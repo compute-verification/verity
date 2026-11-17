@@ -3,7 +3,7 @@
 Pearl-C4 (`pearl-c-nvfp4-v0`, with `pearl-c-mxfp4-v0` as a contrast line) is PoUW's Pearl-C with the FP8 product
 replaced by the block-scaled FP4 one of sm_120 (`mma.sync kind::mxf4nvf4`): the noise enters inside one FP4 atom per
 element, one noisy cast forms each operand, and the BF16 clean-up is checked as in Pearl-C. It is a protocol being
-tried: no demo lists it, and its guarantee rests on a premise that is stated and not proved.
+tried: no application lists it, and its guarantee rests on a premise that is stated and not proved.
 
 ## What is here
 
@@ -16,7 +16,7 @@ tried: no demo lists it, and its guarantee rests on a premise that is stated and
   registers it with PoUW's registry (`schemes.register`) under `pearl-c-nvfp4-v0`, which raises
   `NotImplementedError("compute-accounting/pearl-c4-experimental")` until then: PoUW loads nothing of `experimental/`.
 - `prover/pc4.py`: its tile check as a circuit, on PoUW's shared tile-check parts (`circuit.tile_units`), and
-  `prover/pc4_rowk.py` its row units cut along k on `circuit.rowk`'s cut, each with its circuit-check sidecar.
+  `prover/pc4_rowk.py` its row proof blocks cut along k on `circuit.rowk`'s cut, each with its circuit-check sidecar.
 - `tests/`: the twin, the fixture, the gate and `f1_fast` against the scalar reference, the scheme's pinned vectors
   (`pearl_c4_vectors.py`, `pearl_c4_regions_vectors.py`, their JSON in `tests/vectors/`) and the scheme's and circuit's
   tests, as a suite of their own. They extend PoUW's tests, whose helpers they import by name (`conftest.py`).

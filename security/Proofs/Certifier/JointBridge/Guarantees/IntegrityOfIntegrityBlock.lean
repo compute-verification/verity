@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The integrity audit of a server-time block is Flock's integrity audit of that block (trusted)
 
-A server-time block's SPOT audit (`Audit.sampled` of the block's period, `Accounting.PeriodRun`) is Flock's
+A server-time block's SPOT audit (`Audit.sampled` of the block's period, `ResourceAccounting.PeriodRun`) is Flock's
 integrity audit of block `b` of a server's monitoring period of sessions with carried state
 (`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each a sampling block `S.W t`
 (`Flock.Guarantees.SamplingBlock`), a `--zk` session under hidden outputs with a fresh live subset sample, played by one
@@ -32,7 +32,7 @@ sampling blocks'.
 
 `IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
 `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
-guarantee, which the one theorem's SPOT target couples into the causal game (`Accounting.PeriodLive`).
+guarantee, which the one theorem's SPOT target couples into the causal game (`ResourceAccounting.PeriodLive`).
 
 With no carried leaf the monitoring period's run is `Flock.Guarantees.ServerBlocks.run`
 (`Flock.Guarantees.CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous, so the
@@ -44,7 +44,7 @@ imports them.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
@@ -131,4 +131,4 @@ def IntegrityOfIntegrityBlock : Prop :=
 
 end Guarantees.Bridge
 
-end Accounting
+end ResourceAccounting

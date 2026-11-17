@@ -19,11 +19,11 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from verity.protocols.accounting.certifier.verifier.load_check import SHAPES, Shape, manifest
+from verity.protocols.resource_accounting.network.verifier.load_check import SHAPES, Shape, manifest
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.accounting.certifier.device.load_relay import SALT_BYTES, first_values, relay, store_params, verifier_domain
+from verity.protocols.resource_accounting.network.attester.load_relay import SALT_BYTES, first_values, relay, store_params, verifier_domain
 
 
 class RandomSource(io.RawIOBase):

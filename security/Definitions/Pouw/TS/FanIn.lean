@@ -47,7 +47,7 @@ whose receipt is.
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 /-- A straight-line program over the fresh inputs `ι`, values in `W` (a node's value is everything it writes: its
 words, its predicates and, for a store, the memory): node `i` of `n`, in program order, reads the nodes `src i` (fresh
@@ -93,4 +93,4 @@ def thinFold : Bool → BitVec 32 → List (BitVec 32 × BitVec 32) → BitVec 3
   | _, s, [] => s
   | xor, s, (w, w') :: ws => thinFold (!xor) (thinStep xor s w w') ws
 
-end Accounting.TS
+end ResourceAccounting.TS

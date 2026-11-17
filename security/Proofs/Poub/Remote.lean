@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # PoUB's compositions, from their routes
 
-Statements about a run of PoUB (`Accounting.Remote.Run`), each at the coins flipped (a per-run reading): the
+Statements about a run of PoUB (`ResourceAccounting.Remote.Run`), each at the coins flipped (a per-run reading): the
 routes it composes are bounds at each outcome, taken as hypotheses, and the statement bounds the probability, over the
 audit's coins, that the audit accepts and the bound fails, by the routes' errors summed.
 
@@ -49,34 +49,34 @@ audit's coins, that the audit accepts and the bound fails, by the routes' errors
   every location together are at least `(1 − μ_sample − λ) · C`. The state and compute of locations outside the node
   are unbounded without a location assumption, so conservation reports them as terms (`Run.paid`).
 * **NodeLevel**, under Identity (statement C, no undeclared device of any kind): the node's tiers carried at least
-  `(1 − γ) · C_true` bits to its compute, `γ = μ_sample + μ_chip + μ_rebuild + μ_host + λ` (`Accounting.Remote.gamma`).
+  `(1 − γ) · C_true` bits to its compute, `γ = μ_sample + μ_chip + μ_rebuild + μ_host + λ` (`ResourceAccounting.Remote.gamma`).
   μ_link is reported beside it, not charged. **NodeLevelJoint** is its counting form (Mbw at the node): the bits of
   data independent of the store, seeds and oracle that the node determines from its tiers are at most `γ · C_true`.
 * **NodeLevelLinks**, the weaker statement without Identity: memory-only helpers outside the node and outside work at
   most `Φ_out` per tick, with the links charged (inbound `1:1`, outbound at `b / z_b`):
-  `γ + μ_link + μ_out` (`Accounting.Remote.gammaLinks`).
+  `γ + μ_link + μ_out` (`ResourceAccounting.Remote.gammaLinks`).
 
 Each follows from its routes by a union bound over the routes' errors (`holds_and`) and, at each outcome, the γ
 arithmetic. The correct receipts' `(1 − ε) · C` bits were paid by the node's reads, its state at the pass boundaries
 (at most `μ_chip · C`), its rebuilt bits (at most `μ_rebuild · C`, by the rebuild's work at π_r and its fit beside
 `W_r`) and the guessing slack (`λ · C`); under Identity nothing outside the node paid. `μ_host` then converts `C` into
 `C_true` (`muHost_mul`). Without Identity the bits carried over the boundary and the bound `z` computed outside add
-`μ_link` and `μ_out`. A fleet audited at once, or an NVLink domain, is a node (`Accounting.Remote.Node.fleet`), whose
+`μ_link` and `μ_out`. A fleet audited at once, or an NVLink domain, is a node (`ResourceAccounting.Remote.Node.fleet`), whose
 μ_link counts only the whole's boundary.
 
 These are lemmas, not guarantees. The deployed session's and window's guarantees
-(`Accounting.Guarantees.RemoteMonitoringPeriodConservation`, `RemoteWindowRunConservation` and their `Relay` forms) prove
+(`ResourceAccounting.Guarantees.RemoteMonitoringPeriodConservation`, `RemoteWindowRunConservation` and their `Relay` forms) prove
 `Conservation`'s routes for the runs the rate audit realizes and apply it; their tier-read bound, at no location, is
 the node-level reading that is listed. The memory a session shows held is the memory line's
-(`Accounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's
+(`ResourceAccounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's
 (`Bandwidth.Guarantees.Mbw`).
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Accounting.Remote Pouw
+open ResourceAccounting.Remote Pouw
 
 variable {τ : Type} {N : Node τ} {a : Audit} {Ω : Type} {r : Run N a Ω}
 
@@ -289,4 +289,4 @@ theorem NodeLevelLinks :
   unfold gammaLinks gamma
   nlinarith
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

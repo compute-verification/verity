@@ -335,6 +335,7 @@ class ExhaustiveResult:
     admissible: int = 0             # of which satisfy the gadget's premise (the honest hints must be accepted)
     hint_space: int = 0             # joint hint assignments per input
     accepted: int = 0               # accepted (input, hints) pairs
+    rejected: int = 0               # rejected (input, hints) pairs
     max_accepted_per_input: int = 0
     inputs_with_two_outputs: int = 0    # soundness failures: an input with two accepted, different outputs
     inputs_off_reference: int = 0       # soundness failures: an accepted output differing from the reference
@@ -389,6 +390,7 @@ def exhaustive(spec: Spec, p: Params = TINY, *, budget: int = 5_000_000) -> Exha
             try:
                 out = spec.call(ctx, p, x, h)
             except Reject:
+                res.rejected += 1
                 continue
             n_acc += 1
             outputs.add(tuple(out))
@@ -464,6 +466,7 @@ class SingleHintResult:
     inputs: int = 0
     hints: int = 0                  # hint columns tried
     alternatives: int = 0           # alternative values tried
+    rejected: int = 0               # alternatives the checker rejected
     accepted_same_output: int = 0   # accepted alternatives with the same output (selector ties)
     accepted_other_output: int = 0  # soundness failures
     seconds: float = 0.0
@@ -498,6 +501,7 @@ def single_hint_search(p: Params, cases: Iterable[tuple[int, list[int], list[int
                 try:
                     got = check_step_expr(ctx, p, c, a, b, h)
                 except Reject:
+                    res.rejected += 1
                     continue
                 if got == y:
                     res.accepted_same_output += 1

@@ -3,7 +3,7 @@ N / C `RMSNormFusedCudaAdd_v1{N, C, AT}` parts, each the add on C elements of x 
 `RMSNormFusedCudaTail_v1{N, EPS}`, v2's body after the add on the parts' r in order of AT.
 
 Nothing in `b1.py` is modified: the tail's body is v2's lines after the add, on `b1`'s own reduce and epilogue, so the parts
-and the tail emit v2's gates on the same operands in the same order (`adapters/vllm/verity_vllm/definitions/tests/test_rmsnorm_fused_add.py`
+and the tail emit v2's gates on the same operands in the same order (`tests/adapters/vllm/verity_vllm/definitions/test_rmsnorm_fused_add.py`
 holds them to v2 word for word and gate for gate)."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
 
 _FUSED_SPLIT_CONFORMANCE = ("exact-model-tested: `RMSNormFusedCuda_v2{N, EPS}` cut at its residual add; the N / C add parts and "
-                            "the tail return its outputs word for word (`adapters/vllm/verity_vllm/definitions/tests/test_rmsnorm_fused_add.py`)")
+                            "the tail return its outputs word for word (`tests/adapters/vllm/verity_vllm/definitions/test_rmsnorm_fused_add.py`)")
 
 
 def _fused_rms_tail(B, S, r, w, eps=None):

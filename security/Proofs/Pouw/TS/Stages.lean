@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Guarantees.TS.Stages
 public import Proofs.Pouw.TS
-public import Proofs.Accounting.Lemmas.TS.Stages
+public import Proofs.ResourceAccounting.Lemmas.TS.Stages
 
 /-!
 # SPOT under per-stage coins: proofs
@@ -28,9 +28,9 @@ sample probability prices the share at `r` (`Stages.prob_comp`).
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.Guarantees.TS Pouw.RelativeSecurity
 
 namespace Stages
 
@@ -329,7 +329,7 @@ theorem share_nonneg [Fintype V] (stg : V → ℕ) (w : V → ℝ) (hw0 : ∀ u,
 end Stages
 
 open Stages in
-theorem SampledBudget : Accounting.Guarantees.TS.SampledBudget := by
+theorem SampledBudget : ResourceAccounting.Guarantees.TS.SampledBudget := by
   intro A D _ _ s n W p r hs hp0 hp1 hr hP hL
   induction W with
   | done => trivial
@@ -341,7 +341,7 @@ theorem SampledBudget : Accounting.Guarantees.TS.SampledBudget := by
       (fun a => ∀ i, R.ok a.1 (a.2 i)) (fun _ => Iff.rfl) (fun a => R.share a.1) (fun _ => rfl)
 
 open Stages in
-theorem StageBudget : Accounting.Guarantees.TS.StageBudget := by
+theorem StageBudget : ResourceAccounting.Guarantees.TS.StageBudget := by
   intro C V D _ _ _ M s n W stg tk w p r hs hp0 hp1 hr hw0 hw hL
   have hp : 0 ≤ p := ((Real.exp_pos _).trans_le hp0).le
   induction W with
@@ -361,7 +361,7 @@ theorem StageBudget : Accounting.Guarantees.TS.StageBudget := by
     rw [StageExecutionPhase.game]
     exact ⟨fun a => share_nonneg stg w hw0 T a.1, key, fun a => ih a (hLn a)⟩
 
-theorem CompilerStage : Accounting.Guarantees.TS.CompilerStage := by
+theorem CompilerStage : ResourceAccounting.Guarantees.TS.CompilerStage := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ C V D _ _ _ M s Z H S P W stg tk w lam p r δ δbind δzk nπ hcert hwf hCH hfH
     hS hs hp0 hp1 hr hδ hsplit hfc hww hsr hsu hns hfo hfi hG hw0 hw hL hPS
   have hp : 0 < p := (Real.exp_pos _).trans_le hp0
@@ -372,7 +372,7 @@ theorem CompilerStage : Accounting.Guarantees.TS.CompilerStage := by
   exact CompilerC Z H (Paths C M × (Fin s → D)) S P lam (r / Real.log (1 / p)) p δ δbind δzk nπ hcert hwf hCH hfH
     hS hp hp1 (div_pos hr hL0) hδ hsplit hfc hww hsr hsu hns hfo hfi hB hPS
 
-theorem StageIdeal : Accounting.Guarantees.TS.StageIdeal := by
+theorem StageIdeal : ResourceAccounting.Guarantees.TS.StageIdeal := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ C V D _ _ _ M s Z H S P W stg tk w lam p δ δbind δzk nπ hcert hwf hCH hfH
     hS hs hp0 hp1 hδ hsplit hfc hww hsr hsu hns hfo hfi hG hw0 hw hL hPS
   have h := CompilerStage Z H S P W stg tk w lam p 1 δ δbind δzk nπ hcert hwf hCH hfH hS hs hp0 hp1 one_pos hδ
@@ -382,4 +382,4 @@ theorem StageIdeal : Accounting.Guarantees.TS.StageIdeal := by
     rw [sub_self, zero_mul, zero_mul]
   rwa [h0, sub_zero] at h
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

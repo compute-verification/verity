@@ -7,7 +7,7 @@ acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_rec
 hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
-stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
+stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
 served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
 It writes the engine's rotary table to ``OUT/private/cos_sin_cache.npy`` (`match_capture.dump_cos_sin`), which no record copies:
@@ -116,9 +116,10 @@ def committer_args(opts: Any) -> SimpleNamespace:
 def manifest_of_record(opts: Any) -> dict[str, Any]:
     """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
     loads it."""
+    from verity_vllm import messages as M
     from verity_vllm.commit.partition import require_partition
 
-    man = require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    man = require_partition(json.loads(M.read(Path(opts.required_manifest), "Circuit")), programs_root_of(opts), None)
     if why := manifest_refusal(opts.required_manifest, man):
         raise UsageError(why)
     return man
@@ -178,11 +179,11 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     from verity_vllm import settings
     from verity_vllm.commit.committer.host_retention import retain_exclude_families
     from verity_vllm.engine import vllm_adapter as va
-    from verity_vllm.engine.handle import model_runner
+    from verity_vllm.engine.handle import engine_of, model_runner
     from verity_vllm.pipeline import commit as C, commit_attach as CA
 
     run_id = f"{label}:{opts.run_id}"
-    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model, vllm_config=engine_of(llm.vllm).vllm_config,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     spec = opts.retention.retain_exclude
     manifest, args = manifest_of_record(opts), committer_args(opts)

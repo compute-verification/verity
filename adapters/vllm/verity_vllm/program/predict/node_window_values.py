@@ -289,7 +289,7 @@ class Tables:
             return got
         from verity.protocols.proofs.spot.verifier.one_stage import registered as G
         from verity_vllm.pipeline import expert_rows as XR
-        from verity.protocols.accounting.pouw.prover.serving import registered_commit
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
         t = self.by[name]
         m = _TABLE.match(t.param)

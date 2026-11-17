@@ -72,24 +72,24 @@ honest one, and its time is exactly the credit, so it shows only that every prem
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.FpG1
+namespace ResourceAccounting.SecurityProofs.FpG1
 
-open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1
-  Accounting.SecurityProofs.TS.Headline
+open Finset ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- **FP8-g1's headline on sm_120's measured vector**: `sm120MeasuredHeadline_bind` at `V = Leaves × W` and `n_π + 1`
 proofs a round. The 0.591% rests on the measured record's premises, `ScalarRoute` at `9/8` among them (assumed; at
 A6's proved `½` floor the same bound is 7.791%). -/
-theorem Sm120FpG1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline := by
+theorem Sm120FpG1MeasuredHeadline : ResourceAccounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
-  exact Accounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
+  exact ResourceAccounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
 
 /-- **W4A8-g1's headline on sm_120's measured vector**: `sm120MeasuredHeadline_bind` at `V = Leaves × W` and
 `n_π + 1` proofs a round. The 0.591% rests on the measured record's premises, `ScalarRoute` at `9/8` among them
 (assumed; at A6's proved `½` floor the same bound is 7.791%). -/
-theorem Sm120W4a8G1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline := by
+theorem Sm120W4a8G1MeasuredHeadline : ResourceAccounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
-  exact Accounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
+  exact ResourceAccounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
 
 /-! ## The honest run on VF3s-16 -/
 
@@ -221,7 +221,7 @@ theorem honestRunM_noSum : NoSum honestRunM := by
 
 /-- `φ*(π*) ≤ φ_q`, the lane fold's load at `π*` (`phiqM`). -/
 theorem phiStarM_le : Sm120Measured.model.phiStar (onFacet Sm120Measured.piStar) ≤ (phiqM : ℝ) := by
-  refine (Accounting.SecurityProofs.TS.iInf_le_price (onFacet Sm120Measured.piStar) Sm120Measured.model.fold 0).trans
+  refine (ResourceAccounting.SecurityProofs.TS.iInf_le_price (onFacet Sm120Measured.piStar) Sm120Measured.model.fold 0).trans
     (le_of_eq ?_)
   rw [demandPrice_onFacet]
   show Sm120Measured.model.G.load (Sparse.counts (Sm120Measured.h1fx1.folds.getD 0 [])) Sm120Measured.piStar = _
@@ -306,7 +306,7 @@ theorem measured_bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40 := by
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16⟩ := h
-  exact Accounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9
+  exact ResourceAccounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9
     h10 h11 h12 h13 h14 h15 h16
 
 /-- **Every premise but the g1 premise holds at the honest window on VF3s-16**, for any leaves `v` in H1's ranges:
@@ -384,4 +384,4 @@ theorem measured_offGrid_premises (Ω : Type) [Fintype Ω] :
       ∀ p w i, ¬ ((honestLayer Ω Sm120.checks offGrid).committed p w i).1.Fp8 Grids.h1 :=
   ⟨measured_honest_premises Ω offGrid_inH1, fun _ _ _ => offGrid_not_fp8⟩
 
-end Accounting.SecurityProofs.FpG1
+end ResourceAccounting.SecurityProofs.FpG1

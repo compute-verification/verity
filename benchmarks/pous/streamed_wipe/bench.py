@@ -1,6 +1,6 @@
 """The streamed-label wipe's timing on one node: the labels a GPU generates, what reaches host memory and the network
 stack, and the challenge round trips, so the fill time and the challenger's GPU budget are measured
-(`verity/protocols/accounting/pous/verifier/PROTOCOL.md`, "The streamed-label wipe").
+(`verity/protocols/resource_accounting/memory/pous/verifier/streamed_wipe.py`).
 
 `bench.py all --bin WIPELABELS --scratch DIR --out DIR` runs every step and writes `timing.json`:
 
@@ -12,10 +12,11 @@ stack, and the challenge round trips, so the fill time and the challenger's GPU 
   loopback when perftest is installed.  Between the nodes only TCP 22 passes, so no inter-node stream is measured.
 - `rtt`: a prover process holding `2^28` labels (16 GiB, dumped by the GPU) in memory answers `k = 74,000` challenges
   over loopback TCP at batch sizes 1 (the sequential reveal the guarantee covers) to 74,000, every answer checked.
-- `session`: one whole session of the reference (`wipe_challenger.WipeMemoryChallenger`, test signer) against the honest
+- `session`: one whole session of the reference (`wipe_challenger.WipeMemoryAttester`, test signer) against the honest
   prover in its own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed, and
   judged by `wipe_verdict.judge` (the Lean verdict, `streamed-wipe-verdict`, unless `--verdict` says otherwise), each
-  side's verdict recorded.
+  side's verdict recorded.  Under `--verdict python` no Lean judges it, so an honest session is `undecided`, never
+  accepted (`wipe_verdict.NO_JUDGE`), and the Python's own accept is only in `verdicts`.
 """
 
 from __future__ import annotations
@@ -38,12 +39,12 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/accounting/pous/verifier/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier")]
 
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw  # noqa: E402
-from verity.protocols.accounting.pous.device import wipe_challenger as WC  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/protocols/accounting/pous/device/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/resource_accounting/memory/pous/attester/lean/wipe_verdict.py"
 SECRET, SERVER = b"streamed-wipe bench secret", b"bench-node/bench"
 SESSION = hashlib.sha512(b"streamed-wipe bench session").digest()[:32]
 TABLE_LABELS = 1 << 28
@@ -298,7 +299,7 @@ def session(port: int, verdict: str) -> dict:
     params = sw.WipeParams(n, k, 1, 50_000_000, (("host-dram", n * sw.LABEL_BYTES),))
     with tempfile.TemporaryDirectory(prefix="streamed-wipe-bench-") as scratch:
         signer = ts.TestSigner(b"streamed-wipe bench", height=2, directory=scratch)
-        c = WC.WipeMemoryChallenger(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
+        c = WC.WipeMemoryAttester(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
         prover = _spawn_prover(port, labels=n)
         s = _connect(port)
         try:
@@ -317,7 +318,8 @@ def session(port: int, verdict: str) -> dict:
     v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
     t4 = time.perf_counter_ns()
     per = [r.elapsed_ns for r in signed.batches]
-    return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "reasons": list(v.reasons),
+    return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "outcome": wv.outcome(v),
+            "reasons": list(v.reasons),
             "verdict": verdict, "verdicts": sides, "verdict_s": (t4 - t3) / 1e9,
             "fill_s": (t1 - t0) / 1e9, "challenges_s": (t2 - t1) / 1e9, "per_round": _stats(per),
             "limit_ns": params.limit_ns}

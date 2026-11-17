@@ -46,7 +46,7 @@ the verdict is the source's acceptance (`accepts_iff`), and on an accepted perio
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
 /-- The uniform probability of `E` on `A` is at most that of `F` on `X` when `e : A ≃ X` maps `E` into `F`. -/
 theorem pr_le_pr_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
@@ -83,4 +83,4 @@ theorem WorkOfCreditedWords : Properties.Certifier.JointBridge.WorkOfCreditedWor
     mul_le_mul_of_nonneg_left (hhelp ξ y hacc') hup
   linarith
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

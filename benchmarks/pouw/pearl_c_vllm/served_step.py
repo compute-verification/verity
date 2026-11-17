@@ -131,7 +131,7 @@ def _live(arm):
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     env = PearlCArm()
     if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols):
         return arm, None
@@ -198,7 +198,7 @@ def run(a) -> int:
                           **summarize_host(_STEPS, point.batch)}, default=str))
     engine.close()
     if option is not None:
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import coins_of
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import coins_of
 
         coins = coins_of(option, reserved)
         (out / "coins.json").write_text(json.dumps(coins, indent=1))

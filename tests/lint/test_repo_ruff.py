@@ -1,7 +1,7 @@
 """Ruff's findings on every tracked Python file that the vLLM integration's ruff lint doesn't hold, held to
 ``allowlists/repo_ruff.json``: ``ruff check`` under the root ``ruff.toml``, with the ruff the root ``dev`` group pins.
 
-The integration's lint (``adapters/vllm/tests/lint/test_ruff.py``) holds ``adapters/vllm`` to its own list, so it is
+The integration's lint (``tests/adapters/vllm/tests/lint/test_ruff.py``) holds ``adapters/vllm`` to its own list, so it is
 not held here (``LEFT_OUT``); this lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``, ``tools/verity`` among them, under the root's configuration
 alone: a nearer one would replace it for ``ruff check`` there, so there is none.  Findings are counted per ``(file, rule)``: the file relative
 to the repository and the rule's code, the key the ratchet gate counts by too, so a refactor that moves a finding within its
@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "ruff.toml"
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: what the integration's ruff lint holds to its own list (its `ROOT`)
-LEFT_OUT = ("adapters/vllm/",)
+LEFT_OUT = ("adapters/vllm/", "tests/adapters/vllm/")
 FIELDS = ("file", "rule", "count")
 #: the rules whose findings are errors: a syntax error, an undefined name, a misused statement or comparison
 ERRORS = ("syntax-error", "E9", "F63", "F7", "F82")

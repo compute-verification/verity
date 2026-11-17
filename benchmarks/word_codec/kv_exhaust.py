@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/kv.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
 
 import kv as K  # noqa: E402
 import kv_bench as B  # noqa: E402
@@ -85,7 +85,7 @@ def shape(lib: B.Lib) -> dict:
 
 
 def rc_shape(lib: B.Lib) -> dict:
-    """kv.cu's receipt shape (`kv_rc_shape`); `forms` & 4 where the build runs form 13 (`codec_tensor/step.py`)."""
+    """kv.cu's receipt shape (`kv_rc_shape`); `forms` & 4 where the build runs form 13."""
     a = (ctypes.c_int * 4)()
     lib.so.kv_rc_shape(ctypes.cast(a, ctypes.c_void_p))
     return dict(zip(("mdw", "mt", "rk", "forms"), a))

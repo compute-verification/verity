@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A lengths format reads back under the link's parameters
 
-The network certifier's cells on a connection are a function of the link's `r` and `D`, the connection's admission
+The network attester's cells on a connection are a function of the link's `r` and `D`, the connection's admission
 bucket, and three things of its lane: its length, the data it released and its fail cell (`lanesView_laneRecord`). So
 a record format that writes those three for every connection (`LengthsRows`, a layout with its read) reads back under
 a registered parameter that holds `r`, `D` and the rule that gives the admissions from the lanes' lengths

@@ -18,7 +18,7 @@ PYTHON = ROOT / "verity/commitments/domains.py"
 #: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
 #: its literal until its record next changes (the record hashes the value as written), tied to its entry by an
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
-READERS: tuple[str, ...] = ("verity/protocols/accounting/pouw/verifier",)
+READERS: tuple[str, ...] = ("verity/protocols/resource_accounting/compute/pouw/verifier",)
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)
@@ -148,7 +148,7 @@ def test_readers_carry_no_literal_of_the_table():
 
 
 def test_every_entry_is_read_or_still_written():
-    files = subprocess.run(["git", "ls-files", "-z", "verity", "adapters/vllm/verity_vllm"], cwd=ROOT, check=True, capture_output=True).stdout
+    files = subprocess.run(["git", "ls-files", "-z", "verity", "adapters/vllm/verity_vllm", "tests/verity", "tests/adapters/vllm/verity_vllm"], cwd=ROOT, check=True, capture_output=True).stdout
     text, table = [], {*lean_files(), PYTHON}
     for rel in files.decode().split("\0"):
         path = ROOT / rel

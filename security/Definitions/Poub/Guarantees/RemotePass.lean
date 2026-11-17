@@ -15,7 +15,7 @@ model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
 open scoped ENNReal
 
@@ -40,7 +40,7 @@ term at most `2^-140` a pass and charges at most 80 bits a block at both of its 
 
 Parameters, not constants: `c` is every side channel's capacity over the window (`cap · T`), and `G` is the window over
 the regeneration time `R_regen` (about 2 ms sequential for a P2 root), times the devices that regenerate. Proof:
-`Accounting.SecurityProofs.Remote.AuditRO`. Its completeness is `Bandwidth.Guarantees.HonestPasses`: an honest device is
+`ResourceAccounting.SecurityProofs.Remote.AuditRO`. Its completeness is `Bandwidth.Guarantees.HonestPasses`: an honest device is
 accepted on every store, oracle and sample with ingress exactly `N·b`.
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
@@ -51,4 +51,4 @@ def AuditRO : Prop :=
         Bandwidth.Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

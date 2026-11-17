@@ -183,7 +183,7 @@ no device. -/
 def twWork : Verdict twRound 2 Unit := fun o x t _ =>
   ∀ w, twRound.accept o (t w).1 (x w).1 (x w).2 (t w).2.1 (t w).2.2
 
-/-- The network certifier's check at the witness: the witness machine exchanges nothing, so there is nothing to
+/-- The network attester's check at the witness: the witness machine exchanges nothing, so there is nothing to
 refuse. -/
 def twNet : Verdict twRound 2 Prop := fun _ _ _ _ => True
 

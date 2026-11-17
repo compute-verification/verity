@@ -560,7 +560,7 @@ def SampleRead (k : Verity.Registration.Composite) (read : Verity.Sent → Optio
     V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → OneStatement s.params →
       ∃ log, read s = some log ∧ ShowsSample log dr ξ
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- At a deployment, the sampled check's read is v2's (`Deployed.coinsRead`), so it shows the sample where v2's does. -/
 theorem sampleRead_deployed {V : Vocab d α} {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}

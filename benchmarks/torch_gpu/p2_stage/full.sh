@@ -9,7 +9,7 @@
 #     --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #
-# (h200-manifest.json: `verity.protocols.accounting.pous.prover.served_weights manifest --digests`; store-layout.json: `p2_store/store.py
+# (h200-manifest.json: `verity.protocols.resource_accounting.memory.pous.prover.served_weights manifest --digests`; store-layout.json: `p2_store/store.py
 # layout`.) ENC is memory-accounting's finished store (mem69-v2: every segment's `.c` and `.json`, `setup.json`
 # and `store.json`), only ever read: nothing here writes, moves or deletes anything under it.
 #
@@ -86,7 +86,7 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit,
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 gpu-lease status > "$O/lease-before.txt" 2>&1
 df -h "$S" "$ENC" > "$O/df.txt" 2>&1
-COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator verity.protocols.accounting.pous.prover.served_weights --shape h200 --weights-seed "$SEED"
+COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator verity.protocols.resource_accounting.memory.pous.prover.served_weights --shape h200 --weights-seed "$SEED"
         --encoded "$ENC" --source "$SOURCE" --commitment "$COMMITMENT" --out "$O")
 FULL=("${COMMON[@]}" --lib "$S/lib/lib" ${GEMM_LAYER:+--gemm-layer "$GEMM_LAYER" --m "$M"} ${LAYERS:+--layers "$LAYERS"}
       ${RECEIPTS:+--receipts --keep "$S/keep"})

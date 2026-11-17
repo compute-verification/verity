@@ -8,13 +8,13 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
   sent it keeps neither (vLLM's own);
 - ``to_length``: each request decoded to its ``max_tokens`` (`to_length`), as vLLM decodes one sent with
-  ``ignore_eos``, for requests that come through the network certifier, whose id request has no such field;
+  ``ignore_eos``, for requests that come through the network attester, whose id request has no such field;
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
-- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
+- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
-  numbers them, standing in for the certifier's headers);
+  numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,

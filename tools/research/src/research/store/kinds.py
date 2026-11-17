@@ -13,7 +13,7 @@ KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
     "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
                       "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the frozen tables' 'native dense peak, "
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (calibration/native_peak; the frozen tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
@@ -89,7 +89,7 @@ KINDS: dict[str, str] = {
                    "the name <campaign>/<slug>; payload null; title, hypothesis, owner, status, reason and evidence are labels on it",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "trust-dossier/v1": "the computed trust level of one numerical target (benchmarks/tc_probe/trust.py): meta = the TrustReport "
+    "trust-dossier/v1": "the computed trust level of one numerical target (calibration/tc_probe/trust.py): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",
@@ -117,7 +117,7 @@ KINDS: dict[str, str] = {
                            "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
                              "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
-    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window "
                           "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
                           "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
@@ -138,7 +138,7 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor device's challenger ledger (verity/protocols/compose/device/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor device's challenger ledger (verity/protocols/compose/verifier/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
     "challenger-ledger/v2": "the auditor device's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
@@ -157,7 +157,7 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor device's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/accounting/poub/device/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",

@@ -1,5 +1,5 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check and ratchet-gate, which run after landing, in drive's
+takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate and added-lines, which run after landing, in drive's
 after-landing run on `checked`'s tip).  It reports each step's real verdict; what gates and what may stay red is drive's
 (`research.policy`).
 
@@ -32,12 +32,12 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate, added-lines), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
                                                             verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
-                                                            (but sigma/, a README.md or PROTOCOL.md)
+                                                            (but verifier/sigma/, a README.md or PROTOCOL.md)
                                                             against --base REF (default origin/main; also
                                                             ratchet-gate's base unless --ratchet-base REF is given), the pinned
                                                             Lean dependency bundles and the newest recorded checks' verdict
@@ -120,7 +120,7 @@ parts, each once (the preflight's steps once, passed in every shard), when `rese
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
 every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
-may still name: circuit-check and ratchet-gate run after landing alone). `research merge` takes the combined Attempt only
+may still name: circuit-check, ratchet-gate and added-lines run after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
@@ -189,7 +189,7 @@ doesn't name:
                     the upstream build stored once and pinned by hash (`verity/protocols/proofs/flock/prover/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
                     `research merge` requires it for a change under verity/protocols/proofs/flock/ or a Lean package the verifier
-                    requires by path (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
+                    requires by path (but verifier/sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -207,6 +207,10 @@ doesn't name:
                     verified `main`); one that names no commit here skips it.  Off the
                     gate: a recorded check skips it, and the after-landing run, `--deferred` with every job, runs it
                     (sharded, in the shard its plan names, else in the last)
+    added-lines     `tools/check/added_lines.py BASE HEAD`, as BASE has it (BASE the commit in the run's `check-base.txt`,
+                    else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
+                    Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
+                    sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -261,6 +265,9 @@ A pass travels in a pack only once its run has ended, so the check of a candidat
 whose check is still running finds none of that check's passes.  The queue names that candidate (`TRAIN_SUITES_FROM`), and a
 `--record --on --deferred` launch whose base it is sends it (`lender`, `LEND_FILE`): each suite step then leaves out the
 suites whose key in its tree is their key here (`suites.py --lend-from`, a row marked `lent`), which that check answers for.
+A run sent its base (`BASE_FILE`, every `--record --on` run) gives both suite steps `suites.py --allowances BASE`: the tests an
+unexpired allowance of policy.toml at BASE names, where the verified queue reads them, run as expected failures, so a suite
+red only on them passes and its pass is reused, until the allowance lapses.
 
 The evidence store.  A recorded check runs the store-backed tests (adapters/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -316,6 +323,8 @@ STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
 REGRESSION_ENV = "VERITY_REGRESSION"
 #: the vLLM integration's ratchet gate, which ratchet-gate runs as its base has it, so no change it judges can weaken it
 RATCHET_GATE = "adapters/vllm/tools/ratchet_gate.py"
+#: what a change's added lines bring of retired terms, issue ids and run ids, which added-lines runs as its base has it
+ADDED_LINES = "tools/check/added_lines.py"
 
 
 def custody_dir() -> Path | None:
@@ -666,7 +675,8 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None, ask
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words; with ``min_mem`` (`train_gb`), only
-    the slots whose mem= holds it count. ValueError when no check can run there: a document has an error, the slots file lists
+    the slots whose mem= holds it count, and a share of a slot (`slot.takes`) only for a shard whose ``ask`` its mem= holds.
+    ValueError when no check can run there: a document has an error, the slots file lists
     no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, the machine's deadline
     is nearer than FULL_CHECK_S, or, for a shard with an ``ask`` (`shard_ask_gib`), its slice (`slot.slice_gib`) can't be read
     or is under the ask: slot.py raises a slot's mem= to the ask and waits for that much free, which such a slice never has."""
@@ -697,6 +707,11 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None, ask
         if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
             raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
                 f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")
+        # a share of a slot (slot.py's share=) takes only a run that asks no more than its mem=: `slot.takes`
+        if not (mine := [s for s in mine if not s.get("share") or (ask and ask <= s["mem"])]):
+            raise ValueError(f"every slot in {check['file']} this check could take is a share of a slot (share=), for a run "
+                             f"that asks at most its mem=, and this one " + (f"asks {ask} GiB" if ask else "names no ask")
+                             + ": it takes a whole slot")
         free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
@@ -1054,7 +1069,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
         return [("lean", "skipped: verity/protocols/proofs/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "verity-verify-proof"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/proofs/flock/ or "
-                                  "a Lean package the verifier requires by path (but sigma/, a README.md or PROTOCOL.md) requires this step: "
+                                  "a Lean package the verifier requires by path (but verifier/sigma/, a README.md or PROTOCOL.md) requires this step: "
                                   "`check.py --record` sends its URLs)")
     if UPSTREAM_PIN.exists() and agreement_urls is not None:
         try:
@@ -1817,7 +1832,7 @@ def builds_records(only: list[str] | None) -> bool:
     whole of `pytest`), the two that read and write its binding records."""
     if only is None:
         return True
-    names = {"", *(s.name for s in SUITES.discover() if s.path == CIRCUIT_SUITE)}
+    names = {"", *(s.name for s in SUITES.discover() if CIRCUIT_SUITE in (s.path, *SUITES.LAYOUT.tested(s.path)))}
     return any(p.partition(":")[0] == "circuit-check" or (p.partition(":")[0] == "pytest" and SHARDS.suite_part(p)[1] in names)
                for p in only)
 
@@ -1868,40 +1883,40 @@ AFTER_LEAN = SUITES.AFTER_LEAN
 #: about 2.5 h, stays off.
 OPT_IN = {
     "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
-        "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
+        "test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
+        "test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
     "adapters/vllm/verity_vllm/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
-        "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
+        "test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
-        "tests/test_figures.py::test_figures_writes_every_figure",)},
+        "test_figures.py::test_figures_writes_every_figure",)},
     "verity/protocols/compose/verifier/lean": {"VERITY_SLOW": (
-        "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
-        "tests/test_composition_difftest.py::test_remote_agrees",
-        "tests/test_composition_difftest.py::test_onsite_agrees",
-        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+        "test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
+        "test_composition_difftest.py::test_remote_agrees",
+        "test_composition_difftest.py::test_onsite_agrees",
+        "test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
     # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
     "verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
-        "tests/test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
-        "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
-        "tests/test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
-        "tests/test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
-        "tests/test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
+        "test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
+        "test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
+        "test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
+        "test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
+        "test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
-            "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
-            "tests/pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
-            "tests/pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
-            "tests/pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
-            "tests/pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
-            "tests/pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
-            "tests/pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
-            "tests/pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
-            "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
+            "pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
+            "pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
+            "pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
+            "pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
+            "pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
+            "pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
+            "pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
+            "pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
+            "pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
-            "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
+            "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
     "benchmarks/prove_path": {"VERITY_SLOW": (
-        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
-        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
+        "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
+        "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"
@@ -2111,6 +2126,20 @@ def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
     return ["bash", "-c", script, "ratchet-gate", base, RATCHET_GATE, keep, sys.executable]
 
 
+def added_lines(out: Path) -> list[str] | str:
+    """added-lines' command: `added_lines.py BASE HEAD` as BASE has it, BASE being the commit in the run's `BASE_FILE` (`--record
+    --on` sends it), else origin/main; skipped where BASE names no commit here or has no such script."""
+    sent = out / "inputs" / BASE_FILE
+    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    if subprocess.run(["git", "cat-file", "-e", f"{base}:{ADDED_LINES}"], cwd=ROOT, capture_output=True).returncode:
+        return f"skipped: its base {named} has no {ADDED_LINES}"
+    script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/added_lines.py" && '
+              '"$3" "$g/added_lines.py" "$1" HEAD')
+    return ["bash", "-c", script, "added-lines", base, ADDED_LINES, sys.executable]
+
+
 def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
     """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
     as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
@@ -2169,9 +2198,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         2 if with_lean or with_cc else 1)
     # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
     lend = out / "inputs" / LEND_FILE
+    # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures
+    base = out / "inputs" / BASE_FILE
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
-            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else [])]
+            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else []),
+            *(["--allowances", base.read_text().strip()] if base.is_file() else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping, agreement_urls)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
@@ -2207,7 +2239,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
-             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
+             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT),
+             "added-lines": ("added-lines", added_lines(out), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
     else:
@@ -2806,8 +2839,8 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/proofs/flock/prover/agreement/, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
-    nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
+    nested in the verifier's directory that the verifier doesn't require (the σ-lift check's difftest, `sigma/`, which
+    requires the verifier), since Lake builds the verifier without reading it; less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
     verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
     test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
@@ -2815,9 +2848,9 @@ def agreement_closure(files: list[str]) -> list[str]:
     pre, lean = "verity/protocols/proofs/flock/prover/agreement/", "verity/protocols/proofs/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
-    nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
-    if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
-        nested = ()
+    required = {d for d in required_packages(ROOT / lean).values() if d is not None}
+    nested = tuple(d for f in lakefiles if f not in root
+                   if (ROOT / (d := f.rsplit("/", 1)[0] + "/")).resolve() not in required)
     packages = (lean, *required_in_tree(lean))
     locks = {p + "lean-audit.json" for p in packages}
     return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))

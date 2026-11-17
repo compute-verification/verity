@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Compose.Guarantees.Compose
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # The sharp rate: proof
 
-`Accounting.Guarantees.Compose.SplitRateExp`. Write `x = W_F − L_F` and `y = W_0 − L_0` for the unlucky work and
+`ResourceAccounting.Guarantees.Compose.SplitRateExp`. Write `x = W_F − L_F` and `y = W_0 − L_0` for the unlucky work and
 `c = Kρw_max`. As `(1 − t)^K ≤ e^{−Kt}` (`one_sub_pow_le`), the left side is at most the exponential of
 `(a/Λ − Kρ)·x + (a/Λ)·L_F + (b/Λ − Kρ)·y + (b/Λ)·L_0`, a linear form on the simplex
 `x, L_F, y, L_0 ≥ 0`, `x + L_F + y + L_0 ≤ w_max`. Jensen for `exp` at the simplex's vertices (`exp_four_le`) bounds it by
@@ -21,9 +21,9 @@ and the same for `y`, `L_0` with `b`, `p0`, `ν₀`.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.Rates
+namespace ResourceAccounting.SecurityProofs.Compose.Rates
 
-open Accounting.Compose
+open ResourceAccounting.Compose
 
 /-- Jensen for `exp` with the rest of the weight at `0`. -/
 theorem exp_sum_le {ι : Type*} [Fintype ι] (s u : ι → ℝ) (hs : ∀ i, 0 ≤ s i) (h1 : ∑ i, s i ≤ 1) :
@@ -106,7 +106,7 @@ theorem lucky_eq {p A w L : ℝ} (hp1 : p < 1) (hw : 0 < w) :
   have hp : (1 - p) ≠ 0 := (sub_pos.mpr hp1).ne'
   field_simp
 
-theorem splitRateExp : Accounting.Guarantees.Compose.SplitRateExp := by
+theorem splitRateExp : ResourceAccounting.Guarantees.Compose.SplitRateExp := by
   intro K ρ p p0 a b wmax Λ hK hρ hw hρw hp0 hp1 hq0 hq1 ha hb hΛ
   have hK' : (1 : ℝ) ≤ K := by exact_mod_cast hK
   have hc : 0 < (K : ℝ) * ρ * wmax := by positivity
@@ -146,4 +146,4 @@ theorem splitRateExp : Accounting.Guarantees.Compose.SplitRateExp := by
       rw [hLFeq, hL0eq]
       linarith
 
-end Accounting.SecurityProofs.Compose.Rates
+end ResourceAccounting.SecurityProofs.Compose.Rates

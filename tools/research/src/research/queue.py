@@ -45,8 +45,8 @@ are built again without them in the same tick.
                                                    the gate's fix; a warn gate's failure is printed as a warning and refuses
                                                    nothing), or, merged onto it in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   test_repository.py, tools/research/tests/test_pythonpath.py, a lint its
-                                                   change reaches (tests/test_no_wall_clock.py, adapters/vllm/tests/lint),
+                                                   test_repository.py, tests/tools/research/test_pythonpath.py, a lint its
+                                                   change reaches (tests/test_no_wall_clock.py, tests/adapters/vllm/tests/lint),
                                                    or `pytest --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
@@ -341,7 +341,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
-from . import linear, quick_tier, waitcap
+from . import linear, quick_tier, suite_layout, waitcap
+from .telemetry import end_state
 from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
@@ -1345,7 +1346,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
-#: grader, the certifier program, the inference-only check, PoUB's verifier), and a lock run follows its landing
+#: grader, network attestation's program, the inference-only check, PoUB's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "security/"
 #: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
@@ -1377,8 +1378,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
     that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
     a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
     it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
-    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
-    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  A directory holds its tests under the root's `tests/` too, and
+    `tests/` holds only the root suite's own (`suite_layout.held`).  ``files`` are the PR's own change, against its merge
+    base with `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
     dirs, paths, names = [], set(), []
     for x in excludes:
         if x.endswith("/"):
@@ -1387,9 +1389,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
             paths.add(x)
         else:
             names.append(x)
-    files = list(files)
+    files, dirs = list(files), tuple(dirs)
     return bool(files and (dirs or paths or names)) and not any(
-        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        suite_layout.held(f, dirs) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
         for f in files)
 
 
@@ -3225,14 +3227,14 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
-                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
-                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
-                  "verity/protocols/accounting/poub/verifier/commitments/",
+                  "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/resource_accounting/memory/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py", "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py",
+                  "verity/protocols/resource_accounting/memory/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
                   "verity/commitments/indexed.py", "verity/commitments/layout.py", "verity/commitments/limits.py",
-                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
+                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "tests/verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",
                   "verity/circuits/private_circuits/", "benchmarks/numerical/python/")
@@ -4108,13 +4110,14 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
 
 def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
     """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
-    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
-    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: exit 0 and validation passed
+    when it found no failure, exit 1 and validation failed when every one it found is allowed; and it ended in the state the
+    runner records for that exit (`end_state`: `done`, `failed`)."""
     tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
     if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
-    if (status.get("state"), status.get("rc"), res.validation_status) != want:
+    rc, validation = (0, "passed") if quick_tier.judge(tier, head, output) is None else (1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != (end_state(rc), rc, validation):
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None
@@ -4382,22 +4385,29 @@ def map_retires(repo: Path, at: str, path: str) -> Retired | None:
 
 def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None = None,
                  maps: dict[tuple[str, str], Retired | None] | None = None) -> list[tuple[str, str, list[str] | None]]:
-    """Each move ``main`` landed that ``head`` lacks (`moves_between`) whose map (`map_retires`, kept in ``maps`` by its base and
-    path) retires what ``head``'s own change names, oldest first: (the move, its map, those names, or None when its map can't
-    be read).  The own change is ``head``'s against its merge base with ``main``: its files (``files``, else `own_files`) and
+    """Each move ``main`` landed that ``head`` lacks (`moves_between`) whose map (`map_retires`, kept in ``maps`` by where and
+    path: its base, or the move itself for a move that adds the map it runs by, restack.py's `own_map`) retires what
+    ``head``'s own change names, oldest first: (the move, its map, those names, or None when its map can't be read at
+    either).  The own change is ``head``'s against its merge base with ``main``: its files (``files``, else `own_files`) and
     its added lines.  A head whose change names none of them crosses the moves by a plain merge of `main`, and what a map
     can't list (a path spelled in parts, a relative one) is the check's to find."""
     if not (moves := moves_between(repo, main, head)):
         return []
     maps = {} if maps is None else maps
     text = own_text(repo, main, head, files)
+
+    def read(at: str, path: str) -> Retired | None:
+        if (at, path) not in maps:
+            maps[at, path] = map_retires(repo, at, path)
+        return maps[at, path]
+
     out = []
     for commit, parents in moves:
         if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
             continue
-        if (key := (parents[0] if parents else f"{commit}^", m[1])) not in maps:
-            maps[key] = map_retires(repo, *key)
-        if (got := maps[key]) is None or (names := got.named(text)):
+        if (got := read(parents[0] if parents else f"{commit}^", m[1])) is None:
+            got = read(commit, m[1])
+        if got is None or (names := got.named(text)):
             out.append((commit, m[1], None if got is None else names))
     return out
 
@@ -4897,7 +4907,7 @@ def _depth(crossed: list[dict], c: dict) -> int:
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
 #: `check`'s preflight-lints on test_repository.py (a report-genre name)
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tests/tools/research/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -4919,7 +4929,7 @@ def reaches(paths: Iterable[str], reach: Iterable[str]) -> bool:
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
 #: and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("tests/adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run on
 #: the base, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
 #: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.
@@ -4981,6 +4991,11 @@ _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites 
             "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
             "print(json.dumps({'suites': [s.path for s in chosen], 'fixtures': {s.path: sorted(p for p in fx "
             "if S.covered(p, own[s], S.dropped(s, ins[s]))) for s in chosen}}))")
+#: prints, as JSON, the suites under the test paths of each suite whose path is on its command line (`Suite.inner`), which
+#: `suites.py` has that suite's pytest ignore: the root's `tests/` holds every suite's tests, so a suite's pytest collects the
+#: suites mirrored under it unless told not to, each away from its own configuration
+_INNER = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; want = set(sys.argv[1:]); "
+          "print(json.dumps({s.path: list(getattr(s, 'inner', ())) for s in S.discover() if s.path in want}))")
 #: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_CHECKS_S`: the
 #: machine's store keeps every blob it fetches, so a later preflight here copies them from it in seconds
 PREFLIGHT_FETCH_S = 45.0
@@ -5106,16 +5121,24 @@ def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
                 r, why = run(list(sync), wt)
                 if r is None or r.returncode:
                     return why or f"`{' '.join(sync)}` exited {r.returncode}: {r.stdout.strip()[-300:]}"
-            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, CROSS_ROOT_SUITE)
+            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, root_suite(wt))
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return f"{type(e).__name__}: {e}"
+
+
+def root_suite(wt: Path) -> list[str]:
+    """`CROSS_ROOT_SUITE` on the tree at ``wt``, less each directory of its `tests/` the root suite doesn't own
+    (`suite_layout.root_owns`): the suites mirrored there, which `pytest tests` would otherwise collect as the root suite's."""
+    under = sorted(d.relative_to(wt).as_posix() for d in (wt / suite_layout.MIRROR).iterdir() if d.is_dir())
+    return [*CROSS_ROOT_SUITE, *(f"--ignore={d}" for d in under if not suite_layout.root_owns(d + "/"))]
 
 
 @dataclass
 class LocalSuites:
     """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
     selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
-    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
+    each through ``run`` (the caller's budget), ignoring the suites under its test paths as `suites.py` does (`_INNER`); none
+    while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
     (the tree, the paths; gives the paths still missing and why) brings the fetched fixtures under those suites' inputs into the
     tree (`_TOUCHED`'s, or ``fixtures`` with ``suites``), since a test may read one at import; a suite whose fixtures it couldn't
     fetch isn't collected, and one note says so."""
@@ -5157,8 +5180,10 @@ class LocalSuites:
                 out.notes.append(f"{', '.join(blocked)} not judged: {len(missing)} of the {len(need)} fixture(s) the suites read "
                                  f"weren't fetched ({why or 'no source held them'}: {shown}); its candidate's check fetches them")
                 todo = [s for s in todo if s not in blocked]
+        inner = self._inner(wt, todo, out) if todo else {}
+        args = lambda s: [*self.args, *(f"--ignore={wt / q}" for q in inner.get(s, ()))]               # noqa: E731
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
-            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
+            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, args(s)), todo)):
                 if isinstance(res, str):
                     out.notes.append(f"collect:{s} not checked: {res}")
                     continue
@@ -5168,6 +5193,22 @@ class LocalSuites:
         if self.suites is None:
             out.notes.append(Ran(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else "")))
         return out
+
+    def _inner(self, wt: Path, todo: list[str], out: Touched) -> dict[str, list[str]]:
+        """{suite: the suites under its test paths} for ``todo``, as the tree's `suites.py` names them (`_INNER`); none, and a note
+        in ``out``, when it can't say."""
+        r, why = self.run([self.python, "-P", "-c", _INNER, *todo], wt)
+        said = None
+        if r is not None and r.returncode == 0:
+            try:
+                said = json.loads(r.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError) as e:
+                why = f"its output isn't JSON: {e}"
+        if not isinstance(said, dict):
+            out.notes.append(f"each suite collected with the suites under its test paths: `suites.py` couldn't name them "
+                             f"({why or (r.stderr or r.stdout).strip()[-200:]})")
+            return {}
+        return said
 
 
 def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites, *, wt: Path | None = None,

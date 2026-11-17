@@ -541,7 +541,7 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
       rw [if_neg (fun h => hloc h.1)] at ht
       rw [if_neg hloc, List.nil_append, devBits_getD r i log (q ++ [rl]) hgs t (by omega), hsnoc, Nat.add_zero]
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Where every release of an output's log agrees, `ElemAgrees` holds.** -/
 theorem elemAgrees_of_logGood {A : Live₂} {x : Msg} (reads : ℕ → Prop) {o : Verity.Exchange} (r : Coins A x)
@@ -587,7 +587,7 @@ end Along
 
 /-- **The coin map's distribution holds** (`CoinMapHolds`): at every vocabulary, statement, strategy, locator, prover and set
 of read rounds, `CoinMapDistribution` at the frame of `L`, the agreement `ElemAgrees` and `hide = gapOf`. -/
-theorem coinMapHolds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] :
+theorem coinMapHolds {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] :
     CoinMapHolds (d := d) (α := α) := by
   classical
   intro V A x θ F c σ L P reads E

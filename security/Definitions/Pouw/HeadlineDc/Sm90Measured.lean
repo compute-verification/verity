@@ -7,7 +7,7 @@ public import Definitions.Pouw.HeadlineDc.Sm90
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
+this file. `ResourceAccounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
 * `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 15 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz. `UNLISTED` is A2's catch-all
@@ -30,9 +30,9 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm90Measured
+namespace ResourceAccounting.TS.Headline.Sm90Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- DC-90-ri's rows, in index order. -/
 def rowNames : List String := [
@@ -173,4 +173,4 @@ noncomputable def flat : Labelled (Fin 50) :=
 noncomputable def lamStar : Fin 15 → ℝ :=
   cert 15 [(0, 224871, 62500000), (5, 483349359, 500000000), (6, 14851673, 500000000)]
 
-end Accounting.TS.Headline.Sm90Measured
+end ResourceAccounting.TS.Headline.Sm90Measured

@@ -60,7 +60,7 @@ The arithmetic behind `Definitions.Pouw.FpG1`:
 
 g1's windows are the record's. The record's headlines (`Definitions.Pouw.Guarantees.Headline`) quantify over every
 value type and every proof layer, and their conclusion reads neither, so they cover every window a g1 prover commits
-by their own quantifier over committed values. `Definitions.Accounting.Guarantees.FpG1` states them at g1's windows on H1,
+by their own quantifier over committed values. `Definitions.ResourceAccounting.Guarantees.FpG1` states them at g1's windows on H1,
 where the premise that the committed leaves are g1's narrows the windows and leaves the bound the record's, and
 `Proofs.Pouw.Headline.FpG1` shows that an honest g1 window meets every premise. What
 these lemmas add is that g1's transcript is the record's: every entry plus its coin is an s8 value inside the record's

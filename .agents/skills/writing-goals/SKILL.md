@@ -63,7 +63,7 @@ left out.
   | 11 Onsite demo: all four protocols accept | Onsite demo done |
   | The check reads what the serve registers | Inference-only demo done |
   | The eleven's numbers live on the console | Console shows core system metrics |
-  | The certifier's term is zero without a failure | Network certification adds no exfiltration capacity unless a connection fails |
+  | The network attester's term is zero without a failure | Network attestation adds no exfiltration capacity unless a connection fails |
   | ci's slice reads clean | CI code cleaned up for review |
   | A candidate's check launch registers in three minutes | Check launches within three minutes |
   | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
@@ -186,11 +186,11 @@ An off-track goal's blockers say in one or two plain sentences what stops it tod
 Goals as Daniel approved them. An outcome whose problem today needs saying:
 
 ~~~markdown
-The network certifier certifies every execution phase of a GLM-5.3 serving run.
+The network attester certifies every execution phase of a GLM-5.3 serving run.
 
 On the last served try it did not sign the first execution phase, because it stalled while the operating system moved
 its memory pages. It signed every later phase, and the try as a whole was still refused, since one phase
-was unsigned. The certifier's node is now set not to move those pages.
+was unsigned. The attester's node is now set not to move those pages.
 
 ### Risks
 

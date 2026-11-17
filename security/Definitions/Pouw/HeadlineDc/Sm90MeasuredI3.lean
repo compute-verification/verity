@@ -7,7 +7,7 @@ public import Definitions.Pouw.HeadlineDc.Sm90Measured
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
+this file. `ResourceAccounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
 
 * `d2s`, `model`: `Sm90Measured.d2s` (its writer kinds, and `Sm90.d2s`'s vector classes, fold routes and `N_w`) at
   (I3)'s floors `q = q_T = 3/5`, `b_T = 0`, on `Sm90Measured.machine`. (I3) `ScalarRoute` there is
@@ -19,9 +19,9 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm90MeasuredI3
+namespace ResourceAccounting.TS.Headline.Sm90MeasuredI3
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- `Sm90Measured.d2s` at (I3)'s floors `q = q_T = 3/5`. -/
 def d2s : DesignData where
@@ -41,4 +41,4 @@ noncomputable def model : Model (Fin 50) (Fin 15) (Fin 2) Unit Empty (Fin 56) Un
 noncomputable def lamStar : Fin 15 → ℝ :=
   cert 15 [(5, 12809871, 15625000), (6, 16889149, 500000000), (10, 73194979, 500000000)]
 
-end Accounting.TS.Headline.Sm90MeasuredI3
+end ResourceAccounting.TS.Headline.Sm90MeasuredI3

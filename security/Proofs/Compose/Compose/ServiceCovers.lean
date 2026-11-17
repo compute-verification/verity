@@ -2,12 +2,12 @@ module
 
 public import Definitions.Compose.Guarantees.Compose
 public import Proofs.Pouw.TS.Sampled
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # `ServiceCovers`: the service's share covers every tile that isn't good
 
-`Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
+`ResourceAccounting.SecurityProofs.TS.SampledLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
 layer cones against the game's deficiency, `Σ_{t unpaid} tileCone t`. A layer late edge into tile `v` at slot `k`
 (`SampledLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
 of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`). Under
@@ -20,9 +20,9 @@ its `tileCone` (`0` when `N_w = 0`: a tile's words are among the circuit's).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.CoversProof
+namespace ResourceAccounting.SecurityProofs.Compose.CoversProof
 
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 
 /-- A tile's words are among the circuit's. -/
 theorem tileWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) :
@@ -149,9 +149,9 @@ end Layer
 
 /-- `ServiceCovers`: `covers_of_cone` at the tiles' words, each unpaid tile's layer cone within `N_w` times its
 `tileCone` (`coneWt_le`), and the game's deficiency the unpaid tiles' `tileCone`. -/
-theorem serviceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
+theorem serviceCovers : ResourceAccounting.Guarantees.Compose.ServiceCovers := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ Sc Cd Np Kd hr hK R Pl pr hw hc hG
-  refine Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone (Cd.layer hr hK pr) Pl (jointMode R)
+  refine ResourceAccounting.SecurityProofs.TS.SampledLayer.covers_of_cone (Cd.layer hr hK pr) Pl (jointMode R)
     (fun _ t => (tileWords Sc Cd Np t : ℝ)) (wordsOf Sc Cd : ℝ) (fun _ _ => Nat.cast_nonneg _) fun x _ => ?_
   rw [hG]
   simp only [jointGame, RoundGame.deficiency, JointRun.share, one_mul, add_zero, Fintype.sum_prod_type,
@@ -165,4 +165,4 @@ theorem serviceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   · simpa using coneWt_le Cd hr hK pr Sc hw hc t
   · simpa using coneWt_le Cd hr hK pr Sc hw hc t
 
-end Accounting.SecurityProofs.Compose.CoversProof
+end ResourceAccounting.SecurityProofs.Compose.CoversProof

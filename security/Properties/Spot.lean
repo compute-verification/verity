@@ -316,7 +316,7 @@ def OutputPortsAccepted (v : Docket.Verifier) : Prop :=
 verifier's own entries (`Docket.ownEntries`), each value it pinned before the record (`pinned`, the first root it
 pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
 entry for it (`Docket.entryOf`, the last naming it). A window's certified input is such a value: the verifier pins
-the window's arrivals at the root the network certifier signed for the window. So an arrival open at the previous
+the window's arrivals at the root the network attester signed for the window. So an arrival open at the previous
 window's edge, which continues as a fresh arrival `(id, P + e)` with the `e` outputs the certifier released of it, is
 registered at that root, and a record registering the window's arrivals under any other root, such as arrivals counted
 from the outputs serving computed (`P + n`) or the previous window's arrivals again, is refused. -/
@@ -327,9 +327,9 @@ def PinnedHeld (rec : Json) (v : Docket.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Docket.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.samplingDesignOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
-fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
-ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points
+(`LinkPoints.refused`, which refuses a sampling design no sample of which ends); a sample that runs out of coins fails
+the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Docket.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ samplingDesign n, LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable = .ok (samplingDesign, n) ∧
     LinkPoints.refused samplingDesign n v.members = .ok #[]

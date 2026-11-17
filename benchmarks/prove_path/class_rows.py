@@ -18,6 +18,8 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+
 
 def kinds_of(circuit, IF):
     """(tid, port) -> the kinds its rows are filled by."""
@@ -108,12 +110,12 @@ def main(argv=None) -> int:
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
-        cfg = json.loads((Path.cwd() / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
-        target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server")["sm"]["count"]))}
+        cfg = json.loads((Path.cwd() / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+        target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["sm"]["count"]))}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT
             cfg = {**cfg, "quantization_config": dict(INT8_EXACT_QUANT)}
-            target = {"compute_capability": [9, 0], "num_sms": int(number(load_card("h200-sxm-141gb")["sm"]["count"])),
+            target = {"compute_capability": [9, 0], "num_sms": int(number(load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"])),
                       "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)

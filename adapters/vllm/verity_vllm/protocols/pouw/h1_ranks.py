@@ -40,7 +40,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     COIN_DRAW,
     H1_CHALLENGER,
     H1_SCHEME,
@@ -63,7 +64,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     weights_root,
     zy_host,
 )
-from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import (
     handle,

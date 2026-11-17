@@ -63,7 +63,7 @@ or later, and never of its own.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -166,7 +166,7 @@ def queries (w : World N b h ρ) : Chip N b h ρ α → List (Bits ρ × Fin N �
 
 end Chip
 
-/-- A prover: its strategy on a device of the device model (`Accounting.Device`), bounded by that device's figures. It
+/-- A prover: its strategy on a device of the device model (`ResourceAccounting.Device`), bounded by that device's figures. It
 lays out on-chip state (`S` bits, the device's `chip`), device memory and free side sources, each from the store before
 the seed and the stream, and runs its chip program from that state. In every world the program takes in at most `L`
 bits over the side link (free side sources and the certified stream together: its `cap` over the window) and makes at
@@ -224,4 +224,4 @@ def Devices.dev {n N b h ρ S L q s : ℕ} (A : Devices n N b h ρ S L q s) (i :
     Prover N b h ρ S L q :=
   A i (fun j => ω j.1)
 
-end Accounting.Rate
+end ResourceAccounting.Rate

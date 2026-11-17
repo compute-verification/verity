@@ -2,7 +2,7 @@
 `FORMAT`): each Commit period's advice length |a_j|, unpadded, beside the prompt and output lengths and finishes of the
 requests it admits, so the mix it was measured at is on the record. A Commit period is WINDOW_STEPS engine steps, one in
 the run of record, so an execution phase of T buckets of τ holds several, and their sum over each execution phase
-(``by_phase``) is the advice an execution phase carries, which the onsite record sets beside the network certifier's
+(``by_phase``) is the advice an execution phase carries, which the onsite record sets beside the network attester's
 bound (`onsite_record.py`). A served run's advice length is
 private (a value), so only a test run with public inputs is measured, and its record says so (``label``): a figure of
 that test run, never of a served run.
@@ -19,7 +19,7 @@ requests, each once, in the Commit period that admits it: a Commit period's advi
 first, then those it admits. Where each Commit period's private report records its first step's engine clock reading
 (``t0``), ``start_s`` is it, counted from the first Commit period's, and ``by_phase`` sums the bits of the Commit
 periods that start in each execution phase of T buckets of τ (``--T``, ``--tau``) on that clock (the test run's
-phases, not the network certifier's phase boundaries: a Commit period near a boundary can count in the next), with
+phases, not the network attester's phase boundaries: a Commit period near a boundary can count in the next), with
 ``phase_bits`` summarizing those phases; otherwise ``by_phase`` says why it is missing. ``serving`` is the engine's configuration the
 step trace records (the report's), the settings it was measured at. A report that places outputs at another τ is
 refused. ``refused`` and ``open`` are the Commit periods the advice refused or left open, which no figure counts.

@@ -25,7 +25,7 @@ statement in `Properties.Poub.Remote.SubprotocolDeployed`:
 * **LineHeldAtSubprotocol**: `Properties.Poub.Line.LineHeld` with the component's acceptance in the event in place
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
-  bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's
+  bytes that play the record of `ω` on the node (`Plays`) while the network attesters sign nothing but the verifier's
   messages entering the node and the record's line credits more bits read than the trace's passes read is at most
   `LineHeld`'s bound, term for term.
 * **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64` over the session's `⌈W/g⌉`
@@ -61,8 +61,8 @@ messages entering it, as its certifiers count (`quietIngress`), on a schedule th
 
 namespace Properties.Poub.Subprotocol
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions Properties.Poub.Line
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions Properties.Poub.Line
 
 /-- **The component accepts bytes that play the record on the node.** The parameters `a` (canonical JSON), the
 commitment `b` and the evidence `e` decode under the component's decoders, its check accepts them

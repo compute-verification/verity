@@ -25,8 +25,7 @@ src/research/
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
 │                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
-│                   tools/verity/landq replays
+├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue
 ├── policy.py       the landing's policy over tools/check/policy.toml: what is off the merge gate and what may stay red
 ├── checkview.py    `research status RUN` on a check run; tools/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
@@ -108,7 +107,7 @@ research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
-research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
+research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a candidate
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]  # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
@@ -135,18 +134,18 @@ listed twice. Anything else, unreadable included, passes no gate, and a refusal 
 stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
-(so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
+(so its commits are the candidate's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
 passes fast-forwards the target to that exact tree. On a failure it bisects to the first ref whose merge breaks it
 and fast-forwards to the longest prefix that passed.
 
-`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
-worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's candidate build: the same chain, in a scratch
+worktree, onto the remote's `--into` or a candidate ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the Markdown size limits
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
 `tools/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
-After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
+After a merge or a candidate lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
 head branch unless an open one uses it. With `--push` (the lander's), a merge that lands is
@@ -198,8 +197,7 @@ python = "python3"
 ~~~
 
 The pod registry (`src/research/pods/registry.py`) is the same table as one file per machine,
-`machines.d/<name>.toml` in the notes repo, so creating a pod never means
-hand-merging a shared file: `research pods create --name N --max-hours H ... --register
+`machines.d/<name>.toml` in the notes repo: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
 existing pod. `register` and `run --on` use one directory: `$RESEARCH_MACHINES_D`,
 else `~/.research/notes/machines.d` (`none` turns it off, and `register` refuses).
@@ -208,7 +206,7 @@ The two sources merge, and a name they bind to different pods is refused.
 --apply` seeds `machines.d` from machines.toml.
 
 A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
-`rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
+`rate_usd_per_hour`, reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
 reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `launch.sh` brings one up (`--dry-run`
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
@@ -217,12 +215,14 @@ Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a floc
 `--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
-each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
+each with its repository file and owner, and goes there only through `research deploy install NODE --by WHO
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
-(`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
+(`units/` beside the manifest, settings in `env/`); `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 A file of machines' addresses (`/etc/vy/peers`) is a template the register of machines fills at install time (`register =
 true`; `infra/ops/verity_ops/deploy.py`), and `research deploy roll PATH --by WHO [--apply]` puts it on every node, one at a time.
+A machine marked stopped (`research pods stopped NAME`; `--back` clears it), or `unreachable_since` for an hour, is asked
+nothing by `--on auto` and leaves every list at the next roll (`--allow-shrink`).
 `research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
@@ -264,8 +264,7 @@ and `source_archive_sha256`.
 The commit travels as git objects when it can: the launcher `git push`es it
 into the machine's bare repository `<root>/git/verity.git` through its own ssh
 argv (`remote.git_push_url`, an `ext::` URL; no credential anywhere), so only
-the objects the machine lacks cross the uplink (the first push to a new pod
-carries the history). The machine checks the commit's tree hash, extracts
+the objects the machine lacks cross the uplink. The machine checks the commit's tree hash, extracts
 `git archive` of it, and lists every file's sha256, which must equal the
 launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
@@ -273,9 +272,8 @@ git-push+tree+file-sha256`, `transport: git`; job.json
 path, prints one line and ships the archive stream as above, given `.git` in
 place once a push lands; nothing is ever
 marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
-the workload's cwd: the workload runs in its own run directory, as locally,
-because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+the workload's cwd: the workload runs in its own run directory,
+because every run of one commit shares `<root>/src/<sha>/`. `--cwd source` (or `source/SUB`) runs it in the tree, and
 `--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
 of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
@@ -292,7 +290,7 @@ launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
 (status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
 recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
-`scope_end`; so does a stage timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
+`scope_end`; so does the run's timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
 cancel does. A queued run waits on its machine in `research disk-hold`, then `research cpu-hold` (`disk.py`, `cores.py`: the
 wrappers `infra/cluster` puts ahead of its runner); one still held is withdrawn: its hold ends as a manual cancel and
 refused.json says `Withdrawn` (`withdraw.py`). Never SIGKILL the runner: one killed during
@@ -359,7 +357,7 @@ research.telemetry SUBCOMMAND` (`telemetry/cli.py`, whose docstring lists them).
 `job.json` and `status.json`, its identity and state, with secret-named values redacted (`telemetry/job.py`); `events.jsonl`,
 through one append helper (`events.py`); `resources.jsonl`, the sampler beside the workload (`sample.py`, reading `cgroup.py`
 and `procs.py`); `failure.json`, how it ended (`classify.py`); and `RULES.md`, rendered from a policy file
-(`telemetry/policy.py`). `run.py` is the harness itself: it starts the sampler and the workload, enforces the stage timeout and
+(`telemetry/policy.py`). `run.py` is the harness itself: it starts the sampler and the workload, enforces the run's timeout and
 records the end. `cancel.py` writes a cancel's intent before its signal and its result after, `scope.py` ends a run's processes
 by their cgroup scope (what `research cancel` and a timeout stop), `pyspy.py` dumps a stalled run's Python stacks, and
 `source_identity.py` records which source tree each imported package resolves to. Outside `research`, `infra/ops` reads
@@ -382,12 +380,13 @@ job is added, claimed by a worker under a lease, renewed while it runs and compl
 research jobs add merge-check --commit REF      # or `lean-regen --commit REF --package DIR`, or `audit-main`
 research jobs list [--state S] [--kind K] [--json]    research jobs show ID    research jobs cancel ID
 research worker --dispatch --pods A,B [--once]  # claims jobs and runs each with `research run --on` on one of the pods
+research worker --dispatch --kinds research-run [--slots 4] --name control  # a lead's `research run` line, CPU machines only
 ~~~
 
 `research.jobs.model` is the queue's reference semantics; `vectors.json` beside it pins every rule as request and response
 cases, which the site runs too. `research.jobs.client` talks to the site or to the model, with `$JOBS_TOKEN` for `research
 jobs` and `$JOBS_WORKER_TOKEN` for the worker, neither ever printed. `jobs/cli.py` holds both commands, `jobs/dispatch.py` the
-worker, and `jobs/trains.py` the model of the trains the service builds, checks and lands, whose gate `research merge --canary`
+worker, and `jobs/trains.py` the model of the candidates the service builds, checks and lands, whose gate `research merge --canary`
 tests. Only `research` imports the package.
 
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
@@ -544,7 +543,7 @@ Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
 the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
-`tests/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
+`tests/tools/research/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
 another app's bot posting under a handle's name rings no one.
 
 ### Notes and evidence over MCP

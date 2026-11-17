@@ -6,7 +6,7 @@ public import Definitions.Certifier.Cells
 # Marks: a mark's phase and a span's tail
 
 Definitions only. The schedule's buckets (`Definitions.Certifier.Cells`) run in execution phases of `T` buckets
-each. The network certifier signs a **mark** over a message it is handed and stamps it with the phase of the bucket it
+each. The network attester signs a **mark** over a message it is handed and stamps it with the phase of the bucket it
 handles it in (`markPhase`). A mark's bucket is the number of ticks the device has done when it handles the mark, so
 every connection whose server bytes the device can have read by then was admitted at an earlier bucket; this is exact
 once the device takes marks as an input. A **span** runs from one mark, its start mark, to a later one, its end mark.
@@ -19,7 +19,7 @@ cells. A count over a span is over the phases from the start mark's to the end m
 
 namespace NetTiming
 
-/-- **A mark's phase**: the execution phase, of `T` buckets each, of the bucket `t` the network certifier handles the
+/-- **A mark's phase**: the execution phase, of `T` buckets each, of the bucket `t` the network attester handles the
 mark in (the ticks it has done), `⌊t/T⌋`. It is the device's code on a mark: the phase it stamps the mark with. -/
 def markPhase (T t : ℕ) : ℕ := t / T
 

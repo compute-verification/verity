@@ -13,7 +13,8 @@ reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
 writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
 seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and
 OUT/summary.json, `Compiled.summary()` (what `steps.trace_commands` and `steps.compare` read), and prints
-`COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
+`COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`; a `--window` at every layer, with its `--guard` passed where
+given, also writes those two numbers (`metrics.toml`) into the run's result.
 `--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
 `graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
 measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
@@ -37,8 +38,11 @@ from pathlib import Path
 
 from verity.device import load_card
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+
+MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"], "batch_invariant": False,
+TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]["value"], "batch_invariant": False,
           "attention_backend": None,
           "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
           "moe_backend": "triton"}
@@ -84,7 +88,7 @@ def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seq
 
 def session(reqs: list[tuple[int, int, int]]):
     """The window's I1 advice and certified bodies: greedy requests `q<i>` to their max_tokens, prompts of token ids below 256."""
-    from verity.protocols.accounting.certifier.verifier import advice as I1
+    from verity.protocols.resource_accounting.network.verifier import advice as I1
     steps = scheduled(reqs, ENGINE["max_num_batched_tokens"], ENGINE["long_prefill_token_threshold"])
     requests = tuple(I1.RequestAdvice(f"q{i}", lp, m, "length") for i, (_, lp, m) in enumerate(reqs))
     advice = I1.Advice(requests, tuple(I1.StepAdvice(tuple(
@@ -204,27 +208,35 @@ def instrument(m: Meter) -> None:
     defs.Builder.finish = top_finish
 
 
-def main() -> int:
+def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--window", choices=sorted(WINDOWS), default=None)
+    ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
                     help="class G's execution: compiled is vLLM's breakable CUDA graphs at their capture sizes")
     ap.add_argument("--layers", type=int, default=None, help="the model's first N layers only (a scaling measurement)")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", default=None, help="default: $OUT, else $RESEARCH_RUN_DIR/out")
     ap.add_argument("--profile", action="store_true", help="cProfile the compile (profile.pstats, profile.txt)")
     ap.add_argument("--no-phases", action="store_true", help="no phase instrumentation")
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
+    if a.window and a.requests:
+        ap.error("one of --window and --requests")
+    if not a.requests:
+        a.window = a.window or "long-w0"
+    return a
+
+
+def main() -> int:
+    a = parse()
     if a.engine:
         ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
-    if (a.window is None) == (a.requests is None):
-        ap.error("one of --window and --requests")
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
-    out = Path(a.out)
+    from verity_bench import settings
+    out = Path(a.out or settings.OUT or Path(settings.RESEARCH_RUN_DIR) / "out")
     out.mkdir(parents=True, exist_ok=True)
     m = Meter()
     if not a.no_phases:
@@ -281,7 +293,21 @@ def main() -> int:
         if a.layers is not None or want is None or digests != want:
             print(f"COMPILE-COST guard FAILED: digests {[d[:16] for d in digests]} against PINS {want}", flush=True)
             return 1
+    if a.layers is None and a.window:
+        record(out, a.window, a.execution, rec)
     return 0
+
+
+def record(out: Path, window: str, execution: str, rec: dict) -> None:
+    from verity_bench import kit
+    w = kit.writer(out)
+    card = w.stamp["card"]
+    fields = {"model": "GLM-5.3", "window": window, "execution": execution,
+              "machine": "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")}
+    member = f"glm-5.3-{window}-{execution}-{fields['machine']}"
+    for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
+        m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)
+        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
 
 
 if __name__ == "__main__":

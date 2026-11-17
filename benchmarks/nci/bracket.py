@@ -167,7 +167,7 @@ def retrained(row: dict, parameters: list[dict]) -> bool:
 
 def efficiency(row: dict, calibration: dict, parameters: list[dict]) -> list[dict]:
     """Pretraining efficiency under the policy, ``m / slowdown``, for each recipe: ``attack``, with the construction's cost.
-    The best recipe is the attacker's choice."""
+    The best recipe is the malicious developer's choice."""
     ests = catalog.estimates(parameters)
     out = []
     for name, b_w, b_a, est in RECIPES:

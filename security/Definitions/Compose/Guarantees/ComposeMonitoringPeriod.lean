@@ -41,9 +41,9 @@ time, and the tail is taken at it (`MonitoringPeriodTailMax`).
 
 @[expose] public section
 
-namespace Accounting.Guarantees.ComposeMonitoringPeriod
+namespace ResourceAccounting.Guarantees.ComposeMonitoringPeriod
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 registered circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
@@ -270,4 +270,4 @@ def CircuitCreditMonitoringPeriod : Prop :=
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
 
-end Accounting.Guarantees.ComposeMonitoringPeriod
+end ResourceAccounting.Guarantees.ComposeMonitoringPeriod

@@ -34,7 +34,7 @@ from verity.commitments import history as HT
 from verity.commitments import hm96
 
 __all__ = ["Histories", "LAYOUT_WORDS", "NAME", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on",
-           "release"]
+           "release", "words_of"]
 
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"
@@ -43,6 +43,15 @@ WORDS = 576
 #: a latent row's words by the KV cache's layout: bf16 [kv_c | k_pe] (`WORDS`), or fp8_ds_mla's 656-byte row (the e4m3
 #: kv_c, its four f32 scales, one a 128-wide tile, then the bf16 k_pe) as u16 words in byte order
 LAYOUT_WORDS = {"bf16": WORDS, "fp8_ds_mla": 328}
+
+
+def words_of(layout: Any) -> int:
+    """A latent row's words under the KV cache's layout ``layout`` (`LAYOUT_WORDS`), refused by name for any other."""
+    if not isinstance(layout, str) or layout not in LAYOUT_WORDS:
+        raise ValueError(f"the history tables' layout is one of {sorted(LAYOUT_WORDS)}, not {layout!r}")
+    return LAYOUT_WORDS[layout]
+
+
 #: what a table retains a row: its words' bytes and its salt
 ROW_BYTES = 2 * WORDS + hm96.SHA512.salt_bytes
 

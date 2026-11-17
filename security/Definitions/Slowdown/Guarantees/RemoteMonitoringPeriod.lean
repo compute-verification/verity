@@ -14,7 +14,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 
 * **PoUW** (in place of `PouwSound`): window `t`'s certificate is incorrect (`incorrect t`: accepted with the window's time
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
-  `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks`, at window `t`'s play, for
+  `ResourceAccounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks`, at window `t`'s play, for
   a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s premises; that
   bridge is not stated, and `δ_bind` and `δ_ks` have no value yet (`PouwSound`), so `p` is a parameter with none.
   `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` credits live words over a period's accepted prefix, not time, so it

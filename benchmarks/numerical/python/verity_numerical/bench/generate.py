@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -89,7 +90,7 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 
 
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
-    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``: a mix entry's
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``calibration/census/workloads.json``: a mix entry's
     template bound to exactly its parameters), in id order; an attention head's T range is its census ``variable_ranges.T``."""
     bound = {(s.template, json.dumps(vars(s.parameters), sort_keys=True)): s.id for s in census.SUBCIRCUITS.values()}
     sids = sorted({sid for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows for m in w["template_mix"]
@@ -145,13 +146,16 @@ def register(set_dir: str | Path) -> str:
     return art
 
 
+#: a ``--param`` value that is a number: an integer (group ``int``), else a decimal float with an optional exponent
+NUMBER = re.compile(r"[+-]?(?:(?P<int>\d+)|(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?)")
+
+
 def parse_value(v: str) -> Any:
-    for f in (int, float):
-        try:
-            return f(v)
-        except ValueError:
-            pass
-    return v
+    """A ``--param`` value: an int or a float where it is one (`NUMBER`), else the string itself."""
+    m = NUMBER.fullmatch(v)
+    if m is None:
+        return v
+    return int(v) if m["int"] else float(v)
 
 
 def _print_set(s: Mapping[str, Any]) -> None:

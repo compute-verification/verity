@@ -40,7 +40,7 @@ open Verity.Game
 open Lean (Json)
 open Properties.Challenger (bitsOf Draws)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **What the verifier's acceptance gives of a play of the per-member form, at the window the verifier sets up at
 its parameters** (`ExecutionPhaseRead`): where the form's accepts hold `MembersAccept` and the registered files hold each

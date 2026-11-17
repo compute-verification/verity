@@ -9,8 +9,8 @@ Executable transcriptions of `verity.circuits.ops.fp32` and of the FP32 word pri
 (`verity_vllm.program.registry`: `prims`, `ref_prims`, `moe`, `dsa`, `topp_word_gates`), and of `mufu.DivFullScaleA_v1`,
 the one MUFU primitive that reads no table. Words are natural numbers as in `Evaluate.Scalar`.
 
-Where `security/Definitions/Core/Fp32.lean` defines a primitive, the definition here is a copy of it, the certifier's
-pattern; each doc names the definition it must equal, to be proved in `security/Proofs`. Every finite word is a multiple of
+Where `security/Definitions/Core/Fp32.lean` defines a primitive, the definition here is a copy of it, the network
+attester's program's pattern; each doc names the definition it must equal, to be proved in `security/Proofs`. Every finite word is a multiple of
 the least subnormal `2^-149` (`decode`), so an exact sum, product, quotient or fused `a * b + c` is a rational `n / d` in
 those units, which `roundRn` (`fp32._round_f32`) or `roundRm` (`moe._round_f32_toward_neg_inf`) takes to a word.
 

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Actual
+public import Definitions.ResourceAccounting.Actual
 public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Set.Card
@@ -41,7 +41,7 @@ that implements `P`, `Additive` says every run of a set that implements `P` has 
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Finset
 
@@ -191,4 +191,4 @@ def Additive {L : Type*} (𝓒 : Set (Actual.Run L)) (μ : Actual.Run L → ℕ)
     (impl : Actual.Run L → Prop) : Prop :=
   ∀ R ∈ 𝓒, impl R → (cert : ℕ∞) + r ≤ μ R
 
-end Accounting
+end ResourceAccounting

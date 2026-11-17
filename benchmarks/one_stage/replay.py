@@ -614,7 +614,7 @@ def python(c: Case) -> dict:
         of_record = [(k, v) for k, v in vs if v.get("of_record")]
         if not of_record:
             return out("undecided", "no verifier of record")
-        return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
+        return out("undecided", f"the verifier {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
     public = {"bound": wrong["bound"], audit.COMPLETE: a["complete"], "drawn": list(e["draw"]["units"]),
@@ -709,7 +709,7 @@ OUTSIDE = {
     "statement-binds-another-partition": "M0's statement bindings (`a0.bindings`)",
     "m0-selftest-unit-draw-session": "M0's selftest",
     "prover-ignores-the-draw (M0 selftest)": "M0's selftest",
-    "wrong-output-word": "the verifier of record (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
+    "wrong-output-word": "the verifier (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
     "lean-reads-another-root-of-W": "verity-verify-proof's registered reads (`--registered`), opening each table row against the reads "
                                     "file's root; the protocol reads the roots the verdict opened against (replayed as "
                                     "registered-read-opened-against-another-root)",
@@ -1559,28 +1559,46 @@ def registered_gemm(run: Run) -> Iterator[Case]:
                               session_roots={r["port"]: r["root"] for r in rec["roots"]})
 
 
-#: what the era's code imports from a run's commit
-ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "verity/protocols/accounting/pouw/prover/kernels/served_zk")
+#: what the era's code imports from a run's commit: each part's path in every layout it has had, oldest first. These are
+#: paths into history, read at the run's commit: a move adds its new path at the end and never rewrites these.
+ERA_PARTS = {"verity": ("verity",), "catalog": ("catalog/verity_catalog",), "kernels": ("kernels/verity_kernels",),
+             "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/accounting/pouw/prover/kernels/served_zk",
+                           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")}
+
+
+def era_path(commit: str, part: str, exists: Callable[[str, str], bool] | None = None) -> str:
+    """`part`'s path at `commit`: the newest of its layouts (`ERA_PARTS`) that the commit holds."""
+    exists = exists or (lambda c, p: subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{c}:{p}"],
+                                                    capture_output=True).returncode == 0)
+    found = next((p for p in reversed(ERA_PARTS[part]) if exists(commit, p)), None)
+    if found is None:
+        raise Missing(f"{part} ({' or '.join(ERA_PARTS[part])}) at {commit[:9]} (git history)")
+    return found
 
 
 def era_tree(run: Run, commit: str) -> Path:
-    """The run's commit's own code (`ERA_PATHS`, from git history), for a verifier's copy the current code can't build."""
+    """The run's commit's own code (`ERA_PARTS`, from git history), for a verifier's copy the current code can't build;
+    ``.paths.json`` names the path each part has there."""
     out = run.sets.root.parent / "_trees" / commit[:12]
-    if (out / ".done").exists():
+    if (out / ".done").exists() and (out / ".paths.json").exists():
         return out
     out.mkdir(parents=True, exist_ok=True)
-    for sub in ERA_PATHS:
+    paths = {part: era_path(commit, part) for part in ERA_PARTS}
+    for sub in paths.values():
         a = subprocess.run(["git", "-C", str(REPO), "archive", commit, sub], capture_output=True)
         if a.returncode != 0:
             raise Missing(f"{sub} at {commit[:9]} (git history)")
         subprocess.run(["tar", "-x", "-C", str(out)], input=a.stdout, check=True)
+    (out / ".paths.json").write_text(json.dumps(paths))
     (out / ".done").write_text(commit)
     return out
 
 
 def era_python(tree: Path, code: str, *args: str) -> Any:
-    """`code` run on the era's tree, its last stdout line read as JSON."""
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(tree / p) for p in ("", "catalog", "kernels"))}
+    """`code` run on the era's tree, its last stdout line read as JSON; ``ERA_SERVED_ZK`` names served_zk's path there."""
+    paths = json.loads((tree / ".paths.json").read_text())
+    roots = ("", *(str(Path(paths[k]).parent) for k in ("catalog", "kernels")))
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(tree / p) for p in roots), "ERA_SERVED_ZK": paths["served_zk"]}
     p = subprocess.run([sys.executable, "-c", code, *args], capture_output=True, text=True, env=env, cwd=tree)
     if p.returncode != 0:
         raise Gap(f"the code at {tree.name}: {(p.stderr.strip().splitlines() or ['?'])[-1]}")
@@ -1589,8 +1607,8 @@ def era_python(tree: Path, code: str, *args: str) -> Any:
 
 #: served_zk's verifier copies at each level, by the era's own `served_commit`
 SERVED_ZK_ERA = r'''
-import json, sys
-sys.path.insert(0, "verity/protocols/accounting/pouw/prover/kernels/served_zk")
+import json, os, sys
+sys.path.insert(0, os.environ["ERA_SERVED_ZK"])
 import served_commit as SC
 from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
@@ -1620,14 +1638,14 @@ SERVED_OUTSIDE = (
     (r"receive-after-draw", "the challenger's record order (`Challenger.register`, late-registration): each window is received "
                             "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
-    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
-    (r"lean-.*", "the verifier of record (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
+    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier's"),
+    (r"lean-.*", "the verifier (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
     (r"firewall-.*", "the ZK server's checks on a delivered proof, before the outcome"),
 )
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's docket of PoUW's
+    """served_zk's window through the proof system (`ERA_PARTS`' served_zk at the run's commit): the request's docket of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
@@ -1636,8 +1654,8 @@ def served_window(run: Run) -> Iterator[Case]:
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1784,13 +1802,15 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's docket passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
-    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"],
-                         capture_output=True, text=True) if commit else None
-    if src is None or src.returncode != 0:
-        raise Missing(f"verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py at {commit} (git history)")
+    if commit is None:
+        raise Missing("served_commit.py at the run's commit: the run names no commit")
+    at = f"{era_path(commit, 'served_zk')}/served_commit.py"
+    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:{at}"], capture_output=True, text=True)
+    if src.returncode != 0:
+        raise Missing(f"{at} at {commit} (git history)")
     binding_run = "def run_of" in src.stdout
     prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles, the record's "
                                                 "version)",

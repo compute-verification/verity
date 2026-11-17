@@ -1,5 +1,5 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
-frame-v3-sha512 tree, computed by `verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
+frame-v3-sha512 tree, computed by `verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
 rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
 under the domain id the host computes (`registered.domain`).
 
@@ -42,9 +42,9 @@ from verity.commitments.rowleaf import (
     sha512_row_v2_prefix,
 )
 
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_kernels as RTD
 from verity_torch.pouw import row_table_device as RTL
-from verity.protocols.accounting.pouw.prover.serving.h1.nodes import Nodes
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "ZyArgs", "available", "device_commit", "device_hash", "device_lib",
            "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "host_zy", "nvcc", "pub",
@@ -150,7 +150,7 @@ def pub(head: bytes, first: int, n: int) -> Pub:
 
 def nvcc() -> str | None:
     """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
-    from verity.protocols.accounting.pouw.prover.serving import device as pouw_device
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
 
     return pouw_device.nvcc()
 

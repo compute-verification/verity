@@ -1,0 +1,20 @@
+# The suite of the distribution `verity-exact-kit`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-exact-kit-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-exact-kit"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test_checks validates the result.json `Checks.finish` writes under a run with `research.result.check_doc`.
+inputs = ["tools/research/src/research/__init__.py", "tools/research/src/research/result.py"]

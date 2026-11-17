@@ -5,7 +5,7 @@ public import Definitions.Compose.Joint
 /-!
 # The joint guarantee (trusted)
 
-A joint audit runs the compute, bandwidth and capacity audits on one device at once (`Accounting.Run`). Each audit's
+A joint audit runs the compute, bandwidth and capacity audits on one device at once (`ResourceAccounting.Run`). Each audit's
 guarantee, in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, holds against the other two audits' coins as advice
 (`Run.ComputeSound`, `Run.BandwidthSound`, `Run.CapacitySound`). Then the probability that every audit accepts and some
 account is below its certificate (W_cert of work, Q_cert of reads, S_cert of capacity) on every one of its audit's own
@@ -19,14 +19,14 @@ some coin of each audit leaves the other accounts within its residual. A device 
 of covert work on a few of the compute coins. The per-run reading, at the coins flipped, is `JointPerRun` and
 `CovertResidualPerRun` (`Definitions.Pouw.Guarantees.PerRun`).
 
-Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Compose.Joint`).
+Each `def G : Prop` is proved by `ResourceAccounting.SecurityProofs.G : ResourceAccounting.Guarantees.G` (`Proofs.Compose.Joint`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting
+open ResourceAccounting
 
 /-- **The joint guarantee.** On any device and any run of a joint audit on it whose compute, bandwidth and capacity
 audits have their guarantees at certificates `W`, `Q` and `S` with errors `εW`, `εQ` and `εS`, the probability over the
@@ -53,4 +53,4 @@ def CovertResidual : Prop :=
     Pouw.pr (fun ω => r.Accepted ω ∧ (r.ComputeCovert p W ω ∨ r.BandwidthCovert Q ω ∨ r.CapacityCovert S ω))
       ≤ εW + εQ + εS
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

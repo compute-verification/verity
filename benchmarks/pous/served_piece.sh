@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
+# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
@@ -15,14 +15,15 @@
 # else the tree's own gpu_lease.sh, for at most LEASE_MIN minutes, default 90, and MEM_GB GiB of host memory, default
 # 72; with no lease of its own only in the caller's, when GPU_LEASE_UUID is set), with vLLM's venv (PY, default
 # /workspace/cp/venv312/bin/python) and the snapshot under HF_HOME (default /workspace/hf): setup, PoUS's session with
-# the memory challenger on vy-auditor-2, and then, in the same process over the store it holds, PoUB-P2's with
+# the memory attester on vy-auditor-2, and then, in the same process over the store it holds, PoUB-P2's with
 # vy-auditor-2's bandwidth party, for at most BW_PARTY_MIN minutes (default 10, the gate's cap). The session it asks for
 # is the auditor's (p2_parties.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-*
 # the party refuses it and the bandwidth answer is undecided. What the sessions left stays in SERVE_DIR/private, C*
 # among it, and the lease ends with that process: no answer is waited for on the card.
 #
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
-# (default 128, in a systemd scope where this user can make one: PoUS's case is held by the Python and written as its
+# (default 128, in a systemd scope where this user can make one, else under prlimit's address-space limit, else not
+# answered: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line): PoUB-P2's case answered by
 # poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
 # collect), and its case to SERVE_DIR/private/bandwidth; then PoUS's case answered by pous-run-protocol, which must
@@ -50,8 +51,8 @@ LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
-           "it is allowed (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
-  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/accounting/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+           "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
+  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"
@@ -67,13 +68,13 @@ built() {  # the Lean executable $2 of the scratch copy's package $1, built ther
 }
 POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-}
 if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
-  CHECK=verity/protocols/accounting/pous/verifier/check
+  CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
   tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/accounting/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/resource_accounting/memory/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
 fi
 # shellcheck disable=SC2206
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"
@@ -94,9 +95,15 @@ fi
 rc=$?
 stamp "the sessions' part exit $rc"
 [ "$rc" = 0 ] || exit "$rc"
-scope=()
-command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
-  && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+  scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then
+  # RLIMIT_AS binds each process alone: each Lean served_piece.py starts gets the whole limit, not a share of it.
+  scope=(prlimit "--as=$((${ANSWERS_MEM_GB:-128} << 30))" --)
+else
+  echo "POUS: no answer: this host makes no systemd user scope and runs no prlimit: the answers run only under a memory limit of their own"
+  exit 2
+fi
 CUDA_VISIBLE_DEVICES='' "${scope[@]}" "$PY" "${ARGS[@]}" --answers 2>> "$DIR/pous.log"
 rc=$?
 stamp "the answers' part exit $rc"

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.TS.Session.Checked.Layer
 public import Proofs.Pouw.TS.Session.Held.Known
-public import Definitions.Accounting.Served
+public import Definitions.ResourceAccounting.Served
 public import Batteries.Data.ByteArray
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A checked unit's proof layer with its served checks, through its Flock sessions
 
-`Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
+`ResourceAccounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
 sessions, takes two steps further:
 
 * (a) **The `ok` rows are the verifier's.** verity-verify-proof `--registered F` registers the `ok` port at known content
@@ -50,21 +50,21 @@ sessions, takes two steps further:
   (`OkColl`, a fact of the session's commit-time openings, with both preimages in hand: `FlockC3.RegLevels.knownColl`);
 * (b) **The served checks hold.** The relation (`HeldRel`) is `CheckedRel` and, unless `OkColl`, an assignment the
   circuit's evaluation agrees with on every sampled proof block's wires at which every sampled proof block's checks hold in the registered
-  circuit (`Accounting.Served.Held` of `Cd`, at the unit `unitOf u` and the values `dec vals`).
+  circuit (`ResourceAccounting.Served.Held` of `Cd`, at the unit `unitOf u` and the values `dec vals`).
 
-What ties the Flock circuit to `Cd` is the premise `Accounting.Assumptions.TS.OkRealizes`: on an assignment the key
+What ties the Flock circuit to `Cd` is the premise `ResourceAccounting.Assumptions.TS.OkRealizes`: on an assignment the key
 program's evaluation agrees with at unit `u`, whose `ok` wires carry the `ok` row, `Cd`'s checks of `unitOf u` hold.
 Unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
-`Proofs.Pouw.TS.Session`, as `Accounting.TS.Checked`'s do.
+`Proofs.Pouw.TS.Session`, as `ResourceAccounting.TS.Checked`'s do.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Held
+namespace ResourceAccounting.TS.Held
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 open FlockSoundness.Refine (H512)
 
@@ -95,15 +95,15 @@ def OkColl (s : RowsSession) (ok : String) (ks : Array (Array ℕ × ByteArray))
 
 /-- **The checked unit's relation with its served checks**: `CheckedRel`, and the layer value `v` is the registered
 reads of one assignment the circuit's evaluation agrees with on every wire of every sampled proof block of `o`, at which every
-sampled proof block `u`'s checks hold in the registered circuit `Cd` (`Accounting.Served.Held` at `unitOf u` and `dec vals`); or
+sampled proof block `u`'s checks hold in the registered circuit `Cd` (`ResourceAccounting.Served.Held` at `unitOf u` and `dec vals`); or
 the `ok` tie collides (`OkColl`) at the `ok` port's known rows in `known`. -/
-def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accounting.Compose.Declared ι)
-    (cls : ℕ → Accounting.Served.Cls) (unitOf : Fin s.n → ℕ) (dec : (Fin s.Circ.N → Bool) → ι → ℤ)
+def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : ResourceAccounting.Compose.Declared ι)
+    (cls : ℕ → ResourceAccounting.Served.Cls) (unitOf : Fin s.n → ℕ) (dec : (Fin s.Circ.N → Bool) → ι → ℤ)
     (known : Array (String × Array (Array ℕ × ByteArray))) (v : ℕ → ℕ → Option Bool) : Prop :=
   CheckedRel s o ok v ∧
     ((∃ vals : Fin s.Circ.N → Bool, v = rowsReg s vals ∧
         (∀ u ∈ o.2.1, ∀ g ∈ s.P.io u, s.Circ.eval vals g = vals g) ∧
-        ∀ u ∈ o.2.1, Accounting.Served.Held Cd cls (unitOf u) (dec vals)) ∨
+        ∀ u ∈ o.2.1, ResourceAccounting.Served.Held Cd cls (unitOf u) (dec vals)) ∨
       ∃ ks, (ok, ks) ∈ known ∧ OkColl s ok ks)
 
 /-- **The held layer through its Flock sessions**: proof `i` of round `w` is accepted where verity-verify-proof
@@ -113,7 +113,7 @@ reads (`openedReg`), and its relation is `HeldRel` at round `w`'s registered cir
 noncomputable def heldLayer {ι Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
     (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray)))
-    (Cd : Fin S → Accounting.Compose.Declared ι) (cls : Fin S → ℕ → Accounting.Served.Cls)
+    (Cd : Fin S → ResourceAccounting.Compose.Declared ι) (cls : Fin S → ℕ → ResourceAccounting.Served.Cls)
     (unitOf : ∀ x w i, Fin (sess x w i).n → ℕ) (dec : ∀ x w i, (Fin (sess x w i).Circ.N → Bool) → ι → ℤ)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
     ProofLayer Ω S nπ (ℕ → ℕ → Option Bool) where
@@ -123,4 +123,4 @@ noncomputable def heldLayer {ι Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → 
   rel x w i v := HeldRel (sess x w i) (out x w i) ok (Cd w) (cls w) (unitOf x w i) (dec x w i) (known x w i) v
   right := right
 
-end Accounting.TS.Held
+end ResourceAccounting.TS.Held

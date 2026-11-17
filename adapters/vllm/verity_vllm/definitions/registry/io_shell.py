@@ -1,4 +1,4 @@
-"""The compiled server circuit's ingress: the request bytes the network certifier attests (the ingress transfer gates), parsed
+"""The compiled server circuit's ingress: the request bytes the network attester attests (the ingress transfer gates), parsed
 in-circuit to the prompt's token ids and ``max_tokens``.
 
 Ingress schema v0 is one OpenAI completions request with the prompt as token ids, as compact JSON in a fixed key order with every
@@ -8,8 +8,8 @@ blocks (all JSON whitespace, so vLLM's OpenAI server reads it as it is):
     {"model":"<MODEL>","prompt":[<id>,<id>,...],"max_tokens":<m>,"temperature":0,"stream":true}<spaces>
 
 An id's field is `id_width(V)` characters (6 for a 128,256-entry vocabulary), ``max_tokens``' is `MAX_TOKENS_WIDTH`, and the
-padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the network certifier's attested
-blocks and the parse unit's input rows line up and a registered read opens whole blocks (128 B divides the network certifier's
+padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the network attester's attested
+blocks and the parse unit's input rows line up and a registered read opens whole blocks (128 B divides the network attester's
 4 KiB cells).  So the byte layout is a function of (MODEL, LP, V) alone, never of the prompt's digits: a template's statics carry
 no prompt content.  Greedy only (``"temperature":0``).
 
@@ -20,7 +20,7 @@ the fewest spaces to whole blocks):
     {"model":"<MODEL>","prompt":[<id>,...],"max_tokens":<m>,"temperature":<T>,"top_p":<P>,"seed":<s>,"user":"<RID bytes>",
      "stream":true}<spaces>
 
-``temperature`` and ``top_p`` are `RATIO_WIDTH` characters, a digit, ``.`` and six digits (the network certifier's id request's
+``temperature`` and ``top_p`` are `RATIO_WIDTH` characters, a digit, ``.`` and six digits (the network attester's id request's
 ``%8.6f``), each read as an integer in millionths; ``seed`` is `SEED_WIDTH` characters, spaces then either decimal digits as an
 id's (at least one, no leading zero) or ``null``; ``user`` is RID bytes of printable ASCII without a quote or backslash, its
 length public as the prompt's is. `boolean_io_shell.IngressSampled_v1{MODEL, LP, V, RID}` (body) -> (ok, ids, max_tokens,
@@ -48,7 +48,7 @@ from the scan state row (`boolean_io_shell.ScanSlots_v2`), so a window places on
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
 is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
 
-The network certifier's scan carries the slots: the Programs at a boundary read their slots from the scan's
+The network attester's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
 outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v2{NS, NP, IDB, K0, K, OCC, LP, MAX,
 IDS}` is the read: for each of the row's lanes j (``OCC[j]``, ``LP[j]``, ``MAX[j]`` and ``IDS[j]`` the bit offsets of its
@@ -536,7 +536,7 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
            conformance="not-yet-established: a request's output count and ids as vLLM served them, up to max_tokens and its "
                        "first stop id, KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
-    """A slot's entry of the network certifier's Programs' row (the module docstring): ``read`` the slot's occupancy
+    """A slot's entry of the network attester's Programs' row (the module docstring): ``read`` the slot's occupancy
     bit, then n and the kept outputs; output i is kept while the slot is occupied, its prompt 1 to NP ids, i <
     ``max_tokens`` (unsigned) and no earlier output is a stop id; n the kept outputs, or KO + 1 and none kept where the
     prompt doesn't fit or the outputs don't end within KO."""

@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Pouw.TS.Sampled
-public import Proofs.Accounting.Lemmas.TS.Fixed
+public import Proofs.ResourceAccounting.Lemmas.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word, and the additive lemma
 
-`Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords` and
-`Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed`.
+`ResourceAccounting.SecurityProofs.TS.UnitFixedOfWords : ResourceAccounting.Guarantees.TS.UnitFixedOfWords` and
+`ResourceAccounting.SecurityProofs.TS.AdditiveFixed : ResourceAccounting.Guarantees.TS.AdditiveFixed`.
 
 `UnitFixedOfWords` compares the two sums unit by unit. A good unit of positive weight has fixed words
 (`fixedWords_of_good`): it is fixed (the hypothesis), computed (`ModesRun` at itself, its late cone's first member), and
@@ -22,9 +22,9 @@ continuation from the cut has the path's plurality (`Plurality.plural_sp`).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- A path spliced with itself is the path. -/
 theorem splice_self {Ω : Type} : ∀ {n : ℕ} (k : ℕ) (x : Paths Ω n), splice k x x = x
@@ -94,7 +94,7 @@ theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
 
 open Classical in
 /-- **`UnitFixed` from option A's fixed word.** -/
-theorem UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords := by
+theorem UnitFixedOfWords : ResourceAccounting.Guarantees.TS.UnitFixedOfWords := by
   intro K T L U _ _ _ _ C B _ _ S m s J Q Pos V N W _ _ _ P pf mode wt folded hwt hfix hM hC _ x hx
   obtain ⟨h1, h2⟩ := hC x hx
   refine ⟨le_trans (div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg S)) h1,
@@ -116,7 +116,7 @@ theorem UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords := by
     · exact le_of_eq ((ite_eq_right hw).trans (ite_eq_left ((hM x (w, j)).2 hw)).symm)
 
 /-- **Additive operands don't decide fixedness.** -/
-theorem AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed := by
+theorem AdditiveFixed : ResourceAccounting.Guarantees.TS.AdditiveFixed := by
   intro C B _ _ S m s J Q Pos V N W _ _ pf u hb x hC
   refine ⟨?_, fun z => ?_⟩
   · unfold WordLayer.work
@@ -125,4 +125,4 @@ theorem AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed := by
   · funext k
     exact committed_spliceAt pf.toSampledLayer x z (pf.pos u.1 u.2 k.1) u.1 (pf.coin u.1 u.2) (hb k.1 k.2)
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

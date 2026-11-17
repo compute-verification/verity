@@ -13,7 +13,7 @@ those two leave out:
 
 * `PooledLeakAccepted_schedules`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`), stated as their conjunction. The honest lemma concludes neither:
-  `Witnesses` reads the guarantee at a network certifier with no connection, where both hold with nothing to check.
+  `Witnesses` reads the guarantee at a network attester with no connection, where both hold with nothing to check.
 * `PooledLeakAccepted_fails_at_one_unit`: its bound fails at an audit that always accepts, at `δ = 1/2` with one window
   of one step whose incorrect set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`)
   holds only at `q = 0`, which its `hF` refuses at `δ < 1`.

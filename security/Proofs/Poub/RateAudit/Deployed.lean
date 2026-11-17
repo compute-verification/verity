@@ -25,7 +25,7 @@ samples are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.p
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -677,9 +677,9 @@ theorem pr_paid_le {τ : ℕ} (A : DeployedRun n P N b h ρ S L q r s d G) (tier
 
 end DeployedRun
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.Rate.Deployed
+namespace ResourceAccounting.Rate.Deployed
 
 open scoped ENNReal
 
@@ -772,18 +772,18 @@ theorem window_deployed (n : ℕ) (hn : 0 < n) : ENNReal.ofReal (1 - 0.01 / n) ^
   rw [this]
   norm_num
 
-end Accounting.Rate.Deployed
+end ResourceAccounting.Rate.Deployed
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **PoUB as deployed: an accepted session conserves its words**
-(`Accounting.Guarantees.RemoteRunConservation`). -/
-theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := by
+(`ResourceAccounting.Guarantees.RemoteRunConservation`). -/
+theorem RemoteRunConservation : ResourceAccounting.Guarantees.RemoteRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF hA
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ Deployed.rebuildBits b rounds cRoot F :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
@@ -812,8 +812,8 @@ theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := b
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- **PoUB at its deployed parameters**
-(`Accounting.Guarantees.RemoteRunConservationDeployed`). -/
-theorem RemoteRunConservationDeployed : Accounting.Guarantees.RemoteRunConservationDeployed := by
+(`ResourceAccounting.Guarantees.RemoteRunConservationDeployed`). -/
+theorem RemoteRunConservationDeployed : ResourceAccounting.Guarantees.RemoteRunConservationDeployed := by
   intro n P N ρ S L q r s G lam τ cRoot F cost tier A hn hP hN hc hq hG hW hF hA
   have h := RemoteRunConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
     (by omega) hP hN (by norm_num) (by positivity) (by norm_num) hW hF hA
@@ -825,4 +825,4 @@ theorem RemoteRunConservationDeployed : Accounting.Guarantees.RemoteRunConservat
     have hG' : (G : ℝ≥0∞) ≤ 2 ^ 55 := by exact_mod_cast hG
     gcongr
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

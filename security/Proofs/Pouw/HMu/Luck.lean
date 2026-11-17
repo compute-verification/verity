@@ -2,21 +2,21 @@ module
 
 public import Definitions.Pouw.Guarantees.HMu
 public import Proofs.Poub.Tag.LittlewoodOfford
-public import Proofs.Accounting.Lemmas.HMu
+public import Proofs.ResourceAccounting.Lemmas.HMu
 
 /-!
 # Lemma B, and (H-μ) from the coins
 
 `lemmaB` sums (H-μ) over the at most `Z` skipped values (Inj) leaves on each deficient view. The coin bounds count bit
-vectors at each committed `ω₀`: Erdős's Littlewood–Offord bound (`Accounting.TagProofs.card_level_le_choose`, moved
+vectors at each committed `ω₀`: Erdős's Littlewood–Offord bound (`ResourceAccounting.TagProofs.card_level_le_choose`, moved
 from `Fin u` to any finite index), or the pairing of each bit vector with the one that flips a bit of nonzero weight.
 -/
 
 @[expose] public section
 
-namespace Accounting.HMuProofs
+namespace ResourceAccounting.HMuProofs
 
-open Accounting.HMu Pouw.RelativeSecurity Finset
+open ResourceAccounting.HMu Pouw.RelativeSecurity Finset
 
 section Prob
 
@@ -120,8 +120,8 @@ theorem prob_slice_le (V : Ω₀ → O) (o : O) (P : Ω₀ → Prop) (X : Ω₀ 
 
 omit [DecidableEq J] in
 theorem coinSum_comp_equiv {u : ℕ} (eq : J ≃ Fin u) (v : J → ℤ) (e : J → Bool) :
-    coinSum v e = Accounting.Tag.unreadSum (fun i => v (eq.symm i)) (fun i => e (eq.symm i)) := by
-  unfold coinSum Accounting.Tag.unreadSum
+    coinSum v e = ResourceAccounting.Tag.unreadSum (fun i => v (eq.symm i)) (fun i => e (eq.symm i)) := by
+  unfold coinSum ResourceAccounting.Tag.unreadSum
   exact (Equiv.sum_comp eq.symm (fun j => if e j then v j else 0)).symm
 
 /-- Erdős's Littlewood–Offord bound over any finite index. -/
@@ -130,7 +130,7 @@ theorem card_coinSum_le (v : J → ℤ) (hv : ∀ j, v j ≠ 0) (t : ℤ) :
       (Fintype.card J).choose (Fintype.card J / 2) := by
   let eq : J ≃ Fin (Fintype.card J) := Fintype.equivFin J
   refine le_trans (le_of_eq ?_)
-    (Accounting.TagProofs.card_level_le_choose (fun i => v (eq.symm i)) (fun i => hv _) t)
+    (ResourceAccounting.TagProofs.card_level_le_choose (fun i => v (eq.symm i)) (fun i => hv _) t)
   apply card_equiv (Equiv.arrowCongr eq (Equiv.refl Bool))
   intro e
   simp only [mem_filter, mem_univ, true_and, coinSum_comp_equiv eq]
@@ -217,7 +217,7 @@ end Coins
 
 /-- **Lemma B**: on each deficient view, the round is lucky only where its skipped value is one of the at most `Z` that
 give the committed receipt, each of point mass at most `μ`. -/
-theorem lemmaB : Accounting.Guarantees.HMu.LemmaB := by
+theorem lemmaB : ResourceAccounting.Guarantees.HMu.LemmaB := by
   intro Ω O α β _ R μ Z ⟨hpm, hinj⟩
   apply prob_le_of_fibres R.view
   intro o
@@ -246,24 +246,24 @@ theorem lemmaB : Accounting.Guarantees.HMu.LemmaB := by
   · rw [prob_eq_zero (p := fun ω => R.lucky ω ∧ R.view ω = o) fun ω h => hd (h.2 ▸ h.1.2),
       prob_eq_zero (p := fun ω => 0 < R.d (R.view ω) ∧ R.view ω = o) fun ω h => hd (h.2 ▸ h.1), mul_zero]
 
-theorem coinPointMass : Accounting.Guarantees.HMu.CoinPointMass := by
+theorem coinPointMass : ResourceAccounting.Guarantees.HMu.CoinPointMass := by
   intro Ω₀ O J _ _ _ V a v o t
   exact prob_slice_le V o (fun ω₀ => ∀ j, v ω₀ j ≠ 0) (fun ω₀ e => a ω₀ + coinSum (v ω₀) e = t) _ (by positivity)
     fun ω₀ hv => prob_coinSum_le (a ω₀) (v ω₀) hv t
 
-theorem coinPointMassHalf : Accounting.Guarantees.HMu.CoinPointMassHalf := by
+theorem coinPointMassHalf : ResourceAccounting.Guarantees.HMu.CoinPointMassHalf := by
   intro Ω₀ O J G _ _ _ _ V a v o t
   exact prob_slice_le V o (fun ω₀ => ∃ j, v ω₀ j ≠ 0) (fun ω₀ e => a ω₀ + coinSum (v ω₀) e = t) _ (by norm_num)
     fun ω₀ ⟨j, hj⟩ => prob_coinSum_half (a ω₀) (v ω₀) j hj t
 
-theorem receiptLuckOfCoins : Accounting.Guarantees.HMu.ReceiptLuckOfCoins := by
+theorem receiptLuckOfCoins : ResourceAccounting.Guarantees.HMu.ReceiptLuckOfCoins := by
   intro Ω₀ J β _ _ _ R Z
   exact prob_luck_le (fun a e => R.skipped (a, e)) R.honest R.committed R.d (fun a => ∀ j, R.weight a j ≠ 0) Z _
     (by positivity) fun ω₀ hv x => prob_coinSum_le (R.base ω₀) (R.weight ω₀) hv x
 
-theorem receiptLuckOfCoin : Accounting.Guarantees.HMu.ReceiptLuckOfCoin := by
+theorem receiptLuckOfCoin : ResourceAccounting.Guarantees.HMu.ReceiptLuckOfCoin := by
   intro Ω₀ J G β _ _ _ _ R Z
   exact prob_luck_le (fun a e => R.skipped (a, e)) R.honest R.committed R.d (fun a => ∃ j, R.weight a j ≠ 0) Z _
     (by norm_num) fun ω₀ ⟨j, hj⟩ x => prob_coinSum_half (R.base ω₀) (R.weight ω₀) j hj x
 
-end Accounting.HMuProofs
+end ResourceAccounting.HMuProofs

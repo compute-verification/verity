@@ -2,7 +2,7 @@
 ``allowlists/repo_env_reads.json``, so no area adds one while its owner builds the settings registry that declares each
 variable once.
 
-The integration has its own settings rule (P7, ``adapters/vllm/tests/lint/test_p07_declared_inputs.py``), so it isn't
+The integration has its own settings rule (P7, ``tests/adapters/vllm/tests/lint/test_p07_declared_inputs.py``), so it isn't
 held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,
 ``os.environ.setdefault(...)``, ``os.getenv(...)``, a membership test (``"X" in os.environ``), and ``os.environ.pop(...)``
 whose value is used, through any alias (``from os import environ``, ``import os as o``, ``env = os.environ``), ``os.environb``
@@ -39,13 +39,13 @@ NAME = "repo_env_reads"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: the integration's own settings rule holds it
-LEFT_OUT = ("adapters/vllm/",)
+LEFT_OUT = ("adapters/vllm/", "tests/adapters/vllm/")
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
 TEMPLATE = "tools/config/verity_config/settings.py"
 FIX = (f"Read the variable through your area's settings registry, which declares each one once (under verity/, tools/config/verity_config/verity_settings.py, "
        f"the distribution's one, on the machinery every registry is built on; elsewhere the one beside your pyproject.toml, as "
-       f"{TEMPLATE} says, with tools/config/tests/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
+       f"{TEMPLATE} says, with tests/tools/config/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
        f"tests/lint/allowlists/{NAME}.json marks "
        f'{{"file": PATH, "registry": true}}. If the file moved, move its entries in the same change: '
        f"`python3 tests/lint/test_{NAME}.py --move OLD NEW`.")

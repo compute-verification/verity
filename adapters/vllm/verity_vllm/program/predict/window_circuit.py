@@ -9,7 +9,7 @@ prompt row and P - 1 decode steps, P = prompt + outputs - 1 positions, every pos
 the token select, position p attending to keys 0..p. So the circuit is a function of the class alone: which slots carry a
 request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
 
-A slot's request comes from the network certifier's scan: boundary b's Programs read the scan's state row before it
+A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
 (`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v2` (`scan_state.bridge`), which gives each lane
 its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
 length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
@@ -265,7 +265,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
     ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
-    certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
+    attester's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
     end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
     tables read (`Tables`) or the circuit cut at its linears (`PearlTables`), refused unless the window is the fixed load."""
     takes(compiled, cls, placed, tables)

@@ -56,11 +56,11 @@ from verity_vllm.records.boundary_tables import (
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "LAYOUT_WORDS", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
            "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "layout", "load", "mla_layers", "name",
-           "private", "private_root"]
+           "private", "private_root", "words_of"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
-WORDS, LAYOUT_WORDS, CAPACITY = H.WORDS, H.LAYOUT_WORDS, HT.CAPACITY
+WORDS, LAYOUT_WORDS, CAPACITY, words_of = H.WORDS, H.LAYOUT_WORDS, HT.CAPACITY, H.words_of
 #: the KV cache dtypes under which an MLA layer's cache holds `WORDS` bf16 words a row (vLLM's ``fused_norm_rope``)
 BF16_CACHES = ("auto", "bfloat16")
 #: the KV cache dtypes under which a sparse MLA layer's byte cache holds fp8_ds_mla's rows (FlashMLA's sparse fp8)
@@ -250,7 +250,7 @@ class StepHook:
         want = tuple(found) if layers is None else tuple(int(x) for x in layers)
         if missing := [x for x in want if x not in found]:
             raise ValueError(f"layers {missing} aren't MLA layers of the model, whose are {list(found)}")
-        self.torch, self.layers, words = torch, {x: found[x] for x in want}, H.LAYOUT_WORDS[rows]
+        self.torch, self.layers, words = torch, {x: found[x] for x in want}, H.words_of(rows)
         self.latents = latents if latents is not None else Latents(self.layers, words)
         if tuple(self.layers) != self.latents.layers:
             raise ValueError(f"the model's MLA layers {list(self.layers)} are not the tables' {list(self.latents.layers)}")

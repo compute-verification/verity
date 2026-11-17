@@ -28,12 +28,12 @@ bound from the period's game to the uniform coins.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
 open scoped ENNReal
 
-/-- **The integrity audit of a period** (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod`). -/
-theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod := by
+/-- **The integrity audit of a period** (`ResourceAccounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod`). -/
+theorem IntegrityOfIntegrityMonitoringPeriod : ResourceAccounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod := by
   intro ι d α _ C I Ω _ _ r W T q δ hq hδ hqt hA3 R hT hL c p hcert hfin ξ
   have hsub : ∀ x : Ω (r.own .sampled),
       (r.accepts .sampled (Function.update ξ (r.own .sampled) x) ∧
@@ -62,4 +62,4 @@ theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.Inte
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw]
   exact ENNReal.toReal_mono hfin hsrc
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

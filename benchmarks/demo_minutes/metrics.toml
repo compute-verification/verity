@@ -2,18 +2,6 @@
 # enforces it.
 
 [[metric]]
-id = "vllm/remote-demo-minutes"
-title = "Remote demo run time"
-owner = "vllm"
-unit = "minutes"
-axis = "Minutes from the first command to the verdict."
-better = "lower"
-command = "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN"
-every = "7d"
-floor = 60
-goal = "demos/remote-demo"
-
-[[metric]]
 id = "vllm/onsite-demo-minutes"
 title = "Onsite demo run time"
 owner = "vllm"

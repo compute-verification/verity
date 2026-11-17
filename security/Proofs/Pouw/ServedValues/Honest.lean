@@ -28,8 +28,8 @@ namespace Properties.Pouw.ServedValues.SecurityProofs.HonestValues
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The declared Boolean circuit and its blocks -/
 
@@ -121,7 +121,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
 theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :

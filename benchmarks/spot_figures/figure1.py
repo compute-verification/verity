@@ -40,8 +40,8 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
   designs with each request charged at most the bits it serves (the `served_bits` input: each of its tokens served
-  as the token select's output word, at most the network certifier's registered response cap where the model's
-  `certifier` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
+  as the token select's output word, at most the network attester's registered response cap where the model's
+  `attester` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
   (`card_influenceTwo_le_served_min`), which still counts which of a request's proof blocks are incorrect, and never
   above the scope's served bits (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`),
   which counts a request's sets of more than its served bits once, at most the served bits too
@@ -87,15 +87,15 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocol import MONITORING_PERIODS
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
-ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
-                                    "benchmarks/census/hardware.json")
+ADVERSARY, DEPLOYMENTS, HARDWARE = ("calibration/census/adversary.json", "calibration/census/deployments.json",
+                                    "calibration/census/hardware.json")
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
@@ -139,9 +139,9 @@ REQUESTS = ("census", "workload")
 SERVING = ("assumed", "measured")
 #: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
 SERVING_GOAL = 8 * 300e9
-#: the tokens a request serves: at most the network certifier's registered response cap, or every one of its tokens
+#: the tokens a request serves: at most the network attester's registered response cap, or every one of its tokens
 SERVED = ("cap", "request")
-#: what holds each response the network certifier releases to its registered cap
+#: what holds each response the network attester releases to its registered cap
 CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
@@ -150,15 +150,15 @@ DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token
               "layer_of_token": "Interior commitments at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
-#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
+#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network attester a layer of its own
 ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
          "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
          "no recursion (the proof_overhead card's dev arm); and a verifier samples the sample on the challenger's live "
-         "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
+         "coins and decides with the Lean verifier. The network attester, which stamps each request's release order "
          "and bucket at ingress, is a layer of its own.")
 #: what every bound rests on
 TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and an "
-         "honest verifier; a bound that reads the certifier's stamp rests on the certifier's own assumptions too, "
+         "honest verifier; a bound that reads the network attester's stamp rests on network attestation's own assumptions too, "
          "stated in its layer.")
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
@@ -225,7 +225,7 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     """Every input: the model's slot cards', those read from the census and the slowdown calculator's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
     the census's mean or, under `request="workload"`, the `workload` card's.  It serves at most the response cap its
-    `certifier` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
+    `attester` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
     one and `served` isn't "request", else every one of its tokens.  Under `serving="measured"` the inputs hold the
     `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of the slowdown calculator's
     utilization; under the default they hold none, whatever cards exist."""
@@ -295,19 +295,19 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     word = (f"served as the token select's output word, {bits} bits (the design card's token_bytes), the registered "
             "circuit's only output a token")
     cert = sc.get("certifier")
-    schedule = NetworkCertifierParams(**cert["value"]["schedule"]) if cert else None
+    schedule = NetworkAttesterParams(**cert["value"]["schedule"]) if cert else None
     cap = schedule.max_tokens_cap if schedule else None
     if served not in (None, *SERVED):
         raise ValueError(f"a request's served tokens are one of {SERVED}, not {served!r}")
     if served == "cap" and cap is None:
-        raise ValueError(f"{model} has no certifier card registering a response cap, so a request serves every one of "
+        raise ValueError(f"{model} has no attester card registering a response cap, so a request serves every one of "
                          "its tokens (served='request')")
     if served == "request" or cap is None:
         out["served_bits"] = InputCard(tokens * bits, "bit", "modeled", f"every one of a request's {tokens:,} tokens "
                                        f"{word}")
         return out
     out["max_tokens_cap"] = InputCard(cap, "token", cert["status"],
-                                      f"certifier card's schedule, parameters digest {schedule.digest.hex()}, which "
+                                      f"attester card's schedule, parameters digest {schedule.digest.hex()}, which "
                                       "every record head binds: the network certifier refuses at ingress a request "
                                       "whose max_tokens exceeds the cap and releases at most a request's max_tokens "
                                       f"tokens of its response ({CAP_RULE}): {cert['source']}", cert["provisional"])

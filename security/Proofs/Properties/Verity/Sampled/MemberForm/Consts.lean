@@ -26,7 +26,7 @@ Nothing here reads a play, a verdict or a session: the constants are public circ
 
 namespace Verity.Sampled.MemberForm
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The vocabulary's openings hold at the committed files' constants**: a gate the files fix to `b` opens to every
 value all of whose bits are `b` (`Vocab.opens_const`). -/

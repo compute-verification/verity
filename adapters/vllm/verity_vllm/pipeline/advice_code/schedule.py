@@ -109,7 +109,7 @@ class DraftEngine(Engine):
     """An engine that serves with a draft, speculative decoding by the model's own MTP module: a decode row carries up to
     `num_speculative_tokens` (K) drafts after its token, every allocation takes slots for K tokens past its row, and a
     prefix hit gives up its last block (`replay`'s docstring has the rules). A class of its own: `Engine`'s fields are
-    the engine class the certifier's replay circuits take, which have no draft."""
+    the engine class network attestation's replay circuits take, which have no draft."""
 
     num_speculative_tokens: int = 1
 
@@ -125,7 +125,7 @@ class DraftEngine(Engine):
 
 @dataclass(frozen=True)
 class Tick:
-    """The certified tick's registered constants, in microseconds: the network certifier's bucket τ_b, and the engine
+    """The certified tick's registered constants, in microseconds: the network attester's bucket τ_b, and the engine
     class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
     The serving side's is `verity_vllm.pipeline.serve_admit.Tick`; this stdlib copy keeps the replay loadable alone."""
 

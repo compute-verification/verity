@@ -52,9 +52,9 @@ state by `T`, and a second flip of the next segment's `d₀` takes it back.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.LiLemmas
+namespace ResourceAccounting.SecurityProofs.TS.LiLemmas
 
-open Accounting.TS Pouw.Receipt Pouw.ReceiptProofs
+open ResourceAccounting.TS Pouw.Receipt Pouw.ReceiptProofs
 
 theorem ofFn_eq_set {α : Type} {m : ℕ} (F G : Fin m → α) (i : Fin m) (h : ∀ j, j ≠ i → G j = F j) :
     List.ofFn G = (List.ofFn F).set i (G i) := by
@@ -268,4 +268,4 @@ theorem executionPhaseUnbound {Ω U : Type} (n : ℕ) (D : LiUnits Ω U (n + 1) 
   · rw [checkpoint_one D ω u (D.word ω u) 0, checkpoint_one D ω u (D.honest ω u) 0, h1 u]
     exact xor_top_ne _
 
-end Accounting.SecurityProofs.TS.LiLemmas
+end ResourceAccounting.SecurityProofs.TS.LiLemmas

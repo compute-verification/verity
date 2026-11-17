@@ -25,7 +25,7 @@ queries.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The online phase's inputs: the oracle, the workload, the activation input, the preprocessed state and the salt. -/
 abbrev Actual.Inputs (Q R S : Type) : Type := (Q → R) × Pouw.Workload × (ℕ → Pouw.Mat) × Pouw.State × S
@@ -79,4 +79,4 @@ noncomputable def Actual.timedRun {Q R S : Type} {L : Type} [LinearOrder L] [Fin
     ((P.strategy (H, U, A.act, A.pre.eval H, s)).workIn (π _) V
       ({u | (u : ℝ) < t} ∩ Set.Ico (tₛ + ℓ) (t_d - ℓ)) : ℝ)
 
-end Accounting
+end ResourceAccounting

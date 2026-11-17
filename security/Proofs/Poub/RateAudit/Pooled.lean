@@ -61,7 +61,7 @@ receipts the sample certifies (`RateChainSampledRO`).
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal NNReal
@@ -325,26 +325,26 @@ theorem pr_pooled_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
 
 end Chain
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.PooledSampling`). -/
-theorem PooledSampling : Accounting.Guarantees.PooledSampling := by
+/-- **The causal bound over the monitoring period** (`ResourceAccounting.Guarantees.PooledSampling`). -/
+theorem PooledSampling : ResourceAccounting.Guarantees.PooledSampling := by
   intro n M K X _ s G hG
   exact Pooled.pr_causal_le' n M K X s G hG
 
-/-- **A chain's passes are sampled as a whole** (`Accounting.Guarantees.RatePooled`). -/
-theorem RatePooled : Accounting.Guarantees.RatePooled := by
+/-- **A chain's passes are sampled as a whole** (`ResourceAccounting.Guarantees.RatePooled`). -/
+theorem RatePooled : ResourceAccounting.Guarantees.RatePooled := by
   intro P N b h ρ S L q r s K A
   exact Chain.pr_pooled_le A K
 
-/-- **The route `Sampled`, with side sources that ignore the oracle** (`Accounting.Guarantees.RateChainSampledRO`). -/
-theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
+/-- **The route `Sampled`, with side sources that ignore the oracle** (`ResourceAccounting.Guarantees.RateChainSampledRO`). -/
+theorem RateChainSampledRO : ResourceAccounting.Guarantees.RateChainSampledRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
   have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaidRO P N b h ρ S L q r s lam τ tier A hA
@@ -355,8 +355,8 @@ theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
     rw [← Finset.sum_mul]
     exact Nat.mul_le_mul_right _ (by omega)
 
-/-- **The route `Sampled`, with any side sources** (`Accounting.Guarantees.RateChainSampled`). -/
-theorem RateChainSampled : Accounting.Guarantees.RateChainSampled := by
+/-- **The route `Sampled`, with any side sources** (`ResourceAccounting.Guarantees.RateChainSampled`). -/
+theorem RateChainSampled : ResourceAccounting.Guarantees.RateChainSampled := by
   intro P N b h ρ S L q r s K m lam τ tier A
   have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaid P N b h ρ S L q r s m lam τ tier A
@@ -367,4 +367,4 @@ theorem RateChainSampled : Accounting.Guarantees.RateChainSampled := by
     rw [← Finset.sum_mul]
     exact Nat.mul_le_mul_right _ (by omega)
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

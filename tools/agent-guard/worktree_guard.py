@@ -76,8 +76,9 @@ OWNER_FILE = "agent-owner"
 GONE_S = 2 * 3600
 RECLAIM = "python3 tools/agent-guard/worktree_guard.py reclaim"
 
-#: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names
-QUEUE_REPOS = ("compute-verification/verity", "compute-verification/infra")
+#: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names; infra is
+#: platform's old name, which GitHub still resolves and older clones' `origin` still spells
+QUEUE_REPOS = ("compute-verification/verity", "compute-verification/platform", "compute-verification/infra")
 #: a GitHub URL of one of them, whole: https or ssh (with any user, credential or port) or scp form, with or without `.git`
 QUEUE_URL = (r"(?i)^(?:(?:https?|ssh|git)://(?:[^@/\s]*@)?github\.com(?::\d+)?/|(?:[\w.-]+@)?github\.com:/?)"
              rf"(?:{'|'.join(re.escape(r) for r in QUEUE_REPOS)})(?:\.git)?/?$")

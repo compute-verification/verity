@@ -43,7 +43,7 @@ model on it and its floor program ♭, each given as exact data the machine mode
 
 * `Sparse`: counts per class as `(class index, numerator, denominator)` triples, each entry the rational
   `numerator / denominator`; `Sparse.counts` reads them over `Fin n`, an index at or past `n` read as nothing.
-* `SheetData`: a data sheet (`Accounting.TS.Sheet`) as lists by class index; `SheetData.sheet n` is the sheet over
+* `SheetData`: a data sheet (`ResourceAccounting.TS.Sheet`) as lists by class index; `SheetData.sheet n` is the sheet over
   `Fin n`.
 * `rowsMachine`: a machine whose rows are sparse lists of rational coefficients (a measured vector).
 * `DesignData`: a design's writer kinds (class and `ω`), vector classes, fold routes, SCALAR-ROUTE floors and committed
@@ -54,9 +54,9 @@ model on it and its floor program ♭, each given as exact data the machine mode
 
 @[expose] public section
 
-namespace Accounting.TS.Headline
+namespace ResourceAccounting.TS.Headline
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- Counts per class: `(class index, numerator, denominator)` triples. -/
 abbrev Sparse := List (ℕ × ℕ × ℕ)
@@ -73,7 +73,7 @@ noncomputable def Sparse.counts {n : ℕ} (v : Sparse) : Fin n → ℝ := fun k 
 /-- Class index `i` in `Fin n` (taken mod `n`; the exporter writes indices below `n`). -/
 def idx (n : ℕ) [NeZero n] (i : ℕ) : Fin n := ⟨i % n, Nat.mod_lt _ (Nat.pos_of_ne_zero (NeZero.ne n))⟩
 
-/-- **A data sheet as lists by class index**, over pipes `P`: `Accounting.TS.Sheet`'s fields, a class past a list's end
+/-- **A data sheet as lists by class index**, over pipes `P`: `ResourceAccounting.TS.Sheet`'s fields, a class past a list's end
 read as `0` (or no pipe). -/
 structure SheetData (P : Type) where
   fmax : ℕ
@@ -137,4 +137,4 @@ noncomputable def labelled (n : ℕ) (nw nf nx ns : Sparse) : Labelled (Fin n) w
   nx := Sparse.counts nx
   ns := Sparse.counts ns
 
-end Accounting.TS.Headline
+end ResourceAccounting.TS.Headline

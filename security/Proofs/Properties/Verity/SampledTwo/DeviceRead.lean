@@ -18,7 +18,7 @@ namespace Verity.SampledTwo.Sessions
 
 open Properties.Challenger Spot.Challenger
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut with the read at the deployed two-session history** (`CutRead.cutBound_read`): where the sampled verdict
 accepts only where the form does (`Wired`), the first stage's coin evidence reads under the parameters' key

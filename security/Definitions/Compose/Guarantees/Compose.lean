@@ -7,7 +7,7 @@ public import Definitions.Compose.Assumptions.Compose
 /-!
 # PoUW's credit on an arbitrary registered circuit (trusted)
 
-THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
+THEOREM's composed statement. Each `def G : Prop` is proved as `ResourceAccounting.SecurityProofs.Compose.G` in
 `Proofs.Compose.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
 with its call sites, its rounds, their coin modes, the service's commit coins and its proof blocks, its words, kinds,
 cuts and late cones read off the IR.
@@ -70,9 +70,9 @@ model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS m
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Compose
+namespace ResourceAccounting.Guarantees.Compose
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## The logical layer -/
 
@@ -274,7 +274,7 @@ def CircuitCredit : Prop :=
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 → ℝ) (lam : SheetRow P → ℝ)
-    (ρ p p0 wmax Λ δs δbind δks : ℝ) (win : Accounting.Window),
+    (ρ p p0 wmax Λ δs δbind δks : ℝ) (win : ResourceAccounting.Window),
     Scope Sc Cd δs →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →
     (∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax) →
@@ -327,7 +327,7 @@ def CircuitCreditSeeded : Prop :=
     (pr : ProofRun (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
     (folded : Paths (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 → ℝ) (lam : SheetRow P → ℝ)
     (sq : Paths (Fin Tq → B) Cd.rounds → Fin Cd.rounds → Option (Fin Tq)) (εid : ℕ → ℕ → ℝ) (T J : ℕ)
-    (ρ κ0 δs δg δb δbind δks : ℝ) (win : Accounting.Window),
+    (ρ κ0 δs δg δb δbind δks : ℝ) (win : ResourceAccounting.Window),
     ScopeSeeded Sc Cd δs → 0 < δg → 0 < Kd →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) → 0 < aOf Sc Cd Z lam → 0 ≤ κ0 →
     Pl.game = jointGame (Ξ := Ξ) R (tileCone Sc Cd Np) 1 1 Kd →
@@ -345,4 +345,4 @@ def CircuitCreditSeeded : Prop :=
     (certOf Sc Cd Z H lam (rOfSeeded Sc Cd Np Kd Tq (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) κ0 ρ δs δg)
       (δs + (δbind + δks) + εid T J + 2 * (Cd.rounds : ℝ) * (δg + δb)) win .seeded).Holds Pl
 
-end Accounting.Guarantees.Compose
+end ResourceAccounting.Guarantees.Compose

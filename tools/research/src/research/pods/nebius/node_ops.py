@@ -113,7 +113,9 @@ def groups() -> dict[int, dict]:
             pgid = int(stat.rsplit(")", 1)[1].split()[2])
             rss = int((d / "statm").read_text().split()[1]) * page
             cmd = (d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
-        except (OSError, ValueError, IndexError):
+        except (OSError, ValueError, IndexError) as e:
+            if d.exists():
+                print(f"node_ops: pid {d.name} unread, so it counts in no group ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         g = out.setdefault(pgid, {"rss": 0, "cmds": [], "pids": []})
         g["rss"] += rss
@@ -121,6 +123,15 @@ def groups() -> dict[int, dict]:
         if int(d.name) == pgid or not g["cmds"]:
             g["cmds"].insert(0, cmd)
     return out
+
+
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone."""
+    try:
+        os.killpg(pgid, sig)
+        return True
+    except ProcessLookupError:
+        return False
 
 
 class Guard:
@@ -142,10 +153,7 @@ class Guard:
             alert("mem-low", "node", f"MemAvailable {avail / 2**30:.0f} GiB ({pct:.1f}%) of {total / 2**30:.0f} GiB")
         for pgid, t0 in list(self.pending.items()):
             if time.monotonic() - t0 > 10:
-                try:
-                    os.killpg(pgid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                signalled(pgid, signal.SIGKILL)
                 del self.pending[pgid]
         if pct >= ACT_PCT or self.pending:
             return
@@ -154,9 +162,7 @@ class Guard:
             return
         guests = {k: v for k, v in gs.items() if in_verity_scope(k)}
         pgid, g = max((guests or gs).items(), key=lambda kv: kv[1]["rss"])
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError:
+        if not signalled(pgid, signal.SIGTERM):
             return
         self.pending[pgid] = time.monotonic()
         rec = {"t": iso(), "pgid": pgid, "rss_gib": round(g["rss"] / 2**30, 1), "cmd": g["cmds"][0][:300],
@@ -170,8 +176,8 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-# a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
-# --timed lease would otherwise freeze a train's check for the whole window. The check's directory either way a tree spells it
+# a candidate's check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
+# --timed lease would otherwise freeze a candidate's check for the whole window. The check's directory either way a tree spells it
 # (slot_only.CHECK_DIRS; this file is installed alone), as a whole path (slot_only.check_file)
 CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 CHECK_PY = rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))})(?:check|slot)\.py(?![\w.-])"
@@ -189,7 +195,7 @@ class Quiet:
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
     (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
-    anything under GNU `timeout` (it would lose the paused time), train checks (slot.py, check.py), every process a GPU lease runs
+    anything under GNU `timeout` (it would lose the paused time), candidates' checks (slot.py, check.py), every process a GPU lease runs
     (`in_lease_scope`), the descendants of those in groups of their own, and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
@@ -207,15 +213,11 @@ class Quiet:
             earlier = []
         open_window = self.window() is not None
         for pgid in earlier:
-            try:
-                if open_window:
-                    os.killpg(pgid, 0)
+            if open_window:
+                if signalled(pgid, 0):
                     self.paused[pgid] = {"t0": time.monotonic(), "cmd": "(adopted after an ops restart)"}
-                else:
-                    os.killpg(pgid, signal.SIGCONT)
-                    self.log(event="resume", pgid=pgid, why="ops restart")
-            except ProcessLookupError:
-                pass
+            elif signalled(pgid, signal.SIGCONT):
+                self.log(event="resume", pgid=pgid, why="ops restart")
         self.save()
 
     def save(self) -> None:
@@ -245,10 +247,7 @@ class Quiet:
 
     def resume(self, why: str) -> None:
         for pgid, info in list(self.paused.items()):
-            try:
-                os.killpg(pgid, signal.SIGCONT)
-            except ProcessLookupError:
-                pass
+            signalled(pgid, signal.SIGCONT)
             self.log(event="resume", pgid=pgid, why=why, cmd=info["cmd"][:200], paused_s=round(time.monotonic() - info["t0"]))
             del self.paused[pgid]
         self.save()
@@ -268,8 +267,10 @@ class Quiet:
                 f = st[1].split()
                 procs[int(d.name)] = {"ppid": int(f[1]), "pgid": int(f[2]), "cpu": int(f[11]) + int(f[12]), "comm": comm,
                                       "cmd": (d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()}
-            except (OSError, ValueError, IndexError):
-                continue
+            except (OSError, ValueError, IndexError) as e:
+                if d.exists():
+                    print(f"quiet: pid {d.name} unread, so this tick leaves it out ({type(e).__name__}: {e})", file=sys.stderr,
+                          flush=True)
         holder = self.window()
         if holder is None:
             if self.paused:

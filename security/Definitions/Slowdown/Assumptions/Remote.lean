@@ -25,7 +25,7 @@ windows is wrong (`wrong ω i`: it credits more of that window's work than ran, 
 at most `p`, a parameter: no guarantee gives a deployment's `p` a value. It bounds each window's marginal only: it says
 nothing about how windows depend on one another.
 
-What would back `p` is `Accounting.Guarantees.Compose.CircuitCredit`: a certificate is accepted with the window's time
+What would back `p` is `ResourceAccounting.Guarantees.Compose.CircuitCredit`: a certificate is accepted with the window's time
 below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks`, `ε` being 0.744% at `δ_s = 2⁻⁴⁰`. `δ_bind` and
 `δ_ks` are parameters of `CircuitCredit`, bounding its premises on commitment binding (`MovedIn`) and on the proof
 system's knowledge soundness (`JointSound`): PoUW's binding has no deployed bound and `ProofSystemSound` is

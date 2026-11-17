@@ -66,7 +66,7 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`,
-  `verity.protocols.accounting.registration.verifier.registration`). The verifier passes
+  `verity.protocols.registration.verifier.registration`). The verifier passes
   the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
@@ -84,7 +84,7 @@
   circuits read, and the caller's check refuses a window that names another or none, or names one where the verifier read none
   (`R6-seed-salt`), so a salt the server chose is refused by name.
 * **Registered compiler** (`compiler`): the registration log's registered compiler as its view publishes it
-  (`verity.protocols.accounting.registration.verifier.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
+  (`verity.protocols.registration.verifier.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
   when the log registers none. The caller's check holds the record's window to name that compiler by its digest
   (`window.compiler.digest`; `R6-compiler`) and advice of at most ℓ bits (`window.advice.bits`; `R6-advice-length`),
   and, where the log registers none, to name neither a compiler nor advice (`R6-compiler`), so advice no registered
@@ -130,7 +130,7 @@
   (`R7-pool-chain`),
   beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
-  network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
+  network attester signed for the window, so a root the network attester didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
 * **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and the caller's check
   (`caller.check`) then refuses a record with an output value that reads a port of an earlier record the log names
@@ -340,9 +340,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
-    refuses the record when a member's fewest and most sampled proof blocks give different link points or some sample
-    that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
-    (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
+    refuses the record when a member's fewest and most sampled proof blocks give different link points
+    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     _declarations(day, declarations)
     log = list(log)
@@ -700,7 +700,7 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
 
 def _registered_compiler(item: Any) -> Any:
     """The registered compiler the verifier read (Registered compiler): `UNREAD`; None, a log that registers none; or the
-    log's item as its view publishes it (`verity.protocols.accounting.registration.verifier.registration`), its digest lowercase hex of 64 bytes, its
+    log's item as its view publishes it (`verity.protocols.registration.verifier.registration`), its digest lowercase hex of 64 bytes, its
     advice format a string and its length ℓ a natural, as `(digest, ℓ)`; ValueError otherwise, which the Lean verifier
     refuses too (`OneStage.paramsOfJson`)."""
     if item is UNREAD or item is None:

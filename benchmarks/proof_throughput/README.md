@@ -5,7 +5,7 @@ for the dot products GLM-5.3 serves. The report is the throughput frontier over 
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
-verity bench proof_throughput workloads                       the VU families and their B caps
+verity bench proof_throughput workloads                       the proof-block families and their B caps
 verity bench proof_throughput plan  [--workload W] [--store]  each point's identity (and its passing prover run)
 verity bench proof_throughput run   [--workload W] [--lo B] [--hi B] [--store] [--dry-run]   one recorded prover run per point
 verity bench proof_throughput verify --prove-run RUN [--node N]   the Lean verifier point on that run's bundle (vy-nebius-cpu-3)
@@ -13,6 +13,7 @@ verity bench proof_throughput table RESULT... | --baseline | --store --workload 
 verity bench proof_throughput baseline [--workload W] [--lock RESULT...]   the pinned hill-climb baseline, or pin one sweep
 verity bench proof_throughput compare BASELINE CANDIDATE [--allow FIELD]   refuses results whose identities differ
 verity bench proof_throughput zk                              configuration 2: what is measured, stood in for, or stubbed
+verity bench proof_throughput record [--B B] [--provers 1,2] --cores C,C   the metric's run: 1 prover, then 2 at once, each verified
 ~~~
 
 ## What a point is
@@ -26,9 +27,9 @@ stratified sampling design the Lean verifier's soundness covers:
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
    on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
    challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
-   bundle carries). The server samples each session's B units at its Register by the verifier's sampling design (`serve --sample-design`,
+   bundle carries). The server samples each session's B proof blocks at its Register by the verifier's sampling design (`serve --sample-design`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
-   `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
+   `Q_template_instance` partition), and the session proves those proof blocks only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
    rows (`ProvedScope.sharedRowsOk` covers that only with the verifier's own registered reads), so x is committed once per coordinate
    rather than once per Call, and that cost is in the numbers. It puts the circuit,
@@ -140,5 +141,12 @@ process's CPU only once the prover has waited for it. The ZK server rechecks a w
 The prover runs on vy-nebius-1's RTX PRO 6000s (sm_120) as a GPU host job: at most 32 CPUs, the GPU lent by Kueue's pool
 through `gpu-lease` around the sessions only. The Lean verifier runs in a proofs-pool slot of vy-nebius-cpu-3 or -cpu-2
 (`--pool proofs --cwd clone`), or, while those slots are held by builds, as a queued CPU job of its own on vy-nebius-1
-(`verify --node vy-nebius-1`: 4 CPUs in its own pinned scope, no GPU). Never vy-nebius-cpu-1. The result's
+(`verify --node vy-nebius-1`: 4 CPUs in its own pinned scope, no GPU). Never vy-nebius-cpu-1.
+
+`record`, the command of `metrics.toml`'s `proofs/proof-throughput-blocks-per-second`, runs on node A (vy-spot-glm53) as one
+research run: one prover point alone, then as many at once as `--provers` names next, each a `job.sh` on a card of its own
+leased with its own `--cores` range and its own sessions lock, then `verify.sh` on each point's bundle once the provers
+are done. Each point's contract results stay in `out/provers-N/prover-I/` (`result.json`, the prover's, and
+`verifier/result.json`, the point's result of record); the run's `result.json` holds the readings, one a prover count:
+the sum of the points' `vu.per_second`, given only when every point's verifier result passed and their leases overlapped. The result's
 `software.verifier` names the binary; the run's machine is in its Attempt.

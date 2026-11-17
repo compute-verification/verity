@@ -22,14 +22,14 @@ from the registry, path by path: `research msg owners PATH`.
 
 | Area | What it states |
 |---|---|
-| `Accounting/` | `Poub`'s verdicts, the joint period's bridges, a registered circuit's units and space |
-| `Certifier/` | The certificate and records checks (`NetworkCheck`), the certifier device |
+| `ResourceAccounting/` | `Poub`'s verdicts, the joint period's bridges, a registered circuit's proof blocks and space |
+| `Certifier/` | The certificate and records checks (`NetworkCheck`), the network attester |
 | `Core/` | The evaluator's primitives and the Site's fold and check are `Definitions.Core`'s |
 | `Flock/` | The circuit a registered Flock circuit file describes; the verifier's two fixed nets build |
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
 | `InferenceOnly/`, `InferenceOnly.lean` | What the inference-only check's verdicts mean (`InferenceOnlyCheck`) |
 | `Pous/`, `Pous.lean` | PoUS's setup, timed audit, period and wipe (`PousCheck`, `MemoryChallenger`) |
-| `Pouw/`, `Pouw.lean` | PoUW's window, its check, commitments, credit and period (`PouwWindow`, `PouwCheck`) |
+| `Pouw/`, `Pouw.lean` | PoUW's execution phase, its check, commitments, credit and period (`PouwWindow`, `PouwCheck`) |
 | `Spot/`, `Spot.lean` | SPOT's one-stage audit: its verdict, sample, plan check and wires (`Spot`) |
 | `Verity/` | Soundness at a composite's compiled verifier ([README](Verity/README.md)) |
 | `Annot.lean` | The description-level annotation check's property (`Flock.AnnotExpand`) |

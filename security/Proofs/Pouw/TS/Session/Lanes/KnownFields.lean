@@ -7,7 +7,7 @@ public import Proofs.Pouw.TS.Session.Lanes.KnownBits
 # A lane's known fields hold at the opened rows
 
 Where a session's known rows hold at the known content of the public inputs `P` (`KnownHeld` at `knownOf`, which
-`Accounting.Guarantees.TS.LeafLanesSound` hands each session), the opened rows' bits at its `admit`, `pub` and `o0`
+`ResourceAccounting.Guarantees.TS.LeafLanesSound` hands each session), the opened rows' bits at its `admit`, `pub` and `o0`
 ports are `P`'s, the lane's index and `ok = 1`: the fields of `LaneHolds` that the known content fixes
 (`LaneKnownHolds`: admit, salt, position, roots, lane and ok), and `CombHolds.ok` at the combine.
 
@@ -24,9 +24,9 @@ check gives both (`Lanes.KnownRead`'s `laneKnownHolds_of_check`, `combKnownOk_of
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 
 /-- **The known content's fields of lane `l`'s view**, at the reader `rd` of its ports' row bits: the admit bits, the
 salt, position and roots, the index `l` and `ok = 1`, each at its place in the layout. -/
@@ -182,4 +182,4 @@ theorem combKnownOk (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c
     portBit s (openedReg s) "o0" 0 = some true :=
   ok_of_known hN hK hu hS hcomp ho hPo (salt := salts "o0") (by simp [knownOf, knownRows]) hro
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

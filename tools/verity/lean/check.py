@@ -117,7 +117,22 @@ SETUP = threading.Lock()
 #: the toolchains a `setup.sh` of this run has installed
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
+#: a fetch's sandbox (`in_fetch_sandbox`): the build sandbox's namespaces but the network's
+UNSHARE_NET = [a for a in UNSHARE if a != "--net"]
+#: the toolchains `setup` installs: a release of Lean, a tag of `leanprover/lean4`. elan downloads any other from a
+#: repository the `lean-toolchain` names, and that toolchain's `lean` and `lake` would run outside the sandbox
+TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9][0-9A-Za-z.+-]*")
+#: where a manifest's Mathlib comes from: `setup.sh` runs its `cache` executable by its package's name (`mathlib/cache`)
+MATHLIB_URL = re.compile(r"https://github\.com/leanprover-community/mathlib4(\.git)?")
+#: a target named `cache` in a `lakefile.lean` (`lake exe cache` would find it before Mathlib's)
+LEAN_CACHE_TARGET = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:lean_exe|lean_lib|target|extern_lib|script|input_file"
+                               r"|input_dir)[ \t]+«?cache»?(?=[\s:]|$)")
+#: what a fetch keeps of the environment (`fetch_env`): it has the network, so none of the caller's credentials
+FETCH_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TERM", "TZ", "TMPDIR", "XDG_CACHE_HOME", "ELAN_HOME",
+             "LEAN_NUM_THREADS", "LAKE_ARTIFACT_CACHE", "LEAN_CACHE", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+             "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+             "GIT_SSL_CAINFO")
 #: where a sandboxed build reads its tree (`sandbox.sh --at`, `fixed`). Lean writes a source's absolute path into the
 #: module's `.olean.server` with each message its compile logged, and its `.olean.private` points past that string, so
 #: only a build that reads every tree at one path gives one source one set of bytes, in every tree and on every node
@@ -125,7 +140,7 @@ FIXED = Path("/var/tmp/verity")
 #: `--tree`: the tree the audited packages are in, which a build binds at `FIXED` (default: this file's checkout)
 TREE = ROOT
 #: the controls' own packages; `--all` does not audit them as the repository's
-FIXTURES = HERE / "tests" / "fixtures"
+FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"
 #: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
 #: proofs and unexposed bodies are only in each `.olean`'s private part
 CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
@@ -521,13 +536,14 @@ def peaked(rep: dict, step: str, pkg: Path, gib: float, log=print) -> None:
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
-        on_line=None) -> tuple[int, str]:
+        on_line=None, env: dict[str, str] | None = None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
     descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
     is given each line of its standard output as it comes (a build's, to `Pipeline.line`). What its whole process tree
     holds at once is sampled every `TREE_EVERY_S` (`tree_bytes`), its most kept in `_peak.tree`: a build's jobs run side
-    by side, which a single process's peak doesn't add up."""
-    p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    by side, which a single process's peak doesn't add up. ``env`` replaces `lake_env`."""
+    p = subprocess.Popen(argv, cwd=cwd, env=lake_env() if env is None else env, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True)
     done, most = threading.Event(), [0]
 
     def sample():
@@ -1099,7 +1115,8 @@ def facts_program(pkg: Path) -> str:
 
 def program(pkg: Path, source: str) -> str:
     """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
-    toolchain, once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
+    toolchain, called by its path (`compile_program`): `lake env` would load the package's workspace, which runs its
+    dependencies' lakefiles outside the sandbox. Once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
     (`kept_program`). The program is checked against the digest it had when compiled or taken before each use. Raises
     RuntimeError when it does not compile or has changed."""
     src = TOOL / source
@@ -1113,14 +1130,12 @@ def program(pkg: Path, source: str) -> str:
             if isinstance(exe := kept_program(pkg, src), str):
                 if PROGRAMS is not None:
                     print(f"program cache: {exe}; {source} is compiled for this process alone", flush=True)
+                if isinstance(tc := elan_toolchain(pkg), str):
+                    raise RuntimeError(f"{source} can't be compiled: {tc}")
                 d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
                 atexit.register(shutil.rmtree, d, True)
                 exe = d / stem.lower()
-                for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
-                             ["lake", "env", "leanc", *LEANC_FLAGS, str(d / f"{stem}.c"), "-o", str(exe)]):
-                    rc, text = run(argv, pkg, d / "compile.log")
-                    if rc:
-                        raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+                compile_program(src, tc, exe)
             _programs[key] = (exe, sha256(exe))
         exe, digest = _programs[key]
     if sha256(exe) != digest:
@@ -1531,7 +1546,7 @@ def read_cached_facts(cache: Path, key: str) -> dict | None:
 
 def renamed(name: str, moved: dict[str, str]) -> str:
     """``name`` after the moves ``moved`` ({old: new}, a declaration or a namespace each): its longest moved prefix
-    replaced by the new name (`Facts.lean`'s `renameName` maps back the same way)."""
+    replaced by the new name (`unrenamed` and `Facts.lean`'s `renameName` map back the same way)."""
     parts = name.split(".")
     for i in range(len(parts), 0, -1):
         if (p := ".".join(parts[:i])) in moved:
@@ -1539,48 +1554,313 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
-def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap` and `ids` with
-    every guarantee, theorem and premise they name `renamed` by ``moved``."""
+def unrenamed(name: str, moved: dict[str, str]) -> str:
+    """``name`` before the moves ``moved`` ({old: new}, one old name to each new one): its longest prefix that is a new
+    name replaced by the old one, as `Facts.lean`'s `renameName` maps the build's names back."""
+    return renamed(name, {new: old for old, new in moved.items()})
+
+
+#: main, whose merge-base with HEAD is the commit a change stands on (`base_revs`), the first that resolves
+MAIN = ("refs/remotes/origin/main", "refs/heads/main")
+#: the maps keyed by a guarantee, theorem or premise that `renamed_witnesses` re-keys, beside `deployed`, `trust`,
+#: `shape.inline` and `claims.witnesses`
+RE_KEYED = ("guarantees", "deployed", "ids", "trust_gap", "witnesses_assumed", "witnesses", "unwitnessed", "open", "domain",
+            "assumptions", "four_names_except")
+
+
+def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
+    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap`, `ids`, `open`,
+    `domain`, `assumptions`, `four_names_except` and `claims.witnesses` with every guarantee, theorem and premise they name
+    `renamed` by ``moved`` (or mapped by it, a function), each entry's other fields kept."""
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    for k in ("open", "domain", "assumptions"):
+        if isinstance(m := policy.get(k), dict):
+            out[k] = {rn(a): e | {"cites": rn(e["cites"])} if isinstance(e, dict) and isinstance(e.get("cites"), str)
+                      else e for a, e in m.items()}
+    if isinstance(waiting := policy.get("four_names_except"), dict):
+        out["four_names_except"] = {rn(g): why for g, why in waiting.items()}
+    if isinstance(claims := policy.get("claims"), dict) and isinstance(cw := claims.get("witnesses"), dict):
+        out["claims"] = claims | {"witnesses": {rn(c): {k: rn(v) if isinstance(v, str) else
+                                                        [rn(x) if isinstance(x, str) else x for x in v]
+                                                        if isinstance(v, list) else v for k, v in w.items()}
+                                                if isinstance(w, dict) else w for c, w in cw.items()}}
     if name_list(policy.get("deployed")):
-        out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
+        out["deployed"] = sorted(rn(n) for n in policy["deployed"])
     if isinstance(trust := policy.get("trust"), dict):
         def keyed(m):
-            return {renamed(p, moved): why for p, why in m.items()} if isinstance(m, dict) else m
-        out["trust"] = {k: {renamed(g, moved): keyed(ps) for g, ps in v.items()}
+            return {rn(p): why for p, why in m.items()} if isinstance(m, dict) else m
+        out["trust"] = {k: {rn(g): keyed(ps) for g, ps in v.items()}
                         if k == "extra" and isinstance(v, dict) else keyed(v) for k, v in trust.items()}
     if isinstance(gap := policy.get("trust_gap"), dict):
-        out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
+        out["trust_gap"] = {rn(g): sorted(rn(p) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
-        out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
+        out["witnesses_assumed"] = {rn(a): why for a, why in taken.items()}
     if isinstance(ids := policy.get("ids"), dict):
-        out["ids"] = {renamed(p, moved): i for p, i in ids.items()}
+        out["ids"] = {rn(p): i for p, i in ids.items()}
     if isinstance(ws, dict):
-        out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
-                                                if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
-                                                for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
+        out["witnesses"] = {rn(g): {k: [rn(n) if isinstance(n, str) else n for n in v]
+                                    if isinstance(v, list) else rn(v) if isinstance(v, str) else v
+                                    for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
-        out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+        out["unwitnessed"] = {rn(g): h for g, h in allow.items()}
     if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
-        out["shape"] = spec | {"inline": {renamed(g, moved): h for g, h in spec["inline"].items()}}
+        out["shape"] = spec | {"inline": {rn(g): h for g, h in spec["inline"].items()}}
     return out
 
 
-def move_errors(moved: dict[str, str]) -> list[str]:
-    """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself, or a new name under
-    another new name whose old names are not nested the same way (the build's names would map back to the wrong ones)."""
+def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
+    """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
+    under it has no one old name), a new name at, under or over another entry's old name (a chain or a swap: `rename.py`
+    has already renamed the lock's hand-kept lines, which `renamed_witnesses` would then move a second time), or a name of
+    ``names`` (a lock's, `lock_names`) whose new name maps back to another
+    (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
+    back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
+    than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
+    build, not of the map: here the lock's, and the build's in the texts `Facts.lean` compares (`moved_conflicts`)."""
     errs = [f"{old} moves to itself" for old, new in sorted(moved.items()) if old == new]
     by_new: dict[str, list[str]] = {}
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
+    def above(name: str) -> list[str]:
+        return [name.rsplit(".", i)[0] for i in range(name.count(".") + 1)]
+    under: dict[str, set[str]] = {}
+    for o in moved:
+        for p in above(o):
+            under.setdefault(p, set()).add(o)
     for old, new in sorted(moved.items()):
-        for old2, new2 in sorted(moved.items()):
-            if new2 != new and under([new], new2) and old2 != old + new2[len(new):]:
-                errs.append(f"{old2} moves to {new2}, under {new}, where {old} moves; the names under {new2} would map back "
-                            f"under {old}, not {old2}")
+        for other in sorted(({o for o in above(new) if o in moved} | under.get(new, set())) - {old}):
+            errs.append(f"{old} moves to {new}, and {other}, which moves to {moved[other]}, is at, under or over it: a "
+                        f"chain or a swap, which the lock's lines `rename.py` already renamed would follow twice; split "
+                        f"it into two passes, each its own moves file")
+    if errs:
+        return errs
+    for n in sorted(set(names)):
+        if (m := renamed(n, moved)) != n and (b := unrenamed(m, moved)) != n:
+            errs.append(f"{n} moves to {m}, which maps back to {b}: give {n} an entry of its own")
     return errs
+
+
+def lock_sections(policy: dict) -> list[tuple[str, object]]:
+    """The sections of ``policy`` that `--moved` re-keys (`renamed_witnesses`), each by its label: a map, whose keys are
+    re-keyed, or `deployed`, a list."""
+    out: list[tuple[str, object]] = [(k, policy.get(k)) for k in RE_KEYED]
+    if isinstance(trust := policy.get("trust"), dict):
+        out += [(f"trust.{k}", v) for k, v in trust.items()]
+        if isinstance(extra := trust.get("extra"), dict):
+            out += [(f"trust.extra.{g}", ps) for g, ps in extra.items()]
+    if isinstance(shape := policy.get("shape"), dict):
+        out.append(("shape.inline", shape.get("inline")))
+    if isinstance(claims := policy.get("claims"), dict):
+        out.append(("claims.witnesses", claims.get("witnesses")))
+    return out
+
+
+def section_collisions(policy: dict, moved: dict[str, str], bases: Iterable[dict] = ()) -> list[str]:
+    """Two names of one section of ``policy`` that `--moved` re-keys (`lock_sections`) landing on one new name, where the
+    pass would keep one entry for both and one guarantee's record or line would stand for another's.  A name of the same
+    section in a lock of the change's base (``bases``, `base_locks`) counts too unless the moves take it elsewhere, so a
+    record deleted by hand before the move still holds its name.  Names that meet across sections are no collision: a
+    record still under its old name meets its own lines already written under the new one."""
+    of_base: dict[str, set[str]] = {}
+    for b in bases:
+        for section, names in lock_sections(b):
+            if isinstance(names, (dict, list)):
+                of_base.setdefault(section, set()).update(n for n in names if isinstance(n, str) and renamed(n, moved) == n)
+    out = []
+    for section, names in lock_sections(policy):
+        names = {n for n in names if isinstance(n, str)} if isinstance(names, (dict, list)) else set()
+        lands: dict[str, list[str]] = {}
+        for n in sorted(names | of_base.get(section, set())):
+            lands.setdefault(renamed(n, moved), []).append(n if n in names else f"{n} (in the base's lock)")
+        out += [f"{', '.join(ns)} all land on {m} in {section}" for m, ns in sorted(lands.items()) if len(ns) > 1]
+    return out
+
+
+def move_refusals(moved: dict[str, str], policy: dict, bases: Iterable[dict] = ()) -> list[tuple[str, str]]:
+    """Why ``moved`` cannot re-key the lock ``policy``, each with its failure code: the map itself (`moved.map`), a name of
+    the lock that does not come back (`moved.round-trip`; `move_errors` over `lock_names`), and two names of one section
+    that land on one, with the names of the change's base locks ``bases`` (`moved.collision`; `section_collisions`)."""
+    if errs := move_errors(moved):
+        return [("moved.map", e) for e in errs]
+    return [("moved.round-trip", e) for e in move_errors(moved, lock_names(policy))] + \
+        [("moved.collision", e) for e in section_collisions(policy, moved, bases)]
+
+
+def moves_refused(pkgs: list[Path], moved: dict[str, str], bases: dict[Path, list[dict]] | None = None) -> list[str]:
+    """`move_refusals` of each package's lock as loaded, before anything is written (`main`); the judge refuses them again.
+    It reads the lock only to refuse the moves, and changes nothing an audit builds, extracts or replays."""
+    out = []
+    for p in pkgs:
+        if not (p / POLICY).is_file():
+            continue
+        try:
+            policy = load(p)
+        except ValueError as e:
+            out.append(f"{p / POLICY}: {e}")
+            continue
+        out += [f"{p / POLICY}: {e}" for _, e in move_refusals(moved, policy, (bases or {}).get(p, ()))]
+    return out
+
+
+def write_staged(reports: list[dict]) -> None:
+    """Write the lock each of ``reports`` staged (`_finish`'s ``defer``) as its package's: the end of a `--moved` run in
+    which no move was refused.  Every lock is first copied beside its package's (`.lean-audit.json.moved`), and only then
+    is each renamed over it, so a failure while copying writes none; a process killed between two renames leaves the
+    locks before it written and the rest beside theirs: restore the written ones (`git checkout`) and run it again."""
+    beside = [(Path(r["staged_lock"]), Path(r["package"]) / POLICY) for r in reports]
+    try:
+        for staged, lock in beside:
+            shutil.copyfile(staged, lock.with_name(f".{POLICY}.moved"))
+    except BaseException:
+        for _, lock in beside:
+            lock.with_name(f".{POLICY}.moved").unlink(missing_ok=True)
+        raise
+    for _, lock in beside:
+        os.replace(lock.with_name(f".{POLICY}.moved"), lock)
+        print(f"audit: {lock}: written", flush=True)
+
+
+def base_revs(repo: Path, given: Iterable[str] = ()) -> list[str] | str:
+    """The commits a `--moved` run compares with: HEAD and its merge-base with main (`MAIN`), the commit the change
+    stands on, since HEAD may already hold the change's own hand edits to the lock, and each of ``given`` (`--base`)
+    beside them, never instead; ``given`` stands in for the merge-base only where there is none.  Or why there are none."""
+    def git(*args: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+    if (head := git("rev-parse", "HEAD")) is None:
+        return f"{repo} has no HEAD"
+    if bad := [g for g in given if git("rev-parse", "-q", "--verify", f"{g}^{{commit}}") is None]:
+        return f"--base: {', '.join(bad)} is no commit of {repo}"
+    main = next((m for r in MAIN if (m := git("rev-parse", "-q", "--verify", r))), None)
+    mb = git("merge-base", head, main) if main else None
+    if mb is None and not given:
+        return (f"{repo} has no main ({', '.join(MAIN)}) or no merge-base of HEAD with it: give `--base REV`, the "
+                f"commit of main the change stands on (the queue's check of a candidate: the candidate's base)")
+    return list(dict.fromkeys([head, *([mb] if mb else []),
+                               *(git("rev-parse", f"{g}^{{commit}}") or g for g in given)]))
+
+
+def base_locks(pkg: Path, revs: list[str], repo: Path, tree: Path | None = None) -> tuple[list[dict], list[str]]:
+    """``pkg``'s lock at each of ``revs`` in ``repo``, its path taken under ``tree`` (the tree the packages are in) or
+    ``repo``, and the commits of ``revs`` whose tree has no file at that path; ValueError for a commit git can't read, a
+    lock git lists but can't show, and a lock it can't parse."""
+    roots = [r.resolve() for r in (tree, repo) if r is not None]
+    rel = next((pkg.resolve().relative_to(r) for r in roots if pkg.resolve().is_relative_to(r)), None)
+    if rel is None:
+        raise ValueError(f"{pkg} is under neither {' nor '.join(map(str, roots))}")
+    path = (rel / POLICY).as_posix()
+    out, absent = [], []
+    for rev in revs:
+        def git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        if git("cat-file", "-e", f"{rev}^{{commit}}").returncode:
+            raise ValueError(f"{rev} is no commit of {repo}")
+        if (ls := git("ls-tree", "--name-only", rev, "--", path)).returncode:
+            raise ValueError(f"git can't list {path} at {rev}: {ls.stderr.strip()}")
+        if not ls.stdout.strip():
+            absent.append(rev)
+            continue
+        if (r := git("show", f"{rev}:{path}")).returncode:
+            raise ValueError(f"git can't show {path} at {rev}: {r.stderr.strip()}")
+        try:
+            out.append(json.loads(r.stdout))
+        except ValueError as e:
+            raise ValueError(f"{path} at {rev} is not JSON: {e}") from None
+    return out, absent
+
+
+def moves_file(path: Path) -> dict[str, str]:
+    """The moves file ``path``, {old name: new name}; ValueError for any other JSON, and for an old name it gives twice
+    (`json` would keep the last)."""
+    twice: list[str] = []
+
+    def pairs(ps: list) -> dict:
+        seen: dict = {}
+        for k, v in ps:
+            if k in seen and seen[k] != v:
+                twice.append(f"{k} moves to both {seen[k]} and {v}")
+            seen[k] = v
+        return seen
+    moved = json.loads(path.read_text(), object_pairs_hook=pairs)
+    if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
+        raise ValueError("a JSON object of old names to new names")
+    if twice:
+        raise ValueError("; ".join(twice))
+    if bad := [f"{n!r} is not a Lean name ({why})" for n in sorted({*moved, *moved.values()}) if (why := name_error(n))]:
+        raise ValueError("; ".join(bad))
+    return moved
+
+
+def lean_id_first(c: str) -> bool:
+    """Lean's `isIdFirst`: an ASCII letter, `_`, or a letter-like character (`isLetterLike`)."""
+    v = ord(c)
+    return (c.isascii() and c.isalpha()) or c == "_" or (0x3b1 <= v <= 0x3c9 and v != 0x3bb) or (
+        0x391 <= v <= 0x3a9 and v not in (0x3a0, 0x3a3)) or 0x3ca <= v <= 0x3fb or 0x1f00 <= v <= 0x1ffe or (
+        0x2100 <= v <= 0x214f) or 0x1d49c <= v <= 0x1d59f
+
+
+def lean_id_rest(c: str) -> bool:
+    """Lean's `isIdRest`: `isIdFirst`, an ASCII digit, `'`, `!`, `?`, or a subscript (`isSubScriptAlnum`)."""
+    v = ord(c)
+    return lean_id_first(c) or (c.isascii() and c.isdigit()) or c in "'!?" or 0x2080 <= v <= 0x2089 or (
+        0x2090 <= v <= 0x209c) or 0x1d62 <= v <= 0x1d6a
+
+
+def name_error(name: str) -> str | None:
+    """Why ``name`` is not a Lean name that `String.toName` reads back as itself, or None.  `String.toName` splits as
+    `splitNameLit` does, and reads the whole string as the anonymous name unless each component, between single dots, is
+    an identifier (`isIdFirst`, then `isIdRest`), a run of ASCII digits, or `«…»` up to the first `»`.  This refuses
+    besides: whitespace, a number with a leading zero and an escape around an identifier (Lean reads `A.01` as `A.1`
+    and `A.«b»` as `A.b`, which `renamed` compares as other strings), and an empty or `«`-holding escape.  `renamed`
+    splits at every dot, so it agrees with `Facts.lean`'s `renameName` only on such names (a dot inside `«…»` starts no
+    prefix that an accepted entry can be)."""
+    if not name:
+        return "empty"
+    if any(ch.isspace() for ch in name):
+        return "whitespace"
+    i = 0
+    while True:
+        start = i
+        if i == len(name) or name[i] == ".":
+            return "an empty component"
+        if name[i] == "«":
+            if (j := name.find("»", i + 1)) < 0:
+                return "a « left open"
+            part, i = name[i + 1:j], j + 1
+            if not part or "«" in part:
+                return f"the escaped component {name[start:i]!r} is empty or holds a «"
+            if lean_id_first(part[0]) and all(map(lean_id_rest, part[1:])):
+                return f"{name[start:i]!r} is {part!r} to Lean: write it without « »"
+        elif lean_id_first(name[i]):
+            i += 1
+            while i < len(name) and lean_id_rest(name[i]):
+                i += 1
+        elif "0" <= name[i] <= "9":
+            while i < len(name) and "0" <= name[i] <= "9":
+                i += 1
+            if name[start] == "0" and i - start > 1:
+                return f"the number {name[start:i]!r} has a leading zero, which Lean drops"
+        else:
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) starts no identifier, number or « »: String.toName reads the "
+                    f"name as anonymous")
+        if i == len(name):
+            return None
+        if name[i] != ".":
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) after the component {name[start:i]!r} is no identifier "
+                    f"character: String.toName reads the name as anonymous")
+        i += 1
+
+
+def lock_names(policy: dict) -> set[str]:
+    """Every name of ``policy`` that `renamed_current` renames, and every name its `shape.inline` texts print (`paired`
+    renames those): the lock's names that a moves file must take forward and back to themselves."""
+    seen: set[str] = set()
+    renamed_current(policy, lambda n: seen.add(n) or n)
+    inline = (policy.get("shape") or {}).get("inline")
+    return seen | {n for es in inline.values() if isinstance(es, dict) for t in es for n in NAMES.findall(t)} \
+        if isinstance(inline, dict) else seen
 
 
 #: hex digits of the hashes in records written before SHA-256: a guarantee's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
@@ -1817,7 +2097,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     fails += orphan_failures(policy, files, modules) + layer_failures(policy, modules, facts["imports"], graph, own)
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
-        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
+        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" if "with" in c else
+                          f"{c['name']} would be {c['as']}, which moves to {c['back']}" for c in conflicts[:8])
         fails.append(Failure("moved.conflict", None, f"moved: under the old names, {clash}{more}: the map cannot tell them "
                              f"apart, so the review compares nothing under the old names; map only the declarations that moved"))
     assumed = policy.get("assumptions", {})
@@ -2930,8 +3211,8 @@ NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: dict) -> list[tuple[str, str]] | None:
     """The renames that take the dotted name ``op`` to ``np`` (each split at its dots) through its fields: the two alike up
     to ``start`` (past a variable, or the constant ``np`` starts with) and as long, and each field that differs standing,
-    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name; None for
-    any other pair."""
+    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name in the
+    structure's old namespace (`unrenamed`: a structure moved with its field); None for any other pair."""
     if len(op) != len(np) or op[:start] != np[:start]:
         return None
     out = []
@@ -2941,8 +3222,10 @@ def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: 
         if len(cs := fields.get((".".join(np[:k]), np[k])) or set()) != 1:
             return None
         n = next(iter(cs))
-        o = n[:len(n) - len(np[k])] + op[k]
-        if not n.endswith("." + np[k]) or renamed(o, moves) != n:
+        if not n.endswith("." + np[k]):
+            return None
+        o = f"{unrenamed(n[:len(n) - len(np[k]) - 1], moves)}.{op[k]}"
+        if renamed(o, moves) != n:
             return None
         out.append((o, n))
     return out or None
@@ -4272,8 +4555,13 @@ def source_graph(pkg: Path, roots: list[str]) -> tuple[dict[str, list[str]], lis
 
 
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
-    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
-    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved, each inside
+    ``pkg``'s `home`: they are audited beside it, their `.lake` written, so one outside is refused (`OutsideTree`)."""
+    got = [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    if out := [(p, q) for p, q in got if not q.is_relative_to(root := home(pkg))]:
+        raise OutsideTree(f"{pkg / POLICY}: proved_in {out[0][0]!r} resolves to {out[0][1]}, outside {root}, so its audit "
+                          f"would write its .lake there: a package named under proved_in must lie in the tree")
+    return got
 
 
 def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str], dict[str, list[str]]]:
@@ -4414,6 +4702,7 @@ MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
+MOVED_ENTRY = "its entry under its new name; its definition is compared in `reads`"
 
 
 class Change(str):
@@ -4518,7 +4807,8 @@ def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] 
     return lift["head"] if a.get("type_hash") == unfolded and assumptions == b.get("assumptions") else None
 
 
-def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None) -> list[str]:
+def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None,
+           base: Iterable[dict] = ()) -> list[str]:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
     guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
@@ -4531,17 +4821,22 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    records under its new name (a lock re-recorded after the move) is compared with that record, and so is one whose new
+    name a lock of the change's base (``base``, `base_locks`) records with another statement, whatever ``old`` holds:
+    a record deleted by hand before the move leaves that guarantee's statement changed, never moved.  Each entry added to
     or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
     moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
-    was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
+    prior = {n: r for b in base for n, r in (b.get("guarantees") or {}).items()
+             if n in moved and moved[n]["as"] != n and isinstance(r, dict) and isinstance(np.get(n), dict)
+             and any(r.get(k) != np[n].get(k) for k in ("type_hash", "unfolded_hash"))}
+    was = {n: moved[n]["as"] if n in moved and n not in prior and moved[n]["as"] in op else n for n in np}
     lifts: dict[str, set[str]] = {}
     for name in sorted(set(np) | (set(op) - set(was.values()))):
         o = was.get(name, name)
-        a, b = op.get(o) or {}, np.get(name) or {}
+        a, b = prior.get(name) or op.get(o) or {}, np.get(name) or {}
         if a and b and a.get("owner") != b.get("owner"):
             out.append(f"guarantee {name}: owner {a.get('owner') or 'none'} -> {b.get('owner') or 'none'}: {OWNED}")
         a, b = unowned(a), unowned(b)
@@ -4627,7 +4922,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
-    out += assumption_changes(old, new)
+    out += assumption_changes(old, new, renames)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
     out += [Change("verifier", a, f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the "
@@ -4661,12 +4956,17 @@ def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
     return out
 
 
-def assumption_changes(old: dict, new: dict) -> list[str]:
+def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = None) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
-    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
+    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed.  After
+    `--moved` (``renames``) each of ``old``'s entries is read under its new name, and a premise that moved gets one line:
+    its entry moved, where a `reads` record holds its definition, which that record's lines compare under the old names;
+    else a statement change, since its `digest` hashes the names of what it reads and is not compared.  And one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
     whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
     with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
+    if renames:
+        old = old | renamed_witnesses(old, renames)
     was, now = map(listed_premises, (old, new))
     records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
 
@@ -4686,7 +4986,10 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         h, before = (rec or {}).get("digest"), (was.get(a) or {}).get("digest")
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
-        if a in was and h and h != before and a not in held:
+        if renames and a in was and (o := unrenamed(a, renames)) != a:
+            out.append(f"{what} {a}: moved from {o}: {MOVED_ENTRY}" if a in held else
+                       Change(k, a, f"{what} {a}: moved from {o}, its digest not compared (it hashes the new names)"))
+        elif a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))
         if a not in was and k == "domain":
@@ -4712,7 +5015,8 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED,
+                                                 MOVED_ENTRY))]
 
 
 def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
@@ -4734,21 +5038,104 @@ def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
              "line": str(n)} for n in statement_changes(notes) if isinstance(n, Change)]
 
 
+def setup_refused(pkg: Path) -> list[Failure]:
+    """Why `setup` refuses ``pkg`` before it runs anything: a `lean-toolchain` of it or of a path dependency that names no
+    release of Lean (`TOOLCHAIN`); a target named `cache` in one of their lakefiles, or a package named `mathlib` that is
+    not Mathlib's repository (`MATHLIB_URL`), either of which would make `lake exe mathlib/cache` the tree's own code; or a
+    `.lake` the tree holds as a link, which `setup.sh` would write through before any sandbox refuses it. A file that
+    can't be read refuses too."""
+    fails = []
+
+    def refuse(code: str, f: Path, why: str) -> None:
+        fails.append(Failure(f"setup.{code}", os.path.relpath(f, pkg), f"setup: {os.path.relpath(f, pkg)}: {why}"))
+    try:
+        dirs = [pkg, *(d for d in path_deps(pkg) if d != pkg.resolve())]
+        for d in dirs:
+            if (tc := d / "lean-toolchain").is_file() and not TOOLCHAIN.fullmatch(t := "".join(tc.read_text().split())):
+                refuse("toolchain", tc, f"it names {t!r}, not a release of Lean (`leanprover/lean4:vX.Y.Z`): elan would "
+                       f"download that toolchain from the repository it names, and run its `lean` and `lake` outside the "
+                       f"sandbox")
+            if (toml := d / "lakefile.toml").is_file():
+                doc = tomllib.loads(toml.read_text())
+                if doc.get("name") == "mathlib":
+                    refuse("mathlib", toml, "the package is named `mathlib`, so `lake exe mathlib/cache` would run its own "
+                           "`cache`: name it otherwise")
+                if any(isinstance(t, dict) and t.get("name") == "cache"
+                       for k, v in doc.items() if k != "require" and isinstance(v, list) for t in v):
+                    refuse("cache-target", toml, "it declares a target named `cache`, which `lake exe cache get` would "
+                           "build and run in place of Mathlib's: name it otherwise")
+            if (lean := d / "lakefile.lean").is_file() and LEAN_CACHE_TARGET.search(lean.read_text()):
+                refuse("cache-target", lean, "it declares a target named `cache`, which `lake exe cache get` would build "
+                       "and run in place of Mathlib's: name it otherwise")
+            if (d / ".lake").is_symlink():
+                refuse("link", d / ".lake", "it is a symbolic link, which setup would write through: make it a directory")
+        if (manifest := pkg / "lake-manifest.json").is_file():
+            for p in json.loads(manifest.read_text()).get("packages", []):
+                if p.get("name") == "mathlib" and not (p.get("type") == "git" and MATHLIB_URL.fullmatch(str(p.get("url")))):
+                    refuse("mathlib", manifest, f"its package `mathlib` is {p.get('type')!r} at "
+                           f"{p.get('url') or p.get('dir')!r}, not Mathlib's repository, so `lake exe mathlib/cache` "
+                           f"would run its code")
+    except (OSError, ValueError) as e:
+        fails.append(Failure("setup.unread", None, f"setup: {pkg}: {type(e).__name__}: {e}, so what setup would run "
+                             f"there is unknown"))
+    return fails
+
+
+def mathlib_cache(env: dict[str, str]) -> Path:
+    """Where Mathlib's `cache get` keeps its downloads: `MATHLIB_CACHE_DIR`, else Mathlib's own default."""
+    return Path(env.get("MATHLIB_CACHE_DIR") or Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "mathlib")
+
+
+def fetch_env() -> dict[str, str]:
+    """The environment of a fetch (`in_fetch_sandbox`): `lake_env`'s `FETCH_ENV` and locale, `MATHLIB_CACHE_DIR` set, and
+    with `--dev-cache` the build cache's read credential (`cache.py get`)."""
+    env = lake_env()
+    keep = {k: v for k, v in env.items() if k in FETCH_ENV or k.startswith("LC_")}
+    if DEV_CACHE:
+        keep |= {k: env[k] for k in (*sibling("cache").READ_ENV, "LEAN_CACHE_STATE_URL", "LAKE_CACHE_DIR") if k in env}
+    return keep | {"MATHLIB_CACHE_DIR": str(mathlib_cache(env))}
+
+
+def in_fetch_sandbox(pkg: Path, toolchain: str, argv: list[str]) -> list[str]:
+    """``argv`` in a sandbox of its own with the network (``argv`` as is where builds have none): what loads ``pkg``'s
+    workspace before its build (`setup.sh --fetch`: its dependencies' lakefiles, their clones, Mathlib's `cache`) writes
+    only the packages' `writable` directories and Mathlib's cache, and with `--dev-cache` the build cache's downloads and
+    Lake's local cache, never the tree."""
+    if not sandboxed():
+        return argv
+    env = lake_env()
+    caches = [mathlib_cache(env)]
+    if DEV_CACHE:
+        c = sibling("cache")
+        caches += [Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / c.DOWNLOADS,
+                   *filter(None, [c.lake_cache({"toolchain": toolchain}, env)])]
+    return [*UNSHARE_NET, "--", "bash", str(TOOL / "sandbox.sh"), "--net", *map(str, [*writable(pkg), *caches]), "--", *argv]
+
+
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
-    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
-    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
-    process's first)."""
-    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    """`setup.sh` for ``pkg``: its first half (elan, the toolchain, the pinned dependency bundle) here, then what loads the
+    package's workspace in a sandbox of its own (`in_fetch_sandbox`); alone until one has installed ``toolchain``, since
+    they install into one elan home; then beside the others (Mathlib's `cache get`, which they share a download directory
+    for, writes each download to a file of its own process's first). `setup_refused` refuses before either half."""
+    def both() -> tuple[int, str]:
+        if refused := setup_refused(pkg):
+            return 3, "".join(f"{f}\n" for f in refused)
+        rc, text = run(["bash", str(TOOL / "setup.sh"), "--outside", str(pkg)], pkg, log)
+        if rc:
+            return rc, text
+        rc, more = run(in_fetch_sandbox(pkg, toolchain, ["bash", str(TOOL / "setup.sh"), "--fetch", str(pkg)]), pkg,
+                       log.with_name(f"{log.stem}-fetch.log"), env=fetch_env())
+        return rc, text + more
     with SETUP:
         if toolchain not in _INSTALLED:
-            rc, text = run(argv, pkg, log)
+            rc, text = both()
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return dev_restore(pkg, rc, text, log)
-    return dev_restore(pkg, *run(argv, pkg, log), log)
+            return dev_restore(pkg, toolchain, rc, text, log)
+    return dev_restore(pkg, toolchain, *both(), log)
 
 
-def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+def dev_restore(pkg: Path, toolchain: str, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
     (most of security/Proofs' modules). A failed restore leaves those to `lake build`."""
@@ -4764,8 +5151,8 @@ def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
                 own.parent.mkdir(parents=True, exist_ok=True)
                 own.symlink_to((pkg / ".lake" / "packages").resolve())
                 linked.append(own)
-        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
-                      log.with_name(f"{log.stem}-deps.log"))
+        _, more = run(in_fetch_sandbox(pkg, toolchain, [sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)]),
+                      pkg, log.with_name(f"{log.stem}-deps.log"), env=fetch_env())
     finally:
         for own in linked:
             own.unlink(missing_ok=True)
@@ -4782,7 +5169,8 @@ _SANDBOX: bool | None = None
 
 def sandboxed() -> bool:
     """Whether builds run in `sandbox.sh` here: it needs `unshare` and unprivileged user namespaces, and it must leave this
-    tool's own directory read-only (checked, not assumed). The audit says when it had to build without one; the
+    tool's own directory read-only (checked, not assumed); where a mount's read-only remount fails, the sandbox refuses
+    to run anything, so there is none here. The audit says when it had to build without one; the
     `compile-time` check then stands in for the sandbox."""
     global _SANDBOX
     if _SANDBOX is None:
@@ -4799,15 +5187,54 @@ def sandboxed() -> bool:
     return _SANDBOX
 
 
-def path_deps(pkg: Path) -> list[Path]:
-    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too)."""
+class OutsideTree(Exception):
+    """A directory the tree's own content chose for a build to write (a package, a path dependency, a `proved_in` package)
+    that lies outside the tree: a build of the tree writes only in it, so it is refused. No `ValueError`, which callers
+    take as a policy's error and go on without."""
+
+
+def home(pkg: Path, staged: Path | None = None) -> Path:
+    """Where the packages a build of ``pkg`` writes must lie, resolved: ``staged``, the copy of a tree a caller made and
+    built ``pkg`` in (`lean_audit`'s scratch tree, `lean_changed`'s slot), or else `TREE` when ``pkg`` is in it, named by
+    its path there or its resolved one; and then ``pkg`` itself must resolve inside it (`OutsideTree`: a directory the tree
+    holds as a link out of it). Else the directory holding ``pkg`` (a control's fixture, a test's package), which no tree
+    chose."""
+    if staged is not None:
+        tree = staged.resolve()
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree} it was built in, so its build "
+                              f"would write there: a package of the tree must be a directory in it")
+        return tree
+    tree, p = TREE.resolve(), Path(os.path.abspath(pkg))
+    if p.is_relative_to(os.path.abspath(TREE)) or p.is_relative_to(tree):
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree}, so its build would write "
+                              f"there: a package of the tree must be a directory in it")
+        return tree
+    return pkg.resolve().parent
+
+
+def path_deps(pkg: Path, staged: Path | None = None) -> list[Path]:
+    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too), each inside ``pkg``'s `home`
+    (``staged``: the tree a caller copied and built it in): its build writes their `.lake`, so a manifest entry that
+    resolves outside is refused (`OutsideTree`)."""
     manifest = pkg / "lake-manifest.json"
-    return [(pkg / d["dir"]).resolve() for d in json.loads(manifest.read_text()).get("packages", [])
-            if d.get("type") == "path"] if manifest.exists() else []
+    if not manifest.exists():
+        return []
+    root, deps = home(pkg, staged), []
+    for d in json.loads(manifest.read_text()).get("packages", []):
+        if d.get("type") == "path":
+            if not (dep := (pkg / d["dir"]).resolve()).is_relative_to(root):
+                raise OutsideTree(f"{manifest}: the path dependency {d.get('name')!r} (\"dir\": {d['dir']!r}) resolves to "
+                                  f"{dep}, outside {root}, so a build of {pkg} would write its .lake there: a path "
+                                  f"dependency must lie in the tree")
+            deps.append(dep)
+    return deps
 
 
 def writable(pkg: Path) -> list[Path]:
-    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's, all inside its `home`."""
+    home(pkg)
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
@@ -4960,7 +5387,10 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     `TREE`, differs there. A
     failure names the module and its file, the report's `mismatched` lists each module failed so ({module: its package's
     directory}, the package's own and never its seal's), which a records run has Lake compile before it audits again
-    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them.
+    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them. Each such
+    module's entry in the node's artifact cache (`ARTIFACTS`) goes then, with its artifacts (`forget_mismatched`, the
+    report's `dropped`): `put` stores nothing of a build whose sample failed, so no clean compile would replace it, and
+    every later run here would restore it again, caught only when its sample drew it.
 
     Without the sandbox ``sealed`` is None, and the audit calls this before its seal: nothing is recompiled and the
     report's `unsampled` says so. A module of the population (there: those with a trace in their package's build) that
@@ -5063,17 +5493,48 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     rep["by_graph"] = graphs
     if fails:
         rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
+        if ARTIFACTS:
+            rep["dropped"] = forget_mismatched(mk, ARTIFACTS, keyed, sorted(rep["mismatched"]), sealed)
+            for m, gone in rep["dropped"].items():
+                log(f"sampled: {pkg}: {m}: " + (f"its entry in the artifact cache is removed, with its {len(gone) - 1} "
+                                               f"artifacts, so no later run here restores it" if isinstance(gone, list)
+                                               else gone))
     else:
         shutil.rmtree(top, ignore_errors=True)
     return fails, rep
 
 
+def forget_mismatched(mk, store: Path, keyed: dict, mods: Iterable[str], sealed: "Sealed") -> dict[str, list[str] | str]:
+    """Remove from the node's artifact cache (``store``) the entry each module of ``mods`` (the sample's `mismatched`) was
+    restored under, with its artifacts (``mk``: `module_keys`, `forget`): {module: the store's names of what went, or why
+    nothing did}. The key is the one a build's `stage` computes, from the outputs of what the module loads, read here from
+    the seal (``sealed``), which holds the bytes the build read; ``keyed`` is the build's `module_keys.keys`."""
+    got: dict[str, list[str] | str] = {}
+    for m in mods:
+        loaded = mk.loads(m, keyed)
+        digests = {(g, o): mk.digest(f) for g, level in loaded.items() for o in mk.read(level, keyed[g].module)
+                   if (f := sealed.mapped(mk.file_of(keyed[g].package.build().resolve(), g, o))).is_file()}
+        if (k := mk.key(m, keyed, digests, loaded)) is None:
+            got[m] = "it has no key here (the seal lacks an output of a module it loads), so no entry was restored for it"
+        else:
+            got[m] = mk.forget(store, k, m, keyed[m].package.name) or "the artifact cache holds no entry of it under its key"
+    return got
+
+
 def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
     """`sandbox.sh`'s `--at` for a build that writes the `.lake` directories ``lakes``: ``tree`` (default `TREE`) at
     `FIXED`, when each of them is in it. A package outside it (a control's fixture, one given by a path of its own) gets
-    none and compiles at its own path: its place under `FIXED` would be no function of the tree."""
-    tree = (tree or TREE).resolve()
-    return ["--at", str(FIXED), str(tree)] if all(d.resolve().is_relative_to(tree) for d in lakes) else []
+    none and compiles at its own path: its place under `FIXED` would be no function of the tree. Some in it and others
+    out is refused (`OutsideTree`), unless each one out is a fetched dependency's (under a `.lake`, whose `packages` may
+    be a link out of the tree): a build of the tree writes only in it."""
+    lakes, tree = list(lakes), (tree or TREE).resolve()
+    out = [d for d in lakes if not d.resolve().is_relative_to(tree)]
+    if not out:
+        return ["--at", str(FIXED), str(tree)]
+    if len(out) < len(lakes) and not all(".lake" in d.parts[:-1] for d in out):
+        raise OutsideTree(f"a build of the tree would write {', '.join(str(d.resolve()) for d in out)}, outside the tree "
+                          f"{tree}: a build of the tree writes only in it")
+    return []
 
 
 def fixed(path: Path, tree: Path | None = None) -> Path:
@@ -5082,14 +5543,28 @@ def fixed(path: Path, tree: Path | None = None) -> Path:
     return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
 
 
-def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox). A build passes ``at``, `bound`'s words for those directories, and reads
-    the tree at `FIXED`; the report's `bound` is read from the same words (`audit`). A step that compiles nothing passes
-    none and stays at the package's own path, where its caller opens the files its output names."""
+def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = (), rw: Iterable[Path] = ()) -> list[str]:
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories and ``rw`` (a directory of
+    the audit's own for what the command writes), and `ARTIFACTS` readable (``argv`` as is where there is no sandbox). A
+    build passes ``at``, `bound`'s words for those directories, and reads the tree at `FIXED`; the report's `bound` is
+    read from the same words (`audit`). A step that compiles nothing passes none and stays at the package's own path,
+    where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, writable(pkg)), "--", *argv] \
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, [*writable(pkg), *rw]), "--", *argv] \
         if sandboxed() else argv
+
+
+def graph(pkg: Path, modules: Path, out: Path, log: Path) -> dict:
+    """`Graph.lean` on the modules ``modules`` lists, in ``pkg``'s workspace (`lake env`, which runs its packages'
+    lakefiles, so in the build sandbox), writing only ``out``, a directory of its own: the document it writes there.
+    Raises RuntimeError when it fails."""
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    rc, text = run(in_sandbox(pkg, ["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(out / "graph.json"),
+                                    f"@{modules}"], rw=[out]), pkg, log)
+    if rc:
+        raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
+    return json.loads((out / "graph.json").read_text())
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -5242,11 +5717,10 @@ class Sealed:
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "
                                f"({', '.join(roots)}); build {it}, or list {it} (or a prefix) under `exempt` in {POLICY}")
         (work / "graph-modules").write_text("".join(f"{m}\n" for m in seeds))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'graph-modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc} sealing {self.pkg.name}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        try:
+            doc = graph(self.pkg, work / "graph-modules", work / "graph", work / "graph.log")
+        except RuntimeError as e:
+            raise RuntimeError(f"sealing {self.pkg.name}: {e}") from None
         oleans = [Path(g["olean"]).resolve() for g in doc["graph"].values()]
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(self.copy, oleans))
@@ -5829,14 +6303,10 @@ class Pipeline:
         a directory no build writes) resolves into a writable root. Before replay, every graph module's first hit along
         the moved search path must resolve to the file its key is taken from."""
         (work / "modules").write_text("".join(f"{m}\n" for m in mods))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        doc = graph(self.pkg, work / "modules", work / "graph", work / "graph.log")
         dirs = [Path(d) for d in doc["search"]]
         jobs = {}
-        graph = {}
+        copied = {}
         for m, g in doc["graph"].items():
             rel = Path(*m.split(".")).with_suffix(".olean")
             holders: list[Path] = []
@@ -5855,23 +6325,23 @@ class Pipeline:
             if snap is None:                                   # a directory no build writes: its module is read in place
                 if self.moved(target) is not None:
                     raise RuntimeError(f"replay: {m} is read in place but resolves into a writable root at {target}")
-                graph[m] = {"olean": str(live), "imports": g["imports"]}
+                copied[m] = {"olean": str(live), "imports": g["imports"]}
             else:                                              # a writable directory: the module is copied from within it
                 if not target.is_relative_to(d.resolve()):
                     raise RuntimeError(f"replay: {m}'s olean {live} resolves outside its search directory {d} to {target}")
                 copy = snap / rel
                 jobs[copy] = live
-                graph[m] = {"olean": str(copy), "imports": g["imports"]}
+                copied[m] = {"olean": str(copy), "imports": g["imports"]}
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(lambda kv: self.copy(*kv), jobs.items()))
         search = [str(self.moved(Path(d).resolve()) or d) for d in doc["search"]]
         for m in doc["graph"]:
             rel = Path(*m.split(".")).with_suffix(".olean")
             hit = next((Path(s) / rel for s in search if (Path(s) / rel).exists()), None)
-            want = Path(graph[m]["olean"])
+            want = Path(copied[m]["olean"])
             if hit is None or hit.resolve() != want.resolve():
                 raise RuntimeError(f"replay: {m} would load {hit}, not the keyed {want}")
-        return {"graph": graph, "modules": mods, "axioms": []}, search
+        return {"graph": copied, "modules": mods, "axioms": []}, search
 
     def digest(self, p: Path) -> str:
         """`sha256` of ``p``, kept for a copy in the snapshot, which no one writes once it is made."""
@@ -5948,8 +6418,9 @@ def unpacked(src: Path, dst: Path) -> Path:
 def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path, update: bool) -> tuple[list[str], dict]:
     """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, beside
     the facts and the kernel replay (`audit`). A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
-    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (run here, outside the sandbox,
-    with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
+    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (a command the lock names, so
+    in the sandbox too, with ``repo`` for `{repo}`, read only, and the directory it writes, under the package's `.lake`,
+    for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
     fails, now = [], {}
     # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
@@ -5978,7 +6449,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             base.mkdir(parents=True)
             argv = [sys.executable if i == 0 and a == "python3" else a.replace("{repo}", str(repo)).replace("{out}", str(base))
                     for i, a in enumerate(gen)]
-            rc, text = run(argv, pkg, work / f"generate-{mod}.log")
+            rc, text = run(in_sandbox(pkg, argv), pkg, work / f"generate-{mod}.log")
             if rc:
                 fails.append(Failure("runs.generate", mod, f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}"))
                 continue
@@ -6039,7 +6510,7 @@ def template(pkg: Path) -> dict:
 
 def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = False) -> list[Failure]:
     """What ``pkg``'s sources and lock fail with no build: `scans`, `run_paths`, the `compile_time` listings (`listings`),
-    and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
+    what `setup` refuses (`setup_refused`), and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
     (`source_graph`), which run only when every header can be read.  Each failure is one the audit of the build gives
     again, with its code, its entry and its text, in the order that audit reports them; ``update`` is that audit's.  A
     pass decides nothing: the audit runs each of these again, the layer rule also over the imports of modules no package
@@ -6051,7 +6522,7 @@ def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = Fal
         modules = {m for m in graph if under(policy["roots"], m)}
         fails += orphan_failures(policy, files, modules)
         fails += layer_failures(policy, modules, graph, None, set(module_files(pkg)))
-    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0]
+    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0] + setup_refused(pkg)
 
 
 def source_graph_failures(pkg: Path, policy: dict, facts: dict) -> list[Failure]:
@@ -6151,15 +6622,16 @@ def anonymous_failures(found: list[dict]) -> list[Failure]:
                     f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in found]
 
 
-def renamed_current(policy: dict, moved: dict[str, str] | None) -> dict:
-    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}), the lock the audit judges against
-    (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
+def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] | None) -> dict:
+    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}, or a function), the lock the audit
+    judges against (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
     if not moved:
         return policy
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     renames: dict[str, dict] = {}
     for n, r in sorted(policy.get("guarantees", {}).items()):
-        if r or renamed(n, moved) not in renames:
-            renames[renamed(n, moved)] = r
+        if r or rn(n) not in renames:
+            renames[rn(n)] = r
     return policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
 
 
@@ -6169,22 +6641,28 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
-          matched=lambda ok: None, prover_matched=lambda q: None) -> dict:
+          matched=lambda ok: None, sample_matched=lambda q: None, base: list[dict] | None = None,
+          defer: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
     as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
     stored. With no replay it holds the package's `writable` directories (`writing`) from before ``built`` until it
-    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``prover_matched`` (a
-    package whose facts `proved` read) returns once that package's sample has, False when it didn't match, and the
-    package then fails (`proved_in.sampled`). Without the sandbox nothing is recompiled, and the sample's check runs
-    before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing
+    was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
+    once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
+    package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
+    a path dependency, whose modules this build read and its own sample takes only a share of. Without the sandbox
+    nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
-    the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
+    the build with the records under the old names (`review`), each held to ``base``, the locks of the change's base
+    (`base_locks`): a move may land on no name they hold, and a guarantee whose new name they record with another
+    statement is reviewed as changed.  With ``defer`` the lock it writes is staged for the run (`_finish`). An update's
+    report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
     instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
@@ -6229,6 +6707,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
     pipe = later = None
+    if build and (refused := setup_refused(pkg)):
+        rep["failures"] += refused
+        return reported(rep)
     if build:
         rep["sandbox"] = sandboxed()
         at = bound(writable(pkg)) if rep["sandbox"] else []
@@ -6509,12 +6990,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
     unsampled, w = sampled(), time.monotonic()
     for q in read:
-        if prover_matched(q) is False:
+        if sample_matched(q) is False:
             entry = os.path.relpath(q, pkg.resolve())
             unsampled.append(Failure("proved_in.sampled", entry, f"proved_in: {entry}'s sampled recompile failed (its "
                                      f"report says which module), so the facts read from its seal may not be of its sources"))
     if read:
         rep["seconds"]["proved-in-sample-wait"] = round(time.monotonic() - w, 1)
+    for q in (d for d in path_deps(pkg) if d != pkg.resolve() and d not in read):
+        if sample_matched(q) is False:
+            entry = os.path.relpath(q, pkg.resolve())
+            unsampled.append(Failure("requires.sampled", entry, f"requires: {entry}, which this package requires by path, "
+                                     f"did not match its sampled recompile or ended before it did (its report says why), "
+                                     f"so this build read modules of it that may not be of its sources"))
     if unsampled:
         fails += unsampled
         if facts_cache is not None or facts_out is not None:
@@ -6572,20 +7059,35 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             store_cached_facts(facts_cache, rep["facts_key"], doc)
         else:
             write_facts_document(Path(facts_out), doc)
-    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
+    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log,
+                   base, defer)
 
 
 def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: dict[str, str], fails: list[str],
             rep: dict, update: bool, moved: dict[str, str] | None, bookkeeping: str | None,
-            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print) -> dict:
+            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print,
+            base: list[dict] | None = None, defer: bool = False) -> dict:
     """The records tail `audit` and `audit_from_facts` share, once the lock failures ``fails`` and the record ``new`` are
     judged: the bookkeeping repair (`--bookkeeping warn`), the record `--update`/`--regenerate` writes and its review, the
     notes, and the report (`report.json`).  ``judged`` runs the lock's spec/trees/shape checks (the caller's), ``on_lock``
     the caller's lock failures (bookkeeping keeps the rest), ``lnotes`` the compile-time listings' review notes, ``t`` the
-    audit's start for `seconds.total`.  A pure function of what it is given: `--facts-from` writes the same record."""
+    audit's start for `seconds.total`, ``base`` the locks of the change's base (`base_locks`) that `--moved` is held to.
+    With ``defer`` the lock `--update` writes is left in the report (`staged_lock`), for the run to write with every other
+    package's or not at all (`main`).  A pure function of what it is given: `--facts-from` writes the same record."""
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
+    def write(pkg: Path, new: dict) -> None:
+        if defer:
+            (work / "staged").mkdir(exist_ok=True)
+            dump(work / "staged", new)
+            rep["staged_lock"] = str(work / "staged" / POLICY)
+        else:
+            dump(pkg, new)
+
+    if moved and (back := move_refusals(moved, policy, base or ())):
+        fails = [*fails, *(Failure(c, None, f"moved: {e}") for c, e in back)]
+    refused = [f for f in fails if (code_of(f) or "").startswith("moved.")]
     if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
@@ -6612,22 +7114,24 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                 "changes": changes(notes, policy, regen)}
         log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
-    if update and new != policy:
-        dump(pkg, new)
-        notes = review(policy, new, facts, sources(), moved) + lnotes
+    if update and refused and new != policy:
+        log(f"audit: {pkg}/{POLICY}: not rewritten, the moves are refused ({len(refused)} moved failures)")
+    elif update and new != policy:
+        write(pkg, new)
+        notes = review(policy, new, facts, sources(), moved, base or ()) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         rep["before"] = {k: policy.get(k, {}) for k in ("guarantees", "reads")}   # the record the review compared with
-        log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
+        log(f"audit: {pkg}/{POLICY}: guarantees and reads {'staged' if defer else 'rewritten'} from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
             "; these change what a guarantee says, and the landing message shows them:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
-    elif update and (work / POLICY).read_text() != (pkg / POLICY).read_text():
-        dump(pkg, new)
-        log(f"audit: {pkg}/{POLICY}: rewritten under today's names and layout, saying what it said")
+    elif update and not refused and (work / POLICY).read_text() != (pkg / POLICY).read_text():
+        write(pkg, new)
+        log(f"audit: {pkg}/{POLICY}: {'staged' if defer else 'rewritten'} under today's names and layout, saying what it said")
     weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("guarantees", {}).values()) + \
         sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
@@ -6648,7 +7152,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
 
 def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = False, owner: str | None = None,
                      repo: Path = ROOT, moved: dict[str, str] | None = None, bookkeeping: str | None = None,
-                     log=print) -> dict:
+                     log=print, base: list[dict] | None = None, defer: bool = False) -> dict:
     """Judge ``pkg`` from a stage-A facts document (`--facts-from`), with no build and no `Facts.lean`.  It reads the
     document (`read_facts_document` from ``facts_from``, a file or the reports directory that holds the package's
     `audit-<tag>/FACTS_DOC`) and runs the lock checks over its facts (`judge`, `spec_reads`, `tree_failures`, `shape`,
@@ -6712,7 +7216,7 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     if update and listed.get("compile_time"):
         new["compile_time"] = listed["compile_time"]
     return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock,
-                   listed.get("notes", []), t, log)
+                   listed.get("notes", []), t, log, base, defer)
 
 
 def reported(rep: dict) -> dict:
@@ -6743,7 +7247,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
     elan and the toolchain with `setup.sh`, so a machine without elan works.
 
-    Among the violations (`tests/fixtures/violations.json`, by key):
+    Among the violations (`violations.json` in `FIXTURES`, by key):
     - `kernel`: a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
       every check but the replay and fail the replay;
     - `initializer`: an initializer that tries to forge the facts, which must never run where the audit reads the
@@ -6863,7 +7367,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--update", action="store_true", help="write the guarantees' records from the build instead of comparing them")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --update: a JSON object {old name: new name} of the "
                     "declarations and namespaces moved since the record (the longest prefix applies); the record's guarantees are "
-                    "renamed, and the review compares the build with the records under the old names")
+                    "renamed, and the review compares the build with the records under the old names; no name may land "
+                    "on one the lock or a --base lock holds, and the locks are written together at the end of the run, "
+                    "or none is")
+    ap.add_argument("--base", action="append", metavar="REV", help="with --moved: a commit whose locks the move is held "
+                    "to (repeatable): a moved name may not land on a name they hold, and a guarantee whose new name they "
+                    "record with another statement is reviewed as changed; always held to HEAD and its merge-base with "
+                    "main too, and REV adds to them, never replaces them (the queue's check of a candidate gives the "
+                    "candidate's base)")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
@@ -6959,9 +7470,10 @@ def main(argv: list[str]) -> int:
     if a.moved:
         if not a.update:
             ap.error("--moved goes with --update")
-        moved = json.loads(a.moved.read_text())
-        if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
-            ap.error(f"{a.moved}: a JSON object of old names to new names")
+        try:
+            moved = moves_file(a.moved)
+        except ValueError as e:
+            ap.error(f"{a.moved}: {e}")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
@@ -6987,6 +7499,24 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    bases: dict[Path, list[dict]] = {}
+    if a.base and not moved:
+        ap.error("--base goes with --moved")
+    if moved:
+        if isinstance(revs := base_revs(a.repo.resolve(), a.base or ()), str):
+            ap.error(revs)
+        try:
+            held = {p: base_locks(p, revs, a.repo.resolve(), a.tree) for p in pkgs}
+        except ValueError as e:
+            ap.error(f"--moved: the base's lock: {e}")
+        bases = {p: locks for p, (locks, _) in held.items()}
+        print(f"audit: --moved is held to the locks at {', '.join(revs)}", flush=True)
+        for p, (_, absent) in held.items():
+            if absent:
+                print(f"audit: {p}/{POLICY} is not in {', '.join(absent)}, so it is held to "
+                      f"{len(revs) - len(absent)} of those commits", flush=True)
+    if moved and (errs := moves_refused(pkgs, moved, bases)):
+        ap.error(f"{a.moved}: " + "; ".join(errs))
     for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
                     ("--program-cache", a.program_cache)):
         if d is not None and (over := build_roots_over(d, pkgs)):
@@ -7070,7 +7600,7 @@ def main(argv: list[str]) -> int:
             mine = pkg in named
             if a.facts_from is not None:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
-                                       moved if mine else None, due, log=print)
+                                       moved if mine else None, due, log=print, base=bases.get(pkg), defer=bool(moved))
             elif pkg in unbuilt:
                 built[pkg].set()                        # unpassed, and unsealed: no package that builds rests on it
                 rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg])}
@@ -7087,7 +7617,8 @@ def main(argv: list[str]) -> int:
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
                             matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
-                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None)
+                            sample_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
+                            base=bases.get(pkg), defer=bool(moved))
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
@@ -7162,6 +7693,11 @@ def main(argv: list[str]) -> int:
     finally:
         run_seals.close()
     reports = [reports[p] for p in pkgs]
+    if moved and (staged := [r for r in reports if r.get("staged_lock")]):
+        if refused := [r["package"] for r in reports if any((c or "").startswith("moved.") for c in r["failure_codes"])]:
+            print(f"audit: no lock written: the moves are refused in {', '.join(refused)}", flush=True)
+        else:
+            write_staged(staged)
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")

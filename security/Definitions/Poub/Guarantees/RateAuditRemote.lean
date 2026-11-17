@@ -32,9 +32,9 @@ rebuild work per word is `c_enc`, a parameter of every statement here, so the co
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -56,7 +56,7 @@ and the node had it from a read of some tier, from on chip, from over its NIC, o
 the chip is all of the node's processors, so it holds wherever on the node a receipt was computed; a host CPU reading
 host DRAM reads a counted tier. `N/2^h` is a receipt guessed for a word never queried, over all `N` words.
 
-Proof: `Accounting.SecurityProofs.RateConservationRO`, `RateAudit`'s guessing and compression on the run's queried
+Proof: `ResourceAccounting.SecurityProofs.RateConservationRO`, `RateAudit`'s guessing and compression on the run's queried
 words, with the footprint at most the reads summed over the tiers.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
@@ -82,7 +82,7 @@ seed) comes in over the NIC: `m` relayed receipts fix `h·m` bits of the oracle 
 `L/h` of them can be relayed, each at `h` bits of the link instead of `b` bits of a tier. Every other correct receipt
 costs its word, as in `RateConservationRO`.
 
-Proof: `Accounting.SecurityProofs.RateConservation`, `RateAuditInteractive`'s relay count and compression.
+Proof: `ResourceAccounting.SecurityProofs.RateConservation`, `RateAuditInteractive`'s relay count and compression.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservation : Prop :=
@@ -110,7 +110,7 @@ the tiers' capacity in words plus the slack terms of `RateAudit`: on-chip state,
 words the compute left after receipting could rebuild. The HBM bandwidth a cheater frees is not lost to the count: it
 must be spent on another counted tier, or bought back at the codec's price (`RateDisplacement`).
 
-Proof: `Accounting.SecurityProofs.RateConservationCapRO`.
+Proof: `ResourceAccounting.SecurityProofs.RateConservationCapRO`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservationCapRO : Prop :=
@@ -126,7 +126,7 @@ def RateConservationCapRO : Prop :=
 sources that may relay receipts: for every `m`, if the capacities fall short of `RateAudit`'s floor at `k − m` words,
 the probability that at least `k` committed receipts are correct with the compute within `F` is at most
 `C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. The count is `RateConservationCapRO`'s plus the `m` relayed receipts, about
-`L/h`. Proof: `Accounting.SecurityProofs.RateConservationCap`.
+`L/h`. Proof: `ResourceAccounting.SecurityProofs.RateConservationCap`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservationCap : Prop :=
@@ -152,7 +152,7 @@ is at most `N/2^h + C(q, k)/2^λ`.
 
 **The reading.** A cheater who reads `D` bits less of HBM than its receipts need reads them from another counted tier
 (host DRAM over PCIe, at that tier's capacity) or rebuilds `D/b` words at `c_enc` each, `D·c_enc/b` of compute. Proof:
-`Accounting.SecurityProofs.RateDisplacement`, from `RateConservationRO`.
+`ResourceAccounting.SecurityProofs.RateDisplacement`, from `RateConservationRO`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateDisplacement : Prop :=
@@ -177,7 +177,7 @@ is still uniform. The prover may pick the root (grind pass `j − 1`'s commitmen
 `S` bits on chip at the boundary; none of it helps. The sides may depend on earlier passes' oracles: those are other
 seeds.
 
-Proof: `Accounting.SecurityProofs.RateChainPassRO`, `RateAuditInteractiveRO` at each value of the other passes'
+Proof: `ResourceAccounting.SecurityProofs.RateChainPassRO`, `RateAuditInteractiveRO` at each value of the other passes'
 coins, after the oracle family is split at the root.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -193,7 +193,7 @@ def RateChainPassRO : Prop :=
 
 /-- **A chained pass is a fresh audit, with any side sources.** `RateChainPassRO` for devices whose side sources may
 answer as any function of pass `j`'s oracle too, at `RateAuditInteractive`'s floor at `k − m` words and its error,
-`((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. Proof: `Accounting.SecurityProofs.RateChainPass`, from
+`((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. Proof: `ResourceAccounting.SecurityProofs.RateChainPass`, from
 `RateAuditInteractive`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -218,7 +218,7 @@ is at most `P` times `RateAudit`'s error.
 **The reading.** As `RateAuditWindows`', with one challenge for the whole window: at `c = δ·P` the passes' footprints
 average at least `(1 − δ)·(1 − μ)·|E|` except with probability `ε/δ`. A footprint is at most the reads summed over the
 tiers, so the window's reads of all tiers, at most `∑ᵢ R_i·T`, certify the sum: `P` passes in a window cost `P` passes'
-reads, less the slack. Proof: `Accounting.SecurityProofs.RateChainRO`, from `RateChainPassRO` at each pass.
+reads, less the slack. Proof: `ResourceAccounting.SecurityProofs.RateChainRO`, from `RateChainPassRO` at each pass.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainRO : Prop :=
@@ -232,7 +232,7 @@ def RateChainRO : Prop :=
       ≤ (P : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam)
 
 /-- **A window of chained passes certifies the sum over its passes, with any side sources.** `RateChainRO` at
-`RateChainPass`'s floor at `k − m` words and its error. Proof: `Accounting.SecurityProofs.RateChain`.
+`RateChainPass`'s floor at `k − m` words and its error. Proof: `ResourceAccounting.SecurityProofs.RateChain`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChain : Prop :=
@@ -259,7 +259,7 @@ that probability `#correct·b ≤ ∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) 
 for one pass, `correct·b ≤ paid + λ`. `2^q` counts every set of the run's `q` oracle queries the correct words could
 be; `λ = q + 40` makes the term `2^-40` for about `q/b` words of slack, negligible beside the store.
 
-Proof: `Accounting.SecurityProofs.RatePaidRO`, `RateConservationRO`'s guessing and its compression at each count
+Proof: `ResourceAccounting.SecurityProofs.RatePaidRO`, `RateConservationRO`'s guessing and its compression at each count
 `k ≤ q`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -278,7 +278,7 @@ free link bits, `λ` and `m` words,
   `∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ + m·b < #correct·b`,
 
 is at most `C(N, m)·2^L/2^(h·m) + 2^q/2^λ`: `m` relayed receipts, about `L/h`, are free. Proof:
-`Accounting.SecurityProofs.RatePaid`.
+`ResourceAccounting.SecurityProofs.RatePaid`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaid : Prop :=
@@ -303,7 +303,7 @@ outside the node, whose side sources cannot query the oracle. No sample is sampl
 sample, which the route `Sampled` prices. A word read in pass `j − 1` serves pass `j` only through the `S` bits on chip
 when `root_{j−1}` is fixed, because pass `j`'s oracle is fresh at that root.
 
-Proof: `Accounting.SecurityProofs.RateChainPaidRO`, `RatePaidRO` at each pass at every value of the other passes'
+Proof: `ResourceAccounting.SecurityProofs.RateChainPaidRO`, `RatePaidRO` at each pass at every value of the other passes'
 coins, and a union bound over the passes.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -318,7 +318,7 @@ def RateChainPaidRO : Prop :=
 
 /-- **A window's correct receipts are paid for pass by pass, with any side sources.** `RateChainPaidRO` for devices
 whose side sources may relay receipts: for every `m`, with `m` words a pass added to the slack, the probability is at
-most `P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateChainPaid`, from `RatePaid`.
+most `P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `ResourceAccounting.SecurityProofs.RateChainPaid`, from `RatePaid`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainPaid : Prop :=
@@ -342,7 +342,7 @@ whose device guessed right, and the factor reaches the guessing term too. A pick
 seeing the store only through counted reads and the family only through counted queries, would leave `N/2^h` alone and
 add its queries to `q` (not stated).
 
-Proof: `Accounting.SecurityProofs.RateGrindPaidRO`, `RatePaidRO` at each pass of the chain that keeps each candidate,
+Proof: `ResourceAccounting.SecurityProofs.RateGrindPaidRO`, `RatePaidRO` at each pass of the chain that keeps each candidate,
 and a union bound over the passes and the candidates.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -357,7 +357,7 @@ def RateGrindPaidRO : Prop :=
 
 /-- **Grinding roots costs a factor `G`, with any side sources.** `RateGrindPaidRO` for devices whose side sources may
 relay receipts, at the same Fiat–Shamir seed (`fiat-shamir`): with `m` words a pass added to the slack, the probability
-is at most `P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateGrindPaid`, from `RatePaid`.
+is at most `P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `ResourceAccounting.SecurityProofs.RateGrindPaid`, from `RatePaid`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateGrindPaid : Prop :=
@@ -368,4 +368,4 @@ def RateGrindPaid : Prop :=
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
       ≤ (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam))
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

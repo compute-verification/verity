@@ -16,11 +16,11 @@ from typing import Callable
 from .tool import Tool
 
 REGISTRY: dict[str, str] = {
-    "tc_probe": "benchmarks.tc_probe.tool:TC_PROBE",
-    "instances_hw": "benchmarks.tc_probe.tool:INSTANCES_HW",
-    "tc_probe_fp4": "benchmarks.tc_probe_fp4.tool:TC_PROBE_FP4",
-    "tc_price_fp4": "benchmarks.tc_probe_fp4.tool:TC_PRICE_FP4",
-    "native_peak": "benchmarks.native_peak.tool:NATIVE_PEAK",
+    "tc_probe": "calibration.tc_probe.tool:TC_PROBE",
+    "instances_hw": "calibration.tc_probe.tool:INSTANCES_HW",
+    "tc_probe_fp4": "calibration.tc_probe_fp4.tool:TC_PROBE_FP4",
+    "tc_price_fp4": "calibration.tc_probe_fp4.tool:TC_PRICE_FP4",
+    "native_peak": "calibration.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",

@@ -27,9 +27,9 @@ parties read, rebuild or hold them, with no assumption on who they are.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -48,7 +48,7 @@ bits, a fraction `H(μ)/b` of the store: about `0.011/b` at `μ = 0.1%`. The cru
 bits at `q ≈ 2N`. `C(q, 2)/2^h` is two queries the run made with one oracle value, about `2^-180` at `q = 2^39` and
 `h = 256`.
 
-Proof: `Accounting.SecurityProofs.RateConservationNamedRO`: a guessed receipt (`N/2^h`), a collision among the run's
+Proof: `ResourceAccounting.SecurityProofs.RateConservationNamedRO`: a guessed receipt (`N/2^h`), a collision among the run's
 queries (`C(q, 2)/2^h`, an adaptive `q`-query search for a collision), or, otherwise, compression by a code of the
 chip's state, the run's trace and the `k` named words (`C(N, k)/2^λ`).
 
@@ -73,7 +73,7 @@ is at most `N/2^h + C(q, 2)/2^h + 2^N/2^λ`.
 fraction `1/b` of the store's bits (about `0.003%` at 4 KiB words), whatever the run's query count `q`. `RatePaidRO`
 needs `λ = q + 40`, which grows with every hash the prover makes in a pass.
 
-Proof: `Accounting.SecurityProofs.RatePaidNamedRO`: `RateConservationNamedRO`'s three events, the compression taken at
+Proof: `ResourceAccounting.SecurityProofs.RatePaidNamedRO`: `RateConservationNamedRO`'s three events, the compression taken at
 each count `k ≤ N`, and `∑ₖ C(N, k) = 2^N`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -96,7 +96,7 @@ is at most `(K / (P·N))^(s·P) + P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 **The reading.** At `K = (1 − d̄)·P·N`, a window whose `s·P` openings all pass read, rebuilt or held the words of more
 than `K` correct receipts, at a slack of `N + 40` bits a pass for `λ`.
 
-Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RatePooled`, and `RatePaidNamedRO` at each pass through
+Proof: `ResourceAccounting.SecurityProofs.RateChainSampledNamedRO`: `RatePooled`, and `RatePaidNamedRO` at each pass through
 `RateChainPaidRO`'s union over passes.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -130,7 +130,7 @@ openings all pass read, rebuilt or held more than `(1 − d̄)` of its passes' w
 than `(1 − d_w)` of them in every window, at a slack of `N + 40` bits a pass for `λ`. The words are conserved whoever
 reads, rebuilds or holds them: the prover is one resource, and nothing here assumes which device or party it is.
 
-Proof: `Accounting.SecurityProofs.RateRunSampledNamedRO`: at most `K` correct receipts in all or `K_w` in some
+Proof: `ResourceAccounting.SecurityProofs.RateRunSampledNamedRO`: at most `K` correct receipts in all or `K_w` in some
 window is `RateRunSample`'s event; otherwise some window's reads fall short of its correct receipts' words, so some
 pass's do, which `RatePaidNamedRO` bounds at each pass, with a union over the windows and their passes.
 
@@ -146,4 +146,4 @@ def RateRunSampledNamedRO : Prop :=
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         (n * P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

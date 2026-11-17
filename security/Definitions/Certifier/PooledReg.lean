@@ -13,7 +13,7 @@ Definitions only. `PooledGood` is a monitoring period's good event at any incorr
 each execution phase, the proof blocks incorrect at one trace that the phase's statement, its prover's strategy and its
 registered openings fix before the phase's sample.
 
-* The trace (`regValR`) is the registered value at every gate a registered opening names (the network certifier's at
+* The trace (`regValR`) is the registered value at every gate a registered opening names (the network attester's at
   the transfer gates, the registration's at the registered inputs) and the trace read at the statement
   (`Compiled.regValX`) at every other gate. `FregR` is its incorrect set, and `BopsX` the collision finder against the
   registered openings, whose probability is the registered openings' binding term.
@@ -49,7 +49,7 @@ def RateAt (s : AuditStatement) (Pt : Partition) (q : ℝ) : Prop :=
 /-! ## The trace with the registered openings -/
 
 /-- **The trace read at the statement, with the registered openings** `ops`: the registered value at every gate a
-registered opening names (the network certifier's at the transfer gates, the registration's at the registered inputs),
+registered opening names (the network attester's at the transfer gates, the registration's at the registered inputs),
 the trace read at the statement (`Compiled.regValX`) at every other gate. It reads the statement, the registered
 openings and the prover's strategy, and no tape. -/
 noncomputable def regValR (H : Msg → Msg) (D : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
@@ -149,7 +149,7 @@ def PhaseRegistered {Lk S : ℕ} (D : Msg → Compiled Coin A) (lay : AuditState
     (D (x z ω i)).partition s = some (Pw i) ∧ ∀ g ∈ reg s, certifierVal (ops z ω i s) g = ρ i g
 
 /-- **Execution phase `i`'s record is complete**, at the secret `z` and the period's coins `ω`: the phase's
-observations in the network certifier's record have every status complete over the registered statement's steps
+observations in the network attester's record have every status complete over the registered statement's steps
 (`Covered`), one observation a step, and jitter below `Dj`. -/
 def RecordComplete {Lk K S : ℕ} (k : AuditStatement → ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement)
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) (z : Sec)

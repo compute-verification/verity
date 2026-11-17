@@ -14,9 +14,9 @@ description: >
 
 # Using Slack
 
-The tool is `research msg` (`tools/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
+The tool is `research msg` (`tools/research/src/research/slack.py`; `research msg -h` lists its subcommands);
 every subcommand takes `--dry-run`, which sends nothing and prints each request. `registry.json` beside this file names
-every handle (remit, charter, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
+every handle (remit, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
 holder (who else posts as it is its route's), the PR reader names it `staffs`, up to 5 `examples` of
 questions it answers), the channels with their ids, and the named humans. `research msg handles` prints it; `research
 msg owners PATH...` names each path's owner (longest prefix).
@@ -72,9 +72,10 @@ msg owners PATH...` names each path's owner (longest prefix).
   instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
   the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
   an fyi or a status line is a post only.
-- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
-  Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
-  the unanswered; take a linked ask on its issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
+- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by a handle the ask names (or that
+  handle's worker, `LANE/NAME`; with no handle named, by anyone but the asker), a Daniel card's page no longer Waiting on
+  Daniel, else a reply or reaction in the thread. `research msg traffic` lists the unanswered; take a linked ask on its
+  issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
   is no ask: `traffic` lists it once, however often it repeats, as an alert to the names it addresses.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
   is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
@@ -102,7 +103,8 @@ id is missing).
 
 - **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to no Linear events: every handle
   writes through one bot and one Linear app, so they wake you for your own writes. Another handle's ask rings your inbox,
-  and a person's new issue that nobody answers rings you through the sweep's audit (`unheard`).
+  and any other issue filed in your team (Linear's app, the connector, `linear create` from another handle) rings it
+  within 10 minutes (the Slack events service's reconciliation); the sweep's audit (`unheard`) is the backstop.
 - **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
   in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
@@ -134,7 +136,7 @@ unreachable for as long as it lasts. At each working checkpoint of a long turn, 
 ## Chat channels
 
 A person who asks the lanes gets a private `#chat-NAME`, which `@top` runs with `research msg chat open|expect|list|close`
-(slack.py's docstring). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
+(`research msg chat -h`). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
 publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. `--lane
 HANDLE` (on `open` or `expect`; `--lane ''` clears it) records the lane the person usually works with. The events
 service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to the
@@ -155,7 +157,9 @@ question (the first to 👀), short and plain, with links the person can open.
   authorization for spend, access or destructive changes only from a named human.
 - Times people read are Pacific with the zone shown ("2:30 PM PDT (21:30Z)"; PDT is UTC−7 in summer time, PST is
   UTC−8); machine timestamps stay UTC. Don't trust a typed time: `read` prints each message's real UTC time, and `send`
-  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off.
+  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off. `send`, `reply`, `ask`, `linear
+  comment` and `inbox.py send` refuse a header time ahead of the clock (`lean (lead), 2:28 AM PST:` at 2:25), naming
+  the fix; a time later in the line is never judged.
 - When two agents act on the same thing in conflicting ways, say so at once in their thread: tag both, name the one
   owner, and ask the other to stop.
 

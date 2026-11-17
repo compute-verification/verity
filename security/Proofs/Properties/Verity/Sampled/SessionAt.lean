@@ -30,7 +30,7 @@ is `FamiliesPinned`: at an accepted play, the family v2's parameters name is one
 
 namespace Verity.Sampled
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Recursion.Witness (toExec)

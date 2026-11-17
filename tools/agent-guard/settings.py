@@ -4,8 +4,8 @@ declared once, in `DECLARED`, and read here.
 Standard library only. The values below are read at import: every hook run and every `inbox.py` command is a fresh
 process. A file reads the others through `get`, `need` and `has`, which are ``os.environ.get``, ``os.environ[...]`` and
 ``in os.environ`` of a declared name, at the call: a default, an empty string and an unset variable behave as they do
-there, and a name `DECLARED` lacks raises `Undeclared`. The hooks run this directory's files side by side (`boot.sh` and
-`hook.sh` copy it whole), so a sibling `import settings` finds it.
+there, and a name `DECLARED` lacks raises `Undeclared`. The hooks run this directory's files side by side (`boot.sh` copies it
+whole to /opt/agent-guard, and `hook.sh` extracts it whole on a laptop), so a sibling `import settings` finds it.
 """
 from __future__ import annotations
 

@@ -33,7 +33,7 @@ bits of egress that keeps at least `⌈M/19⌉ + E` bits of uniform prior conten
 `2^-128` plus the PRF's advantage.
 
 It is what `verity/wipe/v0` publishes for an accepted session at `k = 2152` over a fill of at least one segment:
-`foreign_bits = ⌈M/19⌉ + E` at `eps = 2^-128`, `E` the egress the network certifier counted.
+`foreign_bits = ⌈M/19⌉ + E` at `eps = 2^-128`, `E` the egress the network attester counted.
 
 The error splits as `2^-129` for sampling and `2^-129` for compression, at `g = n − ⌈n/24⌉`: the prover answers at
 most `23/24` of the labels, `(23/24)^2152 ≤ e^(−2152/24) ≤ 2^-129`, and with the count `C(n, g+1) ≤ 2^n` and
@@ -59,14 +59,16 @@ def StreamedWipeMeetsFamily : Prop :=
 that keeps at least `⌈M/19⌉ + E` bits of uniform prior content through the reads is accepted with probability at most
 `2^-128` plus the PRF's advantage. No fill covers the device memory whole (software sees less of it); for one device,
 cite the family at the `n` its fill reaches, with the memory outside the fill added to what a prover can keep. Same
-footing as the family. Proof: `PousStreamedWipe.streamed_wipe_meets_96GiB`.
+footing as the family; its two ranges are the domain premises `StreamedWipe.FillsSegment` (a segment or more) and
+`StreamedWipe.PriorAtLeastForeignBits` (prior content of at least the published figure). Proof:
+`PousStreamedWipe.streamed_wipe_meets_96GiB`.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
 def StreamedWipeMeets96GiB : Prop :=
-  ∀ c : Verity.Accel.Card, 2 ^ 19 ≤ c.size .dram / 16 →
+  ∀ c : Verity.Accel.Card, StreamedWipe.FillsSegment (c.size .dram / 16) →
   ∀ (q E κ : ℕ) (prf : Bits κ → Fin (c.size .dram / 16) → Bits 512)
     (P : StreamedWipe.Prover (c.size .dram / 16) 2152 512 q (c.size .dram / 16 * 512) E),
-    (c.size .dram / 16 * 512 + 18) / 19 + E ≤ q →
+    StreamedWipe.PriorAtLeastForeignBits (c.size .dram / 16) E q →
     StreamedWipe.winReal prf P ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 

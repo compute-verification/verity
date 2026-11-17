@@ -43,7 +43,7 @@ reaches only through `tag` queries, and its signs, stream, oracle and sample are
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -138,7 +138,7 @@ def reads (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg α �
 
 end Chip
 
-/-- A prover: its strategy on a device of the device model (`Accounting.Device`), bounded by that device's figures. It
+/-- A prover: its strategy on a device of the device model (`ResourceAccounting.Device`), bounded by that device's figures. It
 holds store sectors on chip when the window opens (`w` bits each, at most `S` bits, the device's `chip`), and runs its
 chip program from the signs and those sectors. In every run the program takes in at most `L` bits over the side link
 (its `cap` over the window) and makes at most `q` oracle queries. -/
@@ -227,4 +227,4 @@ column rank is; a `16 × 32` block is not (Siegel's lemma gives it a kernel vect
 def SectorsBind {k m : ℕ} (σ : SketchSigns k m) : Prop :=
   ∀ u, Function.Injective (fun a : Sector => Tag.project (σ.block u) (fun l => int8 (a l)))
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch

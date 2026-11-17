@@ -6,9 +6,9 @@ public import Mathlib.Algebra.GroupWithZero.Nat
 public import Mathlib.Data.Fin.VecNotation
 
 /-!
-# The network certifier's record as rows: a row a bucket, each frame naming its connection
+# The network attester's record as rows: a row a bucket, each frame naming its connection
 
-Definitions only. The record the deployed network certifier writes, as a `RecordFormat` format
+Definitions only. The record the deployed network attester writes, as a `RecordFormat` format
 (`Definitions.Certifier.Tap`): the egress record of `verity/protocols/accounting/certifier/verifier/network_certifier.py`, whose rows
 `verity/protocols/accounting/certifier/verifier/network_certifier_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
 it, connection by connection in ordinal order (`conns`), each frame naming its connection (`bucketFrames`): `r` padding
@@ -16,21 +16,21 @@ frames a bucket from the connection's admission to `adm c + D`, then its lane's 
 frames fill the row's first slots, each encoded as a `List Bool` (`enc`), and a slot no connection holds is empty
 (`none`: the Python record's `None`, `B` zero bytes in its rows). Window `i` of the monitoring period's `n` windows of
 `T` buckets is buckets `i·T … i·T + T − 1`, on one egress link (`link`); a bucket's jitter class and statuses are the
-network certifier's, from anything it saw.
+network attester's, from anything it saw.
 
 Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the `(j mod r)`-th of its frames in bucket
 `adm c + D + ⌊j/r⌋`: `cells c` is the lane's length through its last bucket. A schedule fits the format
 (`RowsFormat.Fits`) when its lanes' cells fall in the monitoring period's buckets and no bucket holds more than `S`
-frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
+frames, which the network attester's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
 `S = lanes·r`).
 
-**What the Python records add.** A connection the network certifier fails for its client's sake (a malformed cell, or
+**What the Python records add.** A connection the network attester fails for its client's sake (a malformed cell, or
 ingress past its bound) fails at once, before `adm c + D` too; `certifierLane` fails a lane only at a late cell or a late
 end, so such a lane is not one `certifierCode` gives. A lane whose server sends past `egress_cells` cells fails at the last
 of them (limit): its arrivals are the ones whose cell there never arrives.
 
 `fxQueueSched` is the schedule of the fixture `fxQueue` (three connections on two lanes), one of the Python network
-certifier's egress records that `Proofs.Certifier.RecordRows` holds the format to.
+attester's egress records that `Proofs.Certifier.RecordRows` holds the format to.
 -/
 
 @[expose] public section
@@ -65,7 +65,7 @@ def laneLoad (s : CertifierSchedule κ) (c : κ) (b : ℕ) : ℕ :=
 
 /-- **The rows format**: the connections in ordinal order (`conns`), a frame's encoding (`enc`) and its decoding
 (`dec`), the egress link the rows are on (`link`), the buckets a window (`T`), and each bucket's jitter class and
-statuses, from the schedule and what reached the network certifier. -/
+statuses, from the schedule and what reached the network attester. -/
 structure RowsFormat (κ Cell : Type) (L K : ℕ) where
   conns : List κ
   enc : κ × CellView Cell → List Bool
@@ -113,7 +113,7 @@ def Fits (S n : ℕ) (s : CertifierSchedule κ) : Prop :=
 
 end RowsFormat
 
-/-- `fxQueue`: 3 connections; the Python network certifier's egress record, buckets 0 … 9 (every later bucket empty). -/
+/-- `fxQueue`: 3 connections; the Python network attester's egress record, buckets 0 … 9 (every later bucket empty). -/
 def fxQueueSched : CertifierSchedule (Fin 3) :=
   { r := 2, D := 3, adm := ![1, 2, 6], cells := ![6, 2, 2] }
 

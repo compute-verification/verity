@@ -72,8 +72,8 @@ namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.HonestStrata
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
   Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The honest instance -/
 
@@ -107,7 +107,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 /-- **The period-wide premises**, and the accepted prefix is every window: the registration reads only the round coin,
 which the splice at window `w` after its one round keeps; the salt is the round coin's bytes; the sample is the strata's. -/
 theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
     RegisteredBeforeDraw (executionPhases σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (executionPhases σ regOf evOf n) ∧
@@ -117,7 +117,7 @@ theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (e
   refine ⟨fun x z w => ?_, fun _ _ _ => hdraw _ _, fun _ _ => hsalt _, fun x => ?_⟩
   · show regOf (coinAt (coinAt (spliceAt w.val 1 x z) w).1 ⟨0, Nat.one_pos⟩) =
       regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
-    rw [Accounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
+    rw [ResourceAccounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
     rfl
   · unfold CreditExecutionPhases.prefixLen
     have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (executionPhases σ regOf evOf n).AcceptedUpTo x w :=
@@ -220,7 +220,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
 `strata_meets_stratum` give the instance every premise, so except with probability `∑_{s ∈ S} δ_s(s)` its fixed words,
 summed over `S`, are at least the sum over `S` of `(1 − ε_s(n))₊` of stratum `s`'s `N_s·n` live words. -/
 theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u)
     (n : ℕ) (hn : 0 < n) {δs : Fin mB → ℝ} (hδs : ∀ s ∈ S, 0 < δs s) :

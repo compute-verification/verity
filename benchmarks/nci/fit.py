@@ -1,37 +1,37 @@
-"""The fit bound: when no server window can hold a model that reaches the target loss, a token's work spans windows, and
-every window it enters reads its state.
+"""The fit bound: when no server block can hold a model that reaches the target loss, a token's work spans server blocks, and
+every server block it enters reads its state.
 
 The memory cap's closed form in ``tiers.py``, mu = 4 R_wipe lambda_in / (kappa d b_w b_a F), needs (d, e)-threading at the
-scale of a wipe window. The proved layered threading (``ThreadedOfLayered``) gives it only while a region holds less than
-one embedding column's worth of state: a window holding the embedding and the first layers computes a token's work from
+scale of a server block. The proved layered threading (``ThreadedOfLayered``) gives it only while a region holds less than
+one embedding column's worth of state: a server block holding the embedding and the first layers computes a token's work from
 its 17-bit id. The fit bound needs threading only at server scale, where the loss premise makes it hold. Its premises, per
-server window of whole wipe periods (``tiers.windows_bound``'s windows):
+server block of whole wipe periods (``tiers.windows_bound``'s blocks):
 
-* F1, capacity (C1 per weight, not per region): a window that multiplies p distinct updated weights and works on e tokens
-  it didn't start reads at least b_w p + w_e e bits: the weight half of ``WeightsIncompressible`` at window scale, with
+* F1, capacity (C1 per weight, not per region): a server block that multiplies p distinct updated weights and works on e tokens
+  it didn't start reads at least b_w p + w_e e bits: the weight half of ``WeightsIncompressible`` at server-block scale, with
   F4's w_e as its thread half. Master weights, optimizer state and stored activations only add to it; ``B_TRAIN`` is the
   training-storage premise that charges them.
-* F2, state: a window of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F
+* F2, state: a server block of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F
   (``tiers.ingress``): the residual at the wipe that opens it and its intake. What crosses a later wipe inside it isn't
   novel; what crosses the one that opens it is, so a token carried across a wipe in the residual pays like one carried in.
 * F3, loss (empirical): every token's computation in a dense model that reaches the target loss L* depends on at least
   N* updated weights beyond the registered models (``ReachSlots`` at token threads, which the policy adopts for dense
   recipes; false for a token-routed MoE, whose tokens use fewer); ``n_star`` reads N* off a loss law, at no data limit
-  unless given one. Each server's first window, which builds its weights from a seed, is charged (``left_out``).
-* F4, boundary (empirical): one window starts each token, from its id; any other window that does work on it reads at
+  unless given one. Each server's first server block, which builds its weights from a seed, is charged (``left_out``).
+* F4, boundary (empirical): one server block starts each token, from its id; any other server block that does work on it reads at
   least w_e bits of its values: its hidden state crossing in and its gradient crossing back, or its context's keys and
   values, which cost more. An ensemble, whose members each start the token, is outside it.
 
-A token's start window gives it at most S / b_w of its N* weights, so the windows it enters give it at least the rest,
-and its work is at most k' / (k' - 1) times its work there, k' = N* b_w / S. A window that enters e tokens with p weights
-does at most 2 p e of their work, and b_w p + w_e e <= S caps p e at S^2 / (4 b_w w_e). A window therefore does at most
+A token's start server block gives it at most S / b_w of its N* weights, so the server blocks it enters give it at least the rest,
+and its work is at most k' / (k' - 1) times its work there, k' = N* b_w / S. A server block that enters e tokens with p weights
+does at most 2 p e of their work, and b_w p + w_e e <= S caps p e at S^2 / (4 b_w w_e). A server block therefore does at most
 
     2 N* S^2 / (4 w_e (N* b_w - S))
 
 counted multiplications: ``tiers.region_cap``'s 2 K^2 / (4 d b_w b_a) with the thread's entry fee d b_a replaced by
-w_e (k' - 1) / k', paid at window scale. Over its length, at the least over window lengths, it bounds counted
+w_e (k' - 1) / k', paid at server-block scale. Over its length, at the least over server-block lengths, it bounds counted
 multiplications per server-second, as the closed form does at d b_a (which reaches its least at L = R_wipe / lambda_in).
-When a one-period window holds N* weights (S >= N* b_w) the bound is void, and what remains is the replica attack
+When a one-period server block holds N* weights (S >= N* b_w) the bound is void, and what remains is the replica attack
 (``replica``): a server-sized model synced through intake, which reaches L* only if it holds N* weights at its training
 precision.
 
@@ -139,24 +139,24 @@ def intake(p: dict) -> float:
 
 
 def state(p: dict, wipe_bits: float, periods: int = 1) -> float:
-    """F2's S: what a server window of ``periods`` whole wipe periods reads."""
+    """F2's S: what a server block of ``periods`` whole wipe periods reads."""
     return wipe_bits + intake(p) * periods * p["wipe_s"]
 
 
 def visits(S: float, N: float, b: float) -> float:
-    """k': the windows' worth of weights a token's ``N`` needs when each window holds at most ``S / b``."""
+    """k': the server blocks' worth of weights a token's ``N`` needs when each server block holds at most ``S / b``."""
     return N * b / S
 
 
 def window_mults(S: float, N: float, w_e: float, b: float) -> float:
-    """The most counted multiplications a window reading ``S`` bits does under F1-F4, or ``inf`` once it holds ``N``
+    """The most counted multiplications a server block reading ``S`` bits does under F1-F4, or ``inf`` once it holds ``N``
     weights."""
     return 2 * N * S ** 2 / (4 * w_e * (N * b - S)) if S < N * b else math.inf
 
 
 def fit_rate(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> tuple[float, int]:
-    """Counted multiplications per server-second under F1-F4, the least over windows of whole wipe periods, and the
-    periods of the window that gives it; ``(inf, 0)`` when a one-period window holds ``N`` weights."""
+    """Counted multiplications per server-second under F1-F4, the least over server blocks of whole wipe periods, and the
+    periods of the server block that gives it; ``(inf, 0)`` when a one-period server block holds ``N`` weights."""
     b = p["b_w"] if b is None else b
     best, periods, m = math.inf, 0, 1
     while (S := state(p, wipe_bits, m)) < N * b:
@@ -173,12 +173,12 @@ def share(p: dict, rate: float) -> float:
 
 
 def left_out(p: dict, periods: int) -> float:
-    """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
-    over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
+    """What the fit bound leaves out, in ``share``'s unit: each server's first server block of ``periods`` wipe periods, at mfu,
+    over the horizon. That server block builds its weights from a seed, so F1's weight half fails there, and
     ``Slowdown.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
-    it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
-    first windows, of the threads started later, which do no work in a first window when every server starts with the
-    run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),
+    it starts need no F3: their work in later server blocks is paid for by their entry fees there. F3 is asked, outside the
+    first server blocks, of the threads started later, which do no work in a first server block when every server starts with the
+    run. A server that joins later, or a recipe that seeds weights after a server's first server block (progressive growth),
     is outside it."""
     return p["mfu"] * periods * p["wipe_s"] / (p["years"] * T.YEAR)
 
@@ -299,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"r-hat = {T.audited_free(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
           f"{T.DEFAULTS['wipe_s']:.0f} s, b_w = {T.DEFAULTS['b_w']}, w_e = "
           + " / ".join(f"{w:.0f}" for w in BOUNDARY.values()) + " bits (low / central / high)\n")
-    print("S and k' = N* b_w / S at one wipe period; L, the window in wipe periods at which the fit bound is least\n")
+    print("S and k' = N* b_w / S at one wipe period; L, the server block's length in wipe periods at which the fit bound is least\n")
     print(f"{'R_wipe':>7} {'S':>8} {'k':>5} {'mu_closed':>10} {'slowdown_closed':>15} {'L':>3} {'mu_fit':>9} "
           f"{'slowdown_fit':>12} "
           f"{'slowdown_fit, w_e low-high':>26} {'fit/closed':>10}")

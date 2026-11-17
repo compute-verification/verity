@@ -38,8 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The named premises a window of Flock sessions takes
 
-The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
-(`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
+The premises `ResourceAccounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
+(`ResourceAccounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
 the bridge's premise of that name, as a named `Prop`), the window's sampling design (`ExecutionPhaseDesign`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose sampled proof blocks are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
@@ -52,9 +52,9 @@ assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
@@ -137,4 +137,4 @@ def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω
       (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
       rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) ≤ δs
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

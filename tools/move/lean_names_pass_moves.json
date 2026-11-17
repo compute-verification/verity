@@ -1,0 +1,6 @@
+{
+ "Accounting": "ResourceAccounting",
+ "NetworkCertifier": "NetworkAttester",
+ "NetworkCheck.TransferBlocks.Kind.networkCertifier": "NetworkCheck.TransferBlocks.Kind.networkAttester",
+ "Verity.Vocab.NetworkCertifierSound": "Verity.Vocab.NetworkAttesterSound"
+}

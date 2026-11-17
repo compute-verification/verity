@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `prove --zk --stream -` behind the ZK server on real builds: verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py
+# `prove --zk --stream -` behind the ZK server on real builds: tests/verity/protocols/proofs/flock/prover/test_stream_zk_server.py
 # against this tree's proving build of flock-circuit (60-circuit.sh MODE=build GPU=0), on a CPU machine. The test builds
 # its Lean itself: the Lean verifier's two executables, and the challenger's and its audit's. Run from the verity tree:
 #   research run --on auto --cwd source --project verity -- bash verity/protocols/proofs/flock/prover/pod/94-stream-zk-server.sh
@@ -20,7 +20,7 @@ RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/
   || { tail -40 "$O/build/build.log"; exit 6; }
 export FLOCK_CIRCUIT=$FW/flock-gpu-link/flock/target/release/flock-circuit RAYON_NUM_THREADS=$(nproc)
 "$REPO/.venv/bin/python" -m pytest -p no:cacheprovider -v --basetemp="$W/pytest" --junitxml="$O/junit.xml" \
-  verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py > "$O/pytest.txt" 2>&1
+  tests/verity/protocols/proofs/flock/prover/test_stream_zk_server.py > "$O/pytest.txt" 2>&1
 rc=$?
 tail -40 "$O/pytest.txt"
 (cd "$W/pytest" 2>/dev/null && find . -type f ! -name '*.bin' ! -name circuit.txt ! -name loop.sh ! -path '*/set/*' ! -path '*/tables/*' -print0 \

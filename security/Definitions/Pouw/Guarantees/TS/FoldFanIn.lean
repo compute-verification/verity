@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 # The fan-in floor of a fold (trusted)
 
 `FanInCount` (`Definitions/Pouw/Guarantees/TS.lean`) read for a fold of words, with every node of the dataflow
-reading at most `f` sources, each `def G : Prop` proved as `Accounting.SecurityProofs.TS.G` in
+reading at most `f` sources, each `def G : Prop` proved as `ResourceAccounting.SecurityProofs.TS.G` in
 `Proofs.Pouw.TS.FoldFanIn`:
 
 * `FoldFanIn`: a dataflow whose `c` outputs hold the final state of a fold of binding steps over `N` words has at
@@ -54,7 +54,7 @@ predicate destinations). Three registers give `f = 3`, ½ a node a word. A guard
 constant bank where a register was; the widest lane forms, a guarded P2R with that operand there and sm_120's IMNMX.U64
 (three pairs, two predicate operands, the guard and two predicate destinations), `f = 11`, ⅒ a word. A warp-wide
 node counts its lanes together, so its `f` is far larger: SHFL's 192, IMMA.16832's 481, and sm_100's LDTM.32x32b.x128,
-which keeps its 128 registers on 32 lanes under one uniform guard, 4099 (`Accounting.Assumptions.TS.FanIn`).
+which keeps its 128 registers on 32 lanes under one uniform guard, 4099 (`ResourceAccounting.Assumptions.TS.FanIn`).
 
 No count of this kind gives more than `1/(f − 1)` a word. A tree of `f`-input XORs sees `N` words with
 `⌈(N − 1)/(f − 1)⌉` nodes. A duo run is a dataflow of two 3-source nodes a word, since `y′` and `z′` are each a
@@ -63,9 +63,9 @@ function of `y`, `z` and the word. So duo's 3 instructions a word (`FoldOpt`) ar
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- **A fold of binding steps costs `(N − c)/(f − 1)` nodes.** For registers of `w + 1` bits, `N` words each absorbed
 by a step that binds its word and its state, any start state, and any dataflow over the words with `c` output
@@ -97,4 +97,4 @@ def Fx1FoldFanIn : Prop :=
         (v (out 0), v (out 1)) ≠ Pouw.Receipt.fx1Run k (fun j => (a j).1) r (fun j => (m j).1) x s) ∨
       (∃ i, f < (D.src i).card) ∨ L ≤ 2 + (f - 1) * D.n
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

@@ -50,9 +50,9 @@ right receipt there is a guess, at most one value of the mix in `2^h` for each l
 
 @[expose] public section
 
-namespace Accounting.BoundReceipt.InteractiveNode
+namespace ResourceAccounting.BoundReceipt.InteractiveNode
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits)
 open Bandwidth (card_line_le)
 
@@ -122,19 +122,19 @@ theorem card_guess_rest (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryD
   · rw [hx, ← h₁.1, ← h₂.1, ht]
   · exact hoff x hx
 
-end Accounting.BoundReceipt.InteractiveNode
+end ResourceAccounting.BoundReceipt.InteractiveNode
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.BoundReceipt Accounting.BoundReceipt.Node
+open ResourceAccounting.Rate ResourceAccounting.BoundReceipt ResourceAccounting.BoundReceipt.Node
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le
   pr_eq_zero_of_card)
 open Bandwidth.AuditRO (card_sample)
 
-/-- **The link relay at `e > 0`** (`Accounting.Guarantees.BoundReceiptLinkInteractive`). -/
-theorem BoundReceiptLinkInteractive : Accounting.Guarantees.BoundReceiptLinkInteractive := by
+/-- **The link relay at `e > 0`** (`ResourceAccounting.Guarantees.BoundReceiptLinkInteractive`). -/
+theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceiptLinkInteractive := by
   intro N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hA hm
   rw [Bandwidth.pr_coins_flat]
   dsimp only
@@ -279,9 +279,9 @@ theorem BoundReceiptLinkInteractive : Accounting.Guarantees.BoundReceiptLinkInte
 
 
 /-- At a node whose answers ignore the mix, `BoundReceiptLinkInteractive` is `BoundReceiptLink`. -/
-theorem boundReceiptLink_of_interactive : Accounting.Guarantees.BoundReceiptLink :=
+theorem boundReceiptLink_of_interactive : ResourceAccounting.Guarantees.BoundReceiptLink :=
   fun N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hm =>
     BoundReceiptLinkInteractive N a b h S L q Lz qz s k m F cTag cEnc w Fz lam (InteractiveNode.ofNode A)
       (InteractiveNode.ofNode_queryDetermined A) hm
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

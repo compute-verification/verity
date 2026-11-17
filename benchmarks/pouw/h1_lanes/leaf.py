@@ -96,7 +96,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
-from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -104,10 +104,10 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, concat  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1tile as H  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402

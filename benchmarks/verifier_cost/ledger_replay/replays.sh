@@ -11,7 +11,7 @@ set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: replays.sh W..." >&2; exit 2; }
 H=benchmarks/verifier_cost/ledger_replay
-P=$PWD/verity/protocols/accounting/pouw/verifier/lean/check
+P=$PWD/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 uv sync -q --all-packages --extra torch-cpu

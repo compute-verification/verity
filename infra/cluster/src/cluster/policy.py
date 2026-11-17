@@ -41,11 +41,12 @@ import fcntl
 import json
 import re
 import shlex
+import sys
 import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
@@ -221,8 +222,8 @@ def problems(cluster: model.Cluster, keys: dict[str, Key]) -> list[str]:
             except ValueError:
                 out.append(f"{k.key}: {rest[1]!r} is not a UTC start (2026-10-04T06:30Z)")
     for w in cluster.workstreams:
-        for field, want in (("nominal", w.gpus), ("borrowing", w.borrow_gpus)):
-            k = keys.get(f"{w.node}.kueue.{w.name}.gpu.{field}")
+        for quota, want in (("nominal", w.gpus), ("borrowing", w.borrow_gpus)):
+            k = keys.get(f"{w.node}.kueue.{w.name}.gpu.{quota}")
             if k is not None and want is not None and canon(k.key, k.value) != canon(k.key, want):
                 out.append(f"{k.key} = {k.value}, but workstream {w.name} says {want} (one of them is stale)")
     return out
@@ -239,11 +240,11 @@ def _quantity(q: str) -> Fraction:
 
 def _start(s: str) -> int:
     t = datetime.fromisoformat(s.replace("Z", "+00:00"))
-    return int((t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp())
+    return int((t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp())
 
 
 def _minute(t: int) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%MZ" if t % 60 == 0 else "%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%MZ" if t % 60 == 0 else "%Y-%m-%dT%H:%M:%SZ")
 
 
 def canon(key: str, value: Any) -> str:
@@ -666,9 +667,9 @@ def _read_kueue(node: str, raw: str | Exception, holds: str | Exception, live: L
                 for r in fl.get("resources") or ():
                     res = res_key.get(r["name"], r["name"])
                     seen[res] = seen.get(res, 0) + 1
-                    for field, k8s in KUEUE_FIELDS.items():
+                    for quota, k8s in KUEUE_FIELDS.items():
                         if k8s in r:
-                            live.values[f"{prefix}.{name}.{res}.{field}"] = str(r[k8s])
+                            live.values[f"{prefix}.{name}.{res}.{quota}"] = str(r[k8s])
         for res, n in seen.items():
             if n > 1:
                 live.unknown[f"{prefix}.{name}.{res}"] = f"{n} flavors give {res}: the description declares one"
@@ -690,7 +691,9 @@ def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
     for f in _slots(files.get(f"{FILL}/windows") or ""):
         try:
             start, minutes = _start(f[0]), float(f[1]) if len(f) > 1 else 30.0
-        except ValueError:
+        except ValueError as e:
+            print(f"cluster policy: {node}'s fill window {' '.join(f)[:80]!r} skipped, as fill_runner.py skips it ({e})",
+                  file=sys.stderr)
             continue
         if start + 60 * minutes > now:
             key = f"{node}.fill.window.{_minute(start)}"
