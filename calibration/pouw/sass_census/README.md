@@ -22,10 +22,10 @@ its arguments and the environment as they are.
 | `eps_counts.sh` | a CPU node with the CUDA toolkit | builds the kernels ε_skip's per-instruction counts came from, out of the source trees sent with the run (`src-TAG.tar`), for sm_120a, sm_90a and sm_100a with line info, and dumps each cubin's SASS for `eps_counts.py` | `toolkit.txt`, `TAG/ARCH/`: `build.log`, `apv.gi.sass.gz`, `apv.sass.gz`, `lineinfo.txt` |
 
 ~~~text
-research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/run.sh dump [ROOT ...]
-research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]     # the same job
+research run --on MACHINE --cwd source -- bash calibration/pouw/sass_census/run.sh dump [ROOT ...]
+research run --on MACHINE --cwd source -- bash calibration/pouw/sass_census/dump.sh [ROOT ...]     # the same job
 research run --on MACHINE --project verity --source <tree> --cwd source --timeout 30m \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
+  --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/sass_census/rates.sh
 ~~~
 
 ## Reading a census

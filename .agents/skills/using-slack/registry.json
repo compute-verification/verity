@@ -875,6 +875,7 @@
         "tests/",
         "demos/README.md",
         "demos/",
+        "calibration/",
         "benchmarks/tree/",
         "benchmarks/communication/",
         "pyproject.toml",

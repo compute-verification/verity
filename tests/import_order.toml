@@ -42,7 +42,7 @@ order = [
     ["adapters"],
     ["tools"],
     ["demos"],
-    ["benchmarks"],
+    ["benchmarks", "calibration"],
     [".", "tests"],
     ["infra"],
 ]
@@ -141,6 +141,13 @@ loader = "verity/protocols/resource_accounting/memory/poub"
 loaded = "tools"
 files = [
     "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py",
+]
+
+[[against]]
+loader = "tools"
+loaded = "calibration"
+files = [
+    "tools/research/src/research/store/tools_registry.py",
 ]
 
 [[against]]

@@ -29,6 +29,10 @@ NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
+#: the directories of ``benchmarks/pouw/`` that went to ``calibration/pouw/``: this suite still takes their scripts, by the
+#: same names (``theory/run.py``)
+CALIBRATION = POUW.parents[1] / "calibration" / "pouw"
+CALIBRATED = ("dc", "facet_break", "opcode_probe", "sass_census", "tensor_kinds", "theory")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
 #: stayed: `load` reads a file from where it is
 SPLIT = ("filler", "pearl_c_sm120", "pearl_c_sm90", "served_zk")
@@ -40,21 +44,23 @@ AHEAD = ("harness",)
 def scripts() -> list[Path]:
     """Every script under ``benchmarks/pouw/``."""
     here = [p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1])]
-    return sorted(here + [p for d in MOVED + SPLIT for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"])
+    return sorted(here + [p for d in MOVED + SPLIT for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"]
+                  + [p for d in CALIBRATED for p in (CALIBRATION / d).rglob("*.py")])
 
 
 def rel(path: Path) -> Path:
     """`path` as `load` names it: under ``benchmarks/pouw/``, or under `KERNELS` for a directory of `MOVED`; a file of
     this suite's own, under ``tests/benchmarks/pouw/``, from there."""
     here = Path(__file__).resolve().parent
-    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else here if path.is_relative_to(here) else POUW)
+    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else CALIBRATION if path.is_relative_to(CALIBRATION)
+                            else here if path.is_relative_to(here) else POUW)
 
 
 def place(file: str | Path) -> Path:
     """The file `load` reads for ``FILE``: ``benchmarks/pouw/FILE``, or under `KERNELS` for a directory of `MOVED` and
     for a kernel's file of a directory of `SPLIT`."""
     d = Path(file).parts[0]
-    return (KERNELS if d in MOVED or d in SPLIT and not (POUW / file).exists() else POUW) / file
+    return (KERNELS if d in MOVED or d in SPLIT and not (POUW / file).exists() else CALIBRATION if d in CALIBRATED else POUW) / file
 
 
 def script_dirs() -> list[Path]:
