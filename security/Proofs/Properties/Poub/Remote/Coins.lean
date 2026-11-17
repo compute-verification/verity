@@ -17,7 +17,7 @@ reads agree: `start` reads `coins[0]`, `boundary` window `t + 1`'s challenge (`t
 coin `coins[W + t]`, only when it samples window `t` (`*_coins`, `step_coins`); the rest read none. No event changes
 the coins (`step_coins_eq`). Each event keeps every window's sample, and only `close t` samples one, window `t`, with
 every window before it sampled (`Adv`, `adv_step`): so the windows sampled are a prefix (`Prefix`), and a run that ends
-with window `t` unsampled never drew a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
+with window `t` unsampled never sampled a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
 -/
 
 @[expose] public section

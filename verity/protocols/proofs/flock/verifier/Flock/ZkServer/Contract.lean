@@ -38,7 +38,7 @@ phase, whose coins are Flock's coin tree, checked by its prover before the relea
 an opening, and it refuses coins that carry one.
 
 A release log is the ZK server's candidate outbound items in order: the values it would release, each tagged with its case,
-with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The ZK server's send check
+with its tape (the salts and pads it sampled, by id) and the tape entries it handed the workers. The ZK server's send check
 decides each candidate as it comes; so does `run`. The first item that breaks the contract is the cut: a refused item
 stops the session, nothing of the session's own after it leaves, and the auditor sees a stop (in the outer phase at the
 session's `Finish`: the ZK server releases the statement's schedule in the refused item's place, live PROTOCOL.md §10.1, and
@@ -595,7 +595,7 @@ theorem holds_finish {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) : t.
   go_last (holds_go h).2 rfl
 
 /-- (a) on an accepted session: every commitment that left is hm96-sha512's `b ‖ c` of its message under a salt the
-ZK server drew, of 192 bytes, that the workers never saw and that no other salt number of the tape names (`commitLeaf`
+ZK server sampled, of 192 bytes, that the workers never saw and that no other salt number of the tape names (`commitLeaf`
 is its tree leaf). That no two commitments share a salt number is `step`'s check, not stated here. -/
 theorem holds_commit {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {msg : ByteArray} {i : Nat}
     {sent : ByteArray} (hm : Item.commit msg i sent ∈ t.items.toList) :
@@ -609,7 +609,7 @@ theorem holds_commit {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {msg
   have := pairwiseDistinct_ne (tapeError_none ht).1 hj a hne
   simpa [bytesEq] using this
 
-/-- (b) on an accepted session: every masked value that left is its value plus a pad the ZK server drew that the workers
+/-- (b) on an accepted session: every masked value that left is its value plus a pad the ZK server sampled that the workers
 never saw and that no other pad number of the tape names. -/
 theorem holds_masked {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {v : F128} {p : Nat} {sent : F128}
     (hm : Item.masked v p sent ∈ t.items.toList) :

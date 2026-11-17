@@ -10,7 +10,7 @@ public import Proofs.Flock.SessionLoop.Statement
 session gives is the one `Loop.realOf src` gives the table's reps.
 
 * `tab_of_toIn`: two level 0s `Level0.ofSamples` gave at one `m` with one input (`toIn`) give one table.
-* **`real_of_builtAt`**: where every level 0 bound to the session is the one the loop drew for its table from
+* **`real_of_builtAt`**: where every level 0 bound to the session is the one the loop sampled for its table from
   `src`'s rep 0 (`BuiltAt`), the rep streams' names distinct, and rep 1's level 0 has rep 0's inputs, at each rep of
   each table the level 0 gives table `t`, `Loop.realOf src` gives `t`.
 * `level0Src_rep1`: where the loop's host and operating system hand it the tape's level-0 inputs (`Loop.Level0Src`)
@@ -48,7 +48,7 @@ theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _ro
 
 /-- **The level-0 half of `RealAt` at the loop's own tables**, at the loop `σ` for session `sid`, where the model's
 samples are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`SessOn`), the
-rep streams' names are distinct (`hnd`), every level 0 bound to the session is the one the loop drew for its table from
+rep streams' names are distinct (`hnd`), every level 0 bound to the session is the one the loop sampled for its table from
 rep stream `2j`'s samples (`BuiltAt`), and rep stream `2j + 1`'s samples give a level 0 with its inputs (`h1`): at each
 rep `r` of each table `i` of the session's entry, where the level 0 the loop holds for the table gives table `t`,
 `Loop.realOf src` gives `t` at rep stream `2i + r` (`tables_inj`, `tab_of_toIn`). -/

@@ -569,7 +569,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
   encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
   ZK server's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**). Where the
-  release's link is the loop's own (`Loop.linkOf`, the roots of the level 0 the loop drew, as its `Commit` carries
+  release's link is the loop's own (`Loop.linkOf`, the roots of the level 0 the loop sampled, as its `Commit` carries
   them), `LinkIs` holds at a `Live` statement whose sampled level 0 is the tape's (`Loop.LinkLevel0`, from `Loop.Src`,
   **`LeanRelease.linkRoundEq_ofLoop`**, `Proofs.Flock.SessionLoop.Link`).
 * `FinishRound`: `FinalRoundEq` split at its branch. On a live history whose last coins the frame takes, every table
@@ -958,7 +958,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
 * `FrameLinks`: at a `Live` statement every rep stream's table has the session's link points, nonzero and within
   `Frames.COIN_MAX` at its two points (`Masked.live_links`): `ofLoop_progChecks_of`'s `hP`.
 * `FrameReal`: where `real` answers the session loop's own tables (`RealTabs`: `tabOfLevel0` of a level 0 `ofSamples`
-  drew), the rep's own table is of the placeholder's shape (`real_tabAlike`) and within the bounds `schedSoFar_alike`
+  sampled), the rep's own table is of the placeholder's shape (`real_tabAlike`) and within the bounds `schedSoFar_alike`
   reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's

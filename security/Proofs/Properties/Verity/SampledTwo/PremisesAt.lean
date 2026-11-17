@@ -24,7 +24,7 @@ the addresses are connected (`SpotFlock.Honest.Premises`). Where each accepted p
   premises (`Live₂.ks_of_connected`);
 * `scope_of_accept`: the statement of a play the session's verifier accepts is in the scope the subprotocol's error is
   bounded at (`Live₂.L`'s);
-* `template_of_formAccepts`: the session's held copies have a template, since the accepted run's second stage drew
+* `template_of_formAccepts`: the session's held copies have a template, since the accepted run's second stage sampled
   over the replay block's cells (`RunsAs.accepted_steps`), which are the held copies' (`cells_heldOf`), one per
   template;
 * `units_pos_of_formAccepts`, `checked_ne_nil_of_formAccepts`: so at every play the session's verifier accepts, the
@@ -117,7 +117,7 @@ theorem scope_of_accept {A : Live₂} (H : Msg → Msg) {Ω : Type} {P : Claims.
   SpotFlock.Honest.scope_of_play H hacc
 
 /-- **The session's held copies have a template**, wherever a play is accepted and the accepted plays' held copies
-are the ones `heldOf` builds: the accepted run's second stage drew over the replay block's cells
+are the ones `heldOf` builds: the accepted run's second stage sampled over the replay block's cells
 (`RunsAs.accepted_steps`), so there is a cell (`secondProblem`), the cells are the held copies' (`cells_heldOf`), and
 they are one per template where the design evaluates (`SpotFlock.Honest.template_of_cells`). -/
 theorem template_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)

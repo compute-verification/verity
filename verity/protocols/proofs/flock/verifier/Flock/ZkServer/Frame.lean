@@ -129,7 +129,7 @@ def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
     salts := b.extract (o + Zk.TAU_SALT_BYTES) (o + Zk.TAU_SALT_BYTES + SALT * codeLen l) }
 
 /-- The samples in the bytes `b` one read returned, refused unless there are exactly `sampleBytes l` of them: `Draws.ofBytes`
-reads past a short input as zeros, which would be pads no one drew. -/
+reads past a short input as zeros, which would be pads no one sampled. -/
 def Draws.ofRead (l : Zk.PadLayout) (b : ByteArray) : Except String Draws :=
   if b.size = sampleBytes l then .ok (Draws.ofBytes l b)
   else .error s!"{b.size} bytes where the draws take {sampleBytes l}"
