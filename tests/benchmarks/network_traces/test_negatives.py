@@ -499,11 +499,11 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
     assert NG.wrong_token(commit, row=0, vocab=13)["steps"][0][NG.SAMPLED] == [0, 22]
 
 
-def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under_its_root():
+def test_a_changed_byte_of_a_network_attesters_committed_cell_doesnt_read_under_its_root():
     """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
-    WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
+    WR = pytest.importorskip(NG.NETWORK_ATTESTER_ROWS_MODULE)
     from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
     from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, BlockGrid
     from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams, cell
@@ -527,7 +527,7 @@ def test_frame_on_a_network_attester_run_reads_its_data_cells_row_and_refuses_th
     (v2) is read under the network attester's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
-    pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
+    pytest.importorskip(NG.NETWORK_ATTESTER_ROWS_MODULE)
     sys.path.insert(0, str(HERE.parents[1] / "tests" / "benchmarks" / "network_traces"))
     from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws
 
