@@ -523,9 +523,9 @@ The two forms:
 
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
-  (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
+  (`calibration/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
   machines: the world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
-  inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
+  inference (`calibration/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network attester in front of all its machine's compute, serving at the run's rate
   (`leak_bounds.at_link_rate`, the scaling by links). A datacenter's and the world's links are each pooled at

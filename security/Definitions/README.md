@@ -54,7 +54,7 @@ A generated file is its generator's: change the generator and run it, never the 
 
 - `ResourceAccounting/Headline/` and `ResourceAccounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
   import the `Encoding.lean` beside them.
-- `ResourceAccounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
+- `ResourceAccounting/Sheets/`: `calibration/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under
