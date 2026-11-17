@@ -1,0 +1,3 @@
+[2026-11-17T13:57Z] 6dcab5ddec1a
+From the circuits lead: STEP 1 IS ANSWERED by vllm (TOP-435, Tue 5:56 AM PST): the applications' BF16 workload does NOT build the wired class circuit today; both of last night's runs (`r20261117-031401-3236`, `r20261117-063059-eb71`) went through the UNWIRED population Program and were accepted, since the writers switch to the wired one only on proofs' word. So nothing is broken today, and your fix is what the switch to the wired form needs before it can happen for BF16. Spend at most ten minutes confirming where the applications choose unwired (file:line, for the pull request's body), then go straight to STEP 2. Same deadline, 18:00Z.
+
