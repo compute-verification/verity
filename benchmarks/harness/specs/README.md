@@ -7,7 +7,9 @@ a spec or a sweep, and this file says what each one is for.
 - A **spec** (`verity-bench/vllm-spec/v0`) is one measurement: a preset (the model at a pinned revision or a node-local
   checkpoint with its digest, its precision, the GPU, the vLLM pin and the engine settings), the arms timed against each
   other, the sweep it runs over, its reps, and its admission. Every ratio is over its baseline: `stock-fp8` when it runs,
-  else `stock`, else its first arm.
+  else `stock`, else its first arm. `stock@serve` and `stock-fp8@serve` are the checkpoint in BF16 and in FP8 as
+  `vllm serve MODEL` runs it by default, as far as the harness sets it, serving the workload's own requests; each runs
+  alone on the card after the other arms.
 - A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
   and traffic shapes, every request sampled greedily. A spec names one by its id.
 - A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
@@ -38,7 +40,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
-- `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200.
+- `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200, with `stock@serve` and
+  `stock-fp8@serve` beside it.
 - `llama32-1b-bf16-h100-served-arm`: the same on one H100.
 - `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
 - `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
@@ -52,7 +55,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-1gpu-pearl-c-whole-served-h200`: the whole-step arm on one H200, against compiled stock FP8.
 - `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
-  (`served_pearlplus.sh`'s step).
+  (`served_pearlplus.sh`'s step), with `stock@serve` and `stock-fp8@serve`.
 - `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
 
 ## PoUS's bandwidth audit
@@ -61,6 +64,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
 - `llama31-8b-fp8-1gpu-bandwidth-served-h200`: the same on one H200.
 - `llama32-1b-fp8-1gpu-bandwidth-served-h200`: the same on Llama-3.2-1B on one H200.
+- `llama32-1b-fp8-1gpu-bandwidth-served-h200-serve`: that spec with `stock@serve` and `stock-fp8@serve`, its own file
+  because the served table holds the audit's member specs to its record spec's arms.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
 

@@ -2,7 +2,7 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama32-1b-bf16-h100-served-arm"
 # `llama32-1b-bf16-h200-served-arm` on one H100: the same sm_90a code, and only the card differs.
-arms = ["stock", "stock@compiled", "served-commit-rows-4k", "commit-rows-4k-eager"]
+arms = ["stock", "stock@compiled", "served-commit-rows-4k", "commit-rows-4k-eager", "stock@serve", "stock-fp8@serve"]
 arm_modules = ["served_commit.served_arm:ROWS_4K", "served_commit.served_arm:EAGER_ROWS_4K"]
 sweep = "width"
 reps = 3

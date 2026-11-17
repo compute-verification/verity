@@ -2,7 +2,7 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama32-1b-1gpu-pouw-protocol-served-h100"
 # `llama32-1b-1gpu-pouw-protocol-served-h200` on one H100: the same sm_90a code, and only the card differs.
-arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]
+arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled", "stock@serve", "stock-fp8@serve"]
 sweep = "b32"
 reps = 6
 eager = true

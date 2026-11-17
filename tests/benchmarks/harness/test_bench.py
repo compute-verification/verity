@@ -569,7 +569,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
         assert f"`{metric}`" in readme, metric
     for kind in re.findall(r'"kind": "([a-z-]+)"', runner_source):
         assert f"`{kind}`" in readme, kind
-    for mode in ("resident", "blocks"):
+    for mode in ("resident", "blocks", "alone"):
         assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
     assert f"`{result_format.SCHEMA}`" in readme
     for kind in jobs.QUEUE_KINDS.values():
