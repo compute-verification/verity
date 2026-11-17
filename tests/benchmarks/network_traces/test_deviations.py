@@ -427,7 +427,7 @@ def test_what_a_try_keeps_holds_no_salt_or_address_and_the_table_is_made_from_it
 
 
 def test_the_servers_own_record_names_a_request_by_its_run_and_release(tmp_path):
-    """The certified tick names a request ``verity-<run>-<N>``, and the server's recorder writes its sampled ids under
+    """The attested tick names a request ``verity-<run>-<N>``, and the server's recorder writes its sampled ids under
     that `id`: the tie reads those rows as they are, among the rows of what the server served before."""
     kept = _kept(tmp_path, "tokens", [1, 0] * 60) | {"run_id": "ab" * 16}
     record = tmp_path / "requests.jsonl"

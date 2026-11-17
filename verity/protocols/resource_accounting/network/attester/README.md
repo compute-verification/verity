@@ -16,7 +16,7 @@ network attester's definitions). It has no console script.
 - **Host programs**, which run the network attester on a host in front of a server: `network_attester_serve.py` (the
   relay in front of any TCP server, and the offline check of what it published), `load_relay.py` (the relay of the
   weights' load and its commit), `connection_rows_run.py` (a run's lengths and content rows), with `runner_cli.py` and
-  `runner_parts.py`, which they start a run with; `stall_probe.py` (what blocks a tick) and `certifier_key.py` (a
+  `runner_parts.py`, which they start a run with; `stall_probe.py` (what blocks a tick) and `attester_key.py` (a
   device's LMS key on disk). Their tests are in `tests/`.
 
 - **Lean**: `program/lean/` is the Lake package `certifier_program`, whose library `NetworkAttester` the packages at
