@@ -2,30 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.Statement
 
-/-!
-# The session loop's own rounds of the inner proof
-
-Past an opened rep's scheduled rounds the loop's frame releases the inner proof's rounds itself (`Frames.roundPlace`,
-at `Frame.innerSched`): its round `j` is `Frame.ownRound`, every word the frame's own (its `ε`, `β`, pads and coin
-count) but `final_c'` (round 0) and `τ`'s commitment (round 2), which it reads off the finish's round `j`, as the
-finish hands it to the frame (`Sessions.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A relayed
-round that differs from the frame's fails the frame's check at `.sched`, which asks for the round byte for byte: the
-frame's own round stands in and the rep stops (`standIn`). A round the finish has not computed has no place: the loop
-refuses it whatever Rust relays (`Frames.roundPlace`), and the session stops there. This file defines that release and
-proves `LoopInnerRound0` at it, at every finish:
-
-* `Loop.innerOf`: the round in the device's place past the located rep's schedule, at the inner proof's round `j`
-  (`j < INNER_ROUNDS`), `Frame.innerSched` at the rep's configuration, `ε` and `β` the first words of the coins of the
-  inner proof's rounds 0 and 2 (as `Loop.ownRounds` reads them), the finish's rounds `fin` and the round's coin count;
-  none at a scheduled round, past the inner proof, or where `x` sets up no session.
-* `LeanRelease.withInner`: `L₀` with those rounds, at the finish's rounds `fin` of the statement, the witness, the
-  tape and the history; elsewhere `L₀`'s.
-* `step_sched_self`: a round at `.sched r` with `r` itself in the device's place, an honest relay, leaves the frame's
-  state at `.own`'s, `Drive.reqs`' place for the inner proof's rounds, which `Loop.repState` runs. A relay that differs
-  stops the rep (`standIn`): the state but for `stopped`, as `ProgChecks` reads it.
-* `Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own`: `LoopInnerRound0` holds at
-  `withInner`, at every `fin`, `final_c'` the first word past the label frame and its header of the finish's round 0.
--/
+/-! The session loop's own rounds of the inner proof (`LeanRelease.withInner`), at which `LoopInnerRound0` holds at every finish. -/
 
 @[expose] public section
 
@@ -110,10 +87,6 @@ def _root_.Flock.Guarantees.LoopInnerRound0Own : Prop :=
     (x : Msg) (w : Flock.Wit),
     _root_.Flock.Guarantees.LoopInnerRound0 T (LeanRelease.withInner T L₀ real fin) real x w
 
-/-- **An inner round relayed as the frame computes it steps as the frame's own**: where the rep owes no coins and the
-frame takes the round `r` inside the inner proof, `Frame.step` at `.sched r` (the place `Frames.roundPlace` gives an
-opened rep's round) with `r` in the device's place leaves the state `.own` leaves (`Drive.reqs`' place for the inner
-proof's rounds), the rep stopped or not. -/
 theorem step_sched_self (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (n : ℕ) (r : ByteArray) {out : ByteArray}
     {s' : Masker} (ho : st.m.owed = none) (hr : _root_.Flock.ZkServer.Frame.round c st.m r n = .ok (out, s'))
     (hin : s'.inner.isSome) :
@@ -141,9 +114,6 @@ theorem wordBytes_size (v : Array F128) : (wordBytes v).size = 16 * v.size := by
   rw [← ByteArray.size_data, ← Array.length_toList, wordBytes_data, FlockSoundness.Refine.Frame.colBytes_length,
     Array.length_toList]
 
-/-- **The loop's own round past a rep's schedule** after the decoded coins `cs`, where `x` sets up a session, the
-located rep's own table and salts are `(t, hi)` and its schedule so far at them, `sched`, ends `i` rounds before the
-located round, `i` within the inner proof: the inner proof's round `i`, the frame's own on the finish's rounds. -/
 theorem Loop.innerOf_eq (real : ℕ → V (Tab × Array ByteArray)) (c : Cfg) (fin : Array ByteArray) (x : Msg)
     (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q k j : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)

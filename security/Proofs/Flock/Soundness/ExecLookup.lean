@@ -9,21 +9,13 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# What `Lookup.build` builds
-
-A lookup slot's expanded circuit (`Flock.Lookup.build`): one input word whose port is the `n` index bits, the constant
-the last row, reading itself in `A` and in `B`, and the product rows (whose `B` side the fold reads from the table)
-before it.
--/
+/-! What `Lookup.build` builds (`build_facts`). -/
 
 @[expose] public section
 
 open Flock FlockLevel3
 
 namespace FlockSoundness
-
-/-! ## The builder's loops push rows, to `A` and `B` together -/
 
 theorem foldl_count {α σ : Type} (m : σ → ℕ) {g : σ → α → σ} {k : ℕ} (hg : ∀ s x, m (g s x) = m s + k) :
     ∀ (l : List α) (s : σ), m (l.foldl g s) = m s + l.length * k := by
@@ -39,7 +31,6 @@ theorem foldl_inv {α σ : Type} (P : σ → Prop) {g : σ → α → σ} (hg : 
   | nil => intro s t hs h; cases h; exact hs
   | cons x l ih => intro s t hs h; exact ih (hg s x hs) h
 
-/-- A `for i in [0:k]` loop whose body adds one to `m`, run in `V`, adds `k`. -/
 theorem forIn_range_pure {σ : Type} (m : σ → ℕ) {k : ℕ} {s s' : σ} {g : ℕ → σ → σ}
     (hg : ∀ i r, m (g i r) = m r + 1)
     (h : (forIn [:k] s fun i r => pure (ForInStep.yield (g i r)) : V σ) = .ok s') : m s' = m s + k := by
@@ -48,7 +39,6 @@ theorem forIn_range_pure {σ : Type} (m : σ → ℕ) {k : ℕ} {s s' : σ} {g :
   rw [foldl_count m (fun r i => hg i r)]
   simp [Std.Legacy.Range.size]
 
-/-- Two nested range loops whose inner body adds one to `m` add `k · j`. -/
 theorem forIn_range_nested {σ : Type} (m : σ → ℕ) {k j : ℕ} {s s' : σ} {g : ℕ → σ → σ}
     (hg : ∀ i r, m (g i r) = m r + 1)
     (h : (forIn [:k] s fun _ r => do
@@ -59,8 +49,6 @@ theorem forIn_range_nested {σ : Type} (m : σ → ℕ) {k j : ℕ} {s s' : σ} 
   rw [foldl_count m (k := j) (fun r i => by rw [foldl_count m (fun r i => hg i r)]; simp [Std.Legacy.Range.size])]
   simp [Std.Legacy.Range.size]
 
-/-- **A `while` loop's invariant**: `P` holds at the end of a loop that returned, if every step keeps it and every
-`yield` lowers the measure `μ`. -/
 private theorem loop_inv {σ ε : Type} (P : σ → Prop) (μ : σ → ℕ) {f : Unit → σ → Except ε (ForInStep σ)}
     (hf : ∀ s v, P s → f () s = .ok v → P v.value ∧ ∀ s', v = .yield s' → μ s' < μ s) :
     ∀ (s r : σ), P s → Lean.Loop.forIn Lean.Loop.mk s f = .ok r → P r := by
@@ -77,7 +65,6 @@ private theorem loop_inv {σ ε : Type} (P : σ → Prop) (μ : σ → ℕ) {f :
       | done val => cases h; exact hP
       | yield val => exact ih (μ val) (hμ ▸ hμ' val rfl) val rfl r hP h
 
-/-- `Lookup.build`'s padding to a word only pushes rows, to `A` and `B` together. -/
 theorem while_pad {X : ℕ} {s s' : Lookup.Builder} (hs : X ≤ s.a.size ∧ s.a.size = s.b.size)
     (h : (forIn Lean.Loop.mk s fun _ r =>
       if (r.a.size % 128 != 0) = true then
@@ -100,7 +87,6 @@ theorem while_pad {X : ℕ} {s s' : Lookup.Builder} (hs : X ≤ s.a.size ∧ s.a
     cases hv
     exact ⟨hr, fun s' hs' => by cases hs'⟩
 
-/-- `Lookup.decode` pushes its rows to `A` and `B` together. -/
 theorem decode_sizes (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ), bd.a.size = bd.b.size →
     (Lookup.decode bd bits fuel).1.a.size = (Lookup.decode bd bits fuel).1.b.size := by
   induction fuel with
@@ -117,15 +103,12 @@ theorem decode_sizes (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ),
       exact foldl_inv (fun s : Lookup.Builder × Array Lookup.Form => s.1.a.size = s.1.b.size)
         (fun s x hs => by simp only [Lookup.row, Array.size_push]; omega) (ih _ _ (ih _ _ h)) rfl
 
-/-! ## The constant row -/
-
 theorem ite_throw_ok_not {α β : Type} {c : Prop} [Decidable c] {e : String} {f : α → Except String β}
     {g : Except String β} {v : β} (h : (if c then (throw e >>= f) else g) = .ok v) : ¬ c ∧ g = .ok v := by
   by_cases hc : c
   · rw [ite_eq_left hc] at h; cases h
   · rw [ite_eq_right hc] at h; exact ⟨hc, h⟩
 
-/-- The row pushed at `k = rs.size`, with `KONST` resolved to `k`, reads `k`. -/
 theorem fix_push_getD {rs : Array (Array ℕ)} {k : ℕ} (hk : rs.size = k) :
     (Array.map (fun r => Array.map (fun c => if (c == Lookup.KONST) = true then k else c) r) (rs.push #[k])).getD
       k #[] = #[k] := by
@@ -137,7 +120,6 @@ theorem count_singleton_zmod (j k : ℕ) : (((#[k] : Array ℕ).toList.count j :
   · subst hj; simp
   · simp [hj, Ne.symm hj]
 
-/-- **What `Lookup.build` builds**: a lookup slot, one input word, its constant the last useful row, reading itself. -/
 theorem build_facts {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build name table n lo bits = .ok net) :
     net.lookup.isSome = true ∧ net.inGroups = #[⟨0, 1, #[n]⟩] ∧ net.inWords = 1 ∧ n ≤ 128 ∧

@@ -5,30 +5,8 @@ public import Proofs.Flock.Soundness.CompiledTable
 public import Proofs.Flock.Soundness.Extract
 public import Proofs.Flock.Soundness.Game
 
-/-!
-# Knowledge soundness of one table (README.md §1.3)
-
-**The extractor.** It reruns the compiled prover `P*` after its level-0 cap `K` times on fresh coins
-(`expectN`), and takes at each level-0 position the first verifying opening one of its runs made
-there, and the zero row elsewhere (`extractTable`). It decodes that full table at the level-0
-proximity radius: the candidates are the messages of `closeMsgs`, at most `L₀` of them
-(`closeMsgs_card_le`), and extraction succeeds when one of them packs a satisfying witness
-(`Committed`). Its cost is `K` reruns, so `K·t` hash evaluations for a prover making `t`.
-
-**Why it works** (the review's "fill and decode"). By the compiled bound for any table
-(`table_sound_compiled_of_table`), a table that is not committed costs `ε − ε_c⁻` of off-table
-mass, where `ε` is `P*`'s acceptance probability. A fresh run opens a position off the extractor's
-table only if it conflicts with the extractor run that supplied the row (a union over the `K`
-fresh–extractor pairs, each distributed as `adv₀`'s two runs) or opens a position no extractor run
-opened (`Σ_p q_p (1 − q_p)^K ≤ N₀/(eK)`). One Markov step gives the tail form
-(`table_knowledge_sound`); the product form, the probability that a fresh run accepts while the
-extraction fails, needs no condition on `ε` (`table_knowledge_sound_joint_tight`).
-
-**Not knowing `ε`.** For the audit composition the extractor is an analysis device, and `K` may be
-chosen from `ε` and `adv₀`; the joint form is best at `K = √(N₀/(e·adv₀))`, where
-`K·adv₀ + N₀/(eK) = 2√(N₀·adv₀/e)`. An efficient extractor, as recursion's proof of knowledge needs,
-doubles `K` until a satisfying witness is found, a decidable stop.
--/
+/-! Knowledge soundness of one table: the extractor reruns the compiled prover after its level-0 cap `K` times and
+decodes the table it fills (`table_knowledge_sound`, `table_knowledge_sound_joint_tight`). -/
 
 @[expose] public section
 
@@ -39,8 +17,6 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-/-- **The extractor's table** from runs `bs` after the level-0 cap `cap₀`: at each level-0 position
-the first verifying opening a run made there, and zero elsewhere. -/
 noncomputable def extractTable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (cap₀ : Cap D) (bs : List (OutC F D)) : Oracle F :=
   tabOf (lvOf sch 0).lanes (lvOf sch 0).logLen
@@ -71,8 +47,6 @@ theorem epsCminus_nonneg [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
   linarith
 
 open Classical in
-/-- The fixed-table fact behind extraction: if the extractor's table is not committed, a fresh run
-opens a level-0 position off it with probability at least `ε − ε_c⁻`. -/
 theorem uncommitted_costs (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -114,10 +88,6 @@ theorem uncommitted_costs (A : Arith F K) (hA : A.Correct)
   exact h
 
 open Classical in
-/-- **Knowledge soundness of one table, tail form.** For a compiled prover accepted with
-probability `ε > ε_c⁻`, the extractor's table from `K ≥ 1` reruns after the level-0 cap fails to be
-committed with probability at most `(K·adv₀ + N₀/(eK))/(ε − ε_c⁻)`, where `N₀ = 2^{d₀}` is the
-level-0 codeword length. -/
 theorem table_knowledge_sound (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -160,9 +130,6 @@ theorem table_knowledge_sound (A : Arith F K) (hA : A.Correct)
     | simp only [lvOf, List.getD_cons_zero, Nat.cast_pow, Nat.cast_ofNat]
 
 open Classical in
-/-- **Knowledge soundness of one table, the audit's form.** The probability that a fresh run
-accepts while the extraction from `K ≥ 1` independent reruns after the level-0 cap fails is at
-most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with no condition on `ε`. -/
 theorem table_knowledge_sound_joint_tight (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -189,7 +156,6 @@ theorem table_knowledge_sound_joint_tight (A : Arith F K)
         (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2) ≤ _
   set ε := expect (ind fun out : OutC F D => out.accepted = true)
     (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2 with hεdef
-  -- a fresh run is independent of the extractor's runs: the joint probability is a product
   have hprod : ∀ bs : List (OutC F D),
       expect (ind fun out : OutC F D => out.accepted = true ∧
           ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
@@ -252,8 +218,6 @@ theorem table_knowledge_sound_joint_tight (A : Arith F K)
   linarith
 
 open Classical in
-/-- **The audit's form with `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`**, which
-`table_knowledge_sound_joint_tight` implies. -/
 theorem table_knowledge_sound_joint (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)

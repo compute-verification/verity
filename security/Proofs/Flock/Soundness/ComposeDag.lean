@@ -6,20 +6,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# A unit's rows in logical order, over the type DAG (verified-lowering phase 1, 1d step 2)
-
-`Compose.ofBlock words done u` is the unit's `Logical` from `deriveChecked`'s layouts: `Flock.DeriveAll.order` (the list
-`logicalText` prints), and each column's row as the block holds it: Δ's constant copies copy `one`, a Δ binding `src` is
-`src · src`, and any other column its row as the verifier folds it (`Flock.DeriveAll.fullRow`: the derived row, a read's
-product row with its table-direct side from its record).
-
-For every statement `deriveChecked` accepts:
-- `ofBlock_ordered`: the rows are `Ordered` (`Types.Dag.order_sound`, through `Compose.ordered_of_take`);
-- `outCols_mem`: every output column of the unit type is in the order, so it has a logical column;
-- `Rows.compose_eval_unit`: satisfied composed rows, with `one` at 1, carry on each output's logical column the unit
-  type's output (`evalT`) on the input columns' values. This is `Types.Dag.unit_sound` read through the order.
--/
+/-! A unit's rows in logical order over the type DAG compute its unit type (`Rows.compose_eval_unit`). -/
 
 @[expose] public section
 
@@ -31,9 +18,6 @@ open Audit Types.Dag
 
 namespace Compose
 
-/-- **The unit's rows in logical order**, over the type DAG: `order done u`, and each column's row as the block holds it:
-Δ's constant copies copy `one`, a Δ binding `src` reads `src · src`, and any other column its row as the verifier folds it
-(`fullRow`, a read's product row with its table-direct side), the tables' words by SHA-512 in `words`. -/
 abbrev ofBlock (words : String → Option (Array ℕ)) (done : Array D) (u : D) : Logical :=
   ⟨u.inCols.size, order done u, fun c =>
     match u.delta.find? (·.1 == c) with
@@ -41,7 +25,6 @@ abbrev ofBlock (words : String → Option (Array ℕ)) (done : Array D) (u : D) 
     | some (_, some s) => some (s, s)
     | none => some ((fullRow words u c).getD ([], []))⟩
 
-/-- `ofBlock`'s rows are `blockRow`'s, whatever `one` is: a copy of `one`, the same row, or no row (then a zero row). -/
 theorem ofBlock_cases (words : String → Option (Array ℕ)) (done : Array D) (u : D) (c : ℕ) :
     ((ofBlock words done u).row c = none ∧ ∀ one, blockRow words u one c = some ([one], [one])) ∨
     (∃ p, (ofBlock words done u).row c = some p ∧ ∀ one, blockRow words u one c = some p) ∨
@@ -68,7 +51,6 @@ theorem physical_of_mem (z : Fin (Rows.compose L h).w → Bool) {c : ℕ} (hc : 
   · rfl
   · rename_i h'; exact absurd (List.idxOf_lt_length_iff.2 hc) h'
 
-/-- A row that copies `one`, satisfied with `one` at 1, carries 1. -/
 theorem comp_one {z : Fin (Rows.compose L h).w → Bool} (hz : (Rows.compose L h).Sat z)
     (h1 : z (Rows.compose L h).one = true) (k : Fin (Rows.compose L h).nComp)
     (hr : L.row (L.order.getD (L.nIn + k.val) 0) = none) : z ((Rows.compose L h).comp k) = true := by
@@ -95,7 +77,6 @@ section unit
 variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
-/-- **The unit's composed rows read only earlier columns**, or `one`. -/
 theorem ofBlock_ordered (hd : deriveChecked types ls info words unit = .ok done) :
     Ordered (ofBlock words done (done.getD unit default)) := by
   have hs := fun one => order_sound hd one
@@ -118,7 +99,6 @@ theorem ofBlock_ordered (hd : deriveChecked types ls info words unit = .ok done)
       subst hp'
       simp at hc
 
-/-- **Every output column of the unit type is in the order**: its row copies the output's form, with the constant. -/
 theorem outCols_mem (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) {o : ℕ} (ho : o < t.outputs.size) :
     (done.getD unit default).outCols.getD o 0 ∈ order done (done.getD unit default) := by
@@ -132,8 +112,6 @@ theorem outCols_mem (hd : deriveChecked types ls info words unit = .ok done) {t 
   have := hz _ _ hm hrow
   simp at this
 
-/-- **The unit's composed rows compute its type.** Column values that satisfy `Rows.compose` of the unit's rows, with
-`one` at 1, carry on output `o`'s logical column the unit type's output `o` (`evalT`) on the input columns' values. -/
 theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) {h : Ordered (ofBlock words done (done.getD unit default))}
     {z : Fin (Rows.compose (ofBlock words done (done.getD unit default)) h).w → Bool}
@@ -157,7 +135,6 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
     exact (outsideOk_spec ho'.2).2.1
   generalize done.getD unit default = u at *
   have hle := h.le
-  -- the physical values, with `one` (past every row) at 1
   let v : ℕ → Bool := fun c => if c = u.rows.size then true else physical z c
   have hv : ∀ c ∈ order done u, v c = physical z c := fun c hc => by
     have := hlt c hc

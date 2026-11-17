@@ -8,30 +8,8 @@ public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.Claims.ZK.FrameReal
 public import Proofs.Flock.Claims.Complete.Zk.RepRounds
 
-/-!
-# A taken round's rep, table and schedule
-
-`Loop.RoundsPass` reads every history whose last coins the frame takes, live or not. There the round in the device's
-place is the located rep's next scheduled round, on the rep's own table (`Loop.realOf`), wherever its schedule so far is
-not refused. Without liveness nothing says the frame's check passed a device round there, so the schedule's totality is
-the premise `Loop.ScheduleTotal` instead:
-
-* `LeanRelease.coins_taken_of_unrefused`: where the frame takes the last coins of a history, it took those of each of its
-  prefixes of at least three rounds (`coins_taken_of_live` without liveness: the coin stop sticks,
-  `refusesCoins_of_take`).
-* `LeanRelease.rho_words_unrefused`: so a rep's `ρ₀, ρ₁` words among the opened coins are independent where the frame took
-  `ρ₁`'s (`rho_unrefused_sched_pf`'s argument from `coins_taken_of_unrefused`).
-* `LeanRelease.ofLoop_answered_at`: where the coins after a history reach the frame, the round after it is a rep's past
-  its first, whose frame state answered, or its first, whose fresh state is the answer.
-* `LeanRelease.ofLoop_sched_placeholder`: there the rep's schedule on its rounds' coins, at its placeholder table, is not
-  refused: on no coins it is the algebraic phase's; past them `ScheduleTotal` carries the schedule `repState` read on
-  the coins before the last to all of them, each coin of the plan's count (`loopNr_succ`, `Count.plan_sched`) and
-  `ρ₀, ρ₁` independent (`rho_words_unrefused`).
-* `Loop.realOf_ok`: where `src` samples the tape's level 0 (`Loop.Level0Src`), the rep's own table is answered, of the
-  placeholder's shape (`Sched.tabOfLevel0_alike`).
-* **`LeanRelease.ofLoop_sched_unrefused`**: so the rep's own table is answered and its schedule so far not refused
-  (`Sched.schedSoFar_alike`): `ofLoop_sched_live`'s conclusion, at the loop's own tables, without liveness.
--/
+/-! Without liveness, a taken round's rep has its own table and schedule under the premise `Loop.ScheduleTotal`
+(`LeanRelease.ofLoop_sched_unrefused`). -/
 
 @[expose] public section
 
@@ -56,9 +34,6 @@ theorem wordsAt_size_lt (x : Msg) (h1 : List (Msg × Msg)) {p : ℕ} (hp : p < h
   have e := wordsAt_size x h1 (s := h1.length) (p := p) hp (Nat.le_refl _)
   rwa [List.take_of_length_le (Nat.le_refl _)] at e
 
-/-- **Where the frame takes a history's last coins it took each prefix's**, from three rounds on: the coin stop sticks
-(`refusesCoins_of_take`), and where the frame takes the coins after a prefix, its rep's state answered them
-(`coins_taken_of_answered`). -/
 theorem coins_taken_of_unrefused {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     (hr : L.refusesCoins x ρ h = false) {i : ℕ} (h3 : 3 ≤ i) (hi : i ≤ h.length) :
     L.opens x ρ (h.take i) = true ∧
@@ -81,8 +56,6 @@ theorem coins_taken_of_unrefused {W R : Type} (L : LeanRelease W R) (x : Msg) (�
     have hc := L.coins_taken_of_answered x ρ (h.take i) (by omega) ha
     rwa [hlen] at hc
 
-/-- **A placeholder's sizes at the session's link**: its link's points are the session's, and its domain and extra claims
-fit a `u64`'s count. -/
 theorem placeholder_sizes {x : Msg} (hSv : Serves x) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, sts)) {k : ℕ} (hk : k < spec.repStreams.size)
     {h1 : List (Msg × Msg)} (hpos : 0 < h1.length) {c' : Cfg} {tb : Tab} {dom : ByteArray}
@@ -105,8 +78,6 @@ theorem placeholder_sizes {x : Msg} (hSv : Serves x) {s0 : _} {spec : SessionSpe
   omega
 
 set_option maxHeartbeats 800000 in
-/-- **A rep's `ρ₀, ρ₁` words are independent where the frame took `ρ₁`'s coins**: `rho_unrefused_sched_pf`'s argument,
-the frame's taking of `ρ₁`'s coins from `coins_taken_of_unrefused`, on the opened words themselves. -/
 theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -315,9 +286,6 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     ← wordsAt_take x ops (s := s + 1) (p := s) (by omega), hw1, ← hW']
   exact hR
 
-/-- **Where the loop's frame takes the coins after a history, its rep answered them**: the round after it is located at
-rep stream `k`'s round `j`; past the rep's first round the rep's state after the history answered the coins
-(`takeAt`'s same-rep branch), and at its first the frame starts the rep at the fresh state (`freshOf`). -/
 theorem ofLoop_answered_at (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -366,12 +334,6 @@ theorem ofLoop_answered_at (T : ZKMal.CoinLayer.TableData)
       simp at hb
 
 set_option maxHeartbeats 800000 in
-/-- **Where the loop's frame takes a history's last coins, the rep's schedule so far is not refused**, at its placeholder
-table and salts, the round after the history located at rep stream `k`'s round `j`: at the rep's first round its
-schedule on no coins is the algebraic phase's (`rounds_pos`); past it the rep's state after the history answered the
-coins (`ofLoop_answered_at`), so its schedule on the coins before the last is not refused (`repState_ok`), and
-`ScheduleTotal` carries it to them all: each coin has its plan's count (`loopNr_succ`, `Count.plan_sched`), and the
-rep's `ρ₀, ρ₁`, where taken, are independent (`rho_words_unrefused`). -/
 theorem ofLoop_sched_placeholder (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -501,9 +463,6 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.ZkServer.Frame (Cfg)
 open _root_.Flock.ZkServer.Finish (Tab)
 
-/-- **The loop's own table is answered** at a rep stream of the session, where `src` samples the tape's level 0
-(`Level0Src`): its level 0 is sampled, and `tabOfLevel0` of it is of the placeholder's shape, which is answered
-(`Sched.tabOfLevel0_alike`). -/
 theorem realOf_ok {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hS0 : Level0Src src x w) (ν : finS.Nonce) (t : finS.Tape)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -565,11 +524,6 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open Loop
 
-/-- **Where the loop's frame takes a history's last coins, the round's rep has its own table and schedule**, at the loop's
-own tables (`Loop.realOf`) where `src` samples the tape's level 0: `ofLoop_sched_live`'s conclusion without liveness. The
-rep's schedule at its placeholder table is not refused (`ofLoop_sched_placeholder`), its own table is answered
-(`Loop.realOf_ok`) and of the placeholder's shape (`Count.real_tabAlike`), so its schedule there is not refused either
-(`Sched.schedSoFar_alike`). -/
 theorem ofLoop_sched_unrefused (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x) (hS0 : Loop.Level0Src src x w)

@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.Tables
 public import Proofs.Flock.Claims.ZK.FrameParse
 
-/-!
-# The loop's level-0 source is satisfiable
-
-`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-zk-server-os-src`), holds at every statement and witness for
-some source: the one that hands each rep stream its table's packed witness at the tape's mask words and the tape's
-level-0 samples, written in `Level0.ofSamples`'s layout.
-
-* `Level0.inBytes`: a `Link.In`'s extra lanes, lane paddings and salts at level `lv` with `t_pad` paddings, as `ofSamples`
-  reads them: each extra lane's `2^cols` words, each of the `2^lanes + 4` lanes' `t_pad` words, every word `lo ‖ hi`
-  little-endian, then `192` bytes of salt for each of the `2^d` tree positions.
-* **`Level0.ofSamples_inBytes`**: where a `Link.In`'s packed table has `2^(lanes + cols)` words, its extra lanes and lane
-  paddings are `0` past those sizes and its salts are `192` bytes at the tree positions and empty past them, `ofSamples`
-  on its packed table and `inBytes` returns a level 0 whose inputs (`toIn`) are it.
-* `Masked.linkIn` has that shape at every table, so **`Loop.level0Src_tapeSrc`**: the source `Loop.tapeSrc` meets
-  `Loop.Level0Src` at every `x` and `w`.
--/
+/-! The loop's level-0 source is satisfiable: `Loop.tapeSrc` meets `Loop.Level0Src` at every statement and witness. -/
 
 @[expose] public section
 
@@ -46,16 +31,13 @@ def inByte (lv : Level) (tPad : Nat) (i : Link.In) (p : Nat) : UInt8 :=
 def inBytes (lv : Level) (tPad : Nat) (i : Link.In) : ByteArray :=
   ByteArray.mk ((List.range (sampleSize lv tPad)).map (inByte lv tPad i)).toArray
 
-/-- The extra lanes `ofSamples` reads from the samples `d` at level `lv`. -/
 def sampledExtra (lv : Level) (d : ByteArray) : Array (Array F128) :=
   (Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * 2 ^ lv.cols * e) (2 ^ lv.cols)
 
-/-- The lane paddings `ofSamples` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
 def sampledPads (lv : Level) (tPad : Nat) (d : ByteArray) : Array (Array F128) :=
   (Array.range (2 ^ lv.lanes + Zk.EXTRA_LANES)).map fun l =>
     Link.wordsAt d (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * tPad * l) tPad
 
-/-- The salts `ofSamples` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
 def sampledSalts (lv : Level) (tPad : Nat) (d : ByteArray) : ByteArray :=
   d.extract (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad) d.size
 
@@ -154,9 +136,6 @@ theorem In_ext {a b : Link.In} (h0 : a.wideLeaf = b.wideLeaf) (h1 : a.m = b.m) (
 variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 1000000 in
-/-- **`ofSamples` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
-`2^(lanes + cols)` words, its extra lanes and lane paddings are `0` past level 0's sizes, and its salts are `192` bytes at
-the `2^d` tree positions and empty past them, `ofSamples` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
 theorem ofSamples_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
     (hz : Zk.schedule wideLeaf m = .ok (s, tPad))
     (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hw : i.wideLeaf = wideLeaf) (hm : i.m = m)
@@ -267,9 +246,6 @@ open _root_.Flock (V F128)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **A level-0 source that samples the tape's level 0**: at rep stream `k`, of table `k / 2`, the table's packed witness at
-the tape's mask words (`Masked.linkIn`'s) and the tape's extra lanes, lane paddings and level-0 salts at level 0's sizes,
-in `Level0.ofSamples`'s layout (`Level0.inBytes`); no salts for levels ≥ 1. -/
 noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : V (Array F128 × ByteArray × Array ByteArray) :=
@@ -279,8 +255,6 @@ noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
   else .error "no table"
 
 set_option maxHeartbeats 1000000 in
-/-- **`Loop.Level0Src` is satisfiable**: at every statement `x` and witness `w`, the source `Loop.tapeSrc` meets it, so
-at every table, nonce, tape and rep the level 0 the loop samples has `Masked.linkIn`'s inputs. -/
 theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.tapeSrc x w := by
   intro ν t j r
   have hk : (2 * j.val + r.val) / 2 = j.val := by omega

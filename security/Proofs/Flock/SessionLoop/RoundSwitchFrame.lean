@@ -5,19 +5,7 @@ public import Proofs.Flock.Claims.ZK.L0PinSwitch
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# The frame at a rep's ring-switch rounds
-
-From the opening's label on, the frame frees no word of a round and releases it as it came:
-
-* `Loop.label_pcs_out`: the opening's label, where the frame takes it, in the algebraic phase or past it, leaves the
-  frame outside every masked phase and releases its label frame.
-* `Loop.roundFree_pcsAt`, `Loop.check_pcsAt`: a round of the opening's label and then plain frames frees no word and
-  leaves as its frames came, so the frame's check passes a device round there only where it is the scheduled round.
-* `Loop.check_rs`: at the ring switch's rounds (`Switch.rsBody` from empty pending bytes), the first at any state and
-  the later ones outside every masked phase, the check passes only the scheduled body and releases it, which holds no
-  domain frame (`Loop.dropDom_rs`).
--/
+/-! From the opening's label on, the frame frees no word of a round and releases it as it came (`Loop.check_rs`). -/
 
 @[expose] public section
 
@@ -30,15 +18,12 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
 
-/-- The opening's label outside every masked phase leaves the frame as it is and releases its label frame. -/
 theorem label_pcs_off (c : Cfg) (s : Masker) (hon : s.on = false) :
     s.label c LABEL_PCS.toUTF8 = .ok (s, labelFrame LABEL_PCS.toUTF8) := by
   obtain ⟨p1, p2, p3, p4⟩ := Ranked.pcs_other
   simp [Masker.label, hon, Ranked.isLabel_self, p1, p2, p3, p4]
   rfl
 
-/-- **The opening's label**, where the frame takes it, leaves it outside every masked phase and releases its label
-frame. -/
 theorem label_pcs_out (c : Cfg) (s : Masker) {q : Masker × ByteArray} (h : s.label c LABEL_PCS.toUTF8 = .ok q) :
     q.1.on = false ∧ q.2 = labelFrame LABEL_PCS.toUTF8 := by
   cases hon : s.on with
@@ -69,8 +54,6 @@ theorem label_pcs_out (c : Cfg) (s : Masker) {q : Masker × ByteArray} (h : s.la
           · cases h
     · cases hm : c.mask <;> simp [Masker.label, hon, hm, Ranked.isLabel_self, p1, p2, p3, p4, hpos] at h <;> cases h
 
-/-- **A round from the opening's label**: where the frame takes the opening's label and then plain frames, in the
-algebraic phase or past it, it frees no word and releases the frames as they came, then the squeeze. -/
 theorem roundFree_pcsAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n : ℕ}
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -117,9 +100,6 @@ theorem roundFree_pcsAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n 
   rw [data_append', h2, data_append', hout, labelFrame_data, sq_enc]
   simp [maskFrames, encs]
 
-/-- **From the opening's label a round passes only as itself**: where the frame's check passes the device round `v`
-against a scheduled round of the opening's label and then plain frames, at any state, `v` is that round and leaves as
-its frames. -/
 theorem check_pcsAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} {v out : ByteArray}
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
@@ -135,9 +115,6 @@ theorem check_pcsAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n :
   rw [hv] at hf
   exact (roundFree_pcsAt hm hp hk h0 hn hf).2
 
-/-! ## The ring switch's rounds -/
-
-/-- The frames of a ring-switch claim's round: the ring switch's label and the claim's switched vector. -/
 def rsFrames (vs : Array F128) : List Frame := [.label "flock-ring-switch-v0".toUTF8, .vec vs.toList]
 
 theorem rsFrames_mid (vs : Array F128) (hs : vs.size < 2 ^ 64) : ∀ f ∈ rsFrames vs, midFrame f := by
@@ -177,9 +154,6 @@ theorem rsBody_last (sv : ℕ → Array F128) (N : ℕ) : Switch.rsBody sv N [] 
   rw [Switch.rsBody, if_neg (lt_irrefl _)]
   rfl
 
-/-- **The frame at the ring switch's rounds**: where the frame's check passes the device round `v` against the ring
-switch's round `k ≤ N` from empty pending bytes, of `7` coins below `N` and `N` at `N`, the first at any state and the
-later ones outside every masked phase, the round releases as the scheduled body. -/
 theorem check_rs {c : Cfg} {m s' : Masker} {sv : ℕ → Array F128} {N k n : ℕ} {v out : ByteArray}
     (hon : k ≠ 0 → m.on = false) (hkN : k ≤ N) (hN : N ≠ 0) (hN' : N < 2 ^ 64)
     (hs : k < N → (sv k).size < 2 ^ 64) (hn : n = if k < N then 7 else N)
@@ -218,7 +192,6 @@ theorem rsBody_noDom (sv : ℕ → Array F128) {N k : ℕ} (hkN : k ≤ N) :
   · obtain rfl : k = N := by omega
     exact ⟨[], _, _, (fun _ h => nomatch h), rsBody_last sv _⟩
 
-/-- **The ring switch's rounds hold no domain frame**: their message is as it is without one. -/
 theorem dropDom_rs (sv : ℕ → Array F128) {N k : ℕ} (hkN : k ≤ N) :
     dropDom (0 :: Switch.rsBody sv N [] k) = 0 :: Switch.rsBody sv N [] k := by
   obtain ⟨M, kk, nn, hM, he⟩ := rsBody_noDom sv hkN

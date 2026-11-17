@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Soundness.CompiledSound
 public import Proofs.Flock.Soundness.CompiledAlign
 
-/-!
-# The compiled bound for any level-0 table
-
-`table_sound_compiled` is stated for `T*(P*)`, the plurality of the level-0 openings (`C0star`).
-The coupling works for any table `T` the oracle prover sends at the level-0 cap
-(`compiled_le_bad`), and only the level-0 term of the bad runs depends on `T`: the probability that
-a run opens a level-0 position off `T`. The reps' cap terms do not depend on the level-0 table
-(`advRT_eq`, from the alignment of the locksteps). So
-
-> `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`
-> (`table_sound_compiled_of_table`),
-
-with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]` (`epsCminus`), one number for
-every `T`. This is the form the knowledge extractor uses (`Knowledge.lean`).
--/
+/-! The compiled bound for any level-0 table (`table_sound_compiled_of_table`), the form the knowledge extractor uses. -/
 
 @[expose] public section
 
@@ -28,7 +14,6 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-/-- `Adv_{r,ℓ}` computed through the lockstep for the level-0 table `T`. -/
 noncomputable def advRT [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
@@ -39,8 +24,6 @@ noncomputable def advRT [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
 
 open Classical in
-/-- **The bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0
-rewinding term. -/
 theorem bad_le_gen [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
@@ -94,7 +77,6 @@ theorem bad_le_gen [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Mer
   rw [eS]
   linarith
 
-/-- **The reps' fork probabilities do not depend on the level-0 table.** -/
 theorem advRT_eq [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
@@ -105,8 +87,6 @@ theorem advRT_eq [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkl
     (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
 open Classical in
-/-- **`ε_c⁻`**: `tableError`, the reps' cap terms and the self-clash probability; the compiled
-error without its level-0 rewinding term. -/
 noncomputable def epsCminus [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -120,15 +100,11 @@ noncomputable def epsCminus [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
       (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts) σ
 
 open Classical in
-/-- A run opens a level-0 position, with a verifying path, to a row other than `T`'s. -/
 def Off₀ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (cap₀ : Cap D)
     (T : Oracle F) (out : OutC F D) : Prop :=
   ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT (lvOf sch 0).lanes (lvOf sch 0).logLen T) out p
 
 open Classical in
-/-- **Compiled soundness for any level-0 table** (the review's (A′)). For every compiled prover
-`P*` and every table `T`: `Pr[accepted ∧ no codeword near T packs a satisfying witness]` is at most
-`ε_c⁻` plus the probability that a run opens a level-0 position off `T`. -/
 theorem table_sound_compiled_of_table (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)

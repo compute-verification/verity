@@ -3,17 +3,8 @@ module
 public import Proofs.Flock.Soundness.Soundness
 public import Proofs.Flock.Level3
 
-/-!
-# The executable's arithmetic satisfies `Arith.Correct`
-
-`execArith` is the arithmetic the executable verifier computes with (package
-`level3`): `F = GF(2^128)` in GHASH form, `K = GF(2^256)`, the Lagrange weights of the
-univariate-skip nodes, the pinned zerocheck coordinates, the packing basis `x^v`, the embedding
-`F ⊂ K` and `u`, the Reed–Solomon domain `ω_q` and novel basis `Ŵ_i`, and `lo`. Every field of
-`Arith.Correct` is a theorem of `FlockLevel3` about those functions (`execArith_correct`), so
-the soundness theorems hold for the executable's arithmetic with no arithmetic hypothesis
-(`table_sound_exec`).
--/
+/-! The executable's arithmetic (`execArith`) satisfies `Arith.Correct` (`execArith_correct`), so the soundness theorems
+hold for it with no arithmetic hypothesis. -/
 
 @[expose] public section
 
@@ -39,7 +30,6 @@ theorem eqAt_pinned (b : ℕ) : eqAt execArith.pinned b = FlockLevel3.eqAtPinned
   unfold FlockLevel3.eqAtPinned eqAt
   rfl
 
-/-- **`Arith.Correct` holds for the executable's arithmetic.** -/
 theorem execArith_correct : execArith.Correct where
   card_F := FlockLevel3.card_F
   card_K := FlockLevel3.card_K
@@ -56,8 +46,6 @@ theorem execArith_correct : execArith.Correct where
   ofLimbs_bijective := FlockLevel3.ofLimbs_bijective
   lo_balanced := FlockLevel3.lo_balanced
 
-/-- **One table's session is sound, for the executable's arithmetic.** `table_sound` with
-`execArith_correct`, so it has no named assumption. -/
 theorem table_sound_exec (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Game.Strategy (table execArith S sch hm ptLocal mPts)) :

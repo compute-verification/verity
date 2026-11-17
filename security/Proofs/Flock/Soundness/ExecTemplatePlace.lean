@@ -10,24 +10,7 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# A typed template's unit, placed (1e for templates, T3)
-
-A template statement places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
-rows without their part columns) one slot per template instance, each placed layout's net one slot per part, and Δ
-(`delta_typed`): the flat entries, then per template instance each input's copy of its message bit, each part's bound
-inputs, and the root rows' entries at part columns (`crossOf`). Unit column `x` of template instance `g` is at
-`Typed.col c tb g x`.
-
-- **`TemplateLayout st tb words done u`**: the matrix-level facts of the accepted statement that this reads: the ranges, the
-  root's and the parts' nets and slots, and Δ. A part's net (`PartNet`) is its callee's derived rows, and a generated
-  read's lookup from the table the verifier holds.
-- **`UnitShape done u`**: the facts about the unit's rows this reads: its constant row, its order within its own and its
-  parts' columns, no Δ entry at an input, and a part's reads its callee's (`deriveChecked` gives each).
-- **`TemplateLayout.blockFacts`**: with those, and the part lemmas from `deriveChecked … = .ok done`, the block rows
-  at `col g c` are the unit's `blockRow` there, for every template instance `g`: `BlockFacts` at `Typed.col c tb g`,
-  which is a table class's `placed g` (`BlockFacts.placement`).
--/
+/-! A typed template's unit, placed by parts at each template instance (`TemplateLayout.blockFacts`). -/
 
 @[expose] public section
 
@@ -36,8 +19,6 @@ open Flock FlockLevel3
 namespace FlockSoundness
 
 open Compose Flock.DeriveAll Types.Dag
-
-/-! ## Counting pairs by row -/
 
 theorem count_pairs_map (r y j : ℕ) (xs : List ℕ) :
     (xs.map fun x => (r, x)).count (y, j) = if r = y then xs.count j else 0 := by
@@ -50,7 +31,6 @@ theorem count_pairs_map (r y j : ℕ) (xs : List ℕ) :
     obtain ⟨x, -, hx⟩ := List.mem_map.1 hm
     exact h (congrArg Prod.fst hx)
 
-/-- A count of `(y, j)` over entries whose row is `R e`: the count of `j` over the entries at row `y`. -/
 theorem count_flatMap_rows {α : Type} (l : List α) (R : α → ℕ) (F : α → List ℕ) (y j : ℕ) :
     (l.flatMap fun e => (F e).map fun x => (R e, x)).count (y, j) =
       ((l.filter fun e => R e = y).flatMap F).count j := by
@@ -62,13 +42,9 @@ theorem count_flatMap_rows {α : Type} (l : List α) (R : α → ℕ) (F : α �
     · simp [h, List.count_append]
     · simp [h]
 
-/-! ## Slots of a net's range -/
-
-/-- Column `x` is at offset `off` of slot `s` of net `n`'s range. -/
 def AtSlot (c : Circuit) (n s off x : ℕ) : Prop :=
   s < (c.rangeOf n).count ∧ off < 2 ^ (c.rangeOf n).slotLog ∧ x = (c.rangeOf n).slot s + off
 
-/-- Over pairwise-apart ranges, a column is at one slot of one net's range. -/
 theorem AtSlot.inj {c : Circuit} (hd : c.ranges.toList.Pairwise Apart) {n n' s s' off off' x : ℕ}
     (hm : c.rangeOf n ∈ c.ranges.toList) (hk : (c.rangeOf n).kind = .net n)
     (hm' : c.rangeOf n' ∈ c.ranges.toList) (hk' : (c.rangeOf n').kind = .net n')
@@ -82,7 +58,6 @@ theorem AtSlot.inj {c : Circuit} (hd : c.ranges.toList.Pairwise Apart) {n n' s s
   subst hn
   exact ⟨rfl, slot_add_inj ho ho' he⟩
 
-/-- A range of net `ip` whose span holds a column of net `n`'s range is `n`'s range. -/
 theorem AtSlot.eq_range {c : Circuit} (hd : c.ranges.toList.Pairwise Apart) {n s off x : ℕ}
     (hm : c.rangeOf n ∈ c.ranges.toList) (hk : (c.rangeOf n).kind = .net n) {r : Range} (hr : r ∈ c.ranges.toList)
     {ip : ℕ} (hki : r.kind = .net ip) {s' off' : ℕ} (hs' : s' < r.count) (ho' : off' < 2 ^ r.slotLog)
@@ -94,7 +69,6 @@ theorem AtSlot.eq_range {c : Circuit} (hd : c.ranges.toList.Pairwise Apart) {n s
   have := Kind.net.inj (hki.symm.trans hk)
   exact ⟨rfl, this, (slot_add_inj ho' ho hx.symm).1, (slot_add_inj ho' ho hx.symm).2⟩
 
-/-- A column of net `n`'s range is in the block. -/
 theorem AtSlot.lt {c : Circuit} (hb : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog) {n s off x : ℕ}
     (hm : c.rangeOf n ∈ c.ranges.toList) (h : AtSlot c n s off x) : x < 2 ^ c.kLog := by
   obtain ⟨hs, ho, rfl⟩ := h
@@ -103,7 +77,6 @@ theorem AtSlot.lt {c : Circuit} (hb : ∀ r ∈ c.ranges.toList, r.start + spanH
   have := hb _ hm
   omega
 
-/-- A range with a slot inside the block has slots no larger than the block. -/
 theorem AtSlot.slotLog_le {c : Circuit} (hb : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog)
     {n s off x : ℕ} (hm : c.rangeOf n ∈ c.ranges.toList) (h : AtSlot c n s off x) : (c.rangeOf n).slotLog ≤ c.kLog := by
   obtain ⟨hs, -, -⟩ := h
@@ -114,10 +87,6 @@ theorem AtSlot.slotLog_le {c : Circuit} (hb : ∀ r ∈ c.ranges.toList, r.start
   have h4 : 2 ^ (c.rangeOf n).slotLog ≤ 2 ^ c.kLog := by omega
   exact (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).1 h4
 
-/-! ## Δ's first loop at a slot -/
-
-/-- **Δ's first loop at a column of a net's slot**: `(k, k)` and `(k, pin)` at the slot's constant `k` unless it is the
-pin, and nothing at its other columns. -/
 theorem constPairs_count {c : Circuit} {pin : ℕ} (hd : c.ranges.toList.Pairwise Apart)
     (hsl : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → r.slotLog = (c.nets.getD i default).2.unitLog)
     (hfit : ∀ i, (c.nets.getD i default).2.constPos < 2 ^ (c.nets.getD i default).2.unitLog)
@@ -164,15 +133,12 @@ theorem constPairs_count {c : Circuit} {pin : ℕ} (hd : c.ranges.toList.Pairwis
       exact hoc (slot_add_inj hoff hcW (by rcases hm' with ⟨h, -⟩ | ⟨h, -⟩ <;> exact h)).2
     · cases hm'
 
-/-! ## Unit columns in the block -/
-
 namespace Typed
 
 theorem col_own {c : Circuit} {tb : TypedBlock} {g x : ℕ} (hx : x < tb.own) :
     Typed.col c tb g x = c.slotCol c.unitNet g 0 + x := by
   unfold Typed.col; rw [ite_eq_left hx]
 
-/-- The last part at or before `x` is part `i` when `x` is past its base and before every later part's. -/
 theorem find?_parts {parts : List (ℕ × ℕ × ℕ)} {i : ℕ} (hi : i < parts.length) {x : ℕ} (hle : parts[i].2.2 ≤ x)
     (hgt : ∀ k (hk : k < parts.length), i < k → x < parts[k].2.2) :
     parts.reverse.find? (·.2.2 ≤ x) = some parts[i] := by
@@ -216,7 +182,6 @@ theorem count_flatMap_rows3 {α : Type} (l : List α) (R : α → ℕ) (F : α �
   simp only [List.map_map, Function.comp_def] at this
   exact this
 
-/-- With distinct rows, the entries at row `c` are the one `find?` returns. -/
 theorem filter_fst_eq_find? {β : Type} : ∀ {l : List (ℕ × β)}, (l.map (·.1)).Nodup → ∀ c,
     l.filter (fun e => e.1 = c) = (l.find? (·.1 == c)).toList
   | [], _, _ => rfl
@@ -267,9 +232,6 @@ theorem filterMap_range_single {γ : Type} (f : ℕ → Option γ) {c : ℕ} (hf
       · simp [hc, show c < n + 1 by omega]
       · simp [hc, show ¬ c < n + 1 by omega]
 
-/-! ## The typed tail's rows -/
-
-/-- Own row `r`'s entries at part columns (`crossOf`'s filter). -/
 def crossRow (u : D) (r : ℕ) : Option (ℕ × Array ℕ × Array ℕ) :=
   if ((u.rows.getD r ([], [])).1.filter (· ≥ u.size)).isEmpty && ((u.rows.getD r ([], [])).2.filter (· ≥ u.size)).isEmpty
   then none
@@ -281,7 +243,6 @@ theorem crossOf_toList (u : D) : (Typed.crossOf u).toList = (List.range u.size).
   rw [Array.toList_filterMap, Array.toList_range]
   congr 1
 
-/-- The cross entries at own column `c`, as the columns they read (`G` places them). -/
 def crossCols (G : ℕ → ℕ) (u : D) (side : Bool) (c : ℕ) : List ℕ :=
   if c < u.size then
     ((if side then (u.rows.getD c ([], [])).1 else (u.rows.getD c ([], [])).2).filter (· ≥ u.size)).map G
@@ -322,8 +283,6 @@ theorem crossOf_at (G : ℕ → ℕ) (u : D) (side : Bool) (c : ℕ) :
   · rw [ite_eq_right hc, ite_eq_right hc]
     rfl
 
-/-- The bound-input entries at unit column `c`, as the columns they read (`G` places them): its self entry and its
-source's. -/
 def bindCols (G : ℕ → ℕ) (u : D) (c : ℕ) : List ℕ :=
   match u.delta.find? (·.1 == c) with
   | some (_, some s) => G c :: s.map G
@@ -348,17 +307,14 @@ theorem bind_at (G : ℕ → ℕ) (u : D) (hn : (u.delta.toList.map (·.1)).Nodu
     | none => rfl
     | some s => simp
 
-/-- Unit column `x` is its own or in one of its parts. -/
 def InUnit (done : Array D) (u : D) (x : ℕ) : Prop :=
   x < u.size ∨ ∃ p ∈ u.parts, p.2 ≤ x ∧ x < p.2 + (done.getD p.1 default).size
 
-/-- Unit column `x` is no constant's: not the unit's, and no Δ copy of `one`. -/
 def NotConst (u : D) (x : ℕ) : Prop := x ≠ u.const ∧ u.delta.find? (·.1 == x) ≠ some (x, none)
 
 theorem netOfD_lookup {d : D} {nm : String} {n : Net} (h : Typed.netOfD d nm = .ok n) : n.lookup = none :=
   (Net.ofRows_ok h).2.2.2.2.2.2.2.2.2.2.2.2.1
 
-/-- **A net built from derived rows reads them back**: its entry at `(c, j)` is the count of `j` in `d`'s row `c`. -/
 theorem netOfD_sparse {d : D} {nm : String} {n : Net} (h : Typed.netOfD d nm = .ok n) (hu : n.unitLog ≤ 32) (c j : ℕ) :
     sparseEntry n.a c j = ((((Typed.rowsA d).getD c #[]).toList.count j : ℕ) : ZMod 2) ∧
       sparseEntry n.b c j = ((((Typed.rowsB d).getD c #[]).toList.count j : ℕ) : ZMod 2) := by
@@ -394,8 +350,6 @@ theorem rootOf_rows (u : D) (c : ℕ) :
       ((u.rows.getD c ([], [])).1.filter (· < u.size), (u.rows.getD c ([], [])).2.filter (· < u.size)) := by
   simp only [Typed.rootOf, Array.getD_eq_getD_getElem?, Array.getElem?_map]
   cases u.rows[c]? <;> rfl
-
-/-! ## A generated read's lookup reads what `readSide` reads -/
 
 theorem count_readSide (ws : Array ℕ) (r : ReadRec) (c j : ℕ) :
     (readSide ws r c).count j =
@@ -462,10 +416,6 @@ theorem lookupEntry_uncovered {tb : ByteArray} {r : ReadRec} {c : ℕ} (hc : r.c
   simp only
   rw [ite_eq_right (fun h => by rcases hc with hc | hc <;> omega)]
 
-/-! ## A part's placed net -/
-
-/-- **A part's placed net**: its callee's derived rows (`netOfD`), with no lookup and no read, or a generated read's
-lookup from the table the verifier holds for its read (`words`, its `u32` words). -/
 def PartNet (words : String → Option (Array ℕ)) (d : D) (net : Net) : Prop :=
   (∃ nm, Typed.netOfD d nm = .ok { net with lookup := none }) ∧
     ((net.lookup = none ∧ d.reads = #[]) ∨
@@ -473,7 +423,6 @@ def PartNet (words : String → Option (Array ℕ)) (d : D) (net : Net) : Prop :
         (words r.table).getD #[] = (Array.range (tb.size / 4)).map (fun i => rd32 tb (4 * i)) ∧
         ((words r.table).getD #[]).size = 2 ^ r.n ∧ r.lo ≤ r.n)
 
-/-- A callee's row `c`'s `B` side as the verifier folds it (`fullRow`): a read's table-direct side, else its derived row. -/
 def partB (words : String → Option (Array ℕ)) (d : D) (c : ℕ) : List ℕ :=
   match d.reads.find? (·.covers c) with
   | some r => readSide ((words r.table).getD #[]) r c
@@ -485,7 +434,6 @@ theorem PartNet.sparseA {words : String → Option (Array ℕ)} {d : D} {net : N
   obtain ⟨⟨nm, hn⟩, -⟩ := h
   exact (netOfD_sparse hn hu c j).1
 
-/-- **A part net's `B` at a row no read covers** is the callee's derived row. -/
 theorem PartNet.entryB_unc {words : String → Option (Array ℕ)} {d : D} {net : Net} (h : PartNet words d net)
     (hu : net.unitLog ≤ 32) {c : ℕ} (hnc : d.reads.find? (·.covers c) = none) (j : ℕ) :
     sparseEntry net.b c j + lookupEntry net.lookup c j = ((((Typed.rowsB d).getD c #[]).toList.count j : ℕ) : ZMod 2) := by
@@ -499,8 +447,6 @@ theorem PartNet.entryB_unc {words : String → Option (Array ℕ)} {d : D} {net 
       simpa using hnc
     rw [hl, lookupEntry_uncovered hcv, add_zero]
 
-/-- **A part net's `B` at a callee row** is the row as the verifier folds it (`partB`): a covered row's derived `B` is
-empty, and the lookup adds its table-direct side. -/
 theorem PartNet.entryB {words : String → Option (Array ℕ)} {d : D} {net : Net} (h : PartNet words d net)
     (hu : net.unitLog ≤ 32) {c : ℕ} (hc : c < d.size)
     (hB : ∀ r, d.reads.find? (·.covers c) = some r → (d.rows.getD c ([], [])).2 = []) (j : ℕ) :
@@ -527,14 +473,6 @@ theorem PartNet.entryB {words : String → Option (Array ℕ)} {d : D} {net : Ne
       rw [hl, lookupEntry_readSide hws hsz hlo hcv j]
       simp [partB, hf]
 
-/-! ## The facts T3 reads -/
-
-/-- **The accepted template statement's layout, as T3 reads it**, for the class's unit `u`: the ranges (disjoint, in the
-block, of their nets' slots, `G · per_vu` slots each, one per net); the root (its net `Typed.rootOf u`'s, one slot per
-template instance); each part `i` (its net that of its callee `done[u.parts[i].1]`, not the root's or the rows', at its
-slot `q_i` of that net's, no two parts at one slot); the rows' circuits (not the root); Δ (the flat entries, whose other
-rows are input bits of the rows' circuits, then the typed tail); the pin (a net slot's constant, whose row reads
-itself); and the block's size. -/
 structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Option (Array ℕ)) (done : Array D) (u : D) :
     Prop where
   typed : st.c.typed = some tb
@@ -551,7 +489,6 @@ structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Optio
   inCols : tb.inCols = u.inCols
   bind : tb.bind = u.delta.filterMap fun (r, src) => src.map (r, ·.toArray)
   cross : tb.cross = Typed.crossOf u
-  /-- the unit reads no table in its own rows (`templateOf`) -/
   reads_past : ∀ r ∈ u.reads.toList, u.size ≤ r.prod0
   parts_size : tb.parts.size = u.parts.size
   part : ∀ i (hi : i < tb.parts.size) (hu : i < u.parts.size), tb.parts[i].2.2 = u.parts[i].2 ∧
@@ -571,22 +508,16 @@ structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Optio
   kLog6 : 6 ≤ st.c.kLog
   m : st.m = st.c.kLog + st.nbl
 
-/-- **The unit's rows, as T3 reads them**, beyond the part lemmas: its constant is an own column whose row is
-`[const]·[const]`; its order lists own and part columns only; no Δ entry sits at one of its inputs; a part's rows are
-covered by its callee's reads, shifted; and a covered callee row is `a · []`, its read's low minterms callee rows. -/
 structure UnitShape (done : Array D) (u : D) : Prop where
   const_row : u.rows.getD u.const ([], []) = ([u.const], [u.const])
   order_in : ∀ c ∈ order done u, InUnit done u c
   in_delta : ∀ x ∈ u.inCols, u.delta.find? (·.1 == x) = none
-  /-- a part's rows are covered by its callee's reads, shifted -/
   part_reads : ∀ p ∈ u.parts, ∀ c < (done.getD p.1 default).size,
     u.reads.find? (·.covers (p.2 + c)) = ((done.getD p.1 default).reads.find? (·.covers c)).map (·.shift p.2)
-  /-- a callee's product row is `a · []`, and its low minterms are its own rows -/
   callee_prod : ∀ p ∈ u.parts, ∀ c < (done.getD p.1 default).size, ∀ r,
     (done.getD p.1 default).reads.find? (·.covers c) = some r →
       ((done.getD p.1 default).rows.getD c ([], [])).2 = [] ∧ ∀ l < 2 ^ r.lo, r.loTop + l < (done.getD p.1 default).size
 
-/-- **The ranges' entry at a net slot's column**: the net's entry there, within the slot. -/
 theorem rangesEntry_at {st : Stmt} (hd : st.c.ranges.toList.Pairwise Apart) {n s off x : ℕ}
     (hm : st.c.rangeOf n ∈ st.c.ranges.toList) (hk : (st.c.rangeOf n).kind = .net n) (h : AtSlot st.c n s off x)
     (e : Kind → ℕ → ℕ → ZMod 2) (j : ℕ) :
@@ -596,7 +527,6 @@ theorem rangesEntry_at {st : Stmt} (hd : st.c.ranges.toList.Pairwise Apart) {n s
   obtain ⟨hs, ho, rfl⟩ := h
   rw [rangesEntry_of_covers hd hm (covers_slot hs ho) e j, (slot_div s ho).1, (slot_div s ho).2, hk]
 
-/-- A slot's rows, counted: its local row `l`, below the slot size, read at the slot's columns. -/
 theorem count_slot {r : Range} {s : ℕ} (l : List ℕ) (hl : ∀ y ∈ l, y < 2 ^ r.slotLog) (j : ℕ) :
     (if j / 2 ^ r.slotLog = r.pos0 + s then ((l.count (j % 2 ^ r.slotLog) : ℕ) : ZMod 2) else 0) =
       (((l.map (r.slot s + ·)).count j : ℕ) : ZMod 2) := by
@@ -625,7 +555,6 @@ theorem range (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n < st.
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (T.one_range n hn)
   exact ⟨hm, hk, T.count _ hm _ hk, T.slotLog _ hm _ hk⟩
 
-/-- The root's slot in template instance `g` holds its own columns. -/
 theorem at_own (T : TemplateLayout st tb words done 𝒖) {g x : ℕ} (hg : g < st.c.g) (hx : x < 𝒖.size) :
     AtSlot st.c st.c.unitNet g x (Typed.col st.c tb g x) := by
   obtain ⟨-, -, hc, hsl⟩ := T.range T.unitNet
@@ -638,7 +567,6 @@ theorem at_own (T : TemplateLayout st tb words done 𝒖) {g x : ℕ} (hg : g < 
     unfold Circuit.slotCol
     rw [T.root_perVu, Nat.mul_one, Nat.add_zero]
 
-/-- Part `i`'s slot in template instance `g` holds its callee's columns, from its base. -/
 theorem at_part (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖) {g x i : ℕ}
     (hg : g < st.c.g) (hi : i < tb.parts.size) (hu : i < 𝒖.parts.size) (hlo : 𝒖.parts[i].2 ≤ x)
     (hhi : x < 𝒖.parts[i].2 + (done.getD 𝒖.parts[i].1 default).size) :
@@ -659,7 +587,6 @@ theorem at_part (hd : deriveChecked types ls info words unit = .ok done) (T : Te
       omega), hb]
     rfl
 
-/-- **Where a unit column is**: an own column in the root's slot, or a part's column in the part's slot. -/
 theorem at_inUnit (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     {g x : ℕ} (hg : g < st.c.g) (hx : InUnit done 𝒖 x) :
     (x < 𝒖.size ∧ AtSlot st.c st.c.unitNet g x (Typed.col st.c tb g x)) ∨
@@ -674,14 +601,12 @@ theorem at_inUnit (hd : deriveChecked types ls info words unit = .ok done) (T : 
     have := (part_region hd hp).2.2.1
     exact Or.inr ⟨i, hi, hu, by omega, hlo, hhi, T.at_part hd hg hi hu hlo hhi⟩
 
-/-- A unit column is in the block. -/
 theorem col_lt (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     {g x : ℕ} (hg : g < st.c.g) (hx : InUnit done 𝒖 x) : Typed.col st.c tb g x < 2 ^ st.c.kLog := by
   rcases T.at_inUnit hd hg hx with ⟨-, h⟩ | ⟨i, hi, hu, -, -, -, h⟩
   · exact h.lt T.bound (T.range T.unitNet).1
   · exact h.lt T.bound (T.range (T.part i hi hu).2.1).1
 
-/-- **Unit columns are at distinct positions**, across template instances. -/
 theorem col_inj (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     {g g' x x' : ℕ} (hg : g < st.c.g) (hg' : g' < st.c.g) (hx : InUnit done 𝒖 x) (hx' : InUnit done 𝒖 x')
     (h : Typed.col st.c tb g x = Typed.col st.c tb g' x') : g = g' ∧ x = x' := by
@@ -714,8 +639,6 @@ theorem col_inj (hd : deriveChecked types ls info words unit = .ok done) (T : Te
     subst hii
     exact ⟨rfl, by omega⟩
 
-/-! ## Where the typed tail writes -/
-
 theorem callee_col (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size) {p : ℕ × ℕ}
     (hp : p ∈ 𝒖.parts) {y : ℕ} (hy : y ∈ (done.getD p.1 default).inCols) : y < (done.getD p.1 default).size := by
   have hreg := part_region hd hp
@@ -723,7 +646,6 @@ theorem callee_col (hd : deriveChecked types ls info words unit = .ok done) (hul
   rw [← hreg.2.1]
   exact (Array.getElem?_eq_some_iff.1 this).1
 
-/-- **An input column** is a unit column, and no constant's. -/
 theorem inCols_row (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (U : UnitShape done 𝒖) {x : ℕ} (hx : x ∈ 𝒖.inCols) : InUnit done 𝒖 x ∧ NotConst 𝒖 x := by
   have hnone := U.in_delta x hx
@@ -731,7 +653,6 @@ theorem inCols_row (hd : deriveChecked types ls info words unit = .ok done) (hul
   · rw [h, delta_const hd hul] at hnone; cases hnone
   · rw [hnone]; simp
 
-/-- **A bound input's row** is a part's column, and no constant's; it reads its Δ source. -/
 theorem bind_row (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) {rs : ℕ × Array ℕ} (hrs : rs ∈ tb.bind.toList) :
     ∃ s, 𝒖.delta.find? (·.1 == rs.1) = some (rs.1, some s) ∧ rs.2 = s.toArray ∧ InUnit done 𝒖 rs.1 ∧
@@ -756,7 +677,6 @@ theorem bind_row (hd : deriveChecked types ls info words unit = .ok done) (hul :
       rw [h, delta_const hd hul] at hfind
       cases hfind
 
-/-- **A cross entry's row** is an own column, and no constant's. -/
 theorem cross_row (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) {e : ℕ × Array ℕ × Array ℕ} (he : e ∈ tb.cross.toList) :
     e.1 < 𝒖.size ∧ NotConst 𝒖 e.1 := by
@@ -787,8 +707,6 @@ theorem cross_row (hd : deriveChecked types ls info words unit = .ok done) (T : 
     omega
   · simp at h
 
-/-- **Every row the typed tail writes** is the position of a unit column that is no constant's, in its template
-instance. -/
 theorem tailVU_rows (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {side : Bool} {g' : ℕ} {p : ℕ × ℕ}
     (hp : p ∈ Typed.tailVU st.c tb side g') :
@@ -813,7 +731,6 @@ theorem tailVU_rows (hd : deriveChecked types ls info words unit = .ok done) (hu
     obtain ⟨x, -, rfl⟩ := List.mem_map.1 hp
     rfl
 
-/-- **The typed tail writes nothing at a row no non-constant unit column is at.** -/
 theorem tail_zero (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {y : ℕ}
     (hy : ∀ g' < st.c.g, ∀ x, InUnit done 𝒖 x → NotConst 𝒖 x → Typed.col st.c tb g' x ≠ y) (side : Bool) (j : ℕ) :
@@ -824,7 +741,6 @@ theorem tail_zero (hd : deriveChecked types ls info words unit = .ok done) (hul 
   obtain ⟨x, hx, hnc, he⟩ := T.tailVU_rows hd hul U hm
   exact hy g' (List.mem_range.1 hg') x hx hnc he.symm
 
-/-- **The typed tail at a unit column's position**: its bound-input entries there, and its cross entries there. -/
 theorem tail_count (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {g c : ℕ} (hg : g < st.c.g) (hc : InUnit done 𝒖 c)
     (hin : c ∉ 𝒖.inCols) (side : Bool) (j : ℕ) :
@@ -867,9 +783,6 @@ theorem tail_count (hd : deriveChecked types ls info words unit = .ok done) (hul
   rw [T.bind]
   exact bind_at _ _ (delta_nodup hd) c
 
-/-! ## Δ at a unit column's row -/
-
-/-- **Δ at a row no flat-statement input bit is at**: its first loop's pairs there, then the typed tail's. -/
 theorem delta_count (T : TemplateLayout st tb words done 𝒖) {x : ℕ} (hx : ∀ y, DeltaIn st.c y → y ≠ x) (j : ℕ) :
     deltaEntry st.da x j =
         ((((constPairs st.c st.pin).count (x, j) + (Typed.tail st.c tb true).count (x, j) : ℕ)) : ZMod 2) ∧
@@ -883,7 +796,6 @@ theorem delta_count (T : TemplateLayout st tb words done 𝒖) {x : ℕ} (hx : �
   · rw [deltaEntry_eq_count, show st.db.toList = _ from hb, hdl, List.count_append, List.count_append, h0,
       Nat.add_zero]
 
-/-- Δ's other flat rows are in the rows' circuits' slots, so at no other net's column. -/
 theorem deltaIn_ne (T : TemplateLayout st tb words done 𝒖) {n s off x : ℕ} (hn : n < st.c.nets.size)
     (hns : n ≠ st.c.shaNet) (hnh : n ≠ st.c.hmNet) (hx : AtSlot st.c n s off x) :
     ∀ y, DeltaIn st.c y → y ≠ x := by
@@ -895,8 +807,6 @@ theorem deltaIn_ne (T : TemplateLayout st tb words done 𝒖) {n s off x : ℕ} 
   · exact hns h1.symm
   · exact hnh h1.symm
 
-/-- **The block rows at a unit column's position**, counted: the slot net's row there, placed; Δ's first-loop pairs
-there; and the typed tail's bound-input and cross entries there. -/
 theorem entry_at (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {g c n sl off : ℕ} {d : D} (hg : g < st.c.g)
     (hc : InUnit done 𝒖 c) (hin : c ∉ 𝒖.inCols) (hn : n < st.c.nets.size) (hns : n ≠ st.c.shaNet)
@@ -935,7 +845,6 @@ theorem entry_at (hd : deriveChecked types ls info words unit = .ok done) (hul :
     rw [hB h32, count_slot _ (by rw [hsl]; exact hLB) j]
     push_cast; ring
 
-/-- A row of the unit whose block row doesn't read `one` reads only columns of its order. -/
 theorem cols_in_order (hd : deriveChecked types ls info words unit = .ok done) {c : ℕ} (hc : c ∈ order done 𝒖)
     (hin : c ∉ 𝒖.inCols.toList) {p : List ℕ × List ℕ} (hp : ∀ one', blockRow words 𝒖 one' c = some p) :
     ∀ x ∈ p.1 ++ p.2, x ∈ order done 𝒖 := by
@@ -950,7 +859,6 @@ theorem cols_in_order (hd : deriveChecked types ls info words unit = .ok done) {
     rwa [List.getElem_take] at this
   exact List.mem_of_mem_take (hrd ℓ hℓ hge p (hp _) x hx (by omega))
 
-/-- An own row with no Δ entry is its derived row: no read covers an own row (`TemplateLayout.reads_past`). -/
 theorem blockRow_own (T : TemplateLayout st tb words done 𝒖) {c : ℕ} (hc : c < 𝒖.size)
     (hf : 𝒖.delta.find? (·.1 == c) = none) (one' : ℕ) : blockRow words 𝒖 one' c = 𝒖.rows[c]? := by
   have hnc : 𝒖.reads.find? (·.covers c) = none := by
@@ -962,8 +870,6 @@ theorem blockRow_own (T : TemplateLayout st tb words done 𝒖) {c : ℕ} (hc : 
   unfold blockRow fullRow
   rw [hf, hnc]
 
-/-- **A part's other row is its callee's row as the verifier folds it**, shifted to the part's base: the part's reads are
-its callee's (`UnitShape.part_reads`, and `readSide_shift`). -/
 theorem blockRow_part (U : UnitShape done 𝒖) {p : ℕ × ℕ} (hp : p ∈ 𝒖.parts) {c : ℕ}
     (hc : c < (done.getD p.1 default).size) (hf : 𝒖.delta.find? (·.1 == p.2 + c) = none)
     (hrow : 𝒖.rows[p.2 + c]? = some (shiftRow p.2 ((done.getD p.1 default).rows.getD c ([], [])))) (one' : ℕ) :
@@ -981,8 +887,6 @@ theorem blockRow_part (U : UnitShape done 𝒖) {p : ℕ × ℕ} (hp : p ∈ �
 
 end TemplateLayout
 
-/-! ## Counting a row's entries -/
-
 theorem count_map_filter_split (l : List ℕ) (G : ℕ → ℕ) (n j : ℕ) :
     (l.map G).count j = ((l.filter (· < n)).map G).count j + ((l.filter (· ≥ n)).map G).count j := by
   induction l with
@@ -996,7 +900,6 @@ theorem count_map_filter_split (l : List ℕ) (G : ℕ → ℕ) (n j : ℕ) :
         show n ≤ a by omega, decide_true, List.count_cons, ih]
       omega
 
-/-- A constant's row: its own entry, and Δ's `(k, k)` and `(k, pin)` unless it is the pin, read the pin. -/
 theorem const_sum {P : Prop} [Decidable P] (hP : P) (y pin j : ℕ) :
     ((([y].count j + (if P ∧ y ≠ pin then (if j = y then 1 else 0) + (if j = pin then 1 else 0) else 0) +
       ([] : List ℕ).count j + ([] : List ℕ).count j : ℕ)) : ZMod 2) = (([pin].count j : ℕ) : ZMod 2) := by
@@ -1011,7 +914,6 @@ theorem const_sum {P : Prop} [Decidable P] (hP : P) (y pin j : ℕ) :
       · subst h2; simp [h1, Ne.symm h1]
       · simp [h1, h2, Ne.symm h1, Ne.symm h2]
 
-/-- A bound input's row: its own entry and Δ's self entry cancel, and its source's entries remain. -/
 theorem bind_sum (y j : ℕ) (l : List ℕ) :
     ((([y].count j + 0 + (y :: l).count j + ([] : List ℕ).count j : ℕ)) : ZMod 2) = ((l.count j : ℕ) : ZMod 2) := by
   have h : [y].count j + 0 + (y :: l).count j + ([] : List ℕ).count j = l.count j + 2 * [y].count j := by
@@ -1020,8 +922,6 @@ theorem bind_sum (y j : ℕ) (l : List ℕ) :
   push_cast
   rw [show (2 : ZMod 2) = 0 from rfl, zero_mul, add_zero]
 
-
-/-! ## The block rows at each template instance's unit -/
 
 namespace TemplateLayout
 
@@ -1041,8 +941,6 @@ theorem pin_lt {u : D} (T : TemplateLayout st tb words done u) : st.pin < 2 ^ st
   rw [start_eq_slot] at hpin
   omega
 
-/-- **The accepted template statement, as the model's block R1CS**: the verifier's `m`, `k_log` and pin, the level-0
-matrices it folds (`placedA`, `placedB`), and public regions `regs`. -/
 def model {u : D} (T : TemplateLayout st tb words done u) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     Model.Statement where
   m := st.m
@@ -1054,8 +952,6 @@ def model {u : D} (T : TemplateLayout st tb words done u) (regs : List (Model.Re
   B₀ := placedB st
   regions := regs
 
-/-- **The pin's row reads the pin**, in `A` and in `B`: Δ writes nothing there, no unit column that is no constant's is
-at it. -/
 theorem placed_pin (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (j : ℕ) :
     rangesEntry st (slotEntryA st) st.pin j + deltaEntry st.da st.pin j = (if j = st.pin then 1 else 0) ∧
@@ -1107,7 +1003,6 @@ theorem placed_pin (hd : deriveChecked types ls info words unit = .ok done) (hul
         hcr.2.2, hp]
     rfl
 
-/-- `rows_at` at a part's column. -/
 theorem rows_part (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {g : ℕ} (hg : g < st.c.g) {one : ℕ}
     {c : ℕ} (hin' : c ∉ 𝒖.inCols) (hcU : InUnit done 𝒖 c) {p : List ℕ × List ℕ}
@@ -1152,7 +1047,7 @@ theorem rows_part (hd : deriveChecked types ls info words unit = .ok done) (hul 
     unfold crossCols; rw [ite_eq_right (by omega)]
   have hju := (part_region hd hpm).1
   by_cases hcc : c' = d.const
-  · -- the part's constant: a self row no read covers
+  ·
     have hcr := (callee_rows hd (j := 𝒖.parts[i].1) (by omega) (by omega)).2
     rw [hcal] at hcr
     have hnc := hunc _ (getD_of_getElem? (hcc ▸ hcr)) (by simp)
@@ -1182,7 +1077,7 @@ theorem rows_part (hd : deriveChecked types ls info words unit = .ok done) (hul 
   · have hK0 : (constPairs st.c st.pin).count (Typed.col st.c tb g c, j) = 0 := by
       rw [hK, ite_eq_right (fun h => hcc (h.1.trans hcst))]
     rcases hO hcc with ⟨s, hfs, hcin⟩ | ⟨hfn, hrow⟩
-    · -- a bound input: its callee row is a self row no read covers, and Δ's binding reads its source
+    ·
       have hcr := (callee_rows hd (j := 𝒖.parts[i].1) (by omega) (by omega)).1 c' (by rw [hcal]; exact hcin)
       rw [hcal] at hcr
       have hgd : d.rows.getD c' ([], []) = ([c'], [c']) := getD_of_getElem? hcr
@@ -1204,7 +1099,7 @@ theorem rows_part (hd : deriveChecked types ls info words unit = .ok done) (hul 
         exact bind_sum _ _ _
       · rw [rowsB_getD hcd, hgd, hl, hK0, hb1, hc0 false, hfb]
         exact bind_sum _ _ _
-    · -- any other callee row: the callee's row as the verifier folds it, shifted into the part's slot
+    ·
       have hbr := fun one' => blockRow_part (words := words) U hpm (c := c') (by rw [hcal]; exact hcd)
         (by rw [hb, hceq]; exact hfn) (by rw [hb, hceq, hcal]; exact hrow) one'
       simp only [hb, hcal, hceq] at hbr
@@ -1244,9 +1139,6 @@ theorem rows_part (hd : deriveChecked types ls info words unit = .ok done) (hul 
         rw [List.map_congr_left fun y hy => hshift y (hpb y hy)]
         rfl
 
-/-- **The block rows at a unit row's position are its block row**, placed at `col g`: the four kinds of row the unit
-has in its order past its inputs (its constant, an own row, a part's constant, a part's bound input, a part's other
-row). -/
 theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {g : ℕ} (hg : g < st.c.g) {one : ℕ}
     (hone : 𝒖.rows.size ≤ one) {c : ℕ} (hc : c ∈ order done 𝒖) (hin : c ∉ 𝒖.inCols.toList)
@@ -1267,7 +1159,7 @@ theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : 
     · have := hlt x (hm x (List.mem_append_left _ hx)); rw [ite_eq_right (by omega)]
     · have := hlt x (hm x (List.mem_append_right _ hx)); rw [ite_eq_right (by omega)]
   rcases T.at_inUnit hd hg hcU with ⟨hco, hat⟩ | ⟨i, hi, hu, hge, hlo, hhi, hat⟩
-  · -- an own column: the root's slot
+  ·
     obtain ⟨nm, hr⟩ := T.root
     obtain ⟨-, -, -, -, hcst, -, hca, hcb, -⟩ := Typed.netOfD_ok hr
     have hcst' : (st.c.nets.getD st.c.unitNet default).2.constPos = 𝒖.const := hcst
@@ -1281,7 +1173,7 @@ theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : 
       hat j
     have hy : Typed.col st.c tb g c = (st.c.rangeOf st.c.unitNet).slot g + c := hat.2.2
     by_cases hcc : c = 𝒖.const
-    · -- the unit's constant
+    ·
       subst hcc
       have hf := delta_const hd hul
       have hbp : p = ([one], [one]) := by
@@ -1312,7 +1204,7 @@ theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : 
       · rw [hcb', hl, hK, hb0, hc0 false]
         refine (const_sum hP _ _ _).trans ?_
         simp
-    · -- an own row: the root's row there, and its cross entries
+    ·
       have hf : 𝒖.delta.find? (·.1 == c) = none := by
         cases h : 𝒖.delta.find? (·.1 == c) with
         | none => rfl
@@ -1352,8 +1244,6 @@ theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : 
         simp only [crossCols, hco, ↓reduceIte, Bool.false_eq_true, List.count_nil, Nat.add_zero]
   · exact T.rows_part hd hul U hg hin' hcU hp hfree hi hu hge hlo hhi hat j
 
-/-- **1e's facts at template instance `g` of a template statement** (T3): the block rows at `Typed.col c tb g c` are the
-unit's block row there, for every column of its order past its inputs, and the pin's row reads the pin. -/
 theorem blockFacts (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) {one : ℕ} (hone : 𝒖.rows.size ≤ one) :
@@ -1373,8 +1263,6 @@ theorem blockFacts (hd : deriveChecked types ls info words unit = .ok done) (hul
   · show rangesEntry st (slotEntryB st) st.pin j.val + deltaEntry st.db st.pin j.val = _
     rw [(T.placed_pin hd hul U j.val).2, if_congr (hpinv j) rfl rfl]
 
-/-- **A template statement's placement at template instance `g`**: the unit's composed rows, placed
-at `Typed.col c tb g` in the model of the accepted statement. This is a table class's `placed g`. -/
 theorem placement (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) :

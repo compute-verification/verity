@@ -7,35 +7,8 @@ public import Proofs.Flock.SessionLoop.RoundSwitch
 public import Proofs.Flock.SessionLoop.RoundLig
 public import Proofs.Flock.SessionLoop.SchedSlot
 
-/-!
-# `LiveSched` for any worker, at its own histories
-
-`LeanRelease.LiveSched` asks its equation after every live history, but `live` checks the worker's values at each
-prefix, never the history's messages: only `ZkServer.OwnHist` ties each message to the deferred server's frame of the
-worker's round there. The deferred server meets no other history (`ZkServer.RefDOwn`, `split_deferred`'s `hown`), so the
-equation is asked there only, as `FinalRoundEq` asks its own:
-
-* **`Loop.TakesValsAt`**: `Loop.TakesVals` after one history: each word the frame frees in the worker's round is `vs`'s
-  value there. `TakesVals` is it after every history (`Loop.takesVals_iff`).
-* **`Loop.TakesValsOwn`**: it after every history of the worker's own. A worker whose rounds read the history's messages
-  can meet it and not `TakesVals`; a worker that meets `TakesVals` meets it (`Loop.takesValsOwn_of_takesVals`), the honest
-  worker `Loop.valsWk honestVals` among them (`Loop.takesValsOwn_honestVals`).
-* **`LeanRelease.LiveSchedOwn`**: `LiveSched` with `OwnHist` among its hypotheses, in `FinalRoundEq`'s place; `LiveSched`
-  gives it (`LeanRelease.liveSchedOwn_of_liveSched`).
-* **`LeanRelease.liveSchedAt_ofLoopLink`**: `LiveSched`'s equation after one history (`LeanRelease.LiveSchedAt`;
-  `LiveSched` is it after every history, `LeanRelease.liveSched_iff`), from `TakesValsAt` at that history alone, at
-  `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's inputs, where the rows hold at `vs`
-  (`Loop.RowsOK`) and its level-0 words are the ZK server's own (`Loop.L0Fixed`). The history stands at a round of some
-  rep `2j + r` before its inner proof's (`sched_slot`), which is its first (`release_sched_zcBind`), in its PIOP
-  (`roundFrames_piop`), in the ring switch from its rank check's (`release_sched_switch`), the opening's binding
-  (`release_sched_openBind`), level 0's (`release_sched_l0`, `release_sched_close`) or Ligerito's past it
-  (`release_sched_lig`). No round frees a level-0 word, so level 0's release is the ZK server's body whatever the worker
-  sends, and the switched message's is `vs`'s: `L0Fixed` is what equates them.
-* **`LeanRelease.liveSchedOwn_ofLoopLink`**: for every worker `wk` and every `vs` it takes at its own histories
-  (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. A worker that takes no such `vs`'s values
-  is outside it. `LeanRelease.liveSchedOwn_honestVals`: its premises on the worker and the values hold at the honest
-  worker and values; `LeanRelease.liveSched_honestVals`: there `LiveSched` holds after every history.
--/
+/-! `LiveSched` for any worker at its own histories (`LeanRelease.liveSchedOwn_ofLoopLink`); a worker that takes no `vs`'s
+values there is outside it. -/
 
 @[expose] public section
 
@@ -51,9 +24,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- **The worker's free words are `vs`'s values at its own histories**: `TakesValsAt` after every history each of whose
-messages is the deferred server's frame of the worker's round before it (`ZkServer.OwnHist`), the only histories the
-deferred server meets. -/
 def TakesValsOwn (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -68,8 +38,6 @@ theorem takesValsOwn_of_takesVals {vs : (CoinLayer.session Loop.loopNr Masked.da
     {wk : L.toSrv.Worker} {x : Msg} {w : Flock.Wit} (h : TakesVals vs L wk x w) : TakesValsOwn vs L wk x w :=
   fun ν t κ m₀ ρ₀ ops _ => h ν t κ m₀ ρ₀ ops
 
-/-- **The honest worker takes the honest values at its own histories**: `valsWk honestVals` at the session loop
-(`takes_honestVals_ofLoopLink`). -/
 theorem takesValsOwn_honestVals
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -88,9 +56,6 @@ end Loop
 
 namespace LeanRelease
 
-/-- **`LiveSched` at the worker's own histories**: `LiveSched`'s equation after every history it reads at which the loop
-schedules its own round `r`, each of whose messages is the deferred server's frame of the worker's round before it
-(`ZkServer.OwnHist`), in `FinalRoundEq`'s place. -/
 def LiveSchedOwn (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -129,7 +94,6 @@ theorem liveSchedOwn_of_liveSched {vs : (CoinLayer.session Loop.loopNr Masked.da
     LiveSchedOwn vs L₀ src real wk x w :=
   fun ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href _ hv hsc => h ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
 
-/-- **`LiveSched`'s equation after one history** `(m₀, ρ₀) :: ops` at the tape `(ν, t)` and the check coins `κ`. -/
 def LiveSchedAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -155,7 +119,6 @@ def LiveSchedAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         ((CoinLayer.session Loop.loopNr Masked.dataE).wt x w) (vs x w ν) t
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))
 
-/-- `LiveSched` is `LiveSchedAt` after every history. -/
 theorem liveSched_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -169,11 +132,6 @@ theorem liveSched_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     LiveSched vs L₀ src real wk x w ↔ ∀ ν t κ m₀ ρ₀ ops, LiveSchedAt vs L₀ src real wk x w ν t κ m₀ ρ₀ ops :=
   Iff.rfl
 
-/-- **`LiveSched` after one history, from the worker's free words there**: at `SessionLoopZKDeployed`'s release and
-premises (as in `liveSchedOwn_ofLoopLink`), where the rows hold at `vs` and its level-0 words are the ZK server's own
-(`Loop.L0Fixed`), after any history at which the worker's free words are `vs`'s (`Loop.TakesValsAt`), `LiveSched`'s
-equation holds there. The release at round `n` reads the worker's round `n`; the frame's state before it reads the
-history only through `live` and the coins. -/
 theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -207,7 +165,6 @@ theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     exact (Masked.zkTab x j).hz
   have hm25 : 25 ≤ (Masked.stAt x j).m := (htabs j.val hj).1
   have hk6 : 6 ≤ (Masked.stAt x j).c.kLog := (Masked.zkTab x j).wf.1.hk6
-  -- the rep's rounds: its first, the PIOP, the ring switch from the rank check's, then past the PIOP
   have eS : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
       Masked.repBase x (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (Masked.stAt x j) +
         f (Masked.zkTab x j).sch := by
@@ -250,13 +207,6 @@ theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
         · exact release_sched_lig vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r
             hi (by omega) (by omega)
 
-/-- **`LiveSched` for any worker, at its own histories**: at `SessionLoopZKDeployed`'s release (`ofLoopLink` at the
-loop's own tables, `real = Loop.realOf src`), at its premises on the session (`Tables`, `TapeOK`), the statement (in the
-masked verifier's scope, under the relation, served by the loop) and the loop's inputs (`Loop.Src`), every worker `wk`
-whose free words are `vs`'s values at its own histories (`Loop.TakesValsOwn`), where the rows hold at `vs`
-(`Loop.RowsOK`) and its level-0 words are the ZK server's own (`Loop.L0Fixed`: no round frees a level-0 word, so the
-release there is the ZK server's body whatever the worker sends), meets `LiveSchedOwn` at `vs`: `liveSchedAt_ofLoopLink`
-at each own history. -/
 theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -278,8 +228,6 @@ theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.data
     liveSchedAt_ofLoopLink vs L₀ src real hreal wk hTab hTape hR hSv hSc hS hRows hL0 ν t κ m₀ ρ₀ ops
       (hTV ν t κ m₀ ρ₀ ops hown) v r hpos hlt hl hok href hv hsc
 
-/-- **At the honest worker and values**: `liveSchedOwn_ofLoopLink` at `valsWk honestVals`, whose premises on the worker
-and the values hold there (`Loop.takesValsOwn_honestVals`, `Loop.rowsOK_honestVals`, `Loop.l0Fixed_honestVals`). -/
 theorem liveSchedOwn_honestVals
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -299,9 +247,6 @@ theorem liveSchedOwn_honestVals
   liveSchedOwn_ofLoopLink _ L₀ src real hreal _ hTab hTape hR hSv hSc hS (Loop.rowsOK_honestVals hR)
     (Loop.l0Fixed_honestVals x w (Masked.live_of hSc hR) hR) (Loop.takesValsOwn_honestVals L₀ src real x w)
 
-/-- **`LiveSched` at the honest worker and values**: `liveSchedAt_ofLoopLink` after every history, at which the honest
-worker takes the honest values (`Loop.takes_honestVals_ofLoopLink`), where the rows hold (`Loop.rowsOK_honestVals`) and
-the level-0 words are the ZK server's own (`Loop.l0Fixed_honestVals`). -/
 theorem liveSched_honestVals
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

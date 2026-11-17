@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.SchedAt
 
-/-!
-# A rep's PIOP round past its first, in frames
-
-At a live round of rep stream `2j + r`'s PIOP past its first round, the frame checks the worker's round against the
-loop's own scheduled round, the PIOP's frames at zero values (`Sched.rounds_piop`), and the switched session sends the
-PIOP's frames at its masked values (`Masked.runCut_piopBody`). This file shows the two are one round in frames
-(`LeanRelease.RoundFrames`), so the frame releases the session's message:
-
-* **Alike frames** (`alike_cases`, `plainFrames_of_alike`, `noDoms_of_alike`, `fvals_length_alike`): frames alike to
-  ones inside a phase are inside it, and carry as many values. `eq_of_alike_fvals`: alike frames with no domain or
-  bytes frame (`fixedFrame`) and the same values are the same.
-* **The release's values** (`alike_maskFrames`, `fvals_maskFrames`, `maskVals_getElem?`): the release of frames is
-  alike to them, and its values are theirs through the mask, each at its position.
-* **The PIOP's frames** (`piopFr_alike`, `fvals_piopFr_getElem?`, `piopFr_eq_maskFrames`): a PIOP round's frames past
-  round `0` are alike at any values, round `jj`'s value `k` is the masked value at the absorbed order's position
-  `P + k`, `P` the values before it, and so the round's frames are the release of any alike frames whose values, through
-  the mask at `P`, are the masked values there.
--/
+/-! A rep's PIOP round past its first is one round in frames (`LeanRelease.RoundFrames`). -/
 
 @[expose] public section
 
@@ -30,8 +13,6 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open FlockSoundness.Refine (Frame encs)
-
-/-! ## Alike frames -/
 
 theorem alike_cases : ∀ {f f' : Frame}, Alike f f' →
     (∃ b b', f = .dom b ∧ f' = .dom b') ∨ (∃ b, f = .label b ∧ f' = .label b) ∨
@@ -95,13 +76,11 @@ theorem fvals_length_alike {fs fs' : List Frame} (h : List.Forall₂ Alike fs fs
       ⟨vs, vs', rfl, rfl, hl⟩ | ⟨k, n, rfl, rfl⟩ <;>
       (simp only [fvals, List.length_cons, List.length_append, ih] <;> omega)
 
-/-- A frame its values fix among the frames alike to it: neither a domain frame nor a bytes frame. -/
 def fixedFrame : Frame → Prop
   | .dom _ => False
   | .bytes _ => False
   | _ => True
 
-/-- **Alike frames with the same values are the same**, where neither has a domain or bytes frame. -/
 theorem eq_of_alike_fvals {A B : List Frame} (h : List.Forall₂ Alike A B) :
     (∀ f ∈ A, fixedFrame f) → fvals A = fvals B → A = B := by
   induction h with
@@ -123,8 +102,6 @@ theorem eq_of_alike_fvals {A B : List Frame} (h : List.Forall₂ Alike A B) :
       rw [h1, ih hfA h2]
     · simp only [fvals] at hv
       rw [ih hfA hv]
-
-/-! ## The release's values -/
 
 theorem alike_maskFrames (g : ℕ → F128 → F128) :
     ∀ (p : ℕ) (G : List Frame), (∀ f ∈ G, noDom f) → List.Forall₂ Alike G (maskFrames g p G)
@@ -186,9 +163,6 @@ theorem maskVals_getElem? (g : ℕ → F128 → F128) :
     simp only [maskVals, List.getElem?_cons_succ]
     rw [maskVals_getElem? g (p + 1) vs i, show p + 1 + i = p + (i + 1) by omega]
 
-/-! ## The PIOP's frames -/
-
-/-- A PIOP round's frames past round `0` are alike at any values and layout. -/
 theorem piopFr_alike (m kLog : ℕ) {digest cap root digest' cap' root' : ByteArray}
     {lay lay' : _root_.Flock.Zk.PadLayout} (mk mk' : ℕ → F128) {jj : ℕ} (h0 : jj ≠ 0) :
     List.Forall₂ Alike (piopFr m kLog digest cap root lay mk jj) (piopFr m kLog digest' cap' root' lay' mk' jj) := by
@@ -232,8 +206,6 @@ theorem piopV_prefix (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.
     · obtain ⟨rest, hr⟩ := ih (by omega)
       exact ⟨rest ++ fvals (piopFr m kLog digest cap root lay mk b), by rw [piopV_succ, hr, List.append_assoc]⟩
 
-/-- **A PIOP round's value `k`** is the masked value at the absorbed order's pad of position `P + k`, `P` the values the
-rounds before it carry. -/
 theorem fvals_piopFr_getElem? {m kLog : ℕ} {digest cap root : ByteArray} {lay : _root_.Flock.Zk.PadLayout}
     {mk : ℕ → F128} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6) {jj P k : ℕ}
     (hj : jj < piopNR m kLog) (hP : (piopV m kLog digest cap root lay mk jj).length = P)
@@ -257,8 +229,6 @@ theorem fvals_piopFr_getElem? {m kLog : ℕ} {digest cap root : ByteArray} {lay 
       List.range'_eq_map_range, List.getElem?_map, List.getElem?_range (by omega)]
     exact congrArg (fun v => some (mk v)) (show lay.fa + 3 + (P + k - (lay.fa + 2)) = P + k + 1 by omega)
 
-/-- **A PIOP round's frames are the release of alike frames** whose values, through the mask `g` from position `P` on,
-are the masked values at the absorbed order's pads. -/
 theorem piopFr_eq_maskFrames {m kLog : ℕ} {digest cap root : ByteArray} {lay : _root_.Flock.Zk.PadLayout}
     {mk : ℕ → F128} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6) {jj P : ℕ}
     (h0 : jj ≠ 0) (hj : jj < piopNR m kLog) (hP : (piopV m kLog digest cap root lay mk jj).length = P)
@@ -289,7 +259,6 @@ theorem piopV_length_le {m kLog : ℕ} {digest cap root : ByteArray} {lay : _roo
   rw [piopV_all m kLog digest cap root lay' mk hm hk hn hl]
   simp
 
-/-- A PIOP round's squeeze past round `0` is one the frame takes: two words, or one word of one coin. -/
 theorem piopKN_ok {m jj : ℕ} (hm : 14 ≤ m) (hm' : m < 2 ^ 64) (h0 : jj ≠ 0) :
     (piopK jj = 2 ∨ (piopK jj = 1 ∧ piopN m jj = 1)) ∧ ¬ (piopN m jj = 0 ∧ piopK jj = 2) ∧ piopN m jj < 2 ^ 64 := by
   unfold piopK piopN
@@ -299,8 +268,6 @@ theorem piopKN_ok {m jj : ℕ} (hm : 14 ≤ m) (hm' : m < 2 ^ 64) (h0 : jj ≠ 0
     exact ⟨.inl rfl, fun h => by have := h.1; omega, lt_of_le_of_lt (Nat.sub_le m 13) hm'⟩
   · rw [ite_eq_right h1, ite_eq_right (show ¬ jj ≤ 1 by omega)]
     exact ⟨.inr ⟨rfl, rfl⟩, fun h => absurd h.1 one_ne_zero, by norm_num⟩
-
-/-! ## The round in frames -/
 
 section RoundFramesPiop
 
@@ -313,9 +280,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **The switched session's PIOP round `jj ≥ 1` of rep stream `2j + r`**: where the coins show no refusal by it or by
-the rep's first round, the session sends the PIOP's frames at the switched source's masked values, at some binding, and
-its squeeze (`Masked.runCut_piopBody`: the views' level-0 commitments and the pads commitment return quietly). -/
+/-- Holds where the coins show no refusal by the round or by the rep's first round. -/
 theorem enc_piop (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2) {jj : ℕ} (h0 : jj ≠ 0)
@@ -383,7 +348,6 @@ theorem enc_piop (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live 
   simp only [piopBody, h0, ↓reduceIte, List.nil_append]
   exact ⟨_, _, _, rfl⟩
 
-/-- **`enc_piop` at the session's message after the openings `cs`**: `swMsgAt` sends round `cs.length`. -/
 theorem swMsgAt_piop (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (cs : List finS.Coin) (hlt : cs.length < refK x) (j : Fin (Masked.jOf x)) (r : Fin 2) {jj : ℕ}
@@ -405,10 +369,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The frame at a rep's live PIOP round past its first**: at a live history whose next round is rep stream
-`2j + r`'s PIOP round `jj ≥ 1`, the frame takes the round's coins at a state inside the masked phase, at the values
-before round `jj`, and the worker's round is the PIOP's frames there at some values (`Alike`) and the round's squeeze
-(`Frame.passes_frames` against the loop's own round, `Sched.rounds_piop`). -/
 theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -473,7 +433,6 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's check
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x
   have hk : (ofLoop Masked.dataE L₁ real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -484,7 +443,6 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hA' := hA
   rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -531,7 +489,6 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨hon, hin, -, hpos⟩ := repState_piop hcc hal hs (by omega) hmb hdg (placeholder_cap hph0)
     (hdm ▸ hdom') hjjT' hb hA'
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_live Masked.dataE L₁ real wk x w (ν, t) κ (m₀, ρ₀) ops hl hk
     hsx (q := i + 1) (by omega)
   have hre' : real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -560,7 +517,6 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left (by rw [hsz']; exact hjjR),
       hpi' (a + 1) (by omega) hjjR]
     simp only [Option.getD_some, List.toList_toArray]
-  -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hpL
@@ -578,7 +534,6 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [List.length_cons, Nat.add_sub_cancel, hn, hNR (a + 1) hjj, htrm]
   rw [ofLoop_scheduled Masked.dataE L₁ real x w (ν, t) (m₀, ρ₀) ops _ hsx (q := i + 1) (by omega) hre hs' hlt',
     hscheq, hcoins] at hck
-  -- the worker's round is the loop's round at some values
   have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
       Sched.root0 (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1),
       midFrame f ∧ plainFrame f := by
@@ -607,13 +562,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **A rep's live PIOP round past its first is one round in frames** (`RoundFrames`), at `SessionLoopZKDeployed`'s
-release and its premises on the statement and the loop's inputs, after a history at which the worker takes `vs`'s
-values (`Loop.TakesValsAt`): the frame takes the round's coins inside the masked phase (`piop_frame`); the worker's
-round is the PIOP's frames at the values it frees, which are `vs`'s; and the session sends the PIOP's frames at the
-switched source's masked values (`Loop.swMsgAt_piop`, the coins showing no refusal there, `unrefused_prefix`), which
-are `vs`'s values under the frame's pads (`Loop.swSrcE_masked_vsWord`, `Loop.RepSrc.pads`), so the release of the
-worker's frames (`piopFr_eq_maskFrames`). -/
+/-- Takes `Loop.TakesValsAt` at this one history alone. -/
 theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -649,7 +598,6 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hrep' : (ofLoopLink L₀ src real).rep x ((m₀, ρ₀) :: ops).length = Loop.frepOf j.val r.val := hrep
   have hrep'' : (ofLoopLink L₀ src real).rep x (ops.length + 1) = 2 * j.val + r.val := hrep
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
-  -- the frame's configuration: its order and pads
   have hord : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order =
       _root_.Flock.ZkServer.Frame.absorbed (Masked.layE x j) := by
     show _root_.Flock.ZkServer.Frame.absorbed ((ofLoopLink L₀ src real).lay x
@@ -671,7 +619,6 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
       ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     rw [hnP, hord]
     omega
-  -- the worker's values fit before the PIOP's end
   have hlenF : m.pos + (fvals G).length = (piopV (Masked.stAt x j).m (Masked.stAt x j).c.kLog ByteArray.empty
       ByteArray.empty ByteArray.empty (Masked.layE x j) (fun _ => 0) (jj + 1)).length := by
     rw [hposm, fvals_length_alike hAG, piopV_succ, List.length_append]
@@ -685,7 +632,6 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
     rw [nAbs_fvals, hlenF, hord, absorbed_size]
     omega
   have hKN := piopKN_ok (m := (Masked.stAt x j).m) (jj := jj) (by omega) (lt_of_le_of_lt hm35 (by norm_num)) h0
-  -- the words the frame frees are `vs`'s values
   obtain ⟨out, fr, hrf, hfr⟩ := roundFree_vals ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops))
     { m with stopped := false } G (piopK jj) (piopN (Masked.stAt x j).m jj) hc hNO hon hin hmid hplain hKN.1
     hKN.2.1 hKN.2.2 hbP
@@ -727,7 +673,6 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
     unfold padAt
     rw [hH, hidx, e]
     exact congrArg (· + _) hw.symm
-  -- the session's round
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
   have hRk : Masked.rankSlot x ((2 * j.val + r.val) / 2) ((2 * j.val + r.val) % 2) =
       Masked.repBase x (2 * j.val + r.val) + ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) := by

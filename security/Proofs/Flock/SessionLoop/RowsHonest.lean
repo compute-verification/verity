@@ -6,28 +6,8 @@ public import Proofs.Flock.SessionLoop.RoundPiop
 public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.SwCausalExe
 
-/-!
-# An honest worker's served values meet `RowsOK`
-
-`LeanRelease.liveRoundEqOwn_vsOf` takes one condition on the worker beyond the statement and the loop's inputs:
-`Loop.RowsOK (Loop.vsServed bx) x w`, that the rows hold at the values the algebraic-phase worker `bx` serves. This
-file derives it for a worker that serves honestly, one whose every freed word is the table's own value
-(`Loop.TakesVals` at `honestVals`):
-
-* `Loop.freedAt_round`: a round that frees pad `i` of rep stream `2j + r` after `repBase + jj` openings is PIOP round
-  `jj`, and `i` is at a place of the absorbed order below the values of PIOP rounds `0` to `jj` (`piopLen`): the binding
-  round frees none (`zcBind_frame`), PIOP round `jj` frees the values it carries (`piop_frame`, `roundFree_vals`), and
-  past the PIOP every place is below them (`piopLen_full`).
-* `Loop.vals_freed`: the table's own value at such a pad is one at two coin vectors agreeing below `repBase + jj`; the
-  honest sources' masked values there agree (`repOk`), so the table's values do (`vals_of_masked`).
-* `Loop.vsOfWord_of_takes`: where the worker takes the honest values, `vsOfWord` is the honest values: the word a round
-  frees is the table's value along the coins the round opened, which is its value along the full coins
-  (`vals_freed`), and where no round frees a pad `vsOfWord` is the table's own value.
-* **`Loop.rowsOK_vsServed_of_takes`**: `RowsOK (vsServed bx) x w` at such a worker and a witness under the relation:
-  `vsServed bx` is the honest values at every index, `final_c`'s the c_eval of the round-1c values as the honest values'
-  is (`finalCFixed_honestVals`), and the rows hold there (`rowsOK_honestVals`).
-* **`LeanRelease.liveRoundEqOwn_vsOf_takes`**: `liveRoundEqOwn_vsOf` with its `RowsOK` premise discharged so.
--/
+/-! An honest worker's served values meet `RowsOK`, discharging `liveRoundEqOwn_vsOf`'s premise
+(`LeanRelease.liveRoundEqOwn_vsOf_takes`). -/
 
 @[expose] public section
 
@@ -44,9 +24,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig roundFree)
 
 namespace Loop
-
-/-! A place below the values of PIOP rounds `0` to `jj` is in a round no later than `jj`: round 2 for round 1's values,
-residual round `3 + a` for its pair `a`, `final_a`/`final_b`'s round, lincheck round `5 + (m - 6) + a`, `z_partial`'s. -/
 
 theorem round_r1 {m k jj P : ℕ} (h : P < piopLen m k (jj + 1)) : 2 ≤ jj := by
   unfold piopLen at h
@@ -71,7 +48,6 @@ theorem round_zp {m k jj P : ℕ} (h : P < piopLen m k (jj + 1)) (h1 : 130 + 2 *
   unfold piopLen at h
   split_ifs at h <;> omega
 
-/-- **`vsWord` at the honest values is the table's own value** at the tape's base, below `n_E`. -/
 theorem vsWord_honestVals_tab {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce} {c : Fin (refK x) → FlockDeploy.Coin}
     {τ : UE.Tape} {j : Fin (jOf x)} {r : Fin 2} {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
     vsWord (CoinLayer.session loopNr Masked.dataE).honestVals x w ν c τ j r k =
@@ -82,10 +58,6 @@ theorem vsWord_honestVals_tab {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce} {
   rfl
 
 set_option maxHeartbeats 1000000 in
-/-- **The table's own value at a pad is one along coins agreeing up to the PIOP round that absorbs it**: at a place `P`
-of the absorbed order before the Ligerito values, below the values of PIOP rounds `0` to `jj`, that holds pad `i`, the
-honest sources' masked values at `i` agree at two coin vectors that agree below `repBase + jj` (`repOk`, the field at
-`P`'s round: `round_r1` to `round_zp`), so the table's own values do (`vals_of_masked`). -/
 theorem vals_freed {x : Msg} (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) {c c' : Fin (refK x) → FlockDeploy.Coin}
@@ -167,12 +139,6 @@ variable (L₀ : LeanRelease Flock.Wit
       ℕ → V (Tab × Array ByteArray))
 
 set_option maxHeartbeats 2000000 in
-/-- **A pad is freed in the PIOP round whose values hold it**: where a round frees pad `i` of rep stream `2j + r`, its
-history opens `repBase + jj` coins and `i` is at a place of the absorbed order before the Ligerito values and below the
-values of PIOP rounds `0` to `jj`. The round is the rep's `jj`-th (`locate_inv`); the binding round, `jj = 0`, frees no
-word (`zcBind_frame`); PIOP round `jj` frees from its state's position (`piop_frame`) the values it carries
-(`roundFree_vals`), the last of which is below `piopLen (jj + 1)` (`piopV_length_eq`); past the PIOP every place before
-the Ligerito values is below it (`piopLen_full`). -/
 theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {ν : CoinLayer.Nonce}
     {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {cs : List FlockDeploy.Coin}
@@ -192,7 +158,6 @@ theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv
   obtain ⟨-, -, hspec, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
-  -- the place the round frees `i` at, in the rep's layout
   obtain ⟨q, hq⟩ : ∃ q, ops.length = q + 1 := ⟨ops.length - 1, by omega⟩
   have hst := start_of_answered Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real x
     (ν, t) (m₀, ρ₀) ops ha hsx hq
@@ -209,7 +174,6 @@ theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv
     (Free.roundFree_pos hf).2 k hk
   rw [hord.2] at hP0
   rw [hord.1] at hi
-  -- the round is the rep's `jj`-th, after `repBase + jj` openings
   have hsum : (roundsOf spec (Masked.stsOf x)).sum + 1 = refK x := by
     rw [Masked.refK_eq hsx, ← FlockComplete.ZkTables.repStart_last, ← hrsz]
     unfold FlockComplete.repStartZk roundsOf
@@ -234,20 +198,19 @@ theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv
   have hfa : (layE x j).fa = 128 + 2 * ((stAt x j).m - 6) := rfl
   have hlc : (layE x j).nLc = (stAt x j).c.kLog - 6 := rfl
   rcases Nat.eq_zero_or_pos jj with h0 | h0
-  · -- the binding round frees no word
+  ·
     obtain ⟨-, -, -, -, -, hfree, -⟩ := LeanRelease.zcBind_frame
       (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real wk hx hSv ν t κ m₀ ρ₀ ops hRT hlt hl hv j r
       (by omega)
     rw [hfree (m₁ := m) (out₁ := out) (s₁ := s') (fr₁ := fr) ha hf] at hk
     exact absurd hk (Nat.not_lt_zero k)
   by_cases hge : piopNR (stAt x j).m (stAt x j).c.kLog ≤ jj
-  · -- past the PIOP, every place before the Ligerito values is below its values
+  ·
     have e := piopLen_mono (stAt x j).m (stAt x j).c.kLog
       (show piopNR (stAt x j).m (stAt x j).c.kLog ≤ jj + 1 by omega)
     rw [piopLen_full] at e
     omega
   have hjjN : jj < piopNR (stAt x j).m (stAt x j).c.kLog := by omega
-  -- PIOP round `jj` frees the values it carries
   obtain ⟨m', G, hA, hon, hin, hposm, hAG, hmid, hplain, hvG, hcoins, -, -⟩ :=
     LeanRelease.piop_frame (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real wk hx hSv ν t κ m₀ ρ₀
       ops hRT hlt hl hv j r hn (by omega) hjjN
@@ -286,10 +249,6 @@ theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv
   omega
 
 set_option maxHeartbeats 1000000 in
-/-- **Where the worker takes the honest values, `vsOfWord` is the honest values**: where a round frees pad `i`, the
-word is the table's value along the coins the round opened (`TakesVals` at `honestVals`, the round's worker the
-pad-blind one: `phased_alg`), the first `repBase + jj` coins of round `jj` (`freedAt_round`), along which the table's
-value is its value along the full coins (`vals_freed`); where none frees it, `vsOfWord` is the table's own value. -/
 theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (post : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker)
     (hT : TakesVals (CoinLayer.session loopNr Masked.dataE).honestVals (LeanRelease.ofLoopLink L₀ src real)
@@ -308,7 +267,6 @@ theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} 
     rw [dite_eq_left hi]
     rfl
   refine (vsOfWord_of_free _ bx _ _ _ hfw).trans ?_
-  -- the round that frees it
   have hex : ∃ n a, n < refK x ∧ FreedAt (LeanRelease.ofLoopLink L₀ src real) (blind _ (bwOf _ bx)) x w ν
       ((CoinLayer.session loopNr Masked.dataE).seenOf x τ) ((List.ofFn c).take n) j r i a := by
     by_contra hne
@@ -328,7 +286,6 @@ theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} 
   obtain ⟨jj, P, hlen, hPs, hPi, hPj⟩ := freedAt_round L₀ src real hreal hSv _ hF
   rw [List.length_take, List.length_ofFn, Nat.min_eq_left hn.le] at hlen
   obtain ⟨t, κ, m₀, ρ₀, ops, v, m, out, s', fr, k, hs, hd, hpos, hlt, hl, hok, hv, ha, hf, hrep, hk, hik, hwd⟩ := hF
-  -- the round's worker is the pad-blind one, so the worker takes the honest values there
   have hle : ((m₀, ρ₀) :: ops).length ≤ refK x := by
     rw [List.length_cons]
     omega
@@ -352,11 +309,6 @@ theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} 
   rw [h1, h2]
   exact hv.symm
 
-/-- **An honest worker's served values meet `RowsOK`**: at a witness under the relation, where the algebraic-phase
-worker `bx` takes the honest values (`TakesVals` at `honestVals`, the worker `phased bx post`), `vsServed bx` is the
-honest values at every index: `vsOfWord_of_takes` off `final_c`'s, and at `final_c`'s the c_eval of the round-1c values,
-which is the honest values' `final_c` (`finalCFixed_honestVals`). So its rows hold where the honest values' do
-(`rowsOK_honestVals`). -/
 theorem rowsOK_vsServed_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (post : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker)
@@ -423,9 +375,6 @@ end Loop
 
 namespace LeanRelease
 
-/-- **At an honestly serving algebraic-phase worker, through `vsOf`**: `liveRoundEqOwn_vsOf` at a worker
-`Loop.phased bx post` that takes the honest values (`Loop.TakesVals` at `honestVals`), whose served values' rows then
-hold (`Loop.rowsOK_vsServed_of_takes`). -/
 theorem liveRoundEqOwn_vsOf_takes (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)

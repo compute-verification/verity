@@ -3,16 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.RoundsPassTaken
 public import Proofs.Flock.SessionLoop.RoundL0Frame
 
-/-!
-# Level 0's rounds past the binding, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), wherever the
-frame takes its coins (**`LeanRelease.schedTaken_l0`**): the frame is in level 0's masked phase at body `i`'s position
-(`RhoKeep.repState_l0`), the scheduled round on the rep's own table is body `i` at zero pads (`ofLoop_sched_unrefused`,
-`Bind.sched_l0`, `Loop.loopNr_l0r`), and the frame takes it (**`LeanRelease.l0_taken`**: `l0Sent_at` and
-`roundFree_on_fr`, at `k₀ + 3` `ρ₁`'s squeeze alone). This is `l0_frame`'s argument with the frame's answer from
-`refusesCoins` in liveness's place, and `release_l0_at`'s without the device round.
--/
+/-! The frame takes a rep's level-0 rounds past the binding without liveness (`LeanRelease.schedTaken_l0`). -/
 
 @[expose] public section
 
@@ -29,9 +20,6 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace LeanRelease
 
-/-- **The frame takes level 0's body `i` at zero pads**: where the frame takes the coins before level 0's round
-`1 ≤ i ≤ k₀ + 3` in its masked phase at the round's position and asks the round's `l0Nc i` coins (`l0Sent_at`,
-`roundFree_on_fr`; at `k₀ + 3`, `ρ₁`'s squeeze alone). -/
 theorem l0_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh : List (Msg × Msg)) {m : Masker}
     {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray} {sch : _root_.Flock.Schedule}
     {t b : Array F128} {lay : _root_.Flock.Zk.PadLayout} {rep : ℕ} {extra : ℕ → ℕ → F128}
@@ -105,11 +93,6 @@ theorem l0_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh : Lis
 
 open Loop Ranked in
 set_option maxHeartbeats 4000000 in
-/-- **The frame takes a rep's level-0 round past the binding where it takes its coins**: at a history whose next round
-is rep stream `2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), whose coins the loop's frame takes, on
-the loop's own tables where `src` samples the tape's level 0. The frame is in level 0's masked phase at body `i`'s first
-value (`RhoKeep.repState_l0`), the scheduled round is body `i` at zero pads on the rep's own table
-(`ofLoop_sched_unrefused`, `Bind.sched_l0`, `Loop.loopNr_l0r`), and the frame takes it (`l0_taken`). -/
 theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -140,7 +123,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + (3 + P) + i` into the rep's rounds, `A` the algebraic phase's, `2 + P` the ring switch's
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   obtain ⟨P, hPd⟩ : ∃ P, P = spec.points * (Masked.stAt x j).regions.size := ⟨_, rfl⟩
   have hRSf : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
@@ -156,7 +138,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -181,7 +162,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
@@ -210,7 +190,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's answer
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hkd : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -221,7 +200,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_answered_same Masked.dataE L₁ (Loop.realOf src) x (ν, t) (m₀, ρ₀) ops hsx (q := u + 1) (by omega) hj1
     ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = u + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -241,7 +219,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
   have hmkt : tb.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hkd
     hsx (q := u + 1) (by omega)
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -276,7 +253,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [(alg_cnt hmT (by rw [htrk]; omega) hmT' hal').1, htrm, htrk, hAd]
   have hT1' : tr.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := hT1.trans hts'
   have hT2' : tr.sch = (Masked.zkTab x j).sch := hT2.trans hsch
-  -- the schedule: level 0's first `i + 1` bodies at zero pads
   obtain ⟨hssz, T, sws, ⟨_zc, _lc, -, hsws⟩, hbody⟩ := Bind.sched_l0 hal' hs'' hdom' (by rw [hT1]; exact hdg)
     hcapR hmT' (by rw [hT1]; exact hmkt) hXb (by rw [hT2]; exact hk0) (by rw [hT2]; exact hnn)
     (by rw [hT2]; exact hq) (by rw [hT2']; have := (Count.sched_rho hz).1; omega) hmT (j := i) (by rw [hT2']; omega)
@@ -288,7 +264,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hNL : _root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0 = Masked.layE x j := by
     rw [hT1', hT2']
     all_goals rfl
-  -- the round's rep, its layout and its coins
   have hrep : (ofLoop Masked.dataE L₁ (Loop.realOf src)).rep x ((m₀, ρ₀) :: ops).length = 2 * j.val + r.val := by
     show repOf x (ops.length + 1) = _
     rw [show ops.length + 1 = u + 1 + 2 by omega, repOf_add_two hsx, hloc]
@@ -310,7 +285,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz]
     exact loopNr_l0r hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) h1 hi
-  -- the frame's state there: in level 0 at body `i`'s first value
   have hph : placeholder spec (Masked.stsOf x) (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).1
       (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', tb, dom, xs, his) := by
     rw [hloc]
@@ -350,7 +324,6 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
     omega
   have hpm : m.pos = absPos (Masked.layE x j) ((Masked.layE x j).lgOod 0) + l0Off i := by
     rw [hpm0, hc', hlayE, nPiop_ood _ _ _ hkL]
-  -- the frame takes body `i` at zero pads
   refine schedTaken_of hA hin ?_
   rw [ofLoop_scheduled Masked.dataE L₁ (Loop.realOf src) x w (ν, t) (m₀, ρ₀) ops _ hsx (q := u + 1) (by omega) hre hs'
     hlt', hj1, show a + 1 = alg'.size + (XS.size + 2) + 1 + i by omega, (hbody i le_rfl).1, hNL, hT2']

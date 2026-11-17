@@ -7,17 +7,7 @@ public import Proofs.Flock.SessionLoop.RepSrc
 public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# A rep's scheduled round after one history
-
-What `LiveSched`'s equation reads at each of a rep's scheduled rounds, after one history `(m₀, ρ₀) :: ops`:
-
-* **`Loop.TakesValsAt`**: `TakesVals`'s conclusion at that history (`Loop.takesVals_iff`), the worker's free words
-  there being `vs`'s values.
-* **The switched session's message there** (`Loop.swMsgAt_enc`, `Loop.enc_finS_of`): before the openings' end,
-  `swMsgAt` sends round `ops.length` of the session at the opened coins, which where the coins show no refusal by it is
-  `sessionCut`'s body there, tagged `0`.
--/
+/-! What `LiveSched`'s equation reads at a rep's scheduled round after one history, where the coins show no refusal by it. -/
 
 @[expose] public section
 
@@ -31,10 +21,6 @@ open _root_.Flock (SessionSpec)
 
 namespace Loop
 
-/-- **The worker's free words are `vs`'s values after one history** `(m₀, ρ₀) :: ops` at the tape `(ν, t)` and the check
-coins `κ`: `TakesVals`'s conclusion there, wherever `LiveRoundEq` reads the history (`0 < ops.length < refK x` openings,
-live, whose openings pass under the tape's nonce), the frame takes the stream's coins and the worker's round is rep
-stream `2j + r`'s. -/
 def TakesValsAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -57,7 +43,6 @@ def TakesValsAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
           (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
           (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]!
 
-/-- `TakesVals` is `TakesValsAt` after every history. -/
 theorem takesVals_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -65,8 +50,7 @@ theorem takesVals_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     TakesVals vs L wk x w ↔ ∀ ν t κ m₀ ρ₀ ops, TakesValsAt vs L wk x w ν t κ m₀ ρ₀ ops :=
   Iff.rfl
 
-/-- **The session's round `n ≥ 1` at the deployed tables where the coins show no refusal by it**: `sessionCut`'s body
-`n` on the cut, tagged `0`, where the cut session reached it (`enc_finS`). -/
+/-- Holds where the coins show no refusal by round `n`. -/
 theorem enc_finS_of {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n ≠ 0)
     (cut : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Cut) {s : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, Masked.stsOf x)) (hR : ¬ Masked.Refused x c n)
@@ -81,8 +65,6 @@ theorem enc_finS_of {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n
   dsimp only
   rw [ite_eq_left hlt]
 
-/-- **The switched session's message after the openings `cs`**, before the openings' end: its round `cs.length` at the
-coins `cs` open, on the switched cut. -/
 theorem swMsgAt_enc (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (ν : finS.Nonce) (t : finS.Tape)
     (cs : List finS.Coin) (hlt : cs.length < refK x) :
     finS.swMsgAt x (finS.wt x w) (vs x w ν) t cs =

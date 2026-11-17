@@ -4,22 +4,8 @@ public import Proofs.Flock.Soundness.Audit.SamplingDesign
 public import Flock.Draw
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# The executable sample escapes no more often than the model's
-
-`Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
-partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
-on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_escape_le`: over a uniform stream of
-bytes, it returns a sample that misses `B` with probability at most `(SamplingDesign.subset n k hk).missProb B`, the model's uniform
-`k`-subset. A stream that runs out gives `none`, which only lowers the executable's missProb.
-
-* `mem_qsort`: `Array.qsort` keeps its elements, through core's private `qsort.sort` and `qpartition.loop`.
-* `subset_eq`, `subset_misses`: the loop restated as a list recursion, and its `HashMap` read through a permutation `π`
-  with `sw.getD t t = π t`: the sample misses `B` only if `π` does on `[0, k)`.
-* `uniformL_le`: the rejection sampler. `uniform_streamOf` ties `Flock.Draw.uniform` and `beNat` at a position to it.
-* `loopL_le`: step `i` samples uniformly over the pool `π '' [i, n)`, which holds all of `B` while the earlier values miss
-  it, so the loop escapes `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`.
--/
+/-! The executable sample (`Flock.Draw.subset`) escapes no more often than the model's uniform `k`-subset
+(`SamplingDesign.subset_exec_escape_le`). -/
 
 @[expose] public section
 
@@ -109,19 +95,15 @@ open Flock.Draw
 
 abbrev St := Option (Option (Array ℕ)) × Std.HashMap ℕ ℕ × ℕ
 
-/-- One swap of `subset`'s Fisher–Yates: positions `i` and `i + r`. -/
 def swapAt (sw : Std.HashMap ℕ ℕ) (i r : ℕ) : Std.HashMap ℕ ℕ :=
   (sw.insert i (sw.getD (i + r) (i + r))).insert (i + r) (sw.getD i i)
 
-/-- `subset`'s loop as a list recursion. -/
 def loopSw (n : ℕ) (src : ByteArray) : List ℕ → Std.HashMap ℕ ℕ → ℕ → Option (Std.HashMap ℕ ℕ)
   | [], sw, _ => some sw
   | i :: is, sw, pos => match uniform (n - i) src (src.size + 1) pos with
     | none => none
     | some (r, p) => loopSw n src is (swapAt sw i r) p
 
-/-- A `forIn` whose body samples with `uniform` and swaps, followed by a continuation that returns the early exit or
-finishes: the loop computes `loopSw`. -/
 theorem forIn_char (n : ℕ) (src : ByteArray) (G : Std.HashMap ℕ ℕ → Array ℕ)
     (F : ℕ → St → Id (ForInStep St)) (POST : St → Id (Option (Array ℕ)))
     (hFn : ∀ i s, uniform (n - i) src (src.size + 1) s.2.2 = none → F i s = pure (.done (some none, s.2.1, s.2.2)))
@@ -169,7 +151,6 @@ theorem subset_eq (k n : ℕ) (src : ByteArray) :
   · intro s r h; simp only [h]
   · intro s h; simp only [h]
 
-/-- The loop on the permutation `t ↦ sw.getD t t`. -/
 def loopP (n : ℕ) (src : ByteArray) : List ℕ → Equiv.Perm ℕ → ℕ → Option (Equiv.Perm ℕ)
   | [], π, _ => some π
   | i :: is, π, pos => match uniform (n - i) src (src.size + 1) pos with
@@ -205,7 +186,6 @@ theorem loopSw_loopP (n : ℕ) (src : ByteArray) : ∀ (l : List ℕ) (sw : Std.
       rw [hu] at hs
       exact ih _ _ _ (getD_swapAt sw π h i r) sw' hs
 
-/-- **The executable's output misses `B` only if the loop's permutation does on `[0, k)`.** -/
 theorem subset_misses (k n : ℕ) (src : ByteArray) (B : Finset ℕ) (D : Array ℕ) (hD : subset k n src = some D)
     (hB : ∀ u ∈ B, u ∉ D) : ∃ π, loopP n src (List.range' 0 k) (Equiv.refl ℕ) 0 = some π ∧ ∀ i < k, π i ∉ B := by
   rw [subset_eq] at hD
@@ -221,12 +201,8 @@ theorem subset_misses (k n : ℕ) (src : ByteArray) (B : Finset ℕ) (D : Array 
 open Game Finset
 open scoped ENNReal
 
-/-! ## Uniform byte streams -/
-
-/-- The bytes of `g`. -/
 def bsOf {ℓ : ℕ} (g : Fin ℓ → Fin 256) : List UInt8 := List.ofFn fun i => UInt8.ofFin (g i)
 
-/-- A big-endian word, as `Flock.Draw.beNat` reads one. -/
 def beL (bs : List UInt8) : ℕ := bs.foldl (fun acc b => acc * 256 + b.toNat) 0
 
 theorem length_bsOf {ℓ : ℕ} (g : Fin ℓ → Fin 256) : (bsOf g).length = ℓ := by simp [bsOf]
@@ -253,7 +229,6 @@ theorem avg_comm {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0�
     ← avg_equiv (Equiv.prodComm C D) (fun p : D × C => f p.2 p.1)]
   rfl
 
-/-- Splitting a stream into its first `w` bytes and the rest. -/
 def appendEquiv (w ℓ : ℕ) : (Fin w → Fin 256) × (Fin ℓ → Fin 256) ≃ (Fin (w + ℓ) → Fin 256) where
   toFun p := Fin.append p.1 p.2
   invFun g := (fun i => g (Fin.castAdd ℓ i), fun j => g (Fin.natAdd w j))
@@ -294,7 +269,6 @@ theorem sum_range_mul_add (F : ℕ → ℝ≥0∞) : ∀ N : ℕ,
   | succ N ih =>
     rw [Finset.sum_range_succ, ih, Nat.succ_mul, Finset.sum_range_add]
 
-/-- **A uniform `w`-byte word is uniform on `[0, 256^w)`.** -/
 theorem avg_beL (F : ℕ → ℝ≥0∞) : ∀ w : ℕ,
     avg (fun g : Fin w → Fin 256 => F (beL (bsOf g))) = (∑ z ∈ range (256 ^ w), F z) / ((256 ^ w : ℕ) : ℝ≥0∞) := by
   intro w
@@ -326,9 +300,6 @@ theorem avg_beL (F : ℕ → ℝ≥0∞) : ∀ w : ℕ,
       ← ENNReal.mul_inv (Or.inr (by norm_num)) (Or.inr (by norm_num)), pow_succ, Nat.cast_mul]
     norm_num
 
-/-! ## The rejection sampler -/
-
-/-- `Flock.Draw.uniform m` on the rest of the stream: the value and the stream after it. -/
 def uniformL (m : ℕ) : ℕ → List UInt8 → Option (ℕ × List UInt8)
   | 0, _ => none
   | fuel + 1, bs =>
@@ -374,8 +345,6 @@ theorem width_pos (m : ℕ) : 0 < Flock.Draw.width m := by
   unfold Flock.Draw.width; omega
 
 open Classical in
-/-- **The rejection sampler**: if every value `r < m` it can return is followed by an event of probability at most `q r`
-on the rest of the stream, the sample returns some `r` and then that event with probability at most the average of `q`. -/
 theorem uniformL_le (m : ℕ) (hm : 0 < m) (Q : ℕ → List UInt8 → Prop) (q : ℕ → ℝ≥0∞)
     (hQ : ∀ r < m, ∀ ℓ, prCoin (fun h : Fin ℓ → Fin 256 => Q r (bsOf h)) ≤ q r) :
     ∀ fuel ℓ, prCoin (fun g : Fin ℓ → Fin 256 => ∃ r rest, uniformL m fuel (bsOf g) = some (r, rest) ∧ Q r rest) ≤
@@ -432,8 +401,6 @@ theorem uniformL_le (m : ℕ) (hm : 0 < m) (Q : ℕ → List UInt8 → Prop) (q 
             rw [← hSw]
         _ = (∑ r ∈ range m, q r) / m := reject_arith m S hm (by positivity) q
 
-/-! ## The executable's reads, on the rest of the stream -/
-
 theorem size_streamOf {L : ℕ} (f : Fin L → Fin 256) : (SamplingDesign.streamOf f).size = L := by
   simp [SamplingDesign.streamOf, ByteArray.size]
 
@@ -455,7 +422,6 @@ theorem beNat_streamOf {L : ℕ} (f : Fin L → Fin 256) (pos w : ℕ) (h : pos 
   rw [take_drop_bsOf f pos w h, beL, List.foldl_map]
   rfl
 
-/-- **`Flock.Draw.uniform` at position `pos` is `uniformL` on the stream from `pos`.** -/
 theorem uniform_streamOf {L : ℕ} (f : Fin L → Fin 256) (m : ℕ) : ∀ fuel pos, pos ≤ L →
     match uniformL m fuel ((bsOf f).drop pos) with
     | none => Flock.Draw.uniform m (SamplingDesign.streamOf f) fuel pos = none
@@ -497,9 +463,6 @@ theorem uniform_streamOf {L : ℕ} (f : Fin L → Fin 256) (m : ℕ) : ∀ fuel 
         rw [he]
         exact ih (pos + Flock.Draw.width m) hw'
 
-/-! ## The permutation loop, on the rest of the stream -/
-
-/-- `loopP` on the rest of the stream, with `uniformL`'s fuel `F`. -/
 def loopL (n F : ℕ) : List ℕ → Equiv.Perm ℕ → List UInt8 → Option (Equiv.Perm ℕ)
   | [], π, _ => some π
   | i :: is, π, bs => match uniformL (n - i) F bs with
@@ -527,7 +490,6 @@ theorem loopP_streamOf {L : ℕ} (f : Fin L → Fin 256) (n : ℕ) : ∀ (l : Li
       simp only
       rw [ih _ p hp, hrest]
 
-/-- The loop never changes the values below its first index. -/
 theorem loopL_prefix (n F : ℕ) : ∀ (c j : ℕ) (π π' : Equiv.Perm ℕ) (bs : List UInt8),
     loopL n F (List.range' j c) π bs = some π' → ∀ t < j, π' t = π t := by
   intro c
@@ -552,7 +514,6 @@ theorem prCoin_le_one {C : Type} [Fintype C] (p : C → Prop) : prCoin p ≤ 1 :
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_one]
         exact ENNReal.mul_inv_le_one _
 
-/-- A map of `[0, n)` into itself by a permutation is onto. -/
 theorem perm_onto {n : ℕ} (π : Equiv.Perm ℕ) (hπ : ∀ t < n, π t < n) (u : ℕ) (hu : u < n) : ∃ t < n, π t = u := by
   classical
   have hsub : (range n).image π ⊆ range n := fun x hx => by
@@ -565,7 +526,6 @@ theorem perm_onto {n : ℕ} (π : Equiv.Perm ℕ) (hπ : ∀ t < n, π t < n) (u
   obtain ⟨t, ht, h⟩ := mem_image.1 this
   exact ⟨t, mem_range.1 ht, h⟩
 
-/-- **The pool**: of the `n − i` values step `i` can take, exactly `|B|` are in `B`, while no earlier value is. -/
 theorem card_pool_mem (n i : ℕ) (hi : i ≤ n) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) (π : Equiv.Perm ℕ)
     (hπ : ∀ t < n, π t < n) (hpre : ∀ t < i, π t ∉ B) :
     ((range (n - i)).filter fun r => π (i + r) ∈ B).card = B.card := by
@@ -585,7 +545,6 @@ theorem card_pool_mem (n i : ℕ) (hi : i ≤ n) (B : Finset ℕ) (hB : ∀ u �
       exact hpre t (by omega) hu
     exact ⟨t - i, ⟨by omega, by rwa [Nat.add_sub_cancel' hti]⟩, by rw [Nat.add_sub_cancel' hti]⟩
 
-/-- One step of the hypergeometric: `(m − b)/m · C(m − 1 − b, c)/C(m − 1, c) = C(m − b, c + 1)/C(m, c + 1)`. -/
 theorem choose_step_ratio (m b c : ℕ) (hc : c + 1 ≤ m) :
     ((m - b : ℕ) : ℝ≥0∞) * (((m - 1 - b).choose c : ℝ≥0∞) / ((m - 1).choose c : ℝ≥0∞)) / (m : ℝ≥0∞) =
       ((m - b).choose (c + 1) : ℝ≥0∞) / (m.choose (c + 1) : ℝ≥0∞) := by
@@ -617,8 +576,6 @@ theorem swap_trans_lt {n i r : ℕ} (hr : i + r < n) (π : Equiv.Perm ℕ) (hπ 
   split_ifs <;> omega
 
 open Classical in
-/-- **The loop's missProb**: from step `i`, with `π` mapping `[0, n)` into itself and no earlier value in `B`, the rest of
-the loop returns a permutation with no value below `k` in `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`. -/
 theorem loopL_le (n k F : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ (c i : ℕ) (π : Equiv.Perm ℕ),
     i + c = k → k ≤ n → (∀ t < n, π t < n) → (∀ t < i, π t ∉ B) → ∀ ℓ,
       prCoin (fun h : Fin ℓ → Fin 256 => ∃ π', loopL n F (List.range' i c) π (bsOf h) = some π' ∧ ∀ t < k, π' t ∉ B) ≤
@@ -693,9 +650,8 @@ namespace FlockSoundness.Audit.SamplingDesign
 open Game Finset
 open scoped ENNReal
 
-/-- **The executable sample escapes no more often than the model's.** Its probability space is a uniform stream: that
-the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
-`sampleOS_subset_escape_le` (`ExecSampleOS.lean`) takes for the live sample, reruns included. -/
+/-- Its probability space is a uniform stream; that the challenger's coins are uniform is A3
+(`Assumptions.UniformRandomBytes`), which `sampleOS_subset_escape_le` takes for the live sample. -/
 theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤

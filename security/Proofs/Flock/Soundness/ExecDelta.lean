@@ -15,29 +15,13 @@ import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The rows Δ writes (`HmRow.delta`)
-
-Δ is the list of `(row, column)` pairs the statement XORs into the level-0 matrices (`Flock.Statement`). `delta_rows`: every row it writes has one of six forms, one per loop of `HmRow.delta`:
-- a slot's constant, other than the pin (rewired to read the pin);
-- a bit of a row's chain (`ShaRowBit`): a `cv` or message bit of one of its `sha512x3` slots (its first `cv`, and its
-  message's constant bits past the row's length);
-- a bit of a row's hm96 slot (`HmRowBit`): its `cv` (a row of no compression's midstate) or `pad`;
-- a unit's leaf bit;
-- a unit's leaf-cut bit;
-- a wire's destination bit.
-
-The first form is a constant row, and the others are input-port rows of net slots. That no form is a unit slot's computed
-row, and that a slot constant gets exactly its two pairs, follow from the layout checks, which are next (the row-placement
-plan's W3).
--/
+/-! Every row Δ writes (`HmRow.delta`) has one of six forms, one per loop (`delta_rows`). -/
 
 @[expose] public section
 
 open Flock
 namespace FlockSoundness
 
-/-- A loop in `Id` whose body always continues and preserves `P` keeps `P`. -/
 theorem forIn_id_inv {α β : Type} (P : β → Prop) {l : List α} {f : α → β → Id (ForInStep β)}
     (hf : ∀ a ∈ l, ∀ b, P b → ∃ b', f a b = ForInStep.yield b' ∧ P b') {b : β} (hb : P b) :
     P (forIn l b f) := by
@@ -62,7 +46,6 @@ theorem forIn_id_inv_array {α β : Type} (P : β → Prop) {xs : Array α} {f :
   rw [← Array.forIn_toList]
   exact forIn_id_inv P hf hb
 
-/-- Every pair's row satisfies `Q`. -/
 def RowsIn (Q : ℕ → Prop) (d : Array (ℕ × ℕ)) : Prop := ∀ p ∈ d.toList, Q p.1
 
 theorem RowsIn.push2 {Q : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d) {i a b : ℕ} (hi : Q i) :
@@ -77,22 +60,15 @@ theorem RowsIn.push2 {Q : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d
 theorem RowsIn.mono {Q Q' : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d) (hQ : ∀ x, Q x → Q' x) :
     RowsIn Q' d := fun p hp => hQ _ (h p hp)
 
-/-- **A bit of a row's chain**: in template instance `g`, input `i` (`0` its `cv`, 512 bits; `1` its message, 1024) of
-row `p`'s `k`-th `sha512x3` slot. -/
 def ShaRowBit (c : Circuit) (x : ℕ) : Prop :=
   ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ k < ((HmRow.rowSlots c.ports).2[p]!).size, ∃ i < 2,
     ∃ t < 512 * (i + 1), x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
       (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i]!.1 + t
 
-/-- **A bit of a row's hm96 slot**: in template instance `g`, input `i` (`0` its `cv`, 512 bits; `1` its `pad`, 1024) of
-row `p`'s `hm96` slot. -/
 def HmRowBit (c : Circuit) (x : ℕ) : Prop :=
   ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ i < 2, ∃ t < 512 * (i + 1),
     x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[i]!.1 + t
 
-/-- **The rows Δ writes**, one form per loop of `HmRow.delta`: a slot's constant (not the pin), a
-bit of a row's chain, a bit of a row's hm96 slot, a unit's leaf bit, a unit's leaf-cut bit, or a
-wire's destination bit. -/
 def DeltaRow (c : Circuit) (pin x : ℕ) : Prop :=
   (∃ r ∈ c.ranges.toList, ∃ i, r.kind = Kind.net i ∧ ∃ s < r.count,
       x = r.slot s + (c.nets.getD i default).2.constPos ∧ x ≠ pin) ∨
@@ -110,12 +86,9 @@ theorem RowsIn_run_bind {Q : ℕ → Prop} {m : Id (Array (ℕ × ℕ))}
     {k : Array (ℕ × ℕ) → Id (Array (ℕ × ℕ) × Array (ℕ × ℕ))} (hm : RowsIn Q (Id.run m))
     (hk : ∀ d, RowsIn Q d → RowsIn Q (Id.run (k d)).1) : RowsIn Q (Id.run (m >>= k)).1 := hk _ hm
 
-/-- **Every row Δ writes has one of its six forms** (`HmRow.delta` of a flat statement, both halves the same array; a
-typed template's tail is stated apart). -/
 theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (DeltaRow c pin) (HmRow.delta c pin).1 := by
   unfold HmRow.delta
   simp only
-  -- slot constants
   refine RowsIn_run_bind (forIn_id_inv_array _ (fun r hr d hd => ?_) (fun p hp => by simp at hp)) ?_
   · split
     · rename_i i hk
@@ -126,11 +99,10 @@ theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (Del
       · exact ⟨_, rfl, hd⟩
     · exact ⟨_, rfl, hd⟩
   intro d hd
-  -- the rows' constant bits: each row's first cv, its hm96 pad's, its chain's message bits past its length
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun p _ hp d hd => ?_) hd⟩) hd) ?_
   · split
-    · -- a segmented row: each chain start's midstate, then every constant or digest-copied message bit
+    ·
       refine ⟨_, rfl, forIn_id_inv_range _ (fun k _ hk d hd => ?_) hd⟩
       split
       · refine ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_)
@@ -173,25 +145,21 @@ theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (Del
         · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩)
         · exact Or.inr (Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩))
   intro d hd
-  -- the units' leaf bits
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun j _ hj d hd => ⟨_, rfl,
       forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2
         (Or.inr (Or.inr (Or.inr (Or.inl ⟨k, hk, j, hj, t, ht, rfl⟩))))⟩) hd⟩) hd⟩) hd) ?_
   intro d hd
-  -- the units' leaf cuts
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_array _ (fun e he d hd => ⟨_, rfl,
       forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2
         (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨g, hg, e, he, t, ht, rfl⟩)))))⟩) hd⟩) hd⟩) hd) ?_
   intro d hd
-  -- the wires
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_array _ (fun w hw d hd => ⟨_, rfl,
       forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2
         (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨g, hg, w, hw, t, ht, rfl⟩)))))⟩) hd⟩) hd⟩) hd) ?_
   intro d hd
-  -- no typed tail: a flat statement's Δ ends with its wires
   simp only [ht]
   exact hd
 

@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.RhoUnrefused
 
-/-!
-# A rep's frame inside level 0, at its coins
-
-Past the opening's binding a rep's frame is in level 0 after each body (`RhoKeep.sched_l0Run`), and the coins it takes
-there keep it so (`Masker.answer`): before level 0's last masked value it only marks the round answered, and at it it
-also takes `ρ₀`'s words, which neither moves the position nor leaves the phase.
-
-* **`RhoKeep.answer_l0`**: coins the frame takes at level 0, outside the inner proof, keep its phase and position.
-* **`RhoKeep.repState_l0`**: the loop's state at a rep's round from level 0's first body to `ρ₀`'s, where it takes the
-  round's coins, is in level 0 at the next body's first value.
--/
+/-! A rep's frame stays inside level 0 at the coins it takes there (`RhoKeep.repState_l0`). -/
 
 @[expose] public section
 
@@ -25,7 +15,6 @@ open _root_.Flock (V F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker MaskSlot Draws)
 open Loop
 
-/-- Coins the frame takes at level 0, outside the inner proof, keep its phase and position and leave it owing none. -/
 theorem answer_l0 {cfg : Cfg} {s m : Masker} {cs : Array F128} (hi : s.inner = none) (hl : s.l0 = true)
     (h : s.answer cfg cs = .ok m) :
     m.on = s.on ∧ m.l0 = true ∧ m.inner = none ∧ m.owed = none ∧ m.pos = s.pos := by
@@ -48,10 +37,6 @@ theorem answer_l0 {cfg : Cfg} {s m : Masker} {cs : Array F128} (hi : s.inner = n
       subst h
       exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
-/-- **The loop's state at a rep's round inside level 0**: where the loop's state at a rep's round from level 0's first
-body to `ρ₀`'s takes the round's coins, the frame is in level 0's masked phase, outside the inner proof, owing nothing,
-at the next body's first value. The state is the frame's after body `i - 1` (`sched_l0Run`), whose coins keep it
-(`answer_l0`). -/
 theorem repState_l0 {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}

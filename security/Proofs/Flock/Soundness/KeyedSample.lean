@@ -12,39 +12,8 @@ import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Data.HashMap.Lemmas
 
-/-!
-# The PoUW circuit's keyed sample escapes no more often than the model's
-
-`Key.subset` (`Randomness.subset`) samples each swap `i` of a `k`-subset from its own stream, index `("s", *index, i)`,
-where `Flock.Draw.subset` reads one stream. So its missProb needs its own proof, on the same pieces as
-`Flock.Draw.subset`'s: the swap map read as a permutation (`getD_swapAt`), the rejection sampler (`uniformL_le`) and
-the pool (`card_pool_mem`).
-
-* `subsetOn_eq`, `subsetOn_misses`: the per-swap loop as a list recursion, and its `HashMap` read through a permutation.
-* `loopK_le`: swap `i` on its own uniform stream samples uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
-  at most `C(n − i − |B|, c)/C(n − i, c)`.
-* `SamplingDesign.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
-  uniform `k`-subset's missProb.
-
-The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, admission refusing a repeated call index):
-
-* `sampleAll_eq`, `sampleK_eq_sampleOn`: the calls' samples are one sample over the window's flat strata (`flat`), and on the key
-  it is `sampleOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
-* `SamplingDesign.sampleOn_escape_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
-  and swap, the window sample misses `B` with at most `(SamplingDesign.stratified σ k hk).missProb B`, for strata that describe `σ`'s
-  (`PlanStrata`).
-* `SamplingDesign.keyedExecutionPhase`, `SamplingDesign.keyedExecutionPhase_escape_le`: **tier 3**. The live window sample, on the key derived from a verifier
-  secret of `S` bytes, escapes `B` with at most `(SamplingDesign.stratified σ k hk).missProb B + η`, under A4
-  (`Assumptions.KeyedStreamsUniform`) for the test `executionPhaseTest` and swap indices with distinct framings. As for
-  `Flock.Draw.subset`, it holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
-* `Randomness.frames_inj'`, `SamplingDesign.executionPhaseIdx_inj`, `SamplingDesign.keyedExecutionPhase_escape_le_of_names`: a frame parses uniquely, so the
-  swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
-  holds from the sample's own checks, with every swap index framed in under `2^64` bytes.
-* `SamplingDesign.keyedExecutionPhase_audit_of_record`, `SamplingDesign.keyedExecutionPhase_extraction_audit_of_record`: **step 4**, the window pins on the live
-  keyed sample at the sizing of record: `2^-40 + η + ε_ks + ε_bind`, on a fresh uniform window secret (A5).
-* `SamplingDesign.keyedExecutionPhaseReg_extraction_audit_of_record` (the claim of record), `SamplingDesign.keyedExecutionPhaseReg_audit_of_record`: the same on the
-  real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
--/
+/-! The PoUW circuit's keyed sample (`Key.subset`, one stream per swap) escapes no more often than the model's, and the
+window audit on it at the sizing of record (`SamplingDesign.keyedExecutionPhaseReg_extraction_audit_of_record`). -/
 
 @[expose] public section
 
@@ -53,7 +22,6 @@ namespace FlockSoundness.Audit.KeyedSample
 open Game Finset SampleExec
 open scoped ENNReal
 
-/-- `Key.subset`'s loop as a list recursion, swap `i` sampling from `S i`. -/
 def loopSwK (n : ℕ) (S : ℕ → ByteArray) : List ℕ → Std.HashMap ℕ ℕ → Option (Std.HashMap ℕ ℕ)
   | [], sw => some sw
   | i :: is, sw => match Randomness.uniformOn (n - i) (S i) with
@@ -106,7 +74,6 @@ theorem subsetOn_eq (k n : ℕ) (S : ℕ → ByteArray) :
   · intro s r h; simp only [h]
   · intro s h; simp only [h]
 
-/-- The per-swap loop on the permutation `t ↦ sw.getD t t`. -/
 def loopPK (n : ℕ) (S : ℕ → ByteArray) : List ℕ → Equiv.Perm ℕ → Option (Equiv.Perm ℕ)
   | [], π => some π
   | i :: is, π => match Randomness.uniformOn (n - i) (S i) with
@@ -129,7 +96,6 @@ theorem loopSwK_loopPK (n : ℕ) (S : ℕ → ByteArray) : ∀ (l : List ℕ) (s
       rw [hu] at hs
       exact ih _ _ (getD_swapAt sw π h i r) sw' hs
 
-/-- **The per-swap sampler's output misses `B` only if its permutation does on `[0, k)`.** -/
 theorem subsetOn_misses (k n : ℕ) (S : ℕ → ByteArray) (B : Finset ℕ) (D : Array ℕ)
     (hD : Randomness.subsetOn k n S = some D) (hB : ∀ u ∈ B, u ∉ D) :
     ∃ π, loopPK n S (List.range' 0 k) (Equiv.refl ℕ) = some π ∧ ∀ i < k, π i ∉ B := by
@@ -143,7 +109,6 @@ theorem subsetOn_misses (k n : ℕ) (S : ℕ → ByteArray) (B : Finset ℕ) (D 
     rw [← hD, mem_qsort, Array.mem_map]
     exact ⟨i, Array.mem_range.2 hi, hsw i⟩
 
-/-- `uniformOn` on a stream of `L` bytes is `uniformL` on its bytes, with `L + 1` fuel. -/
 theorem uniformOn_streamOf {L : ℕ} (g : Fin L → Fin 256) (m : ℕ) :
     Randomness.uniformOn m (SamplingDesign.streamOf g) = (uniformL m (L + 1) (bsOf g)).map Prod.fst := by
   have h := uniform_streamOf g m (L + 1) 0 (Nat.zero_le _)
@@ -159,7 +124,6 @@ theorem uniformOn_streamOf {L : ℕ} (g : Fin L → Fin 256) (m : ℕ) :
     obtain ⟨p, _, _, hU⟩ := h
     rw [hU]; rfl
 
-/-- The per-swap loop on byte lists, swap `i` reading `S i` from its start. -/
 def loopK (n F : ℕ) (S : ℕ → List UInt8) : List ℕ → Equiv.Perm ℕ → Option (Equiv.Perm ℕ)
   | [], π => some π
   | i :: is, π => match uniformL (n - i) F (S i) with
@@ -193,11 +157,9 @@ theorem loopK_prefix (n F : ℕ) (S : ℕ → List UInt8) : ∀ (c j : ℕ) (π 
       rw [ih (j + 1) _ π' h t (by omega), Equiv.trans_apply,
         Equiv.swap_apply_of_ne_of_ne (by omega) (by omega)]
 
-/-- The swaps' streams from swap `i` on: swap `i + j` reads `G j`. -/
 def swapsOf {c L : ℕ} (i : ℕ) (G : Fin c → Fin L → Fin 256) : ℕ → List UInt8 := fun j =>
   if h : i ≤ j ∧ j - i < c then bsOf (G ⟨j - i, h.2⟩) else []
 
-/-- Splitting off the first of `c + 1` streams. -/
 def consEquiv (c : ℕ) (α : Type) : α × (Fin c → α) ≃ (Fin (c + 1) → α) where
   toFun p := Fin.cons p.1 p.2
   invFun G := (G 0, fun j => G j.succ)
@@ -213,7 +175,6 @@ theorem avg_div_sum {C : Type} [Fintype C] (R : Finset ℕ) (f : ℕ → C → �
   ring
 
 open Classical in
-/-- `1` if `p` holds, else `0`: `prCoin`'s indicator. -/
 noncomputable def ind (p : Prop) : ℝ≥0∞ := if p then 1 else 0
 
 theorem prCoin_eq_avg_ind {C : Type} [Fintype C] (p : C → Prop) : prCoin p = avg fun c => ind (p c) := rfl
@@ -225,8 +186,6 @@ theorem prCoin_const_le {C : Type} [Fintype C] (p : Prop) : prCoin (fun _ : C =>
   · simp only [ind, hp, ite_false]; exact (prCoin_false).le
 
 open Classical in
-/-- **The per-swap loop's missProb**: from swap `i`, each swap on its own uniform stream, the rest of the loop returns a
-permutation with no value below `k` in `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`. -/
 theorem loopK_le (n k L : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ (c i : ℕ) (π : Equiv.Perm ℕ),
     i + c = k → k ≤ n → (∀ t < n, π t < n) → (∀ t < i, π t ∉ B) →
       prCoin (fun G : Fin c → Fin L → Fin 256 =>
@@ -328,7 +287,6 @@ theorem loopK_le (n k L : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
           choose_step_ratio (n - i) B.card c (by omega)
 
 
-/-- Per-swap streams, swap `i` reading `G i`. -/
 def streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) : ℕ → ByteArray := fun i =>
   if h : i < k then SamplingDesign.streamOf (G ⟨i, h⟩) else ByteArray.empty
 
@@ -356,8 +314,6 @@ namespace FlockSoundness.Audit.SamplingDesign
 open Game Finset
 open scoped ENNReal
 
-/-- **`Key.subset` escapes no more often than the uniform `k`-subset**: over independent uniform streams, one per swap,
-the spec's per-swap sampler returns a sample missing `B` with probability at most `C(n − |B|, k)/C(n, k)`. -/
 theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun G : Fin k → Fin L → Fin 256 =>
         ∃ D, Randomness.subsetOn k n (KeyedSample.streamsOf G) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
@@ -388,11 +344,9 @@ namespace FlockSoundness.Audit.KeyedSample
 open Game Finset SampleExec Randomness
 open scoped ENNReal
 
-/-- The window's strata, in sample order: each call's layout strata, with the call's index. -/
 def flat (calls : List PlanDraw.Call) : List (List Part × PlanDraw.Stratum) :=
   calls.flatMap fun c => c.strata.map fun s => (c.index, s)
 
-/-- The window sample on the key, over the flat strata. -/
 def drawK (key : ByteArray) (L : ℕ) : List (List Part × PlanDraw.Stratum) → Option (List ℕ)
   | [] => some []
   | (call, s) :: rest => do
@@ -422,7 +376,6 @@ theorem drawn_eq (key : ByteArray) (L : ℕ) (call : List Part) : ∀ (ss : List
         | none => rfl
         | some r => simp [List.append_assoc]
 
-/-- **The calls' samples are one sample over the window's strata.** -/
 theorem sampleAll_eq (key : ByteArray) (L : ℕ) : ∀ calls : List PlanDraw.Call,
     PlanDraw.sampleAll key calls L = drawK key L (flat calls) := by
   intro calls
@@ -434,7 +387,6 @@ theorem sampleAll_eq (key : ByteArray) (L : ℕ) : ∀ calls : List PlanDraw.Cal
     rw [ih]
     rfl
 
-/-- The window sample on given streams, stratum at position `p` sampling swap `i` from `T p i`. -/
 def sampleOn (T : ℕ → ℕ → ByteArray) : List (List Part × PlanDraw.Stratum) → ℕ → Option (List ℕ)
   | [], _ => some []
   | (_, s) :: rest, p => do
@@ -478,8 +430,6 @@ theorem sampleK_eq_sampleOn (key : ByteArray) (L : ℕ) (T : ℕ → ℕ → Byt
       rw [show p + (j + 1) = p + 1 + j by omega] at this
       simpa using this]
 
-/-- **What a successful window sample holds**: every stratum's `Key.subset` succeeded, and each of its local indices'
-units is in the sample. -/
 theorem sampleOn_units (T : ℕ → ℕ → ByteArray) : ∀ (WS : List (List Part × PlanDraw.Stratum)) (p : ℕ) (D : List ℕ),
     sampleOn T WS p = some D → ∀ j (h : j < WS.length), ∃ loc, subsetOn WS[j].2.k WS[j].2.units.length (T (p + j)) = some loc ∧
       ∀ i ∈ loc, WS[j].2.units.getD i 0 ∈ D := by
@@ -518,19 +468,14 @@ open scoped ENNReal
 
 variable {n M : ℕ}
 
-/-- The window's layout strata describe `σ`'s: stratum `p` samples `k p` of its units, has `σ`'s stratum's size, and its
-units, in order, run over `σ`'s stratum `p`. -/
 def PlanStrata (σ : Fin n → Fin M) (k : Fin M → ℕ) (WS : List (List Part × PlanDraw.Stratum)) : Prop :=
   WS.length = M ∧ ∀ (p : Fin M) (h : p.val < WS.length), WS[p.val].2.k = k p ∧
     WS[p.val].2.units.length = (stratum σ p).card ∧
     (range WS[p.val].2.units.length).image (fun j => WS[p.val].2.units.getD j 0) = (stratum σ p).map Fin.valEmbedding
 
-/-- Per-stratum, per-swap streams `F p i`, as the window sample reads them. -/
 def executionPhaseStreams {k : Fin M → ℕ} {L : ℕ} (F : (p : Fin M) → Fin (k p) → Fin L → Fin 256) : ℕ → ℕ → ByteArray :=
   fun p => if h : p < M then KeyedSample.streamsOf (F ⟨p, h⟩) else fun _ => ByteArray.empty
 
-/-- **The window sample escapes no more often than `SamplingDesign.stratified`**: over independent uniform streams, one per stratum
-and swap, it returns a sample missing `B` with at most the stratified sampling design's missProb. -/
 theorem sampleOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (WS : List (List Part × PlanDraw.Stratum)) (hWS : PlanStrata σ k WS) (L : ℕ) (B : Finset (Fin n)) :
     prCoin (fun F : (p : Fin M) → Fin (k p) → Fin L → Fin 256 =>
@@ -604,27 +549,21 @@ theorem sampleOn_congr (T T' : ℕ → ℕ → ByteArray) : ∀ (WS : List (List
       rw [show p + (j + 1) = p + 1 + j by omega] at this
       simpa using this]
 
-/-- The flat strata's default, for positions past the end. -/
 def noStratum : List Part × PlanDraw.Stratum := ([], ⟨"", [], 0⟩)
 
-/-- **The window's streams**: swap `i` of stratum `p`, numbered `finSigmaFinEquiv ⟨p, i⟩`, is at index
-`("s", *context, i)`, the stratum's `plan.draw` context. -/
 def executionPhaseIdx (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (j : Fin (∑ p, k p)) : List Part :=
   let x := (finSigmaFinEquiv (n := k)).symm j
   swapIndex (PlanDraw.context (WS.getD x.1.val noStratum).1 (WS.getD x.1.val noStratum).2.name) x.2.val
 
-/-- The window sample on given streams, numbered as `executionPhaseIdx` numbers them. -/
 def executionPhaseOf (k : Fin M → ℕ) (streams : Fin (∑ p, k p) → ByteArray) : ℕ → ℕ → ByteArray := fun p i =>
   if h : p < M then (if hi : i < k ⟨p, h⟩ then streams (finSigmaFinEquiv ⟨⟨p, h⟩, ⟨i, hi⟩⟩) else ByteArray.empty)
   else ByteArray.empty
 
-/-- **The test A4 is taken for**: the window sample computed from the streams misses `B`. -/
 def executionPhaseTest (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (B : Finset (Fin n))
     (streams : Fin (∑ p, k p) → ByteArray) : Prop :=
   ∃ D, KeyedSample.sampleOn (executionPhaseOf k streams) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D
 
-/-- **The live PoUW window sample as a sampling design**: `PlanDraw.executionPhase` on the key derived from the window's secret `sec ω` of
-`S` bytes, each swap's stream read to `L` bytes; a refused or short sample samples every unit. -/
+/-- A refused or short sample samples every unit. -/
 def keyedExecutionPhase {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (domain : String)
     (context : List (String × Part)) (calls : List PlanDraw.Call) (L : ℕ) : SamplingDesign n where
   Ω := Ω
@@ -635,8 +574,6 @@ def keyedExecutionPhase {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : 
 /-- A5 is satisfiable: the identity source, `S` uniform bytes themselves. -/
 theorem uniformSecret_id (S : ℕ) : Assumptions.UniformSecret (fun ω : Fin S → Fin 256 => ω) := fun _ => rfl
 
-/-- **Tier 3 for the PoUW window sample**: on a uniform window secret (A5), under A4 for the sample's missProb test, the live
-window sample escapes `B` with at most `SamplingDesign.stratified`'s missProb plus `η`, for every number of bytes `L` read per swap. -/
 theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedSample.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
@@ -652,7 +589,7 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · rw [stratified_escape_empty]
     exact (SampleExec.prCoin_le_one _).trans le_self_add
-  · -- the missProb event is the test on the key's streams
+  ·
     have hkey : ∀ ω : Ω, Disjoint ((keyedExecutionPhase (n := n) sec domain context calls L).draw ω) B →
         executionPhaseTest WS k B fun j => stream (derive ⟨Array.ofFn fun b => UInt8.ofFin (sec ω b)⟩ domain context)
           (executionPhaseIdx WS k j) L := by
@@ -680,7 +617,6 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
             simp only [List.getD_eq_getElem _ _ hj]
         · exact absurd hD (by simp)
       · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
-    -- the uniform side is the window sample on per-stratum, per-swap streams
     let e' : ((p : Fin M) → Fin (k p) → Fin L → Fin 256) ≃ (Fin (∑ p, k p) → Fin L → Fin 256) :=
       (Equiv.piCurry fun p (_ : Fin (k p)) => Fin L → Fin 256).symm.trans
         ((finSigmaFinEquiv (n := k)).arrowCongr (Equiv.refl _))
@@ -715,7 +651,6 @@ end FlockSoundness.Audit.SamplingDesign
 
 namespace FlockSoundness.Randomness
 
-/-- Two numbers below `2^(8ℓ)` with the same `ℓ` big-endian bytes are equal. -/
 theorem eq_of_bytes {x y ℓ : ℕ} (hx : x < 2 ^ (8 * ℓ)) (hy : y < 2 ^ (8 * ℓ))
     (h : ∀ q < ℓ, (x >>> (8 * q)) % 256 = (y >>> (8 * q)) % 256) : x = y := by
   refine Nat.eq_of_testBit_eq fun j => ?_
@@ -749,7 +684,6 @@ theorem be8_inj {x y : ℕ} (hx : x < 2 ^ 64) (hy : y < 2 ^ 64) (h : (be8 x).dat
   rw [this] at hi
   exact Option.some.inj hi
 
-/-- `natBytes n`'s length. -/
 def natLen (n : ℕ) : ℕ := max 1 (((if n = 0 then 0 else Nat.log2 n + 1) + 7) / 8)
 
 theorem natBytes_toList (n : ℕ) :
@@ -775,13 +709,11 @@ theorem natBytes_inj {n m : ℕ} (h : (natBytes n).data.toList = (natBytes m).da
     show natLen n - 1 - (natLen n - 1 - q) = q by omega] at hi
   exact Option.some.inj hi
 
-/-- A part's body, the bytes its frame carries after the tag and the length. -/
 def body : Part → ByteArray
   | .bytes b => b
   | .str s => s.toUTF8
   | .int n => natBytes n
 
-/-- A part's tag. -/
 def tag : Part → UInt8
   | .bytes _ => 98
   | .str _ => 115
@@ -803,8 +735,6 @@ theorem length_toList (a : ByteArray) : a.data.toList.length = a.size := by
 theorem eq_of_toList {a b : ByteArray} (h : a.data.toList = b.data.toList) : a = b := by
   cases a; cases b; simp only [ByteArray.mk.injEq]; exact Array.toList_inj.1 h
 
-/-- **A frame parses uniquely**: a part's frame followed by anything determines the part and the rest, for bodies
-under `2^64` bytes. -/
 theorem frame_append_inj {p q : Part} {r r' : List UInt8} (hp : (body p).size < 2 ^ 64) (hq : (body q).size < 2 ^ 64)
     (h : (frame p).data.toList ++ r = (frame q).data.toList ++ r') : p = q ∧ r = r' := by
   rw [frame_toList, frame_toList] at h
@@ -827,7 +757,6 @@ theorem foldl_frames_toList (l : List Part) (acc : ByteArray) :
   | nil => simp
   | cons p ps ih => rw [List.foldl_cons, ih, toList_append]; simp
 
-/-- **A sequence of frames parses uniquely**, for bodies under `2^64` bytes. -/
 theorem flatten_frames_inj : ∀ (l l' : List Part), (∀ p ∈ l, (body p).size < 2 ^ 64) →
     (∀ p ∈ l', (body p).size < 2 ^ 64) →
     (l.map fun p => (frame p).data.toList).flatten = (l'.map fun p => (frame p).data.toList).flatten → l = l' := by
@@ -847,7 +776,6 @@ theorem flatten_frames_inj : ∀ (l l' : List Part), (∀ p ∈ l, (body p).size
       obtain ⟨rfl, hr⟩ := frame_append_inj (hs p List.mem_cons_self) (hs' q List.mem_cons_self) h
       rw [ih qs (fun x hx => hs x (List.mem_cons_of_mem _ hx)) (fun x hx => hs' x (List.mem_cons_of_mem _ hx)) hr]
 
-/-- **`frames` is injective** on indices whose parts, and whose framed parts together, are under `2^64` bytes. -/
 theorem frames_inj {l l' : List Part} (hs : ∀ p ∈ l, (body p).size < 2 ^ 64) (hs' : ∀ p ∈ l', (body p).size < 2 ^ 64)
     (hb : (l.foldl (fun acc p => acc ++ frame p) ByteArray.empty).size < 2 ^ 64)
     (hb' : (l'.foldl (fun acc p => acc ++ frame p) ByteArray.empty).size < 2 ^ 64)
@@ -863,7 +791,6 @@ theorem frames_inj {l l' : List Part} (hs : ∀ p ∈ l, (body p).size < 2 ^ 64)
 theorem length_frame (p : Part) : (frame p).data.toList.length = 9 + (body p).size := by
   rw [frame_toList, List.length_cons, List.length_append, length_be8, length_toList]; omega
 
-/-- An index framed in under `2^64` bytes has every part, and its parts' frames together, under `2^64` bytes. -/
 theorem small_of_frames {l : List Part} (h : (frames l).size < 2 ^ 64) :
     (∀ p ∈ l, (body p).size < 2 ^ 64) ∧ (l.foldl (fun acc p => acc ++ frame p) ByteArray.empty).size < 2 ^ 64 := by
   have hlen := length_frame (.bytes (l.foldl (fun acc p => acc ++ frame p) ByteArray.empty))
@@ -916,7 +843,6 @@ theorem context_inj {c c' : List Part} {s s' : String} (h : PlanDraw.context c s
     | nil => simp at h1
     | cons y ys => simpa using h1
 
-/-- Admitted calls with distinct stratum names each give the window's strata distinct (call, name) pairs. -/
 theorem flat_pairs_nodup (calls : List PlanDraw.Call) (hadm : (calls.map fun c => frames c.index).Nodup)
     (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup) :
     ((KeyedSample.flat calls).map fun x => (x.1, x.2.name)).Nodup := by
@@ -936,8 +862,6 @@ theorem flat_pairs_nodup (calls : List PlanDraw.Call) (hadm : (calls.map fun c =
     obtain ⟨_, _, hx⟩ := hxb
     exact hab (congrArg frames (Prod.mk.inj hx).1).symm
 
-/-- **The window's swap streams have pairwise distinct framings**: admitted calls, distinct stratum names within each
-call, and every swap index framed in under `2^64` bytes. -/
 theorem executionPhaseIdx_inj (calls : List PlanDraw.Call) (k : Fin M → ℕ) (hlen : (KeyedSample.flat calls).length = M)
     (hadm : (calls.map fun c => frames c.index).Nodup) (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
     (hsmall : ∀ j, (frames (executionPhaseIdx (KeyedSample.flat calls) k j)).size < 2 ^ 64) :
@@ -965,9 +889,6 @@ theorem executionPhaseIdx_inj (calls : List PlanDraw.Call) (k : Fin M → ℕ) (
     exact (Fin.heq_ext_iff (congrArg k hfst)).2 hi
   exact (finSigmaFinEquiv (n := k)).symm.injective hxx
 
-/-- **Tier 3 for the PoUW window sample, from the sample's own checks**: `keyedExecutionPhase_escape_le` with its distinct framings
-from admission, distinct stratum names within each call, and swap indices framed in under `2^64` bytes. A window that
-admission refuses samples every unit. -/
 theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedSample.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
@@ -1004,16 +925,8 @@ section Audits
 
 variable {n M : ℕ} {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **The PoUW window audit on the live keyed sample, at the sizing of record** (step 4): the audit accepts while the unsound
-tiles do at least 0.1% of the work, or the unsound y cells are at least 0.1% of them, with probability at most
-`2^-40 + η + ε_ks + ε_bind`. It is `audit_executionPhase_split_of_record_of_le_slack` at `L := keyedExecutionPhase sec domain context calls L`,
-whose missProb `keyedExecutionPhase_escape_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
-sample's missProb tests (`executionPhaseTest`), which cost the same for every `B`.
-
-The key's context is the receipt digest, so the sample depends on the registration: it holds per strategy, for the context
-`context` that the strategy's registration fixes (the key is derived from the complete receipt, and a call the
-receipt doesn't list is refused), and for every context, A4 and the `Analysis` taken uniformly over them. The window's
-secret is fresh and uniform (A5, C2). -/
+/-- It holds per strategy, at the context that the strategy's registration fixes, with A4 and the `Analysis` taken
+uniformly over every context and one `η` for every `B`; the window's secret is fresh and uniform (A5). -/
 theorem keyedExecutionPhase_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
@@ -1036,8 +949,6 @@ theorem keyedExecutionPhase_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (ca
     (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
-/-- **The claim of record: the PoUW window audit on the live keyed sample at the compiled layer** (randomized extractor):
-`keyedExecutionPhase_audit_of_record`'s bound with `ε_ks(σ)` and `ε_bind(σ)`, through `extraction_audit_executionPhase_split_of_record_of_le_slack`. -/
 theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
@@ -1061,10 +972,7 @@ theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n →
     (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
-/-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
-registration's receipt, so the sample is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
-`keyedExecutionPhase_extraction_audit_of_record` at `ctx (reg σ)`, with A4 and the analysis taken for every registration and one `η`
-for all of them. -/
+/-- A4 and the analysis are taken for every registration, with one `η` for all of them. -/
 theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C)
     (w v f : Fin M → ℕ) (calls : List PlanDraw.Call)
     (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
@@ -1092,8 +1000,6 @@ theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n 
   exact keyedExecutionPhase_extraction_audit_of_record σ call w v f calls hWS sec hsec L domain (ctx σ'.1) η hnames hsmall
     (hA4 σ'.1) (A σ'.1) (hks σ'.1) (hlink σ'.1) hW hone hN hfy (atReg σ')
 
-/-- The oracle-layer form on the real, receipt-keyed game: at most `2^-40 + η + ε_ks + ε_bind`, one `ε_ks` and one
-`ε_bind` for every registration. -/
 theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)

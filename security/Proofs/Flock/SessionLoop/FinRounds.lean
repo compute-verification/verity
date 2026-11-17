@@ -47,23 +47,7 @@ import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameTaken
 public import Proofs.Flock.Claims.ZK.OwnHistAny
 
-/-!
-# (d) `FinRepRounds`: the reps' rounds
-
-* **`LeanRelease.msg_of_liveRoundEq`**: on a live history of `refK x` openings whose openings pass and whose messages are
-  the deferred release's own (`ZkServer.OwnHist`), each frame round's message (rounds `2` to `refK x`) is the session's
-  switched message at the coins the openings before it open, without its leading domain frame: `LiveRoundEqOwn` at that
-  prefix, which is live (`live_take`), takes its coins (`refusesCoins_of_live`), passes its openings (`allOk_eval`) and
-  is own (`ZkServer.OwnHist.take`).
-* **`LeanRelease.msg_of_swCausal`**: the same at the opened coins, from the switched causality on `Ok` (`SwCausalOn`)
-  where every prefix of them is `Ok`'s: at the loop, `Loop.SwOk`'s (`Loop.swOk_take_of_finCtx`).
-* **`Loop.msg_runCut`**, **`Loop.runCut_body`**: that message is the cut session's body at the opened coins, which is
-  the body the view rep's run sends (`CutPrefix.repCut_cut_agree`, `RepLog.repCut_rounds`).
-* **`LeanRelease.msg_release`**: a frame round's message is a release ending in the squeeze of its coins, fewer than
-  `2 ^ 64` (`release_out_of_takes`).
-* **`Loop.viewRep_rounds`**, **`Loop.finRepRounds_of`**: the view rep's rounds are the auditor's (`streamOf`), so (d)
-  holds wherever (a) to (c) do; **`Loop.finishIs_of_abc`**: (a) to (c) give `FinishIs`.
--/
+/-! (d) `FinRepRounds`: the view reps' rounds are the auditor's wherever (a) to (c) hold, and (a) to (c) give `FinishIs`. -/
 
 @[expose] public section
 
@@ -88,8 +72,6 @@ theorem forall₂_map {α β δ : Type} {R : α → β → Prop} (φ : α → δ
   | _, _, .nil => rfl
   | _, _, .cons hr hf => by simp [hR _ _ hr, forall₂_map φ ψ hR hf]
 
-/-- **Two verdict loops in step**: where each element `g` returns at, `f` returns at a related value, the loops return
-related lists. -/
 theorem list_mapM_rel {α β γ : Type} {g : α → _root_.Flock.V β} {f : α → _root_.Flock.V γ} (R : β → γ → Prop)
     (h : ∀ a b, g a = .ok b → ∃ c, f a = .ok c ∧ R b c) :
     ∀ (xs : List α) (bs : List β), xs.mapM g = .ok bs → ∃ cs, xs.mapM f = .ok cs ∧ List.Forall₂ R bs cs
@@ -132,8 +114,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 
 -- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
-/-- **A round the frame takes releases its squeeze last**: `roundFree`'s loop returns only at the squeeze of the `n`
-coins it was asked for, which it appends to the round's release. -/
 theorem roundFree_out {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
     (h : roundFree c s xb n = .ok q) : ∃ o k, q.1 = o ++ header 4 k n := by
   by_cases hs : s.inner = some INNER_ROUNDS
@@ -173,8 +153,6 @@ end Out
 
 namespace LeanRelease
 
-/-- **A release the frame takes ends in the squeeze of its round's coins**: the frame's round returns its release with
-the squeeze of the `coins x h.length` it was asked for last, a count its 64-bit length field holds (`roundFree_sq`). -/
 theorem release_out_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (v : Msg)
     (ht : L.takes x ρ h v = true) : L.coins x h.length < 2 ^ 64 ∧ ∃ o k, L.release x ρ h false v =
       0 :: (o ++ _root_.Flock.Transcript.header 4 k (L.coins x h.length)).data.toList := by
@@ -195,8 +173,6 @@ theorem release_out_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : 
     rw [← hlt]
     exact UInt64.toNat_lt _
 
-/-- **Each frame round of a `Finish` `FinishIs` reads is the session's switched message** at the coins the openings
-before it open, without its leading domain frame. -/
 theorem msg_of_liveRoundEq (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
     (w : Flock.Wit) (hE : LiveRoundEqOwn S vs L H wk x w) (hlast : L.last x = refK x + 1) (ν : S.Nonce) (t : S.Tape)
@@ -242,9 +218,6 @@ theorem msg_of_liveRoundEq (S : RefSession) (vs : S.SwVals)
   have := hok i (by simp only [List.length_map]; omega)
   simpa [List.getElem_map, List.getElem_take] using this
 
-/-- **Each frame round of a `Finish` `FinishIs` reads is the switched round encoding at the opened coins**, without its
-leading domain frame: `msg_of_liveRoundEq`, whose prefix coins agree with the opened ones below the round, at values
-causal on `Ok` (`SwCausalOn`) where every prefix of the opened coins, padded, is `Ok`'s (`enc_swCutOf_on`). -/
 theorem msg_of_swCausal (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
     (w : Flock.Wit) (hE : LiveRoundEqOwn S vs L H wk x w) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop)
@@ -280,7 +253,6 @@ theorem msg_of_swCausal (S : RefSession) (vs : S.SwVals)
     exact hOk (j - 1)
   · simpa only [List.take_length] using hOk ops.length
 
-/-- Rounds `2` to `refK x` are frame rounds, with the `Finish` one past the last coin. -/
 theorem kindAt_mid {W R : Type} {L : LeanRelease W R} {x : Msg} (hlast : L.last x = refK x + 1) {j : ℕ}
     (h2 : 2 ≤ j) (hj : j ≤ refK x) : L.kindAt x j = .masked := by
   unfold kindAt
@@ -290,7 +262,6 @@ theorem kindAt_mid {W R : Type} {L : LeanRelease W R} {x : Msg} (hlast : L.last 
     omega
   · rfl
 
-/-- **A release the frame takes is a round message**, tagged `0`. -/
 theorem release_cons_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (v : Msg)
     (ht : L.takes x ρ h v = true) : ∃ b, L.release x ρ h false v = 0 :: b := by
   unfold takes at ht
@@ -301,8 +272,6 @@ theorem release_cons_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ :
     obtain ⟨out, m⟩ := p
     exact ⟨out.data.toList, rfl⟩
 
-/-- **A live run's frame rounds are round messages**: on a live history whose messages are the deferred release's own,
-each frame round's message is the Lean frame's release of the worker's round, which the frame took. -/
 theorem msg_cons {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (j : ℕ) (hj : j < h.length) (hk : L.kindAt x j = .masked) :
@@ -321,8 +290,6 @@ theorem msg_cons {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
   rw [L.frameD_toSrv L.fillOf wk x w ρ κ _ hk' hu]
   exact hb
 
-/-- **A live run's frame rounds end in their coins' squeeze**: `msg_cons`, whose release the frame took ends in the
-squeeze of round `j`'s `coins x j`, a count below `2 ^ 64` (`release_out_of_takes`). -/
 theorem msg_release {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (j : ℕ) (hj : j < h.length) (hk : L.kindAt x j = .masked) :
@@ -351,8 +318,6 @@ theorem enc_finS_eq {x : Msg} (c : Fin (refK x) → finS.Coin) (n : ℕ)
     (cut : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Cut) :
     finS.enc x c n cut = Masked.encStop (Masked.encExe Masked.PE) x c n cut := rfl
 
-/-- **The session's round `n ≥ 1` at the deployed tables**: `[]`, or `sessionCut`'s body `n` on the cut, answered by
-the coins `c` and stopped right after it, tagged `0` (`encExe`, `encStop`). -/
 theorem enc_finS {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n ≠ 0)
     (cut : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Cut) :
     finS.enc x c n cut = [] ∨ ∃ s spec, FlockDeploy.setupOf true x = some (s, spec, Masked.stsOf x) ∧
@@ -377,8 +342,6 @@ theorem enc_finS {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n �
       · exact .inr ⟨s, spec, rfl, rfl⟩
       · exact .inl rfl
 
-/-- **At a `Finish` `FinishIs` reads every prefix of the opened coins is `SwOk`'s** (`LeanRelease.swOk_take_of_live`):
-the run is live and its coins unrefused. -/
 theorem swOk_take_of_finCtx {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
@@ -389,10 +352,6 @@ theorem swOk_take_of_finCtx {L₀ : LeanRelease Flock.Wit Tp}
   LeanRelease.swOk_take_of_live Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real wk x w
     (ν, t) κ m₀ ρ₀ ops hF.1.le hF.2.1 hF.2.2.2.1 k
 
-/-- **Each frame round of a `Finish` `FinishIs` reads is the cut session's body at the opened coins**: at the deployed
-tables, message `j` (`2 ≤ j ≤ refK x`) is `sessionCut`'s body `j - 1` on the switched cut at the opened coins, stopped
-right after it, tagged `0`, without its leading domain frame. It is a round message (`msg_cons`), so the session did not
-stop before it (`enc_finS`). -/
 theorem msg_runCut (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) (H : Msg → Msg) (wk : L.toSrv.Worker)
     (x : Msg) (w : Flock.Wit) (hE : LeanRelease.LiveRoundEqOwn finS vs L H wk x w)
     (hc : finS.SwCausalOn (SwOk Masked.dataE) vs)
@@ -418,10 +377,6 @@ theorem msg_runCut (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) (H : Msg �
     simp [dropDom] at h'
   · exact ⟨s, spec, hsx, e.trans (congrArg dropDom he)⟩
 
-/-- **A recorded round is the auditor's**: round `j` of a rep whose log started at `L` bodies (`RepLog.RoundAt`), whose
-history message `m` is body `L + j` tagged `0` without its leading domain frame and is a release ending in the squeeze of
-`n'` coins, has `n'` coins, `coin (L + j)`'s, no digest, and as bytes the message past its tag, after the stream's domain
-frame at round `0`. -/
 theorem round_of_logs {coin : ℕ → ℕ → _root_.Flock.F128} {B : ℕ} {d : String} {L : ℕ} {l : Array Msg} {j : ℕ}
     {r : _root_.Flock.Round} (hr : FlockComplete.RepLog.RoundAt coin B d.toUTF8 L l j r) (hB : B < 2 ^ 64)
     (hd : d.toUTF8.size < 2 ^ 64) {m : Msg} (hm : m = dropDom (0 :: l[L + j]!)) {o : ByteArray} {k' : UInt8}
@@ -483,9 +438,6 @@ theorem round_of_logs {coin : ℕ → ℕ → _root_.Flock.F128} {B : ℕ} {d : 
   subst hn hsha hcoins hc
   rw [hbytes]
 
-/-- **(d)'s count**: in the masked scope, rep stream `k`'s run from the views, from a history at its first round, sends
-its rep's bodies (`repCut_eqAt` against itself), as many as its recorded rounds (`repRoundsT_eq`), so it ends at rep
-`k + 1`'s first round. -/
 theorem viewRep_size (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
@@ -548,10 +500,6 @@ theorem viewRep_size (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     FlockComplete.ZkTables.repRoundsT, e6, e7]
   omega
 
-/-! ## The view rep against the cut rep -/
-
-/-- **A `Finish` `FinishIs` reads opens coins every table admits**, at a statement the loop serves: no coin fault shows
-(`frameUnrefused_ofLoop`), and the deployed tables admit unrefused coins (`tablesAdmitUnrefused_dataE`). -/
 theorem admits_of_finCtx (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
@@ -563,8 +511,6 @@ theorem admits_of_finCtx (L₀ : LeanRelease Flock.Wit Tp)
     LeanRelease.frameUnrefused_ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
       CoinOpen.shaH wk x w hServe hx ν t κ m₀ ρ₀ ops hF.1 hF.2.1 hF.2.2.1 hF.2.2.2.1
 
-/-- **Where every table admits the coins, the switched cut is the switched views'** with every guarded message sent
-(`cutV_swViewsAt`, `famGuard_admits`). -/
 theorem swCutOf_viewCut {x : Msg} {c : Fin (refK x) → finS.Coin} (hA : finS.Admits x c)
     (wt : ∀ j, FlockSoundness.Model.Witness (finS.C x j).S.m)
     (v : (∀ j, FlockSoundness.Discharge.ZkView.Seen (finS.C x j).z) → ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Vals)
@@ -578,8 +524,6 @@ theorem swCutOf_viewCut {x : Msg} {c : Fin (refK x) → finS.Coin} (hA : finS.Ad
     (fun j => ((finS.C x j).T (finS.cz x c j)).rep) j) (viewPre _ (finS.swViewsAt x c wt v t j)) = _
   simp only [FlockSoundness.ZK.Table.cut, famSent, hP, ite_true, Masked.viewCut, viewPre]
 
-/-- **Where every table admits the coins, a rep's source from the views is the switched cut's** but for what only the
-final message reads (`swCutOf_viewCut`). -/
 theorem eraseS_finSrc (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     {ops : List (Msg × Msg)} (hA : finS.Admits x (finCoins x ops)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) :
     Masked.eraseS ((finSrc vs x w ν t ops i).rep r) =
@@ -597,8 +541,6 @@ theorem eraseS_finSrc (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.No
   simp only [hi, hr, ↓reduceDIte]
   refine Masked.eraseS_upd _ _ _ _ _ _ ?_ ?_ ?_ ?_ ?_ <;> rfl
 
-/-- **A rep sends the same at sources equal but for what only the final message reads**, at level 0's commitments
-with one cap and tree and pads commitments with one size, root and tree (`repCut_eraseIS`, `repCut_eraseC`). -/
 theorem repCut_eraseZ (io : FlockComplete.Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray)
     {cm cm' : FlockComplete.Commit} (hcap : cm.cap = cm'.cap) (hlay : cm.layers = cm'.layers)
@@ -610,8 +552,6 @@ theorem repCut_eraseZ (io : FlockComplete.Asks FlockComplete.PS) (hs : _root_.Fl
   rw [Masked.FinRep.repCut_eraseIS io hs st sch rep dom cm extras hn hroot hilay hsrc prior words,
     Masked.FinRep.repCut_eraseC io hs st sch rep dom hcap hlay extras ic' src' prior words]
 
-/-- **Runs equal up to `eraseZ` send the same**: where one returns, the other returns the same transcript at the same
-history, its proof equal up to `eraseZ`. -/
 theorem go_of_eraseZ {m m' : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof}
     (he : FlockComplete.eraseZ <$> m = FlockComplete.eraseZ <$> m') {t : _root_.Flock.Transcript} {l : Array Msg}
     {p : _root_.Flock.Zk.ZkProof} {tr : _root_.Flock.Transcript} {l' : Array Msg}
@@ -630,10 +570,6 @@ theorem go_of_eraseZ {m m' : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.Z
     subst h2 h3
     exact ⟨p', rfl, h1.symm⟩
 
-/-! ## The cut run against the view run -/
-
-/-- **The switched cut's source** at the opened coins: what the deployed session's round encodings read
-(`Masked.encExe`, `msg_runCut`). -/
 noncomputable def cutSrc (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) : ℕ → FlockComplete.TabSrc :=
   Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
@@ -690,8 +626,6 @@ theorem array_mapM_rel {α β γ : Type} {g : α → _root_.Flock.V β} {f : α 
     rw [hcs]
     rfl
 
-/-- **Level 0's commitments from the switched cut** return where the views' do (`commitsView`), at the same caps and
-trees, so at the same roots (`commit0Cut_leaf0`: the cut's leaves are the views'). -/
 theorem cmsCut_ok (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     {ops : List (Msg × Msg)} (hA : finS.Admits x (finCoins x ops)) (schs : Array (_root_.Flock.Schedule × ℕ))
     {cms : Array FlockComplete.Commit} (hcms : ∀ l, (commitsView vs x w ν t ops schs).go l = (.ok cms, l)) :
@@ -739,8 +673,6 @@ theorem cmsCut_ok (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce)
     · rw [getElem!_neg cs i (by omega), getElem!_neg cms i hi]
       exact ⟨rfl, rfl⟩
 
-/-- **Rep `r`'s pads commitment from the switched cut** returns where the views' does, at the same size, root and tree
-(`padsTreeCut_leaf`: the cut's pads leaves are the views'). -/
 theorem icCut_ok (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     {ops : List (Msg × Msg)} (hA : finS.Admits x (finCoins x ops)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2)
     (N : ℕ) {ic : FlockComplete.InnerCommit}
@@ -768,8 +700,6 @@ theorem icCut_ok (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce) 
       salts := (Array.range N).map ((cutSrc vs x w ν t ops i).rep r).padSalt },
     fun l => by rw [e1, FlockComplete.go_map', hic l]; rfl, by simp [hN], rfl, rfl⟩
 
-/-- **A pads commitment from the views sends nothing from any history** where it sends nothing from one
-(`padsTreeCut_quiet`). -/
 theorem padsView_all (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     {ops : List (Msg × Msg)} {schs : Array (_root_.Flock.Schedule × ℕ)} {k : ℕ} {ic : FlockComplete.InnerCommit}
     {l : Array Msg} (h : (padsView vs x w ν t ops schs k).go l = (.ok ic, l)) (l' : Array Msg) :
@@ -778,9 +708,6 @@ theorem padsView_all (vs : finS.SwVals) {x : Msg} (w : Flock.Wit) (ν : finS.Non
   rw [FlockComplete.CutEq.padsTreeCut_quiet] at h ⊢
   rw [(Prod.mk.inj h).1]
 
-/-- **A loop that steps, then throws**: where each of the first `k` bodies yields from every state and history the
-invariant `I` holds at, to a state and history it holds at the next step, the loop runs to the `k`-th body at a state and
-history `I k` holds at, and throws where that body throws. -/
 theorem forIn_go_err {α β : Type} (f : α → β → FlockComplete.PS (ForInStep β)) :
     ∀ (xs : List α) (I : ℕ → β → Array Msg → Prop) (k : ℕ) (hk : k < xs.length)
       (_ : ∀ k' (hk' : k' < k) b l, I k' b l →
@@ -802,7 +729,6 @@ theorem forIn_go_err {α β : Type} (f : α → β → FlockComplete.PS (ForInSt
     rw [e1]
     exact hE e L (by simpa using he)
 
-/-- `forIn_go_err` under a bind: what holds of the throwing body's history holds of the run's. -/
 theorem forIn_bind_err {α β γ : Type} {xs : List α} {b : β} {f : α → β → FlockComplete.PS (ForInStep β)}
     {g : β → FlockComplete.PS γ} {l : Array Msg} (P : Array Msg → Prop) (I : ℕ → β → Array Msg → Prop) (k : ℕ)
     (hk : k < xs.length)
@@ -825,13 +751,6 @@ theorem getElem!_append_shift {a a' bs : Array Msg} (hs : a.size = a'.size) {n :
   · have h' : ¬ n < (a' ++ bs).size := by simp only [Array.size_append] at h ⊢; omega
     rw [getElem!_neg _ n h, getElem!_neg _ n h']
 
-/-- **The cut session stopped at body `n` sent rep stream `k`'s body `n` as the view rep did**: where the reps before
-`k` run from the views to the streams the auditor saw (`streamOf`), rep stream `k`'s run from the views from a history at
-its first round sends, at each body `n` it sends, what the deployed session on the switched cut, stopped right after body
-`n`, sends there (`msg_runCut`'s right side). The session runs its schedules, level 0's commitments from the cut (the
-views' up to rows and salts, `cmsCut_ok`) and the link, then rep streams before `k` as from the views (`repCut_eraseZ`,
-then `eq_of_agree`: they end by body `n`), then rep stream `k` from a history of the same size as `l`
-(`repCut_shift`), which, stopped at `n`, throws right after the view rep's body `n` (`prefix_of_agree`). -/
 theorem runCut_body (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
@@ -872,7 +791,6 @@ theorem runCut_body (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     unfold FlockComplete.repStartZk at this
     omega
   obtain ⟨cmsC, hcmsC, -, hcsz, hcsz', hcm⟩ := cmsCut_ok vs w ν t hA schs hcms
-  -- the cut rep stream `k'` against the view one, at the answerer stopped at `N`
   have hcmp : ∀ k' < 2 * spec.tables.size, ∀ N extras' ic' icC,
       (∀ l, (padsView vs x w ν t ops schs k').go l = (.ok ic', l)) →
       (∀ l, (FlockComplete.padsTreeCut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes FlockComplete.PS)
@@ -977,15 +895,11 @@ theorem runCut_body (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     · rw [hpre n (by omega)]
       exact getElem!_append_shift (hl₀.trans hl.symm) (by omega)
 
-/-! ## The view rep's rounds as the history's -/
-
 theorem streamOf_size (x : Msg) (h : List (Msg × Msg)) (spec : _root_.Flock.SessionSpec)
     (sts : Array _root_.Flock.Stmt) (k : ℕ) :
     (streamOf x h spec sts k).size = (roundsOf spec sts).getD k 0 := by
   simp [streamOf, seenRounds]
 
-/-- Round `j` of rep stream `k` as the auditor records it: rep round `streamAt + j`, the history's entry past `Hello`
-and the link that carries it. -/
 theorem streamOf_getElem (x : Msg) (h : List (Msg × Msg)) (spec : _root_.Flock.SessionSpec)
     (sts : Array _root_.Flock.Stmt) (k j : ℕ) (hj : j < (streamOf x h spec sts k).size) :
     (streamOf x h spec sts k)[j] =
@@ -997,12 +911,6 @@ theorem streamOf_getElem (x : Msg) (h : List (Msg × Msg)) (spec : _root_.Flock.
           else ⟨((h.tail.getD (streamAt (roundsOf spec sts) k + j + 1) ([], [])).1).tail.toArray⟩) } := by
   simp only [streamOf, seenRounds, List.getElem_toArray, List.getElem_mapIdx, List.getElem_map, List.getElem_range]
 
-/-- **(d)'s rounds at rep stream `k`**: where rep stream `k`'s run from the views returns from the history at its first
-round, and the streams before it return with their rounds the auditor's, its round `j` is the auditor's. The run sent
-body `L + j` for it (`repCut_rounds`, at `65536` coins a squeeze: `zkSchedule_small`, `live_bounds`), which is the cut
-session's body there (`runCut_body`), so history message `L + j + 1` (`msg_runCut`), a release ending in the squeeze of
-`loopNr x (L + j)` coins (`msg_release`): the round has those coins, the opened coin's words (`wordsAt_slot`), and the
-message's bytes (`round_of_logs`). -/
 theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
@@ -1141,10 +1049,6 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     show streamAt (roundsOf spec (Masked.stsOf x)) k + j + 1 = l.size + j by omega, hm2]
   congr 1
 
-/-- **(d) from (a) to (c)**: at a statement in the masked verifier's scope that the loop serves, where the frame rounds
-are the session's (`LiveRoundEqOwn`, `SwCausalOn` at `SwOk`), each rep stream's run from the views has the auditor's
-rounds (`viewRep_rounds`) and ends at the next one's first round (`viewRep_size`), by induction on the stream: the
-streams before it return (c), with their rounds the auditor's. -/
 theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
@@ -1186,7 +1090,6 @@ theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   exact ⟨viewRep_rounds vs L₀ src real wk hsc hR hServe hE hc hF hsx hs hcms hext hpads hk hprev hex hic hl h,
     viewRep_size vs hsc hR ν t m₀ ρ₀ ops hsx hs cms hk hex ic hl h⟩
 
-/-- **(a) to (c) give `FinishIs`**: (d) follows from them (`finRepRounds_of`), then `finishIs_of_parts`. -/
 theorem finishIs_of_abc (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))

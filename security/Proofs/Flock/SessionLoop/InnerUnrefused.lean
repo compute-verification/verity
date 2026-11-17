@@ -43,26 +43,8 @@ import Proofs.Flock.SessionLoop.CutPiopLive
 import Proofs.Flock.SessionLoop.InnerSlot
 import Proofs.Flock.SessionLoop.LiveInner
 
-/-!
-# The loop's frames refuse every coin fault shown below the inner proof's rounds
-
-At `Loop.InnerAt` the history stands at a rep's inner round, within the rep's rounds and past its whole schedule
-(`Loop.innerAt_slot`), so every fault the coins below it show is one a frame refused:
-
-* `Loop.check_inner0_inner`: the frame's check of the inner proof's round 0, passed or stood in, leaves the frame in the
-  inner proof.
-* **`LeanRelease.unrefused_rep`**: on a live history whose last coins the frame takes, no refusal shows by a round the
-  history holds within rep `2j + r`'s rounds, where the rep's rank check and `ρ` pair hold at the opened coins. An
-  outer coin shown there is answered within the history (`outer_unrefused`); an earlier rep's rounds all are, and the
-  frames refused its faults (`rank_unrefused`, `rho_unrefused`, `beta_unrefused`); the rep's own `β` round, where shown,
-  is within the history; and no later rep's round is below its first (`slots_order`).
-* **`LeanRelease.innerAt_unrefused`**: at `LiveInner`'s premises at `withInner`, no refusal shows by the history's
-  length. The rep's rank check and `ρ` pair hold where the loop's state at the rep's inner round 0 is inside the inner
-  proof or owes coins (`rank_of_prog`, `rho_of_prog`): past round 0 the frame took that round's coins
-  (`coins_taken_of_live`); at round 0 the frame's check put the frame in the inner proof (`check_inner0_inner`), and the
-  loop's state one round on is the check's (`ofLoop_progChecks_sizes`, at `withInner`'s round 0, the ZK server's own:
-  `LoopInnerRound0Own`).
--/
+/-! The loop's frames refuse every coin fault shown below the inner proof's rounds, so no refusal shows there
+(`LeanRelease.innerAt_unrefused`). -/
 
 @[expose] public section
 
@@ -79,9 +61,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **The inner proof's round 0 puts the frame in the inner proof**: where the frame's check of a device round against
-the ZK server's own round 0 returns, whether the device's round passed or the round stood in, the frame is at the inner
-proof's round 0. -/
 theorem check_inner0_inner {c : Cfg} {m s' : Masker} {w' : ByteArray} (hw : w'.size = 16) {n : ℕ}
     {v r out : ByteArray} {why : Option String}
     (hr : r.data.toList =
@@ -110,13 +89,7 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The loop's frames refuse every fault shown within a rep's rounds where its rank check and `ρ` pair hold**: on a
-live history of at most `refK x` openings whose last coins the frame takes, no refusal shows by a round `N` the history
-holds from rep `2j + r`'s first round to below the next rep's, where the rep's rank check and `ρ` pair hold at the
-opened coins. An outer coin shown there is answered within the history (`outer_unrefused`); an earlier rep's rounds
-are all below `N` (`slots_order`), so the frames refused its rank check, `ρ` pair and `β` (`rank_unrefused`,
-`rho_unrefused`, `beta_unrefused`); the rep's own `β`, where shown, is answered within the history
-(`beta_unrefused`); and a later rep's rank check, `ρ` pair and `β` are past its first round. -/
+/-- No refusal shows by a round within rep `2j + r`'s rounds where its rank check and `ρ` pair hold at the opened coins. -/
 theorem unrefused_rep (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -165,15 +138,6 @@ theorem unrefused_rep (T : ZKMal.CoinLayer.TableData)
       rcases hth with ⟨-, -, -, hrs, -⟩ | ⟨hρ, -⟩ | ⟨hβ, -⟩ <;> omega
 
 set_option maxHeartbeats 400000 in
-/-- **At the inner proof's rounds the loop's frames refuse every fault the coins show**: at `LiveInner`'s premises at
-`withInner`, on the rep's own tables where `real` answers the loop's (`hR`) at a `Live` statement the loop serves, no
-refusal shows by the history's length. The history stands at rep `2j + r`'s inner round, within the rep's rounds
-(`innerAt_slot`), so it is `unrefused_rep` where the rep's rank check and `ρ` pair hold. They do where the loop's state at
-the rep's inner round 0 is inside the inner proof or owes coins (`rank_of_prog`, `rho_of_prog`): past round 0 the frame
-took that round's coins (`coins_taken_of_live`); at round 0, the history's next round, the frame's check of the round in
-the device round's place, `withInner`'s round 0 (`scheduled_innerAt`), leaves the frame in the inner proof
-(`check_inner0_inner`), and the loop's state one round on is that check's (`ofLoop_progChecks_sizes`, its round 0 the
-ZK server's own: `LoopInnerRound0Own`). -/
 theorem innerAt_unrefused
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

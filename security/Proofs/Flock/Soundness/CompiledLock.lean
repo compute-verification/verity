@@ -4,16 +4,7 @@ public import Proofs.Flock.Soundness.Model.Compiled
 public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LigeritoMid
 
-/-!
-# The compiled Flock verifier runs in lockstep with the oracle verifier
-
-`Game.Lock` between `Model.table` (with a dummy last message) and `Model.tableC`: the same coins
-and messages, caps for tables. Along the lockstep, the compiled claim evaluated at any openings
-that agree with the fixed tables at every requested position equals the oracle claim
-(`StRel`), so at the end the compiled verdict equals the oracle verdict on such openings.
-
-Slots: `0` is the level-0 cap; rep `r`'s level-`ℓ` cap (`ℓ ≥ 1`) is `slotOf r ℓ = 2ℓ + r`.
--/
+/-! The compiled Flock verifier runs in lockstep with the oracle verifier (`lockTable`). -/
 
 @[expose] public section
 
@@ -92,7 +83,6 @@ theorem AgreeRep.of_append {r : ℕ} {C₀ : Oracle F} {i : IRep F D} {reqs reqs
     {o : Opens F D} (h : AgreeRep r C₀ i (reqs ++ reqs') o) : AgreeRep r C₀ i reqs o :=
   fun req hr => h req (List.mem_append_left _ hr)
 
-/-- On agreeing openings, the consistency value from the opened rows is the oracle's. -/
 theorem consValueO_eq (A : Arith F K) (α : List F) (ch : List K) (C : Oracle F) (rows : ℕ → List F)
     (pos : List ℕ)
     (h : ∀ j < pos.length, ∀ lane < 2 ^ ch.length, (rows j).getD lane 0 = C lane (pos.getD j 0)) :
@@ -132,7 +122,6 @@ theorem mem_querySlots {Q d c t : ℕ} (h : (c, t) ∈ querySlots Q d) : c ≤ d
   obtain ⟨c', hc', t', ht', rfl, rfl⟩ := h
   exact ⟨strata_le Q d c' hc', ht'⟩
 
-/-- Query positions lie on the level's domain. -/
 theorem positions_lt (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) :
     ∀ p ∈ positions A Q d w, p < 2 ^ d := by
   intro p hp
@@ -213,8 +202,6 @@ where
       .coin F fun β =>
         .ret (queryRel_leaf A r C₀ i lv ch start st stC h w α β _ _ fun o ho =>
           (h.sq o ho.of_append).2)
-
-/-! ## The recursive rounds -/
 
 /-- A request's shape: its level's queries, domain, lanes and path length. -/
 def ReqShape (sch : Schedule) (req : Req) : Prop :=
@@ -477,8 +464,6 @@ theorem RecRel.reject (r : ℕ) (C₀ : Oracle F) (sch : Schedule) (i : IRep F D
   ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by simp [PendL.reject] at h,
     by simp [PendL.reject]⟩
 
-/-! ## Ligerito, a rep, a table -/
-
 /-- **Ligerito in lockstep**, for a schedule of at least two levels whose level 0 folds `k0`
 lanes. -/
 def lockLig (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
@@ -604,7 +589,6 @@ theorem disjoint_reps : Lock.Disjoint (getRep 0 : IRep F D → ℕ → Option (O
     · rw [if_neg fun h2 => by omega]
     · rw [if_neg hs] at h; simp at h
 
-/-- The oracle table's continuation after the level-0 table `C₀`, with the dummy last message. -/
 def tableOrc (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (C₀ : Oracle F) : Game (Bool × Oracle F) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -621,7 +605,6 @@ theorem withDummy_table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 1
   simp only [Game.bind_ret, Game.bind_eq, Game.pure_eq, Game.bind_assoc]
 
 open Classical in
-/-- The compiled table's continuation after the level-0 cap. -/
 noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D) :
     Game (OutC F D) :=
@@ -632,7 +615,6 @@ noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.En
         ⟨pend.1.verdict o && pend.2.verdict o &&
           decide (OpensOK H E cap₀ 0 pend.1 o ∧ OpensOK H E cap₀ 1 pend.2 o), cap₀, pend, o⟩
 
-/-- **The table's leaf relation** below the level-0 cap. -/
 def TopRel (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (C₀ : Oracle F)
     (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (out : OutC F D) : Prop :=
   a.2 = C₀ ∧ out.cap₀ = cap₀ ∧
@@ -644,8 +626,6 @@ def TopRel (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (
 
 instance instInhabitedOracle : Inhabited (Oracle F) := ⟨fun _ _ => 0⟩
 
-/-- **The table in lockstep** below the level-0 cap: the link points, both reps interleaved, the
-openings. -/
 noncomputable def lockTable [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)

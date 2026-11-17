@@ -6,24 +6,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The strata the verifier accepts are a partition's
-
-`SamplingDesign.execStrata_of_ofJson`: a sample file `Flock.Draw.UnitSample.ofJson` accepts under a stratified sampling design has an assignment `σ`
-of its population's units to the strata that the strata describe (`ExecStrata`), each stratum's `k` at most its size. The
-hypotheses `ExecStrata σ k S` and `k s ≤ (stratum σ s).card` that the stratified e2e theorems take are so not conditions
-on the statement's form: they follow from the verifier accepting.
-
-* `StrataExec.ofJson_stratified`: what `ofJson` checks of a stratified sampling design: `strataProblem` finds nothing, and each stratum
-  passed `stratumOfJson`, whose units are non-empty ranges `lo < hi` (`stratumOfJson_ranges`).
-* `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's
-  (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
-* `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once;
-  `StrataExec.chain_covers`: any chain from `a` to `b` covers each unit of `[a, b)`.
-* `SamplingDesign.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
-* At a work sampling design: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
-  `StrataExec.workProblem_chain`, which checks that the ranges, sorted by their starts, chain from `0` to `pop`.
--/
+/-! The strata of a sample file the verifier accepts describe a partition (`SamplingDesign.execStrata_of_ofJson`), so
+the stratified e2e theorems' `ExecStrata` and stratum-size hypotheses follow from its acceptance. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -35,20 +19,16 @@ open Finset Flock.Draw
 
 namespace StrataExec
 
-/-- The ranges `l` follow each other from `a` to `b`: each starts where the last ended. -/
 def Chain : ℕ → ℕ → List (ℕ × ℕ) → Prop
   | a, b, [] => a = b
   | a, b, r :: rs => r.1 = a ∧ Chain r.2 b rs
 
-/-- The units of ranges `rs`, in order. -/
 def flat (rs : List (ℕ × ℕ)) : List ℕ := rs.flatMap fun r => List.range' r.1 (r.2 - r.1)
 
-/-- `Stratum.unit` on the list of its ranges. -/
 def unitL : List (ℕ × ℕ) → ℕ → ℕ
   | [], _ => 0
   | r :: rs, j => if j < r.2 - r.1 then r.1 + j else unitL rs (j - (r.2 - r.1))
 
-/-- Range `r` holds unit `u`. -/
 def hits (u : ℕ) (r : ℕ × ℕ) : Bool := decide (r.1 ≤ u ∧ u < r.2)
 
 theorem unit_eq (s : Stratum) (j : Nat) : s.unit j = unitL s.units.toList j := by
@@ -118,7 +98,6 @@ theorem chain_facts : ∀ (a b : Nat) (l : List (Nat × Nat)), Chain a b l → (
       simp only [hits, decide_eq_true_eq]
       split <;> split <;> split <;> omega
 
-/-- A chain of ranges from `a` to `b` covers each unit of `[a, b)`: some range holds it. -/
 theorem chain_covers : ∀ {a b : ℕ} {l : List (ℕ × ℕ)}, Chain a b l → ∀ u, a ≤ u → u < b →
     ∃ r ∈ l, r.1 ≤ u ∧ u < r.2
   | a, b, [], h, u, hau, hub => by cases h; omega
@@ -169,7 +148,6 @@ theorem loopB (msg : String) (l : List (Nat × Nat)) (a : Nat) :
       simp only [hne, ite_true]
       left; rfl
 
-/-- A loop each of whose steps from no early return continues or returns some `m` never returns `none` early. -/
 theorem forIn_ne_some_none {β : Type} (l : List β)
     (b : β → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit)))
     (hb : ∀ i, b i (none, ()) = ForInStep.yield (none, ()) ∨ ∃ m, b i (none, ()) = ForInStep.done (some (some m), ())) :
@@ -234,7 +212,6 @@ theorem strataProblem_none {k : Nat} {S : Array Stratum} {pop : Nat} (h : strata
           · next heq => rw [← beq_iff_eq.1 heq]; exact hc
           · cases h
 
-/-- What `workProblem` checks of the ranges: sorted by their starts, they chain from `0` to `pop`. -/
 theorem workProblem_chain {k : ℕ} {S : Array WorkStratum} {pop : ℕ} (h : workProblem k S pop = none) :
     Chain 0 pop ((S.foldl (fun x1 x2 => x1 ++ x2.units) #[]).qsort fun a b => decide (a.fst < b.fst)).toList := by
   unfold workProblem at h
@@ -295,8 +272,6 @@ theorem stratumK_le {k z pop : ℕ} (hz : 1 ≤ z) (hk : k ≤ pop) (hk1 : 1 ≤
   have : k * z ≤ pop * z := Nat.mul_le_mul_right z hk
   nlinarith
 
-/-! ### The checks `UnitSample.ofJson` makes of a stratified sampling design -/
-
 section ofJson
 
 open FlockSoundness.Refine Lean
@@ -332,7 +307,6 @@ theorem ok_of_mem_mapM {α β : Type} (f : α → Flock.V β) (as : Array α) (b
     obtain ⟨a, ha, h'⟩ := ok_of_mem_mapM_list f l r hl b (by simpa using hb)
     exact ⟨a, by simpa using ha, h'⟩
 
-/-- A stratum `stratumOfJson` accepts has non-empty units, each a non-empty range `lo < hi`. -/
 theorem stratumOfJson_ranges {j : Json} {s : Stratum} (h : stratumOfJson j = .ok s) :
     s.units ≠ #[] ∧ ∀ r ∈ s.units, r.1 < r.2 := by
   unfold stratumOfJson at h
@@ -351,8 +325,6 @@ theorem stratumOfJson_ranges {j : Json} {s : Stratum} (h : stratumOfJson j = .ok
   subst h
   exact Nat.lt_of_not_ge hlt
 
-/-- A sample file `UnitSample.ofJson` accepts under a stratified sampling design: `strataProblem` found nothing, and every stratum
-passed `stratumOfJson`. -/
 theorem ofJson_stratified {j : Json} {D : UnitSample} {k : ℕ} {S : Array Stratum} (h : UnitSample.ofJson j = .ok D)
     (hl : D.samplingDesign = .stratified k S) :
     strataProblem k S D.population = none ∧ ∀ s ∈ S, s.units ≠ #[] ∧ ∀ r ∈ s.units, r.1 < r.2 := by
@@ -373,7 +345,6 @@ theorem ofJson_stratified {j : Json} {D : UnitSample} {k : ℕ} {S : Array Strat
     obtain ⟨a, -, ha⟩ := ok_of_mem_mapM _ _ _ ‹Array.mapM stratumOfJson _ = Except.ok _› s hs
     exact stratumOfJson_ranges ha
 
-/-- A sample file `UnitSample.ofJson` accepts under a work sampling design: `workProblem` found nothing. -/
 theorem ofJson_work {j : Json} {D : UnitSample} {k : ℕ} {S : Array WorkStratum} (h : UnitSample.ofJson j = .ok D)
     (hl : D.samplingDesign = .work k S) : workProblem k S D.population = none := by
   unfold UnitSample.ofJson at h
@@ -399,9 +370,6 @@ namespace SamplingDesign
 
 open StrataExec
 
-/-- A stratified sampling design the verifier accepts describes a partition: `strataProblem` finding nothing, with
-`stratumOfJson`'s checks that each stratum's units are non-empty ranges `lo < hi`, gives the assignment `σ` of the
-population's units to the strata that the strata describe, each stratum's `k` at most its size. -/
 theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
     (hlt : ∀ s ∈ S, ∀ r ∈ s.units, r.1 < r.2) (hne : ∀ s ∈ S, s.units ≠ #[]) (h : strataProblem k S pop = none) :
     ∃ σ : Fin pop → Fin S.size, ExecStrata σ (fun s => S[s].k) (fun s => S[s]) ∧
@@ -494,9 +462,6 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
       obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hx
       exact ⟨j, hj, unitL_getElem _ _ hj⟩
 
-/-- **The strata of an accepted sample file describe a partition**: a sample file `UnitSample.ofJson` accepts under a stratified
-sampling design `stratified k S` has an assignment `σ` of its population's units to the strata `S` that `S` describes, each
-stratum's `k` at most its size. -/
 theorem execStrata_of_ofJson {j : Lean.Json} {D : UnitSample} {k : ℕ} {S : Array Stratum}
     (h : UnitSample.ofJson j = .ok D) (hl : D.samplingDesign = .stratified k S) :
     ∃ σ : Fin D.population → Fin S.size, ExecStrata σ (fun s => S[s].k) (fun s => S[s]) ∧

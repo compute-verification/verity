@@ -6,14 +6,7 @@ import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-# What `HmRow.check` accepted
-
-The layout facts of an `hm96-sha512/row/v1` circuit that `HmRow.check` checks, as `ExecSetup.lean` uses them: the
-ranges inside the block, pairwise apart, in slots of their nets' rows; the unit a text net with one range of
-`vus_per_block × units_per_vu` slots and a group of 16-bit leaf ports; the row slots' ports; every net range's slots per
-template instance; one range per net; the wires' and leaf cuts' bounds; the leaf maps.
--/
+/-! The layout facts of an `hm96-sha512/row/v1` circuit that `HmRow.check` accepted (`check_facts`). -/
 
 @[expose] public section
 
@@ -21,7 +14,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness
 
-/-- **The layout facts `HmRow.check` checks.** -/
 structure CheckFacts (c : Circuit) : Prop where
   bound_slotLog : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog ∧
     ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog
@@ -39,7 +31,6 @@ structure CheckFacts (c : Circuit) : Prop where
   one_range : ∀ n < c.nets.size, (c.ranges.filter (·.kind == Kind.net n)).size = 1
   wires : ∀ w ∈ c.wires.toList, w.dst.1 < c.nets.size ∧ w.dst.2.1 < c.perVu.getD w.dst.1 0 ∧
     w.dst.2.2 < (portCols (c.nets.getD w.dst.1 default).2.inGroups).size
-  /-- each wire's source is an output port of a slot, as wide as the input port it fills -/
   wire_src : ∀ w ∈ c.wires.toList, w.src.1 < c.nets.size ∧ w.src.2.1 < c.perVu.getD w.src.1 0 ∧
     w.src.2.2 < (portCols (c.nets.getD w.src.1 default).2.outGroups).size ∧
     (portCols (c.nets.getD w.dst.1 default).2.inGroups)[w.dst.2.2]!.2 =
@@ -47,45 +38,32 @@ structure CheckFacts (c : Circuit) : Prop where
   cuts : ∀ e ∈ c.leafCuts.toList, e.1 < c.upv ∧ e.2.1 < (portCols c.unit.inGroups).size
   leaves : c.leavesIn.size = c.upv ∧
     ∀ u < c.upv, (c.leavesIn[u]!).size = (c.unit.inGroups.getD 0 default).bits.size
-  /-- where the unit returns the outputs, each unit's output leaves are its output group's ports -/
   leavesOut : c.leavesOut.size = c.upv ∧ ∀ u < c.upv, c.outNet = c.unitNet →
     (c.leavesOut[u]!).size = (c.unit.outGroups.getD 0 default).bits.size
-  /-- no wire reaches a unit's leaf port -/
   wire_leaf : ∀ w ∈ c.wires.toList, w.dst.1 = c.unitNet → (c.unit.inGroups.getD 0 default).bits.size ≤ w.dst.2.2
-  /-- a leaf cut reaches a cut port, past the leaf ports -/
   cut_leaf : ∀ e ∈ c.leafCuts.toList, (c.unit.inGroups.getD 0 default).bits.size ≤ e.2.1
-  /-- every other input port of every slot of a circuit but the rows' is wired exactly once, by wires and cuts together -/
   wired : ∀ n < c.nets.size, n ≠ c.shaNet → n ≠ c.hmNet → ∀ i < c.perVu.getD n 0, ∀ p,
     (if n = c.unitNet then (c.unit.inGroups.getD 0 default).bits.size else 0) ≤ p →
     p < (portCols (c.nets.getD n default).2.inGroups).size →
     (c.wires.toList.filter fun w => w.dst = (n, i, p)).length +
       (c.leafCuts.toList.filter fun e => (c.unitNet, e.1, e.2.1) = (n, i, p)).length = 1
-  /-- the unit leaves a forced-zero row in its slot -/
   unit_zero : c.unit.useful < 2 ^ c.unit.unitLog
-  /-- a unit that returns the outputs has a power of two of slots -/
   unit_pow2 : c.outNet = c.unitNet → isPow2 (c.ranges.filter (·.kind == Kind.net c.unitNet))[0]!.count = true
-  /-- a VU holds a unit -/
   upv_pos : 0 < c.upv
-  /-- a block holds a power of two of VUs -/
   g_pow2 : isPow2 c.g = true
 
-/-! ## Steps of an accepted check -/
-
-/-- `ite_throw_ok`, keeping the condition that did not throw. -/
 private theorem ite_throw_ok' {α β : Type} {c : Prop} [Decidable c] {e : String} {f : α → Except String β}
     {g : Except String β} {v : β} (h : (if c then (throw e >>= f) else g) = .ok v) : ¬c ∧ g = .ok v := by
   by_cases hc : c
   · rw [ite_eq_left hc] at h; cases h
   · rw [ite_eq_right hc] at h; exact ⟨hc, h⟩
 
-/-- An `if` whose taken branch, when it succeeds, ends in the else branch's continuation. -/
 theorem ite_join {β : Type} {c : Prop} [Decidable c] {a k : Except String β} {v : β}
     (h : (if c then a else k) = .ok v) (ha : a = .ok v → k = .ok v) : k = .ok v := by
   by_cases hc : c
   · rw [ite_eq_left hc] at h; exact ha h
   · rwa [ite_eq_right hc] at h
 
-/-- A loop in `Except` that finished: every element's step, from some state, yielded and has `P`. -/
 theorem forIn_list_forall {α σ ε : Type} {l : List α} {b : σ} {f : α → σ → Except ε (ForInStep σ)} {v : σ}
     {P : α → Prop} (hf : ∀ a ∈ l, ∀ s t, f a s = .ok t → (∃ s', t = .yield s') ∧ P a)
     (h : forIn l b f = .ok v) : ∀ a ∈ l, P a := by
@@ -116,8 +94,6 @@ theorem forIn_range_forall {σ ε : Type} {lo hi : ℕ} {b : σ} {f : ℕ → σ
   intro a hlo hhi
   exact forIn_list_forall (fun a ha => hf a ((hmem a).1 ha).1 ((hmem a).1 ha).2) h a ((hmem a).2 ⟨hlo, hhi⟩)
 
-/-- A loop in `Except` that finished, each step pushing `g a`: every element has `P`, and the state is `b` then
-the `g a`. -/
 theorem forIn_list_push {α β ε : Type} {l : List α} {b : Array β} {f : α → Array β → Except ε (ForInStep (Array β))}
     {v : Array β} {P : α → Prop} {g : α → β}
     (hf : ∀ a ∈ l, ∀ s t, f a s = .ok t → t = .yield (s.push (g a)) ∧ P a)
@@ -137,15 +113,11 @@ theorem forIn_list_push {α β ε : Type} {l : List α} {b : Array β} {f : α �
     · exact hx
     · exact hl a ha
 
-/-! ## `HmRow.check`'s count of each port's wirings -/
-
-/-- `HmRow.check`'s count step: one more wiring of `key`. -/
 def bump (wired : Array ((ℕ × ℕ × ℕ) × ℕ)) (key : ℕ × ℕ × ℕ) : Array ((ℕ × ℕ × ℕ) × ℕ) :=
   match wired.findIdx? (·.1 == key) with
   | some i => wired.modify i fun (k, v) => (k, v + 1)
   | none => wired.push (key, 1)
 
-/-- The count `HmRow.check` reads for `key`. -/
 def wcount (wired : Array ((ℕ × ℕ × ℕ) × ℕ)) (key : ℕ × ℕ × ℕ) : ℕ :=
   ((wired.find? (·.1 == key)).map (·.2)).getD 0
 
@@ -201,7 +173,6 @@ theorem wcount_foldl {α : Type} (key : ℕ × ℕ × ℕ) (kf : α → ℕ × �
     · simp [h]; omega
     · simp [h]
 
-/-- A loop in `Except` whose every step yields `g a s`: it is a fold. -/
 theorem forIn_list_fold {α σ ε : Type} (g : α → σ → σ) {f : α → σ → Except ε (ForInStep σ)} :
     ∀ (l : List α) (b v : σ), (∀ a ∈ l, ∀ s t, f a s = .ok t → t = .yield (g a s)) → forIn l b f = .ok v →
       v = l.foldl (fun s a => g a s) b
@@ -218,7 +189,6 @@ theorem forIn_array_fold {α σ ε : Type} (g : α → σ → σ) {f : α → σ
     v = xs.toList.foldl (fun s a => g a s) b :=
   forIn_list_fold g xs.toList b v hf (by rw [Array.forIn_toList]; exact h)
 
-/-- **What `HmRow.check` accepted.** -/
 theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) : CheckFacts c := by
   unfold HmRow.check at h
@@ -458,9 +428,6 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
     g_pow2 := by simpa using hgp }
 
 
-/-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`): the ranges' common facts, one range
-of `G · per_vu` slots per circuit, the root one slot per template instance, each placed layout's circuit one slot per part, its slot size
-its range's, and a forced-zero row in the root's slot. -/
 structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where
   bound_slotLog : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog ∧
     ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog
