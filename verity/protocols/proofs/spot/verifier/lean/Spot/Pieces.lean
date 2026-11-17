@@ -264,7 +264,7 @@ after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a c
 alone: the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the pool's marks and
 chain, and the verdicts) are the caller's check's (`VStar.Recursive.Caller.check`), which this package can't load;
 `spot-flock-caller` serves it, and the verifier runs both (`one_stage.verifier.check`, `Caller.gate`). -/
-def registration (j : Json) : V Json := do
+def docket (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   let members ← match field? j "members" with
     | some ms => LinkPoints.membersOfJson ms
@@ -321,7 +321,7 @@ registration and sample strings, `mine` the verifier's own entries (`{value: {"l
 three natural numbers and a string each), `opened` null or `{value: root}`, `known` null or the verifier's own ports'
 openings (`knownOpenings`) and `verdicts` null or an object; refused otherwise. -/
 def produced (j : Json) : V Json := do
-  let (.str registration, .str draw) := (getD j "registration", getD j "draw")
+  let (.str docket, .str draw) := (getD j "registration", getD j "draw")
     | throw "registration or draw is not a string"
   let .obj _ := getD j "mine" | throw "mine is not an object"
   let mine ← (entries (getD j "mine")).mapM fun (value, e) =>
@@ -336,7 +336,7 @@ def produced (j : Json) : V Json := do
   let verdicts := getD j "verdicts"
   if !(verdicts matches .null | .obj _) then throw "verdicts is not an object"
   let rec_ := getD j "record"
-  let cs := Produced.check rec_ registration draw (mine.qsort (·.value < ·.value))
+  let cs := Produced.check rec_ docket draw (mine.qsort (·.value < ·.value))
   let codes (xs : Array String) := if cs.isEmpty then Json.arr (xs.map Json.str) else Json.null
   return Json.mkObj [("codes", Json.arr (cs.map Json.str)), ("opened", codes (Produced.opened rec_ opened)),
     ("shared", codes (Produced.shared (Produced.wanted rec_ known) (entries verdicts)))]
@@ -344,13 +344,13 @@ def produced (j : Json) : V Json := do
 /-- `{"program", "value", "row", "salt", "registration", "word_bits"}` to `{"root", "bc"}` in hex, `produced.known_port`'s
 root and opening: four strings (the salt lowercase hex), a list of natural numbers and one; refused where it raises. -/
 def knownPort (j : Json) : V Json := do
-  let (.str program, .str value, .str salt, .str registration) :=
+  let (.str program, .str value, .str salt, .str docket) :=
       (getD j "program", getD j "value", getD j "salt", getD j "registration")
     | throw "program, value, salt or registration is not a string"
   let .arr row := getD j "row" | throw "row is not a list"
   let some row := row.mapM nat? | throw "row is not natural numbers"
   let some wb := nat? (getD j "word_bits") | throw "word_bits is not a natural number"
-  let (root, bc) ← Produced.known program value row (← Flock.unhex salt) registration wb
+  let (root, bc) ← Produced.known program value row (← Flock.unhex salt) docket wb
   return Json.mkObj [("root", Json.str (Flock.hexOf root)), ("bc", Json.str (Flock.hexOf bc))]
 
 /-- `{"draw", "population", "law"}`, the population an integer and the sampling design an object, to `check_draw`'s codes. -/
@@ -1077,7 +1077,7 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("fanout", fanout), ("registration", registration),
+   ("fanout", fanout), ("registration", docket),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),

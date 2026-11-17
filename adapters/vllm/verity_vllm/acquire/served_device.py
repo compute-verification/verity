@@ -33,6 +33,7 @@ from verity.device import load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa3_model as FA3
 from verity_vllm.definitions.registry import attention_vocab
@@ -109,20 +110,20 @@ def card_of(name: str) -> str | None:
     if name in NO_CARD:
         return None
     raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
-                     "add its card under hardware/cards/ and map it in CARD")
+                     "add its card under calibration/hardware/cards/ and map it in CARD")
 
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
-    c = load_card(sku)
+    c = load_card(sku, directory=CARD_FILES)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
-        raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+        raise Unmodelled(f"calibration/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
     fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
               ("SM count", str(sms), str(c["sm"]["count"]["value"])))
     off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
     if off:
-        raise Unmodelled(f"the device is not its registered card hardware/cards/{sku}.toml: " + "; ".join(off))
+        raise Unmodelled(f"the device is not its registered card calibration/hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)

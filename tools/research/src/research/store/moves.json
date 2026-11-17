@@ -5157,11 +5157,93 @@
     },
     {
       "paths": {
-        "benchmarks/two_stage/": "benchmarks/one_stage/",
-        "tests/benchmarks/two_stage/TwoGuard.lean": "tests/benchmarks/one_stage/TwoGuard.lean",
-        "tests/benchmarks/two_stage/guard_node.py": "tests/benchmarks/one_stage/guard_node.py",
-        "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
-        "tests/benchmarks/two_stage/test_toy.py": "tests/benchmarks/one_stage/test_toy.py"
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck.lean": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier.lean",
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck.lean": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier.lean",
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck.lean": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier.lean",
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck.lean": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier.lean",
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "hardware/": "calibration/hardware/",
+        "benchmarks/tc_probe/": "calibration/tc_probe/",
+        "tests/benchmarks/tc_probe/": "tests/calibration/tc_probe/",
+        "benchmarks/tc_probe_fp4/": "calibration/tc_probe_fp4/",
+        "tests/benchmarks/tc_probe_fp4/": "tests/calibration/tc_probe_fp4/",
+        "benchmarks/native_peak/": "calibration/native_peak/",
+        "tests/benchmarks/native_peak/": "tests/calibration/native_peak/",
+        "benchmarks/f32_exhaustive/": "calibration/f32_exhaustive/",
+        "benchmarks/training_slowdown/": "calibration/training/",
+        "tests/benchmarks/training_slowdown/": "tests/calibration/training/",
+        "benchmarks/circuit_properties/": "calibration/circuit_properties/",
+        "tests/benchmarks/circuit_properties/": "tests/calibration/circuit_properties/",
+        "benchmarks/tensor_duty/": "calibration/tensor_duty/",
+        "tests/benchmarks/tensor_duty/": "tests/calibration/tensor_duty/",
+        "benchmarks/pouw/dc/": "calibration/pouw/dc/",
+        "benchmarks/pouw/opcode_probe/": "calibration/pouw/opcode_probe/",
+        "benchmarks/pouw/tensor_kinds/": "calibration/pouw/tensor_kinds/",
+        "benchmarks/pouw/sass_census/": "calibration/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/": "calibration/pouw/facet_break/",
+        "benchmarks/pouw/theory/": "calibration/pouw/theory/",
+        "benchmarks/bandwidth/": "calibration/bandwidth/",
+        "tests/benchmarks/bandwidth/": "tests/calibration/bandwidth/",
+        "benchmarks/rate_squaring/": "calibration/rate_squaring/",
+        "tests/benchmarks/rate_squaring/": "tests/calibration/rate_squaring/",
+        "benchmarks/certifier_timing/": "calibration/certifier_timing/",
+        "tests/benchmarks/certifier_timing/": "tests/calibration/certifier_timing/",
+        "benchmarks/sampling_plan/": "calibration/sampling_plan/",
+        "tests/benchmarks/sampling_plan/": "tests/calibration/sampling_plan/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/census/": "calibration/census/",
+        "benchmarks/machine_model/": "calibration/machine_model/",
+        "tests/benchmarks/machine_model/": "tests/calibration/machine_model/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/certifier_piece.py": "benchmarks/network_traces/attester_piece.py",
+        "calibration/certifier_timing/": "calibration/attester_timing/",
+        "tests/benchmarks/network_traces/test_block_certifier.py": "tests/benchmarks/network_traces/test_block_attester.py",
+        "tests/benchmarks/network_traces/test_certifier_piece.py": "tests/benchmarks/network_traces/test_attester_piece.py",
+        "tests/benchmarks/network_traces/test_certifier_term.py": "tests/benchmarks/network_traces/test_attester_term.py",
+        "tests/calibration/certifier_timing/": "tests/calibration/attester_timing/",
+        "tests/calibration/certifier_timing/test_certifier_timing.py": "tests/calibration/attester_timing/test_attester_timing.py",
+        "verity/protocols/resource_accounting/network/attester/certifier_key.py": "verity/protocols/resource_accounting/network/attester/attester_key.py",
+        "verity/protocols/resource_accounting/network/prover/block_certifier.py": "verity/protocols/resource_accounting/network/prover/block_attester.py"
+      }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_certificate.py": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_attestation.py"
       }
     }
   ]

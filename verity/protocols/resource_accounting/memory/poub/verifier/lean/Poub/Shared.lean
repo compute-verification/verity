@@ -56,7 +56,7 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
       (acc.1.modify u (fun w => { w with drawn := some mine, openedNs := some now,
                                          verdict := if mine.isEmpty then some .accept else w.verdict }),
        acc.2 + n)) (s.windows, 0)
-  return (.drew sampled, { s with windows })
+  return (.sampled sampled, { s with windows })
 
 def step (g : Nat) (s : State) (e : Event) : Except String (Result × State) :=
   if g ≤ 1 then Session.step s e
