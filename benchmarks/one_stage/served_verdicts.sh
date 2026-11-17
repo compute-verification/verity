@@ -108,13 +108,15 @@
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
 #     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/attester. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
-#     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, its
-#     composed_on saying where it was made; under VERITY_HOLD_PLACEMENT=1 none is (under COMPOSE_OFF_NODE=0 it is a
+#     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, and the
+#     record is composed again after it, reading it (--composite), its composed_on saying where it was made (the served
+#     node, served_node true); under VERITY_HOLD_PLACEMENT=1 none is (under COMPOSE_OFF_NODE=0 it is a
 #     development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, then the default,
 #     it says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
 #     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     The run's exit is the record's verdict: 0 only where it is the compiled Lean check's accept, 2 where it is
-#     `pending`, no composite of record yet (always on the served node and in a deferral's follow-on), and otherwise
+#     `pending`, no composite of record yet (on the served node and in a deferral's follow-on under
+#     VERITY_HOLD_PLACEMENT=1), and otherwise
 #     nonzero: 1 where it is `reject`, a composite is refused or a step around it failed, the step's own code where one
 #     stopped the run before it.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote SPOT and PoUW
@@ -2386,6 +2388,13 @@ comp=0
 fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
   || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+if [ -z "$DEFER" ] && [ "$COMPOSE_OFF_NODE" = 0 ] && [ -n "${COMPOSITE-1}" ] && ! hold_placement; then
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
+    --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --composite "$OUT/composite" \
+    2>&1 | publish_lines
+  rec=${PIPESTATUS[0]}
+fi
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi

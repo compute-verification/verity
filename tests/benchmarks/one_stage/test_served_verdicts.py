@@ -5486,6 +5486,65 @@ def test_with_placement_unset_a_composite_is_composed_off_the_node_only_where_it
     assert ("composed off this node, on COMPOSE_NODE" in lines[0]) is off, lines
 
 
+#: what `served_verdicts.sh`'s steps before its composite leave the run's end: a pending record, and stubs of the steps
+#: it calls there that the composite and the record don't read
+RUN_END = '''set -uo pipefail
+say() { echo "$*" >> "$OUT/verdicts.txt"; }
+publish_lines() { tee -a "$OUT/verdicts.txt"; }
+hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
+fixed_limits() { :; }
+handoff() { echo "HANDOFF composed off this node" >> "$OUT/verdicts.txt"; }
+rec=2 wc_ok=1 sc=0 left=0 v3c_done=1 V3C= DEFER= WT=() SC=()
+'''
+
+
+def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh`'s lines from its composite to its exit, after a record that was pending, with `FAKE_RECORD`
+    and `FAKE_SERVED_COMPOSITE` in a toy tree on vy-dc-h200: the exit, OUT/verdicts.txt and what ran, in order."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\ncomp=0\nfixed_limits\n")
+    end = script.index('\nexit "$rec"\n', start) + len('\nexit "$rec"\n')
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    _script(tree / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
+    out.mkdir()
+    (out / "verdicts.txt").touch()
+    full = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOST": "vy-dc-h200", "TPY": sys.executable,
+            "ORDER": str(tmp_path / "order"), "D": str(tmp_path / "serve"), "OUT": str(out), "K": "7",
+            "SP": str(tmp_path / "serve" / "sampled-proofs-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
+            "COMPOSE_OFF_NODE": "0", **env}
+    run = subprocess.run(["bash", "-c", RUN_END + script[start:end]], cwd=tree, check=False, capture_output=True,
+                         text=True, env={k: v for k, v in full.items() if v is not None})
+    order = tmp_path / "order"
+    return (run.returncode, (out / "verdicts.txt").read_text().splitlines(),
+            order.read_text().split() if order.is_file() else [])
+
+
+@pytest.mark.parametrize("env, rc, order, composed", [
+    ({"LEAN": "accept"}, 0, ["composite", "record"], "accept"),
+    ({"LEAN": "reject"}, 1, ["composite", "record"], "reject"),
+    ({"LEAN": "accept", "PRODUCT": "onsite"}, 0, ["composite", "record"], "accept"),
+    ({"LEAN": "accept", "VERITY_HOLD_PLACEMENT": "1"}, 2, ["composite"], None),
+    ({"LEAN": "accept", "COMPOSE_OFF_NODE": "1"}, 2, [], None),
+    ({"LEAN": "accept", "COMPOSITE": ""}, 2, [], None),
+])
+def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_placement_is_held(
+        tmp_path, env, rc, order, composed):
+    """With VERITY_HOLD_PLACEMENT unset, a composite made on the served node is of record: the record is composed again
+    after it, reading it, so the run ends on the product's Lean verdict and not pending. Under VERITY_HOLD_PLACEMENT=1,
+    under COMPOSE_OFF_NODE=1 (whose hand-off is composed off the node) or with no composite, the record stays as step 5
+    composed it, as on main."""
+    got, lines, ran = _run_end(tmp_path, **env)
+    assert (got, ran) == (rc, order), lines
+    records = [json.loads(x.removeprefix("RECORD ")) for x in lines if x.startswith("RECORD ")]
+    assert [r["composed"] for r in records] == ([composed] if composed else [])
+    if composed:
+        argv = json.loads((tmp_path / "order.record").read_text())
+        assert argv[-2:] == ["--composite", str(tmp_path / "out" / "composite")]
+        assert argv[argv.index("--product") + 1] == env.get("PRODUCT", "remote")
+    assert any(x.startswith("HANDOFF") for x in lines) is (env.get("COMPOSE_OFF_NODE") == "1")
+
+
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
     """A follow-on under PREFLIGHT_ONLY passes its own preflight (the deferral's settings, the audit's memory, the served
     node's tree) and stops before its copy's check or V3c's audit."""
