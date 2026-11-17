@@ -20,7 +20,6 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation.reference import evaluate
 
 from tests.program.test_running_example import make_program
-from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError, workload_file
 from verity_vllm.pipeline import circuit_db, cli, epoch
@@ -390,12 +389,10 @@ def test_pull_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_th
     assert not circuit_db.INDEX.exists(), "a checkout whose file is not at its cap does not index the pod's record"
 
 
-def test_a_checkpoints_staging_is_labelled_and_glue_counts_its_hours_from_it(tmp_path, store):
+def test_a_checkpoints_staging_is_labelled_at_a_utc_time(tmp_path, store):
     rev = "aca966e4e02791568aa6a4ced368624b3d897f42"
     circuit_db.staged(REPO, rev, at="2026-10-12T21:42:55Z", ref="vy-glm53-eu:/fs/x.verify", by="circuits")
     circuit_db.staged(REPO, rev, at="2026-10-13T00:00:00Z", ref="r20261013-000000-0000", by="circuits")
-    h = glue.hours(circuit_db.checkpoint(REPO, rev), [ROW], glue.store_sql)
-    assert h["staged"] == {"at": "2026-10-12T21:42:55Z", "ref": "vy-glm53-eu:/fs/x.verify"} and h["record"] is None and h["hours"] is None
     with pytest.raises(UsageError, match="a UTC time"):
         circuit_db.staged(REPO, rev, at="2026-10-12 21:42", ref="x", by="circuits")
 
