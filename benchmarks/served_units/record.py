@@ -1,7 +1,6 @@
-"""record.py OUT: each proof block of OUT/summary.json whose Lean checks all gave the verdict they must writes
+"""record.py OUT [MODEL]: each proof block of OUT/summary.json whose Lean checks all gave the verdict they must writes
 `circuits/proof-block-prove-seconds` and `circuits/proof-block-peak-memory` into the run's result."""
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -21,10 +20,9 @@ def member(model: str, tag: str, machine: str) -> str:
     return "-".join([model, *([] if machine == "cpu" else [machine]), re.sub(r"[^a-z0-9]+", "-", tag.lower()).strip("-")])
 
 
-def main(out: Path) -> None:
+def main(out: Path, model: str = "synthetic") -> None:
     rows = json.loads((out / "summary.json").read_text())
     w = kit.writer(out)
-    model = os.environ.get("SU_MODEL") or "synthetic"
     for r in rows:
         zk = r.get("zk") or {}
         if not (r["as_expected"] and zk.get("prove_total_s_median") and zk.get("prover_maxrss_gb")):
@@ -36,4 +34,4 @@ def main(out: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    main(Path(sys.argv[1]), *sys.argv[2:3])
