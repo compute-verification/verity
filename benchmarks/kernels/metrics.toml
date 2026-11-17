@@ -1,0 +1,15 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# Read from the store's passing runs of two steady-state specs that differ in `FC_UNIT_WALK=1` alone
+# (`benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml` and its `-walk` sibling); member: the model and
+# the card.
+[[metric]]
+id = "kernels/witness-walk-on-card-over-host"
+title = "Witness walked on the card"
+owner = "kernels"
+unit = "times host walk"
+axis = "GPU-seconds the proof server spends a sparse attention head block statement at one prover when the card walks the witness's units, over the same with the host's CPUs walking them."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/kernels/steady_walk.py"
+every = "7d"
