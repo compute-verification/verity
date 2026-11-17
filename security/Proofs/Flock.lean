@@ -23,7 +23,7 @@ public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.SessionLoop.InnerDeployed
 public import Proofs.Flock.SessionLoop.Fill
-public import Proofs.Flock.ZkAny.DeferLoop
+public import Proofs.Flock.Soundness.Discharge.Hidden.Sibling
 public import Proofs.Flock.SessionLoop.Honest
 public import Proofs.Flock.SessionLoop.Leak
 public import Proofs.Flock.SessionLoop.RepSrcSat
@@ -48,20 +48,14 @@ public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.KSTable
-public import Proofs.Flock.SamplingGeneric.Masked
-public import Proofs.Flock.SamplingGeneric.MaskedKSTable
-public import Proofs.Flock.SamplingGeneric.OneVerifierTables
-public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
-public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SamplingGeneric.SpotFirstHit
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitKS
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvg
-public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvgNumbers
 public import Proofs.Flock.SamplingGeneric.PhasesNumbers
 public import Proofs.Flock.SamplingGeneric.PhasesAvg
 public import Proofs.Flock.SpotFlock.Cap
@@ -72,17 +66,14 @@ public import Proofs.Flock.SpotFlock.Accepting
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.SpotFlock.KS
 public import Proofs.Flock.SpotFlock.Sessions
-public import Proofs.Flock.SpotFlock.Numbers
 public import Proofs.Flock.SpotFlock.Opens
 public import Proofs.Flock.SpotFlock.Frame
 public import Proofs.Flock.SpotFlock.FrameAt
 public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
-public import Proofs.Flock.SpotFlock.FirstHitClassCaps
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
 public import Proofs.Flock.SpotFlock.OneWaitClassAvg
-public import Proofs.Flock.SpotFlock.OffClassAt
 public import Proofs.Flock.SpotFlock.OneWaitTwo
 public import Proofs.Flock.SpotFlock.OpensClass
 public import Proofs.Flock.SpotFlock.OpensWhole
@@ -121,7 +112,6 @@ public import Proofs.Flock.SpotFlock.RevealsOpen
 public import Proofs.Flock.SpotFlock.NoAlways
 public import Proofs.Flock.SpotFlock.Drawn
 public import Proofs.Flock.SpotFlock.Counts
-public import Proofs.Flock.SpotFlock.ClassCounts
 public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.AddressFacts
@@ -153,7 +143,6 @@ public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
 public import Proofs.Flock.SpotFlock.Placement
 public import Proofs.Flock.SpotFlock.LayoutAt
-public import Proofs.Flock.SpotFlock.Pin
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
@@ -163,7 +152,6 @@ public import Proofs.Flock.ZkAny
 public import Proofs.Flock.Claims.Complete.Zk
 public import Proofs.Flock.EndToEnd.Joint.Bound
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SiblingJP
 public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.EndToEnd.Joint
 

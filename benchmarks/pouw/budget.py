@@ -125,9 +125,6 @@ class Family:
     #: P·V noised as `pv` instead of `peel` (sm_120 only, the one device with pv designs): ε_skip's ratio and the
     #: whole-model γ's change, dither-c against dither-c-peel in eps_budget (8B, floor credit; pv's γ is the TS model's)
     pv_noise: tuple[float, float] | None = None
-    #: the next larger L's design on this device (machine model, measured kernels): (the headline's L, the larger L,
-    #: its core ε as a fraction, its ratio 1 + γ)
-    larger_l: tuple[int, int, float, float] | None = None
 
     @functools.cached_property
     def fill(self) -> dict[str, list[tuple[float, float, float, float, float]]]:
@@ -161,12 +158,6 @@ FAMILIES = (
            "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
            "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
            served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
-    Family("L40S", "sm_89", "dither-2s L16 (ADA-89)", "dither-2s-l16", "", "L40S", 1.90,
-           "vy-dc-l40s: $1.90/h, one GPU with its host (measured price)",
-           served=0.2186, route=0.000226, skip_no_pv=0.0, pv_share=0.0185, larger_l=(16, 32, 0.126726, 1.5446)),
-    Family("A100", "sm_80", "dither-2s L16 (AMPERE-80)", "dither-2s-l16", "", "A100 SXM4 80 GB", 1.79,
-           "vy-dc-a100: RunPod $1.79/h (note:20261017T1852Z-draft-rt-dc, measured price)",
-           served=0.2184, route=0.0, skip_no_pv=0.0, pv_share=0.0185, larger_l=(16, 32, 0.014775, 2.9618)),
 )
 
 
@@ -440,10 +431,6 @@ def levers(f: Family, **kw) -> list[dict]:
             "the served check (pv has no peel)")
     row("P·V uncredited", f.skip_no_pv - t.eps_skip, 0.0,
         f"forgoes {100 * f.pv_share:.2f}% of the credit at 8B 2K (19% at 8B 32K); changes what ε is a fraction of")
-    if f.larger_l:
-        small, big, core, gamma = f.larger_l
-        row(f"L = {small} → {big}", core - (t.eps_skip + t.eps_machine), gamma - t.gamma,
-            "the device's own designs (machine model, measured kernels); no design has a smaller L")
     step(point(f, c, t.B_sample, p=7 / 16, **kw), "2-bit coins (p ≤ 7/16)",
          "moves only luck; FRONTIER: perplexity +2.32/+2.83%, fails")
     return rows
