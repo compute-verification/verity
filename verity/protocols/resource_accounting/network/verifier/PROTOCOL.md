@@ -678,7 +678,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   `test_network_attester_io_request_phase9.py`.
 - **Not in it: the prompt ids' values** (the phase-9 attack's first case: the tie counts each request's prompt fields and checks
   each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also not in it:
-  the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s).
+  the advice's output_len ≤ max_tokens (an optional check) and one request a user (`attested_io`'s).
 - **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, L, R, P, S}`: the reference on a fake upstream Commit
   and the network attester's own ingress, and the Boolean Definition, with its sidecar), one proof block a bucket row
   like IoTieRequest. It is the ingress analog of the egress port's reads: IoTieRequest's scan plus the Commit's
