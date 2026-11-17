@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory" / "scope_offload.py"
+SCRIPT = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory" / "scope_offload.py"
 
 
 def test_scope_offload(tmp_path):

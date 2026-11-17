@@ -1,5 +1,5 @@
 """The words CO-Dither's checked GEMMs commit, which their CPU references (`cgemm_ref.py`, `cpv_ref.py`, `apv_ref.py`,
-`cwgemm_ref.py`) recompute and `benchmarks/pouw/theory/checked_strip.py` analyses (its docstring states the
+`cwgemm_ref.py`) recompute and `calibration/pouw/theory/checked_strip.py` analyses (its docstring states the
 construction, in Lean's coordinates). A tally, where given, is anything with checked_strip's `Tally.int8(A, B, what)`,
 which prices each product as computed. Numpy only; its readers load it by file.
 """

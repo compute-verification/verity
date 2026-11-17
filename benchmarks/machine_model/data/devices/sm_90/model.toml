@@ -1,12 +1,12 @@
 # The H200 (sm_90) as `eps` prices it (README "Devices"): its measured census, and no vector solved for prices, so the
 # constants only `solve` reads are left out. Three epochs: DC-90; DS-90, the data-sheet vector, whose lines are
-# census/DS-90.csv and close where they open, so it moves no other epoch's census (benchmarks/pouw/dc/census.py
+# census/DS-90.csv and close where they open, so it moves no other epoch's census (calibration/pouw/dc/census.py
 # --write rewrites census.csv and keeps none of them); and DC-90-ri, which refits the uniform instruction's price on the
 # async-joint issue row (UNI,JI90_0) to its measured cost beside the saturated async tensor op (the old
 # 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was optimistic). `current` stays DC-90; the refit is the vector DC-90-ri (read it with `eps --vector DC-90-ri`).
 current = "DC-90"
 epochs = ["DC-90", "DS-90", "DC-90-ri"]
-# The card file (hardware/cards/) θ, the opcode table, the data sheet and the table route read this device's numbers from.
+# The card file (calibration/hardware/cards/) θ, the opcode table, the data sheet and the table route read this device's numbers from.
 card = "h200-sxm-141gb"
 # The card file of the host the device sits in, which θ's host rates read (`host:PATH`).
 host = "xeon-platinum-8468-2s"

@@ -153,7 +153,7 @@ shards = [
      "lean-suites:verity-lean-audit:2/3", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "pytest:research",
      "pytest:adapters/vllm/verity_vllm/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
-     "pytest:benchmarks/training_slowdown", "pytest:repository", "pytest:verity/protocols/resource_accounting/memory/pous/verifier"],
+     "pytest:calibration/training", "pytest:repository", "pytest:verity/protocols/resource_accounting/memory/pous/verifier"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:2/3", "lean-suites:verity-pouw-check-difftest:3/3",

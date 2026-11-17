@@ -58,7 +58,7 @@ ALLOWED: dict[str, int] = {
     # addresses and instance ids that benchmarks, examples and their tests record or run against
     "tests/benchmarks/network_traces/fixtures/certifier-period-answers.json": 1,
     "tests/benchmarks/pouw/fixtures/challenger-key.json": 1,
-    "tests/benchmarks/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json": 1,
+    "tests/calibration/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json": 1,
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-b71a-w30.json": 7,
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r1-window10.json": 4,
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json": 8,
@@ -66,7 +66,7 @@ ALLOWED: dict[str, int] = {
     # stand-ins that predate the documentation ranges
     "tests/tools/check/test_verdicts.py": 2,
     # version numbers the scan reads as addresses
-    "benchmarks/pouw/dc/dc.cuh": 1,
+    "calibration/pouw/dc/dc.cuh": 1,
     "benchmarks/pouw/harness/README.md": 1,
     # links in the locks and data, and the Lean cache's route
     "security/Properties/lean-audit.json": 2,

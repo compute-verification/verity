@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory" / "fold_min.py"
+SCRIPT = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory" / "fold_min.py"
 
 
 def test_fold_min(tmp_path):

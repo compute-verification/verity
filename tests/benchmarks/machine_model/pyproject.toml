@@ -21,5 +21,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the Site's readers (`verity.device`, which imports the wire, `verity.channel`), which the workspace environment
 # brings.
 inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "security/Definitions/Registration/Sheets",
-          "verity/__init__.py", "verity/errors.py", "hardware/cards", "verity/device.py",
+          "verity/__init__.py", "verity/errors.py", "calibration/hardware/cards", "verity/device.py",
           "verity/channel.py"]

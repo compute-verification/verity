@@ -9,8 +9,8 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
 `verity.circuits.silicon` and are never re-derived here.
 
 **What a caller may import** is each module's `__all__` (`exact_kit.checks`, `exact_kit.f2`, `exact_kit.wrap`,
-`exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../theory/`'s scripts and
-`../theory/egemm_depthr_check.py`.
+`exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../../../calibration/pouw/theory/`'s scripts and
+`../../../calibration/pouw/theory/egemm_depthr_check.py`.
 
 **What it never does.** It imports nothing of Verity and nothing of `research`: the standard library, numpy and pysat
 alone. It reads the environment in one place, `exact_kit.settings` (`OUT` and the three variables `research run` sets),

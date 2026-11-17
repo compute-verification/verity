@@ -1,8 +1,8 @@
-"""A registered device's figure is written in its card (``hardware/cards/*.toml``, ``hardware/nodes/*.toml``) and nowhere
-else.  Its copies outside ``hardware/`` are held to a count per file in ``allowlists/device_figures.json``, so no file gains
+"""A registered device's figure is written in its card (``calibration/hardware/cards/*.toml``, ``calibration/hardware/nodes/*.toml``) and nowhere
+else.  Its copies outside ``calibration/hardware/`` are held to a count per file in ``allowlists/device_figures.json``, so no file gains
 one while each area makes its sites read the card or take the figure as a parameter.
 
-What it reads: every tracked file outside ``hardware/``, outside every ``tests/`` directory and outside the generated Lean (a
+What it reads: every tracked file outside ``calibration/hardware/``, outside every ``tests/`` directory and outside the generated Lean (a
 Lean file whose module docstring says it is generated: its generator is read, and its generator's test holds it), and in each
 only the tokens that can be a figure: Python's ``NUMBER`` tokens by ``tokenize`` (never a string, a docstring or a comment),
 Lean's numerals outside comments, docstrings and strings, the numerals of ``.cu``, ``.cuh`` and ``.sh`` outside comments, and
@@ -56,7 +56,7 @@ LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: runs the base's lint directory, reads the change's copy, and holds only ``LIST`` to shrink
 KEPT = ROOT / "tests" / f"{NAME}_kept.json"
 REGISTRY = ".agents/skills/using-slack/registry.json"
-CARDS, NODES = "hardware/cards/", "hardware/nodes/"
+CARDS, NODES = "calibration/hardware/cards/", "calibration/hardware/nodes/"
 #: the readings of a GPU's tensor clock its card states: the tensor's own, then the SM clock (``verity.device.READINGS``;
 #: each peak below is ``verity.device.readings(card, fmt=...)``'s, a card without ``clock.tensor`` reading ``clock.sm``)
 READINGS = ("tensor", "sm")
@@ -361,7 +361,7 @@ def generated(text: str) -> bool:
 def holds(path: str) -> bool:
     """Whether this lint reads ``path`` (a generated Lean file's text decides the rest: ``generated``)."""
     parts = path.split("/")
-    return not path.startswith("hardware/") and "tests" not in parts[:-1] and path.endswith(PY + LEAN + SLASH + HASH + DATA)
+    return not path.startswith("calibration/hardware/") and "tests" not in parts[:-1] and path.endswith(PY + LEAN + SLASH + HASH + DATA)
 
 
 def runs(text: str, path: str, sms: frozenset[Fraction] = frozenset()) -> list[Run]:
@@ -496,7 +496,7 @@ def test_no_new_device_figures() -> None:
                 [g for g in gone if g.rsplit("/", 1)[-1] == f.rsplit("/", 1)[-1]])
            for f, n in sorted(now.items()) if f not in pairs and n > allow[f]]
     assert not new, (f"device figures: {len(new)} file(s) state more of a card's figures than {LIST.relative_to(ROOT)} "
-                     "allows; a figure is written in its card (hardware/) and read from it.\n" + "\n".join(new))
+                     "allows; a figure is written in its card (calibration/hardware/) and read from it.\n" + "\n".join(new))
 
 
 def test_the_list_is_current() -> None:
@@ -535,7 +535,7 @@ bytes = { value = 499289948160, unit = "B", mark = "measurement", source = "s" }
 
 
 def test_what_is_a_figure_and_what_is_not() -> None:
-    figs = figures({"hardware/cards/g.toml": CARD}, {"hardware/nodes/n.toml": NODE})
+    figs = figures({"calibration/hardware/cards/g.toml": CARD}, {"calibration/hardware/nodes/n.toml": NODE})
     assert figs.alone[Fraction(1830)].read == 'number(load_card("g")["clock"]["tensor"])'
     assert figs.alone[Fraction(1830 * 10 ** 6)].read.endswith(" * 10**6")
     assert Fraction(132 * 4096 * 1830 * 10 ** 6) in figs.alone and Fraction(132 * 4096 * 1980 * 10 ** 6) in figs.alone
@@ -578,7 +578,7 @@ def test_what_is_a_figure_and_what_is_not() -> None:
     assert fold([Fraction(1830), Fraction(0)], ["/"]) is None and number("1e9999") is None and number("0x726") == 1830
     [(run, fig)] = sites('{"r 7168 64": [1830]}', "d.json", figs)
     assert say("d.json", run, fig).startswith("    d.json [r 7168 64[0]]: 1830 equals g clock.tensor (MHz).")
-    assert holds("benchmarks/x.py") and not holds("hardware/cards/g.toml") and not holds("a/tests/b.py")
+    assert holds("benchmarks/x.py") and not holds("calibration/hardware/cards/g.toml") and not holds("a/tests/b.py")
     assert not holds("README.md") and holds("security/A.lean")
 
 

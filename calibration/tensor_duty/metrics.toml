@@ -1,0 +1,9 @@
+[[metric]]
+id = "compute-research/eight-bit-mac-rate-over-sheet"
+title = "Eight-bit MAC rate over sheet"
+owner = "compute-research"
+unit = "share of sheet"
+axis = "The most 8-bit multiply-accumulates a second any tensor_duty point reached over the host's wall clock, as a share of the data sheet's dense 8-bit tensor rate (132 SMs x 4096 x clock.tensor on the H200), each point naming its card."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=compute-research -- bash calibration/tensor_duty/run.sh"
+every = "7d"

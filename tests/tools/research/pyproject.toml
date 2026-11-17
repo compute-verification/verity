@@ -126,8 +126,8 @@ untraced = [
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
 # test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (adapters/vllm, verity,
 # catalog, kernels, core);
-# test_store_prov loads the tc_probe declaration (benchmarks/tc_probe), content-resolves a golden
-# fixture (tests/verity/circuits/ops/fixtures) and git-archives benchmarks/tc_probe and verity/circuits/silicon;
+# test_store_prov loads the tc_probe declaration (calibration/tc_probe), content-resolves a golden
+# fixture (tests/verity/circuits/ops/fixtures) and git-archives calibration/tc_probe and verity/circuits/silicon;
 # test_repo_replicas hashes every tracked fixture artifacts.json registers (today under adapters/vllm,
 # tests/verity/circuits/ops/fixtures and benchmarks/numerical/bench-instances, named on its own so it stays an input wherever it
 # sits). test_pythonpath and test_notes derive every workspace member's import root from the
@@ -154,20 +154,20 @@ untraced = [
 # the identity a crossing's commits carry (`queue.IDENTITY`).
 # tools/check/train.sh: test_landing launches the loop's own (`landing.OWN_TRAIN`) with the settings.py beside it.
 inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
-          "tools/check/lean_slot.py", "tools/check/slot.py", "tools/check/tool.py", "tools/check/drive.toml", "benchmarks/tc_probe",
+          "tools/check/lean_slot.py", "tools/check/slot.py", "tools/check/tool.py", "tools/check/drive.toml", "calibration/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/proofs/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "tests/benchmarks/commitments/pyproject.toml", "tests/benchmarks/network_traces/pyproject.toml",
           "tests/benchmarks/pouw/pyproject.toml", "tools/check/pyproject.toml", "tools/check/settings.py", "tools/check/train.sh",
           "tools/verity/circuit_check/pyproject.toml",
           "infra/cluster", "tests/tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
-          "tools/verity/lean/check.py", "tools/check/suites.py", "tools/check/gates/markdown_caps.py", "tests/lint/test_repo_silent_excepts.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/check/pins.py", "tests/benchmarks/native_peak/pyproject.toml",
-          "tests/benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
+          "tools/verity/lean/check.py", "tools/check/suites.py", "tools/check/gates/markdown_caps.py", "tests/lint/test_repo_silent_excepts.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/check/pins.py", "tests/calibration/native_peak/pyproject.toml",
+          "tests/calibration/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
           "tools/move/move_lines.toml", "tools/agent-guard/pre_push.py", "tests/tools/verity/graph/key_vectors.json",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
           "tools/verity/lean/settings.py", "tools/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
-          "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml",
+          "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "calibration/hardware/cards/rtx-pro-6000-server.toml",
           "tools/check/merge_map.py", "tools/check/merge_rows.py",
           "tools/check/added_lines.py", "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py"]
 parallel = true

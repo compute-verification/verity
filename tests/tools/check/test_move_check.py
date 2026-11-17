@@ -212,7 +212,7 @@ def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_
     the mover's own `only_comments`: empty or of comments and whitespace alone, it goes with its package; a docstring,
     code, or text that doesn't parse is refused, naming the file and the fix."""
     repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": held})
-    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/a100.toml", "calibration/hardware/cards/a100.toml")
     _git(repo, "rm", "-q", "verity/hardware/cards/__init__.py")
     r = _check(repo, base)
     if certified:
@@ -228,7 +228,7 @@ def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_
 def test_the_init_of_an_emptied_package_moved_by_its_row_is_certified(tmp_path):
     """The fix for one that holds code: its row sends it where it goes (the package becomes a module of its name)."""
     repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": CODE})
-    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/a100.toml", "calibration/hardware/cards/a100.toml")
     _move(repo, "verity/hardware/cards/__init__.py", "verity/hardware/cards.py")
     r = _check(repo, base)
     assert r["certified"], r["refusals"]

@@ -107,7 +107,7 @@ and **the slowdown lower bound** (Terms, "Feasible set").
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ` |
+| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `calibration/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `ResourceAccounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
 | HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of attesters, challengers and their hosts (`trusted-device`). | `ResourceAccounting.Hardware`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Causal`; `ResourceAccounting.Covered`, `ResourceAccounting.TrustedUnits` |
@@ -321,7 +321,7 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
   It is certified by checking each input's commitment root against its external
   anchor (the registered weights root, the client's request commitment, the challenger's live coins), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.circuits.silicon.instructions`): its silicon model matched every
-  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
+  hardware probe, at the level `calibration/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.
 - **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of its served steps
   (`ResourceAccounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size.

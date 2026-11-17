@@ -216,7 +216,7 @@ FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manif
 #: The frozen Hopper input sets (``BF16_HOPPER_INSTANCES_DATASET``, ``FP8_HOPPER_INSTANCES_DATASET``): the synthetic
 #: VUs ``archive/direct/ligero/relchain.py`` samples for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``)
 #: -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
-#: (``benchmarks/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
+#: (``calibration/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (after the rows
 #: with preserved proof dumps) so a reader recognises the sets without importing the prover; a change to a
 #: recipe is a new tier.
@@ -236,7 +236,7 @@ _NVFP4 = census.INPUT_SETS["bench-instances-nvfp4-sm120-v1"]
 NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
 NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
-#: ``benchmarks/tc_probe/trust.py`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
+#: ``calibration/tc_probe/trust.py`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
 #: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
 NVFP4_INSTANCES_FAMILIES = {
     "random": 293, "zero-scales": 293, "subnormal-scales": 293, "top-scales": 293, "top-scales-zero-acc": 293, "span-scales": 293,

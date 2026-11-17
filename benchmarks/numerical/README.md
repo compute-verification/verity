@@ -117,7 +117,7 @@ tests/reference/wp1_cases.py                         fixture loaders, structured
 tests/reference/exhaustive_driver.py                 the recorded run, stage wp1.exhaustive: counts + wp1_exhaustive.json + result.json
 tests/reference/hawkeye_harness.cpp                  drives the compiled pinned simulator (unmodified sources) on the same cases
 tests/reference/exhaustive_pod.sh                    clone at the pin, hash-object check, CPU libtorch venv, build, run
-../tc_probe/                                the hardware probe (mma_tiles.cu, tc_probe.py): golden replay + finite sweep
+../../calibration/tc_probe/                                the hardware probe (mma_tiles.cu, tc_probe.py): golden replay + finite sweep
 ~~~
 
 ~~~sh
@@ -126,7 +126,7 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
   -- bash tests/benchmarks/numerical/reference/exhaustive_pod.sh
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.probe.4090 --require-result \
   -- bash -c 'export PYTHONPATH=.:benchmarks/numerical/python PATH=/usr/local/cuda/bin:$PATH; \
-     /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/tc_probe/tc_probe.py --arch sm_89 \
+     /root/.local/bin/uv run --no-project --with numpy --python 3.12 python calibration/tc_probe/tc_probe.py --arch sm_89 \
        --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
 #   --replay-special PATH, PATH the A100 special-value fixture

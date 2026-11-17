@@ -142,7 +142,7 @@ data-centre families' readings to `F`.
   or the run that would (`gap`); the exact paths (b1, INT4, FP4); the FP8 atoms' semantics; the units that write
   registers; a verdict for every unit outside the SM pipes (`[[unit]]`); the public SHA-512 figures (`[[public]]`) and
   our kernel's SASS a compression (`[sha512_mix]`); and the host the card sits in (`host.*`). The module and command
-  keep the name `theta`. A ceiling the device's card file holds (`hardware/cards/<sku>.toml`, the SKU
+  keep the name `theta`. A ceiling the device's card file holds (`calibration/hardware/cards/<sku>.toml`, the SKU
   `model.toml` names as `card`) is read from it: its table says `card = "rate.tensor / weight.f16"` in place of a
   value, grade and source; `host:PATH` is an entry of the host's card (`model.toml`'s `host`), as in
   `host.sha512`. What keeps a `sheet` value is what no card file holds as a ceiling.
@@ -221,7 +221,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../../calibration/pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -290,7 +290,7 @@ that writes registers its `copy16` line (`tests/test_data.py`'s `MEMORY_ONLY` li
 
 ## Adopt a probe's census
 
-An opcode probe (`../pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
+An opcode probe (`../../calibration/pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
 row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
@@ -485,7 +485,7 @@ as Markdown, a table a card, with the counts by mark and every hole.
 
 - **The envelope** (`envelope.toml`) is `Accel.Opcode` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode
   on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers
-  (ρ a SM-clock, format weights) are its card file's (`hardware/cards/`, read by `cover.load`). What the table
+  (ρ a SM-clock, format weights) are its card file's (`calibration/hardware/cards/`, read by `cover.load`). What the table
   needs that `Accel` lacks is marked `proposed`: the `collective` op and resource, `tex`, and the formats `e3m2`,
   `e2m3`, `mxf8` and `mxf6`.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
@@ -515,11 +515,11 @@ hole has no severity.
 
 The evidence a row's source cites, each a `research run` with its verdict line:
 
-- `../pouw/sass_census/lowering.sh` (`--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and checks the
+- `../../calibration/pouw/sass_census/lowering.sh` (`--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and checks the
   SASS it lowers to or that ptxas refuses it (`verdict: N/N cases lower as expected`).
-- On one leased RTX PRO 6000, through `../pouw/opcode_probe/run.sh`: `../pouw/opcode_probe/probes/match.cu` (MATCH.ANY by class
+- On one leased RTX PRO 6000, through `../../calibration/pouw/opcode_probe/run.sh`: `../../calibration/pouw/opcode_probe/probes/match.cu` (MATCH.ANY by class
   count and .U64, beside LOP3 and FFMA) and `collective.cu` (REDUX and VOTE beside LOP3, REDUX beside MATCH.ANY), whose
-  verdict is `../pouw/opcode_probe/collective_verdict.py`; both build for sm_90a too (`../pouw/dc/emp.sh build`, then `emp.sh
+  verdict is `../../calibration/pouw/opcode_probe/collective_verdict.py`; both build for sm_90a too (`../../calibration/pouw/dc/emp.sh build`, then `emp.sh
   time` on the H200). `pipes.cu` times each lane opcode beside its pipe's partner (LOP3, MUFU.EX2 or DFMA), and
   `pipes_verdict.py` holds each to the pipe's ρ.
-- `../pouw/sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.
+- `../../calibration/pouw/sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.

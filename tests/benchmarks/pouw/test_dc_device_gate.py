@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-DC = "benchmarks/pouw/dc"
+DC = "calibration/pouw/dc"
 #: (script, its arguments, the compute capability it needs, its exit when the build is refused)
 JOBS = [("run.sh", ["sm90"], 9, 1), ("run.sh", ["sm100"], 10, 1), ("uni.sh", ["sm90"], 9, 1), ("uni.sh", ["sm100"], 10, 1),
         ("pipe.sh", [], 10, 1), ("ffill.sh", [], 9, 1), ("s8_mma.sh", ["sm90"], 9, 4), ("s8_mma.sh", ["sm100"], 10, 4)]

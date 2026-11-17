@@ -25,9 +25,9 @@ FORBIDDEN = {"bound", "blocks_at_least", "slowdown_at_least"}
 SIBLINGS = {"bound_charged", "best_w", "capped"}
 #: {file outside the calculator that reaches its `min_cut`: (the names of `FORBIDDEN` and `SIBLINGS` it reads, why)}
 ALLOWED = {
-    "benchmarks/training_slowdown/training_slowdown/calculator.py":
+    "calibration/training/training_slowdown/calculator.py":
         ((), "the training benchmark's chooser: reads a traced step's products into the one function"),
-    "benchmarks/circuit_properties/circuit_properties/work.py":
+    "calibration/circuit_properties/circuit_properties/work.py":
         ((), "the circuit-properties chooser: reads a Program's charged products into the one function"),
     "benchmarks/inference_only/policy.py":
         ((), "the inference-only chooser: hands the one function a session block's one forward product"),
@@ -38,17 +38,17 @@ ALLOWED = {
     "tests/benchmarks/inference_only/test_inference_only.py":
         (("bound", "bound_charged", "best_w", "capped"), "references: the policy's number and the tied rows are "
                                                          "`bound`'s and the period bound's"),
-    "tests/benchmarks/training_slowdown/conftest.py":
+    "tests/calibration/training/conftest.py":
         (("bound",), "reference: the count the fixtures' bound of record is held to"),
-    "tests/benchmarks/training_slowdown/test_formalism.py":
+    "tests/calibration/training/test_formalism.py":
         (("slowdown_at_least",), "reference: the record's figure is the statement's arithmetic"),
-    "tests/benchmarks/training_slowdown/test_grade.py":
+    "tests/calibration/training/test_grade.py":
         (("blocks_at_least",), "reference: ρ's products term is the theorem's count solved for the fewest blocks"),
-    "tests/benchmarks/training_slowdown/test_one_calculator.py":
+    "tests/calibration/training/test_one_calculator.py":
         (("bound",), "reference: the entry point's slowdown is `bound`'s at three policies"),
-    "tests/benchmarks/training_slowdown/test_program_reading.py":
+    "tests/calibration/training/test_program_reading.py":
         ((), "compares a Program's reading with its trace's at one `F`"),
-    "tests/benchmarks/circuit_properties/test_work.py":
+    "tests/calibration/circuit_properties/test_work.py":
         (("bound",), "reference: the reading's bound is `bound` at its products' sums"),
 }
 FIX = ("every slowdown the calculator's callers compute comes from its `min_cut.slowdown_of`: read your work into its `Product`s and call "

@@ -1,0 +1,9 @@
+[[metric]]
+id = "compute-research/eight-bit-mma-issue-cost"
+title = "Eight-bit MMA issue cost"
+owner = "compute-research"
+unit = "issue cycles a MMA"
+axis = "The joint issue coefficient a of IMMA s8 m16n8k32 that tensor_kinds fits, the issue cycles one such MMA takes from the lane instructions beside it, each point naming its card."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=compute-research -- bash calibration/pouw/tensor_kinds/run.sh"
+every = "7d"

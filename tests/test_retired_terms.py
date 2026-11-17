@@ -483,8 +483,8 @@ def test_spot_s_older_name_only_falls():
 
 
 #: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
-SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "calibration/circuit_properties/", "benchmarks/inference_only/",
+                 "calibration/training/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.

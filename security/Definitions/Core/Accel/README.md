@@ -19,7 +19,7 @@ function of its accumulator and its pairs' products. The card assumption says th
 
 Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
 (bank words), `l2` (words read or written) and `dram` (words). A card's table is its SKU's at its firmware's maximum,
-and its numbers are its card file's (`hardware/cards/<sku>.toml`):
+and its numbers are its card file's (`calibration/hardware/cards/<sku>.toml`):
 
 | Card file | SKU | SM clock | Tensor clock | Device memory |
 |---|---|---|---|---|
@@ -29,8 +29,8 @@ and its numbers are its card file's (`hardware/cards/<sku>.toml`):
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
 [0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`clock.tensor`), the clock
 its data sheet quotes the tensor peaks at: 9.894 · 10¹⁴ `s8` MACs a second, and 1.0705 · 10¹⁵ on the second reading,
-the 1980 MHz SM clock the driver reports. The card file (`hardware/cards/h200-sxm-141gb.toml`, `clock.tensor`)
-states both readings and names the 1830 MHz reading's falsification test, `benchmarks/tensor_duty/`. Every rate is a
+the 1980 MHz SM clock the driver reports. The card file (`calibration/hardware/cards/h200-sxm-141gb.toml`, `clock.tensor`)
+states both readings and names the 1830 MHz reading's falsification test, `calibration/tensor_duty/`. Every rate is a
 ceiling, not a clock a loaded card holds: under its power limit it holds less. The table also gives the device model's
 limits (`Card.toDevice`, `ResourceAccounting.Device`). A run that fits the model stays within them summed over a window
 (`fits_toDevice`), and no per-tick `ResourceAccounting.Schedule` is built from a run.

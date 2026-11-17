@@ -84,7 +84,7 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
 
 
 #: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
+#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
 #: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
 CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
          "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}

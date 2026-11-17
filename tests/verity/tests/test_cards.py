@@ -47,7 +47,7 @@ def test_the_cards_we_run() -> None:
 @pytest.mark.parametrize(("sheets", "listed"), [("CARDS", "skus"), ("NODES", "node_kinds")])
 def test_the_sheets_are_found_through_a_link_to_the_package(tmp_path, monkeypatch, sheets: str, listed: str) -> None:
     """A `research run` job imports `verity` through a directory of links (`research.pythonpath.shim_dir`), so the
-    Site's `__file__` is the link's path, and the checkout's `hardware/` is beside the package, not the link."""
+    Site's `__file__` is the link's path, and the checkout's `calibration/hardware/` is beside the package, not the link."""
     real = Path(S.__file__).resolve()
     (tmp_path / "verity").symlink_to(real.parent, target_is_directory=True)
     through = tmp_path / "verity" / real.name
