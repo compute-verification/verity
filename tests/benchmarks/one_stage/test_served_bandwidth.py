@@ -94,6 +94,7 @@ def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
 
 def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(ROOT)
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     reg = BT.toy(tmp_path / "toy")
     serve = _serve_dir(tmp_path / "serve")
 
@@ -148,6 +149,7 @@ def test_the_pous_piece_runs_first_and_the_bandwidth_piece_collects_what_its_ses
     """`pieces` starts PoUS's piece before the bandwidth audit's, so the answer PoUS's piece wrote to the bandwidth
     piece's directory is there when ``collect`` reads it, and the record reads it as the bandwidth audit's."""
     monkeypatch.chdir(ROOT)
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     serve, held = _serve_dir(tmp_path / "serve"), _held(tmp_path, 0)
     env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../bandwidth" && cp {held}/*.json "$3/../bandwidth/"',
                               "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
