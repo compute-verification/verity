@@ -552,3 +552,17 @@ def test_each_rank_hashes_its_pool_under_the_edges_key_and_keeps_its_part(monkey
     assert all(g["runner_bytes"] > 0 for g in got)
     every = ex.collective_rpc(B.rank_pool, args=(4, "all"))
     assert [r["host_bytes"] for r in every] == [2, 2, 2]
+
+
+def test_a_blocks_fingerprint_reads_each_layer_at_its_own_width():
+    """GLM-5.3's pool lays out layers of several widths (its MLA cache and its indexer's): each layer's fingerprint is
+    the one form cut to its width, so equal blocks agree and a changed byte moves its block in its layer alone."""
+    torch = pytest.importorskip("torch")
+    gen = torch.Generator().manual_seed(1)
+    rows = [torch.randint(-128, 128, (5, w), generator=gen, dtype=torch.int8) for w in (5248 * 8, 1056 * 8, 16)]
+    rows[0][3] = rows[0][1]
+    fp = B.fingerprints(rows)
+    assert fp.shape == (5, 3) and fp.dtype == torch.int64 and int(fp[3, 0]) == int(fp[1, 0])
+    rows[1][2, 7] += 1
+    moved = B.fingerprints(rows) != fp
+    assert moved.nonzero().tolist() == [[2, 1]]
