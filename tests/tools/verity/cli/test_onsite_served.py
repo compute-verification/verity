@@ -910,7 +910,7 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent", "inference-only": "absent",
                                   **{T.RECORD_NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["coins_on"] == {
-        **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}, **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
+        **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")}, "sampled-proofs": T.GATE_HOST}
     assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
                                                  ("integrity", "work", "space", "communication", "wipe", *rows)}
 

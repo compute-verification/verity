@@ -143,7 +143,7 @@ def test_the_runners_variables_under_remote_are_pearl_pluss():
     serve = T.SERVE.variables(cfg, BINDINGS)
     assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
         "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "fixed"}
-    variables = serve | {"DEVELOPMENT": "1"} | PEARLPLUS | ASKED | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
+    variables = serve | PEARLPLUS | ASKED | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
     assert T.variables(cfg, BINDINGS) == variables
     both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
                                           "main-file": "/tmp/main.json"}}}
