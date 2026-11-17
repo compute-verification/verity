@@ -7,7 +7,7 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
 
 * ``server``: the node the block ran on; ``server_time``: the block's steps, ``[{server, steps: [lo, hi)}]`` (the circuits'
   blocks schema).
-* ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
+* ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``attester``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the subprotocol's certificate
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``

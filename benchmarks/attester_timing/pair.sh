@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# certifier_timing's cases with the attester and the observer on two hosts, one side each:
+# attester_timing's cases with the attester and the observer on two hosts, one side each:
 #
 #   pair.sh serve   ADDR PORT START OUT [serve's flags]   on the attester's host: OUT/out/<case>/
 #   pair.sh observe ADDR PORT START OUT                   on the observer's: OUT/seen/<case>/observer.json
@@ -14,7 +14,7 @@
 # the server ignoring its bits. INTERVALS (3000) and GUARD_INTERVALS (600) are their lengths and INTERVAL_MS (100)
 # the attester's bucket; both sides take the same. A case of n intervals takes n * INTERVAL_MS / 1000 + 45 seconds,
 # so a second set (other flags, another OUT) starts that many after the first for each of its cases. TREE is the
-# checkout whose certifier it is, where `serve` takes `--tree`.
+# checkout whose attester it is, where `serve` takes `--tree`.
 set -euo pipefail
 side=$1 addr=$2 port=$3 at=$4 out=$5
 shift 5
@@ -46,18 +46,18 @@ for part in ${PARTS:-guard attacks control}; do
 done
 
 for case in "${cases[@]}"; do
-    read -r name certifier attack n observer ignore <<<"$case"
+    read -r name attester attack n observer ignore <<<"$case"
     ahead=$((at - $(date +%s)))
     if ((ahead < -5)); then
         echo "pair.sh: $name's time has passed" >&2
     else
         if ((ahead > 0)); then sleep "$ahead"; fi
         if [ "$side" = serve ]; then
-            "$py" "$here/run.py" serve --listen "$addr" --port "$port" --wait-s 20 --certifier "$certifier" \
+            "$py" "$here/run.py" serve --listen "$addr" --port "$port" --wait-s 20 --attester "$attester" \
                 --attack "$attack" $ignore --intervals "$n" --interval-ms "$tau" --out "$out/out/$name" "$@" ||
                 echo "pair.sh: $name failed" >&2
         else
-            "$py" "$here/run.py" observe "$addr:$port" --wait-s 20 --certifier "$certifier" --observer "$observer" \
+            "$py" "$here/run.py" observe "$addr:$port" --wait-s 20 --attester "$attester" --observer "$observer" \
                 --intervals "$n" --interval-ms "$tau" ${TREE:+--tree "$TREE"} --out "$out/seen/$name" ||
                 echo "pair.sh: $name failed" >&2
         fi

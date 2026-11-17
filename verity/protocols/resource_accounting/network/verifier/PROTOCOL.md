@@ -197,7 +197,7 @@ One execution phase's certificates are registered through the proof system
   charged at its link's line rate (`refused_bits`).
 - **Public** (`service.PUBLIC`): the population, the execution phase, the value's leaf count, domain and salted root, the
   parameters digests and the network attester's profile (its execution phases and parameters digest), all bound by the spec's context with the link, the run,
-  the network attester's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
+  the network attester's key id and its session id (`attester_session`), and the check's outputs `verdict` and `deadline`. A
   rejected execution phase shows only the service's `reject`; the violation's kind stays in the verifier. A registration
   with any other field, a second root, a root entry with another key, or anything more in `window` is refused.
 - **The check** is `TransferBlocks.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, over the two certificates' signed
@@ -205,7 +205,7 @@ One execution phase's certificates are registered through the proof system
   block fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and
   ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the verifier
   checks them on their public fields (`TransferBlocks.certified`: each verifies under the network attester's key in its session,
-  `TransferBlocks.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
+  `TransferBlocks.attester_session`, over its public fields and its signed digest, and names the execution phase). A proof
   states the proof block on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
   network attester's salt) and the output row ``o0``, one u16 word (`TransferBlocks.layout`, `service.OUT_BITS`), its circuit
   `TransferBlocks.proof_block`. The head check is a Boolean Definition,

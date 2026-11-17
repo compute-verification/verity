@@ -335,7 +335,7 @@ def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_pa
     assert rc == 3 and sorted(d["path"] for d in report["found"]) == ["out/copy.json", "out/scan/honest/spaced.json"]
 
 
-def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_record(tmp_path):
+def test_a_list_of_consecutive_integers_is_no_piece_of_the_attesters_usage_record(tmp_path):
     """The attester's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
     integers they are the same bytes as any indented list of consecutive integers at their depth, so a verifier
     outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
