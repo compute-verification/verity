@@ -2594,5 +2594,5 @@ def test_a_composite_of_record_naming_a_case_not_covering_the_tied_load_is_not_e
     v = rec["verdicts"]
     assert {k: v["onsite"][k] for k in ("verdict", "answer", "open", "why")} == {
         "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.FRONT_APART], "why": f"{OR.NETWORK}'s case is {why}"}
-    assert v["the network certifier"]["verdict"] == "accept"
+    assert v[next(k for k, row in OR.ROWS.items() if row == "communication")]["verdict"] == "accept"
     assert rec["of_record"]["holds"] is False and "onsite" in rec["of_record"]["not_established"]
