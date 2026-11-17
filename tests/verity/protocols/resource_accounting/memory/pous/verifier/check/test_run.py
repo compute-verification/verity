@@ -1,4 +1,4 @@
-"""`pous-run` (`PousVerifier.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
+"""`pous-run` (`PousCheck.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
 word, on runs sampled at reduced points (the verifier's list of memory-challenger keys, a setup's public outputs, the table of
 `C*`'s row digests, one session the memory attester signed bound to the setup's root, the id the auditor designated),
 honest and under one edit of the verifier's list, the setup, the table, the point, the session or the designated id, the
@@ -256,7 +256,7 @@ def _point_of(j: Any) -> run.Point:
 
 
 def reference(j: Any) -> dict:
-    """`PousVerifier.Run.runFn` in Python: decode as the Lean decodes, then `run.check_at`."""
+    """`PousCheck.Run.runFn` in Python: decode as the Lean decodes, then `run.check_at`."""
     point = _point_of(M._get(j, "point"))
     ids = M.list_(j, "schemes")
     if not all(isinstance(i, str) for i in ids) or any(i not in KNOWN for i in ids):
@@ -404,7 +404,7 @@ def _python_outcome(trusted: tuple[bytes, ...], setup: run.Setup, digests: bytes
 @pytest.mark.slow
 def test_the_deployed_check_agrees_from_its_files(tmp_path):
     """`pous-run`'s four files and the designated id at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed
-    parameters): `PousVerifier.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
+    parameters): `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
     whose answers is not its label, the honest run under another designated id and the honest run against a verifier's list
     that holds another key only; `pous-run` refuses an id that is not lowercase hex and a session that carries keys of its
     own. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a sampled point, is the deployed point under

@@ -214,7 +214,7 @@ def test_the_lean_is_unavailable_without_lake_or_its_server(monkeypatch, tmp_pat
 
 def test_a_built_executable_judges_as_pous_checks_does(strict_doc):
     """`--lean-exe`'s path: `pous-timed-audit` run directly (`run_lean`), with no `verity_difftest`, gives what
-    `pous_verifier`'s does, on an accepted document and a rejected one."""
+    `pous_check`'s does, on an accepted document and a rejected one."""
     live, ready, leaves, honest, bad = strict_doc
     exe = ta.build(ta.HERE, ta.EXE)
     for doc in (honest, bad):
