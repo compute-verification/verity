@@ -419,7 +419,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof verify --zk`) itself; v1, which takes the verdicts as
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused, and the two-stage form is read and
-  checked, then refused last while its switch is off. Where v2 accepts, its session
+  checked, then accepted while its switch is on, ahead of its proof. Where v2 accepts, its session
   is in V5's event (`Verity.Sampled.checkBlobs_event`), which is coupled to it (`Verity.Sampled.CouplingTarget`).
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.

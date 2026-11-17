@@ -601,7 +601,7 @@ def failures(allow: bool, g: Given, record: Mapping[str, Any], records: Sequence
              statements: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
     """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled proof block is in no rank
     member, else ``ranks-wire-tree`` and the per-session failures; ``two-stage-form`` last while nothing else fails and
-    the form is off."""
+    the form's switch is off."""
     found = rank_failures(record, records, served, registrations, root, logged)
     ranks = ranks_of(record.get("ranks"))
     if ranks is not None:

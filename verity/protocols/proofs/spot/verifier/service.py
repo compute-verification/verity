@@ -2449,7 +2449,7 @@ class Stream:
         holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
         and sample a verdict names), the interior docket and the second stage's cells as the interior
         docket's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
-        one while `second_stage.FORM` refuses the two-stage form. `proofs` is the auditor's params naming each template's
+        one where `second_stage.FORM` is off, which refuses the two-stage form. `proofs` is the auditor's params naming each template's
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts

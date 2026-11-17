@@ -178,7 +178,7 @@ HERE = (Path(__file__).resolve().parent)
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 FIRST_STAGE = "stage1.json"
-#: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
+#: what round 2 refused every two-stage run by while the form's switch was off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
 #: docstring), so no outcome here is complete (`second_stage.complete`), whatever its audit records say of themselves
@@ -1157,7 +1157,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     """Whether an honest second stage held: every check before the sample passed, every session's circuit file is the
     one its template's params name (`pins`, ``files``), every Lean verdict accepted, the sessions' registered reads
     the verifier's own, every negative refused, round 2 ``r2`` accepting the statements, and the stream's outcome ``o``
-    accepted or refused by round 2's two-stage form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the
+    accepted, or refused by round 2's two-stage form alone (`FORM_REFUSED`, where `second_stage.FORM` is off): the
     interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none. A
     run whose interior docket registers a value a replay block's input may not read (`INPUTS_REFUSED`, in
     ``r2``'s codes or the outcome's) never held, whatever else it reports: its sessions proved replay blocks over inputs

@@ -545,8 +545,8 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **The inference-only policy at remote** (`Properties.Remote.SecurityProofs.acceptInferenceOnly`, proved): remote's
   accept gives `InferenceOnlyHeld`, whose SPOT case is `StageHeld`, the one-stage form's. It has no clause for the
-  two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the two-stage
-  clause first.
+  two-stage form, which the verifier accepts while `SecondStage.FORM` is true, ahead of its proof; the two-stage case
+  needs its own clause and its open premises.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. The challenger and the verifier both run on auditor devices. The challenger, which

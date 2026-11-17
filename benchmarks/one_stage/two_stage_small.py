@@ -57,7 +57,7 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
 MAX_MODEL_LEN = 4096
 #: ``--tables``: the one layer a request's history table is at, and a table's leaves
 TABLE_LAYER, TABLE_LEAVES = 0, 16
-#: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
+#: the stream's code for the two-stage form, which it refused every run by, last, while the form's switch was off
 FORM = "two-stage-form"
 #: round 2's code for a value the interior docket registers that a replay block's input may not read: here the
 #: sampler's ``logits``, which the prover registers after the first stage's sample

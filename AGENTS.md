@@ -282,8 +282,9 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
 
 - **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
   Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form;
-  this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
-  gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
+  this is a requirement, not a claim that `main` proves it. The verifier refuses any form its proof does not cover, except
+  the two-stage form, which runs ahead of its proof by Daniel's ruling of Mon 16 Nov, and whose accept's record says its
+  form is not yet proved. Circuit inputs and outputs use one canonical format, proved in general, so a new
   workload needs no verifier or proof change.
 - **The math is modular.** Each layer is proved once over the guarantee of the layer below: the knowledge soundness of
   one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration

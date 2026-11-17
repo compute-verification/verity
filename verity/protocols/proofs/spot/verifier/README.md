@@ -134,7 +134,7 @@ A bound of S served bits charges a replay block at most F S, F the grain's fan-o
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
 proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
 `plancheck.two` refuses a served cap below them.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` is on: a two-stage run whose every check passes is accepted, ahead of the form's proof. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
 block returns is read only at the boundary record's port for it: an interior docket that registers a value of
@@ -289,7 +289,7 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 | R1-R8 on a docket | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
 | The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
 | A docket's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
-| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run whose every check passes while `SecondStage.FORM` is on, ahead of the form's proof | the two records' join |
 | Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 

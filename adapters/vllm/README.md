@@ -101,8 +101,9 @@ finish inside one served window. The parts, in the order they run:
 - **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
-  stage. The verifier refuses every two-stage run at its last check (`FORM` in
-  `verity/protocols/proofs/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+  stage. The verifier accepts a two-stage run whose every check passes (`FORM` in
+  `verity/protocols/proofs/spot/verifier/second_stage.py`), ahead of the soundness proof of that form, and the accept's
+  record says its form is not yet proved.
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
