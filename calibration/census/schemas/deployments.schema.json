@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/deployments.schema.json",
+  "$id": "calibration/census/schemas/deployments.schema.json",
   "title": "Census deployments: the machines a result over all compute covers and the window each machine is audited in",
   "type": "array",
   "items": {
