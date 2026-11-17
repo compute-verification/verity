@@ -18,24 +18,8 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# The padded level 0: lane rounds, extra lanes, and decoding
-
-The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s:
-
-* **The lane rounds** send no message after the last coin (`foldRoundsNL`). For a post-condition
-  that does not read that message, they are the lane rounds (`value_foldRoundsNL_le`).
-* **The extra lanes' coins** (`sampleKs`). Each coin `ρ_i` is an affine line `w + ρ_i·X_i` for mutual
-  correlated agreement (`ExtrasGood`, `value_sampleKs_extras_le`), and a coin on the restarted
-  claim, an affine function of the coins with a nonzero constant for every list element
-  (`value_sampleKs_affine_le`).
-* **Rep `r`'s list** (`padList`): the row families, witness lanes then the rep's extra lanes, within
-  the padded radius of the rep's rows. A family's next-level message is its witness lanes' messages
-  folded by the lane challenges plus its extra lanes' weighted by `ρ` (`padFold`).
-* **Decoding** (`decode_pad`): if no fold round and no extra coin was an MCA event, and the padded
-  column agrees with the encoding of `G` on `(1 − γ')·2^d` positions, then `G` is `padFold` of a
-  family in the list. The padding correction `ybar` is then the family's folded padding.
--/
+/-! The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s: the lane rounds, the extra lanes' coins, rep
+`r`'s list and decoding. -/
 
 @[expose] public section
 
@@ -47,8 +31,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## The lane rounds without their last message -/
-
 theorem value_sampleK_bind_mono (A : Arith F K) {α β : Type} {p : α → Prop} {p' : β → Prop}
     {f : K → Game α} {g : K → Game β} (h : ∀ r, value p (f r) ≤ value p' (g r)) :
     value p ((drawK A).bind f) ≤ value p' ((drawK A).bind g) := by
@@ -57,7 +39,6 @@ theorem value_sampleK_bind_mono (A : Arith F K) {α β : Type} {p : α → Prop}
   rw [value_coin, value_coin]
   exact Finset.sum_le_sum fun w _ => mul_le_mul_right (h _) _
 
-/-- **The lane rounds without their last message** accept no more often than with it. -/
 theorem value_foldRoundsNL_le (A : Arith F K) :
     ∀ (k : ℕ) (p : List K × K → Prop) (s : K) (q : Quad K), 1 ≤ k →
       value p (foldRoundsNL A k s q) ≤
@@ -83,14 +64,11 @@ theorem value_foldRoundsNL_le (A : Arith F K) :
       rw [value_bind_ret, value_bind_ret]
       exact value_foldRoundsNL_le A (k + 1) (fun out => p (r :: out.1, out.2)) _ _ (by omega)
 
-/-! ## The extra lanes' coins -/
-
 theorem sampleKs_succ (A : Arith F K) (e : ℕ) :
     sampleKs A (e + 1) = (drawK A).bind fun r => (sampleKs A e).bind fun rs => Game.ret (Fin.cons r rs) :=
   rfl
 
 omit [DecidableEq K] in
-/-- An affine equation with a nonzero constant has at most one root. -/
 theorem prCoin_affine_le (a c : K) (ha : a ≠ 0) :
     prCoin (fun r : K => a + r * c = 0) ≤ 1 / Fintype.card K := by
   classical
@@ -111,8 +89,6 @@ theorem prCoin_affine_le (a c : K) (ha : a ≠ 0) :
     · gcongr
       exact_mod_cast hdeg
 
-/-- **The restarted claim.** If `a_M ≠ 0` for every list element, the `e` coins make some
-`a_M + Σ_i ρ_i·c_{M,i}` vanish with probability at most `e·|S|/|K|`. -/
 theorem value_sampleKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Finset ι) :
     ∀ (e : ℕ) (a : ι → K) (c : ι → Fin e → K), (∀ M ∈ S, a M ≠ 0) →
       value (fun ρ : Fin e → K => ∃ M ∈ S, a M + ∑ i, ρ i * c M i = 0) (sampleKs A e) ≤
@@ -151,7 +127,6 @@ theorem value_sampleKs_affine_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S
         ring_nf
         exact le_rfl
 
-/-- No extra lane's coin is an MCA event: the lanes are added one at a time, `w ↦ w + ρ_i·X_i`. -/
 def ExtrasGood {ι : Type} [Fintype ι] (code : Submodule K (ι → K)) (δ : ℝ) :
     (e : ℕ) → (Fin e → K) → (Fin e → ι → K) → (ι → K) → Prop
   | 0, _, _, _ => True
@@ -159,8 +134,6 @@ def ExtrasGood {ι : Type} [Fintype ι] (code : Submodule K (ι → K)) (δ : �
       ExtrasGood code δ e (fun i => ρ i.succ) (fun i => Xs i.succ) (fun q => w q + ρ 0 * Xs 0 q)
 
 omit [DecidableEq K] in
-/-- **The extra lanes, deterministically.** If no extra coin is an MCA event and `w + Σ_i ρ_i·X_i`
-agrees with a codeword on a set `T` of at least `(1 − δ)n` positions, so do `w` and every `X_i`. -/
 theorem agree_of_extras {ι : Type} [Fintype ι] (code : Submodule K (ι → K)) (δ : ℝ) :
     ∀ (e : ℕ) (ρ : Fin e → K) (Xs : Fin e → ι → K) (w : ι → K), ExtrasGood code δ e ρ Xs w →
       ∀ T : Finset ι, (T.card : ℝ) ≥ Fintype.card ι * (1 - δ) →
@@ -180,8 +153,6 @@ theorem agree_of_extras {ι : Type} [Fintype ι] (code : Submodule K (ι → K))
       refine Fin.cases ⟨(p 1).val, (p 1).property, fun q hq => by rw [hp 1 q hq]; rfl⟩
         (fun j => hrest j) i
 
-/-- **The extra lanes' MCA events.** Over the `e` coins, on fixed rows, some coin is an MCA event
-with probability at most `e·ε`. -/
 theorem value_sampleKs_extras_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fintype ι]
     (code : Submodule K (ι → K)) (δ : ℝ) (ε : ℝ≥0∞)
     (hε : ∀ U : Fin 2 → ι → K, prCoin (fun γ : K => IsMCA (AffineLineGenerator K) code γ U δ) ≤ ε) :
@@ -200,8 +171,6 @@ theorem value_sampleKs_extras_le (A : Arith F K) (hA : A.Correct) {ι : Type} [F
         simp only [ExtrasGood, Fin.cons_zero, Fin.cons_succ, not_and] at h
         exact h hr
       · rw [Nat.cast_succ, add_mul, one_mul, add_comm]
-
-/-! ## Rep `r`'s list -/
 
 /-- Rep `r`'s lanes: the witness lanes, then its extra lanes. -/
 def padLane (k0 e r : ℕ) : Fin (2 ^ k0 + e) → ℕ :=
@@ -227,23 +196,17 @@ def padWit {k0 e cols t : ℕ} (c₀ : F) (R : Fin (2 ^ k0 + e) → Fin (2 ^ col
     Message F k0 cols :=
   fun ℓ => padMsgAt c₀ (R (Fin.castAdd e ℓ))
 
-/-- **A row family's next-level message**: its witness lanes' messages folded by `ch`, plus its
-extra lanes' weighted by `ρ`. -/
 def padFold (A : Arith F K) {k0 e cols t : ℕ} (c₀ : F) (ch : List K) (ρ : Fin e → K)
     (R : Fin (2 ^ k0 + e) → Fin (2 ^ cols + t) → F) (x : ℕ) : K :=
   foldMsg A ch (padWit c₀ R) x + ∑ i, ρ i *
     (if h : x < 2 ^ cols then A.embed (padMsgAt c₀ (R (Fin.natAdd (2 ^ k0) i)) ⟨x, h⟩) else 0)
 
-/-- The padded code over `K`. -/
 noncomputable def codePad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ)
     (hd : l.logLen ≤ 64) : Submodule K (Fin (2 ^ l.logLen) → K) :=
   ReedSolomon.code (domainK A hA l.logLen hd) (2 ^ l.logCols + t)
 
-/-- Rep `r`'s extra rows over `K`. -/
 def xrowsK (A : Arith F K) (k0 e r d : ℕ) (C : Oracle F) : Fin e → Fin (2 ^ d) → K :=
   fun i q => A.embed (C (extraLane k0 e r i) q.val)
-
-/-! ## Decoding the padded column -/
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem Xhat_lift (A : Arith F K) (c cols : ℕ) (hc : c < 2 ^ cols) :
@@ -253,7 +216,6 @@ theorem Xhat_lift (A : Arith F K) (c cols : ℕ) (hc : c < 2 ^ cols) :
       rw [← add_assoc, Xhat_succ_low A (cols + j) c
         (lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num) (by omega))), Xhat_lift A c cols hc j ω]
 
-/-- A `K` combination of the first `k` monomials, with `ℕ`-indexed coefficients. -/
 def encKN (A : Arith F K) (d k : ℕ) (b : ℕ → K) (q : ℕ) : K :=
   ∑ c ∈ Finset.range k, b c * A.embed (A.Xhat c d (A.omega q))
 
@@ -263,7 +225,6 @@ theorem encKN_eq_encKAt (A : Arith F K) (d k : ℕ) (b : ℕ → K) (q : ℕ) :
   unfold encKN encKAt
   rw [← Fin.sum_univ_eq_sum_range (fun c => b c * A.embed (A.Xhat c d (A.omega q))) k]
 
-/-- **A `K` combination of `k` monomials vanishing on `k` positions is zero**, `ℕ`-indexed. -/
 theorem encKN_eq_zero (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64)
     (hk : k ≤ 2 ^ d) (b : ℕ → K) (T : Finset (Fin (2 ^ d))) (hT : k ≤ T.card)
     (h : ∀ q ∈ T, encKN A d k b q.val = 0) : ∀ c < k, b c = 0 := by
@@ -272,7 +233,6 @@ theorem encKN_eq_zero (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 4
     rw [← encKN_eq_encKAt]; exact h q hq
   exact congrFun this ⟨c, hc⟩
 
-/-- The next level's encoding on the padded code's monomials. -/
 theorem encK_eq_encKN (A : Arith F K) (l : Level) (t : ℕ) (hcols : l.logCols ≤ l.logLen)
     (G : ℕ → K) (q : ℕ) :
     encK A l.logCols G q = encKN A l.logLen (2 ^ l.logCols + t)
@@ -287,15 +247,12 @@ theorem encK_eq_encKN (A : Arith F K) (l : Level) (t : ℕ) (hcols : l.logCols �
   rw [show l.logCols + (l.logLen - l.logCols) = l.logLen by omega] at this
   rw [if_pos hx', this]
 
-/-- `ybar`, `ℕ`-indexed. -/
 def ybarN {t : ℕ} (ybar : Fin t → K) (j : ℕ) : K := if h : j < t then ybar ⟨j, h⟩ else 0
 
-/-- The padding correction's coefficients on the padded code's monomials. -/
 def padCorrN (A : Arith F K) (cols t : ℕ) (c₀ : F) (ybar : Fin t → K) (c : ℕ) : K :=
   (if c < t then ybarN ybar c * A.embed c₀ else 0) +
     (if 2 ^ cols ≤ c then ybarN ybar (c - 2 ^ cols) else 0)
 
-/-- The padding correction on the padded code's monomials. -/
 theorem padCorr_eq_encKN (A : Arith F K) (l : Level) (t : ℕ) (ht : t ≤ 2 ^ l.logCols) (c₀ : F)
     (ybar : Fin t → K) (q : ℕ) :
     padCorr A l.logLen l.logCols t c₀ ybar q =

@@ -5,23 +5,8 @@ public import ArkLib.Data.CodingTheory.ReedSolomon.Interleaved
 public import Definitions.Flock.Defs
 import Proofs.Flock.Soundness.Defs
 
-/-!
-# The list size: at most `L₀` codewords near any level-0 table
-
-Every phase of `rep_sound` pays a union bound over the codewords within the level-0 proximity
-radius of the committed table (`closeMsgs`). This file bounds their number by `listBound₀ =
-100·2^r` at rate `2^-r` (`closeMsgs_card_le`), from ArkLib's Johnson bound for interleaved
-Reed–Solomon codes (`irs_lambda_le_johnson_mds`: at radius `1 − √ρ − η`, at most `1/(2ηρ)`
-codewords). The bridge:
-
-* a table, read position first (`tr`), is an interleaved word; an encoded message is a codeword of
-  `irsCode` on the level's evaluation points, because each row is the evaluation of a polynomial of
-  degree below `2^cols` (the novel basis, `Arith.Correct.xhat_poly`);
-* "close" (`Close`: every lane agrees on a `1 − γ` fraction of positions) is relative block
-  Hamming distance at most `γ`;
-* encoding is injective (a nonzero polynomial of degree below `2^cols ≤ 2^d` cannot vanish on `2^d`
-  distinct points), so distinct close messages are distinct close codewords.
--/
+/-! At most `listBound₀` codewords lie near any level-0 table, from ArkLib's Johnson bound for interleaved Reed–Solomon
+codes. -/
 
 @[expose] public section
 
@@ -32,14 +17,12 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The level's evaluation points, as an embedding. -/
 def domainEmb (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ F :=
   ⟨fun q => A.omega q.val, fun q q' h => Fin.ext (hA.omega_injective d hd q.isLt q'.isLt h)⟩
 
 theorem domainEmb_apply (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) (q : Fin (2 ^ d)) :
     domainEmb A hA d hd q = A.omega q.val := rfl
 
-/-- A table read position first: an interleaved word. -/
 def tr {lanes d : ℕ} (T : Table F lanes d) : Fin (2 ^ d) → Fin (2 ^ lanes) → F := fun q ℓ => T ℓ q
 
 /-- The novel-basis polynomials of `Arith.Correct.xhat_poly`. -/
@@ -76,7 +59,6 @@ theorem rowPoly_natDegree (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤
   have : 0 < 2 ^ L := Nat.two_pow_pos L
   omega
 
-/-- An encoded message is an interleaved Reed–Solomon codeword on the level's points. -/
 theorem tr_encode_mem (A : Arith F K) (hA : A.Correct) {lanes cols : ℕ} (d : ℕ)
     (hcols : cols ≤ 40) (hd : d ≤ 64) (M : Message F lanes cols) :
     tr (encode A d M) ∈ ReedSolomon.Interleaved.irsCode (domainEmb A hA d hd)
@@ -89,13 +71,11 @@ theorem tr_encode_mem (A : Arith F K) (hA : A.Correct) {lanes cols : ℕ} (d : �
     Polynomial.eval (domainEmb A hA d hd q) (rowPoly A hA hcols (M ℓ))
   rw [domainEmb_apply, rowPoly_eval A hA hcols]
 
-/-- Encoding is injective once the code has at least as many positions as coefficients. -/
 theorem encode_injective (A : Arith F K) (hA : A.Correct) {lanes cols d : ℕ} (hcd : cols ≤ d)
     (hcols : cols ≤ 40) (hd : d ≤ 64) :
     Function.Injective (fun M : Message F lanes cols => tr (encode A d M)) := by
   intro M M' h
   funext ℓ c
-  -- the two row polynomials agree on the `2^d` distinct points
   have hzero : rowPoly A hA hcols (M ℓ) - rowPoly A hA hcols (M' ℓ) = 0 := by
     refine Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero _
       (domainEmb A hA d hd).injective (fun q => ?_) ?_
@@ -109,7 +89,6 @@ theorem encode_injective (A : Arith F K) (hA : A.Correct) {lanes cols d : ℕ} (
       have h2 := rowPoly_natDegree A hA hcols (M' ℓ)
       have h3 : 2 ^ cols ≤ 2 ^ d := Nat.pow_le_pow_right (by norm_num) hcd
       omega
-  -- so their coefficient vectors agree, by linear independence
   have hsum : ∑ c', (M ℓ c' - M' ℓ c') • xP A hA cols hcols c' = 0 := by
     rw [← hzero]
     simp only [rowPoly, ← Finset.sum_sub_distrib, sub_smul, Polynomial.smul_eq_C_mul, ← sub_mul,
@@ -117,7 +96,6 @@ theorem encode_injective (A : Arith F K) (hA : A.Correct) {lanes cols d : ℕ} (
   have := Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA cols hcols) _ hsum c
   exact sub_eq_zero.1 this
 
-/-- Closeness of tables is relative block Hamming distance. -/
 theorem relHammingDist_tr_le {lanes d : ℕ} (γ : ℝ) (T U : Table F lanes d) (h : Close γ T U) :
     (Code.relHammingDist (tr T) (tr U) : ℝ) ≤ γ := by
   classical
@@ -146,9 +124,6 @@ theorem relHammingDist_tr_le {lanes d : ℕ} (γ : ℝ) (T U : Table F lanes d) 
   linarith
 
 
-/-! ## The list size -/
-
-/-- A `fast100` schedule has a level 0. -/
 theorem fast100_levels_ne_nil : ∀ m s, fast100 m = some s → s.levels ≠ [] := by
   intro m s h
   have hm : ∀ m', fast100 m' ≠ none → 22 ≤ m' ∧ m' ≤ 35 := by
@@ -160,7 +135,6 @@ theorem fast100_levels_ne_nil : ∀ m s, fast100 m = some s → s.levels ≠ [] 
   obtain ⟨h1, h2⟩ := hm m (by simp [h])
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; simp [mk])
 
-/-- A `fast100` schedule is for the statement's `m`. -/
 theorem fast100_m : ∀ m s, fast100 m = some s → s.m = m := by
   intro m s h
   have hm : ∀ m', fast100 m' ≠ none → 22 ≤ m' ∧ m' ≤ 35 := by
@@ -172,7 +146,6 @@ theorem fast100_m : ∀ m s, fast100 m = some s → s.m = m := by
   obtain ⟨h1, h2⟩ := hm m (by simp [h])
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; rfl)
 
-/-- At rate `2^-r`, `1/(2ηρ) = 100·2^r`. -/
 theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((100 * 2 ^ r : ℕ) : ℝ) := by
   unfold eta
   push_cast
@@ -182,9 +155,6 @@ theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((100 * 2
   ring
 
 open Classical in
-/-- **The list size at any level.** At most `listBound l = 100·2^r` messages with `2^lanes` lanes
-encode within `l`'s radius of any table: ArkLib's Johnson bound for `l`'s interleaved
-Reed–Solomon code, `1/(2ηρ)`. -/
 theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Fits) (lanes : ℕ)
     (T : Table F lanes l.logLen) :
     (Finset.univ.filter fun M : Message F lanes l.logCols =>
@@ -234,8 +204,6 @@ theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Fits)
   exact_mod_cast h1
 
 open Classical in
-/-- **The list size.** At most `listBound₀ = 100·2^r` messages encode within the level-0 radius of
-any table: `card_close_le` at level 0. -/
 theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
     (hsch : fast100 m = some sch) (C : Oracle F) :
     (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ sch.listBound₀ := by

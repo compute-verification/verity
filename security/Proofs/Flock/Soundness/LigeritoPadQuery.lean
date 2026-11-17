@@ -18,17 +18,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# The padded level 0's queries, and on to level 1
-
-`phaseA` for the padded level 0 (`phaseA0Pad`): from `PostPad0`, the level-1 commitment, its two
-out-of-domain samples, and level 0's queries on the padded column leave `PreFold` on level 1,
-except with probability `midAPad`. The out-of-domain samples are `phaseA`'s (`value_twoOod_good`).
-The queries are `phaseA`'s on a column function `v` (`value_queryAndBatchV_le`,
-`exists_zero_of_not_preFoldV`). A claimed fold that satisfies the claim is far from the padded
-column, since otherwise it decodes to a family of the list (`decode_pad`), whose claim is false
-(`query_bound_pad`). Its mismatch survives the queries with probability at most `(√ρ' + η)^Q`.
--/
+/-! The padded level 0's queries and on to level 1 (`phaseA0Pad`, `phaseA` for the padded level 0). -/
 
 @[expose] public section
 
@@ -40,9 +30,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **After the padded level 0's folds and extra lanes** (level 0's `PostFold`): the running claim
-is false for every family of rep `r`'s list, against the next stage's weight, and no fold round and
-no extra coin was an MCA event. -/
 structure PostPad0 (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (l : Level)
     (hd64 : l.logLen ≤ 64) (t : ℕ) (c₀ : F) (k0 e r : ℕ) (C : Oracle F) (ch : List K)
     (ρ : Fin e → K) (st : LigState F K) : Prop where
@@ -54,8 +41,6 @@ structure PostPad0 (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (l
     (foldAllRows k0 ch (rowsK A k0 l.logLen C))
   doom : ∀ M ∈ padList A l t k0 e r C, st.s ≠ ∑ x ∈ Finset.range (2 ^ l.logCols),
     padFold A c₀ ch ρ M x * resAt A n b ch st.levels st.oods st.cons l.logCols x
-
-/-! ## The queries on a column function -/
 
 theorem queryAndBatchV_eq (A : Arith F K) (lv : Level) (v : ℕ → K) (start : ℕ)
     (st : LigState F K) :
@@ -69,17 +54,14 @@ theorem queryAndBatchV_eq (A : Arith F K) (lv : Level) (v : ℕ → K) (start : 
             cons := st.cons ++
               [⟨lv.logCols, positions A lv.queries lv.logLen w, List.ofFn α, β, start⟩] } := rfl
 
-/-- The consistency claim's error against a claimed fold `G`: `Σ_j eq(α)_j·(v[p_j] − Enc(G)[p_j])`. -/
 def consGapV (A : Arith F K) (cols : ℕ) (v : ℕ → K) (G : ℕ → K) (α : List F) (pos : List ℕ) : K :=
   ((pos.zipIdx).map fun pj => A.embed (eqList α pj.2) * (v pj.1 - encK A cols G pj.1)).sum
 
 open Classical in
-/-- The positions where `v` differs from the encoding of `G`. -/
 noncomputable def mismatchV (A : Arith F K) (cols d : ℕ) (v : ℕ → K) (G : ℕ → K) : Finset ℕ :=
   (Finset.range (2 ^ d)).filter fun p => v p ≠ encK A cols G p
 
 open Classical in
-/-- **The queries and the consistency coins, on a column function.** As `value_queryAndBatch_le`. -/
 theorem value_queryAndBatchV_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd : l.logLen ≤ 64)
     (hQ : l.queries ≤ 2 ^ 64) (v : ℕ → K) (start : ℕ) (st : LigState F K)
     {ι : Type} (S : Finset ι) (D : ι → K) (G : ι → ℕ → K) (qe : ℝ)
@@ -184,8 +166,6 @@ theorem card_agree_add_mismatchV (A : Arith F K) (cols d : ℕ) (v : ℕ → K) 
   unfold mismatchV
   exact Finset.filter_congr_decidable _ _ _
 
-/-- **The far fold, padded.** A claimed fold `G` whose value is the claim is far from the padded
-column: its mismatch survives the queries with probability at most `(√ρ' + η)^Q`. -/
 theorem query_bound_pad (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (l : Level) (t : ℕ)
     (hd : l.logLen ≤ 40) (hd64 : l.logLen ≤ 64) (hcols : l.logCols ≤ l.logLen)
     (ht : t ≤ 2 ^ l.logCols) (hk : 2 ^ l.logCols + t ≤ 2 ^ l.logLen) (c₀ : F) (k0 e r : ℕ)
@@ -228,8 +208,6 @@ theorem query_bound_pad (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → 
     rw [sub_nonneg, div_le_one h2]; exact_mod_cast hmis
   exact pow_le_pow_left₀ hnn hle _
 
-/-- **A failed `PreFold` is a zero batched difference**, on a column function: as
-`exists_zero_of_not_preFold`. -/
 theorem exists_zero_of_not_preFoldV (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
     (initial : List K) (l l' : Level) (v : ℕ → K) (st : LigState F K)
     (hok : PostOK initial st.levels st.oods st.cons l.logCols)
@@ -272,10 +250,6 @@ theorem exists_zero_of_not_preFoldV (A : Arith F K) (hA : A.Correct) (n : ℕ) (
   dsimp only
   linear_combination hM'
 
-/-! ## From the padded level 0 to level 1 -/
-
-/-- The next commitment, its OOD samples and level 0's queries on the column function `v`, then the
-continuation (as `midRound`). -/
 def midRoundV (A : Arith F K) (lv : Level) (dim : ℕ) (v : ℕ → K) (st : LigState F K)
     (k : Oracle F → LigState F K → Game Bool) : Game Bool := do
   let C' ← recv (Oracle F)
@@ -284,7 +258,6 @@ def midRoundV (A : Arith F K) (lv : Level) (dim : ℕ) (v : ℕ → K) (st : Lig
   let st ← queryAndBatchV A lv v st.levels.length st
   k C' st
 
-/-- Everything of `padMidLevelError` after level 0's folds and extra lanes. -/
 noncomputable def midAPad (l l' : Level) (t : ℕ) : ℝ :=
   pairs l'.listBound * (((l'.logCols + l'.lanes : ℕ) : ℝ) / qF) ^ 2 + 2 * l'.listBound / qF
     + l.padQueryError t + l'.listBound * ceilLog2 l.queries / qF + l'.listBound / qF
@@ -366,9 +339,6 @@ theorem midAPad_bound (l l' : Level) (t L : ℕ) (hL : L ≤ l'.listBound)
     _ = _ := by ring
 
 open Classical in
-/-- **From the padded level 0 to level 1.** From `PostPad0`, the commitment of level 1, its two
-OOD samples and level 0's queries on the padded column leave `PreFold` on level 1 except with
-probability `midAPad`. -/
 theorem phaseA0Pad (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (l l' : Level) (t : ℕ)
     (hd : l.logLen ≤ 40) (hd64 : l.logLen ≤ 64) (hcols : l.logCols ≤ l.logLen)
     (ht : t ≤ 2 ^ l.logCols) (hk : 2 ^ l.logCols + t ≤ 2 ^ l.logLen) (hf' : l'.Fits)

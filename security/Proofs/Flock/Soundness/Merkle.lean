@@ -3,16 +3,7 @@ module
 public import Definitions.Flock.Merkle
 public import Mathlib.Tactic.Basic
 
-/-!
-# Merkle trees: the facts the binding rests on
-
-`append_inj`: a node's input determines its two children, since all digests have one length. `verifiesL_plain`: an
-opening verifies under the unsalted leaf scheme (`Leaf.plain`) exactly when it verifies (`Verifies`).
-
-**Binding** is in `Proofs.Flock.Soundness.MerklePair`: two openings of one position that both verify against one tree
-top (`Definitions.Flock.Merkle`) but carry different columns give two byte strings that collide under `H`
-(`openCollPair_spec`, and `openCollPairL_spec` for any leaf scheme, salted ones included).
--/
+/-! Merkle trees: the facts the binding rests on, which `Proofs.Flock.Soundness.MerklePair` proves. -/
 
 @[expose] public section
 
@@ -22,7 +13,6 @@ variable {Col D : Type}
 
 variable (H : List UInt8 → D) (E : Enc Col D)
 
-/-- `up` is `H(acc ‖ sib)` at an even index and `H(sib ‖ acc)` at an odd one. -/
 theorem up_eq (idx : ℕ) (acc sib : D) :
     up H E idx acc sib = if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc) := by
   unfold up upIn

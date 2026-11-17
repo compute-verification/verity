@@ -9,16 +9,8 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Nodes
 
-/-!
-# The template fold's reference, in closed form
-
-`Tmpl.foldRef` is the lincheck fold of a templated unit summed over its unrolled rows at their committed positions
-`π = Tmpl.posMap`: entry `s < 64` is `Σ_x Σ_{v ∈ A_x} [π v mod 64 = s] · α · e(π x) · g(π v)` plus the same over `B`
-without `α`, with `e(q) = lw[q mod 64] · eq(ρ, ⌊q/64⌋)` and `g(q) = eq(r, ⌊q/64⌋)`.
-
-- `foldRef_eq_rows`: its loops are a `foldl` over the rows (`foldRefRows`).
-- `of_eqAt`, `eqTail_halves`: the fold point's `eq` tables, read in two halves, are `eqTable`'s entries.
--/
+/-! The template fold's reference `Tmpl.foldRef` in closed form, as `project ∘ baseOf` at the matrices `unrollAt`
+commits (`foldRef_eq_project`). -/
 
 @[expose] public section
 
@@ -37,8 +29,6 @@ theorem size_le_pow_log2ceil (n : ℕ) : n ≤ 2 ^ log2ceil n := by
   · have := Nat.lt_log2_self (n := n - 1)
     omega
 
-/-! ## Loops that only yield -/
-
 theorem list_forIn_ok {α β ε : Type} (l : List α) (b : β) (f : α → β → β) :
     forIn (m := Except ε) l b (fun a s => Except.ok (ForInStep.yield (f a s))) =
       Except.ok (l.foldl (fun s a => f a s) b) := by
@@ -51,15 +41,11 @@ theorem array_forIn_ok {α β ε : Type} (l : Array α) (b : β) (f : α → β 
       Except.ok (l.foldl (fun s a => f a s) b) := by
   rw [← Array.forIn_toList, list_forIn_ok, Array.foldl_toList]
 
-/-! ## `foldRef` as a fold over the rows -/
-
-/-- One logical row's entries added at their positions: `A`'s weighted by `α`, `B`'s by 1. -/
 def rowStep (pt : FoldPt) (π : Array ℕ) (ra rb : Array (Array ℕ)) (p : Array F128) (x : ℕ) : Array F128 :=
   let ex := pt.e (π.getD x 0)
   let p := (ra.getD x #[]).foldl (fun p v => addAt p (π.getD v 0) (pt.alpha * ex * pt.g (π.getD v 0))) p
   (rb.getD x #[]).foldl (fun p v => addAt p (π.getD v 0) (ex * pt.g (π.getD v 0))) p
 
-/-- `foldRef`'s loops, on rows `ra`, `rb` at positions `π`. -/
 def foldRefRows (pt : FoldPt) (π : Array ℕ) (ra rb : Array (Array ℕ)) : Array F128 :=
   (List.range ra.size).foldl (rowStep pt π ra rb) (Array.replicate 64 0)
 
@@ -73,8 +59,6 @@ theorem foldRef_eq_rows (t : Tmpl) (lays : Array Lay) (alpha : F128) (lw rho r :
   | ok acc =>
     simp only [bind, Except.bind, pure, Except.pure]
     simp [Std.Legacy.Range.forIn_eq_forIn_range', array_forIn_ok, list_forIn_ok, List.range_eq_range']
-
-/-! ## `addAt`, read back -/
 
 theorem addAt_size (p : Array F128) (q : ℕ) (v : F128) : (addAt p q v).size = p.size := by simp [addAt]
 
@@ -101,9 +85,6 @@ theorem foldl_addAt_get (l : List ℕ) (qf : ℕ → ℕ) (w : ℕ → F128) (p 
     simp only [List.foldl_cons, List.map_cons, List.sum_cons]
     rw [ih _ (by rw [addAt_size]; exact hs), addAt_get p _ _ hs, add_assoc]
 
-/-! ## `foldRef`'s entries -/
-
-/-- Logical row `x`'s share of entry `s`. -/
 noncomputable def rowTerm (pt : FoldPt) (π : Array ℕ) (ra rb : Array (Array ℕ)) (s x : ℕ) : GF128 :=
   ((ra.getD x #[]).toList.map fun v =>
       if π.getD v 0 % 64 = s then of (pt.alpha * pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0).sum +
@@ -134,7 +115,6 @@ theorem foldl_rowStep_get (l : List ℕ) (p : Array F128) {s : ℕ} (hs : s < p.
     simp only [List.foldl_cons, List.map_cons, List.sum_cons]
     rw [ih _ (by rw [rowStep_size]; exact hs), rowStep_get _ _ _ _ _ _ hs, add_assoc]
 
-/-- **`foldRef`'s entry `s`**: every logical row's share, summed. -/
 theorem foldRefRows_size : (foldRefRows pt π ra rb).size = 64 := by
   unfold foldRefRows
   suffices h : ∀ (l : List ℕ) (p : Array F128), (l.foldl (rowStep pt π ra rb) p).size = p.size by
@@ -152,9 +132,6 @@ theorem foldRefRows_get {s : ℕ} (hs : s < 64) :
 
 end
 
-/-! ## The fold point's `eq` tables -/
-
-/-- `Tmpl.eqAt r lo n u` is `eq(r[lo .. lo + n], u)` below `2^n`. -/
 theorem of_eqAt (r : Array F128) (lo : ℕ) (n u : ℕ) (hu : u < 2 ^ n) :
     of (Tmpl.eqAt r lo n u) = FlockLevel3.eqAt (fun j : Fin n => of (r.getD (lo + j.val) 0)) u := by
   unfold Tmpl.eqAt
@@ -173,7 +150,6 @@ theorem of_eqAt (r : Array F128) (lo : ℕ) (n u : ℕ) (hu : u < 2 ^ n) :
     · simp [hb]
     · simp [hb, of_add, ← one_eq, add_comm]
 
-/-- `eq(r, u)` read in two halves (`halves`, `eqTail`) is `eqTable r`'s entry `u`. -/
 theorem eqTail_halves (r : Array F128) (u : ℕ) (hu : u < 2 ^ r.size) :
     of (Tmpl.eqTail (Tmpl.halves r) 0 u) = of (eqTable r)[u]! := by
   have hh : r.size / 2 ≤ r.size := Nat.div_le_self _ _
@@ -200,8 +176,6 @@ theorem eqTail_halves (r : Array F128) (u : ℕ) (hu : u < 2 ^ r.size) :
     rfl
   rw [e1, eqAt_split]
   simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.zero_add]
-
-/-! ## The committed side: `project ∘ baseOf` -/
 
 theorem list_sum_range {β : Type} [AddCommMonoid β] (f : ℕ → β) : ∀ l : List ℕ,
     (l.map f).sum = ∑ t ∈ Finset.range l.length, f (l.getD t 0)
@@ -235,7 +209,6 @@ theorem sparse_ofRows_dims {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse}
   cases h
   exact ⟨rfl, rfl⟩
 
-/-- Row `p` of a matrix `Sparse.ofRows` built: its length and its columns are `rows[p]`'s. -/
 theorem sparse_col {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
     (hw : width ≤ 2 ^ 32) {p : ℕ} (hp : p < rows.size) :
     m.len[p]! = (rows.getD p #[]).size ∧ ∀ t < (rows.getD p #[]).size, m.col p t = (rows.getD p #[])[t]! := by
@@ -263,7 +236,6 @@ theorem sparse_col {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sp
         Array.getElem?_eq_getElem hsz, Option.getD_some, getElem!_pos m.start p hsz]
     rw [← e, hrow]
 
-/-- `(Xᵀe)[i']` for a matrix `Sparse.ofRows` built, over its rows. -/
 theorem sparseT_rows {rows : Array (Array ℕ)} {W : ℕ} {m : Sparse} (h : Sparse.ofRows rows W = .ok m)
     (hw : W ≤ 2 ^ 32) (eLo : Array F128) (hN : rows.size ≤ eLo.size) (i' : ℕ) :
     sparseT m eLo i' = ∑ p ∈ Finset.range rows.size, ∑ t ∈ Finset.range (rows.getD p #[]).size,
@@ -276,7 +248,6 @@ theorem sparseT_rows {rows : Array (Array ℕ)} {W : ℕ} {m : Sparse} (h : Spar
   refine Finset.sum_congr rfl fun t ht => ?_
   rw [hc t (Finset.mem_range.mp ht)]
 
-/-- A column's share of entry `s` over the slot's `M` words. -/
 theorem sum_slot (M c s : ℕ) (hs : s < 64) (hc : c < 64 * M) (f : ℕ → GF128) :
     ∑ u ∈ Finset.range M, (if c = s + 64 * u then f u else 0) = if c % 64 = s then f (c / 64) else 0 := by
   by_cases h : c % 64 = s
@@ -289,7 +260,6 @@ theorem sum_slot (M c s : ℕ) (hs : s < 64) (hc : c < 64 * M) (f : ℕ → GF12
   · rw [if_neg h]
     exact Finset.sum_eq_zero fun u _ => if_neg (show ¬ c = s + 64 * u by omega)
 
-/-- One matrix's share of `project ∘ baseOf`, regrouped by row. -/
 theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse.ofRows rows W = .ok m)
     (hw : W ≤ 2 ^ 32) (hW : W = 64 * M) (eLo : Array F128) (hN : rows.size ≤ eLo.size) (w : GF128)
     (g : ℕ → GF128) {s : ℕ} (hs : s < 64) :
@@ -328,8 +298,6 @@ theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse
   rw [e]
   exact sum_slot M _ s hs hpt (fun u => w * of eLo[p]! * g u)
 
-/-- **`project ∘ baseOf` on matrices `Sparse.ofRows` built**, regrouped by row: row `p`'s columns `c`, each at entry
-`c mod 64` with the row's `e_lo` weight and `eq(r, ⌊c/64⌋)`. -/
 theorem project_baseOf_rows {rowsA rowsB : Array (Array ℕ)} {sl : ℕ} {A B : Sparse}
     (hA : Sparse.ofRows rowsA (2 ^ sl) = .ok A) (hB : Sparse.ofRows rowsB (2 ^ sl) = .ok B) (hsl : sl ≤ 32)
     (alpha : F128) (lw rho r : Array F128) (hlw : lw.size = 64) (hrho : rho.size + 6 = sl) (hr : r.size = rho.size)
@@ -365,10 +333,6 @@ theorem project_baseOf_rows {rowsA rowsB : Array (Array ℕ)} {sl : ℕ} {A B : 
     side_sum hB hw hW _ (by rw [hE, hNB]; exact hNA) 1 (fun u => of (eqTable r)[u]!) hs, hNB,
     ← Finset.sum_add_distrib]
 
-/-! ## The committed rows, back to the logical ones -/
-
-/-- A sum over the committed rows (`Net.placed`) is the sum over the logical rows, each at its position: `pos` is
-one-to-one, and the gaps are empty. -/
 theorem sum_placed {useful inCols size : ℕ} {pos : Array ℕ} {inv : Array (Option ℕ)}
     (h : Net.posOk useful inCols size pos inv = true) (ra rb : Array (Array ℕ))
     (F : ℕ → Array ℕ → Array ℕ → GF128) (hF : ∀ p, F p #[] #[] = 0) :
@@ -393,8 +357,6 @@ theorem sum_placed {useful inCols size : ℕ} {pos : Array ℕ} {inv : Array (Op
       hp (Finset.mem_image.mpr ⟨x, Finset.mem_range.mpr hx, he⟩)
     show F p ((Net.placed pos inv ra).getD p #[]) ((Net.placed pos inv rb).getD p #[]) = 0
     rw [Net.placed_gap h ra hn, Net.placed_gap h rb hn, hF]
-
-/-! ## The unrolled rows' count -/
 
 theorem write_size {acc acc' : Acc} {c : ℕ} {a b : Array ℕ} (h : write acc c a b = .ok acc') :
     acc'.ra.size = acc.ra.size ∧ acc'.rb.size = acc.rb.size := by
@@ -436,7 +398,6 @@ theorem place_size (defs : Array Def) (k : ℕ) : ∀ (fuel d o : ℕ) (inp : Li
           have e := place_size defs k fuel _ _ _ a' b' hab'
           exact ⟨e.1.trans ha'.1, e.2.trans ha'.2⟩) _ a b hab ha) _ acc1 acc' h2 p1
 
-/-- `Tmpl.rows` has one row per column of the root. -/
 theorem rows_size {t : Tmpl} {acc : Acc} (h : t.rows = .ok acc) :
     acc.ra.size = (t.defs.getD t.root default).cols ∧ acc.rb.size = (t.defs.getD t.root default).cols := by
   unfold Tmpl.rows at h
@@ -445,8 +406,6 @@ theorem rows_size {t : Tmpl} {acc : Acc} (h : t.rows = .ok acc) :
   have h2 := write_size h
   simp only [Acc.empty, Array.size_replicate] at h1
   exact ⟨h2.1.trans h1.1, h2.2.trans h1.2⟩
-
-/-! ## The fold's reference is `project ∘ baseOf` -/
 
 theorem getElem!_getD (p : Array F128) {s : ℕ} (hs : s < p.size) : p[s]! = p.getD s 0 := by
   rw [getElem!_pos p s hs, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hs, Option.getD_some]
@@ -457,8 +416,6 @@ theorem list_range_sum {β : Type} [AddCommMonoid β] (f : ℕ → β) (n : ℕ)
   | zero => simp
   | succ n ih => simp [List.range_succ, Finset.sum_range_succ, ih]
 
-/-- **The template fold's reference is `project ∘ baseOf`** at the matrices `unrollAt` commits: entry `s < 64` of
-`foldRef` is entry `s` of `project (baseOf α (lw ⊗ eq(ρ, ·)) A B none unitLog) (eq(r, ·))`. -/
 theorem foldRef_eq_project {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128} {n' : Net}
     (hP : foldRef t lays alpha lw rho r = .ok P) (hU : Flock.Tmpl.unrollAt t lays = .ok n')
     (hlw : lw.size = 64) (hrho : rho.size + 6 = n'.unitLog) (hr : r.size = rho.size) (hsl : n'.unitLog ≤ 32)

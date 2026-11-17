@@ -6,32 +6,13 @@ public import Proofs.Flock.SpotFlock.WiredCode
 public import Proofs.Flock.SpotFlock.AddressFacts
 public import Proofs.Flock.Verifier.Registered
 
-/-!
-# The ways round 2 reads a registered read
-
-A registered read of an accepted run's checked unit is read one of three ways, by what the auditor's copies name its
-port: at a port a link names, the boundary port the link names, under the statement's roots; at a port a wire names,
-the writer's output port of the interior record, under the replay block's roots; at a port neither names, where the
-interior record has a port of the read's value, the template's own port of the interior record, under the replay
-block's roots. This file states each from round 2's check of the read (`SecondStage.readOk`), with what `readRoots`
-and `readKeyAt` are there:
-
-* `registeredEntry_none_of_inputs`: at what the model holds of the run (`ownOf`: no value pinned or supplied, no
-  table read), round 2's `second-inputs` passes only where round 1's record registers no value;
-* `readsInterior_linked`, `readsInterior_port`: which record round 2 reads the value off, and the entry;
-* `readOk_own`: at a port no link or wire names, a read of a port of the interior record is of the template's own;
-* `read_of_reg`: the entry round 2 passes for a registered read of a checked unit's session, with `second-inputs`;
-* `schema_of_setup`: each registered read of a session that sets up has the schema of the circuit's first port of
-  its name (`Registered.checkPort`);
-* `regNamed_spec`, `regNamed_ne_none`, `reg_of_named`: the registered read named like a port, and that a port a link
-  or a wire names has one.
--/
+/-! The three ways round 2 reads a registered read of an accepted run's checked unit, by what the auditor's copies name
+its port. -/
 
 @[expose] public section
 
 namespace Flock.Registered
 
-/-- **A port `checkPort` accepts has the schema of the circuit's first port of its name.** -/
 theorem checkPort_schema {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
     (h : checkPort c pub t indices reg = .ok ()) :
     ∃ p, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
@@ -53,7 +34,6 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy
 open Lean (Json)
 
-/-- A non-empty array none of whose elements passes has not all of them passing. -/
 theorem nonempty_all_false {α : Type} (xs : Array α) (p : α → Bool) (hp : ∀ x, p x = false) :
     (!xs.isEmpty && xs.all p) = false := by
   by_cases hsz : xs.size = 0
@@ -75,12 +55,10 @@ theorem pass_of_false {a b c : Bool} (ha : a = false) (hb : b = false) : (!a && 
   subst hb
   rfl
 
-/-- A port a circuit has, has the schema Flock frames its rows in. -/
 theorem schemaOf_lt {c : _root_.Flock.Circuit} {q : ℕ} (hq : q < c.ports.size) :
     _root_.Flock.PortRoots.schemaOf c q = _root_.Flock.Registered.portSchema c.ports[q]! := by
   simp [_root_.Flock.PortRoots.schemaOf, hq]
 
-/-- Circuits of the same ports frame each port's rows in the same schema. -/
 theorem schemaOf_ports {c c' : _root_.Flock.Circuit} (hp : c.ports = c'.ports) (q : ℕ) :
     _root_.Flock.PortRoots.schemaOf c q = _root_.Flock.PortRoots.schemaOf c' q := by
   unfold _root_.Flock.PortRoots.schemaOf
@@ -88,9 +66,6 @@ theorem schemaOf_ports {c c' : _root_.Flock.Circuit} (hp : c.ports = c'.ports) (
 
 variable (h : Held)
 
-/-! ## What the model holds of the run -/
-
-/-- **At what the model holds of the run, no link names an opened row**: the model records no table read. -/
 theorem openedRow_ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) (names : Array String)
     (mine : Array (String × Array (Array (String × String)))) (x : Spot.SecondStage.Link) :
     Spot.SecondStage.openedRow (ownOf h st rec draw c₀) names mine x = false := by
@@ -102,9 +77,6 @@ theorem openedRow_ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin)
   unfold Spot.SecondStage.openedRow
   simp only [hsz, Option.isSome_none, Bool.false_and]
 
-/-- **At what the model holds of the run, `second-inputs` passes only where round 1's record registers no value**:
-the model holds no value pinned or supplied and records no table read, so every value the interior registration
-registers is one a replay block's input may not read (`SecondStage.inputsFailure`). -/
 theorem registeredEntry_none_of_inputs {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin}
     (hin : Spot.SecondStage.inputsFailure (ownOf h st rec draw c₀) = none) (v : String) :
     Spot.SecondStage.registeredEntry rec v = none := by
@@ -133,9 +105,6 @@ theorem registeredEntry_none_of_inputs {st : Roots} {rec draw : Json} {c₀ : Fl
       exact pass_of_false h1 (nonempty_all_false _ _ (openedRow_ownOf h st rec draw c₀ _ _))
     | _ => simp [Spot.jsonStrIs, hval] at hv
 
-/-- **A linked read is read off the boundary record, at the port the link names**: at a port a link of the auditor's
-copies names, in a run whose `second-inputs` passes, round 2 reads the value under the statement's roots, off the
-boundary port the link names. -/
 theorem readsInterior_linked {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin}
     (hin : Spot.SecondStage.inputsFailure (ownOf h st rec draw c₀) = none) {t port : String}
     {l : Spot.SecondStage.Link} (hl : heldLink h t port = some l) (v : String) :
@@ -148,8 +117,6 @@ theorem readsInterior_linked {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.
   rw [hlo, hre]
   exact ⟨rfl, rfl⟩
 
-/-- **A read of a port of the interior record at a port no link names is read off the interior record, at that
-port.** -/
 theorem readsInterior_port (st : Roots) {rec : Json} (draw : Json) (c₀ : FlockDeploy.Coin) {t port : String}
     (hl : heldLink h t port = none) {v : String}
     (hp : ((Spot.Record.byPort rec).find? (·.1 == v)).isSome = true) :
@@ -162,8 +129,6 @@ theorem readsInterior_port (st : Roots) {rec : Json} (draw : Json) (c₀ : Flock
   exact ⟨rfl, rfl⟩
 
 variable {h} in
-/-- **At a port no link or wire names, a read of a port of the interior record is of the template's own port**
-(`SecondStage.readOk`, its last arm). -/
 theorem readOk_own {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
     {e : Json} {v : String} (hl : Spot.SecondStage.linkOf own p.template port = none)
     (hw : Spot.SecondStage.wireOf own p.template port = none) (hv : Spot.getD e "value" = .str v)
@@ -181,7 +146,6 @@ theorem readOk_own {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondS
     simp only [hf, Bool.and_eq_true, beq_iff_eq] at hok
     exact hok.1.1
 
-/-- **A member of a record's ports is found by its name.** -/
 theorem port_found {ps : Array (String × Json)} {v : String} {x : Json} (hm : (v, x) ∈ ps) :
     (ps.find? (·.1 == v)).isSome = true := by
   cases hf : ps.find? (·.1 == v) with
@@ -190,12 +154,6 @@ theorem port_found {ps : Array (String × Json)} {v : String} {x : Json} (hm : (
     have hne := Array.find?_eq_none.1 hf (v, x) hm
     simp at hne
 
-/-! ## An accepted run's registered reads -/
-
-/-- **Round 2 passes each registered read of a checked unit's session**: in an accepted run, a registered read `reg`
-of a checked unit's session has an entry of the session statement's registered reads, of `reg`'s value, that
-`SecondStage.readOk` passes at `reg`'s port against the unit's template's part, at what the model holds of the run,
-whose `second-inputs` passes. -/
 theorem read_of_reg {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ} {ins : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -235,8 +193,6 @@ theorem read_of_reg {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : St
     Array.all_eq_true_iff_forall_mem.1 hreads _ hm
   exact ⟨st, rec, draw, ej, hst, hrec, hdraw, getD_of_ok hv, hrd, hin⟩
 
-/-- **Each registered read of a session that sets up has the schema of the circuit's first port of its name**: the
-session's verifier refuses a read whose rows are of another schema than the port's (`Registered.checkPort`). -/
 theorem schema_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hown : ins.registered = some own) :
@@ -252,9 +208,6 @@ theorem schema_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.
     (FlockSoundness.Discharge.ZkReg.checkRegistered_ok hck)
   exact _root_.Flock.Registered.checkPort_schema (hp reg hreg)
 
-/-! ## The registered read named like a port -/
-
-/-- **The registered read named like a port is one of the session's, of the port's name.** -/
 theorem regNamed_spec {ins : FlockDeploy.Ins} {sts : Array _root_.Flock.Stmt} {q : ℕ} {name : String}
     (hname : (sts[0]!.c.ports[q]!).name = name) {reg : _root_.Flock.Registered.Port}
     (hreg : regNamed ins sts q = some reg) :
@@ -264,7 +217,6 @@ theorem regNamed_spec {ins : FlockDeploy.Ins} {sts : Array _root_.Flock.Stmt} {q
   rw [hname] at hp
   exact ⟨own, hown, Array.mem_of_find?_eq_some hfo, eq_of_beq hp⟩
 
-/-- **A port one of the session's registered reads is named like has a registered read named like it.** -/
 theorem regNamed_ne_none {ins : FlockDeploy.Ins} {sts : Array _root_.Flock.Stmt} {q : ℕ} {name : String}
     (hname : (sts[0]!.c.ports[q]!).name = name) {own : Array _root_.Flock.Registered.Port}
     {reg : _root_.Flock.Registered.Port} (hown : ins.registered = some own) (hmem : reg ∈ own)
@@ -276,14 +228,12 @@ theorem regNamed_ne_none {ins : FlockDeploy.Ins} {sts : Array _root_.Flock.Stmt}
     simpa using Array.find?_eq_none.1 hnf reg hmem
   exact hne (hn.trans hname.symm)
 
-/-- A link the auditor's copies find for a template's port is one of the copies', of that template and port. -/
 theorem link_named {t port : String} {l : Spot.SecondStage.Link} (hl : heldLink h t port = some l) :
     ∃ l ∈ h.links.getD #[], l.template = t ∧ l.port = port := by
   have hp := Array.find?_some hl
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
   exact ⟨l, Array.mem_of_find?_eq_some hl, hp.1, hp.2⟩
 
-/-- A wire the auditor's copies find for a template's port is one of the copies', of that template and port. -/
 theorem wire_named {t port : String} {w : Spot.SecondStage.Wire} (hw : heldWire h t port = some w) :
     ∃ wr ∈ h.wires.getD #[], wr.template = t ∧ wr.port = port := by
   have hp := Array.find?_some hw
@@ -291,8 +241,6 @@ theorem wire_named {t port : String} {w : Spot.SecondStage.Wire} (hw : heldWire 
   exact ⟨w, Array.mem_of_find?_eq_some hw, hp.1, hp.2⟩
 
 variable {h} in
-/-- **In an accepted run, a port a wire or a link names has a registered read of the checked unit's session named
-like it** (`named_port_of_stmtOk`). -/
 theorem CheckedRun.reg_of_named {r : CheckedRun h.stage} (hr : r.Ok h) {port : String}
     (hport : (∃ wr ∈ h.wires.getD #[], wr.template = h.names.getD (templateOf h.ms r.u) "" ∧ wr.port = port) ∨
       ∃ l ∈ h.links.getD #[], l.template = h.names.getD (templateOf h.ms r.u) "" ∧ l.port = port) :
@@ -305,9 +253,6 @@ theorem CheckedRun.reg_of_named {r : CheckedRun h.stage} (hr : r.Ok h) {port : S
   rw [hi] at hown
   exact ⟨own, reg, hown, hmem, hn⟩
 
-/-! ## The roots a registered read is read under -/
-
-/-- **Round 2 reads a value off the boundary record under the statement's roots.** -/
 theorem readRoots_of_not_readsInterior {x m₁ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {st : Roots}
     {rec smp : Json}
     (hx : decode x = some st) (hm : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some smp) (ρ t : ℕ)
@@ -318,8 +263,6 @@ theorem readRoots_of_not_readsInterior {x m₁ : Msg} {c₀ : FlockDeploy.Coin} 
   dsimp only
   exact if_neg (by rw [hri]; simp)
 
-/-- **The entry round 2 reads a registered read off**, where the run's statement decodes, its round-1 message is a
-record and its second stage's sample evaluates. -/
 theorem readKeyAt_eq {x m₁ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {st : Roots} {rec smp : Json}
     (hx : decode x = some st) (hm : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some smp) (t : ℕ)
     (port v : String) :
@@ -331,14 +274,12 @@ namespace CheckedRun
 
 variable {h} {r : CheckedRun h.stage} {ω : ℕ → ℕ} {keep : ℕ → Bool}
 
-/-- **Inside its replay block, the wired program opens a gate under the block's roots.** -/
 theorem rootsWired_inside {g : ℕ}
     (hin : g ∈ cutBlock ω r.rb ∧ (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = false) :
     r.rootsWired ω keep g = irootsOf r.m₁ r.ρ := by
   unfold rootsWired
   exact (if_pos hin).trans rfl
 
-/-- **On its replay block's boundary, the wired program opens a gate under the statement's roots.** -/
 theorem rootsWired_boundary {g : ℕ} (hB : (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = true) :
     r.rootsWired ω keep g = r.s.roots := by
   unfold rootsWired

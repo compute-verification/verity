@@ -9,35 +9,8 @@ import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Matches
 import Proofs.Flock.Claims.Scope.Sizes
 
-/-!
-# A session row's commit string is the table row its registered read opens
-
-`rows_open`: at a session statement that sets up as a masked Flock statement with registered ports `own`, in Flock's
-scope with hidden outputs (`ScopedHidden`), and a Flock witness its relation accepts, row `q` of unit `n` of each
-table, as the witness holds it, commits to the table row that the registered read of `q`'s port opens. The commit
-string (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the row hash reads (`InnerRows.rowBytes`), under the
-salt the `hm96` slot reads (`InnerRows.salt`), opens the port's root at the position and through the path the session
-gives the unit (`Registered.opens`). It is `InnerRows.rows_commit_check` (the circuit computes the commit string and the
-public file pins it) after `opens_of_setup` (the registered reads open the public file's rows).
-
-`rows_rooted`: where the statement has one table (`count ≤ 1`), the same commit string opens the population's published
-tree at port `q` (`pubPort`) at the row of the unit the sample drew as instance `n` (`unitOf`, `rowAt`), through
-the path from that row (`pubPath`): it is the population's `b ‖ c` there (`setupHidden_unit`), a leaf of the tree whose
-root Flock's `checkPublic` recomputes (`pubPort_opens`).
-
-`decOf_bitAt`: a layout's decoder at table `j`'s column `y` of the unit's block is the witness's bit there, as
-`InnerRows.bitAt` reads it, the bit `rowBytes` and `salt` read.
-
-`sessionScoped`: the verifier's check puts each session statement in Flock's scope with hidden outputs, since
-`sessionOk` applies Flock's scope check and the hidden-outputs tag (`scoped_of_stmtOkAt`, `scopedHidden_of_checks`),
-so `rows_open` and `rows_rooted` apply at every session statement the check passes.
-
-`reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from one premise on the registration,
-`FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's block, and the
-code's reveal holds an opening of the witness's bit there that passes wherever the row holding it opens either the
-registered read of its port (the session has registered reads) or its population's published tree (a one-table
-session). So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds` and `FrameRows`.
--/
+/-! A session row's commit string is the table row its registered read opens, or its population's published tree's, so
+`SessionOpensTwo` follows from `Embeds` and `FrameRows` (`sessionOpensTwo_of_rows`). -/
 
 @[expose] public section
 
@@ -45,14 +18,10 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **A session statement in Flock's scope with hidden outputs**: where it sets up, its reading passes the verifier's
-statement check (`Readable.Read.check`, the first half of its scope refusal) and hides its outputs. -/
 def ScopedHidden (xS : Msg) : Prop :=
   ∀ ins spec sts, FlockDeploy.setupOf true xS = some (ins, spec, sts) →
     ins.read.check = .ok () ∧ ins.read.tags.hiddenOutputs = true
 
-/-- **A session statement Flock's scope check passes, with hidden outputs, is `ScopedHidden`**: the scope refusal
-(`Parsed.scope`) begins with the statement check, at the reading the setup's tables parse from (`parsed_setupOf`). -/
 theorem scopedHidden_of_checks {xS : Msg} (hs : FlockDeploy.scopeCheck true xS = true) (hh : hiddenOf xS = true) :
     ScopedHidden xS := by
   intro ins spec sts hset
@@ -66,8 +35,6 @@ theorem scopedHidden_of_checks {xS : Msg} (hs : FlockDeploy.scopeCheck true xS =
     exact ((_root_.Flock.Readable.scope_ok_iff _).1 ((_root_.Flock.Readable.isOk_iff _).1 hs)).1
   · cases hs
 
-/-- **The relation at the setup's reading**: where a session statement sets up and the claims' check accepts a witness,
-the reading with the setup's own tables parses, and the witness satisfies the deployed relation there. -/
 theorem relS_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {w : Claims.Flock.Wit} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true) :
@@ -82,9 +49,6 @@ theorem relS_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Ses
     obtain ⟨rfl, hP⟩ := parsed_setupOf hset hp
     exact ⟨hP, hR⟩
 
-/-- **The decoder at a table's column is the witness's bit there**: where a layout's wire for gate `g` of unit `u` is
-table `j`'s column `y` in the session's block circuit, at a session statement whose reading passes the statement check,
-the decoded value is bit `y` of the unit's block in table `j`'s share of the witness (`InnerRows.bitAt`). -/
 theorem decOf_bitAt {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β : ℕ} {ins : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
@@ -112,11 +76,6 @@ theorem decOf_bitAt {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β
 
 variable (h : Held)
 
-/-- **A session row's commit string is the table row its registered read opens**: at a session statement that sets up as
-a masked Flock statement with registered ports `own`, in Flock's scope with hidden outputs, and a Flock witness its
-relation accepts, at each table `j`, for each port `reg` of `own`, the table's port `q` named like it and each unit `n`:
-the commit string of row `q` of unit `n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens
-`reg` at the position its reads give for the unit, through the path the session gives there. -/
 theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} {w : Claims.Flock.Wit}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hown : ins.registered = some own)
@@ -157,11 +116,6 @@ theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
   rw [hrow]
   exact hopens
 
-/-- **A session row's commit string opens its population's published tree**: at a one-table session statement
-(`count ≤ 1`) that sets up as a masked Flock statement, in Flock's scope with hidden outputs, and a Flock witness its
-relation accepts, the session's public file loads a population, and at each table `j`, port `q` and unit `n`, the
-commit string of row `q` of unit `n`, as the witness holds it, opens port `q`'s published tree there (`pubPort`) at the
-row of the unit the sample drew as `n`, through the path from that row. -/
 theorem rows_rooted {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {w : Claims.Flock.Wit}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hsc : ScopedHidden xS)
@@ -200,26 +154,13 @@ theorem rows_rooted {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Sess
   rw [hrow, hdig]
   exact pubPort_opens hpop hu hq
 
-/-- **The verifier's check puts each session statement in Flock's scope with hidden outputs** (`ScopedHidden`). -/
 def SessionScoped : Prop :=
   ∀ x m₁ xS c₀ c₁ t, stmtOkAt h x m₁ xS c₀ c₁ t = true → ScopedHidden xS
 
-/-- **The verifier's check puts each session statement in Flock's scope with hidden outputs**: `sessionOk` applies
-Flock's scope check and the hidden-outputs tag (`scoped_of_stmtOkAt`). -/
 theorem sessionScoped : SessionScoped h := fun _ _ _ _ _ _ hok =>
   scopedHidden_of_checks (scoped_of_stmtOkAt h hok).1 (scoped_of_stmtOkAt h hok).2
 
-/-- **The frame reveals each value a checked unit needs at its session row**: at the statements `Reveals` reads and the
-session's setup, for each gate `g` the unit's correctness reads, the layout's wire for `g` is column `y` of table `j`
-in the unit's block `β`, and the reveal holds an opening at `g` of the witness's bit there, under the roots `Reveals`
-names, that passes wherever the commit string of row `q` of a unit `n` of the table opens either
-
-* the registered read `reg` of the session's registered ports `own` that table `j`'s port `q` is named like, at the
-  position and through the path the session gives the unit; or
-* at a one-table session, port `q`'s published tree over the session's population (`pubPort`), at the row of the unit
-  the sample drew as `n`, through the path from that row.
-
-A session of more than one table needs only the first: round 2 refuses a session split across Flock tables
+/-- A session of more than one table needs only the first branch: round 2 refuses a session split across Flock tables
 (`second-tables`). -/
 def FrameRows (L : Layout) : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
@@ -255,10 +196,6 @@ def FrameRows (L : Layout) : Prop :=
               (pubPath sts[j].c pop q (rowAt sts[j].c pop q (unitOf ins.read.draw n))) = true →
             (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 o.1 o.2 = true))
 
-/-- **`Reveals` at a layout's decoder** where the frame reveals each needed value at its session row (`FrameRows`):
-the check puts the session statement in Flock's scope with hidden outputs (`sessionScoped`), so the row opens the
-registered read of its port (`rows_open`) or its population's published tree (`rows_rooted`), so the opening passes,
-and its value, the witness's bit at the wire's column, is the decoded value (`decOf_bitAt`). -/
 theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decOf L) := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
   have hokU := stmtOkAt_unit h hx hok hu
@@ -283,8 +220,6 @@ theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decO
     refine ⟨o, ho, hopen, hpos, ?_, hroot⟩
     rw [hval, decOf_bitAt hset hS (hsx ins spec sts hset).1 hβ wF hj hy hw]
 
-/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a layout** where the session statement holds each checked
-unit's gates (`Embeds`) and the frame reveals each needed value at its session row (`FrameRows`). -/
 theorem sessionOpensTwo_of_rows (L : Layout) (he : Embeds h L) (hf : FrameRows h L) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=

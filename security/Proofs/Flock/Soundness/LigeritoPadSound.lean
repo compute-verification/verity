@@ -16,16 +16,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# Ligerito with the padded level 0 is sound
-
-`ligeritoPad_sound`: from a claim `Σ_y f(y)·b(y) = T` false for every family of rep `r`'s list,
-`ligeritoPad` accepts with probability at most `padLigeritoError`:
-* level 0's out-of-domain claim's batching coin `β₀` (`L₀'/|F|`), as in `ligerito_sound`;
-* the lane rounds (`lane_rounds_pad`): the sumcheck and the folds' MCA events on the padded code;
-* the extra lanes (`extras_pad`): one MCA line and one coin on the restarted claim per extra lane;
-* `phaseA0Pad` into level 1, and `value_recursiveRounds_le` from there on, unchanged.
--/
+/-! Ligerito with the padded level 0 is sound (`ligeritoPad_sound`). -/
 
 @[expose] public section
 
@@ -53,11 +44,6 @@ theorem padMcaA_nonneg (l : Level) (t : ℕ) (hr : 0 ≤ l.padRadius t)
     add_nonneg (by positivity) (mul_nonneg (mul_nonneg (mul_nonneg (by norm_num) hm.le) hr) hρ.le)
   exact add_nonneg (mul_nonneg (div_nonneg hnum (by positivity)) hn.le) (div_nonneg hm.le h2.le)
 
-/-! ## The lane rounds -/
-
-/-- **The padded level 0's lane rounds.** From a level-0 claim false for every family of the list
-against `W0`, after the lane rounds the claim is false for every family's folded witness lanes, and
-no round was an MCA event, except with probability `(2^k₀ − 1)·a'/|K| + 2k₀·|S|/|K|`. -/
 theorem lane_rounds_pad (A : Arith F K) (hA : A.Correct)
     (n : ℕ) (b : ℕ → F) (l : Level) (t : ℕ) (hpad : PadOK l t) (c₀ : F) (k0 e r : ℕ)
     (hk0 : 1 ≤ k0) (hn : n = k0 + l.logCols) (C : Oracle F) (z₀ : List F) (hz : z₀.length = n)
@@ -121,10 +107,6 @@ theorem lane_rounds_pad (A : Arith F K) (hA : A.Correct)
           (add_le_add (value_foldRounds_mca_le A hA code (l.padRadius t) _ hmcaε k0 _ _ _) hsumε)
     _ = _ := zero_add _
 
-/-! ## The extra lanes -/
-
-/-- A family's next-level message against a weight: its folded witness lanes', plus each extra
-lane's weighted by its coin. -/
 theorem sum_padFold (A : Arith F K) {k0 e cols t : ℕ} (c₀ : F) (ch : List K) (ρ : Fin e → K)
     (M : Fin (2 ^ k0 + e) → Fin (2 ^ cols + t) → F) (res : ℕ → K) :
     ∑ x ∈ Finset.range (2 ^ cols), padFold A c₀ ch ρ M x * res x =
@@ -137,8 +119,6 @@ theorem sum_padFold (A : Arith F K) {k0 e cols t : ℕ} (c₀ : F) (ch : List K)
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring
 
-/-- **The extra lanes.** After the lane rounds, the `e` extra coins keep the restarted claim false
-for every family and are no MCA event, except with probability `e·a'/|K| + e·|S|/|K|`. -/
 theorem extras_pad (A : Arith F K) (hA : A.Correct)
     (l : Level) (t : ℕ) (hpad : PadOK l t) (c₀ : F) (k0 e r : ℕ) (C : Oracle F) (ch : List K)
     (s : K) (ev : Fin e → K) (res : ℕ → K)
@@ -195,9 +175,6 @@ theorem phaseA0Pad' (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (
   exact phaseA0Pad A hA n b l l' t hd hd64 hcols ht hk hf' hQ c₀ k0 e r ch ρ ybar st hpost hdim k εk
     hk'
 
-/-! ## Ligerito -/
-
-/-- `ligeritoPad` on a schedule with at least two levels. -/
 theorem ligeritoPad_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (t : ℕ) (c₀ : F) (e r : ℕ) (T : F) (b : ℕ → F) (C : Oracle F) :
     ligeritoPad A ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ t c₀ e r T b C =
@@ -216,9 +193,6 @@ theorem ligeritoPad_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : 
                       fun C' st' => recursiveRounds A (m - 7) b initial ext (l₁ :: rest)
                         { st' with prev := C', prevLevel := l₁ } := rfl
 
-/-- **Ligerito with the padded level 0 is sound.** For a schedule of the `fast100` shape whose
-level 0 meets `PadOK`, if the claim `Σ_y f(y)·b(y) = T` is false for every family of rep `r`'s
-list, `ligeritoPad` accepts with probability at most `padLigeritoError`. -/
 theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
     (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
@@ -252,7 +226,6 @@ theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
       (by have := Nat.two_pow_pos k0; omega)
       (padRows k0 e r l₀.logLen C)
     exact this
-  -- the rest of the rounds, from level 1's `PreFold`
   set εrest : ℝ≥0∞ := ENNReal.ofReal (ligeritoError (l₁ :: rest))
   have hrec : ∀ (initial : List K) (C' : Oracle F) (st' : LigState F K),
       PreFold A (m - 7) b initial l₁ C' l₀.logCols st' →
@@ -293,7 +266,6 @@ theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
       refine iSup_le fun msg => ?_
       have hq₀ := fromMsg_sum msg (s₀ β₀)
       push Not at hβ₀
-      -- the lane rounds
       refine (value_bind_le _ _ _ (fun out : List K × K => out.1.length = k0 ∧
           MCAGood (codePad A hA l₀ t hd64) (l₀.padRadius t) k0 out.1 (rowsK A k0 l₀.logLen C) ∧
           ∀ M ∈ S₀, out.2 ≠ ∑ x ∈ Finset.range (2 ^ l₀.logCols),
@@ -305,7 +277,6 @@ theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
         show value _ (Game.send (Fin e → K) fun ev => _) ≤ _
         rw [value_send]
         refine iSup_le fun ev => ?_
-        -- the extra lanes
         refine (value_bind_le _ _ _ (fun ρ : Fin e → K =>
             ExtrasGood (codePad A hA l₀ t hd64) (l₀.padRadius t) e ρ (xrowsK A k0 e r l₀.logLen C)
               (foldAllRows k0 initial (rowsK A k0 l₀.logLen C)) ∧
@@ -340,7 +311,7 @@ theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
       · refine add_le_add ?_ le_rfl
         exact lane_rounds_pad A hA (m - 7) b l₀ t hpad c₀ k0 e r hk1 hn C (List.ofFn z₀)
           (by simp) β₀ (s₀ β₀) _ hq₀ fun M hM h => hβ₀ M hM h
-  · -- the arithmetic
+  ·
     have hq : (0 : ℝ) < qF := by unfold qF; positivity
     have hqK : (0 : ℝ) < qK := by unfold qK; positivity
     have hok := levelsChained_ok hchain

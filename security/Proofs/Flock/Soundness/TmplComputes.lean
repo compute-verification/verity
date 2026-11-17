@@ -3,16 +3,8 @@ module
 public import Proofs.Flock.Soundness.Types.Dag
 public import Flock.TmplComputes
 
-/-!
-# A template Definition whose rows are a typed layout's computes its type
-
-`Flock.TmplValue.defComputes_of_rows` proves `Tmpl.DefComputes` from any relational fact about a Definition's rows. The
-typed path has that fact for every layout `deriveChecked` accepts: `Types.Dag.layout_sound`, whose rows
-(`Flock.DeriveAll.fullRow`) satisfied with the constant at 1 carry `evalT` of the layout's type on its outputs. So a
-Definition whose rows, in its own references, are a checked layout's, with the layout's constant at the Definition's
-constant reference, its inputs at the Definition's inputs and its outputs among the Definition's columns, computes its
-type's `evalT` on those outputs (`defComputes_of_layout`). No verifier path reads this file.
--/
+/-! A template Definition whose rows are a checked typed layout's computes its type's `evalT` (`defComputes_of_layout`);
+no verifier path reads this file. -/
 
 @[expose] public section
 
@@ -20,7 +12,6 @@ open Flock Flock.Tmpl Flock.DeriveAll FlockSoundness.Types.Dag
 
 namespace FlockSoundness.TmplValue
 
-/-- **A Definition whose rows are a checked layout's computes the layout's type.** -/
 theorem defComputes_of_layout {t : Tmpl} {d : ℕ} (hd : d < t.defs.size)
     (hord : ∀ r ∈ (t.defs.getD d default).rows.toList, ∀ w ∈ r.2.1.toList ++ r.2.2.toList,
       (t.defs.getD d default).cols ≤ w ∨ w < r.1)

@@ -14,14 +14,8 @@ import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-# The templated unit's share is the flat slot's
-
-`Stmt.partialRangesT` folds a range whose net is a read template's unrolled net (`Stmt.unitShare`) with `Tmpl.foldUnit`
-instead of projecting the slot's `2^sl` base. Its entries are the projection's (`unitShare_get`, by `foldUnit_eq_project`
-on the template's own facts, `TmplUnit`), and the slot-type cache only spares work, so `partialRangesT` is `partialRanges`
-on any two caches of `slotBase`'s values (`partialRangesT_eq`).
--/
+/-! The templated unit's share is the flat slot's: `partialRangesT` is `partialRanges` on any two caches of `slotBase`'s
+values (`partialRangesT_eq`). -/
 
 @[expose] public section
 
@@ -29,7 +23,6 @@ open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
 
-/-- A slot-type cache of `slotBase`'s values. -/
 def CacheOk (st : Stmt) (alpha : F128) (lw rho : Array F128) (b : Array ((Kind × ℕ) × Array F128)) : Prop :=
   ∀ kb ∈ b, st.slotBase alpha lw rho kb.1 = .ok kb.2
 
@@ -47,8 +40,6 @@ theorem slotBase_net (st : Stmt) (alpha : F128) (lw rho : Array F128) {i sl : �
       (st.c.nets.getD i default).2.a (st.c.nets.getD i default).2.b (st.c.nets.getD i default).2.lookup sl) := by
   subst h; simp [Stmt.slotBase, pure, Except.pure]
 
-/-- **A templated unit's share is the projection of its slot's base**: what `unitShare` returns is the range's net's
-slot base, projected, entry by entry. -/
 theorem unitShare_get {st : Stmt} {alpha : F128} {lw rho rr p : Array F128} {r : Range}
     (h : st.unitShare alpha lw rho rr r = some p) :
     ∃ i, r.kind = .net i ∧ (st.c.nets.getD i default).2.unitLog = r.slotLog ∧ ∀ s < 64,
@@ -75,7 +66,6 @@ theorem unitShare_get {st : Stmt} {alpha : F128} {lw rho rr p : Array F128} {r :
     · simp at h
   · simp at h
 
-/-- The slot-type lookup `partialRanges` and `partialRangesT` share. -/
 def slotLook (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × ℕ)
     (b : Array ((Kind × ℕ) × Array F128)) :
     V (Array F128 × Array ((Kind × ℕ) × Array F128)) :=
@@ -85,7 +75,6 @@ def slotLook (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × ℕ
     let y ← st.slotBase alpha lw rho key
     pure (y, b.push (key, y))
 
-/-- A range's step on the 64 entries, its share `p`. -/
 def rangeAcc (r : Range) (rho rr out p : Array F128) : Array F128 :=
   Array.ofFn (n := 64) fun s => out[s.val]! + Stmt.sumUpTo r.count (fun k =>
     (eqTable (rho.extract (r.slotLog - 6) rho.size))[r.pos0 + k]! *
@@ -150,8 +139,6 @@ theorem slotLook_error {st : Stmt} {alpha : F128} {lw rho : Array F128} {key : K
   | none =>
     simp only [bind, Except.bind, he]
 
-/-- **The templated fold is the flat one**: `partialRangesT` is `partialRanges`, on any two caches of `slotBase`'s
-values. -/
 theorem partialRangesT_eq (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : ∀ (rs : List Range)
     (b1 b2 : Array ((Kind × ℕ) × Array F128)) (out : Array F128),
     CacheOk st alpha lw rho b1 → CacheOk st alpha lw rho b2 →

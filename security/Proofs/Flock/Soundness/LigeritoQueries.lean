@@ -8,18 +8,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZerocheckPhase
 
-/-!
-# Ligerito's stratified queries (`Flock.Ligerito`)
-
-If a set `D` covers a fraction `δ` of a level's `2^d` positions, the `Q` stratified query
-positions all miss it with probability at most `(1 − δ)^Q`, the same as `Q` independent uniform
-positions (`prCoin_positions_miss_le`):
-* the strata sum to `Q` (`strata_sum`), and each query is uniform in its stratum's block, since the
-  low bits of `lo` are balanced (`Arith.Correct.lo_balanced`);
-* the queries' coins are independent, so the miss probabilities multiply (`prCoin_forall_fin`);
-* within one summand the blocks partition the positions, so AM–GM bounds the product of the
-  blocks' miss probabilities by `(1 − δ)^{2^c}`.
--/
+/-! Ligerito's `Q` stratified queries all miss a set covering a fraction `δ` of a level's positions with probability at
+most `(1 − δ)^Q`. -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ open Game Model Accounting
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-! ## The strata -/
 
 theorem strata_go_sum (d : ℕ) : ∀ fuel rem, rem ≤ fuel →
     ((strata.go d fuel rem).map (2 ^ ·)).sum = rem
@@ -46,7 +34,6 @@ theorem strata_go_sum (d : ℕ) : ∀ fuel rem, rem ≤ fuel →
         rw [strata_go_sum d fuel (rem - 2 ^ min (Nat.log 2 rem) d) (by omega)]
         omega
 
-/-- The strata's sizes sum to `Q`. -/
 theorem strata_sum (Q d : ℕ) : ((strata Q d).map (2 ^ ·)).sum = Q :=
   strata_go_sum d Q Q le_rfl
 
@@ -62,12 +49,8 @@ theorem strata_go_le (d : ℕ) : ∀ fuel rem, ∀ c ∈ strata.go d fuel rem, c
         · exact min_le_right _ _
         · exact strata_go_le d fuel _ c hc
 
-/-- Every stratum's depth is at most `d`. -/
 theorem strata_le (Q d : ℕ) : ∀ c ∈ strata Q d, c ≤ d := strata_go_le d Q Q
 
-/-! ## Slots and positions -/
-
-/-- The query slots `(depth, stratum)`, in query order (`Flock.Ligerito`). -/
 def querySlots (Q d : ℕ) : List (ℕ × ℕ) :=
   (strata Q d).flatMap fun c => (List.range (2 ^ c)).map fun s => (c, s)
 
@@ -75,7 +58,6 @@ theorem querySlots_length (Q d : ℕ) : (querySlots Q d).length = Q := by
   rw [querySlots, List.length_flatMap]
   simpa using strata_sum Q d
 
-/-- The position of the query in slot `(c, s)`, from its coin. -/
 def slotPos (A : Arith F K) (d : ℕ) (cs : ℕ × ℕ) (x : F) : ℕ :=
   cs.2 * 2 ^ (d - cs.1) + A.lo x % 2 ^ (d - cs.1)
 
@@ -92,10 +74,7 @@ theorem positions_eq (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) :
     rw [dif_pos hi]
     rfl
 
-/-! ## Independent coins -/
-
 omit [DecidableEq F] in
-/-- Independent coordinates multiply. -/
 theorem prCoin_forall_fin : ∀ (Q : ℕ) (E : Fin Q → F → Prop),
     prCoin (fun w : Fin Q → F => ∀ j, E j (w j)) = ∏ j, prCoin (E j)
   | 0, E => by
@@ -117,8 +96,6 @@ theorem prCoin_forall_fin : ∀ (Q : ℕ) (E : Fin Q → F → Prop),
       rw [avg_mul_const]
       rfl
 
-/-- **One query.** A query uniform in a block of `2^b` positions (`b ≤ 64`) misses `D` with the
-block's fraction of positions outside `D`. -/
 theorem prCoin_slot_miss (A : Arith F K) (hA : A.Correct) (b s : ℕ) (hb : b ≤ 64)
     (D : Finset ℕ) :
     prCoin (fun x : F => s * 2 ^ b + A.lo x % 2 ^ b ∉ D) =
@@ -152,9 +129,6 @@ theorem prCoin_slot_miss (A : Arith F K) (hA : A.Correct) (b s : ℕ) (hb : b �
   push_cast
   rw [ENNReal.mul_div_mul_right _ _ (by positivity) (by simp)]
 
-/-! ## AM–GM over the strata -/
-
-/-- AM–GM: a product of `N > 0` nonnegative reals is at most their mean to the `N`. -/
 theorem prod_le_mean_pow (N : ℕ) (hN : 0 < N) (z : ℕ → ℝ) (hz : ∀ s ∈ Finset.range N, 0 ≤ z s) :
     ∏ s ∈ Finset.range N, z s ≤ ((∑ s ∈ Finset.range N, z s) / N) ^ N := by
   have h := Real.geom_mean_le_arith_mean (Finset.range N) (fun _ => (1 : ℝ)) z
@@ -168,7 +142,6 @@ theorem prod_le_mean_pow (N : ℕ) (hN : 0 < N) (z : ℕ → ℝ) (hz : ∀ s �
     _ ≤ ((∑ s ∈ Finset.range N, z s) / N) ^ N :=
         pow_le_pow_left₀ (Real.rpow_nonneg hP _) h N
 
-/-- Blocks of `B` consecutive positions: the points outside `D` below `M·B`, block by block. -/
 theorem sum_block_miss (B : ℕ) (D : Finset ℕ) : ∀ M : ℕ,
     ∑ s ∈ Finset.range M, ((Finset.range B).filter fun t => s * B + t ∉ D).card =
       ((Finset.range (M * B)).filter fun q => q ∉ D).card
@@ -177,7 +150,6 @@ theorem sum_block_miss (B : ℕ) (D : Finset ℕ) : ∀ M : ℕ,
       rw [Finset.sum_range_succ, sum_block_miss B D M, Finset.card_filter, Finset.card_filter,
         Finset.card_filter, show (M + 1) * B = M * B + B by ring, Finset.sum_range_add]
 
-/-- The fraction of block `(c, s)` of a level with `2^d` positions that lies outside `D`. -/
 noncomputable def missFrac (d : ℕ) (D : Finset ℕ) (cs : ℕ × ℕ) : ℝ :=
   (((Finset.range (2 ^ (d - cs.1))).filter fun t => cs.2 * 2 ^ (d - cs.1) + t ∉ D).card : ℝ) /
     2 ^ (d - cs.1)
@@ -192,7 +164,6 @@ theorem prCoin_slotPos_miss (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d �
   rw [prCoin_slot_miss A hA (d - cs.1) cs.2 (by omega) D, ENNReal.ofReal_div_of_pos (by positivity),
     ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num), ENNReal.ofReal_ofNat]
 
-/-- Within one summand of depth `c ≤ d`, the blocks' miss fractions average to `1 − |D|/2^d`. -/
 theorem sum_missFrac (d c : ℕ) (hc : c ≤ d) (D : Finset ℕ) (hD : D ⊆ Finset.range (2 ^ d)) :
     ∑ s ∈ Finset.range (2 ^ c), missFrac d D (c, s) = 2 ^ c * (1 - (D.card : ℝ) / 2 ^ d) := by
   unfold missFrac
@@ -242,8 +213,6 @@ theorem list_prod_map_pow (L : List ℕ) (x : ℝ) :
   | nil => simp
   | cons a L ih => simp [List.prod_cons, List.sum_cons, pow_add, ih]
 
-/-- **The stratified queries.** If `D` covers a fraction `|D|/2^d` of a level's positions, the `Q`
-stratified query positions (`Flock.Ligerito`) all miss it with probability at most `(1 − |D|/2^d)^Q`. -/
 theorem prCoin_positions_miss_le (A : Arith F K) (hA : A.Correct) (Q d : ℕ) (hd : d ≤ 64)
     (D : Finset ℕ) (hD : D ⊆ Finset.range (2 ^ d)) :
     prCoin (fun w : Fin Q → F => ∀ p ∈ positions A Q d w, p ∉ D) ≤

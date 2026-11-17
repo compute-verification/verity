@@ -5,32 +5,7 @@ public import Proofs.Flock.Soundness.Audit.Circuit
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The compiled lowering: a satisfied table makes every placed unit correct
-
-**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
-template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
-(`Rows`). Computed row `i` is column `nIn + i`:
-
-$$z_{nIn+i} = \Big(\bigoplus_{c \in a_i} z_c\Big)\cdot\Big(\bigoplus_{c \in b_i} z_c\Big),$$
-
-reading earlier columns and the constant. In the circuit it is one gate, `Op.row`. A unit of a
-partition is an instance of a template's rows when its gates are those rows, read through a wiring
-of the unit's columns to the circuit's gates (`Partition.IsRowsUnit`). Only input columns may share
-a gate: a unit may read one source on several inputs.
-
-**The theorem, for every template** (`lowering_sound`). Suppose a witness satisfies a statement in
-which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' rows at the unit's
-computed columns read exactly its rows' columns, and its constant's rows read the pin), and the
-unit's input columns on one gate carry one value there. Then the transcript decoded from that
-block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_one`). What each
-template's rows compute is not a hypothesis of it: rows derived from a gate circuit carry its outputs
-(`GateRows.rows_sound`), and no theorem carries that to a unit (`ASSUMPTIONS.md`).
-
-`UnitPlace` bundles a sampled proof block's place in a table: its rows, its instance, its block and its
-columns, where every satisfying witness carries one value on the unit's inputs that share a gate.
-`UnitPlace.correct` is the compiled lowering for that unit.
--/
+/-! The compiled lowering: a satisfied table makes every placed unit correct (`lowering_sound`). -/
 
 @[expose] public section
 
@@ -64,7 +39,6 @@ theorem decode_wire {z : Fin R.w → Bool} (hz : I.Agree z) (c : Fin R.w) : I.de
   · rw [he]
   · exact hz _ _ (Classical.choose_spec h) h1 h2
 
-/-- A column a row reads, outside the unit, is one of the unit's committed wires. -/
 theorem mem_io_of_read {i : Fin R.nComp} {c : Fin R.w} (hc : c ∈ R.a i ++ R.b i)
     (hout : P.unit (I.wire c) ≠ some u) : I.wire c ∈ P.io u := by
   classical
@@ -79,8 +53,6 @@ theorem mem_io_of_read {i : Fin R.nComp} {c : Fin R.w} (hc : c ∈ R.a i ++ R.b 
   simp only [io, Finset.mem_filter]
   exact ⟨hcom, Or.inr ⟨_, I.mem i, hread⟩⟩
 
-/-- **Rows satisfied, unit correct.** If the unit's column values satisfy its rows and the transcript
-carries them on the unit's committed wires, the unit is correct. -/
 theorem correct {z : Fin R.w → Bool} (hz : R.Sat z) {X : Fin C.N → Bool}
     (hX : ∀ c, I.wire c ∈ P.io u → X (I.wire c) = z c) : P.Correct X u := by
   classical
@@ -115,16 +87,12 @@ theorem correct {z : Fin R.w → Bool} (hz : R.Sat z) {X : Fin C.N → Bool}
   simp only [io, Finset.mem_filter]
   exact ⟨hg, Or.inl hgu⟩
 
-/-- The decoded transcript makes the unit correct when its column values satisfy its rows and agree on
-shared gates. -/
 theorem correct_decode {z : Fin R.w → Bool} (hz : R.Sat z) (ha : I.Agree z) : P.Correct (I.decode z) u :=
   I.correct hz fun c _ => I.decode_wire ha c
 
 end IsRowsUnit
 
 end Audit.Partition
-
-/-! ## Rows placed in a statement -/
 
 theorem bit_add (x y : ZMod 2) : bit (x + y) = Bool.xor (bit x) (bit y) := by
   fin_cases x <;> fin_cases y <;> rfl
@@ -164,7 +132,6 @@ theorem mulVec_placed {S : Statement} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S
   rw [sum_count_mul, List.map_map]
   rfl
 
-/-- **A satisfied statement satisfies the placed rows**, in every block. -/
 theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : Placement S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     R.Sat fun c => bit (S.block z o (col c)) := by
@@ -175,7 +142,6 @@ theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (
   rw [bit_mul, bit_sum, bit_sum] at hb
   exact hb.symm
 
-/-- **A placed unit's constant is 1** in every block of a satisfying witness. -/
 theorem Placement.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : Placement S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     S.block z o (col R.one) = 1 := by
@@ -200,9 +166,8 @@ theorem PlacedSat.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
   obtain ⟨A, B, hp, ht⟩ := hpl
   exact hp.one_eq (S := { S with A₀ := A, B₀ := B }) (ht z hz) o
 
-/-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
-`u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
-value there, the transcript decoded from that block makes `u` correct. -/
+/-- What each template's rows compute is not a hypothesis of it: rows derived from a gate circuit carry its outputs
+(`GateRows.rows_sound`), and no theorem carries that to a unit (`ASSUMPTIONS.md`). -/
 theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
@@ -218,13 +183,10 @@ theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=
   fun c c' h hc hc' => congrArg bit (pl.aliased c c' h hc hc' z hz)
 
-/-- **The compiled lowering for a placed unit**: every witness satisfying the table's statement
-decodes to a transcript on which the unit is correct. -/
 theorem correct (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     P.Correct (pl.decode z) u :=
   pl.inst.correct_decode (pl.placed.rowsSat hz pl.o) (pl.agree hz)
 
-/-- The decoded transcript carries `true` on the gate the unit's constant reads. -/
 theorem decode_one (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.decode z (pl.inst.wire pl.R.one) = true := by
   simp only [decode]
@@ -233,15 +195,12 @@ theorem decode_one (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z)
 
 end UnitPlace
 
-/-! ## The circuit of a program: its units' rows -/
-
 namespace Prog
 
 variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
 
 omit p R ins one hone in
-/-- **Every unit of a program is an instance of its template's rows** (program level). -/
 theorem rowsWire : ∀ {N n : ℕ} (p : Prog N n) (u : Fin n), Nonempty (p.RowsWire u (p.rows u))
   | _, _, .inputs _, u => u.elim0
   | _, _, @snoc N₀ n₀ p R ins one hone, u => by
@@ -256,7 +215,6 @@ theorem rowsWire : ∀ {N n : ℕ} (p : Prog N n) (u : Fin n), Nonempty (p.RowsW
         exact ⟨rowsWire_snoc p R ins one hone W⟩
 
 omit p R ins one hone in
-/-- **Every unit of a program's circuit is an instance of its template's rows.** -/
 theorem isRowsUnit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) (u : Fin n) :
     Nonempty ((p.partition outs).IsRowsUnit u (p.rows u)) :=
   let ⟨W⟩ := p.rowsWire u

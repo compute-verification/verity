@@ -11,19 +11,8 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# Ligerito's coins (`Flock.Ligerito`)
-
-The pieces of the Ligerito phase that do not depend on its weight bookkeeping:
-
-* a `K` coin (`drawK`, two `F` limbs) is uniform on `K` (`prCoin_ofLimbs`, from
-  `Arith.Correct.ofLimbs_bijective`), so a step on it costs `prCoin bad` over `K`
-  (`value_sampleK_le`);
-* a Ligerito round's quadratic `from(msg, s)` sums to `s` by construction (`Flock.Ligerito`), so a false
-  claim survives a `K` coin with probability at most `2/|K|` (`prCoin_fromMsg_le`);
-* the consistency coins `α` batch per-query mismatches through `eq(α)`: a nonzero mismatch survives
-  with probability at most `⌈log2 Q⌉/|F|` (`prCoin_eqList_le`).
--/
+/-! Ligerito's coin bounds that do not depend on its weight bookkeeping: `K` coins, a round's quadratic and the
+consistency coins. -/
 
 @[expose] public section
 
@@ -34,9 +23,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## `K` coins -/
-
-/-- A `K` coin is uniform on `K`: its two limbs are a bijection `F × F → K`. -/
 theorem prCoin_ofLimbs (A : Arith F K) (hA : A.Correct) (P : K → Prop) :
     prCoin (fun w : Fin 2 → F => P (A.ofLimbs (w 0) (w 1))) = prCoin P := by
   classical
@@ -47,7 +33,6 @@ theorem prCoin_ofLimbs (A : Arith F K) (hA : A.Correct) (P : K → Prop) :
   rw [hcard, ← e.sum_comp]
   rfl
 
-/-- A step on a `K` coin: leaving the good set costs `prCoin bad` over `K`. -/
 theorem value_sampleK_le (A : Arith F K) (hA : A.Correct) {α : Type} (p : α → Prop)
     (k : K → Game α) (bad : K → Prop) (ε ε' : ℝ≥0∞) (hbad : prCoin bad ≤ ε)
     (hgood : ∀ c, ¬ bad c → value p (k c) ≤ ε') :
@@ -56,9 +41,6 @@ theorem value_sampleK_le (A : Arith F K) (hA : A.Correct) {α : Type} (p : α �
   exact value_coin_le p _ _ (fun w => bad (A.ofLimbs (w 0) (w 1))) ε ε'
     (by rw [prCoin_ofLimbs A hA]; exact hbad) (fun w hw => hgood _ hw)
 
-/-! ## A Ligerito round -/
-
-/-- A round polynomial as a polynomial. -/
 noncomputable def quadPoly (q : Quad K) : K[X] :=
   C q.1 + C q.2.1 * Polynomial.X + C q.2.2 * Polynomial.X ^ 2
 
@@ -75,7 +57,6 @@ theorem quadPoly_natDegree_le (q : Quad K) : (quadPoly q).natDegree ≤ 2 := by
   · exact (natDegree_C_mul_le _ _).trans (by simp)
 
 omit [Fintype K] [DecidableEq K] in
-/-- `from(msg, s)` sums to `s` over `{0, 1}` (`Flock.Ligerito`). -/
 theorem fromMsg_sum [CharP K 2] (msg : K × K) (s : K) :
     (fromMsg msg s).eval 0 + (fromMsg msg s).eval 1 = s := by
   simp only [fromMsg, Quad.eval, mul_zero, zero_pow two_ne_zero, add_zero, mul_one, one_pow]
@@ -83,17 +64,12 @@ theorem fromMsg_sum [CharP K 2] (msg : K × K) (s : K) :
   have h2 := Rounds.add_self msg.2
   linear_combination h1 + h2
 
-/-- **A Ligerito round.** If the running claim is not `T(0) + T(1)` for the true quadratic `T`,
-then whatever message the prover sends, the new claim `from(msg, s)(r)` equals `T(r)` at a uniform
-`r ∈ K` with probability at most `2/|K|`. -/
 theorem prCoin_fromMsg_le [CharP K 2] (msg : K × K) (s : K) (T : K[X]) (hT : T.natDegree ≤ 2)
     (hs : s ≠ T.eval 0 + T.eval 1) :
     prCoin (fun r : K => (fromMsg msg s).eval r = T.eval r) ≤ 2 / Fintype.card K := by
   simp_rw [← quadPoly_eval]
   refine Rounds.sumRound_sound s _ T (quadPoly_natDegree_le _) hT ?_ hs
   rw [quadPoly_eval, quadPoly_eval, fromMsg_sum]
-
-/-! ## The consistency coins -/
 
 omit [Fintype F] [DecidableEq F] in
 theorem eqList_ofFn {R : Type} [CommRing R] {k : ℕ} (α : Fin k → R) (j : ℕ) :
@@ -106,8 +82,6 @@ theorem eqList_ofFn {R : Type} [CommRing R] {k : ℕ} (α : Fin k → R) (j : �
   · intro i h1 h2
     simp [List.getElem_zipIdx]
 
-/-- **The consistency coins.** A nonzero vector of per-query mismatches, weighted by `eq(α)` over
-`k ≥ ⌈log2 Q⌉` coordinates, sums to zero with probability at most `k/|F|`. -/
 theorem prCoin_eqList_le [CharP F 2] {k Q : ℕ} (hQ : Q ≤ 2 ^ k) (d : ℕ → F) (j₀ : ℕ)
     (hj₀ : j₀ < Q) (hd : d j₀ ≠ 0) :
     prCoin (fun α : Fin k → F => ∑ j ∈ Finset.range Q, eqList (List.ofFn α) j * d j = 0) ≤

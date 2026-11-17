@@ -5,30 +5,8 @@ public import Proofs.Flock.Soundness.LinkFinder
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Carried state: one hiding leaf read in several sampling blocks
-
-Carried state crosses a wipe as a committed value: one hiding leaf, registered in the public file of every sampling
-block that reads it, on both sides of every wipe it crosses. Each of those sampling blocks has its trial
-(`LinkFinder`), and every trial that opens the leaf opens the same commitment, so two readings with different values
-give a collision, whichever sampling blocks they came from. The leaf's finder is `LinkFinder.finderG` on the mixture of
-the sampling blocks' trials (`mixG`: a uniform coin picks which one runs), with their values embedded in one type `V`.
-
-Every sampling block reads the leaf as the mixture's plurality `Xm`, pulled back into its own values (`pull`), and none
-pays more than `m` times the mixture's binding error for it, `m` the number of sampling blocks that share the leaf:
-
-* `errAt`: a trial's binding error at a value `X`, `s + Σ_{v ≠ X} p v`, with `p v` the probability that it reads `v`
-  alone and `s` that it reads two values.
-* `errAt_eq_expect`: the binding error as one expectation over the trial.
-* `errAt_mixG`: the mixture's binding error is the average of the trials'; so each trial's is at most `m` times the
-  mixture's (`errAt_le_mix`).
-* `carry_errAt`: the same with each sampling block's values embedded injectively in `V`, at `pull e_i Xm`; the pulled
-  values are one value of `V` wherever `Xm` is a value of each sampling block (`pull_spec`).
-* `outMix_spec`: every success of the mixture's finder outputs a collision, given a collision between any two openings
-  of the leaf, from any two of the sampling blocks, whose values differ in `V`.
-* `errAt_le_coll`: at the plurality, a trial's binding error is at most the probability that its finder outputs a
-  collision, plus `1/(eM)`: `link_mass_le` without its collision-resistance hypothesis, the break form.
--/
+/-! Carried state, one hiding leaf read in several sampling blocks, each of which pays at most `m` times the mixture's
+binding error for it. -/
 
 @[expose] public section
 
@@ -42,14 +20,12 @@ section Err
 
 variable {τ Val : Type} [Fintype Val] [DecidableEq Val] (T : Game τ) (sT : Strategy T) (rd : τ → Finset Val)
 
-/-- **A trial's binding error at `X`**: the probability that it reads two values, or one value other than `X`. -/
 noncomputable def errAt (X : Val) : ℝ := sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd X)
 
 theorem errAt_eq (X : Val) : errAt T sT rd X = rRd T sT rd - pRd T sT rd X := by
   rw [errAt, rRd_eq]
   ring
 
-/-- The binding error as one expectation over the trial. -/
 theorem errAt_eq_expect (X : Val) :
     errAt T sT rd X = expect (fun e => ind (fun e => (rd e).Nonempty) e - ind (fun e => rd e = {X}) e) T sT :=
   (errAt_eq T sT rd X).trans (expect_sub _ _ T sT).symm
@@ -61,12 +37,9 @@ theorem errAt_nonneg (X : Val) : 0 ≤ errAt T sT rd X := by
   unfold errAt
   linarith
 
-/-- **A collision of `Hc` in a finder's output.** -/
 def Coll {Dh : Type} (Hc : List UInt8 → Dh) (o : Option (List UInt8 × List UInt8)) : Prop :=
   ∃ a b, o = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b
 
-/-- **The break form of the binding error**: at the plurality `X`, a trial's binding error is at most the probability
-that its finder outputs a collision, plus `1/(eM)`, when every success of the finder outputs one. -/
 theorem errAt_le_coll {Dh : Type} (Hc : List UInt8 → Dh) (out : τ × List τ → Option (List UInt8 × List UInt8))
     (M : ℕ) (hM : 1 ≤ M) (hout : ∀ x, Succ rd x → Coll Hc (out x)) {X : Val}
     (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd X) :
@@ -81,8 +54,6 @@ theorem errAt_le_coll {Dh : Type} (Hc : List UInt8 → Dh) (out : τ × List τ 
   linarith
 
 end Err
-
-/-! ## The mixture of the trials -/
 
 section Mix
 
@@ -116,7 +87,6 @@ theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdSig rd) = (∑ i, sRd (T i) (s
   expect_mixG T s _
 
 omit [DecidableEq V] in
-/-- **The mixture's binding error is the average of the trials'**, at any `X`. -/
 theorem errAt_mixG (X : V) :
     errAt (mixG T) (mixStrat T s) (rdSig rd) X = (∑ i, errAt (T i) (s i) (rd i) X) / Fintype.card ι := by
   unfold errAt
@@ -124,7 +94,6 @@ theorem errAt_mixG (X : V) :
   rw [← Finset.sum_div, Finset.sum_comm, Finset.sum_add_distrib, Finset.sum_sub_distrib]
   ring
 
-/-- **Each trial's binding error is at most `m` times the mixture's**, at any `X`, with `m` the number of trials. -/
 theorem errAt_le_mix (i : ι) (X : V) :
     errAt (T i) (s i) (rd i) X ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdSig rd) X := by
   have hm : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
@@ -132,8 +101,6 @@ theorem errAt_le_mix (i : ι) (X : V) :
   exact Finset.single_le_sum (fun j _ => errAt_nonneg (T j) (s j) (rd j) X) (Finset.mem_univ i)
 
 end Mix
-
-/-! ## Readings embedded in a common type -/
 
 section Image
 
@@ -188,8 +155,6 @@ theorem rRd_image : rRd T sT (fun x => (rd x).image e) = rRd T sT rd := by
   simp only [ind, ← Finset.card_pos, Finset.card_image_of_injective _ he]
 
 include he in
-/-- **The embedded binding error bounds the pulled-back one**: equal at a value of `Val`, and at any other `w` the
-embedded readings never read `w` alone, so their binding error there is everything they read. -/
 theorem errAt_pull_le (w : V) : errAt T sT rd (pull e w) ≤ errAt T sT (fun x => (rd x).image e) w := by
   rw [errAt_eq, errAt_eq, rRd_image T sT rd he]
   by_cases hw : ∃ v, e v = w
@@ -207,29 +172,19 @@ variable {ι : Type} [Fintype ι] [Nonempty ι] {τ : ι → Type} (T : (i : ι)
   [∀ i, Inhabited (Val i)] {V : Type} [Fintype V] [DecidableEq V] (rd : (i : ι) → τ i → Finset (Val i))
   (e : (i : ι) → Val i → V)
 
-/-- The mixture's readings, each trial's embedded in `V`. -/
 def rdMix : (Σ i, τ i) → Finset V := rdSig fun i x => (rd i x).image (e i)
 
-/-- **The carried leaf's binding error in each sampling block**: read as the pulled-back value `pull e_i Xm`, each
-trial's binding error is at most `m` times the mixture's at `Xm`, with `m` the number of sampling blocks that share
-the leaf. -/
 theorem carry_errAt (he : ∀ i, Function.Injective (e i)) (Xm : V) (i : ι) :
     errAt (T i) (s i) (rd i) (pull (e i) Xm) ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdMix rd e) Xm :=
   (errAt_pull_le (T i) (s i) (rd i) (he i) Xm).trans (errAt_le_mix T s (fun i x => (rd i x).image (e i)) i Xm)
 
-/-! ### The mixture's finder output -/
-
 variable {O : ι → Type} (op : (i : ι) → τ i → Val i → O i) (col : (i j : ι) → O i → O j → List UInt8 × List UInt8)
 
-/-- The mixture's opening of a value: its sampling block's own opening of the value's preimage. -/
 noncomputable def opMix (x : Σ i, τ i) (w : V) : Σ i, O i := ⟨x.1, op x.1 x.2 (pull (e x.1) w)⟩
 
-/-- The mixture's collision from two openings, from whichever sampling blocks they came. -/
 def colMix (o o' : Σ i, O i) : List UInt8 × List UInt8 := col o.1 o'.1 o.2 o'.2
 
 omit [Fintype ι] [Nonempty ι] [(i : ι) → DecidableEq (Val i)] [Fintype V] in
-/-- **Every success of the mixture's finder outputs a collision**, given each sampling block's openings of its
-readings and a collision between any two openings of the carried leaf whose values differ in `V`. -/
 theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he : ∀ i, Function.Injective (e i))
     (G : (i : ι) → O i → Prop) (val : (i : ι) → O i → Val i)
     (hop : ∀ i x v, v ∈ rd i x → G i (op i x v) ∧ val i (op i x v) = v)

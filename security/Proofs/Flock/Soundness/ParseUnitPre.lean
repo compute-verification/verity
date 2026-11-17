@@ -11,13 +11,8 @@ import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.ExecCircuit
 
-/-!
-# A unit given ahead of the file
-
-`HmRow.parse … (pre := #[("unit", n)])` is how a templated file's circuit is read (`HmOut.parseTmpl`): the unit net `n`
-comes first, ahead of the file's own nets, so it is the circuit's unit (`unit_of_parsePre`). The flat-parse consumers'
-`…Pre` forms (`Layout.outShape_of_parsePre`, `Hidden.unitFacts_of_parsePre`) read their facts about the unit off `n`.
--/
+/-! A unit net given ahead of the file (`pre := #[("unit", n)]`, as `HmOut.parseTmpl` reads a templated file) is the
+circuit's unit. -/
 
 @[expose] public section
 
@@ -25,7 +20,6 @@ open Flock
 
 namespace FlockSoundness
 
-/-- **The unit given ahead of the file is the circuit's unit**: the first net, named `unit`. -/
 theorem unit_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {n : Net}
     {c : Circuit} (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) = .ok c) :
     c.unitNet = 0 ∧ c.nets.getD 0 default = ("unit", n) ∧ c.unit = n := by

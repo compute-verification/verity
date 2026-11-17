@@ -2,15 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.TmplSplitEq
 
-/-!
-# A templated unit slot's fold is the flat slot's
-
-`Tmpl.foldUnit` is `foldSplit` behind the checks a verifier can make in `O(1)`: the point is the slot's, and the root is
-one chunk of 64 to `2^sl` columns. On a well-formed template at `layoutM`'s layouts, whose `unrollAt` net has `sl` bits,
-it is the fold the flat statement computes on that net, `project (baseOf α (lw ⊗ eq(ρ, ·)) A B none sl) (eqTable r)`
-(`foldUnit_eq_project`). The split fold reaches the reference without `fold` (`foldSplit_eq_foldRef`), so no lane count
-against the point is needed: the walk refuses a run of lanes wider than its chunk.
--/
+/-! A templated unit slot's fold is the flat slot's (`foldUnit_eq_project`), with no lane count against the point: the
+walk refuses a run of lanes wider than its chunk. -/
 
 @[expose] public section
 
@@ -18,7 +11,6 @@ open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
 
-/-- **The split fold is the reference**, entry by entry, without `fold`. -/
 theorem foldSplit_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128}
     {w1 w2 w3 : ℕ} (hS : foldSplit t lays alpha lw rho r = .ok (P, w1, w2, w3))
     (hP' : foldRef t lays alpha lw rho r = .ok P') (hlay : LayOk t lays)
@@ -48,8 +40,6 @@ theorem foldSplit_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rh
     ring
   · simp
 
-/-- **A templated unit slot's fold is the flat slot's**: `foldUnit` on a well-formed template at `layoutM`'s layouts is
-the flat statement's fold of the slot on `unrollAt`'s net of `sl` bits, entry by entry. -/
 theorem foldUnit_eq_project {t : Tmpl} {mode : Mode} {lays : Array Lay} {sl : ℕ} {alpha : F128}
     {lw rho r P : Array F128} {n' : Net} (hwf : t.wellFormed = true) (hL : layoutM t mode = .ok lays)
     (hU : Flock.Tmpl.unrollAt t lays = .ok n') (hsl : n'.unitLog = sl)

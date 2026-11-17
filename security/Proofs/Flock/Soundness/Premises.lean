@@ -2,16 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.ZkP
 
-/-!
-# The `--zk` session's premises that are instances of its named ones
-
-`shape.premises` in `security/lean-audit.json` names this module, and none of it sits in an `Assumptions` module, so the
-audit reads each abbrev here as the premise it unfolds to.
-
-* `RecordCustodyZKJ` (`live-verifier`): `Assumptions.Zk.RecordCustodyZKJPLaw` at no public inputs, every sample under the
-  subset sampling design. `recordCustodyZKJ_iff` states it as the record's half at `setupOf (zkInputs I)` and the sample
-  file's at `subset kd`.
--/
+/-! The `--zk` session's premises that are instances of its named ones: `shape.premises` in `security/lean-audit.json`
+names this module, so the audit reads each abbrev here as the premise it unfolds to. -/
 
 @[expose] public section
 
@@ -31,7 +23,6 @@ abbrev RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) 
     (kd : ℕ) : Prop :=
   RecordCustodyZKJPLaw I none dj Jf wr (fun _ => .subset kd)
 
-/-- `RecordCustodyZKJ` is the record's custody at `setupOf (zkInputs I)` and the sample file's at `subset kd`. -/
 theorem recordCustodyZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
@@ -40,7 +31,6 @@ theorem recordCustodyZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inp
       Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.SampleFileZK dj (.subset kd) n :=
   Iff.rfl
 
-/-- At no public inputs, `RecordCustodyZKJP` is `RecordCustodyZKJ`. -/
 theorem recordCustodyZKJP_none {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)

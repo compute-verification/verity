@@ -8,19 +8,7 @@ import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The published trees a session reads are at most 64 levels deep
-
-`rootedDepthsAt`: in an accepted run, the published tree of each port a checked unit's one-table session reads that no
-registered read is named like has at most `2^64` leaves, so it is no deeper than a code at least 64 levels deep
-(`RootedDepthsAt`). With it, `frameIs_of` gives `FrameIs` from the reveal's slots alone.
-
-Such a port's tree has a leaf per instance (`PortRoots.countOf`). A loaded file has tables only where its header shares
-rows (`loadPublic_counts`), which names every port (`sharedRows_names`), and round 2 lets a header share rows only at
-ports its statement reads registered (`SecondStage.refsOk`), whose names are the verifier's registered reads'
-(`portsOf_entries`). The instance count is the header's `instances` (`loadPublic_counts`), which normalizing keeps
-(`raw_nat`) and round 2 holds to at most `MAX_LEAVES` (`SecondStage.populationOk`).
--/
+/-! The published trees a checked unit's one-table session reads are at most 64 levels deep (`rootedDepthsAt`). -/
 
 @[expose] public section
 
@@ -31,20 +19,17 @@ open Lean (Json)
 
 namespace Depths
 
-/-- `Json.getNat?` reads only a natural number's own encoding. -/
 theorem eq_of_getNat {v : Json} {n : ℕ} (h : v.getNat? = .ok n) : v = .num ⟨Int.ofNat n, 0⟩ := by
   unfold Json.getNat? at h
   split at h
   · cases h; rfl
   · cases h
 
-/-- A value equivalent to a number is that number. -/
 theorem num_of_jsonEquiv {x : Lean.JsonNumber} {w : Json} (h : FlockDeploy.JsonEquiv (.num x) w) : w = .num x := by
   cases w <;> simp [FlockDeploy.JsonEquiv, FlockDeploy.jsonForm] at h
   subst h
   rfl
 
-/-- **A natural number the normalized header holds at `k` is the raw header's there.** -/
 theorem raw_nat {hdr : Json} (hw : Claims.Json.Wf hdr) {k ctx : String} {n : ℕ}
     (h : _root_.Flock.J.nat (_root_.Flock.norm hdr) k ctx = .ok n) : Spot.nat? (Spot.getD hdr k) = some n := by
   unfold _root_.Flock.J.nat at h
@@ -65,7 +50,6 @@ theorem raw_nat {hdr : Json} (hw : Claims.Json.Wf hdr) {k ctx : String} {n : ℕ
   rw [HeaderRoots.getD_of_getObjVal hu, num_of_jsonEquiv he]
   simp [Spot.nat?, Spot.int?]
 
-/-- **A key under field `o` of the normalized header is there in the raw header**, as an entry of `o`. -/
 theorem raw_mem {hdr : Json} (hw : Claims.Json.Wf hdr) {o k : String} {t v : Json}
     (ht : (_root_.Flock.norm hdr).getObjVal? o = .ok t) (hv : t.getObjVal? k = .ok v) :
     ∃ v', (k, v') ∈ Spot.entries (Spot.getD hdr o) := by
@@ -82,14 +66,12 @@ theorem raw_mem {hdr : Json} (hw : Claims.Json.Wf hdr) {o k : String} {t v : Jso
       Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm, ← Std.TreeMap.Raw.get?_eq_getElem?]
     exact (FlockComplete.JsonRT.mem_of_getObjVal hm hu).2
 
-/-- An object no element of `ps` is missing from has each one's key. -/
 theorem ok_of_not_any {α : Type} {ps : Array α} {nm : α → String} {s : Json} {p : α} (hp : p ∈ ps)
     (h : ¬(ps.any fun p => !(s.getObjVal? (nm p)).isOk) = true) : ∃ v, s.getObjVal? (nm p) = .ok v := by
   cases hg : s.getObjVal? (nm p) with
   | ok v => exact ⟨v, rfl⟩
   | error e => exact absurd (Array.any_eq_true'.2 ⟨p, hp, by rw [hg]; rfl⟩) h
 
-/-- **A header that shares rows names every port under `shared_rows`.** -/
 theorem sharedRows_names {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {hd : Json} {cs : Array ℕ}
     (h : _root_.Flock.HmRow.sharedRows tags c hd = .ok (some cs)) :
     ∃ s, hd.getObjVal? "shared_rows" = .ok s ∧ ∀ p ∈ c.ports, ∃ v, s.getObjVal? p.name = .ok v := by
@@ -106,8 +88,6 @@ theorem sharedRows_names {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {
 
 -- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **What `HmRow.loadPublic` reads of a population's size and tables**: its instance count is the normalized header's
-`instances`, and a file with tables has a header that shares rows. -/
 theorem loadPublic_counts {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f : ByteArray}
     {pop : _root_.Flock.Public} (h : _root_.Flock.HmRow.loadPublic tags c f = .ok pop) :
     ∃ j, headerOf f = some j ∧ _root_.Flock.J.nat (_root_.Flock.norm j) "instances" "public file" = .ok pop.n ∧
@@ -130,7 +110,6 @@ theorem loadPublic_counts {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} 
         | exact ⟨_, ‹_›⟩
         | cases ht
 
-/-- Round 2's population check holds the header's `instances` to at most `MAX_LEAVES`. -/
 theorem populationOk_le {q : ℕ} {p : Spot.SecondStage.Part} {hd : Json}
     (hp : Spot.SecondStage.populationOk q p hd = true) :
     ∃ m, Spot.nat? (Spot.getD hd "instances") = some m ∧ m ≤ Spot.SecondStage.MAX_LEAVES := by
@@ -146,7 +125,6 @@ theorem someMap_ok {α : Type} {x : Except String α} {r : Option α} (h : (some
   | error e => cases h
   | ok b => cases h; exact ⟨b, rfl, rfl⟩
 
-/-- **A statement's `registered reads` file gives the verifier its registered reads.** -/
 theorem ins_of_registered {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.ins = .ok s) {b}
     (hb : w.registered = some b) :
     ∃ j own, FlockDeploy.jsonOf "registered reads" b = .ok j ∧ _root_.Flock.Registered.ofJson j = .ok own ∧
@@ -161,9 +139,6 @@ end Depths
 
 variable (h : Held)
 
-/-- **A port of a checked unit's one-table session that no registered read is named like has at most `MAX_LEAVES`
-rows**: one per instance, since round 2 lets the header share rows only at ports its statement reads registered, and
-round 2 holds the instance count to `MAX_LEAVES`. -/
 theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -224,14 +199,10 @@ theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Sta
   simp only [_root_.Flock.PortRoots.countOf, hnone, hm]
   exact hle
 
-/-- **The published trees a checked unit's one-table session reads are at most 64 levels deep** (`countOf_le`), so
-no deeper than a code at least 64 levels deep. -/
 theorem rootedDepthsAt {c : Code} (h64 : 64 ≤ depth c.own) : RootedDepthsAt h c := by
   intro x s m₁ m₂ c₀ c₁ _ u ins spec sts hx hok hu _ hset j hj q pop _ hq hnr hpop
   exact (log2ceil_le_64 (countOf_le h hx hok hu hset hj hq hnr hpop)).trans h64
 
-/-- **`FrameIs` at a frame that reads its ports off the roots**, at a code at least 64 levels deep, from the reveal's
-slots (`SlotsAt`). -/
 theorem frameIs_of {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf : h.frame = frameAt slot c)
     (hS : SlotsAt h slot c L) (h64 : 64 ≤ depth c.own) : FrameIs h L :=
   frameIs_frameAt h hf hS (entriesAt_of h (depthsAt_of h h64 (rootedDepthsAt h h64)))

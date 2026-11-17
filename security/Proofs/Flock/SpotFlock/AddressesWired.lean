@@ -4,54 +4,16 @@ public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.Claims.Sampling.Rewire
 
-/-!
-# Where each gate's value sits, at the wired program
-
-`Addresses h` (`SlotsAt.lean`) reads the members' programs side by side. Every gate a proof block needs is committed
-there, so the program opens it under the statement's roots, while round 2 reads a session's own ports, and a wired
-read, off the interior record: one accepted run with a checked unit all of whose session's reads round 2 reads off
-the interior record refutes it (`AddressesAt.lean`).
-
-`AddressesWired h ω keep` is the same property read at the members' programs wired by `ω`, returning `keep`
-(`Prog.wired`), each proof block and replay block without the gates `ω` moves (`cutBlock`). A run and its checked
-unit are the verifier's own, side by side (`CheckedRun.Ok`): the verifier's checks don't change. What changes is
-which gates a unit needs and which roots each is opened under.
-
-* **The gates.** A proof block needs gate `g` at the wired program only where it needs, side by side, a gate
-  `i` with `ω i = g` (`Prog.needs_wired`): `g` itself where the unit writes it or reads it as a block input, and the
-  unit's own source gate `i` where the unit reads `g` through a wire. The unit's session holds `i`, so an address is
-  a side-by-side gate's: its row is read at `i` (`RowAt` at `i`), in the port that holds `i`, and its place and slot
-  are those of `ω i`. Two gates of one unit that the wiring sends to one gate each have their own port and the one
-  place and slot.
-* **The roots** (`CheckedRun.rootsWired`): the replay block's, where `g` is a gate of the replay block that `ω`
-  leaves alone and the wired program doesn't commit as that block sees it; else the statement's. A written bit that
-  only units of its own replay block read through wires, and that the wired program doesn't return, is such a gate;
-  an input no wire moves and a returned output are not.
-* **The slot.** One slot a gate serves every unit that needs it, the unit that writes it and each unit that reads
-  it, so an address's slot is held to the entry round 2 reads, not to the way a session names it: under the gate's
-  roots the slot names the entry the read's key names (`entryAt … = keyAt …`), with the read's leaf count
-  (`leavesAt`) and leaf (`leafAt`). The writer's session reads its output port as template `t`'s port `p` of the
-  interior record, and a wired reader's session reads the same entry as a registered read of the port named
-  `portOf t p`; `Addresses` asked the slot's key and `sized` to be both.
-
-At the wiring that moves nothing and returns everything, `Addresses` gives the property (`addressesWired_id`): it asks
-no more than `Addresses` of a design with no wire.
-
-The property is a premise only where every source bit of a member is at a port a link or a wire names
-(`sourcesNamed`, decided on what the verifier holds): round 2 reads any other port off the interior record, and the
-wired program opens its gates under the statement's roots. `AddressesConnected h` is the premise in that form: the
-property at the code's own wiring map (`wireMap h`, returning `returned h`), asked only of such a held code.
--/
+/-! Where each gate's value sits at the members' programs wired by `ω` (`AddressesWired`), and the premise in the form
+the two-stage guarantees take (`AddressesConnected`). -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- A gate rewired by the map that moves nothing is itself. -/
 theorem BGate.rewire_id (x : BGate) : x.rewire id = x := by
   cases x <;> simp [BGate.rewire]
 
-/-- **The wiring that moves nothing and returns everything leaves a program as it is.** -/
 theorem Prog.wired_id (C : Prog) : C.wired id (fun _ => true) = C := by
   cases C with
   | mk gates outs =>
@@ -61,7 +23,6 @@ theorem Prog.wired_id (C : Prog) : C.wired id (fun _ => true) = C := by
     show (⟨gates.map (BGate.rewire id), outs.filter fun _ => true⟩ : Prog) = ⟨gates, outs⟩
     rw [hg, ho]
 
-/-- The map that moves nothing removes no gate of a set. -/
 theorem cutBlock_id (u : List ℕ) : cutBlock id u = u := by
   unfold cutBlock
   exact List.filter_eq_self.2 fun g _ => decide_eq_true rfl
@@ -147,24 +108,15 @@ def AddressesWired : Prop :=
       ∀ r : CheckedRun h.stage, r.Ok h →
         ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
 
-/-! ## The entry a writer and its readers name -/
-
-/-- **A template's port of a record and the port of that name are one entry**: under any roots, a slot whose key is
-template `t`'s port `p` names the entry the key of the port named `portOf t p`, at the roots' naming, names. So one
-slot serves the session that writes a port and each session that reads it as a registered read. -/
 theorem entryAt_interior_port (roots : List Msg) (S : Slot) (t p : String) (hk : S.key = .interior t p) :
     entryAt roots S = keyAt roots (.port (Spot.SecondStage.portOf (namedOf roots) t p)) := by
   rw [entryAt, hk]
   rfl
 
-/-! ## The wiring that moves nothing -/
-
 namespace CheckedRun
 
 variable {h} {r : CheckedRun h.stage}
 
-/-- **At the wiring that moves nothing and returns everything, the wired program opens a gate under the roots the
-members' programs side by side open it under** (`Reveal.rootsAt_eq`). -/
 theorem rootsWired_id (hr : r.Ok h) (g : ℕ) : r.rootsWired id (fun _ => true) g = r.roots h g := by
   obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
   have he : r.roots h g =
@@ -174,9 +126,6 @@ theorem rootsWired_id (hr : r.Ok h) (g : ℕ) : r.rootsWired id (fun _ => true) 
   unfold rootsWired
   rw [cutBlock_id, Prog.wired_id]
 
-/-- **An address that holds side by side holds at the wiring that moves nothing and returns everything**, at the
-gate itself: a slot whose key is the read's names the read's entry, and its leaf count is the entry's where it is
-not sized and its units' where it is. -/
 theorem addressHoldsWired_id (hr : r.Ok h) {S : Address} {g : ℕ} (hH : r.AddressHolds h S g) :
     r.AddressHoldsWired h id (fun _ => true) S g g := by
   obtain ⟨hn, hR, hrd⟩ := hH
@@ -202,17 +151,10 @@ theorem addressHoldsWired_id (hr : r.Ok h) {S : Address} {g : ℕ} (hH : r.Addre
 
 end CheckedRun
 
-/-- **Where `Addresses` holds, the property holds at the wiring that moves nothing and returns everything**, each
-gate at the address `Addresses` gives it. So the property asks no more than `Addresses` of a design with no wire. -/
 theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => true) :=
   ⟨fun g => (hA g).choose, fun _ => ⟨rfl, rfl⟩, fun r hr i hi =>
     CheckedRun.addressHoldsWired_id hr ((hA i).choose_spec r hr hi)⟩
 
-/-! ## Where the property is a premise: every source bit at a port a link or a wire names -/
-
-/-- **Only source bits at a port a link names stay inputs**: where every source bit is at a port a link or a wire
-names and every wired source bit has a gate to go to (`wiresMove`), a source bit at a port no link names has one
-(`wireTarget`), so the wiring map moves it. -/
 theorem wireTarget_of_sourcesNamed (hn : sourcesNamed h = true) (hc : wiresMove h = true) {x t : ℕ}
     {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) (hl : heldLink h (h.names.getD t "") r.row = none) :
     ∃ y, wireTarget h x = some y := by
@@ -233,34 +175,21 @@ round 2 reads such a port off the interior record and the wired program opens it
 def AddressesConnected : Prop :=
   sourcesNamed h = true → AddressesWired h (wireMap h) (returned h)
 
-/-! ## A connected instance: the gates and their roots
-
-Three members in one replay block, each one proof block: two writers, each an input and its negation, and a reader
-of three inputs and their conjunction. The reader's first and third inputs are wired to the first writer's output
-and its second to the second writer's; the writers' outputs are read only there and the reader's is returned. So one
-written gate is read by one unit at two of its own gates, and the two writers' outputs are read by one reader. -/
-
-/-- The three members side by side: gates `0, 1` the first writer's, `2, 3` the second's, `4` to `7` the reader's;
-every output returned. -/
+/-- Three members in one replay block: two writers, each an input and its negation, and a reader of three inputs and
+their conjunction, whose first and third inputs are wired to the first writer's output and its second to the
+second's. -/
 def fanProg : Prog := ⟨[.input, .not 0, .input, .not 2, .input, .input, .input, .and [4, 5, 6]], [1, 3, 7]⟩
 
-/-- The wires: the reader's first and third inputs to the first writer's output, its second to the second's. -/
 def fanWire (i : ℕ) : ℕ := if i = 4 then 1 else if i = 5 then 3 else if i = 6 then 1 else i
 
-/-- What the wired program returns: the reader's output. -/
 def fanKeep (g : ℕ) : Bool := g == 7
 
-/-- **What the three proof blocks need at the wired program**: each writer its input and its output, the reader its
-output and the two writers' outputs, the first's twice, once for each of its own gates wired to it. -/
 theorem fanProg_needs :
     (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [0, 1]) = [0, 1] ∧
       (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [2, 3]) = [2, 3] ∧
       (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [4, 5, 6, 7]) = [7, 1, 3, 1] := by
   decide
 
-/-- **Which of them the replay block commits at the wired program**: the writers' inputs and the reader's
-output; the two wired gates, the writers' outputs, it does not, so every unit that needs one opens it under the
-replay block's roots. -/
 theorem fanProg_boundary :
     cutBlock fanWire [0, 1, 2, 3, 4, 5, 6, 7] = [0, 1, 2, 3, 7] ∧
       (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 0 = true ∧
@@ -270,8 +199,6 @@ theorem fanProg_boundary :
       (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 7 = true := by
   decide
 
-/-- **Side by side the replay block commits every gate a block needs**, the reader's three inputs among them, so the
-program opens those inputs under the statement's roots, where no record of the first stage holds them. -/
 theorem fanProg_sideBySide :
     fanProg.needsList [0, 1] = [0, 1] ∧ fanProg.needsList [2, 3] = [2, 3] ∧
       fanProg.needsList [4, 5, 6, 7] = [4, 5, 6, 7] ∧

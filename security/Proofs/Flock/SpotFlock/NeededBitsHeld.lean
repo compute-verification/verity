@@ -14,17 +14,8 @@ public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 public import Flock.Desc
 
-/-! # Every member of a held code is rowed, at an accepted run
-
-The checks an accepted run passed make every member's bits rowed (`MemberRowed`), so `NeededBits h` holds with no
-premise (`SpotFlock.neededBits_held`). A member's statement parses (`templateOk`) and is in the hidden-output scope
-(`membersScoped`): its unit reads one input group, and every input a row reads is a port bit (`Layout.KeysRow`), so each
-source gate a unit owns is a port's message bit and has a commitment position (`Bits.rowBit`); padding, a wire and a
-literal never reach one. Every returned output word is an output word of an output row (`RowsFitS`, `Layout.check_out`),
-so each returned output bit has one too (`Bits.outRowBit`).
-
-The same facts give `RowsArePorts h` (each source and written bit's row is one of its member's ports), and `WrittenOnce h`
-holds of every held code: a written gate fixes its member, unit, instance, leaf and bit. -/
+/-! The checks an accepted run passed make every member of a held code rowed, so `NeededBits h` holds with no premise
+(`neededBits_held`). -/
 
 @[expose] public section
 
@@ -64,8 +55,6 @@ section rowed
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **A column's gate below the rows is a key's source gate**: a column of unit `u` whose gate is a source gate is an
-input column with a key. -/
 theorem keyWire_src {u col : ℕ} (h2 : 2 ≤ keyWire c n u col) (hlt : keyWire c n u col < 2 + n * (bitsRows c).nIn) :
     col < (bitsRows c).nIn ∧ ∃ b, Spot.Bits.keyIdx c (bitsRows c).nIn col = some b ∧
       keyWire c n u col = 2 + u * (bitsRows c).nIn + b := by
@@ -88,7 +77,6 @@ theorem keyWire_src {u col : ℕ} (h2 : 2 ≤ keyWire c n u col) (hlt : keyWire 
     · rw [if_neg h3] at h2
       omega
 
-/-- **A source gate a unit's row reads** is one of the unit's keyed inputs, at an input column the row reads. -/
 theorem src_read {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g = some u)
     (hw : w ∈ Spot.Bits.args (Spot.Bits.keyProg c n) g) (h2 : 2 ≤ w) (hlt : w < 2 + n * (bitsRows c).nIn) :
     ∃ i < (bitsRows c).nComp, ∃ col ∈ (bitsRows c).a.getD i [] ++ (bitsRows c).b.getD i [],
@@ -102,7 +90,6 @@ theorem src_read {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g 
   · obtain ⟨hcol, b, hb, he⟩ := keyWire_src c n h2 hlt
     exact ⟨i, hi, col, List.mem_append.2 (Or.inr hc), hcol, b, hb, he⟩
 
-/-- **Unit `u`'s source gate at its own key `b`** is unit `u`'s read of `b`'s source. -/
 theorem rowBit_key {u b : ℕ} (hu : u < n) (hbB : b < (bitsRows c).nIn)
     (hb : Spot.Bits.keyIdx c (bitsRows c).nIn b = some b) :
     Spot.Bits.rowBit c n (2 + u * (bitsRows c).nIn + b) =
@@ -120,8 +107,6 @@ theorem rowBit_key {u b : ℕ} (hu : u < n) (hbB : b < (bitsRows c).nIn)
     omega
   · rfl
 
-/-- **A keyed input a row reads is a port's message bit** (`KeysRow`): its source gate's commitment position is some,
-on a port's row. -/
 theorem rowBit_of_read {hU : Built c.unit} (hu32 : c.unit.unitLog ≤ 32)
     (hK : FlockSoundness.Discharge.Layout.KeysRow c hU (FlockSoundness.Discharge.Layout.portRowW c))
     {u i col b : ℕ} (hu : u < n) (hi : i < (bitsRows c).nComp)
@@ -154,7 +139,6 @@ theorem rowBit_of_read {hU : Built c.unit} (hu32 : c.unit.unitLog ≤ 32)
     rw [rowBit_key c n hu (keyIdx_lt hb) (keyIdx_self hb), hsb]
     exact ⟨q, hq, _, rfl, rfl⟩
 
-/-- **Every source gate a member's constants leave free has a commitment position on a port's row**, at `KeysRow`. -/
 theorem rowBit_of_free {hU : Built c.unit} (hu32 : c.unit.unitLog ≤ 32)
     (hK : FlockSoundness.Discharge.Layout.KeysRow c hU (FlockSoundness.Discharge.Layout.portRowW c))
     {g : ℕ} (hg : g < (Spot.Bits.keyProg c n).inputs) (hκ : Spot.Bits.consts c n g = none) :
@@ -169,7 +153,6 @@ theorem rowBit_of_free {hU : Built c.unit} (hu32 : c.unit.unitLog ≤ 32)
     obtain ⟨i, hi, col, hc, hcol, b, hb, rfl⟩ := src_read c n hg' hw (by omega) hg
     exact rowBit_of_read c n hu32 hK (unitOf_some c n hg').1 hi hc hcol hb
 
-/-- **A returned output bit's commitment position is an output word's**, when every returned output is an output word. -/
 theorem outRowBit_of_outGate (hsz : c.leavesOut.size = c.upv)
     (hl : ∀ u < c.upv, ∀ o ∈ (c.leavesOut[u]!).toList, o < c.outWords)
     {u k j t x : ℕ} (hx : Spot.Bits.outGate c n u k j t = some x) :
@@ -185,8 +168,6 @@ theorem outRowBit_of_outGate (hsz : c.leavesOut.size = c.upv)
   rw [hg, getElem?_pos (c.leavesOut[k]!) j hj]
   rfl
 
-/-- **Every returned output bit has a commitment position on a port's row**, at `RowsFitS` with every returned output
-an output word. -/
 theorem outRowBit_some (hR : FlockSoundness.Discharge.Hidden.Any.RowsFitS c) (hsz : c.leavesOut.size = c.upv)
     (hl : ∀ u < c.upv, ∀ o ∈ (c.leavesOut[u]!).toList, o < c.outWords)
     {u k j t x : ℕ} (hx : Spot.Bits.outGate c n u k j t = some x) :
@@ -195,8 +176,6 @@ theorem outRowBit_some (hR : FlockSoundness.Discharge.Hidden.Any.RowsFitS c) (hs
   rw [he, outPos_eq hR.1.1 hw]
   exact ⟨_, (hR.1.2 _ (FlockSoundness.Discharge.HiddenExec.outPortOf_spec c hw).1).1, _, rfl, rfl⟩
 
-/-- **What the hidden-output scope gives a parsed statement**: every input a row reads is a port bit (`KeysRow`), its
-rows fit (`RowsFitS`), and every returned output is an output word. -/
 theorem scoped_facts {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     (hty : tags.typed = false) (hcS : HmOut.parseStmt tags cf tables = .ok c) (hU : Built c.unit)
     (hs : ProvedScope.scopeOkH c = true) :
@@ -216,7 +195,6 @@ theorem scoped_facts {tags : Flock.Tags} {cf : ByteArray} {tables : List (String
   have hout := FlockSoundness.Discharge.Layout.check_out hty' ho hls
   exact ⟨hout.2.1, fun u hu => (hout.2.2 u hu).2⟩
 
-/-- **A member in the hidden-output scope is rowed** (`MemberRowed`). -/
 theorem memberRowed_of {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     (hty : tags.typed = false) (hcS : HmOut.parseStmt tags cf tables = .ok c) (hU : Built c.unit)
     (hu32 : c.unit.unitLog ≤ 32) (hs : ProvedScope.scopeOkH c = true) : _root_.SpotFlock.MemberRowed c n := by
@@ -229,8 +207,6 @@ theorem memberRowed_of {tags : Flock.Tags} {cf : ByteArray} {tables : List (Stri
     rw [he]
     rfl
 
-/-- **One gate is written once**: two returned output bits on one gate are the same unit's same instance's same leaf
-bit. -/
 theorem outGate_inj {u k j t u' k' j' t' x : ℕ} (h : Spot.Bits.outGate c n u k j t = some x)
     (h' : Spot.Bits.outGate c n u' k' j' t' = some x) : u = u' ∧ k = k' ∧ j = j' ∧ t = t' := by
   have hP : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nComp = c.upv * ((Spot.Bits.Rows.ofNet c.unit).nComp + 1) :=
@@ -275,7 +251,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
 
-/-- **Each member's statement parses** as an untyped hidden-output statement, at an accepted design (`templateOk`). -/
 theorem member_parsed (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) :
     ∃ (tags : _root_.Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)), tags.typed = false ∧
@@ -300,8 +275,6 @@ theorem member_parsed (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two
       exact ⟨_, _, _, hty, _root_.Flock.Desc.parseStmt_stmt hD'⟩
     · cases hD
 
-/-- **What an accepted design gives member `t`**: its unit is built, of at most 2³² columns, every input a row reads is
-a port bit, its rows fit, and every returned output is an output word. -/
 theorem member_facts (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) :
     ∃ hU : _root_.FlockSoundness.Built h.ms[t].1.unit, h.ms[t].1.unit.unitLog ≤ 32 ∧
@@ -315,7 +288,6 @@ theorem member_facts (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two 
     _root_.Flock.Bridge.NeededBitsOf.scoped_facts _ hty hcS hU (scoped_of_two h hd _ (List.getElem_mem ht))
   exact ⟨hU, hu32, hK, hR, hsz, hl⟩
 
-/-- **Every member is rowed at an accepted design** (`MembersRowed`). -/
 theorem membersRowed_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     MembersRowed h := by
   intro ci hci
@@ -325,8 +297,6 @@ theorem membersRowed_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd
   exact _root_.Flock.Bridge.NeededBitsOf.memberRowed_of _ _ hty hcS hU hu32
     (scoped_of_two h hd _ (List.getElem_mem ht))
 
-/-- **Every gate a checked unit needs is one of its own unit's bits** (`NeededBits`), of every held code: an accepted
-run's design is accepted, so every member is rowed. -/
 theorem neededBits_held (h : Held) : NeededBits h := by
   intro r hr
   obtain ⟨_, _, _, _, _, h2, _⟩ := id hr
@@ -335,7 +305,6 @@ theorem neededBits_held (h : Held) : NeededBits h := by
 theorem memberCircuit_eq (h : Held) {t : ℕ} (ht : t < h.ms.length) : memberCircuit h t = h.ms[t].1 := by
   simp [memberCircuit, Held.ms]
 
-/-- **Each source and written bit's row is one of its member's ports** (`RowsArePorts`), at an accepted design. -/
 theorem rowsArePorts_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     RowsArePorts h := by
   refine ⟨fun e he => ?_, fun e he => ?_⟩
@@ -356,7 +325,6 @@ theorem rowsArePorts_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd
     rw [memberCircuit_eq h hm]
     exact ⟨q, hq, by rw [hrow]; exact _root_.Flock.Bridge.NeededBitsOf.name_getD hq⟩
 
-/-- **Each written gate is written once** (`WrittenOnce`), of every held code. -/
 theorem writtenOnce_held (h : Held) : WrittenOnce h := by
   intro a ha b hb hab
   obtain ⟨m, hm, u, k, j, t, x, r, hx, hr, rfl⟩ := _root_.Flock.Bridge.NeededBitsOf.of_mem_writtenBits ha
