@@ -398,7 +398,7 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`); the rows of `ARCHITECTURE.md`'s table of code to write (`not_built.py`); and the sites the ratchet lints find, their lists allow and the lints find past their entries, in total and by lead (`lint_sites.py`, over `lint_counts.py`) | maintained |
+| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`); the rows of `ARCHITECTURE.md`'s table of code to write (`not_built.py`); and the sites the ratchet lints find, their lists allow and the lints find past their entries, in total and by lead (`lint_sites.py`, over `lint_counts.py`); and the share of Python and Lean lines that are prose, the prose items over the length AGENTS.md allows and those naming a date, an id, a commit, a machine or a person, in total and by lead (`prose.py`) | maintained |
 | `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
 
 ### Security
