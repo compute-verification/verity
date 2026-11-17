@@ -38,7 +38,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import wi
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-CARD_FILES = ROOT / "hardware/cards"
+CARD_FILES = ROOT / "calibration/hardware/cards"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
