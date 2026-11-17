@@ -18,8 +18,8 @@ import random
 from types import SimpleNamespace
 
 import pytest
-from verity_vllm.compiler import replay_step as RS
 
+from verity_vllm.compiler import replay_step as RS
 from verity_vllm.pipeline.advice_code import pool as PL
 from verity_vllm.pipeline.advice_code import replay as RP
 from verity_vllm.pipeline.advice_code import schedule as SC

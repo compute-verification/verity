@@ -211,6 +211,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
          "policy's own count of its class"),
         ("  Pearl+ credits linears alone, 96.89% of the model's MACs at this class: its passes hold 136,201,633,792 of "
          "them and its credit is 98.73% of them all"),
+        C.HELD_TO_W,
         ("  tokens, the class's since the record holds no count of those served: 128 prompt and 16 output, over 140 "
          "positions"),
         f"  capacity share: {C.ABSENT}",
@@ -222,6 +223,9 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert doc["made_up_says"] == SAYS
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": WHY}
+    assert C.HELD_TO_W == ("  the passes the share counts are W's, the window record the verdict holds them to: W is "
+                           "the developer's own record of its passes, and nothing here holds it to the bytes the "
+                           "requests received or to the checkpoint")
     assert C.RESTS_ON == ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates "
                           "refuted: that a credited MAC was computed is an open assumption, not a proved guarantee")
     # the answer's ε and δ are sampling's, and the document names them so: it has no `epsilon` or `delta` of the credit
@@ -549,7 +553,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "error"]
+    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "epsilon_s", "error"]
     assert C.METRIC == "compute-accounting/verified-compute-share"
     # the number is the product of the two shares the text prints beside it
     assert (got[C.CREDITABLE]["value"], got[C.OF_CREDITABLE]["value"]) == (MACS["linears"] / TOTAL, CREDITED / MACS["linears"])
@@ -560,12 +564,18 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
     for name in ("capacity", "free"):
         assert (got[name]["value"], got[name]["unit"], got[name]["why"]) == (None, "MAC", why)
-    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone
+    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone and a parameter the
+    # run chose, which its mark says no run measured; ε_s, the verifier's from its sample, is measured beside it
     assert (got["error"]["value"], got["error"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["error"]
-    assert "the answer's δ_s, sampling's alone" in C.DELTA_S
+    assert "the answer's δ_s, sampling's alone" in C.DELTA_S and "a parameter the run chose" in C.DELTA_S
+    assert (got["epsilon_s"]["value"], got["epsilon_s"]["unit"]) == (0.01, C.EPSILON_S) and "why" not in got["epsilon_s"]
+    marks = {"error": C.DELTA_S_MARK}
+    assert C.DELTA_S_MARK == "modeled"
     for m in got.values():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
-        assert m["mark"] == "measured" and m["inputs"] == ["measured", RUN, *["delta_s"] * (m["name"] == "error")]
+        mark = marks.get(m["name"], "measured")
+        named = {"error": ["delta_s"], "epsilon_s": ["epsilon_s"]}.get(m["name"], [])
+        assert m["mark"] == mark and m["inputs"] == [mark, RUN, *named]
         assert m["audit"] is False
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's machine")
@@ -591,7 +601,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
     got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
     assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity at clock.tensor",
-                         "free at clock.tensor", "capacity at clock.sm", "free at clock.sm", "error"]
+                         "free at clock.tensor", "capacity at clock.sm", "free at clock.sm", "epsilon_s", "error"]
     assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
         tensor, tensor - CREDITED, sm, sm - CREDITED]
     assert not any("why" in m for m in got.values())
@@ -619,6 +629,7 @@ def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp
     doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
     got = {m["name"]: m for m in C.amounts(doc)}["error"]
     assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
+    assert got["mark"] == C.DELTA_S_MARK
 
 
 #: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split holds every linear of the class
@@ -668,7 +679,7 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert sum(Fraction(c["macs"]) for c in got["causes"]) == got["give_up"]
     assert [(c["pass"], c["call"], c["linear"]) for c in got["top"]] == [(0, 2, "gate_up"), (0, 6, "gate_up")]
     assert got["top"][1]["causes"] == {"epsilon_macs": "1073741824/25", "rho_macs": "6643777536/625"}
-    assert text[12:] == [
+    assert text[13:] == [
         ("  per call: the model gives up 6,096,318,838 of its MACs (4.34%); by cause, from the verifier's split of "
          "its 256 calls (out/pieces/pouw/verify.json):"),
         "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   68.94%",
@@ -1201,16 +1212,21 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
     assert "was withdrawn" in capsys.readouterr().err
 
 
-def test_every_metric_row_reads_the_run_of_record_its_header_names():
-    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line: every row's ``--from`` is
-    that run, so moving the rows to another run is one edit that this holds complete, and every metric `run.py` writes
-    has a row."""
+def test_each_metric_row_is_the_run_that_measures_it_and_no_reprint_is_rerun():
+    """`metrics.toml`: every metric `run.py` writes has a row whose command is the served run (`serve.sh`), which
+    writes them under its own run, and never `run.py --from`, a reprint of a stored run that the weekly rerun loop
+    would record as a new reading. A row that reads a stored run (the h200 row) takes it as the placeholder
+    ``RUN_OF_RECORD``, which keeps it off that loop, and the header's ``RUN OF RECORD`` line names the run and its
+    commit."""
     import re
     import tomllib
     text = (HERE.parents[2] / "benchmarks" / "compute" / "metrics.toml").read_text()
-    named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}),", text, re.M)
-    assert named, "metrics.toml's header names no run of record"
-    rows = tomllib.loads(text)["metric"]
-    assert {m["id"]: re.search(r"--from (\S+)", m["command"]).group(1) for m in rows} == dict.fromkeys(
-        (m["id"] for m in rows), named.group(1))
-    assert {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE} <= {m["id"] for m in rows}
+    named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}), commit [0-9a-f]{7,40}", text, re.M)
+    assert named, "metrics.toml's header names no run of record and the commit it ran at"
+    rows = {m["id"]: m["command"] for m in tomllib.loads(text)["metric"]}
+    served = {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE}
+    assert served <= set(rows)
+    for i in served:
+        assert rows[i].endswith(" -- bash benchmarks/compute/serve.sh") and "--from" not in rows[i], i
+    assert {i: re.search(r"--from (\S+)", c).group(1) for i, c in rows.items() if i not in served} == dict.fromkeys(
+        set(rows) - served, "RUN_OF_RECORD")
