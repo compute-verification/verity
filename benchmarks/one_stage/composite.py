@@ -223,7 +223,7 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
 
 
 def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
-    """Of SPOT's case in the per-member form, the members its accepted sample reached and the members it
+    """Of the SPOT case in the per-member form, the members its accepted sample reached and the members it
     registers; None for any other case."""
     for p in cases:
         proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
