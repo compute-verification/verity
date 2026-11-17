@@ -65,8 +65,8 @@ declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
 serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units (their producer module, which
-``main`` is handed by ``benchmarks/pouw/served_h1/h1_gpu.py``, the way this run is started with ``--receipts``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
-``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
+``main`` is handed): h1u.cu's proof-block kernel of the -hbc build SO
+over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
 window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
 (`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
@@ -1562,8 +1562,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
 
 
 def main(argv: list[str] | None = None, producer: Any = None) -> int:
-    """`producer` is kernels' producer module, which ``--receipts`` needs (``benchmarks/pouw/served_h1/h1_gpu.py`` hands
-    it in)."""
+    """`producer` is kernels' producer module, which ``--receipts`` needs."""
     ap = argparse.ArgumentParser(description="int8 Llama served with PoUW's H1 + fx1 on the eager int8_exact row, checked on the host")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
@@ -1673,7 +1672,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                          "coins are this process's unless --challenger with --peer gives each window a session of its own")
     ap.add_argument("--receipts", metavar="SO",
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
-                         "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
+                         "-hbc build SO on the serving GPU, the "
                          "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
                          "(pouw_cuda/noise.cu's, receipts.noise_cubin) takes receipts.py's torch chain over its noise")
     ap.add_argument("--arch", help="fill with --served: the H1 device record (h1device.DEVICES: sm_90, the H200; sm_120, "
@@ -1714,8 +1713,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
     if a.receipts and producer is None:
-        ap.error("--receipts needs kernels' producer: start this run with benchmarks/pouw/served_h1/h1_gpu.py, which "
-                 "hands it in")
+        ap.error("--receipts needs kernels' producer, which main is handed")
     if a.j10r and not (a.served and a.workload == "fill"):
         ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.ks and not (a.served and a.workload == "fill"):

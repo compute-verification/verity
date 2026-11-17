@@ -1,6 +1,6 @@
 """Every environment variable PoUW's benchmarks read, declared once (`verity_config.settings`): the Pearl-C kernels'
-(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``),
-served H1 (``served_h1``) and the served path's opt-in tests.  Code reads them through ``of(__file__)``::
+(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``)
+and the served path's opt-in tests.  Code reads them through ``of(__file__)``::
 
     from verity_config.settings import of
     S = of(__file__)
@@ -131,25 +131,10 @@ REGISTRY = Registry(
     S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin a run was sent (verity_bench's "
                                               "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
                                               "arm builds one, for development only"),
-    # ---------------------------------------------------------------- served H1
-    S("POUW_CHALLENGER", str, None, WHERE, "the window's challenger session's address (infra's gate)"),
-    S("POUW_CHALLENGER_SESSION", str, None, WHERE, "the window's challenger session's id"),
-    S("POUW_CHALLENGER_SECRET_FILE", str, None, WHERE, "the file holding the session's secret"),
-    S("POUW_CHALLENGER_COMMITMENT", str, None, WHERE, "the session's commitment"),
-    S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
-    S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
-    S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
     # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
     S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),
     S("H1_TMPL", str, None, WHERE, "the H1 statement's form: unset, empty or flat the flat statement, structural or a "
                                    "layout mode the templated one (h1unit.layout)"),
-    S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
-                                        "test_lane_refs.py); unset, they skip"),
-    S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "
-                                              "test_served_h1_producer.py's GPU tests load; unset, they skip"),
-    S("VERITY_POUW_NOISE_CUBIN", str, None, WHERE, "noise.cu built for the device (`receipts.Cubin`), for "
-                                                   "test_served_h1_producer.py's GPU tests of its J10-R streams; unset, they "
-                                                   "skip or take hashlib's"),
     standalone=STANDALONE,
 )

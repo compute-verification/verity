@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The served window's shape, its rounds, and the coin each served value is committed before (`ResourceAccounting.Served`)
 
-A served int8 window (SERVE-H1's static form, `benchmarks/pouw/served_h1/serve.py`) is a fixed function of public
+A served int8 window (SERVE-H1's static form) is a fixed function of public
 parameters (`Shape`): `steps` engine steps, `rows` slot rows a linear call, `tileRows × tileCols` units, and the
 model's linears in call order, each its `(K, N)`. Call `(s, w)` is step `s`'s call of linear `w`; its units are its
 `rows/tileRows × N_w/tileCols` tiles at positions `base s w + u`, `base s w = s·U + off w`, `U` the units of one step
