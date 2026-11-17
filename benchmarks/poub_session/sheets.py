@@ -8,8 +8,8 @@ from pathlib import Path
 from verity.device import load_card, load_node
 from verity.protocols.resource_accounting.memory.poub.verifier import timing
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[2] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/nodes"
 
 NODE = "rtx-pro-6000-server-x8"
 
