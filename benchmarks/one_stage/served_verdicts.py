@@ -1886,7 +1886,7 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
         n = sum(hi - lo for lo, hi in m["units"])
         k = sum(lo <= u < hi for u in sample for lo, hi in m["units"])
         if k:
-            by_member.append({"member": name, "of": n, "drawn": k})
+            by_member.append({"member": name, "of": n, BR.SAMPLED: k})
     return {"members": {"sampled": len(by_member), "registered": len(members)},
             "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
 
