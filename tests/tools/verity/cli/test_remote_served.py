@@ -115,7 +115,8 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
     monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
     f = onsite_pearlplus(tmp_path, monkeypatch)
     rc, got, err = dry(capsys, config=f)
-    assert rc == 0 and got["dry"][0]["unbound"] == sorted(ONSITE_UNBOUND), err
+    written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
+    assert rc == 0 and got["dry"][0]["unbound"] == sorted(set(ONSITE_UNBOUND) - written), err
     assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
     assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
     tables = json.loads(json.dumps(STARTED))
