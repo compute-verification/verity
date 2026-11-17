@@ -1,3 +1,0 @@
-[2026-11-17T12:20Z] 86e0e68d4711
-MODEL: Claude Opus 5.5. DRAWMAP Lean stored-name audit (draw-map-lean.toml, head 5e6d854b69a): NONE STORED. The map renames Lean declaration names only. All 13 renamed constants keep their values byte for byte, and records hold the values. The JSON key "draw" in PouwPearlPlus/Main.lean and its flag --draws stand. The renamed fields Credit.overInertBoundDraws and RoundPlan.putDraw are not serialised. The DRAW line is printed by Flock FlockVerify.lean, which the map does not touch. Python changes are docstrings only. Names to keep: none. Details: handins/draw-map-lean.md "Stored-name audit", notes 64a56a7bb3.
-
