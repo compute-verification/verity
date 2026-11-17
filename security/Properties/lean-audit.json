@@ -15975,9 +15975,9 @@
    }
   },
   "CoreOnsite": {
-   "digest": "04c4a2ad5280a53900a486ffcabea9f128489f06483829a5b06f163be1a6620a",
+   "digest": "66161573f31ff80028ff08eec8a0307ac3327bb327313316f36007f70ee2b45c",
    "definitions": {
-    "Core.Onsite.components": "853b712f57725e87c39bfe8bf1e8dc18ff7e54a349cf449d86e3e3829f38ab06",
+    "Core.Onsite.components": "7dadf9ecac00b5161750471b7b25c8f2bf8f3cfb01a4c6dd751579fbeeb728cd",
     "Core.Onsite.protocol": "64b09769d6abf6bf0bb5b8d188c40d503bb6821ff7b816f6e8a2970514b817cc",
     "Core.Onsite.store": "443632f68722fc502f08cd174cd6c40fc63b828234e6464de14468492b754d61",
     "Core.Onsite.tied": "0ae498cd481ac4da91607545750ab364af517e7dc293f97674ea2f2e05d2cb16",
