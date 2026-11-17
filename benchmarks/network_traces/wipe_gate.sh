@@ -13,7 +13,7 @@
 # listening on PEER's loopback PORT, and keeps the gate's answer in KEEP/RUN/start.json alone (0600), never published:
 # it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the network attester's witness also
 # records (stalls.json's cgroup paths) and no public file holds, so the leak guard would hold it as a piece of the
-# witness. A refusal (another rehearsal still runs), an answer naming no certifier run, goes to the log: a visible
+# witness. A refusal (another rehearsal still runs), an answer naming no attester run, goes to the log: a visible
 # failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
 # witness/, the lane's own (`fetch`), to KEEP/RUN/fetch.tar.gz (0700, outside the run dir: custody publishes $OUT), and
 # to bundle.tgz only what `fetch` gives any other key, the bundle less witness/; summary.json is the session's. Exits
@@ -25,7 +25,7 @@
 # releases the rest (exit 3 when it found one). A signal, a guard past its budget or one that fails releases nothing:
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
-# 1700 requests, the gate's most (`auditor.NETWORK_CERTIFIER_REQUESTS`), on the gate's most prompts, 400 (`NETWORK_CERTIFIER_PROMPTS`; request
+# 1700 requests, the gate's most (`auditor.NETWORK_ATTESTER_REQUESTS`), on the gate's most prompts, 400 (`NETWORK_ATTESTER_PROMPTS`; request
 # j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`network_attester_serve.prompt_traffic`): 3404.8 s from
 # the session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures an execution
 # phase they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700
@@ -100,7 +100,7 @@ rc=0
 reply=$(PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$PROMPTS" \
   | "${SSH[@]}" "$REQUEST") || rc=$?
 RUN=$([ "$rc" = 0 ] && python3 -c 'import json, sys; print(json.loads(sys.argv[1])["run"])' "$reply" 2>/dev/null) || RUN=
-# `auditor.CERTIFIER_RUN`, which plain python3 can't import; RUN names a directory under KEEP
+# `auditor.ATTESTER_RUN`, which plain python3 can't import; RUN names a directory under KEEP
 if ! [[ "$RUN" =~ ^c[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}$ ]]; then
   echo "$(date -u +%FT%TZ): the gate didn't start the session (exit $rc): ${reply:0:400}"; exit $((rc ? rc : 1))
 fi
