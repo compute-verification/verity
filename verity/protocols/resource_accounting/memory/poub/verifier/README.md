@@ -34,15 +34,13 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
   and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
-  proof block proves (`PROTOCOL.md` §8), but no session proves them: `opening.py` evaluates the opening unit on the
+  proof block proves, but no session proves them: `opening.py` evaluates the opening unit on the
   honest witness, and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
-- **Plans are in the clear.** The verifier sees which blocks each pass covers (`PROTOCOL.md` §8, "What the plan
-  shows").
+- **Plans are in the clear.** The verifier sees which blocks each pass covers.
 - **The requirement's units and the stacking property are inputs, not proofs.** The ledger credits the served
   circuit's reads only on the plan and memory-map units' verdict (`audit.RequirementLink`), and blocks appended after
   the seed only on the stacking property's (`audit.PostSeedVerdict`); without them it credits the node's reads of its
   registered store. Only `benchmarks/one_stage/a7.py` proves the units.
 
-[`PROTOCOL.md`](PROTOCOL.md) has the semantics, the byte formats and the record. [`DESIGN.md`](DESIGN.md) holds the
-entry points, which side is the definition and why the Lean decides alone, replaying a recorded session, and what each
-module does.
+[`DESIGN.md`](DESIGN.md) holds the entry points, which side is the definition and why the Lean decides alone, replaying a
+recorded session, and what each module does.
