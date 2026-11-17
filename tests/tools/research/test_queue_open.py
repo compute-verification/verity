@@ -342,7 +342,7 @@ def test_link_links_an_open_pr_and_fails_on_an_unknown_key_or_a_refused_link(ope
     assert research_main([*link, "--issue", "ENG-123"]) == 1
     assert "(Linear: refused); link it with `research queue link 6859 --issue ENG-123`" in capsys.readouterr().err
     for bad, why in ((["--issue", "none:x"], "link needs the PR number and --issue KEY"), ([], "link needs the PR number"),
-                     (["--issue", "ENG-1", "--dry-run"], "--dry-run is for sync, open, edit only, not link")):
+                     (["--issue", "ENG-1", "--dry-run"], "--dry-run is for open, edit only, not link")):
         with pytest.raises(SystemExit):
             research_main([*link, *bad])
         assert why in capsys.readouterr().err
