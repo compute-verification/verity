@@ -271,6 +271,7 @@ ALLOWED = {
     "benchmarks/dsa_topk/metrics.toml": 1,  # proofs
     "benchmarks/flock_s8_block/metrics.toml": 1,  # proofs
     "benchmarks/proof_throughput/metrics.toml": 1,  # proofs
+    "benchmarks/replay_ladder/metrics.toml": 1,  # proofs
     "infra/dashboard/metrics.toml": 1,  # console
 }
 
