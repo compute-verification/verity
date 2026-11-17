@@ -114,6 +114,8 @@ at every τ, since the target grows with τ as the intervals a second fall.
 - **On one host.** `run`'s three parties share a host, its cores and its raw monotonic clock, over loopback. A network attester
   is the auditor's hardware on a machine the developer doesn't control, so what the server does to the network attester's
   host through shared cores is more than a deployed server can do, and a loopback path is quieter than a network.
+  There the network attester's own release times (a row's `sender`, beside the observer's `process` and `kernel`
+  stamps) carry the bit through how long its write takes, while each release starts on time.
 - **`serve` and `observe`** put the observer on another host (below). The server still shares the network attester's host
   and clock.
 - **One connection.** A case's observer holds one connection. A receiver holding several of a link's sees each

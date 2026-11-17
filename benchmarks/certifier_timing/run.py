@@ -654,7 +654,9 @@ def record(doc: dict, out: Path, code: int) -> None:
         one_host = all(c.get("observer_host") in (None, c.get("host")) for c in doc["cases"])
         writer.measurement(METRIC, doc["value"], "bits a release interval", (doc["lower"], doc["upper"]),
                            mark="measured", extra={"cpu": doc["host"]["cpu"], "interval_ms": doc["interval_ms"],
-                                                   "n": doc["n"], "best": doc["best"], "one_host": one_host})
+                                                   "n": doc["n"], "best": doc["best"], "one_host": one_host,
+                                                   "awake": doc["certifier"]["awake"],
+                                                   "paced_ms": doc["certifier"]["paced_ms"]})
 
 
 if __name__ == "__main__":
