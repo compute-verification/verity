@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/subcircuits.schema.json",
+  "$id": "calibration/census/schemas/subcircuits.schema.json",
   "title": "Census subcircuit templates (typed parameters) with the subcircuits (fully bound templates) under each; never units",
   "type": "array",
   "items": {
@@ -358,7 +358,7 @@
           },
           "port_datatypes": {
             "type": "object",
-            "description": "the datatype of each port the bytes count (benchmarks/census/datatypes.json ids, or f32 / i32 for kernel-internal words)",
+            "description": "the datatype of each port the bytes count (calibration/census/datatypes.json ids, or f32 / i32 for kernel-internal words)",
             "additionalProperties": {"type": "string", "minLength": 1}
           },
           "variable_bounds": {
