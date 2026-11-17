@@ -43,7 +43,8 @@ HERE = Path(__file__).resolve().parent
 MM = Path(__file__).resolve().parents[2] / "machine_model"
 sys.path.insert(0, str(MM))
 
-from verity_machine_model.model import census, entries, holds, model, vector, vectors  # noqa: E402
+from verity_machine_model.model import DEVICE, census, entries, holds, model, vector, vectors  # noqa: E402
+from verity_machine_model.model import card as model_card  # noqa: E402
 
 __all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
            "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "METRIC", "MMA_FORMS", "model", "program",
@@ -431,8 +432,10 @@ METRIC = "compute-research/largest-facet-load"
 
 def record(out: Path, programs: list[dict], epoch: str | None, failed: str | None) -> None:
     """Writes the run's validation and, when `failed` is None and a program was timed, the largest load any program puts
-    on any row as `METRIC`."""
+    on any row as `METRIC`, its member the card's `short`; no value where no card record names the run's card or it
+    isn't the card of the census the loads are priced on."""
     from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
 
     w = kit.writer(out)
     why = failed or (None if programs else "no program was timed")
@@ -440,13 +443,22 @@ def record(out: Path, programs: list[dict], epoch: str | None, failed: str | Non
                  why or f"{len(programs)} programs gated and timed")
     if why:
         return
+    try:
+        card = kit.card_short(w.stamp["card"], directory=CARD_FILES)
+    except SystemExit as refused:
+        w.measurement(METRIC, None, "load", mark="measured", why=str(refused), extra={"epoch": epoch})
+        return
+    if card != (priced := model_card()["short"]):
+        w.measurement(METRIC, None, "load", mark="measured", member=card, extra={"epoch": epoch},
+                      why=f"the loads are priced on {DEVICE}'s census, of the {priced}, and the run's card is the {card}")
+        return
     pairs = [(v, r, p) for p in programs for r, v in p["load"].items()]
     if not pairs:
-        w.measurement(METRIC, None, "load", mark="measured", why="no timed program loads a row",
+        w.measurement(METRIC, None, "load", mark="measured", why="no timed program loads a row", member=card,
                       extra={"epoch": epoch, "programs": len(programs)})
         return
     v, r, p = max(pairs, key=lambda t: t[0])
-    w.measurement(METRIC, v, "load", mark="measured",
+    w.measurement(METRIC, v, "load", mark="measured", member=card,
                   extra={"row": r, "probe": p["probe"], "epoch": epoch, "programs": len(programs)})
 
 

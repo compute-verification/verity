@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import tensor_kinds as TK
+from conftest import H100, H200, RTX, UNKNOWN
 
 
 def test_kernel_key_reads_the_struct_by_its_length():
@@ -105,20 +106,29 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     assert "**below**" in (tmp_path / "tensor_kinds.md").read_text()
 
 
-def test_record_writes_the_eight_bit_forms_issue_cost_and_a_failed_gate_writes_none(tmp_path: Path, no_gpu):
+def test_record_writes_the_eight_bit_forms_issue_cost_and_a_failed_gate_writes_none(tmp_path: Path, stamp_card):
+    """Each card's point names its card; a card no data sheet holds writes no value."""
     imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     lane = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
-    good, bad = tmp_path / "good", tmp_path / "bad"
-    good.mkdir(), bad.mkdir()
-    _write(good, [_opalone(1000, 8 * 67 / 0.98),
-                  _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, imma, lane)])
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    for name, member in ((RTX, "rtx-pro-6000"), (H100, "h100"), (H200, "h200"), (UNKNOWN, None)):
+        (good := tmp_path / name).mkdir()
+        _write(good, [_opalone(1000, 8 * 67 / 0.98),
+                      _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, imma, lane)])
+        stamp_card(name)
+        if member is None:
+            break
+        assert TK.main(["tensor_kinds.py", str(good), "--record"]) == 0
+        doc = json.loads((good / "result.json").read_text())
+        [m] = doc["measurements"]
+        assert doc["validation"]["status"] == "passed"
+        assert (m["name"], m["unit"], m["mark"], m["form"], m["member"], m["host"]["card"]) == (
+            TK.METRIC, "issue cycles a MMA", "measured", "imma_s8_m16n8k32", member, name)
+        assert abs(m["value"] - 8.115) < 1e-9
     assert TK.main(["tensor_kinds.py", str(good), "--record"]) == 0
-    doc = json.loads((good / "result.json").read_text())
-    [m] = doc["measurements"]
-    assert doc["validation"]["status"] == "passed"
-    assert (m["name"], m["unit"], m["mark"], m["form"], m["host"]["card"]) == (
-        TK.METRIC, "issue cycles a MMA", "measured", "imma_s8_m16n8k32", "none")
-    assert abs(m["value"] - 8.115) < 1e-9
+    [m] = json.loads((good / "result.json").read_text())["measurements"]
+    assert m["value"] is None and "member" not in m and repr(UNKNOWN) in m["why"]
     _write(bad, [_opalone(1000, 8 * 67 / 0.52)])
     assert TK.main(["tensor_kinds.py", str(bad), "--record"]) == 3
     doc = json.loads((bad / "result.json").read_text())

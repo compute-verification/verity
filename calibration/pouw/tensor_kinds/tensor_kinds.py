@@ -442,17 +442,24 @@ METRIC = "compute-research/eight-bit-mma-issue-cost"
 
 
 def record(out: Path, summary: dict, fails: list[str]) -> None:
-    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result."""
+    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result, its member the
+    card's `short`, or no value where no card record names the run's card."""
     from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
 
     w = kit.writer(out)
     detail = "; ".join(fails) if fails else f"every gate held over {len(summary)} forms"
     w.validation("failed" if fails else "passed", "tensor_kinds.analyze", detail)
     if fails:
         return
+    try:
+        card = kit.card_short(w.stamp["card"], directory=CARD_FILES)
+    except SystemExit as refused:
+        w.measurement(METRIC, None, "issue cycles a MMA", mark="measured", why=str(refused), extra={"form": REF})
+        return
     s = summary.get(REF) or {}
     a = s.get("a")
-    w.measurement(METRIC, a, "issue cycles a MMA", mark="measured",
+    w.measurement(METRIC, a, "issue cycles a MMA", mark="measured", member=card,
                   why=None if a is not None else f"the run timed no mixed point of {REF}",
                   extra={"form": REF, "a_per_slot": s.get("a_per_slot"), "slots": s.get("slots")})
 

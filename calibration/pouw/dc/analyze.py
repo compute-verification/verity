@@ -329,28 +329,39 @@ def agree(a: Path, b: Path, margin: float = MARGIN) -> dict:
 METRIC = "compute-research/fastest-tensor-form-over-honest"
 #: the honest form a family's tensor forms are held to: the first of these the run timed
 HONEST = {"sm90": ("wg_s8_n256_a1", "wg_s8_n256_a0"), "sm100": ("tc_i8_m128_n256",)}
+#: the card whose points name no member: every point was of it before points named their card
+UNNAMED = "h200"
 
 
 def record(where: Path, out: dict, failed: str | None) -> int:
     """Writes the run's validation and, when `failed` is None, `METRIC`: the most slots a SM a clock any timed tensor form
-    with data writes, over the honest form's. Returns 1 when `failed`."""
+    with data writes, over the honest form's, its member the card's `short` (none for `UNNAMED`), or no value where no
+    card record names the run's card. Returns 1 when `failed`."""
     from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
 
     w = kit.writer(where)
     w.validation("failed" if failed else "passed", "probe.py gate and run, dgemm gate",
                  failed or f"{len(out['forms'])} forms timed")
     if failed:
         return 1
+    try:
+        card = kit.card_short(w.stamp["card"], directory=CARD_FILES)
+    except SystemExit as refused:
+        w.measurement(METRIC, None, "times honest", mark="measured", why=str(refused), extra={"family": out["family"]})
+        return 0
+    member = None if card == UNNAMED else card
     forms, names = out["forms"], HONEST[out["family"]]
     honest = next((forms[n] for n in names if n in forms), None)
     best = max((f for f in forms.values() if f.get("slots") and not f.get("zero_data")), key=lambda f: f["slots"],
                default=None)
     extra = {"family": out["family"], "form": best and best["form"], "honest_form": honest and honest["form"]}
     if honest and best and honest.get("slots"):
-        w.measurement(METRIC, best["slots"] / honest["slots"], "times honest", mark="measured", extra=extra)
+        w.measurement(METRIC, best["slots"] / honest["slots"], "times honest", mark="measured", member=member,
+                      extra=extra)
     else:
         w.measurement(METRIC, None, "times honest", mark="measured", why=f"the run timed none of {', '.join(names)}",
-                      extra=extra)
+                      member=member, extra=extra)
     return 0
 
 

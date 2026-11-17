@@ -19,7 +19,7 @@ import numpy as np
 import pipe
 import pytest
 import uniform as un
-from conftest import load
+from conftest import H100, H200, UNKNOWN, load
 
 DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
 MODEL_DATA = Path(__file__).resolve().parents[3] / "calibration" / "machine_model" / "data"
@@ -313,16 +313,30 @@ def test_analyze_sm90_pass_line(tmp_path):
     assert not an.analyze("sm90", tmp_path / "b")["M3"]["pass"]
 
 
-def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_none(tmp_path, no_gpu):
+def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_none(tmp_path, stamp_card):
+    """The H200's points name no member, as every point did before points named their card; another card's name its
+    card, and a card no data sheet holds writes no value."""
     wg = {"0:IGMMA.64x256x32.S8.S8*": 128 / 4096}
     _rows(tmp_path / "rows", {"wg_s8_n256_a1": wg, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.1},
                               "wgz_s8_n256_a1": {"0:IGMMA.64x256x32.S8.S8*": 2 * 128 / 4096}})
-    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "ok")]) == 0
-    doc = json.loads((tmp_path / "ok" / "result.json").read_text())
-    [m] = doc["measurements"]
-    assert doc["validation"]["status"] == "passed" and m["value"] == pytest.approx(1.1)
-    assert (m["name"], m["unit"], m["mark"], m["family"], m["form"], m["honest_form"], m["host"]["card"]) == (
-        an.METRIC, "times honest", "measured", "sm90", "mma.sync s8_k16", "wgmma s8 m64n256k32", "none")
+    ms = {}
+    for name in (H200, H100):
+        stamp_card(name)
+        assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / name)]) == 0
+        doc = json.loads((tmp_path / name / "result.json").read_text())
+        [ms[name]] = doc["measurements"]
+        assert doc["validation"]["status"] == "passed" and ms[name]["value"] == pytest.approx(1.1)
+    m = ms[H200]
+    assert "member" not in m and m["host"]["card"] == H200
+    assert (m["name"], m["unit"], m["mark"], m["family"], m["form"], m["honest_form"]) == (
+        an.METRIC, "times honest", "measured", "sm90", "mma.sync s8_k16", "wgmma s8 m64n256k32")
+    assert ms[H100]["member"] == "h100" and {k: v for k, v in ms[H100].items() if k not in ("member", "host")} == {
+        k: v for k, v in m.items() if k != "host"}
+    stamp_card(UNKNOWN)
+    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "unknown")]) == 0
+    [m] = json.loads((tmp_path / "unknown" / "result.json").read_text())["measurements"]
+    assert m["value"] is None and "member" not in m
+    assert m["why"].startswith("0 card records under ") and repr(UNKNOWN) in m["why"]
     assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "bad"),
                     "--failed", "a dgemm gate is not exact"]) == 1
     doc = json.loads((tmp_path / "bad" / "result.json").read_text())
