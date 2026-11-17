@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # verity bench served_units [UNIT ...]: job.sh on each UNIT (stage.py's UNITS type, TYPE[:S=V,...]; default
 # fp8-coord:K=6144) at SU_N inputs (default 1), each unit's summary line last; exit 1 unless every unit is as expected.
+# SU_MODEL names the model whose proof blocks the units are (default synthetic), as its points' model and member.
 # verity bench served_units --cover COVER [ARGS]: cover_count.py --record on a stored cover record (an art: id), held to
 # ARGS' card (default GLM-5.3's).
 set -uo pipefail

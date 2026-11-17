@@ -1,6 +1,8 @@
 """record.py OUT: each proof block of OUT/summary.json whose Lean checks all gave the verdict they must writes
 `circuits/proof-block-prove-seconds` and `circuits/proof-block-peak-memory` into the run's result."""
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -13,17 +15,23 @@ def machine(card: str) -> str:
     return "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")
 
 
+def member(model: str, tag: str, machine: str) -> str:
+    if model == "synthetic":
+        return f"synthetic-{tag}-{machine}"
+    return "-".join([model, *([] if machine == "cpu" else [machine]), re.sub(r"[^a-z0-9]+", "-", tag.lower()).strip("-")])
+
+
 def main(out: Path) -> None:
     rows = json.loads((out / "summary.json").read_text())
     w = kit.writer(out)
+    model = os.environ.get("SU_MODEL") or "synthetic"
     for r in rows:
         zk = r.get("zk") or {}
         if not (r["as_expected"] and zk.get("prove_total_s_median") and zk.get("prover_maxrss_gb")):
             continue
-        fields = {"model": "synthetic", "block": r["definition"], "machine": machine(w.stamp["card"])}
-        member = f"synthetic-{r['tag']}-{fields['machine']}"
+        fields = {"model": model, "block": r["definition"], "machine": machine(w.stamp["card"])}
         for name, value, unit in ((PROVE, zk["prove_total_s_median"], "seconds"), (PEAK, zk["prover_maxrss_gb"], "GiB")):
-            m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)
+            m = w.measurement(name, value, unit, mark="measured", member=member(model, r["tag"], fields["machine"]), extra=fields)
             print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", "model", "block", "machine")}))
 
 
