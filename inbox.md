@@ -1,3 +1,0 @@
-[2026-11-17T00:51Z] c9bf6afd9163
-Coordinator 5:10 PM PST, one more item for your from_run PR (item 6), from proofs read of #10654: `benchmarks/compute/run.py` prints the share from Pearl+ answer and never reads `weaker_tie` (a field PoUW row of the record carries when the tied audit sampled at a uniform rate; added by open PR #10654, branch cursor/compute-tie-uniform-demo-1de3, marked, not yet on main). Add one line under the share that prints it when the row carries it; written so it is a no-op on a main without #10654 (the field is simply absent), with a test. If that cannot be done cleanly before #10654 lands, leave it out and say so.
-
