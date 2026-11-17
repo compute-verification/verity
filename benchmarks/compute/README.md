@@ -82,7 +82,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+refutes (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`), and no proved guarantee covers a Pearl+ run's credit:
 the number counts what the verifier credits, and that this is work done is an open assumption. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
@@ -222,7 +222,10 @@ step and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
-line says `Lean verdict of record against the local challenger's key`. `COINS=in-process` holds the challenger in the
+line says `Lean verdict of record against the local challenger's key`. Under it the serve runs inside a Pearl-C period
+of the local gate's lane, opened before the serve on the run's circuit record (built first, on the CPU) and closed once
+the serve's salt session has ended, so the verifier's sample is the lane's first reserve after the close, as PoUW's verdict
+of record requires (`out/pieces/pouw/period.json` holds the period). `COINS=in-process` holds the challenger in the
 serving process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it
 (`salt_coin`). The serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing
 in `/tmp`.
@@ -264,8 +267,9 @@ The paths below are relative to the record directory.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
   and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
 - `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which PoUW's
-  verdict is printed beside the number. A served run on your own card reads `missing` there: the credit is then the
-  Pearl+ verifier's alone.
+  verdict is printed beside the number. serve.sh writes PoUW's row as the window's compose reads it
+  (`benchmarks/one_stage/served_verdicts.py`'s `piece`): `missing` with the first condition of record the run fails,
+  as no window registration of SPOT's is made on your own card. The credit is then the Pearl+ verifier's alone.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,
@@ -331,9 +335,10 @@ that reads the store; a withdrawal of part of a stored record is honored (a with
 a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
 
 `metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
-(the number) and the others `run.py` writes, each with the run it reads; `h200_share.py` writes
-`compute-accounting/h200-capacity-credited-share` for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate
-(a `benchmarks/tensor_duty --arms fp32-beside` run's arm A on uniform operands) over the card's ceiling at each reading
-of its tensor clock, times `run.py`'s share of a served run. Both need the store:
+(the number) and the others `run.py` writes, each written by the served run that measured them, at `serve.sh`'s last
+step, as a `--from` of another run writes none; `h200_share.py` prints `compute-accounting/h200-capacity-credited-share`
+for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate (a `benchmarks/tensor_duty --arms fp32-beside`
+run's arm A on uniform operands) over the card's ceiling at each reading of its tensor clock, times `run.py`'s share of
+a served run. Both need the store:
 `uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN`. Its docstring states the model and what it leaves
 out, which makes its number an upper bound on the served share.

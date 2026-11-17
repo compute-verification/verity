@@ -3295,9 +3295,9 @@ def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_ne
     assert new["branch"] == "cursor/ca-salt-wire-ea24"
 
 
-def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run_fable(tmp_path):
-    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at high effort, and told to name
-    `claude-opus-5-5-high` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
+def test_a_relaunched_worker_runs_opus_at_medium_effort_and_its_children_never_run_fable(tmp_path):
+    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at medium effort, and told to name
+    `claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
     (tmp_path / "workers.d").mkdir()
     (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
     launch_api = FakeLaunchApi()
@@ -3310,10 +3310,10 @@ def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run
         clock.t += 60
         w.sweep(lambda r: None)
     ((_, body),) = launch_api.posts
-    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "medium"}]}
     assert "claude-fable" not in json.dumps(body), "a worker never runs Fable"
     text = body["prompt"]["text"]
-    assert ("A child you start names `claude-opus-5-5-high` (or `claude-sonnet-5-5-high` for a fully specified task), "
+    assert ("A child you start names `claude-opus-5-5-medium` (or `claude-sonnet-5-5-high` for a fully specified task), "
             "never Fable, `inherit` or none.") in text
     assert "You hold no timer or subscription of your own." in text
 

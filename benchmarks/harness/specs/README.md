@@ -38,6 +38,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
+- `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200.
+- `llama32-1b-bf16-h100-served-arm`: the same on one H100.
 - `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
 - `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
   don't fit one GPU beside the Commit's buffers.
@@ -52,6 +54,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
   (`served_pearlplus.sh`'s step).
+- `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
 
 ## PoUS's bandwidth audit
 
@@ -66,6 +69,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   two and four provers on one H200 with ten cores, each statement fetched from the store.
 - `glm53-flock-steady-head-block-h200-c24`: the same two forms at four provers on 24 cores, six a prover, so a node
   whose NUMA nodes hold 24 cores keeps all of a point on the card's node.
+- `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
+  walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
+  metric.
 
 ## Sweeps
 

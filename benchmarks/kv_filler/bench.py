@@ -33,6 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+CARD_FILES = ROOT / "hardware/cards"
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
 
 sys.path.append(str(ROOT))
@@ -41,7 +42,7 @@ import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 from verity.device import load_card  # noqa: E402
 
-SMS = load_card("rtx-pro-6000-server")["sm"]["count"]["value"]
+SMS = load_card("rtx-pro-6000-server", directory=CARD_FILES)["sm"]["count"]["value"]
 """The RTX PRO 6000's SMs, its card's `sm.count`: the readers' grid is a multiple of it."""
 
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()

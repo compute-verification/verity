@@ -913,7 +913,7 @@ def test_a_turn_on_another_model_than_the_launchs_is_refused_once_at_its_first_c
     text = first["user_message"]
     assert first["permission"] == "deny" and text == first["agent_message"]
     assert f"this turn runs on `{OTHER}`, and you were launched on `{LAUNCH}`" in text
-    assert "Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
+    assert "Task and `model: claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
     assert f"model: {LAUNCH}" not in text and "resumed by your lead" in text and "go by your brief" in text
     assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
     assert on_model("pwd", AGENT, two, OTHER, tmp_path) == ALLOW
@@ -1049,7 +1049,7 @@ def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event
         assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
 
 
-FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-high", "claude-sonnet-5-5-high"
+FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-medium", "claude-sonnet-5-5-high"
 HOLDER = "bc-12121212-1212-4121-8121-121212121212"
 
 
@@ -1077,8 +1077,8 @@ def test_every_command_of_a_workers_turn_on_fable_is_refused_each_time_with_the_
             text = refused["user_message"]
             assert refused["permission"] == "deny" and text == refused["agent_message"], (model, command)
             assert f"this turn runs on `{model}`, and no worker runs Fable 5.2" in text
-            assert "`claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task" in text
-            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-high`" in text
+            assert "`claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task" in text
+            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-medium`" in text
     for turn, model in ((TURNS[3], OPUS), (TURNS[4], SONNET), (TURNS[5], OPUS)):
         assert on_model("ls", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
         assert on_model("pwd", AGENT, turn, model, tmp_path, **registry) == ALLOW, model

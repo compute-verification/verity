@@ -13,8 +13,6 @@ The fixture's FlashMLA geometry is one 16-row block at a tile of 128 NoPE values
 stand-ins."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 import torch

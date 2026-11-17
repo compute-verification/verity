@@ -32,8 +32,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
-    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/remote_session/`.
+    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/poub_session/` a place of its
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/poub_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -57,7 +57,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
   circuits, which also traces a training step.
-- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+- `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
