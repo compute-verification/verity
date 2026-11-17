@@ -5227,6 +5227,24 @@
         "benchmarks/machine_model/": "calibration/machine_model/",
         "tests/benchmarks/machine_model/": "tests/calibration/machine_model/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/certifier_piece.py": "benchmarks/network_traces/attester_piece.py",
+        "calibration/certifier_timing/": "calibration/attester_timing/",
+        "tests/benchmarks/network_traces/test_block_certifier.py": "tests/benchmarks/network_traces/test_block_attester.py",
+        "tests/benchmarks/network_traces/test_certifier_piece.py": "tests/benchmarks/network_traces/test_attester_piece.py",
+        "tests/benchmarks/network_traces/test_certifier_term.py": "tests/benchmarks/network_traces/test_attester_term.py",
+        "tests/calibration/certifier_timing/": "tests/calibration/attester_timing/",
+        "tests/calibration/certifier_timing/test_certifier_timing.py": "tests/calibration/attester_timing/test_attester_timing.py",
+        "verity/protocols/resource_accounting/network/attester/certifier_key.py": "verity/protocols/resource_accounting/network/attester/attester_key.py",
+        "verity/protocols/resource_accounting/network/prover/block_certifier.py": "verity/protocols/resource_accounting/network/prover/block_attester.py"
+      }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_certificate.py": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_attestation.py"
+      }
     }
   ]
 }
