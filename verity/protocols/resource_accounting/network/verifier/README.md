@@ -28,7 +28,7 @@ any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
 and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network attester's code (`recordingCode`), not about runs of the network check's Lean
-(`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
+(`lean`, `NetworkVerifier`), which is the verifier's code and states no bound.
 `NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
@@ -65,22 +65,22 @@ Open premises (`open`):
   `one_stage`, `pouw`, `poub_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
   (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock`
   and `../../../proofs/recursion` import none.
-- **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
+- **Lean here**: `lean/` is the Lake package `network_verifier`, whose library `NetworkVerifier` the
   packages at `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
-  - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
+  - `network-verifier`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
     is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
     `network/tests/period_case.py` for the third;
-  - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
+  - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkVerifier.RowsAudit`),
     an active network attester's run, each record held to its attested head and its attestation to the key in the
     session, then the network attester's program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`.
     `benchmarks/network_traces/attester_piece.py` runs it in step 1 of each of its steps, on the kept network
     attester run (`network_attester_chain.rows_audit_case`);
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
-    `NetworkCheck.Certificate`'s.
+  - `network-verifier-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
+    `NetworkVerifier.Certificate`'s.
 - **Lean beside it**: `../attester/program/lean/`, the network attester's program, is the Lake package `certifier_program`, whose
   library `NetworkAttester` the packages at `lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
@@ -104,7 +104,7 @@ Open premises (`open`):
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
-  `inference_only_check` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
+  `inference_only_verifier` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the network attester's program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `parties` alone, `verity.protocol` and `verity.channel`;
@@ -354,7 +354,7 @@ A spec-level reference for network attestation's timing channel:
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless each
   lane's entries are a compute audit's pinned `SlotEntry_v1` or `SelectEntry_v1` template's (`entryPins`), the read bit
   is the prover's word (an entry of read 1 and no outputs passes), so the period check refuses such an execution phase
-  (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
+  (`NetworkVerifier.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
   public salts, a constant of T ≥ 2 (`scan_ok`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
   and domain (`stateTied`): the scan's state tree is the execution phase's state (`window_state`), each row but leaf 0's the one a
@@ -441,7 +441,7 @@ in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by defaul
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
+`TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkVerifier.TransferBlocks`
 (`verity/protocols/resource_accounting/network/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at

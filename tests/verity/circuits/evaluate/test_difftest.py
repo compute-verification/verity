@@ -25,7 +25,7 @@ repository's fixtures (single steps, and chains of steps on one accumulator), an
 E4's primitives (PoUW's and NCP's words, the sampler, MUFU, the reference kinds' transcendentals, the activations and RoPE)
 run batched the same way, on their captures where the fixtures hold them; the tables they read are held to their pins; the
 registered tables are bound by name and read by the composites that take them; the lazy families run on their one-call
-Programs.
+Programs, and the wiring families on every bit position.
 
 The same server answers two readings of a decoded Program, which hold two Python classes to their Lean as mirrors: `gate`
 (`Evaluate.gateFn`, `Flock.Program.Gate`) against `layout.Circuit.gate`'s `layout.Gate`, on every gate of random composites
@@ -58,6 +58,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import wor
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits import partition_object as PO
+from verity.circuits import population as POP
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import reference
@@ -131,10 +132,11 @@ LAZY_FAMILIES = re.compile(r"^(TableRead\d+x\d+|GatherBf16x\d+|GatherF32x\d+)_v1
 def _in_scope(fn: PrimitiveDefinition) -> bool:
     """The primitives the Lean evaluator implements: the Boolean profile's gates (E0), the constant family and the scalar
     primitives (E1), the FP32 and BF16 arithmetic and casts (E2), the tensor-core dot steps (E3), the rest of the registry's
-    primitives and the lazy families `TableRead`, `GatherBf16x` and `GatherF32x` (E4), and the inputs, run and registered, of
-    any width."""
+    primitives, the lazy families `TableRead`, `GatherBf16x` and `GatherF32x` and the wiring families `BitOf` and `WordOf`
+    (E4), and the inputs, run and registered, of any width."""
     return bool(input_id(fn.id) or BL.is_gate(fn) or getattr(fn, "family", None) == "Const"
-                or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS | _E4_IDS or LAZY_FAMILIES.match(fn.id))
+                or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS | _E4_IDS or LAZY_FAMILIES.match(fn.id)
+                or POP.BIT_OF_ID.match(fn.id) or POP.WORD_OF_ID.match(fn.id))
 
 
 #: the registered tables a request may name instead of giving their words: (the primitive declaring it, its leaves, leaf j)
@@ -491,7 +493,7 @@ def test_refusals_name_what_is_refused(server):
     evaluated."""
     desc, leaves = json.loads(_random_desc(0)[0]), _random_desc(0)[1]
     x = [[0] * n for n in leaves]
-    for new in ("DtUnregistered_v1", "BitAtx8_v1"):
+    for new in ("DtUnregistered_v1", "BitAtx8_v1", "BitOf16x16_v1", "BitOf16x01_v1", "WordOf0_v1"):
         d = copy.deepcopy(desc)
         _rename(d, _first_gate(d), new)
         got = server.call("evaluate", request(d, x))
@@ -2086,3 +2088,27 @@ def test_lazy_families_on_their_one_call_programs(server):
     rng = random.Random("lazy")
     counts = {fn.id: _agree_on(server, fn, [_lazy_rows(fn, rng)]) for fn in LAZY}
     assert all(n >= 18 for n in counts.values()), counts
+
+
+WIRING = tuple(f for w in (16, 32) for f in (POP.word_of(w), *(POP.bit_of(w, i) for i in (0, 1, w // 2, w - 1))))
+
+
+def _wiring_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
+    ((_, t),) = fn.params
+    if isinstance(t, Array):
+        return ([(tuple(int(j == i) for j in range(t.n)),) for i in range(t.n)]
+                + [(tuple(rng.getrandbits(1) for _ in range(t.n)),) for _ in range(16)])
+    return [(1 << k,) for k in range(t.w)] + [(w,) for w in EDGES[t.w]] + [(rng.getrandbits(t.w),) for _ in range(16)]
+
+
+def test_wiring_families_read_bit_i_as_leaf_i_least_significant_first(server):
+    rng = random.Random("wiring")
+    for fn in WIRING:
+        rows = _wiring_rows(fn, rng)
+        assert _agree_on(server, fn, [rows]) == len(rows)
+        ((_, t),) = fn.params
+        if isinstance(t, Array):
+            assert [fn.evaluate(*_flat(r)) for r in rows[:t.n]] == [1 << i for i in range(t.n)], fn.id
+        else:
+            i = int(POP.BIT_OF_ID.fullmatch(fn.id)[2])
+            assert [fn.evaluate(*r) for r in rows[:t.w]] == [int(k == i) for k in range(t.w)], fn.id

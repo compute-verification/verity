@@ -144,7 +144,7 @@ moved, what the step reads from appended blocks. The shortfall is a share of the
 plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`: `core_requirement`'s one-sided check, and the
 memory-map and plan units), that the payloads at `addr` are the store's blocks, each at its own append (the appends'
 digests, by `poub`'s Replay), that each pass's plan is its step's, and that the pass ran in its
-ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
+ticks (a network attester stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
 boundary, are attribution's (`certifier-coverage`, `trusted-device` and the tiers' bandwidths at the deadline). A

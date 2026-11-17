@@ -15,7 +15,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 - **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
   counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
-  blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
+  blocks against the policy written before the serve, and the Lean `inference-only-verifier --count` counts one block's
   gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
   as the node wrote it and doesn't check it again; only a composite (`COMPOSITE` set) checks the policy's case, in the
   product's Lean on the compose host, and the placed window composes none.
@@ -73,9 +73,9 @@ directory holds the served run's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network attestation. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
+Onsite (`verity/onsite/v1`, in `verity/protocols/compose/verifier/onsite/`) is the superset of remote's composite of
+record: beside SPOT, the inference-only policy and Pearl+'s run verdict it composes PoUS, PoUB-P2
+(`verity/remote-bandwidth/p2/v0`), network attestation and the memory wipe. Each runs on the workload as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 

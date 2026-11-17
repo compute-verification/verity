@@ -16,8 +16,8 @@ public import Proofs.Pouw.Lemmas.Dither
   bit the program exchanged more.
 * `servedFreed`: the outsourcing premise gives an exchange-free family of window programs with the same outputs, fixed
   before the salts, which `ServedWork` prices: off its event they spent at least `p · creditPrefix − Σ lam`, so the
-  originals spent at least that less `β · ext`, and off the certifier's event `ext ≤ K`. `FreedOfFloor` turns the
-  floor into freed compute, and the union bound adds the certifier's `δ`.
+  originals spent at least that less `β · ext`, and off the network attester's event `ext ≤ K`. `FreedOfFloor` turns the
+  floor into freed compute, and the union bound adds the network attester's `δ`.
 -/
 
 @[expose] public section

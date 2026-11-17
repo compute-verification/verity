@@ -70,7 +70,7 @@ The model of `security/Definitions/ResourceAccounting/Actual.lean`:
   from `linkCapacity_union_le`, `linkCapacity_biUnion_le`). `LeakPartsRegistered`: `LeakParts` at a subtree of a valid
   registration's Site, the sinks' sealing concluded from the registration (`Site.leak_le_registered`).
 * `Actual/RegisteredWitness.lean`: `LeakPartsRegistered_honest`: the example onsite log is valid, and at its Site a
-  one-gate strategy at the certifier's place is placed at the places a link may end at and has each trusted device's
+  one-gate strategy at the network attester's place is placed at the places a link may end at and has each trusted device's
   record within one bit. `LeakPartsRegistered_nontrivial`: at the same Site a strategy whose one gate is at the
   outside, wider than the links' whole capacity a tick, does more there than the limit.
 * `Actual/LinkEnds.lean`: `B4UnderId`: `B4` on a table whose every leaf is its own link end is `B4Under` there, and

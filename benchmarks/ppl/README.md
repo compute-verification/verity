@@ -38,7 +38,12 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --timeo
 checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
 and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
-`--gpus 1` (research's own lease would take any card and leave the script none to pin).
+`--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures
+WikiText-2 instead, built from the hub's parquet of its test split into the bench's pinned file, with pyarrow installed
+beside the venv (`$WORK/ppl-pyarrow`) if it lacks one. `ARMS` runs other arms beside `pearl-c-linears` in the same eval,
+e.g. `fp8-linears`, the same linears in plain E4M3 with no noise, and `PPL_OUT` names the output directory. Only
+C4 at 2048, `metrics.toml`'s axis, writes the metrics: `run.py metrics` refuses another set, and `SET=wikitext2` writes
+its table alone.
 
 `pearl-c-linears` is the compute benchmark's served arithmetic (`pearl-c-h100-v1-h3` in
 `benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`): its one step, `linear.pearl_c`, calls the

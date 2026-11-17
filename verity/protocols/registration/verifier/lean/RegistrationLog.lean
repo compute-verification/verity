@@ -460,7 +460,7 @@ private def bare : List (String → Entry) :=
 #guard refusal .remote bare == none
 -- onsite: memory no challenger reaches
 #guard refusal .onsite [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
--- a sheet with no data sheet, a device's memory over its sheet's, a certifier without its key
+-- a sheet with no data sheet, a device's memory over its sheet's, a network attester without its key
 #guard refusal .remote (stating { sheet with figures := { sheet.figures with sku := "sim-b" } }) ==
   some (0, .site .sheetDigest)
 #guard refusal .remote bare { auditor with sheet := fun _ => none } == some (0, .site .sheetDigest)
@@ -481,7 +481,7 @@ private def fast : Sheet :=
 private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := (64 <<< 30) + 1 }
 #guard refusal .remote [site ⟨[sheet], locs.take 3 ++ [over], []⟩] == some (0, .site .capacity)
 #guard refusal .onsite entries { auditor with key := fun _ => some "k1" } == some (0, .site .owner)
--- an auditor's device: the auditor's own, at the site, with its key and its time base; a certifier in it registers as
+-- an auditor's device: the auditor's own, at the site, with its key and its time base; a network attester in it registers as
 -- one at the site does; without the auditor's key or time base for the host, or with the host under the prover's,
 -- the entry is refused
 private def vm0 : Loc :=

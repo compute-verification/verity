@@ -471,7 +471,7 @@ def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_pa
     assert (m.mark, m.salt, m.window) == (MARK, b"\x01" * 64, 5)
     assert (c.key_id, c.link, c.direction, c.window) == (key.key_id, "responses-marks", EGRESS, 5)
     assert marks_link("responses") == "responses-marks"
-    assert MARK_TAG == domains.CERTIFIER_MARK.encode() == b"verity-network-certifier/mark/v1"
+    assert MARK_TAG == domains.ATTESTER_MARK.encode() == b"verity-network-certifier/mark/v1"
     assert c.digest == mark_digest(m.salt, MARK) == hashlib.sha512(MARK_TAG + m.salt + MARK).digest()
     assert c.digest not in (MARK, certificate_digest(m.salt, MARK))
     assert c.message(SESSION) == lms.certificate_message(key.key_id, SESSION, "responses-marks", "egress", 5, c.digest)
