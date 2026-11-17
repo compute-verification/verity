@@ -39,7 +39,8 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 files pass** (`ExecutionPhaseInstance.ExecutionPhasePasses`), where the form's accepts hold `MembersAccept` and their members share
 no unit, and the registered files hold each member's file. -/
 theorem executionPhasePasses_members (I : ExecutionPhaseInstance d α) (k : Verity.Registration.Composite) (hF : FormAccepts)
-    (hA : FormApart) (hR : RegisteredHolds I.base) : I.ExecutionPhasePasses k := by
+    (hA : FormApart) (hR : RegisteredHolds I.base) (hmiss : MissedFilesPass I.base I.pinned) :
+    I.ExecutionPhasePasses k := by
   rintro θ F W - hon ⟨c, o, hreach, hv, ht, hfs⟩
   have hθ : o.params = θ := (Binding.play_reaches hreach).1
   subst hθ
@@ -47,7 +48,7 @@ theorem executionPhasePasses_members (I : ExecutionPhaseInstance d α) (k : Veri
   obtain ⟨a, b, e, c', ev, ξ, dr, sts, r, -, hacc, hM⟩ := accept_members hF hp hms hv
   obtain ⟨roots, -, hheld⟩ := _root_.Spot.OneStageZk.membersRun_files hM.run
   have hpass : ∀ m ∈ W.ms, FilesPass m :=
-    hon.passes ht hp hms (fun vm hvm => readsFiles_of_sent hR hfs hp hms hvm) hheld
+    hon.passes ht hp hms (fun vm hvm => readsFiles_of_sent hR hfs hp hms hvm) e.base.provedUnits hheld hmiss
   exact ⟨hon.laid hpass hp hms (laidHeld_one (membersStructure_laid (membersRun_ok hM.run hM.all).1))
     (hA _ _ _ _ _ _ _ _ _ _ hacc hms), hpass⟩
 
@@ -57,8 +58,9 @@ theorem executionPhasePasses_members (I : ExecutionPhaseInstance d α) (k : Veri
 (`executionPhasePasses_members`, `ExecutionPhaseInstance.executionPhaseAt_members`). The check's accepts hold `FormAccepts` and `FormApart`
 (`formAccepts`, `formApart`). -/
 theorem executionPhaseAt_form (I : ExecutionPhaseInstance d α) (k : Verity.Registration.Composite) (hW : I.ExecutionPhaseRegistered)
-    (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base) : I.ExecutionPhaseAt k :=
-  I.executionPhaseAt_members k hW (executionPhasePasses_members I k hF hA hR)
+    (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base) (hmiss : MissedFilesPass I.base I.pinned) :
+    I.ExecutionPhaseAt k :=
+  I.executionPhaseAt_members k hW (executionPhasePasses_members I k hF hA hR hmiss)
 
 /-- **What the verifier's acceptance gives of each play of the per-member form, at the deployment's windows**
 (`ExecutionPhaseInstance.ExecutionPhaseReads`), at the evidence sent for each session and the proof files decoded from it at the

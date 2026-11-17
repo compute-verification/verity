@@ -219,17 +219,26 @@ theorem filesPass_of_held {T : PinnedTables} {R : Array ByteArray} {s : Verity.S
   rw [circuitOf_flat hty hflat]
   exact hports
 
-/-- **Every member of a window has its files pass, where the run held every member's**: at a window that is the
-parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
-files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
-of the registration. -/
+/-- **The files of a member the sample misses pass**: at parameters that name the members `ms`, a member `vm` none of
+whose units are among `units` has its files pass at the window's member that is `vm` on the registered files. The form's
+run reads no file of a member the sample misses, so no check holds this; it is a premise. -/
+def MissedFilesPass (V : Vocab d α) (T : PinnedTables) : Prop :=
+  ∀ (θ : ByteArray) (units : Array ℕ) {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member},
+    ParamsAt θ p → p.members = some ms → ∀ vm ∈ ms, vm.sampled units = false →
+      ∀ {nJ : ℕ} (m : Member nJ), MemberOn T (V.registered θ) vm m → FilesPass m
+
+/-- **Every member of a window has its files pass, where the run held the files of the members the sample holds a unit
+of** (`units`) **and the files of the others pass** (`MissedFilesPass`): at a window that is the parameters' members on
+the registered files, on blobs sent where v2 reads each member's files among the registered files, each pinned table the
+blobs hold is its registered file and the run held each sampled member's files at its slice of the registration. -/
 theorem ExecutionPhaseOn.passes {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V T θ F W) {s : Verity.Sent} (ht : TablesSent T s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
     (hms : p.members = some ms)
     (hF : ∀ vm ∈ ms, ReadsFiles (V.registered θ) vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}
-    {roots : Std.HashMap String (Array Json)}
-    (hheld : ∀ vm ∈ ms, vm.FilesHeld (vm.slice rec roots) (_root_.Core.Blobs.ofArray s.blobs)) :
+    {roots : Std.HashMap String (Array Json)} (units : Array ℕ)
+    (hheld : ∀ vm ∈ ms, vm.sampled units = true → vm.FilesHeld (vm.slice rec roots) (_root_.Core.Blobs.ofArray s.blobs))
+    (hmiss : MissedFilesPass V T) :
     ∀ m ∈ W.ms, FilesPass m := by
   obtain ⟨p', ms', vms, hp', hms', hperm, -, hall, -⟩ := h.members
   have hpp : p = p' := hp.unique hp'
@@ -239,7 +248,9 @@ theorem ExecutionPhaseOn.passes {V : Vocab d α} {T : PinnedTables} {θ : ByteAr
   intro m hm
   obtain ⟨vm, hvm, hon⟩ := forall₂_right hall m hm
   have hvm' : vm ∈ ms := Array.mem_toList_iff.1 (hperm.mem_iff.1 hvm)
-  exact filesPass_of_held ht hon (hF vm hvm') (hheld vm hvm')
+  by_cases hs : vm.sampled units = true
+  · exact filesPass_of_held ht hon (hF vm hvm') (hheld vm hvm' hs)
+  · exact hmiss θ units hp hms vm hvm' (by simpa using hs) m hon
 
 /-! ## Files that pass fix their roots' domains -/
 

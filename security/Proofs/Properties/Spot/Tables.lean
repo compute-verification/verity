@@ -30,7 +30,7 @@ import all Std.Data.DTreeMap.Internal.Def
 so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and on parameters that
 name no members `checkBlobsAt` accepts only where its chain of refusals ends in `run`'s acceptance
 (`checkBlobsAt_run`). On parameters that name members it accepts only where the per-member run returned, which holds
-every member's statement (`Spot.OneStageZk.membersRun_files`), and a member's statement binds its own tables first,
+the statement of every member the sample holds a unit of (`Spot.OneStageZk.membersRun_files`), and a member's statement binds its own tables first,
 the blobs' pinned tables among the names its circuit looks up (`ownTables_ok`), and holds them to its circuit's lookups
 by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those tables and no other (`statement_tables`,
 `checkBlobsAt_members_tables`).
@@ -153,19 +153,19 @@ theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.
   subst hnn
   exact ⟨circuitB', names', hc, hl, hI.trans hta, (congrArg (List.map (·.1)) hI).trans hn⟩
 
-/-- **On parameters that name members, an accept holds each table each member's circuit looks up**, sampled or not:
-the per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so every member's statement was read
-(`Spot.OneStageZk.membersRun_files`) at its own tables (`statement_tables`). -/
+/-- **On parameters that name members, an accept holds each table the circuit of each member the sample holds a unit
+of looks up**: the per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so each such member's statement
+was read (`Spot.OneStageZk.membersRun_files`) at its own tables (`statement_tables`). -/
 theorem checkBlobsAt_members_tables {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     {ms : Array OneStageZk.Member} (hm : p.members = some ms)
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∀ m ∈ ms, ∃ tables, HandedOwnTables m.own bs tables := by
+    ∀ m ∈ ms, m.sampled e.base.provedUnits = true → ∃ tables, HandedOwnTables m.own bs tables := by
   obtain ⟨sts, -, h⟩ := OneStageZk.checkBlobsAt_accept_members hm h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
   obtain ⟨roots, -, hf⟩ := OneStageZk.membersRun_files hr
-  intro m hmem
-  obtain ⟨a, ha, -⟩ := hf m hmem
+  intro m hmem hs
+  obtain ⟨a, ha, -⟩ := hf m hmem hs
   exact ⟨a.I.tables, statement_tables ha⟩
 
 theorem tablesRegistered : TablesRegistered := by

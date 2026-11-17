@@ -89,15 +89,16 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
   fixed before the next member's coins; and the log holds the trees one after another in the sessions' order, no line
   of a tree, the one that samples it or one opening a round of it, before the closing round of the one before it or
-  after its own (`Challenger.membersOrder`). Then every
-  member's files are read, sampled or not (`membersFiles`): its statement must read as a sampled member's does
+  after its own (`Challenger.membersOrder`). Then the files of every member the sample holds a unit of are read
+  (`membersFiles`; a member the sample missed has no statement and its files are not read): its statement must read
+  as a sampled member's does
   (`Member.statement`), on its own lookup tables, the blobs' pinned tables its own circuit looks up (`ownTables`), each
   of which the blobs must hold (`tablesMatch`, `NO_TABLES`): the members of a window may look up different tables, and
   a member's inputs hold no table its circuit does not look up (`Properties.Spot.TablesRegistered`). Its files pass
   what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
   scope, the files' ports and roots, the form the sampled audit's knowledge soundness covers without a session's
   sample, `Flock.KsScope.filesOf`, the public file's header and rows as a session's setup takes them,
-  `Flock.PortRoots.headerOf`, and the population check), so a member the sample missed is refused where its
+  `Flock.PortRoots.headerOf`, and the population check), so a member the sample holds is refused where its
   session's verdict would have refused its files (`membersRun_files`). A member's circuit file is parsed once for
   them (`StepAt.ofOwn`), and the statement keeps each check's result, never the parse. The compiled pass
   (`membersFilesKept`, equal to it) reads the blobs' lookup tables once and a circuit file once for the members that
@@ -204,16 +205,16 @@ def sampledHeld (held : Array Member) (want : Array Nat) : V Unit :=
   | none => pure ()
 
 /-- **The per-member form's run**, at each member's `slice` of the registration: the statements' structure held
-(`membersHeld`), each statement's member one the sample holds (`sampledHeld`), every member's files held, sampled or
-not (`membersFiles`), then each statement at its member's statement as that pass read it, after the statements before
+(`membersHeld`), each statement's member one the sample holds (`sampledHeld`), the files of every member the sample
+holds a unit of held (`membersFiles`), then each statement at its member's statement as that pass read it, after the statements before
 it (`stepMember`), so `step`'s coin-tree keys are fresh across statements; then, where every session accepted, the
-union of the statements' proved units held to the evidence's `want` (`provedHeld`). Every member's files are read
-once, whichever members the sample holds. -/
+union of the statements' proved units held to the evidence's `want` (`provedHeld`). The files of the members the
+sample holds a unit of are read once, those of the members it missed not at all. -/
 def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
     (bs : Core.Blobs) : V Run :=
   membersHeld ms sts >>= fun held =>
   sampledHeld held want >>= fun _ =>
-  membersFiles slice bs ms.toList >>= fun files =>
+  membersFiles slice bs (ms.toList.filter (·.sampled want)) >>= fun files =>
   (sts.zip held).foldlM (stepMember (statementAt files) bs) ⟨#[], #[], #[], true⟩ >>= fun r =>
   (match r.all with
     | true => provedHeld r.proved want
@@ -335,16 +336,17 @@ theorem membersFiles_ok {slice : Member → Json} {bs : Core.Blobs} {ms : List M
     · exact Member.files_ok ha
     · exact ih hrest m hm
 
-/-- **The per-member form's run holds every member's files, sampled or not**: where `runMembers` returns a run, each
-member of the parameters has its files held (`Member.FilesHeld`) at its slice, whatever the statements name. -/
+/-- **The per-member form's run holds the files of every member the sample holds a unit of**: where `runMembers`
+returns a run, each member of the parameters that has a unit among `want` has its files held (`Member.FilesHeld`) at its
+slice. -/
 theorem runMembers_files {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array Nat}
     {bs : Core.Blobs} {r : Run} (h : runMembers slice ms sts want bs = .ok r) :
-    ∀ m ∈ ms, m.FilesHeld (slice m) bs := by
+    ∀ m ∈ ms, m.sampled want = true → m.FilesHeld (slice m) bs := by
   unfold runMembers at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨files, hf, _⟩ := Flock.HmNets.bind_ok h
-  exact fun m hm => membersFiles_ok hf m (Array.mem_def.1 hm)
+  exact fun m hm hs => membersFiles_ok hf m (List.mem_filter.2 ⟨Array.mem_def.1 hm, hs⟩)
 
 /-- Where `sampledHeld` passes, the sample holds a unit of each of the members. -/
 theorem sampledHeld_ok {held : Array Member} {want : Array Nat} (h : sampledHeld held want = .ok ()) :
@@ -681,9 +683,9 @@ def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMa
 
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
-member's, with each member's wired ports at their writers' (`membersRootsOf`), then every member's files and each
-statement's session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`), then the
-wires of the sample's units (`wiresHeld`). -/
+member's, with each member's wired ports at their writers' (`membersRootsOf`), then the files of the members the
+sample holds a unit of and each statement's session on the blobs, at its member's slice of the registration
+(`Member.slice`, `runMembers`), then the wires of the sample's units (`wiresHeld`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
@@ -691,13 +693,14 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs >>= fun r =>
   wiresHeld p ms e.base.provedUnits bs >>= fun _ => pure r
 
-/-- **Where the per-member form's run returns, every member's files are held, sampled or not**: at the roots
-`membersRootsOf` gives each member, each member of the parameters has its statement read and its files pass what a
-session's verdict checks of them (`Member.FilesHeld`), at its slice of the registration, whatever the evidence's
-statements name and whatever the sample holds. -/
+/-- **Where the per-member form's run returns, the files of every member the sample holds a unit of are held**: at the
+roots `membersRootsOf` gives each member, each member of the parameters that has a unit among the evidence's
+`proved_units` has its statement read and its files pass what a session's verdict checks of them
+(`Member.FilesHeld`), at its slice of the registration. -/
 theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
-    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs := by
+    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧
+      ∀ m ∈ ms, m.sampled e.base.provedUnits = true → m.FilesHeld (m.slice c.record roots) bs := by
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
