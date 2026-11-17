@@ -2,7 +2,7 @@
 
 The design: serve-openai adds each request to the engine at the first bucket boundary after its release (the network attester's
 release bucket a, so at origin + (a + 1) tau), in release order (a, then the network attester's ordinal). The engine's arrival order
-is then the certified release order, and the replay's order bits are 0.
+is then the attested release order, and the replay's order bits are 0.
 
 A request can't be added before the frontend has it ready (its recorded engine add), and in release order none goes
 before an earlier-released one. So the counterfactual add of the k-th request in release order is
@@ -22,7 +22,7 @@ A trace without a network attester takes the client's send bucket as its release
 frontend's arrival stamp plus `--add-lag-ms` as its ready time (those corpora don't record the engine's add).
 
 Usage: python3 -P admit_release.py [--replay PATH] [--add-lag-ms NAME=MS ...] --out DIR NAME=TRACE_DIR[:ORDER_DIR] ...
-(ORDER_DIR, the trace view whose ingress is the certified order for the replay's order bits; default the trace itself).
+(ORDER_DIR, the trace view whose ingress is the attested order for the replay's order bits; default the trace itself).
 """
 
 from __future__ import annotations
@@ -213,7 +213,7 @@ def simulate(rp: Any, engine: Any, requests: list[Any], order: list[int], ready:
 
 
 def as_trace(rp: Any, trace: Any, otrace: Any, order: list[int], sim: Sim) -> Any:
-    """The simulated run as a replay `Trace`: its requests in the order they reached the engine (`order`), the certified
+    """The simulated run as a replay `Trace`: its requests in the order they reached the engine (`order`), the attested
     ingress of `otrace`, and each step's output time as its release (egress at the engine step)."""
     inv = {i: j for j, i in enumerate(order)}
     steps = [rp.Step(rows=[(inv[i], s, n) for i, s, n in st.rows], new=[inv[i] for i in st.new],
@@ -284,7 +284,7 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
     rank = {i: k for k, i in enumerate(sorted(ids, key=lambda i: (sends[i], i)))}
     return Release(g0, tau, [math.floor((sends[i] - g0) / tau + 1e-9) for i in ids], [rank[i] for i in ids],
                    [float(reqs[i]["arrival"]) + add_lag_s for i in ids],
-                   f"no network certifier: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
+                   f"no network attester: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
                    "kept after the last open step that passed it over and before its first scheduling")
 
 
@@ -463,7 +463,7 @@ def markdown(results: list[dict[str, Any]]) -> str:
     for r in results:
         b, h, al = r["base"], r["variants"]["hold"], r["variants"]["aligned"]
         t = b["ttft_from_add_ms"]
-        margin = "- (no network certifier)" if b["egress_margin_ms"] is None else (
+        margin = "- (no network attester)" if b["egress_margin_ms"] is None else (
             f"{fmt(b['egress_margin_ms']['min'])} -> {fmt(h['egress_margin_ms']['min'])} -> {fmt(al['egress_margin_ms']['min'])}")
         out.append(f"| {r['trace']} | {fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['max'])} | {h['frontend_late_for_boundary']} "
                    f"| {h['held_behind_earlier_release']} | {margin} |")

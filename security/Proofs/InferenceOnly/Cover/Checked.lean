@@ -20,7 +20,7 @@ and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
@@ -53,4 +53,4 @@ circuit the declaration contains, under the cover theorem's premises on its bit 
 theorem CheckedCoverTraining : Properties.CheckedCoverTraining :=
   checkedCoverTraining_of_descAgrees DescAgrees
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

@@ -783,6 +783,39 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert not c["measured"] and "refuses these arms: cost: the arms were served by different builds of vLLM" in c["why"]
 
 
+def test_the_cost_is_split_by_layer_each_arm_over_the_arm_it_adds_one_change_to():
+    rates = {"prod": [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], "prod-trace": [[1.99, 1.99], [2.0, 2.0], [1.98, 1.98]],
+             "prod-record-bisect": [[1.8, 1.8], [1.81, 1.81], [1.79, 1.79]],
+             "prod-record": [[1.9, 1.9], [1.91, 1.91], [1.89, 1.89]]}
+    by = {a["arm"]: a for a in S.lifetimes([x for name, r in rates.items() for x in lifetimes_of(name, r)])}
+    ly = P.layers(by, S.AGENTIC, 1.0)
+    own = {(x, y): S.session_cost([by[y], by[x]], x, y, 1.0, S.AGENTIC) for x, y, _, _ in P.LAYERS if x in by and y in by}
+    assert [(x["arm"], x["over"]) for x in ly["each"]] == [
+        ("prod-trace", "prod"), ("prod-record", "prod-trace"), ("prod-record-bisect", "prod-trace"),
+        ("prod-record", "prod-record-bisect")]
+    for x in ly["each"]:
+        o = own[(x["arm"], x["over"])]
+        assert (x["value"], x["ci95"], x["pairs"]) == (o["value"] / 100, [e / 100 for e in o["ci95"]], 3)
+    text = P._layers(ly)
+    assert text[0].startswith("the cost by layer, each arm over the arm it adds one change to")
+    assert text[1].startswith("  the seeds sent, the step trace and ids: prod-trace over prod +0.50%, 95% interval [")
+    assert text[4].startswith("  the top-k's refinement against bisecting: prod-record over prod-record-bisect -5.26%")
+    assert text[4].endswith(" over 3 lifetime pairs")
+    # seeded stock served splits the first layer in two, and leaves the sum out
+    by |= {a["arm"]: a for a in S.lifetimes([x for name, r in rates.items() for x in lifetimes_of(name, r)]
+                                            + lifetimes_of("prod-seeded", rates["prod"]))}
+    assert [(x["arm"], x["over"]) for x in P.layers(by, S.AGENTIC, 1.0)["each"]][:2] == [
+        ("prod-seeded", "prod"), ("prod-trace", "prod-seeded")]
+    # another load has none, nor does a job with no layer's two arms, and the report says nothing of them; nor of a
+    # report kept before the split
+    assert P.layers(by, "chat", 1.0)["why"] == ("load chat is not a sessions load, whose cost alone has an interval "
+                                                "over lifetimes")
+    assert P.layers({"prod": by["prod"]}, S.AGENTIC, 1.0)["why"] == "no layer's two arms were both served"
+    assert P._layers(P.layers(by, "chat", 1.0)) == P._layers(None) == []
+    assert P._layers(P.read("the cost by layer", lambda: 1 / 0))[0].startswith(
+        "the cost by layer: the cost by layer can't be read from the job's files: ZeroDivisionError")
+
+
 def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The arms of a job the benchmark served in lifetimes are ``<arm>.K``: every lifetime is in what ran, an arm's
     reps are all its lifetimes', and the tokens are those of the lifetime the replay's record names."""
@@ -858,7 +891,7 @@ def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: 
 
 # ------------------------------------------------------------------------------------------------- the replay's engine
 
-def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int], rows_at: int | None = None) -> None:
+def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, ...], rows_at: int | None = None) -> None:
     """One process's counters as the canonical top-k's plugin keeps them (`dsa_topk.log_to`), its rows read at its
     last call or, for a process killed since, when it had made ``rows_at``."""
     d.mkdir(parents=True, exist_ok=True)
@@ -866,6 +899,22 @@ def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int], rows_at:
         "pid": pid, "calls": {"top_k_per_row_decode": calls}, "launches": {"top_k_per_row_decode": calls // 2},
         "rows": {"cuda:0": dict(zip(("rows_long", "rows_tied", "rows_bisected"), rows))},
         "rows_at": calls if rows_at is None else rows_at}))
+
+
+def test_the_top_k_counters_keep_the_rows_bisected_and_refined_where_the_processes_counted_them(tmp_path: Path):
+    old, new = tmp_path / "old", tmp_path / "new"
+    topk_log(old, 1, 100, (40, 2))
+    assert P.topk_counters([old]) == {"processes": 1, "calls": 100, "rows_long": 40, "rows_tied": 2, "rows_at": 100}
+    assert "bisected" not in P._topk(P.topk_counters([old]))
+    topk_log(new, 2, 300, (90, 3, 7))
+    (new / "dsa_topk.3.json").write_text(json.dumps({"pid": 3, "calls": {"cooperative_topk": 50}, "launches": {}, "rows": {
+        "cuda:0": {"rows_long": 10, "rows_tied": 0, "rows_bisected": 1, "rows_refined": 5}}, "rows_at": 50}))
+    c = P.topk_counters([old, new])
+    assert c == {"processes": 3, "calls": 450, "rows_long": 140, "rows_tied": 5, "rows_bisected": 8, "rows_refined": 5,
+                 "rows_at": 450}
+    assert P._topk(c) == ("3 processes kept counters: at least 450 calls of the indexer's top-k, 140 rows of more than "
+                          "its keys rewritten, 5 of them with a tie across the k-th key, 8 bisected, 5 refined from the "
+                          "candidate's window after a wrong fast selection")
 
 
 #: what a replay of an arm that served on the canonical top-k says its engine ran under (`replay.served_under`)
@@ -901,23 +950,27 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
     # with the job's private directory: serving's processes kept theirs under the arm's name, the replay's under its
     # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
     # a serving worker is killed: its calls are all there, its rows those its device had counted when last read
-    served = {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 8192}
+    served = {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_bisected": 1, "rows_at": 8192}
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1), rows_at=8192)
     txt, engine = said("--private", str(private))
     assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": served}
     assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key, the rows as read after "
+            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key, 1 bisected after a wrong fast "
+            "selection, the rows as read after "
             "8,192 of the calls\n") in txt
     topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
     topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_at": 8000}
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_bisected": 1,
+                                                   "rows_at": 8000}
     assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
-            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key\n") in txt
+            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key, 1 bisected after a wrong fast "
+            "selection\n") in txt
     # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
     kept = json.loads((out / P.TOPK_KEPT).read_text())
-    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_at": 8000},
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_bisected": 1,
+                                                   "rows_at": 8000},
                     "served": served}
     shutil.rmtree(private)
     assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
@@ -994,11 +1047,15 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     # with the job's private directory, each directory's processes' counters, kept in OUT for a later reading
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
     counted = ("prod-record 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 rows of more than its "
-               "keys rewritten, 3 of them with a tie across the k-th key; ")
+               "keys rewritten, 3 of them with a tie across the k-th key, 1 bisected after a wrong fast selection; ")
     txt, r = said("--private", str(private))
     assert block + counted + off in txt
     assert json.loads((out / P.TOPK_KEPT).read_text()) == {
-        "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 9000}}}
+        "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_bisected": 1,
+                                 "rows_at": 9000}}}
+    # and each process's own file whole, its rows by device
+    assert (out / P.TOPK_FILES / "prod-record" / "dsa_topk.21.json").read_bytes() == (
+        private / "prod-record/topk-log/dsa_topk.21.json").read_bytes()
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1231,7 +1288,12 @@ def test_a_cost_over_its_target_says_so_in_the_validation_whose_status_stays_the
     assert P.against_target({}, {"measured": False})["target"] == {"value": None, "target": P.TARGET, "verdict": P.NOT_SHOWN}
 
 
-def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
+#: GLM-5.3's checkpoint as a report names it (``model``)
+GLM = f"{S.MODELS['glm53'].repo}@{S.MODELS['glm53'].revision}"
+
+
+def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record",
+             parts: list[str] | None = None) -> list[dict]:
     """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
     where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
@@ -1242,10 +1304,28 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
         "measurements": [{"name": S.AGENTIC, "value": 0.5}, {"name": "vllm/prod-serving-cost-glm53", "value": 9.0},
                          {"name": "vllm/prod-replay-match-glm53", "value": 9.0},
                          {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]}))
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
-         "arms": {"stock": stock, "again": None, "ours": ours}}
+         "arms": {"stock": stock, "again": None, "ours": ours}, "model": GLM, **({"parts": parts} if parts else {})}
     assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
     return json.loads((tmp_path / "result.json").read_text())["measurements"]
+
+
+def test_prod_all_ons_cost_over_prod_is_a_point_of_the_same_metric_that_says_what_it_leaves_off(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One metric for every configuration: `prod-all-on` over `prod` is a point of the cost's id beside `prod-record`'s,
+    its member naming the arm and its parts what it has on and leaves off; over another stock it is none."""
+    by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-again": sessions_arm("prod-again", [2.0] * 6),
+          "prod-all-on": sessions_arm("prod-all-on", [1.99, 1.988, 1.992, 1.99, 1.989, 1.991])}
+    c = P.cost(tmp_path, by, "prod", "prod-all-on", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] == "vllm/prod-serving-cost-glm53"
+    assert P.cost(tmp_path, by, "prod-again", "prod-all-on", None, S.AGENTIC, 1.0)["metric"] is None
+    assert P.costed("prod", P.ALL_ON, "glm53") and not P.costed("compiled", P.ALL_ON, "llama32-1b")
+    parts = S.parts_of("prod-all-on", {"every_s": 60.0})
+    got = declared(tmp_path, monkeypatch, c, ours="prod-all-on", parts=parts)
+    assert (got[1]["name"], got[1]["member"], got[1]["parts"]) == (
+        "vllm/prod-serving-cost-glm53", "glm-5.3-h200-prod-all-on-over-prod", parts)
+    assert "the network attester's egress pacing: off" in parts
 
 
 def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(
@@ -1261,7 +1341,10 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
         "mark": "measured", "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
+        "ours": "prod-record", "lifetimes": 3, "counted_passes": 6, "left_out": None, "interval": P.INTERVAL,
+        "noise_floor": {"arm": "prod", "over": "lifetimes", "value": -0.5, "ci95": None, "pairs": 1},
+        "commit": "c" * 40, "run": "r-1", "model": GLM, "hardware": "8 × NVIDIA H200",
+        "member": "glm-5.3-h200-prod-record-over-prod",
         "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
                    "lifetimes an arm (serving time, one node, one load at 4 users, unsaturated)"]}]
     # the first input opens with the entry's mark, which the Metrics tab shows beside the value
@@ -1344,7 +1427,7 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
     assert (t["tokens_served"], t["tokens_before_first_difference"], t["tokens_given_back"], t["tokens_differing"]) == \
         (4, 2, 3, 2)
     assert r["cost"]["measured"] and not r["cost"]["stands"]
-    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
+    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "model": "repo@rev", "hardware": None, "rep": 1}
     assert got == [
         {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "mark": "measured",
          "better": "higher", "target": 100.0, "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
@@ -1412,6 +1495,52 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
     assert P.default_arms("glm53", tmp_path, ("compiled", "record")) == P.TODAY
     assert P.default_arms("moonlight", tmp_path) == P.PROD
     assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
+
+
+def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm53s_metric(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Llama 3.2 1B has no recipe: its default arms are `KEPT`, whose ours keeps each request's ids, which a replay under
+    vLLM's client reads. Its cost of `record-ids` over `compiled`, its replay match and its advice are points of
+    GLM-5.3's ids, and the cost of no other arms is; each point's member names the model, the card and the arm, the
+    cost's over its reference, so that the two models' points are two lines of one metric."""
+    assert P.default_arms("llama32-1b") == P.KEPT and not S.MODELS["llama32-1b"].published
+    assert all(a in S.ARMS for a in P.KEPT) and "ids" in S.ARMS[P.KEPT[2]].plugin
+    (tmp_path / "out" / "record-ids.1").mkdir(parents=True)
+    assert P.default_arms("llama32-1b", tmp_path / "out") == P.KEPT
+    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"], P.ADVICE["llama32-1b"]) == (
+        P.METRICS["glm53"], P.MATCH["glm53"], P.ADVICE["glm53"])
+
+    def cost(stock: str, ours: str) -> dict:
+        arms = S.lifetimes([a | {"model_id": "llama32-1b"} for a in
+                            lifetimes_of(stock, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]])
+                            + lifetimes_of(ours, [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])])
+        return P.cost(tmp_path, {a["arm"]: a for a in arms}, stock, ours, None, S.AGENTIC, 1.0)
+
+    assert cost("compiled", "record-ids")["metric"] == "vllm/prod-serving-cost-glm53"
+    assert cost("compiled", "record")["metric"] is None
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    one, glm = S.MODELS["llama32-1b"], S.MODELS["glm53"]
+    assert (S.member(one, "record-ids", "compiled"), S.member(one, "record-ids")) == (
+        "llama-3.2-1b-h200-record-ids-over-compiled", "llama-3.2-1b-h200-record-ids")
+    assert (S.member(glm, "prod-record", "prod"), S.member(glm, "prod-record")) == (
+        "glm-5.3-h200-prod-record-over-prod", "glm-5.3-h200-prod-record")
+    assert (P.member({"members": {"cost": "c", "arm": "a"}}, "arm"), P.member({"members": None}, "cost")) == (
+        {"member": "a"}, {})
+
+
+def test_glm53s_stand_in_serves_the_published_arms_and_writes_no_point():
+    """The stand-in has GLM-5.3's recipe, so its default arms are the published settings' arms; it has no id, so its
+    cost, its replay's match and its advice are lines of its report and no measurement."""
+    assert P.default_arms("glm53-standin") == P.PROD
+    assert all("glm53-standin" not in ids for ids in (P.METRICS, P.MATCH, P.ADVICE))
+    r = {"cost": {"measured": True, "stands": True, "metric": P.METRICS.get("glm53-standin"), "value": 0.01, "target": 1,
+                  "verdict": "meets", "how": {"reps": 2, "client": S.BENCH, "rung": 4, "saturated": False},
+                  "lifetimes": {"pairs": 2, "ci95": None}},
+         "tokens": {}, "advice": {}, "arms": {"stock": "prod", "ours": "prod-record"}, "load": "agentic", "commit": "c",
+         "run": "r"}
+    assert P.measurements(r) == []
+    assert [m["name"] for m in P.measurements(r | {"cost": r["cost"] | {"metric": P.METRICS["glm53"]}})] == [
+        P.METRICS["glm53"]]
 
 
 # --------------------------------------------------------------------------------------------------------- the runner
@@ -1602,9 +1731,12 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
             "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
-            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
+            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key, 0 bisected after a wrong fast "
+            "selection\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
         "processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2, "rows_at": 7}
+    assert sorted(p.parent.name for p in (run_dir / "out" / P.TOPK_FILES).glob("*/dsa_topk.*.json")) == [
+        "prod-record", "replay-compiled"]
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same

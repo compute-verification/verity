@@ -51,14 +51,13 @@ def test_a_device_named_by_no_str_names_no_tuned_file(S):
 
 def test_sizes_past_class_g_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
-    past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
-    all-reduce (vLLM's NCCL route), a 2,000-row prefill takes the dense-MHA backend and one past INDEX_TOPK keys the sparse-MQA
-    one, and the unseeded and top-k requests have no select (a seeded request in the batch keeps FlashInfer's sampler off)."""
+    past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, a 2,000-row prefill takes the dense-MHA
+    backend and one past INDEX_TOPK keys the sparse-MQA one, and the unseeded and top-k requests have no select (a seeded
+    request in the batch keeps FlashInfer's sampler off)."""
     need = S.step(8192, 8192, [(2000, 0), (4000, 16000)], [5000] + [100] * 191, 194,
                   {"greedy": 180, "seeded": 4, "random": 10, "top_k": 2}, True)
     assert _gaps(need) == {
-        ("dsa-topk", "radix-topk", "radix top-k"), ("tp-allreduce", "allreduce-pynccl_comm", "no capture"),
-        ("fa3-prefill-attention", "prefill-call", "dense-MHA prefill"), ("dsa-sparse-prefill", "prefill-call", "sparse-MQA prefill"),
+        ("dsa-topk", "radix-topk", "radix top-k"), ("fa3-prefill-attention", "prefill-call", "dense-MHA prefill"), ("dsa-sparse-prefill", "prefill-call", "sparse-MQA prefill"),
         ("token-select", "select-random", "unseeded sampling"), ("token-select", "select-top_k", "top-k sampling")}
     ids = Counter({n.id: c for n, c in need.items()})
     assert ids["DsaMqaLogits_v3{N=5000,H=32,D=128}"] == 21 and ids["radix-topk{TOPK=2048,KEYS=5000}"] == 21

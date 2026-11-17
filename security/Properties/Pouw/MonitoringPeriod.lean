@@ -2,7 +2,7 @@ module
 
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Compose.Assumptions.Compose
-public import PouwCheck
+public import PouwVerifier
 
 /-!
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
@@ -138,7 +138,7 @@ accepted window), and `Proofs.Pouw.MonitoringPeriod.Honest` is a live-salt perio
 
 namespace Properties.Pouw.MonitoringPeriod
 
-open PouwCheck
+open PouwVerifier
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The deployed check accepts the window**: `protocol.check` at the verifier's parameters `p`, on the window's

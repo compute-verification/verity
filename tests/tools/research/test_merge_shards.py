@@ -1,4 +1,4 @@
-"""`research merge` on a sharded check: a `check.py --combine` Attempt passes the gate only when the gate's own reading of its
+"""A sharded check: a `check.py --combine` Attempt passes (`passing`, `refused`) only when `merge`'s own reading of its
 shards (`shard_set`) finds them one passing check of the exact clean commit, and its steps are theirs; a shard alone, and a set
 with a shard missing, repeated, failed or of another commit, config or plan, passes nothing.  Fake Attempts in a scratch store."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from research.merge import SHARD_KIND, Refused, gate, shard_set, step_status, unchecked_pushes, unlike
+from research.merge import SHARD_KIND, Refused, declared_command, passing, produced, refused, shard_set, step_status, unlike
 
 COMMAND = ["uv", "run", "python", "tools/check/check.py"]
 DECL = ("from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', "
@@ -100,8 +100,15 @@ def _combine(world, ids: list[str], steps=None) -> str:
 
 
 def _gate(world):
-    main, _tip, _config, store = world
-    return gate(main, "feat", "main", store, "check", log=lambda *_: None)
+    """(feat's tip, the attempt `passing` admits for it); `Refused` naming why `refused` turns down each ended clean attempt of it
+    with rc 0 otherwise."""
+    main, tip, _config, store = world
+    kinds, command = produced(main, "check"), declared_command(main, "check")
+    if ids := passing(store, tip, "check", kinds=kinds, command=command, repo=main):
+        return tip, ids[0]
+    rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND source_dirty = 0 "
+                           "AND state = 'done' AND rc = 0", (tip,))
+    raise Refused("; ".join(f"{r[0]} refused: {refused(store, r[0], kinds, 'check', tip, command, main)}" for r in rows))
 
 
 def test_a_combined_set_of_every_shard_passes_the_gate_as_one_check(world):
@@ -115,7 +122,6 @@ def test_a_combined_set_of_every_shard_passes_the_gate_as_one_check(world):
     rid = _combine(world, ids)
     assert _gate(world) == (tip, rid)
     assert step_status(store, rid, "c") == "skipped", "a step skipped in its shard is skipped in the check, as unsharded"
-    assert not unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {'0' * 39}1"], store)
 
 
 def test_a_shard_alone_passes_nothing(world):
@@ -123,7 +129,6 @@ def test_a_shard_alone_passes_nothing(world):
     _shards(world)
     with pytest.raises(Refused, match="shard 1/2 of a sharded check, which passes no gate alone"):
         _gate(world)
-    assert unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {'0' * 39}1"], store) == [tip]
     assert unlike([*COMMAND, "--shard", "1/2"], COMMAND) and unlike([*COMMAND, "--combine", "r1"], COMMAND)
     assert unlike([*COMMAND, "--keep-going", "--shard", "1/2", "--cores", "8"], COMMAND).startswith("it is shard 1/2")
 
@@ -216,7 +221,7 @@ def _off_gate(world):
 def test_a_job_off_the_gate_is_required_of_no_check_whole_or_sharded(world):
     """circuit-check is off the gate until `circuit-check --all` fits inside the rest of the check: shards covering every job on
     the gate combine into a passing check, a whole check without it passes, and its red is the after-landing run's to revert."""
-    from research.merge import declared_jobs, refused
+    from research.merge import declared_jobs
 
     off = _off_gate(world)
     main, tip, _config, store = off
@@ -229,7 +234,6 @@ def test_a_job_off_the_gate_is_required_of_no_check_whole_or_sharded(world):
     assert why is None and "off" not in {s["step"] for s in steps}
     rid = _combine(off, ids)
     assert refused(store, rid, frozenset({"check/v1"}), "check", tip, tuple(COMMAND), main) is None
-    assert not unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {'0' * 39}1"], store)
 
 
 def test_shards_missing_a_job_on_the_gate_still_pass_nothing_beside_a_job_off_it(world):

@@ -4,23 +4,23 @@
 and the ingress link) and the key and run id its `Deployment` pins (`certifier_key`, `run_id`).
 
 It holds the salts it sampled and the records the prover made with it before them, by PoUW execution phase, and gives
-them back on any registration. It signs, times and serves nothing, so it holds none of the certifier's own rules (when a
+them back on any registration. It signs, times and serves nothing, so it holds none of the network attester's own rules (when a
 salt is published, its reveal deadline, one reveal per execution phase, a record the prover signed): those are the
-certifier device's to state and its tests'."""
+network attester device's to state and its tests'."""
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
-#: the certifier run's id, fixed so a prover can name the run in the stream it records
+#: the network attester run's id, fixed so a prover can name the run in the stream it records
 RUN_ID = bytes(range(32))
 KEY_ID = hashlib.sha512(b"the network certifier's key").digest()[:16]
 
 
 @dataclass(frozen=True)
 class Key:
-    """The certifier's public key as a `Deployment` pins it: its id, and a `verify` no PoUW check calls."""
+    """The network attester's public key as a `Deployment` pins it: its id, and a `verify` no PoUW check calls."""
     key_id: bytes
 
     def verify(self, message: bytes, signature: bytes) -> bool:
@@ -28,13 +28,13 @@ class Key:
 
 
 def salts(windows: int, seed: bytes = b"") -> dict[int, bytes]:
-    """The 64-byte salts a certifier samples for PoUW execution phases 0 … `windows` − 1, under `seed`."""
+    """The 64-byte salts a network attester samples for PoUW execution phases 0 … `windows` − 1, under `seed`."""
     return {p: hashlib.shake_256(b"certifier salt %d %s" % (p, seed)).digest(64) for p in range(windows)}
 
 
 @dataclass
 class Certifier:
-    """A certifier run that sampled `salts` and holds `records` by PoUW execution phase."""
+    """A network attester run that sampled `salts` and holds `records` by PoUW execution phase."""
     salts: dict[int, bytes]
     records: dict[int, bytes] = field(default_factory=dict)
     key_id: bytes = KEY_ID

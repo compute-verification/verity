@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundRouteCols
-public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 public import Proofs.Flock.Claims.Recursion.KSLin2
 public import Proofs.Flock.Claims.Recursion.SetupCalls
 import Mathlib.Algebra.Order.Floor.Extended

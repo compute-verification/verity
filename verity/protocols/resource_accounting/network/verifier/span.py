@@ -2,16 +2,16 @@
 its Lean check is held to (``network/tests/test_network_span_protocol.py``).
 
 A span runs from the execution phase of a start mark to the execution phase of an end mark, on one link of the network
-attester. The count answers, from certificates alone: is every execution phase of the span and of its tail certified
+attester. The count answers, from attestations alone: is every execution phase of the span and of its tail attested
 under the schedule, and how many bits can have left on the link over them. Its formats are the Lean module's docstring;
 this module decodes them (`params`, `commitment`, `evidence`), checks them (`check`) and names what a composition ties
 (`named`). The framing of an answer (canonical JSON, hex, the outcome) is the core interface's, which a difftest's
 reference adds around these.
 
 **The marks.** Each mark is a `certificate.CertifiedMark`: the 64-byte message it was asked for, the 64-byte salt the
-network attester sampled, and the certificate that signs the message under the salt (`mark_digest`) on the link's
+network attester sampled, and the attestation that signs the message under the salt (`mark_digest`) on the link's
 marks link name (`marks_link`). The count opens each (`CertifiedMark.refusal`) and reads its execution phase from its
-certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate's bytes (`Certificate.encode`) behind
+attestation. A mark's bytes in the commitment are `mark_bytes`: its attestation's bytes (`Certificate.encode`) behind
 their length, its salt, then its message. A link's name is what the period's check takes: at most 65,535 UTF-8 bytes.
 
 **The registered hardware.** The parameters may hold the site of a registration log's view and the head of the log it
@@ -23,11 +23,11 @@ attester releases a connection's response late, by a bounded time, and reads a s
 opened when it admitted that client's connection, so the bytes it has read by the end mark leave in the tail's
 execution phases at the latest. The count is `phases = w_e + tail − w_s + 1` execution phases, each at the
 schedule's capacity (`capacity_bits`): every cell of both egress records, the responses' and the fails', which both
-leave on the link. A certificate hides its record, so the count takes each certified record as full; it is certified
+leave on the link. An attestation hides its record, so the count takes each attested record as full; it is attested
 only when complete, so nothing left outside its cells. What of the count is public is `public`'s to say: the two
 marks' execution phases are not, since they say when the span ran, which a mark's salt hides.
 
-**Each execution phase** of the span and its tail shows its two egress certificates (the responses' record's on the
+**Each execution phase** of the span and its tail shows its two egress attestations (the responses' record's on the
 link, the fails record's on the link's fails link name) and the signed head of its egress cells, the one signed thing
 that names the schedule's digest (`WR.check_registration`). The network attester certifies no record of an
 execution phase it faulted or refused a connection in, so a span that holds one is rejected.
@@ -53,7 +53,7 @@ from verity.protocols.resource_accounting.network.verifier.network_attester impo
 
 ID = domains.CERTIFIER_SPAN_PROTOCOL
 COMMITMENT_TAG = domains.CERTIFIER_SPAN
-#: what a link's name gains for the link its fails record is certified under
+#: what a link's name gains for the link its fails record is attested under
 FAILS = "fails"
 PARAMS_KEYS = ["key", "link", "lms", "schedule", "session"]
 #: with the registered hardware: `head` and `site` come together
@@ -61,7 +61,7 @@ REGISTERED_KEYS = ["head", "key", "link", "lms", "schedule", "session", "site"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 #: with the bound on a response's length, the one field beside them that `scheduleOf` reads
 BOUNDED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
-CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
+ATTESTATION_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 PHASE_KEYS = ["certificates", "phase", "registration"]
 ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layout", "link", "parameters", "root",
              "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"]
@@ -148,7 +148,7 @@ def params(j: Any) -> Params:
     the link, its name held to what the period's check holds it to, and the schedule. With the registered hardware
     (`site`, the site of a registration log's view, and `head`, the head of the log it was read at, which come
     together), the link and the key are read off the site (`registered.registered`): the link joins a network
-    attester and a host, and the key is the one that certifier registered. A refusal there refuses the parameters."""
+    attester and a host, and the key is the one that attester registered. A refusal there refuses the parameters."""
     if not isinstance(j, dict):
         raise Refused("the object: not an object")
     site = sorted(j) == REGISTERED_KEYS
@@ -182,7 +182,7 @@ def params(j: Any) -> Params:
 
 
 def mark_bytes(m: CertifiedMark) -> bytes:
-    """A mark's bytes in the commitment: u32be len(certificate) ‖ certificate (`Certificate.encode`) ‖ salt ‖
+    """A mark's bytes in the commitment: u32be len(attestation) ‖ attestation (`Certificate.encode`) ‖ salt ‖
     message."""
     certificate = m.certificate.encode()
     return struct.pack(">I", len(certificate)) + certificate + m.salt + m.mark
@@ -204,7 +204,7 @@ class _Reader:
 
 def commitment(b: bytes) -> Commitment:
     """The commitment's two marks, the start's then the end's, each `mark_bytes`, with nothing left over. Each
-    certificate is read from exactly the bytes its length gives it (`Certificate.decode`)."""
+    attestation is read from exactly the bytes its length gives it (`Certificate.decode`)."""
     r, marks, certificates = _Reader(b), [], []
     for _ in MARKS:
         certificates.append(r.take(r.be(4)))
@@ -224,8 +224,8 @@ def digest(c: Commitment) -> bytes:
     return tagged_sha512(COMMITMENT_TAG, c.bytes)
 
 
-def _json_certificate(j: Any, ctx: str) -> Certificate:
-    _exactly(j, CERTIFICATE_KEYS, ctx)
+def _json_attestation(j: Any, ctx: str) -> Certificate:
+    _exactly(j, ATTESTATION_KEYS, ctx)
     try:
         direction = Direction(_of(j["direction"], str, ctx))
     except ValueError:
@@ -235,7 +235,7 @@ def _json_certificate(j: Any, ctx: str) -> Certificate:
 
 
 def _rows(j: Any, ctx: str) -> dict:
-    """`rowsOf`: a row registration with exactly its keys (and its layout's and certificate's), its numbers naturals,
+    """`rowsOf`: a row registration with exactly its keys (and its layout's and attestation's), its numbers naturals,
     its strings strings and its byte fields lowercase hex."""
     _exactly(j, ROWS_KEYS, ctx)
     _exactly(j["layout"], LAYOUT_KEYS, f"{ctx}.layout")
@@ -259,7 +259,7 @@ def evidence(j: Any) -> list[Phase]:
     for x in _of(j["phases"], list, "phases"):
         ctx = "an execution phase"
         _exactly(x, PHASE_KEYS, ctx)
-        certificates = tuple(_json_certificate(c, f"{ctx}.certificates")
+        certificates = tuple(_json_attestation(c, f"{ctx}.certificates")
                              for c in _of(x["certificates"], list, f"{ctx}.certificates"))
         out.append(Phase(_nat(x["phase"], f"{ctx}.phase"), certificates,
                          _rows(x["registration"], f"{ctx}.registration")))
@@ -290,13 +290,13 @@ def capacity_bits(s: Schedule) -> int:
 
 
 def fails_link(link: str) -> str:
-    """The link name `link`'s fails record is certified under, `<link>-fails`."""
+    """The link name `link`'s fails record is attested under, `<link>-fails`."""
     return f"{link}-{FAILS}"
 
 
 def records(link: str) -> tuple[tuple[str, str], ...]:
     """The two egress records the count reads at each execution phase, by what the reasons call them and the link
-    name each is certified under."""
+    name each is attested under."""
     return (("egress", link), ("fails", fails_link(link)))
 
 
@@ -309,15 +309,15 @@ REFUSALS = {
 }
 """Why a mark is refused, by `CertifiedMark.refusal`'s code."""
 
-NONE_CERTIFIED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
+NONE_ATTESTED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
                   "in, and a span that holds one is rejected")
-MISSING = f"an execution phase of the span or its tail is missing: {NONE_CERTIFIED}"
+MISSING = f"an execution phase of the span or its tail is missing: {NONE_ATTESTED}"
 
 
 def _certified(p: Params, w: int, x: Phase) -> str | None:
     """Why execution phase `w`'s entry doesn't certify it under the schedule, or None when it does."""
     if len(x.certificates) != len(records(p.link)):
-        return f"not two certificates, its egress record's and its fails record's: {NONE_CERTIFIED}"
+        return f"not two certificates, its egress record's and its fails record's: {NONE_ATTESTED}"
     for (what, link), c in zip(records(p.link), x.certificates):
         if c.direction is not Direction.EGRESS:
             return f"the {what} certificate is not an egress certificate"
@@ -327,7 +327,7 @@ def _certified(p: Params, w: int, x: Phase) -> str | None:
             return f"the {what} certificate is at another execution phase"
         if not c.verify(p.key, p.session):
             return (f"the {what} certificate does not verify under the key in the certifier session: "
-                    f"{NONE_CERTIFIED}")
+                    f"{NONE_ATTESTED}")
     doc = x.registration
     if doc["parameters"] != p.schedule.digest.hex():
         return "the egress cells' head names another schedule's digest than the parameters'"
@@ -371,7 +371,7 @@ def check(p: Params, c: Commitment, e: list[Phase]) -> tuple:
 
 def named(p: Params, c: Commitment) -> dict[str, Any]:
     """What a composition's tie reads off a case's parameters and commitment, meaningful once the count accepts
-    them: the SHA-512 of the start certificate's bytes (`Certificate.encode`), which a wipe's signed message names as
+    them: the SHA-512 of the start attestation's bytes (`Certificate.encode`), which a wipe's signed message names as
     its start mark; the messages the two marks open to; and the bits that can have left over the span and its tail.
     The first three are witness, read off the commitment. No rounding is applied here."""
     start, end = (m.window for m in c.marks)

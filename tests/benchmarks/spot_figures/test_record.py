@@ -50,7 +50,7 @@ def test_what_each_serve_shows():
 
 def test_a_switch_shown_only_in_part_or_by_no_reader_stays_off():
     """A serve with every switch its `meta.json` can show at the post's value still has off the two it shows in part
-    (the engine unmodified, the certifier in front of it) and the seven nothing in it gives."""
+    (the engine unmodified, the network attester in front of it) and the seven nothing in it gives."""
     m = meta("context-131072")
     m.update(sampling="seeded", plugin=["record", "boundary_rows"], tick={"bucket_us": 250000})
     made = record.stamp(m)

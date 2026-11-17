@@ -15,6 +15,7 @@ from verity_bench import jobs
 from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (
+    GPUS,
     expand_sweep,
     resolve_spec,
 )
@@ -23,6 +24,7 @@ from verity_bench.vllm.runner import (
 )
 
 COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
+RTX = GPUS["rtx-pro-6000"].nvidia_smi_name
 
 
 def _repo(tmp_path):
@@ -37,8 +39,9 @@ def _repo(tmp_path):
     return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
 
-def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tree=None, tool="vllm_bench_point"):
-    """An attempt as `research run` records it from `repo` (from another commit's `tree`, or another `tool`)."""
+def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tree=None, tool="vllm_bench_point", run_env=None):
+    """An attempt as `research run` records it from `repo` (from another commit's `tree`, or another `tool`; `run_env` its
+    `--env`)."""
 
     from research import env
     from research.store import derivation
@@ -46,7 +49,8 @@ def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tre
     source = {**env.source_identity(env.source_conditions(repo)), **({"tree": tree} if tree else {}), "dirty": dirty}
     drv = derivation.derivation_id({"name": tool, "version": "0"}, {}, {"identity": identity}, {}, ["hw.gpu.family"])
     return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": "0"}, "derivation": drv,
-            "reuse_key": derivation.reuse_key(drv, source), "argv": [], "params": {"identity": identity}, "inputs": {},
+            "reuse_key": derivation.reuse_key(drv, source), "argv": [],
+            "params": {"identity": identity, **({"env": run_env} if run_env else {})}, "inputs": {},
             "key_params": ["identity"], "conditions": {}, "key_conditions": [], "source": source, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
             "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
@@ -76,6 +80,21 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     identity = jobs.point_identity(spec.config_sha256, pins, point)
     assert identity != jobs.point_identity(spec.config_sha256, replace(pins, vllm_pin="0" * 40), point)
     assert identity != jobs.point_identity("0" * 64, pins, point)
+
+
+def test_a_trial_is_never_a_points_passing_run_and_a_trial_launch_says_so(tmp_path, monkeypatch):
+    from research.store.local import LocalStore
+
+    (repo, commit), ident = _repo(tmp_path), "f" * 64
+    store, config = _stores(tmp_path, [_attempt("r20261021-130000-0001", ident, repo),
+                                       _attempt("r20261021-140000-0002", ident, repo, run_env={"VERITY_BENCH_TRIAL": "1"})])
+    assert jobs.StoreCompletion(LocalStore(store, config_path=config), root=repo)(ident, commit) == "r20261021-130000-0001"
+    spec = resolve_spec("llama31-8b-fp8-1gpu")
+    monkeypatch.delenv("VERITY_BENCH_TRIAL", raising=False)
+    assert "VERITY_BENCH_TRIAL=1" not in jobs._env_flags(spec)
+    monkeypatch.setenv("VERITY_BENCH_TRIAL", "1")
+    flags = jobs._env_flags(spec)
+    assert flags[flags.index("VERITY_BENCH_TRIAL=1") - 1] == "--env"
 
 
 def _stores(tmp_path, remote_attempts):
@@ -173,6 +192,7 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
         raise RuntimeError("preempted")
 
     monkeypatch.setattr(cli, "run_benchmark", preempted)
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": RTX})
     with pytest.raises(RuntimeError, match="preempted"):
         cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity])
     assert not (tmp_path / "result.json").exists()
@@ -198,7 +218,7 @@ def test_a_timed_point_records_its_numbers_in_its_runs_result(tmp_path, monkeypa
         return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
 
     monkeypatch.setattr(cli, "run_benchmark", timed)
-    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": RTX})
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id,
                      "--identity", item.identity]) == 0
     assert ran == [(item.point,)]

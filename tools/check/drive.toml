@@ -66,52 +66,53 @@ lowrisk_per_tick = 20
 # `/` before its end), or a file name glob (no `/`: any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
 # their tests, and the soundness-path Python (AGENTS.md's soundness path); the data sheets the Site and the accounting
-# read (hardware/: a changed figure changes a device's assumed capacity bound); the auditor's devices (every `attester/` and compose's `verifier/`: the
-# network attester, the memory challenger, the challenger service and the verifier's auditor device) and what both auditor
+# read (calibration/hardware/: a changed figure changes a device's assumed capacity bound); the auditor's devices (every `attester/` and compose's `verifier/`: the
+# network attester, the memory attester, the challenger service and the verifier's auditor device) and what both auditor
 # devices pin beside them and run or read as `auditor`: the challenger's (benchmarks/network_traces/, the network attester's
 # rehearsals; the checkpoint manifest its model registry reads) and the verifier's (benchmarks/one_stage/, which its compose
 # gate's `served_verdicts.sh compose` runs with that directory on sys.path; the fixture registration `bw_party --fixture`
 # holds), with the memory line of record computed from the verifier's runs (auditor_line.py); and the guards that hold
 # everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
-# (tools/check/, and in tools/verity/check/ the merge drivers' shims that clones from before the move run), the graph
+# (tools/check/), the graph
 # lister that lists the executor's gating
 # tasks (tools/verity/graph/), the merge drivers (.gitattributes), and the landing rules themselves (queue.py); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
 # (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock). Every `attester/` and `verifier/` is excluded
 # whole, by its own entry or one above it, so a file added there later is too (tests/test_lowrisk_excludes.py), among them:
-# the registration log's verifier (verity/protocols/registration/verifier/), not only its files' names;
+# the registration log's verifier (verity/protocols/registration/verifier/), not only its files' names; the verifier
+# machine's deployment the research tool holds (tools/research/src/research/pods/nebius/verifier/), so `verdict_plain`
+# freeing tools/research/ leaves it on the whole check;
 # compose's verifier (verity/protocols/compose/verifier/), not only its lean/, onsite/ and remote/
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "record.py", "registration.py", "verity/protocols/resource_accounting/network/attester/", "verity/protocols/resource_accounting/network/verifier/", "verity/protocols/proofs/flock/verifier/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/workload_classification/training_detection/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/resource_accounting/memory/poub/verifier/", "verity/protocols/resource_accounting/memory/pous/attester/", "tools/pous_grader/", "verity/protocols/resource_accounting/memory/pous/verifier/", "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/proofs/spot_flock/verifier/", "verity/protocols/proofs/spot_flock_recursion/verifier/", "tests/verity/protocols/",
                     "verity/protocols/registration/verifier/", "verity/protocols/compose/verifier/",
-                    "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "tests/verity/", "hardware/",
+                    "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "tests/verity/", "calibration/hardware/",
                     "verity/protocols/resource_accounting/memory/poub/attester/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
-                    "benchmarks/one_stage/", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/remote_session/auditor_line.py",
+                    "benchmarks/one_stage/", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/poub_session/auditor_line.py",
                     "__init__.py",
                     "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "tests/adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
-                    "tools/verity/lean/", "tests/", "tools/check/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes",
+                    "tools/verity/lean/", "tests/", "tools/check/", "tools/verity/graph/", ".gitattributes",
                     "queue.py",
-                    "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
+                    "infra/", "tools/research/", "tools/research/src/research/pods/nebius/verifier/", "tools/move/", "tools/agent-guard/",
+                    ".cursor/", "pyproject.toml", "uv.lock"]
 # what the land verdicts gate (the loop's `--gate verdict`) keeps on the whole check before landing beyond
 # `lowrisk_excludes`, written as its entries are: a candidate is plain, and lands on its members' land verdicts and the
 # quick tier, only when no member's change, against its merge base with `main`, touches an entry of `lowrisk_excludes` that
 # `verdict_plain` doesn't list, or of this list (`DriveFlags.plain_excludes`, `Loop._plain`); with `lowrisk_excludes` or this
 # list empty, none is plain. What the gate reads of `lowrisk_excludes` keeps off Lean, its locks and Lake files, the
-# verifiers, the soundness-path Python, the Lean check, the check and this file, the landing code (tools/research/) and the
-# merge drivers; this adds the auditor's devices it doesn't name. A move's PR is never plain, whatever it touches, nor a
-# change to a Lean input of the tree (`vqueue_slim.lean_inputs`)
+# verifiers, the soundness-path Python and the Lean check; this adds the auditor's devices it doesn't name. A move's PR is
+# never plain, whatever it touches, nor a change to a Lean input of the tree (`vqueue_slim.lean_inputs`)
 verdict_excludes = ["verity/protocols/compose/verifier/", "verity/protocols/resource_accounting/memory/poub/attester/"]
 # the entries of `lowrisk_excludes` the land verdicts gate doesn't read (`DriveFlags.plain_excludes`): each keeps a change
 # off the low-risk lane so that a reader sees it before it lands, which its land verdict is, and none needs the whole check
 # first. Each is written character for character as in `lowrisk_excludes`, and the parse refuses any other, one in
 # `verdict_excludes` and a duplicate. Together they free no file under a `verifier/` or `attester/` directory, of a trusted
-# place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, nothing under tools/research/,
-# tools/move/, tools/verity/check/ or tools/verity/lean/, and none of the code an auditor's device runs outside an `attester/` or `verifier/`
-# directory (tests/test_lowrisk_excludes.py): benchmarks/one_stage/, benchmarks/network_traces/ and
-# benchmarks/remote_session/auditor_line.py stay on the whole check with the devices, and tools/move/, which the loop runs
-# and certifies moves against, with tools/research/. The quick tier runs the root's suite on every
+# place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, nothing under tools/verity/lean/, and
+# none of the code an auditor's device runs outside an `attester/` or `verifier/` directory (tests/test_lowrisk_excludes.py):
+# benchmarks/one_stage/, benchmarks/network_traces/ and benchmarks/poub_session/auditor_line.py stay on the whole check with
+# the devices. The quick tier runs the root's suite on every
 # change, a changed test module's slow tests too; `main`'s whole check after the landing runs every suite with its slow tests,
 # the Lean steps, circuit-check and Flock's Rust build, and a red there reverts the PR it names
 verdict_plain = [
@@ -129,6 +130,10 @@ verdict_plain = [
     # what runs with the control pod's credentials, which nothing in verity/ reads: the quick tier runs the root's suite and,
     # for ops/, verity-ops' and research's
     "infra/",
+    # the landing system's own code, which nothing in verity/ reads: the research tool, the move scripts and maps the loop runs,
+    # the check and this file, the graph lister, the merge drivers, the landing rules and the agent hooks; the quick tier runs
+    # each one's suite, and a red of `main`'s whole check after the landing reverts it
+    "tools/research/", "tools/move/", "tools/check/", "tools/verity/graph/", ".gitattributes", "queue.py", ".cursor/",
 ]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections

@@ -190,6 +190,11 @@ its last activity is recorded once more:
 a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
 its lane, which relaunches it from its last note or drops it; a coordinator still in that turn, or a worker the API won't
 archive, is recorded as **no_step**, rung to top.
+A lane's reader is never judged silent, so never archived by it: a worker whose name has a word matching a glob of its
+handle's `staffs` in the registry (ci's `review-*`, the field `research queue delegate` registers a reader by). Its work is
+verdict labels in the store and lines in its lane's shared request list (ci's `lanes/ci/reviewers/requests.md`), none of
+them a note or a push of its own, and its brief keeps it on shift through quiet hours writing nothing, so no clock of
+these could tell a reader at work from a stopped one; its lead watches its pool in that list.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
@@ -282,6 +287,7 @@ import argparse
 import base64
 import calendar
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -397,7 +403,7 @@ WORKER_RELAUNCH = (
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
-    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-high` (or "
+    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-medium` (or "
     "`claude-sonnet-5-5-high` for a fully specified task), never Fable, `inherit` or none. You hold no timer or "
     "subscription of your own. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
@@ -410,8 +416,8 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-# a worker runs Opus 5.5 at high effort; only leads run Fable 5.2
-WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+# a worker runs Opus 5.5 at medium effort; only leads run Fable 5.2
+WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "medium"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
@@ -637,6 +643,14 @@ def name_lane(name: str, registry: Path | None) -> tuple[str, dict] | None:
     teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
     keys = [m for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams]
     return of(keys[0]) if len({m[1] for m in keys}) == 1 else None
+
+
+def reader(name: str, handle: str | None, registry: Path | None) -> bool:
+    """Whether a worker is one of its lane's readers: a word of its `name` (`review-73`) matches a glob of its handle's
+    `staffs` in the registry (ci's `review-*`), the field a reader is registered by (`research queue delegate`)."""
+    globs = next((h.get("staffs") or [] for h in read_json(registry).get("handles") or [] if handle and h.get("handle") == handle), [])
+    words = re.findall(r"[\w-]+", name.lower())
+    return any(fnmatch.fnmatchcase(w, g) for g in globs if isinstance(g, str) for w in words)
 
 
 def issue_of(name: str, registry: Path | None) -> dict[str, str]:
@@ -2396,8 +2410,10 @@ class Watch:
         its lane's agents' runs), no start or end of a research run it sent (`run_ends`' `ran`) and, for a coordinator, no
         assistant text (its run's stream's, and what a read of its conversation found new) for `SILENT_S`, or a coordinator's
         `COORD_SILENT_S`, counted from the latest of those, `since` and the first heads read; again after a second window,
-        then not until one of those moves. A coordinator is recorded only once `quiet` confirms it. Needs
-        `--notes` and heads read in the last `HEADS_STALE_S`."""
+        then not until one of those moves. A coordinator is recorded only once `quiet` confirms it. A lane's reader (`reader`)
+        is never judged: its work is verdict labels and lines in its lane's shared request list, none of them its own note or
+        push, and it stays on shift through quiet hours writing nothing. Needs `--notes` and heads read in the last
+        `HEADS_STALE_S`."""
         changed = False
         for d, gone in ((self.silent, known), (self.blind, known), (self.unjudged, known), (self.texts, self.coords)):
             for agent in [a for a in d if a not in gone]:
@@ -2411,6 +2427,9 @@ class Watch:
         heads = self.heads.get("heads") or {}
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
+            if not coord and reader(k["name"], k["handle"], self.registry):
+                changed = self.silent.pop(agent, None) is not None or changed
+                continue
             mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
                     *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}

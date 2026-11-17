@@ -1,4 +1,4 @@
-"""Prove path: a committed run and its advice through the proof system, for network certification under arbitrary vLLM usage.
+"""Prove path: a committed run and its advice through the proof system, for network attestation under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
@@ -1308,7 +1308,7 @@ def audit(a: argparse.Namespace) -> int:
                      "advice": bound["advice"], "cap_bits": compiler.cap_bits,
                      "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest}, "compile_s": compile_s,
                      "transfer_gates": list(compiler.transfer_gates),
-                     "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
+                     "gap": "the advice is opened to the verifier until the compile slice's proof block exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
@@ -1821,7 +1821,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
-    state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
+    population = WC.population_digest(low.circuit)
+    state = None if scanned is None else WRS.state_value(population, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
                          None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
@@ -1840,7 +1841,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run) if state is None
+              SS.SCAN_STATE: WRS.standin_state(population, cls, rows, key, int(a.window), window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
@@ -1863,8 +1864,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")

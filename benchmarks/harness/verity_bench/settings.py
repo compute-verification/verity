@@ -43,6 +43,9 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
       "the provers' session files, in a directory of its own that it removes at its end; a spec's setup exports a "
       "directory on the node's disk where a row's statement is fetched from the store"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the card gpu-lease gave a steady-state point's timed step"),
+    S("VERITY_BENCH_TRIAL", str, None, VALUE, "a trial run (a probe from a branch, a study at other settings, a stand-in): "
+      "set to anything but 0, the kit's writer writes its measurements to out/trial-measurements.json and none to the "
+      "result, which says trial (verity_bench.kit.is_trial)"),
     # ---- research run's (the point's run directory and record)
     S("RESEARCH_RUN_DIR", str, ".", WHERE, "the run directory a point writes result.json in"),
     S("OUT", str, None, WHERE, "the directory a point writes its outputs in; unset, RESEARCH_RUN_DIR/out"),
@@ -54,7 +57,7 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
       "reads the clocks of; unset, every GPU of the host"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # tests/benchmarks/numerical/bench/test_instances.py's opt-in
-        "VERITY_BENCH_CUBIN",      # the cubin file overhead_node sets and a scheme's arm loads
+        "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads
     ), shared=False)
 del S
 

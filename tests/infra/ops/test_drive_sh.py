@@ -1,6 +1,6 @@
 """infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` in the queue's clone on branch main, which it refuses
-on a detached HEAD (else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of
-origin's main."""
+on a detached HEAD (else every `drive.sh merge` is refused), while `drive.sh queue` keeps a detached checkout of origin's
+main."""
 import os
 import re
 import subprocess
@@ -79,14 +79,6 @@ def test_fast_clones_seeds_the_container_disk_from_the_volume_once(tmp_path):
     assert (tmp_path / "queue.volume" / ".git").is_dir()
 
 
-def test_start_seeds_the_clones_before_its_push_check():
-    """On a new container `$REPO` exists only once `fast_clones` has run, so a `start` that checks its dry-run push first is
-    always refused there."""
-    start = re.search(r"^  start\) (.*?);;\n", DRIVE.read_text(), re.M | re.S).group(1)
-    assert 'flock 8; fast_clones' in start
-    assert start.index("fast_clones") < start.index("gh_app_token.sh")
-
-
 def test_research_writes_unbuffered_so_a_running_tick_shows_in_the_log():
     """drive's log is a pipe, where Python would hold a tick's lines until it ended."""
     export = re.search(r"^export PATH=.*?(?<!\\)\n", DRIVE.read_text(), re.M | re.S).group(0)
@@ -101,17 +93,25 @@ def test_locked_calls_checkout_with_its_verb_and_runs_merge_in_the_queues_clone(
     assert 'if [ "$1" = merge ]; then cd "$FAST/queue-verity"; else cd "$REPO"; fi || exit 1' in body
 
 
-@pytest.mark.parametrize("args, runs", [(("queue", "promote"), "unlocked"), (("queue", "baseline", "abc", "--by", "ci"), "unlocked"),
-                                        (("queue", "eject", "5"), "locked"), (("merge", "--push"), "locked")])
-def test_queue_baseline_and_promote_run_beside_a_tick(args, runs):
-    """`queue baseline` and `queue promote` only fast-forward main and write nothing of drive's, so they wait for no tick (one
-    holds its lock an hour and more, and main would wait with them) and check nothing out under one; every other verb does."""
-    arms = "".join(re.search(rf"^  {verb}\) .*;;\n", DRIVE.read_text(), re.M).group(0) for verb in ("queue", "merge"))
-    stubs = 'locked() { echo locked "$@"; }; unlocked() { echo unlocked "$@"; }; '
-    out = subprocess.run(["sh", "-c", f"{stubs}case $1 in\n{arms}esac", "sh", *args], capture_output=True, text=True).stdout.strip()
-    assert out == f"{runs} {' '.join(args)}"
-    body = function("unlocked")
-    assert "flock" not in body and "checkout" not in body and "RESEARCH_DRIVE=1" in body
+def verb(tmp_path, *args):
+    """drive.sh's dispatch with `locked` and `deploy` stubbed: what it ran, its exit status and its stderr."""
+    arms = re.search(r"^case \$\{1:-\} in\n(.*?)^esac\n", DRIVE.read_text(), re.M | re.S).group(1)
+    stubs = 'locked() { echo locked "$@"; }; deploy() { echo deploy "$@"; }; '
+    out = subprocess.run(["sh", "-c", f"{stubs}case ${{1:-}} in\n{arms}esac", "sh", *args], cwd=tmp_path, capture_output=True,
+                         text=True)
+    return out.stdout.strip(), out.returncode, out.stderr
+
+
+@pytest.mark.parametrize("args", [("queue", "eject", "5"), ("queue", "promote"), ("merge", "--push")])
+def test_queue_and_merge_run_under_the_lock(tmp_path, args):
+    assert verb(tmp_path, *args)[:2] == (f"locked {' '.join(args)}", 0)
+
+
+@pytest.mark.parametrize("args", [("start",), ("stop",), ("once", "--dry-run"), ()])
+def test_no_verb_starts_stops_or_runs_the_loop(tmp_path, args):
+    """The loop's tick was `research queue drive`, which rebuilt and pushed `next`: no verb runs one, and with no argument
+    drive.sh only names its verbs."""
+    assert verb(tmp_path, *args) == ("", 2, "drive.sh [status|queue ARGS|merge ARGS|deploy SHA|main]\n")
 
 
 def test_merge_checks_out_branch_main_at_origin_in_both_clones(repo):
@@ -194,7 +194,7 @@ def test_merge_resets_a_local_main_that_drifted(repo):
 
 def test_queue_and_the_tick_stay_detached(repo):
     clone, tip = repo
-    checkout(clone, "queue")                                            # the tick is `locked queue drive ...`
+    checkout(clone, "queue")
     assert subprocess.run(["git", "symbolic-ref", "-q", "HEAD"], cwd=clone).returncode == 1
     assert git("rev-parse", "HEAD", cwd=clone) == tip
 
@@ -223,8 +223,8 @@ def test_the_tick_runs_the_deployed_commit_until_deploy_main_and_merge_stays_on_
 
 
 def test_deploy_takes_only_landed_code_and_a_pin_that_names_no_commit_fails_the_tick(repo):
-    """Drive pushes `next`, `checked` and `main`, so it runs only a commit `checked` or `main` holds; a pin file that names no
-    commit fails the tick rather than run main's tip unannounced."""
+    """Drive runs only a commit `main` holds; a pin file that names no commit fails the tick rather than run main's tip
+    unannounced."""
     clone, _ = repo
     origin = Path(clone).parent / "origin"
     vol = Path(clone).parent / "volume"
@@ -235,7 +235,24 @@ def test_deploy_takes_only_landed_code_and_a_pin_that_names_no_commit_fails_the_
     git("checkout", "-q", "main", cwd=origin)
     git("fetch", "-q", "origin", "unlanded", cwd=clone)
     out = deploy(clone, other)
-    assert out.returncode == 1 and "on neither checked nor main" in out.stderr and not (vol / "deployed").exists()
+    assert out.returncode == 1 and "is not on main" in out.stderr and not (vol / "deployed").exists()
     (vol / "deployed").write_text("not a commit\n")
     with pytest.raises(subprocess.CalledProcessError):
         checkout(clone, "queue")
+
+
+def test_a_commit_only_checked_holds_is_not_deployed_and_its_pin_is_not_fetched(repo):
+    """origin's `checked` goes away: deploy reads `main` alone, and a pin $REPO lacks fails the checkout without fetching it."""
+    clone, _ = repo
+    origin = Path(clone).parent / "origin"
+    (Path(clone).parent / "volume").mkdir()
+    git("checkout", "-q", "-b", "checked", cwd=origin)
+    git("commit", "-q", "--allow-empty", "-m", "landed on checked only", cwd=origin)
+    only = git("rev-parse", "HEAD", cwd=origin)
+    git("checkout", "-q", "main", cwd=origin)
+    out = deploy(clone, only)
+    assert out.returncode == 1 and "is no commit" in out.stderr and not (Path(clone).parent / "volume" / "deployed").exists()
+    (Path(clone).parent / "volume" / "deployed").write_text(f"{only}\n")
+    with pytest.raises(subprocess.CalledProcessError):
+        checkout(clone, "queue")
+    assert not git("for-each-ref", "refs/remotes/origin/checked", cwd=clone)

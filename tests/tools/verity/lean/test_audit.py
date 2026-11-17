@@ -6,6 +6,7 @@ import ast
 import gzip
 import hashlib
 import importlib.util
+import inspect
 import itertools
 import json
 import os
@@ -35,7 +36,8 @@ def sha(s: str) -> str:
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
             "witness_failures": None, "four_name_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None, "sampled_recompile": 0,
-            "orphan_failures": None, "layer_failures": None, "sources_judge": None, "source_graph_failures": None}
+            "orphan_failures": None, "layer_failures": None, "sources_judge": None, "source_graph_failures": None,
+            "setup_refused": None}
 
 
 def coded(failures) -> list:
@@ -90,6 +92,15 @@ def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
     real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
     monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
+@pytest.fixture(autouse=True)
+def main_s_globals_end_with_the_test(monkeypatch):
+    """`main` sets the globals its `global` statement names for its run (`ARTIFACTS` among them); each is put back after
+    every test, so a test that ran `main` leaves no artifact cache or tree to a later test of its worker."""
+    (names,) = [n.names for n in ast.walk(ast.parse(inspect.getsource(A.main))) if isinstance(n, ast.Global)]
+    for name in names:
+        monkeypatch.setattr(A, name, getattr(A, name))
 
 
 @pytest.fixture
@@ -2104,7 +2115,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
                  "packages": whole,                                              # the file's name, among a directory's
-                 "controls_of": whole,                                           # a control's copy of a fixture
+                 "control_case": whole,                                          # a control's copy of a fixture
                  "moves_refused": whole,                                         # refuses a moves file, before any step
                  "base_locks": whole,                                            # the base's locks a move is held to
                  "write_staged": whole,                                          # the run's writer of the locks it staged
@@ -2133,16 +2144,17 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     assert all("rep, policy, work = _open(pkg, out)" in ast.unparse(funcs[f]) for f in both), "the name the walk starts from"
     assert [n.value for n in ast.walk(module) if isinstance(n, ast.Constant) and isinstance(n.value, str)
             and (n.value == A.POLICY or n.value.endswith("/" + A.POLICY))] == [A.POLICY], "a lock's path that `POLICY` does not name"
-    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
-    # `upstream.py`'s own command line, and check.py calls neither
+    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index), in
+    # `upstream.py`'s own command line and in `cache.py`'s docstring and `packages` (the tracked locks, by name), and
+    # check.py calls none of them
     siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
     naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parents[3] / "tools" / "verity" / "lean" / f"{s}.py").read_text()).body
               if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
                      for n in ast.walk(top))}
-    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
+    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main", "cache.", "cache.packages"}, (
         f"of the siblings check.py loads ({', '.join(sorted(siblings))}), these name the lock's file: {sorted(naming)}; one that "
         f"a step before the judge calls reads the lock by its path, where this walk does not follow it")
-    assert not {"policy_roots", "main"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
+    assert not {"policy_roots", "main", "packages"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
         "check.py calls a sibling's function that reads the lock by its path"
 
 
@@ -2316,6 +2328,188 @@ def test_a_package_of_the_tree_that_is_a_link_out_of_it_is_refused(tmp_path, mon
     with pytest.raises(A.OutsideTree, match=f"resolves to {elsewhere}, outside the tree"):
         A.writable(tree / "P")
     assert A.writable(elsewhere) == [elsewhere / ".lake"]
+
+
+TOY = 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n'
+needs_unshare = pytest.mark.skipif(subprocess.run([*A.UNSHARE, "--", "true"], capture_output=True).returncode != 0,
+                                   reason="no unprivileged user namespaces here (`unshare`), so no sandbox")
+
+
+def toy(tmp_path: Path, lakefile: str = TOY) -> Path:
+    """A package of one module, `P`, at the control fixture's toolchain, outside the tree."""
+    (pkg := tmp_path / "pkg").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
+    (pkg / "lakefile.toml").write_text(lakefile)
+    (pkg / "P.lean").write_text("def P.x : Nat := 1\n")
+    return pkg
+
+
+MATHLIB = {"name": "mathlib", "type": "git", "url": "https://github.com/leanprover-community/mathlib4", "rev": "0" * 40}
+SETUP_REFUSED = {
+    "toolchain": ({"lean-toolchain": "attacker/lean4:v4.34.0\n"}, "setup.toolchain"),
+    "a-cache-executable": ({"lakefile.toml": TOY + '\n[[lean_exe]]\nname = "cache"\nroot = "Pwn"\n'}, "setup.cache-target"),
+    "a-cache-library": ({"lakefile.toml": TOY + '\n[[lean_lib]]\nname = "cache"\n'}, "setup.cache-target"),
+    "a-path-dependencys-cache": ({"lake-manifest.json": json.dumps({"packages": [{"name": "d", "type": "path", "dir": "../d"}]}),
+                                  "../d/lakefile.lean": "import Lake\nopen Lake DSL\npackage d\n\nlean_exe «cache» where\n"
+                                                        "  root := `Pwn\n"}, "setup.cache-target"),
+    "named-mathlib": ({"lakefile.toml": TOY.replace('"p"', '"mathlib"', 1)}, "setup.mathlib"),
+    "mathlib-by-path": ({"lake-manifest.json": json.dumps({"packages": [{"name": "mathlib", "type": "path", "dir": "../d"}]})},
+                        "setup.mathlib"),
+    "mathlib-from-elsewhere": ({"lake-manifest.json": json.dumps({"packages": [
+        MATHLIB | {"url": "https://github.com/attacker/mathlib4"}]})}, "setup.mathlib"),
+    "a-linked-lake": ({}, "setup.link"),
+}
+
+
+@pytest.mark.parametrize("case", SETUP_REFUSED)
+def test_setup_refuses_a_package_that_would_make_it_run_the_trees_own_code_before_running_anything(tmp_path, monkeypatch,
+                                                                                                   case):
+    """`setup.sh` runs `elan` at the package's `lean-toolchain` and Mathlib's `cache` executable by its package's name
+    (`lake exe mathlib/cache get`). So a toolchain that is no release of Lean (elan downloads it from the repository it
+    names), a target named `cache` in a lakefile the workspace loads, a package named `mathlib` that isn't Mathlib's
+    repository, or a `.lake` the tree holds as a link (the bundle restore writes through it) each refuse `setup` before it
+    runs anything, and `sources_judge` before any build. A package with Mathlib from its repository passes."""
+    files, code = SETUP_REFUSED[case]
+    pkg = toy(tmp_path)
+    (tmp_path / "d").mkdir()
+    for name, text in files.items():
+        (pkg / name).write_text(text)
+    if case == "a-linked-lake":
+        (tmp_path / "src").mkdir()
+        (pkg / ".lake").symlink_to("../src")
+    assert [f.code for f in A.setup_refused(pkg)] == [code]
+    ran = []
+    monkeypatch.setattr(A, "run", lambda argv, *a, **k: ran.append(argv) or (0, ""))
+    monkeypatch.setattr(A, "_INSTALLED", set())
+    rc, text = A.setup(pkg, "leanprover/lean4:v4.34.0", tmp_path / "setup.log")
+    assert rc == 3 and text.startswith("setup: ") and ran == []
+    honest = toy(tmp_path / "honest")
+    (honest / "lake-manifest.json").write_text(json.dumps({"packages": [MATHLIB]}))
+    assert A.setup_refused(honest) == []
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_package_declaring_its_own_cache_executable_is_refused_by_a_real_build_run_before_setup_runs_it(tmp_path):
+    """A package whose `lakefile.toml` declares `[[lean_exe]] name = "cache"`, an ordinary `main` that
+    writes a source outside the package and a file in another directory. `setup.sh` ran `lake exe cache get` outside
+    the sandbox, which built and ran it. A real `check.py --build` refuses the package before `setup`; outside the check,
+    `lake exe cache get` runs it, so it is a writer."""
+    pkg = toy(tmp_path, TOY + '\n[[lean_exe]]\nname = "cache"\nroot = "Pwn"\n')
+    (src := tmp_path / "src").mkdir()
+    (victim := src / "Victim.lean").write_text("orig\n")
+    (tool := tmp_path / "tool").mkdir()
+    (pkg / "Pwn.lean").write_text(f'def main (args : List String) : IO Unit := do\n  IO.FS.writeFile "{victim}" '
+                                  f's!"pwned {{args}}\\n"\n  IO.FS.writeFile "{tool}/PWNED" "pwned\\n"\n')
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"], "exempt": {"Pwn": "an executable"}, "guarantees": {}}))
+    out = tmp_path / "out"
+    assert A.main([str(pkg), "--build", "--no-replay", "--no-runs", "--out", str(out), "--repo", str(tmp_path)]) == 1
+    (rep,) = json.loads((out / "audit.json").read_text())["packages"]
+    assert rep["failure_codes"] == ["setup.cache-target"], rep
+    assert victim.read_text() == "orig\n" and not any(tool.iterdir())
+    subprocess.run(["lake", "exe", "cache", "get"], cwd=pkg, env=A.lake_env(), check=True, capture_output=True)
+    assert victim.read_text() == "pwned [get]\n" and (tool / "PWNED").exists()
+
+
+def test_setup_runs_what_loads_the_workspace_in_a_fetch_sandbox_with_none_of_the_callers_credentials(tmp_path,
+                                                                                                       monkeypatch):
+    """`setup`'s first half (elan, the toolchain, the pinned bundle) runs as the check; its second, which loads the
+    package's workspace (its dependencies' lakefiles and clones, Mathlib's `cache`), runs in a sandbox of its own that
+    keeps the network (`UNSHARE_NET`, `sandbox.sh --net`), with an environment that holds no credential."""
+    pkg = toy(tmp_path)
+    ran = []
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, **k: ran.append((argv, k.get("env"))) or (0, ""))
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "_INSTALLED", set())
+    monkeypatch.setenv("LEAN_CACHE_R2_SECRET_ACCESS_KEY", "dummy-not-a-credential")
+    monkeypatch.setenv("MATHLIB_CACHE_DIR", str(tmp_path / "mathlib"))
+    assert A.setup(pkg, "leanprover/lean4:v4.34.0", tmp_path / "setup.log") == (0, "")
+    (outside, env0), (fetch, env) = ran
+    setup_sh = str(A.TOOL / "setup.sh")
+    assert outside == ["bash", setup_sh, "--outside", str(pkg)] and env0 is None
+    assert fetch[:len(A.UNSHARE_NET) + 4] == [*A.UNSHARE_NET, "--", "bash", str(A.TOOL / "sandbox.sh"), "--net"]
+    assert fetch[-5:] == ["--", "bash", setup_sh, "--fetch", str(pkg)] and "--net" not in A.UNSHARE_NET
+    assert fetch[len(A.UNSHARE_NET) + 4:-5] == [str(pkg.resolve() / ".lake"), str(tmp_path / "mathlib")]
+    assert "LEAN_CACHE_R2_SECRET_ACCESS_KEY" not in env and env["MATHLIB_CACHE_DIR"] == str(tmp_path / "mathlib")
+
+
+@needs_unshare
+def test_a_fetch_sandbox_keeps_the_network_and_writes_only_the_packages_lake_and_mathlibs_cache(tmp_path, monkeypatch):
+    """Run as `setup` runs its second half: in the host's network namespace, writing the package's `.lake` and Mathlib's
+    cache, and refused anywhere else (a source beside the package)."""
+    pkg = toy(tmp_path)
+    (victim := tmp_path / "Victim.lean").write_text("orig\n")
+    monkeypatch.setenv("MATHLIB_CACHE_DIR", str(cache := tmp_path / "mathlib"))
+    assert A.sandboxed()
+    script = (f'echo lake > .lake/ok && echo cache > "$MATHLIB_CACHE_DIR/ok" && readlink /proc/self/ns/net && '
+              f'{{ {{ echo pwned > {victim}; }} 2>/dev/null || echo refused; }}')
+    rc, text = A.run(A.in_fetch_sandbox(pkg, "leanprover/lean4:v4.34.0", ["bash", "-c", script]), pkg, env=A.fetch_env())
+    assert rc == 0, text
+    assert text.split() == [os.readlink("/proc/self/ns/net"), "refused"]
+    assert (pkg / ".lake" / "ok").read_text() == "lake\n" and (cache / "ok").read_text() == "cache\n"
+    assert victim.read_text() == "orig\n"
+
+
+def test_setup_sh_refuses_a_toolchain_that_is_no_release_of_lean_before_elan_runs(tmp_path):
+    """elan downloads a toolchain from the repository its name gives, and `setup.sh` then runs its `lean` and `lake`:
+    `attacker/lean4:v4.34.0` is refused before any `elan` runs."""
+    pkg = toy(tmp_path)
+    (pkg / "lean-toolchain").write_text("attacker/lean4:v4.34.0\n")
+    (bin_ := tmp_path / "bin").mkdir()
+    for tool in ("elan", "lake", "lean", "curl"):
+        (bin_ / tool).write_text(f'#!/bin/sh\necho "{tool} $*" >> "{tmp_path}/ran"\n')
+        (bin_ / tool).chmod(0o755)
+    r = subprocess.run(["bash", str(A.TOOL / "setup.sh"), "--outside", str(pkg)], capture_output=True, text=True,
+                       env={"PATH": f"{bin_}:/usr/bin:/bin", "HOME": str(tmp_path)})
+    assert r.returncode == 2 and "not a release of leanprover/lean4" in r.stderr, r.stdout + r.stderr
+    assert not (tmp_path / "ran").exists()
+
+
+def test_graph_and_the_tools_programs_load_no_workspace_outside_the_sandbox(tmp_path, monkeypatch):
+    """`lake env` loads the package's workspace, which runs its packages' lakefiles: `Graph.lean` runs under it in the
+    build sandbox, writing only a directory of its own, and `Facts.lean` and `Unread.lean` compile with the toolchain's
+    own `lean` and `leanc`, never under `lake env`."""
+    pkg = toy(tmp_path)
+    ran = []
+
+    def fake_run(argv, cwd, log=None, **k):
+        ran.append(argv)
+        (tmp_path / "work" / "graph" / "graph.json").write_text('{"graph": {}, "search": []}')
+        return 0, ""
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    (tmp_path / "work").mkdir()
+    assert A.graph(pkg, tmp_path / "work" / "mods", tmp_path / "work" / "graph", tmp_path / "work" / "graph.log") == \
+        {"graph": {}, "search": []}
+    (argv,) = ran
+    assert argv[:len(A.UNSHARE)] == A.UNSHARE and str(tmp_path / "work" / "graph") in argv[:argv.index("--", len(A.UNSHARE) + 1)]
+    compiled = []
+    monkeypatch.setattr(A, "PROGRAMS", None)
+    monkeypatch.setattr(A, "_programs", {})
+    monkeypatch.setattr(A, "elan_toolchain", lambda p: tmp_path / "tc")
+    monkeypatch.setattr(A, "compile_program", lambda src, tc, exe: compiled.append((src.name, tc)) or exe.write_text("x"))
+    A.program(pkg, "Unread.lean")
+    assert compiled == [("Unread.lean", tmp_path / "tc")] and ran == [argv]
+
+
+@needs_unshare
+@pytest.mark.parametrize("writes_outside", [True, False])
+def test_a_runs_generate_command_runs_in_the_sandbox(tmp_path, monkeypatch, writes_outside):
+    """A `runs` entry's `generate` is a command the lock names, so it runs in the build sandbox: it writes its `{out}`,
+    under the package's `.lake`, and nothing else (a source beside the package stays)."""
+    pkg = toy(tmp_path)
+    (victim := tmp_path / "Victim.lean").write_text("orig\n")
+    code = "open('{out}/d.txt', 'w').write('d')" + (f"; open('{victim}', 'w').write('pwned')" if writes_outside else "")
+    policy = {"roots": ["P"], "exempt": {"P.T": "a test"},
+              "runs": {"P.T": {"generate": ["python3", "-c", code], "data": {"d.txt": ""}, "args": []}}}
+    real = A.run
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, **k: (0, "") if log is not None and log.name.startswith("run-")
+                        else real(argv, cwd, log, **k))
+    (work := tmp_path / "work").mkdir()
+    assert A.sandboxed()
+    fails, now = A.tests(pkg, policy, {"P.T": "P/T.lean"}, work, tmp_path, update=True)
+    assert [f.code for f in fails] == (["runs.generate"] if writes_outside else [])
+    assert victim.read_text() == "orig\n"
+    assert (pkg / ".lake" / "runs" / "P.T" / "generated" / "d.txt").read_text() == "d"
 
 
 def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
@@ -4884,7 +5078,7 @@ def generic_fixture():
                                                                         "P.Compiled.Sessions", binder="a")],
         "premises": []}
     built = {m: {"olean": f"/r/Security/.lake/build/lib/lean/{m}.olean"}
-             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwCheck.Check", "P.Guarantees")}
+             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwVerifier.Check", "P.Guarantees")}
     graph = built | {"Init.Prelude": {"olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
                      "Mathlib.Data": {"olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Data.olean"}}
     f = facts(pins={"P.t": fact(), "P.compiler": g}, spec_definitions=[spec("P.Compiler", True), spec("P.KS", False)],
@@ -4957,7 +5151,7 @@ def test_a_generic_statement_reads_only_the_claims_vocabulary_core_and_what_no_p
     doesn't place, fails, naming the module."""
     policy, f = generic_fixture()
     reads = f["pins"]["P.compiler"]["reads"]
-    for module in ("PouwCheck.Check", "P.Guarantees", "Unplaced.Module"):
+    for module in ("PouwVerifier.Check", "P.Guarantees", "Unplaced.Module"):
         f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Q.deployed", "module": module, "kind": "def"}]
         assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")], module
     assert A.claim_failures(policy, f) == [
@@ -5786,20 +5980,20 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
 
 
 #: compute-accounting's structure move, with the entry of `main`'s moves files for its field under it
-RECORD_MOVES = {"PouwCheck.WindowCommitmentRecord": "PouwCheck.ExecutionPhaseCommitmentRecord",
-                "PouwCheck.WindowCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"}
+RECORD_MOVES = {"PouwVerifier.WindowCommitmentRecord": "PouwVerifier.ExecutionPhaseCommitmentRecord",
+                "PouwVerifier.WindowCommitmentRecord.law": "PouwVerifier.ExecutionPhaseCommitmentRecord.samplingDesign"}
 
 
 def test_a_field_renamed_with_its_structure_follows_both_moves():
     """A field renamed where its structure moved too: the old field's constant is the field's old name in
     the structure's old namespace, so the premise takes its entry's place; with the field's entry alone it doesn't."""
     was, now = "Eq (P.view c.law) P.zero", "Eq (P.view c.samplingDesign) P.zero"
-    shown = [["c", "samplingDesign", "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"]]
+    shown = [["c", "samplingDesign", "PouwVerifier.ExecutionPhaseCommitmentRecord.samplingDesign"]]
     constants = {"P.view": ("def", "view"), "P.zero": ("def", "zero")}
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, RECORD_MOVES, shown)
     assert inline_codes(pol, f) == []
     assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
-    field_only = {k: v for k, v in RECORD_MOVES.items() if k != "PouwCheck.WindowCommitmentRecord"}
+    field_only = {k: v for k, v in RECORD_MOVES.items() if k != "PouwVerifier.WindowCommitmentRecord"}
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, field_only, shown)
     assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"]
 
@@ -6600,7 +6794,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
 
 
 def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
+    """`--regenerate` (the lean-audit step of a candidate's Lean check): a package whose every failure is a record difference,
     so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
@@ -7902,7 +8096,7 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     (store / mk.INDEX).mkdir()
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "lean_slot", lambda repo: None)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(), rw=(): argv)
     moves = tmp_path / "moves.json"
     moves.write_text(json.dumps({"Control.A": "Control.Z"}))
     runs = iter(range(100))
@@ -9635,10 +9829,19 @@ def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(t
     assert json.loads((tmp_path / "replay.json").read_text())["axioms"] == axioms
 
 
+#: {fixture: `control_clean`'s copy}, built once a worker by the first control case that needs it
+CONTROL_CLEAN: dict[str, tuple[Path | None, list[str]]] = {}
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_controls(tmp_path):
-    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
-    assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
+@pytest.mark.parametrize("fixture,name", [(f, n) for f in A.CONTROLS for n in A.control_cases(f)])
+def test_the_controls(tmp_path_factory, fixture, name):
+    if fixture not in CONTROL_CLEAN:
+        toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
+        CONTROL_CLEAN[fixture] = A.control_clean(fixture, toolchain, tmp_path_factory.mktemp("controls"))
+    work, fails = CONTROL_CLEAN[fixture]
+    assert fails == []
+    assert A.control_case(work, fixture, name) == []
 
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
@@ -9948,7 +10151,7 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
 
 def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
     """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
-    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research.merge` refuse:
     the gate's from-source build is the cache's root of trust and must never read it."""
     monkeypatch.setattr(A, "ARTIFACTS", None)
     monkeypatch.setattr(A, "DEV_CACHE", False)
@@ -9974,18 +10177,25 @@ def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatc
     (tmp_path / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
     (tmp_path / "flock" / ".lake" / "packages").mkdir(parents=True)
 
-    def run(argv, cwd, log=None, timeout=0):
+    def run(argv, cwd, log=None, timeout=0, env=None):
         calls.append(argv)
         seen.append({d.name: (d / ".lake" / "packages").is_symlink() for d in deps})
         return 0, ""
 
+    tc = "leanprover/lean4:v4.34.0"
     monkeypatch.setattr(A, "run", run)
     monkeypatch.setattr(A, "path_deps", lambda p: deps)
     monkeypatch.setattr(A, "DEV_CACHE", True)
-    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "")
-    assert calls == [[A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]]
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    assert A.dev_restore(tmp_path / "Proofs", tc, 0, "", tmp_path / "setup.log") == (0, "")
+    get = [A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]
+    assert calls == [get]
     assert seen == [{"security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
     calls.clear()
-    assert A.dev_restore(tmp_path / "Proofs", 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    assert A.dev_restore(tmp_path / "Proofs", tc, 0, "", tmp_path / "setup.log") == (0, "")
+    assert calls[0][:len(A.UNSHARE_NET)] == A.UNSHARE_NET and calls[0][-len(get) - 1:] == ["--", *get]
+    calls.clear()
+    assert A.dev_restore(tmp_path / "Proofs", tc, 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
     monkeypatch.setattr(A, "DEV_CACHE", False)
-    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "") and calls == []
+    assert A.dev_restore(tmp_path / "Proofs", tc, 0, "", tmp_path / "setup.log") == (0, "") and calls == []

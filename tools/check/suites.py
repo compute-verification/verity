@@ -287,19 +287,19 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
               "verity", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/registration/verifier/lean",
               "verity/protocols/resource_accounting/memory/poub/verifier/lean", "verity/protocols/resource_accounting/memory/poub/verifier",
               "verity/protocols/resource_accounting/memory/poub",
               "verity/protocols/resource_accounting/network/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
-              "memory-challenger-lean", "benchmarks/pous",
+              "verity-pouw-verifier-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "memory-attester-lean", "benchmarks/pous",
               "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
-              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
               "verity-network-e2e",
               "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
@@ -2628,7 +2628,7 @@ def _count(r: Result) -> str:
 
 def failing_path(out: Path) -> Path:
     """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
-    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    have failed while it runs (the verified queue reads it through `research status --also`)."""
     return out.with_name(f"{out.stem}.failed.json")
 
 

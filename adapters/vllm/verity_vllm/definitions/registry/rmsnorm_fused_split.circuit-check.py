@@ -6,10 +6,11 @@ from typing import Any
 
 
 def _rmsnorm_fused_add_roots() -> list[Any]:
-    """`RMSNormFusedCuda_v2` cut at its residual add: Llama-3.2-1B's norm after down_proj (its 8 add parts of 256 and the tail),
-    and N = 64 in 4 parts."""
+    """`RMSNormFusedCuda_v2` cut at its residual add: Llama-3.2-1B's norms (8 add parts of 256 and the tail), x read as 32 rows
+    (BF16 o_proj's, int8 down_proj's) and as 64 (BF16 down_proj's), and N = 64 in 4 parts of 8 rows."""
     from verity.circuits.defs import bind
     from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
 
-    return [*(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=j) for N, C in ((2048, 256), (64, 16)) for j in range(N // C)),
+    return [*(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=j, R=R) for N, C, R in ((2048, 256, 32), (2048, 256, 64), (64, 16, 8))
+              for j in range(N // C)),
             *(bind(NS.RMSNormFusedCudaTail, N=N, EPS=1e-5) for N in (2048, 64))]
