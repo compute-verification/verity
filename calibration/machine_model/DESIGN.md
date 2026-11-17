@@ -30,7 +30,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../../calibration/pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -95,11 +95,11 @@ A new measurement is lines of data and a vector file, not a script:
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
 every vector's epoch. A new root-writing kind or register load also needs its line in `data/floors.csv`, and a new kind
-that writes registers its `copy16` line (`tests/benchmarks/machine_model/test_data.py`'s `MEMORY_ONLY` lists the kinds that write none).
+that writes registers its `copy16` line (`tests/calibration/machine_model/test_data.py`'s `MEMORY_ONLY` lists the kinds that write none).
 
 ## Adopt a probe's census
 
-An opcode probe (`../../calibration/pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
+An opcode probe (`../pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
 row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
