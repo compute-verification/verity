@@ -20,26 +20,7 @@ import Proofs.Flock.Soundness.SparseRows
 import Std.Data.HashSet
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# An instance's rows, placed by the statement the verifier accepted
-
-The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`): column
-`j`'s entries come from the last range covering `j`, rows in the same slot only, plus Δ's pairs. This file proves
-`Placement` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
-- **the ranges:** their spans are pairwise disjoint (`HmRow.check`'s pairwise test), a net range's slots are its net's
-  `2^unitLog` rows, and every net's constant and input rows fit its slot;
-- **the unit range:** `vus_per_block × units_per_vu` slots of the unit net, whose constant row reads itself and whose
-  input rows end before its computed rows, and which is its logical net `lunit`, a net `Net.ofRows` built (a text net, a
-  typed flat class's `Typed.netOfD`, or a templated unit's `Tmpl.unroll` net), placed at `upos` (`UnitAt`);
-- **the pin:** the first slot's constant of a range with a slot, whose net's constant row reads itself;
-- **Δ:** every net slot's constant other than the pin gets `(k, k)` and `(k, pin)`, and every other pair's row is an input
-  bit of a net slot (`HmRow.delta`, `delta_split`).
-
-Then at each unit copy's computed rows the matrices are the logical net's rows, through `upos`, shifted to the slot, and
-Δ adds nothing there; at
-each copy's constant row they read the pin; and so does the pin's row. `ExecSetup.lean` derives `Layout` from
-`Stmt.setupH`.
--/
+/-! An instance's rows, placed by the statement the verifier accepted (`placement`), from the layout facts `Layout` names. -/
 
 @[expose] public section
 
@@ -47,12 +28,9 @@ open Flock FlockLevel3
 
 namespace FlockSoundness
 
-/-! ## Spans and covers -/
-
 /-- A range's span in the block, as `HmRow.check` measures it: its slots if packed, else the next power of two of them. -/
 def spanH (r : Range) : ℕ := if r.packed then r.count * 2 ^ r.slotLog else nextPow2 r.count * 2 ^ r.slotLog
 
-/-- Column `x` is in range `r`'s span. -/
 def InSpan (r : Range) (x : ℕ) : Prop := r.start ≤ x ∧ x < r.start + spanH r
 
 /-- Two ranges' spans do not overlap: `HmRow.check`'s pairwise test does not fire on them. -/
@@ -63,7 +41,6 @@ instance instSymmRangeApart : Std.Symm Apart := ⟨fun _ _ h ⟨h1, h2⟩ => h �
 theorem not_apart_of_inSpan {r r' : Range} {x : ℕ} (h : InSpan r x) (h' : InSpan r' x) : ¬ Apart r r' :=
   fun ha => ha ⟨by have := h.1; have := h'.2; omega, by have := h'.1; have := h.2; omega⟩
 
-/-- Two ranges of a pairwise-apart list whose spans share a column are the same range. -/
 theorem eq_of_inSpan {l : List Range} (hd : l.Pairwise Apart) {r r' : Range} (hr : r ∈ l) (hr' : r' ∈ l)
     {x : ℕ} (hx : InSpan r x) (hx' : InSpan r' x) : r = r' := by
   by_contra hne
@@ -105,15 +82,12 @@ theorem covers_slot {r : Range} {s off : ℕ} (hs : s < r.count) (hoff : off < 2
   rw [(slot_div s hoff).1]
   omega
 
-/-- Two columns of a range's slots, each below the slot size, are equal only in the same slot at the same offset. -/
 theorem slot_add_inj {r : Range} {s s' off off' : ℕ} (hoff : off < 2 ^ r.slotLog) (hoff' : off' < 2 ^ r.slotLog)
     (h : r.slot s + off = r.slot s' + off') : s = s' ∧ off = off' := by
   have h1 := slot_div s hoff
   have h2 := slot_div s' hoff'
   rw [h] at h1
   exact ⟨by omega, by omega⟩
-
-/-! ## The last range covering a column -/
 
 theorem lastCover_foldl (c : ℕ) : ∀ (l : List Range) (acc : Option Range) (r : Range),
     l.foldl (fun acc r => if covers r c then some r else acc) acc = some r → (r ∈ l ∧ covers r c) ∨ acc = some r
@@ -151,8 +125,6 @@ theorem lastCover_ne_none {l : List Range} {c : ℕ} {r : Range} (hr : r ∈ l) 
     lastCover l c ≠ none :=
   lastCover_foldl_ne_none c l none (Or.inr ⟨r, hr, hc⟩)
 
-/-- **The ranges' entry at a row of a range**: with pairwise-apart spans, the entry at row `x` in a slot of `R` is `R`'s
-local entry for columns in the same slot, and zero elsewhere. -/
 theorem rangesEntry_of_covers {st : Stmt} (hd : st.c.ranges.toList.Pairwise Apart) {R : Range}
     (hR : R ∈ st.c.ranges.toList) {x : ℕ} (hx : covers R x) (e : Kind → ℕ → ℕ → ZMod 2) (j : ℕ) :
     rangesEntry st e x j =
@@ -177,8 +149,6 @@ theorem rangesEntry_of_covers {st : Stmt} (hd : st.c.ranges.toList.Pairwise Apar
       exact absurd hnone (lastCover_ne_none hR hcj)
     · rw [ite_eq_right hq']
 
-/-! ## Counting -/
-
 theorem count_flatMap_zero {α β : Type} [BEq β] {l : List α} {f : α → List β} {y : β}
     (h : ∀ a ∈ l, (f a).count y = 0) : (l.flatMap f).count y = 0 := by
   induction l with
@@ -187,8 +157,6 @@ theorem count_flatMap_zero {α β : Type} [BEq β] {l : List α} {f : α → Lis
     rw [List.flatMap_cons, List.count_append, h a List.mem_cons_self,
       ih (fun b hb => h b (List.mem_cons_of_mem _ hb))]
 
-/-- Over pairwise-apart ranges, a count over their `flatMap` is the count at the one range whose span holds `x`, when
-every range whose span misses `x` contributes nothing. -/
 theorem count_flatMap_apart {l : List Range} (hd : l.Pairwise Apart) {R : Range} (hR : R ∈ l) {x : ℕ}
     (hx : InSpan R x) {β : Type} [BEq β] (f : Range → List β) (y : β)
     (h0 : ∀ a ∈ l, ¬ InSpan a x → (f a).count y = 0) : (l.flatMap f).count y = (f R).count y := by
@@ -229,8 +197,6 @@ theorem deltaEntry_eq_count (d : Array (ℕ × ℕ)) (r j : ℕ) :
   intro p _
   by_cases h : p = (r, j) <;> simp [h]
 
-/-- The count mod 2 of a column among a list's columns shifted into slot `B` of size `W`: the count of its offset, if it
-is in that slot. -/
 theorem count_map_shift {N w W B : ℕ} (hW : 0 < W) (L : List (Fin w)) (hw : w ≤ W) (f : Fin w → Fin N)
     (hf : ∀ c, (f c).val = B * W + c.val) (j : Fin N) :
     (((L.map f).count j : ℕ) : ZMod 2) =
@@ -257,7 +223,6 @@ theorem count_map_shift {N w W B : ℕ} (hW : 0 < W) (L : List (Fin w)) (hw : w 
       apply hq
       rw [← hjy, Nat.add_comm, Nat.add_mul_div_right _ _ hW, Nat.div_eq_of_lt hc, Nat.zero_add]
 
-/-- `count_map_shift` with each column `c` at `g c` in the slot. -/
 theorem count_map_shiftAt {N w W B : ℕ} (hW : 0 < W) (L : List (Fin w)) (g : Fin w → ℕ) (hg : ∀ c, g c < W)
     (f : Fin w → Fin N) (hf : ∀ c, (f c).val = B * W + g c) (j : Fin N) :
     (((L.map f).count j : ℕ) : ZMod 2) =
@@ -284,8 +249,6 @@ theorem count_map_shiftAt {N w W B : ℕ} (hW : 0 < W) (L : List (Fin w)) (g : F
       apply hq
       rw [← hjy, Nat.add_comm, Nat.add_mul_div_right _ _ hW, Nat.div_eq_of_lt hc, Nat.zero_add]
 
-/-! ## `Sparse`'s entries are its rows' counts -/
-
 theorem ofRows_rows {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m) :
     m.rows = rows.size := by
   unfold Sparse.ofRows at h
@@ -294,7 +257,6 @@ theorem ofRows_rows {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : S
   cases h
   rfl
 
-/-- **A built matrix's entry** (`sparseEntry`, the fold's terms) is the count, mod 2, of the column in its row. -/
 theorem sparseEntry_ofRows {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
     (i i' : ℕ) : sparseEntry m i i' = (((m.row i).toList.count i' : ℕ) : ZMod 2) := by
   obtain ⟨-, hs, hl, -⟩ := ofRows_spec h
@@ -325,8 +287,6 @@ theorem sparseEntry_built_b {net : Net} (h : Built net) (i i' : ℕ) :
     sparseEntry net.b i i' = (((net.b.row i).toList.count i' : ℕ) : ZMod 2) :=
   let ⟨_, _, _, _, hb⟩ := built_rowOrder h
   sparseEntry_ofRows hb i i'
-
-/-! ## Δ's first loop, and input bits -/
 
 /-- A net's constant row reads itself, in `A` and in `B` (a lookup slot's table entries included), and its input rows
 end before it. -/
@@ -376,8 +336,6 @@ def InBit (c : Circuit) (x : ℕ) : Prop :=
   ∃ n s off, c.rangeOf n ∈ c.ranges.toList ∧ (c.rangeOf n).kind = .net n ∧ s < (c.rangeOf n).count ∧
     off < (c.nets.getD n default).2.inWords * WORD ∧ x = (c.rangeOf n).slot s + off
 
-/-! ## The layout facts -/
-
 /-- **The unit's logical net**: a templated unit's `Tmpl.unroll` net, a flat unit itself. -/
 def lunit (c : Circuit) : Net :=
   match c.tmpl with
@@ -417,7 +375,6 @@ structure UnitAt (c : Circuit) : Prop where
   row_b : ∀ x, x < (lunit c).constPos → c.unit.unitLog ≤ 32 → ∀ j,
     sparseEntry c.unit.b (upos c x) j = (((((lunit c).b.row x).toList.map (upos c)).count j : ℕ) : ZMod 2)
 
-/-- **A flat built unit is its own logical net, at `upos = id`.** -/
 theorem UnitAt.flat {c : Circuit} (ht : c.tmpl = none) (hU : Built c.unit)
     (hin : c.unit.inWords * WORD ≤ c.unit.constPos) : UnitAt c := by
   have e1 := lunit_flat ht
@@ -440,32 +397,22 @@ theorem UnitAt.flat {c : Circuit} (ht : c.tmpl = none) (hU : Built c.unit)
 /-- **The layout facts** the placement reads off an accepted statement (`ExecSetup.lean` derives them from
 `Stmt.setupH`). -/
 structure Layout (st : Stmt) : Prop where
-  /-- `HmRow.check`'s pairwise test: no two ranges' spans overlap -/
   disj : st.c.ranges.toList.Pairwise Apart
-  /-- every range inside the block -/
   bound : ∀ r ∈ st.c.ranges.toList, r.start + spanH r ≤ 2 ^ st.c.kLog
-  /-- a net range's slots are its net's rows -/
   slotLog : ∀ r ∈ st.c.ranges.toList, ∀ i, r.kind = .net i → r.slotLog = (st.c.nets.getD i default).2.unitLog
-  /-- every net's constant and input rows fit its slot -/
   fit : ∀ i, (st.c.nets.getD i default).2.constPos < 2 ^ (st.c.nets.getD i default).2.unitLog ∧
     (st.c.nets.getD i default).2.inWords * WORD ≤ 2 ^ (st.c.nets.getD i default).2.unitLog
   unit_mem : st.c.unitRange ∈ st.c.ranges.toList
   unit_kind : st.c.unitRange.kind = .net st.c.unitNet
   unit_count : st.c.unitRange.count = st.c.g * st.c.upv
-  /-- the unit's logical net is a net `Net.ofRows` built (not a lookup slot): a text net, a typed flat class's derived
-  net, or a templated unit's `Tmpl.unroll` net -/
   unit_built : Built (lunit st.c)
-  /-- the unit is its logical net placed at `upos` -/
   unit_at : UnitAt st.c
   unit_lookup : st.c.unit.lookup = none
   unit_in : st.c.unit.inWords * WORD ≤ st.c.unit.constPos
-  /-- the unit's constant row reads itself (its rows fit `rd32`'s words when its slot fits the block) -/
   unit_const : st.c.unit.unitLog ≤ 32 → ConstRow st.c.unit
-  /-- the pin is the first slot's constant of a net range with a slot -/
   pin : ∃ rp ∈ st.c.ranges.toList, ∃ ip, rp.kind = .net ip ∧ 0 < rp.count ∧
     st.pin = rp.start + (st.c.nets.getD ip default).2.constPos ∧ ConstRow (st.c.nets.getD ip default).2
   delta_b : st.db = st.da
-  /-- Δ: its first loop's pairs, then only input bits of net slots -/
   delta : ∃ rest, st.da.toList = constPairs st.c st.pin ++ rest ∧ ∀ p ∈ rest, InBit st.c p.1
   kLog : st.c.kLog ≤ 32
   kLog6 : 6 ≤ st.c.kLog
@@ -482,7 +429,6 @@ theorem const_covers {r : Range} (hr : r ∈ st.c.ranges.toList) {i : ℕ} (hk :
     (hs : s < r.count) : covers r (r.slot s + (st.c.nets.getD i default).2.constPos) :=
   covers_slot hs (by rw [L.slotLog r hr i hk]; exact (L.fit i).1)
 
-/-- A column of a net range's slot at or past its net's input rows is no input bit. -/
 theorem not_inBit {R : Range} (hR : R ∈ st.c.ranges.toList) {n₀ : ℕ} (hk : R.kind = .net n₀) {s₀ off : ℕ}
     (hs : s₀ < R.count) (hoff : off < 2 ^ R.slotLog) (hge : (st.c.nets.getD n₀ default).2.inWords * WORD ≤ off) :
     ¬ InBit st.c (R.slot s₀ + off) := by
@@ -497,7 +443,6 @@ theorem not_inBit {R : Range} (hR : R ∈ st.c.ranges.toList) {n₀ : ℕ} (hk :
   obtain ⟨-, rfl⟩ := slot_add_inj hoff hoffW heq
   omega
 
-/-- No pair of Δ's first loop is at a column of a net range's slot below its net's constant. -/
 theorem constPairs_not_below {R : Range} (hR : R ∈ st.c.ranges.toList) {n₀ : ℕ} (hk : R.kind = .net n₀) {s₀ off : ℕ}
     (hs : s₀ < R.count) (hoff : off < (st.c.nets.getD n₀ default).2.constPos) (j : ℕ) :
     (R.slot s₀ + off, j) ∉ constPairs st.c st.pin := by
@@ -518,7 +463,6 @@ end Layout
 
 theorem start_eq_slot (r : Range) : r.start = r.slot 0 := by simp [Range.start, Range.slot]
 
-/-- Inside slot `B` of size `W`, a local row reading only its own offset `c` reads column `B·W + c`. -/
 theorem ite_slot_eq {W B c j : ℕ} (hW : 0 < W) (hc : c < W) {v : ℕ → ZMod 2}
     (hv : ∀ j', v j' = if j' = c then 1 else 0) :
     (if j / W = B then v (j % W) else 0) = if j = B * W + c then 1 else 0 := by
@@ -538,7 +482,6 @@ theorem ite_fin_val {N : ℕ} (j : Fin N) {p : ℕ} (hp : p < N) :
     (if j.val = p then (1 : ZMod 2) else 0) = if j = ⟨p, hp⟩ then 1 else 0 := by
   by_cases h : j.val = p <;> simp [h, Fin.ext_iff]
 
-/-- A slot constant's row: its own entry, and Δ's `(k, k)` and `(k, pin)` unless it is the pin, read the pin. -/
 theorem const_row_sum (a x p : ℕ) :
     ((if a = x then (1 : ZMod 2) else 0) +
         if x ≠ p then (if a = x then 1 else 0) + (if a = p then 1 else 0) else 0) = if a = p then 1 else 0 := by
@@ -589,7 +532,6 @@ theorem unitRows_b (hu : (lunit st.c).unitLog ≤ 32) (i : Fin (unitRows st L.un
       ((lunit st.c).b.row ((unitRows st L.unit_built).comp i).val).toList :=
   Rows.ofNet_b _ hu i
 
-/-- A logical column is committed inside the unit's slot. -/
 theorem upos_lt (c : Fin (unitRows st L.unit_built).w) : upos st.c c.val < 2 ^ st.c.unit.unitLog := by
   have hc : c.val < (unitRows st L.unit_built).nIn + (unitRows st L.unit_built).nComp + 1 := c.isLt
   have := L.unitRows_nIn_nComp
@@ -631,7 +573,6 @@ theorem hb {g : ℕ} (hg : g < st.c.g) :
       st.c.unitRange.slot (g * st.c.upv + u) + upos st.c c.val < 2 ^ st.c.kLog :=
   fun u hu c => L.unit_slot_lt (L.slot_lt hg hu) (L.upos_lt c)
 
-/-- The ranges' entry at a row of a unit slot: the unit net's local entry, in the same slot. -/
 theorem rangesEntry_unit {s₀ off : ℕ} (hs : s₀ < st.c.unitRange.count) (hoff : off < 2 ^ st.c.unit.unitLog)
     (e : Kind → ℕ → ℕ → ZMod 2) (j : ℕ) :
     rangesEntry st e (st.c.unitRange.slot s₀ + off) j =
@@ -641,7 +582,6 @@ theorem rangesEntry_unit {s₀ off : ℕ} (hs : s₀ < st.c.unitRange.count) (ho
   rw [rangesEntry_of_covers L.disj L.unit_mem (covers_slot hs hoff') e j, (slot_div s₀ hoff').1,
     (slot_div s₀ hoff').2, L.unit_kind, L.unit_slotLog]
 
-/-- **Δ adds nothing at a unit copy's computed rows.** -/
 theorem delta_unit_comp {s₀ off : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ off)
     (hhi : off < st.c.unit.constPos) (j : ℕ) : deltaEntry st.da (st.c.unitRange.slot s₀ + off) j = 0 := by
   obtain ⟨rest, hsplit, hrest⟩ := L.delta
@@ -651,7 +591,6 @@ theorem delta_unit_comp {s₀ off : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo
     List.count_eq_zero.2 (fun hm => L.not_inBit L.unit_mem L.unit_kind hs hoffW hlo (hrest _ hm))]
   simp
 
-/-- **Δ adds nothing at the pin's row.** -/
 theorem delta_pin (j : ℕ) : deltaEntry st.da st.pin j = 0 := by
   obtain ⟨rest, hsplit, hrest⟩ := L.delta
   obtain ⟨rp, hrp, ip, hk, hc, hpin, hcr⟩ := L.pin
@@ -663,7 +602,6 @@ theorem delta_pin (j : ℕ) : deltaEntry st.da st.pin j = 0 := by
       (by rw [← start_eq_slot, ← hpin]; exact hrest _ hm))]
   simp
 
-/-- **Δ at a unit copy's constant row**: `(k, k)` and `(k, pin)`, unless the constant is the pin. -/
 theorem delta_unit_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (j : ℕ) :
     deltaEntry st.da (st.c.unitRange.slot s₀ + st.c.unit.constPos) j =
       if st.c.unitRange.slot s₀ + st.c.unit.constPos ≠ st.pin then
@@ -722,7 +660,6 @@ namespace Layout
 variable {st : Stmt} (L : Layout st)
 include L
 
-/-- `hb` at the model statement's `kLog`. -/
 theorem hbM (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     ∀ u < st.c.upv, ∀ c : Fin (unitRows st L.unit_built).w,
       st.c.unitRange.slot (g * st.c.upv + u) + upos st.c c.val < 2 ^ (L.model regs).kLog :=
@@ -735,7 +672,6 @@ noncomputable def col (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) 
   stackPlaceAt (L.model regs) (unitRows st L.unit_built) st.c.upv (fun u => st.c.unitRange.slot (g * st.c.upv + u))
     (fun c => upos st.c c.val) (L.hbM regs hg)
 
-/-- Copy `u`'s logical column `c` sits at `ur.slot (g·upv + u) + upos c`. -/
 theorem col_stackCol (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) {u : ℕ}
     (hu : u < st.c.upv) (c : Fin (unitRows st L.unit_built).w) :
     (L.col regs hg ((unitRows st L.unit_built).stackCol st.c.upv hu c)).val =
@@ -744,7 +680,6 @@ theorem col_stackCol (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {
   rw [stackPlaceAt_stackCol]
   rfl
 
-/-- A stacked input `x` sits at input `x % nIn` of unit slot `g·upv + x / nIn`: `upos` fixes the inputs. -/
 theorem col_val_in (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g)
     (x : Fin ((unitRows st L.unit_built).stackW st.c.upv)) (hx : x.val < st.c.upv * (unitRows st L.unit_built).nIn) :
     (L.col regs hg x).val =
@@ -757,7 +692,6 @@ theorem col_val_in (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g 
   have hn : 0 < (unitRows st L.unit_built).nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hx
   exact L.unit_at.inputs _ (by rw [← L.unitRows_nIn]; exact Nat.mod_lt _ hn)
 
-/-- Copy `u'`'s computed column `c0`, stacked, sits at `ur.slot (g·upv + u') + upos c0`. -/
 theorem col_val_comp (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g)
     {u' c0 : ℕ} (hu' : u' < st.c.upv) (h1 : (unitRows st L.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows st L.unit_built).nIn + (unitRows st L.unit_built).nComp)
@@ -769,12 +703,8 @@ theorem col_val_comp (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {
   obtain ⟨_, e⟩ := stackPlaceAt_val_comp (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) hu' h1 h2 x hx
   exact e
 
-/-- A flat unit (no template) is `Built`. -/
 theorem built_flat (h : st.c.tmpl = none) : Built st.c.unit := lunit_flat h ▸ L.unit_built
 
-/-- **An instance's rows, placed by the accepted statement.** VU `g`'s `upv` unit slots, stacked (`Rows.stack`), sit at
-`ur.slot (g·upv + u)` for copy `u`, each logical column at its committed position `upos`, with the shared constant at the
-pin (`col`), and the verifier's level-0 matrices place them there. -/
 theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     Placement (L.model regs) ((unitRows st L.unit_built).stack st.c.upv) (L.col regs hg) := by
   have hW : 0 < 2 ^ st.c.unit.unitLog := Nat.two_pow_pos _
@@ -890,9 +820,6 @@ def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verit
       (L.model regs).Satisfies z →
       (L.model regs).block z o (L.col regs hg c) = (L.model regs).block z o (L.col regs hg c')
 
-/-- **A sampled proof block's place in the accepted statement** (`UnitPlace`, which `loweringSoundB_of_place` and the
-`_placed` forms take): VU `g`'s stacked unit slots in block `o`, given the unit's instance in the audit circuit
-(`inst`, the circuit side), whose inputs on one gate carry one value there (`hal`). -/
 noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) (hal : L.Aliased regs inst o hg) :

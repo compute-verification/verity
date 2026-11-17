@@ -7,12 +7,7 @@ import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Shared definitions of the soundness statement
-
-The arithmetic facts the proof uses (`Arith.Correct`), the committed values at the level-0
-radius (`Committed`), and the doomed start of a rep (`RepDoomed`).
--/
+/-! The soundness statement's shared definitions: `Arith.Correct`, `Committed` and `RepDoomed`. -/
 
 @[expose] public section
 
@@ -21,7 +16,6 @@ namespace FlockSoundness
 open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- Every `fast100` level fits. -/
 theorem fast100_levels_fit : ∀ m s, fast100 m = some s → ∀ l ∈ s.levels, l.Fits := by
   intro m s h
   have hm : ∀ m', fast100 m' ≠ none → 22 ≤ m' ∧ m' ≤ 35 := by
@@ -39,7 +33,6 @@ theorem fast100_levels_fit : ∀ m s, fast100 m = some s → ∀ l ∈ s.levels,
   have := List.all_eq_true.1 (key m h1 h2 s h) l hl
   simpa using this
 
-/-- The skip nodes (§9): 64 distinct points on which `lagS` are the Lagrange weights. -/
 theorem Model.Arith.Correct.lagS_interp {A : Arith F K} (hA : A.Correct) :
     ∃ node : Fin 64 → F, Function.Injective node ∧
       ∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ s, A.lagS ζ s * p.eval (node s) = p.eval ζ := by
@@ -53,19 +46,6 @@ theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 →
   induction S.regions with
   | nil => simp
   | cons R rs ih => simp [List.flatMap_cons, ih]; ring
-
-/-! ## The witness's A-side and B-side, and the pin's extension -/
-
-/-! ## The codewords near the committed table -/
-
-/-! ## Doomed states between the phases -/
-
-/-! ## The doomed states over any list of messages
-
-The phases before Ligerito use the messages near the committed table (`closeMsgs`) only through
-membership and the list's size, so each is proved over any set `W` of messages (`…_of_list`). The
-doomed states above are these at `W = closeMsgs A sch C` (`repDoomed_iff`, `dZc_eq`, `dLc_eq`,
-`dOp_eq`). The padded level 0 takes `W` to be its padded code's witnesses (`SoundnessPad`). -/
 
 theorem repDoomed_iff (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) :

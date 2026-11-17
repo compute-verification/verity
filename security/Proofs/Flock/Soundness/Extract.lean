@@ -12,21 +12,8 @@ import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.EReal.Inv
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Extraction by filling: the extractor's own table
-
-The extractor reruns the prover `K` times and takes, at each position, the first opening one of its
-runs made there, and a fixed row `z₀` where none did (`firstTable`). A fresh run opens a position
-off that table only if it conflicts with the run that supplied the row, or opens a position no
-extractor run opened (`off_firstTable_le`). Over the `K` independent runs, the first costs
-`K·Pr₂[conflict]` (a union over the `K` fresh–extractor pairs, each distributed as two independent
-runs) and the second costs `Σ_p q_p (1 − q_p)^K ≤ N/(eK)` (`expect_off_firstTable_le`,
-`sum_missing_le`), where `q_p` is the probability that a run opens `p`.
-
-If every table `T` with a failing property costs at least `ε − ε_c` of such off-table mass, one
-Markov step bounds the probability that the extractor's table fails (`tail_of_fixed`), and the
-product form `ε · Pr[fails] ≤ 2ε_c + 2·E[mass]` needs no condition on `ε` (`joint_of_fixed`).
--/
+/-! Extraction by filling: the extractor's table from `K` reruns, and the probability that it fails (`tail_of_fixed`,
+`joint_of_fixed`). -/
 
 @[expose] public section
 
@@ -42,8 +29,6 @@ theorem conflictAt_comm (op : β → P → Option V) (a b : β) (p : P) :
   ⟨fun ⟨h1, h2, h3⟩ => ⟨h2, h1, Ne.symm h3⟩, fun ⟨h1, h2, h3⟩ => ⟨h2, h1, Ne.symm h3⟩⟩
 
 open Classical in
-/-- **Off the extractor's table**: a conflict with the run that supplied the row, or a position no
-extractor run opened. -/
 theorem off_firstTable_le (op : β → P → Option V) (z₀ : P → V) (bs : List β) (ω : β) :
     ind (fun ω => ∃ p, Off op (firstTable op z₀ bs) ω p) ω ≤
       (bs.map fun b => ind (fun x : β × β => ∃ p, ConflictAt op x p) (ω, b)).sum +
@@ -106,8 +91,6 @@ theorem expect_list_sum (g : Game β) (s : Strategy g) (f : β → β → ℝ) :
       rw [expect_add, expect_list_sum g s f bs]
 
 open Classical in
-/-- **The extractor's off-table mass**, over `K` independent runs: `K` fresh–extractor pairs, each
-distributed as two independent runs, and the positions no extractor run opened. -/
 theorem expect_off_firstTable_le (op : β → P → Option V) (z₀ : P → V) (g : Game β)
     (s : Strategy g) (K : ℕ) :
     expectN g s K (fun bs => expect (ind fun ω => ∃ p, Off op (firstTable op z₀ bs) ω p) g s) ≤
@@ -153,7 +136,6 @@ theorem expect_off_firstTable_le (op : β → P → Option V) (z₀ : P → V) (
     rw [show (fun b => ind (fun b => op b p = none) b) =
       fun b => 1 - ind (fun ω => (op ω p).isSome) b from funext hN, expect_sub, expect_const]
 
-/-- `q (1 − q)^K ≤ 1/(eK)`. -/
 theorem mul_one_sub_pow_le (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (K : ℕ) (hK : 1 ≤ K) :
     q * (1 - q) ^ K ≤ 1 / (Real.exp 1 * K) := by
   have hKpos : (0 : ℝ) < K := by exact_mod_cast hK
@@ -173,7 +155,6 @@ theorem mul_one_sub_pow_le (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (K : ℕ) (
     _ = q * Real.exp (-(q * K)) := by rw [h2]
     _ ≤ 1 / (Real.exp 1 * K) := h4
 
-/-- **The missing positions**: `Σ_p q_p (1 − q_p)^K ≤ N/(eK)`. -/
 theorem sum_missing_le (q : P → ℝ) (hq0 : ∀ p, 0 ≤ q p) (hq1 : ∀ p, q p ≤ 1) (K : ℕ) (hK : 1 ≤ K) :
     ∑ p, q p * (1 - q p) ^ K ≤ Fintype.card P / (Real.exp 1 * K) := by
   calc ∑ p, q p * (1 - q p) ^ K ≤ ∑ _p : P, 1 / (Real.exp 1 * K) :=
@@ -182,7 +163,6 @@ theorem sum_missing_le (q : P → ℝ) (hq0 : ∀ p, 0 ≤ q p) (hq1 : ∀ p, q 
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
 open Classical in
-/-- **The extractor's off-table mass**: at most `K·Pr₂[conflict] + N/(eK)`. -/
 theorem expect_off_firstTable_le' (op : β → P → Option V) (z₀ : P → V) (g : Game β)
     (s : Strategy g) (K : ℕ) (hK : 1 ≤ K) :
     expectN g s K (fun bs => expect (ind fun ω => ∃ p, Off op (firstTable op z₀ bs) ω p) g s) ≤
@@ -193,8 +173,6 @@ theorem expect_off_firstTable_le' (op : β → P → Option V) (z₀ : P → V) 
 
 omit [Fintype P] [DecidableEq V] in
 open Classical in
-/-- **One Markov step.** If every run list whose table fails has off-table mass at least `ε − ε_c`,
-the extractor fails with probability at most `E[mass]/(ε − ε_c)`. -/
 theorem tail_of_fixed (g : Game β) (s : Strategy g) (Fm : List β → ℝ) (X : List β → Prop)
     (hF : ∀ bs, 0 ≤ Fm bs) (ε εc : ℝ) (hε : εc < ε) (hX : ∀ bs, ¬ X bs → ε ≤ εc + Fm bs) (K : ℕ) :
     expectN g s K (ind fun bs => ¬ X bs) ≤ expectN g s K Fm / (ε - εc) := by
@@ -208,8 +186,6 @@ theorem tail_of_fixed (g : Game β) (s : Strategy g) (Fm : List β → ℝ) (X :
 
 omit [Fintype P] [DecidableEq V] in
 open Classical in
-/-- **The product form**: `ε · Pr[fails] ≤ ε_c + E[mass]`, with no condition on `ε`. Run list by
-run list, `ε · 1[fails] ≤ ε_c + mass`. -/
 theorem joint_of_fixed (g : Game β) (s : Strategy g) (Fm : List β → ℝ) (X : List β → Prop)
     (hF : ∀ bs, 0 ≤ Fm bs) (ε εc : ℝ) (hεc : 0 ≤ εc)
     (hX : ∀ bs, ¬ X bs → ε ≤ εc + Fm bs) (K : ℕ) :

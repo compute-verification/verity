@@ -7,29 +7,8 @@ import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Nat.Power2.Basic
 
-/-!
-# The deployed masked session's leaf count is at most a constant
-
-`Loop.anyErr`'s hiding terms read the session's pre-final leaf count (`RefSession.nLeaves`), which `Loop.anyErr_le`
-takes a cap of as a hypothesis. At the deployed session's tables (`Masked.tabC`) the count is bounded by the table
-count times a constant, from what `Zk.schedule` accepts, and the table count by the verifier's cap.
-
-* `ZkHidden.zkLen0_all`: level 0's codeword of `Zk.schedule wideLeaf m` has at most `2^23` symbols at every `m` it
-  accepts, at either statement version (`wideLeaf`), one check per version and `m` (`decide +kernel`), as
-  `zkSchedFacts_all` is. The wide-leaf version holds level 0 at `2^19` symbols, so the cap binds at the narrow
-  version's `m = 35`.
-* `ZkHidden.ZkTab.card_leafPos_le`: a `--zk` table's `Coined` tables have at most `leafCap = 2^23 + 2^14 + 2`
-  pre-final leaves. Level 0's opened and unopened positions are its codeword's (`zkSchedFacts_all`: the pad count is
-  below the codeword's length); each of the two reps' pads positions are the inner code's, at most `2^13` (`len_le`);
-  and the two pads message leaves.
-* `Masked.nL_le`: so the session's leaves at `x` are at most `jOf x * leafCap`.
-* `Masked.jOf_le_max`: the session has at most `Tags.MAX_TABLES` tables (`ZkTables.tables_of_setup`).
-* `Loop.nLeaves_tableData_le`, **`Loop.nLeaves_dataE_le`**: `nL_le` at `CoinLayer.session` of any plans, and of the
-  deployed session's (`Masked.dataE`).
-* **`Loop.nLeaves_dataE_le_max`**: so the deployed session has at most `Tags.MAX_TABLES * leafCap` leaves at every
-  statement, `2^29 + 2^20 + 2^7`.
-* **`Loop.anyErr_le_dataE`**: `Loop.anyErr_le` at that constant, with no leaf count left free.
--/
+/-! The deployed masked session's leaf count is at most `Tags.MAX_TABLES * leafCap`, so `Loop.anyErr_le` holds with no leaf
+count left free (`Loop.anyErr_le_dataE`). -/
 
 @[expose] public section
 
@@ -40,12 +19,10 @@ namespace FlockSoundness.Discharge.ZkHidden
 
 open Flock Refine ZkLink
 
-/-- **The leaf cap of one `--zk` table**: level 0's codeword positions, two reps' pads positions and two pads message
-leaves, at the largest sizes `Zk.schedule` accepts (`m = 35`, where level 0's codeword has `2^23` symbols). -/
+/-- One `--zk` table's pre-final leaves at the largest `m` `Zk.schedule` accepts (`m = 35`, level 0's codeword at `2^23` symbols). -/
 def leafCap : ℕ := 2 ^ 23 + 2 ^ 14 + 2
 
-/-- Whether level 0's codeword of `Zk.schedule wideLeaf m` has at most `2^23` symbols. The wide-leaf version holds
-level 0 at `2^19` symbols (`fast100Wide`, `m = 31`'s level 0), so the cap binds at the narrow version's `m = 35`. -/
+/-- The wide-leaf version holds level 0 at `2^19` symbols, so the cap binds at the narrow version's `m = 35`. -/
 def zkLen0 (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with
   | .ok (s, _) => decide (((schedOf s).levels.headD default).logLen ≤ 23)
@@ -56,7 +33,6 @@ theorem zkLen0_all {wideLeaf : Bool} : ∀ m, 25 ≤ m → m ≤ 35 → zkLen0 w
   intro m h1 h2
   cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- **A `--zk` table's `Coined` tables have at most `leafCap` pre-final leaves.** -/
 theorem ZkTab.card_leafPos_le (P : Composed.LigProver) {st : Flock.Stmt} (y : ZkTab st) :
     Fintype.card (ZkView.LeafPos (Composed.coinedOf P y.table st).z) ≤ leafCap := by
   obtain ⟨h1, h2⟩ := schedule_range y.hz
@@ -99,15 +75,12 @@ namespace Claims.ZKMal.Masked
 
 open Claims FlockSoundness.Discharge
 
-/-- **The deployed masked session's leaves at `x` are at most `leafCap` a table.** -/
 theorem nL_le (P : Composed.LigProver) (x : Msg) : nL P x ≤ jOf x * ZkHidden.leafCap := by
   unfold nL
   rw [Fintype.card_sigma]
   refine (Finset.sum_le_sum fun j _ => (zkTab x j).card_leafPos_le P).trans ?_
   simp
 
-/-- **The masked session has at most `Tags.MAX_TABLES` tables**: a statement of the masked scope that sets up sets up
-at most that many (`ZkTables.tables_of_setup`), and `jOf` is `0` elsewhere. -/
 theorem jOf_le_max (x : Msg) : jOf x ≤ _root_.Flock.Tags.MAX_TABLES := by
   unfold jOf
   split_ifs with h
@@ -125,27 +98,19 @@ namespace Claims.ZKServer.Loop
 open Claims Claims.ZKMal Claims.ZKServer
 open FlockSoundness.Discharge FlockSoundness.CROnly
 
-/-- **The session's leaf count at the deployed tables**, whatever the round and tape plans: at most `leafCap` a
-table. -/
 theorem nLeaves_tableData_le (nr : Msg → ℕ → ℕ) (P : Composed.LigProver) (Q : Masked.RoundPlan (Masked.tabC P))
     (U : Masked.TapePlan (Masked.tabC P)) (x : Msg) :
     (CoinLayer.session nr (Masked.tableData P Q U)).nLeaves x ≤ Masked.jOf x * ZkHidden.leafCap :=
   Masked.nL_le P x
 
-/-- **The deployed session's leaf count is at most `leafCap` a table**: the cap `Loop.anyErr_le` takes, at
-`L = jOf x * leafCap`. -/
 theorem nLeaves_dataE_le (x : Msg) :
     (CoinLayer.session loopNr Masked.dataE).nLeaves x ≤ Masked.jOf x * ZkHidden.leafCap :=
   nLeaves_tableData_le loopNr _ _ _ x
 
-/-- **The deployed session's leaf count is at most `Tags.MAX_TABLES * leafCap`** at every statement: the cap
-`Loop.anyErr_le` takes, at a constant `L`. -/
 theorem nLeaves_dataE_le_max (x : Msg) :
     (CoinLayer.session loopNr Masked.dataE).nLeaves x ≤ _root_.Flock.Tags.MAX_TABLES * ZkHidden.leafCap :=
   (nLeaves_dataE_le x).trans (Nat.mul_le_mul_right _ (Masked.jOf_le_max x))
 
-/-- **`anyErr` at the deployed tables is at most `errAt` at `L = Tags.MAX_TABLES * leafCap`**: `anyErr_le` with no
-leaf count left free. -/
 theorem anyErr_le_dataE (vs : (CoinLayer.session loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))

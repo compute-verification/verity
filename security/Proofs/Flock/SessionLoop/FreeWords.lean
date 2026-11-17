@@ -5,20 +5,7 @@ public import Proofs.Flock.Claims.ZK.FrameRanked
 public import Proofs.Flock.Claims.ZK.FrameRounds
 public import Proofs.Flock.Claims.ZK.FrameState
 
-/-!
-# The words a round frees, and what the frame's state after it reads
-
-`Frame.roundFree` returns, beside a round's release and the frame's state after it, the offsets of the 16-byte words the
-round absorbs in the algebraic phase (its free words), which a device round may carry at any value:
-
-* **The positions** (`roundFree_pos`): the frame's position after a round is past the words it freed, each freed at a
-  position below `n_piop`.
-* **The free words alone differ** (`roundFree_agree`): at alike configurations (`CfgAlike`) and from states equal but
-  for `stopped`, two rounds of one size that agree outside the words the first frees free the same words and leave
-  states equal but for `stopped`.
-* **The check** (`check_unstop`): the state the frame's `check` returns on any device round, of a stopped rep or not,
-  is the one the scheduled round leaves, but for `stopped`.
--/
+/-! The words a round frees (`Frame.roundFree`) and what the frame's state after the round reads. -/
 
 @[expose] public section
 
@@ -29,7 +16,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 
 namespace Free
 
-/-- **A label leaves the frame's position.** -/
 theorem label_pos {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (h : s.label c l = .ok q) :
     q.1.pos = s.pos := by
   have e : (s.label c l).map (fun q => q.1.pos) = (s.label c l).map (fun _ => s.pos) := by
@@ -38,7 +24,6 @@ theorem label_pos {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArra
   rw [h] at e
   exact Except.ok.inj e
 
-/-- **An absorbed value moves the frame's position by one in a masked phase**, by none outside one. -/
 theorem absorb_pos {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.absorb c v = .ok q) :
     q.1.pos = if s.on then s.pos + 1 else s.pos := by
   unfold Masker.absorb at h
@@ -57,7 +42,6 @@ theorem absorb_pos {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s
         subst h
         rfl
 
-/-- **Taking coins leaves the frame's position.** -/
 theorem answer_pos {cfg : Cfg} {s s' : Masker} {cs : Array F128} (h : s.answer cfg cs = .ok s') : s'.pos = s.pos := by
   cases hi : s.inner with
   | none =>
@@ -94,7 +78,6 @@ theorem answer_pos {cfg : Cfg} {s s' : Masker} {cs : Array F128} (h : s.answer c
       subst h
       split <;> (try split) <;> rfl
 
-/-- The frame's position `m.pos` is past the `free.size` words freed since `s`, each at a position below `n_piop`. -/
 def PosInv (c : Cfg) (s m : Masker) (free : Array ℕ) : Prop :=
   s.pos + free.size ≤ m.pos ∧ ∀ k < free.size, s.pos + k < c.nPiop
 
@@ -117,8 +100,6 @@ theorem posInv_push {c : Cfg} {s m : Masker} {free : Array ℕ} {v : F128} {q : 
   · exact h2 k hk'
   · omega
 
-/-- **A round's free words sit at the frame's next positions**: the frame's position after the round is past the words
-it freed, each freed at a position below `n_piop`. -/
 theorem roundFree_pos {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q : ByteArray × Masker × Array Nat}
     (h : roundFree c s content n = .ok q) :
     s.pos + q.2.2.size ≤ q.2.1.pos ∧ ∀ k < q.2.2.size, s.pos + k < c.nPiop := by
@@ -214,7 +195,6 @@ theorem roundFree_pos {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q 
       exact ⟨hk, fun _ hv => by cases hv⟩
     · cases hy
 
-/-- `Ranked.forIn_inv` with each step's index in the loop's list. -/
 theorem forIn_inv_mem {τ : Type} (Q : τ → Prop) (g : ℕ → τ → V (ForInStep τ)) :
     ∀ (l : List ℕ), (∀ i ∈ l, ∀ x y, Q x → g i x = .ok y → Q (match y with | .done b => b | .yield b => b)) →
       ∀ (x y : τ), Q x → forIn l x g = .ok y → Q y
@@ -231,14 +211,11 @@ theorem forIn_inv_mem {τ : Type} (Q : τ → Prop) (g : ℕ → τ → V (ForIn
         exact forIn_inv_mem Q g l (fun i hi => hg i (List.mem_cons_of_mem _ hi)) b y
           (hg a (List.mem_cons_self ..) x _ hx hga) h
 
-/-- Two steps alike in `R`: both go on, or both return, at states alike in `R`. -/
 def StepRel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) : ForInStep τ₁ → ForInStep τ₂ → Prop
   | .yield a, .yield b => R a b
   | .done a, .done b => R a b
   | _, _ => False
 
-/-- **Two loops alike step by step end alike**: where each pair of steps from states alike in `R` is alike, at the
-first loop's run past the step (its rest and its end, which `Rest` describes), both loops end at states alike in `R`. -/
 theorem forIn_rel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) (Rest : τ₁ → Prop)
     (g₁ : ℕ → τ₁ → V (ForInStep τ₁)) (g₂ : ℕ → τ₂ → V (ForInStep τ₂))
     (hg : ∀ (i : ℕ) (l : List ℕ) (x₁ : τ₁) (x₂ : τ₂) (y₁ : ForInStep τ₁) (y₂ : ForInStep τ₂) (z₁ : τ₁),
@@ -268,25 +245,18 @@ theorem forIn_rel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) (Rest : τ
           | done b => exact (hs : False).elim
           | yield b => exact forIn_rel R Rest g₁ g₂ hg l a b z₁ z₂ hs hZ h₁ h₂
 
-/-- The state of `roundFree`'s loop: the round's return, once it returned, the frame's state, the round's release so
-far, the free offsets so far and the position in the round. -/
 abbrev St : Type := Option (ByteArray × Masker × Array ℕ) × Masker × ByteArray × Array ℕ × ℕ
 
-/-- **One step of the round's loop**: on, past the frame header it read (16 bytes on), with the offsets it freed
-appended, each past that header and before the step's end; or returned, at the offsets so far. -/
 def GrowStep (x : St) : ForInStep St → Prop
   | .yield b => b.1 = none ∧ x.2.2.2.2 + 16 ≤ b.2.2.2.2 ∧
       ∃ L : Array ℕ, b.2.2.2.1 = x.2.2.2.1 ++ L ∧ ∀ e ∈ L, x.2.2.2.2 + 16 ≤ e ∧ e + 16 ≤ b.2.2.2.2
   | .done b => (∃ v, b.1 = some v ∧ v.2.2 = x.2.2.2.1) ∧ x.2.2.2.2 + 16 ≤ b.2.2.2.2 ∧ b.2.2.2.1 = x.2.2.2.1
 
-/-- Every step of the loop body `g` grows (`GrowStep`). -/
 def Grows (g : ℕ → St → V (ForInStep St)) : Prop := ∀ i x y, g i x = .ok y → GrowStep x y
 
-/-- `Grows g`, with `g` read off a run of the loop. -/
 theorem grows_at {l : List ℕ} {x z : St} {g : ℕ → St → V (ForInStep St)} (_ : forIn l x g = .ok z) (hG : Grows g) :
     Grows g := hG
 
-/-- **The offsets a round's loop frees from a state on** are past that state's frame header. -/
 theorem suffix_of_grows {g : ℕ → St → V (ForInStep St)} (hG : Grows g) :
     ∀ (l : List ℕ) (x z : St), x.1 = none → forIn l x g = .ok z → ∀ v, z.1 = some v →
       ∃ L : Array ℕ, v.2.2 = x.2.2.2.1 ++ L ∧ ∀ e ∈ L, x.2.2.2.2 + 16 ≤ e
@@ -317,7 +287,6 @@ theorem suffix_of_grows {g : ℕ → St → V (ForInStep St)} (hG : Grows g) :
         · have := hL₂e e he
           omega
 
-/-- `suffix_of_grows` from a step of the loop, whatever that step's state returned. -/
 theorem suffix_cons {g : ℕ → St → V (ForInStep St)} (hG : Grows g) (a : ℕ) (l : List ℕ) (x z : St)
     (h : forIn (a :: l) x g = .ok z) (v : ByteArray × Masker × Array ℕ) (hv : z.1 = some v) :
     ∃ L : Array ℕ, v.2.2 = x.2.2.2.1 ++ L ∧ ∀ e ∈ L, x.2.2.2.2 + 16 ≤ e := by
@@ -372,18 +341,14 @@ theorem extract_congr {D D' : ByteArray} (hsz : D.size = D'.size) {a b : ℕ} (h
   rw [get!_of_lt hi, get!_of_lt hi'] at e
   exact e
 
-/-- Two returns alike: none yet, or both, with the same free offsets and states equal but for `stopped`. -/
 def OptRel : Option (ByteArray × Masker × Array ℕ) → Option (ByteArray × Masker × Array ℕ) → Prop
   | none, none => True
   | some v₁, some v₂ => v₁.2.2 = v₂.2.2 ∧ unstop v₁.2.1 = unstop v₂.2.1
   | _, _ => False
 
-/-- Two states of `roundFree`'s loop alike: one position, the same free offsets, frames equal but for `stopped`, and
-alike returns. -/
 def Rel0 (x₁ x₂ : St) : Prop :=
   x₁.2.2.2.2 = x₂.2.2.2.2 ∧ x₁.2.2.2.1 = x₂.2.2.2.1 ∧ unstop x₁.2.1 = unstop x₂.2.1 ∧ OptRel x₁.1 x₂.1
 
-/-- A state's free offsets lie behind its position. -/
 def Fwd (x : St) : Prop := ∀ e ∈ x.2.2.2.1, e + 16 ≤ x.2.2.2.2
 
 theorem fwd_step {x : St} {y : ForInStep St} (hx : Fwd x) (h : GrowStep x y) :
@@ -406,8 +371,6 @@ theorem fwd_step {x : St} {y : ForInStep St} (hx : Fwd x) (h : GrowStep x y) :
     have := hx e he
     omega
 
-/-- **Two runs of a round's loop alike step by step end alike** (`forIn_rel`), the first's free offsets behind its
-position at every step. -/
 theorem forIn_rel_grows {g₁ g₂ : ℕ → St → V (ForInStep St)} (Rest : St → Prop) {l : List ℕ} {x₁ x₂ z₁ z₂ : St}
     (h₁ : forIn l x₁ g₁ = .ok z₁) (h₂ : forIn l x₂ g₂ = .ok z₂) (hG : Grows g₁)
     (hg : ∀ (i : ℕ) (l : List ℕ) (x₁ x₂ : St) (y₁ y₂ : ForInStep St) (z₁ : St),
@@ -451,9 +414,6 @@ theorem ite_bind_ok' {α β : Type} {p : Prop} [Decidable p] {e : String} {a : �
     exact ⟨hp, h⟩
 
 open _root_.Flock.ZkServer.Frame (inFree) in
-/-- **Two runs of a round alike outside its free words end alike**: at alike configurations, from states equal but
-for `stopped`, on two rounds of one size that agree outside the words the first run frees, both runs free the same
-offsets and end at states equal but for `stopped`. -/
 theorem roundFree_agree {c c' : Cfg} (hc : CfgAlike c c') {s₁ s₂ : Masker} (hs : unstop s₁ = unstop s₂)
     {content content' : ByteArray} {n : ℕ} (hsz : content.size = content'.size)
     {q₁ q₂ : ByteArray × Masker × Array ℕ}
@@ -712,8 +672,6 @@ theorem roundFree_of_round {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {o :
   exact ⟨fr, hq⟩
 
 open _root_.Flock.ZkServer.Frame (check) in
-/-- **The frame's check leaves the scheduled round's state** but for `stopped`: whatever the device round, at a state
-of a stopped rep or not, the state the check returns is the one the scheduled round `r` leaves the rep in. -/
 theorem check_unstop {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}
     {f : Array ℕ} {out : ByteArray} {s' : Masker} {why : Option String}
     (hr : roundFree c { m with stopped := false } r n = .ok (o, t, f))

@@ -38,17 +38,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameRankFault
 
-/-!
-# (c.3)'s `FinRepXs`: the extra claims' coordinates
-
-* **`Loop.extraClaims_xs`**: the claims `Stmt.extraClaims` returns are at `Drive.extras`' coordinates, region-major,
-  then point by point, each region's point past its six skip coordinates (`FlockSoundness.Refine.extraClaims_ok`).
-* **`Loop.linkPoints_wordsAt`**: at a statement in the masked scope with a witness, the link points a rep's request
-  reads off the `Commit`'s coin (`Drive.linkPoints`, as `repInOf` does) are the session's at the opened coins
-  (`viewPoints_eq`): the coin holds `points · mPts` words, and every table has the session's `mPts > 0`
-  (`Masked.live_links`).
-* **`Loop.finRepXs`**: so `FinRepXs` holds there.
--/
+/-! (c.3)'s `FinRepXs`: the extra claims from the views are at the request's coordinates (`Loop.finRepXs`). -/
 
 @[expose] public section
 
@@ -62,8 +52,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **`extraClaims`' claims are at `Drive.extras`' coordinates**: where `extraClaims` returns at the link points `pts`,
-its claims' coordinates are `Drive.extras st pts`. -/
 theorem extraClaims_xs {st : Stmt} {pts : Array (Array F128)} {extras : Array _root_.Flock.Claim}
     (h : st.extraClaims pts = .ok extras) : extras.map (·.x) = _root_.Flock.ZkServer.Drive.extras st pts := by
   obtain ⟨ess, hess, heq⟩ := FlockSoundness.Refine.extraClaims_ok st pts extras h
@@ -93,9 +81,6 @@ theorem extraClaims_xs {st : Stmt} {pts : Array (Array F128)} {extras : Array _r
   unfold _root_.Flock.ZkServer.Drive.extras
   rw [Array.toList_flatMap]
 
-/-- **The request's link points are the session's**: at a statement in the masked scope with a witness, where the
-openings are `refK x` long, rep stream `k`'s link points off the `Commit`'s coin (`repInOf`'s) are the session's at
-the opened coins. -/
 theorem linkPoints_wordsAt (x : Msg) (w : Flock.Wit)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
@@ -145,9 +130,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepXs` in the masked scope with a witness**: rep stream `k`'s request's coordinates are `Drive.extras` at its
-link points off the `Commit`'s coin (`repInOf`), which are the session's at the opened coins (`linkPoints_wordsAt`),
-and the extra claims there are at those coordinates (`extraClaims_xs`). -/
 theorem finRepXs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
     FinRepXs L₀ src real wk x w := by

@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.L0Fixed
 public import Proofs.Flock.Claims.ZK.L0Pin
 
-/-!
-# Level 0's bodies at the switched source, under `L0Fixed`
-
-The switched session sends level 0's bodies at the pads `padsL0` its source fixes (`Masked.runCut_cutL0_of_ret`); the
-frame releases them at the session's pads. Where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`), the two
-agree from `zp 64` to `h_ab`, the only pads a body reads:
-
-* `LigLock.l0BodyAt_pads_congr`: level 0's bodies read their pads only from `zp 64` to `h_ab`.
-* **`Loop.padsL0_vs`**: under `L0Fixed`, the switched source's `padsL0` at the opened coins, the tape's packed table and
-  extra lanes and the rep's basis are the session's pads (`padsOf`) from `zp 64` to `h_ab`.
-* **`Loop.l0BodyAt_vs`**: so level 0's bodies at those pads are its bodies at the session's pads.
--/
+/-! Under `L0Fixed`, level 0's bodies at the switched source's pads are its bodies at the session's pads (`Loop.l0BodyAt_vs`). -/
 
 @[expose] public section
 
@@ -22,8 +11,6 @@ namespace FlockComplete.LigLock
 
 open Flock
 
-/-- **Level 0's bodies read their pads only from `zp 64` to `h_ab`**: the out-of-domain value's, the lane messages' and
-the pair's sums'. -/
 theorem l0BodyAt_pads_congr {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray}
     {sch : Schedule} {t b : Array F128} {lay : Zk.PadLayout} {h h' : Array F128} {rep : ℕ}
     {extra : ℕ → ℕ → F128}
@@ -61,9 +48,6 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
 namespace Loop
 
-/-- **Under `L0Fixed` the switched source's level-0 pads are the session's**: from `zp 64` to `h_ab`, `padsL0` at the
-opened coins from the rep's PIOP's end, the tape's packed table and extra lanes and the rep's basis is the source's
-masked value (`vsWord` plus the session's pad, `swSrcE_masked_vsWord`) plus `l0Clear`, which is `vsWord` there. -/
 theorem padsL0_vs {vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals} {x : Msg} {w : Flock.Wit}
     (hL0 : L0Fixed vs x w) (ν : CoinLayer.Nonce) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {n : ℕ}
     (hn : ¬ Refused x c n) {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
@@ -82,8 +66,6 @@ theorem padsL0_vs {vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals} {x 
     _root_.Flock.F128.add_comm _ (FlockComplete.padsOf _ _ _ _).h[k]!,
     FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
 
-/-- **Under `L0Fixed` level 0's bodies at the switched source's pads are its bodies at the session's pads**
-(`padsL0_vs`, `l0BodyAt_pads_congr`), at any pending bytes, transcript, cap and nonce. -/
 theorem l0BodyAt_vs {vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals} {x : Msg} {w : Flock.Wit}
     (hL0 : L0Fixed vs x w) (ν : CoinLayer.Nonce) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {n : ℕ}
     (hn : ¬ Refused x c n) {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}

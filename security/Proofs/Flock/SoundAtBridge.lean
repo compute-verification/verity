@@ -38,10 +38,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-! `Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge`: the reduction
-`Flock.SoundAtBridge.soundAtBridge_of_rows` at Flock's rows link, `Flock.SecurityProofs.EndToEndRegisteredRows`.
-`Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked`: `Flock.SoundAtBridge.servedRowsLinked`.
-Its witness is `Flock.SoundAtBridge.soundAtBridge_nonvacuous`. -/
+/-! Proofs of `Flock.Guarantees.SoundAtBridge` and `Flock.Guarantees.ServedRowsLinked`, witnessed by
+`Flock.SoundAtBridge.soundAtBridge_nonvacuous`. -/
 
 @[expose] public section
 

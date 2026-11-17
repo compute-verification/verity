@@ -36,19 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The bridge's probability steps, over any family of sessions
-
-The proof layer's soundness (`ResourceAccounting.TS.ProofLayer.SoundAt`) is a probability over a window's paths (uniform on
-`Paths Ω S`, `Pouw.RelativeSecurity.prob`), per round `w` and proof `i`; Flock's bounds are probabilities over one
-session's audit game played by its prover (`FlockSoundness.Game.prob`). This file joins the two for any family of
-sessions, with no Flock definition:
-
-* `game_prob_exists_le`: the union bound for a fixed strategy over a finite family of events;
-* `SessionSamplingDesign`: read through the session a path runs and its outcome there, the window's coins have the sessions' sampling design;
-* `soundAt_of_sessions`: `SoundAt` at `δo + δ` when each unsound proof is off (probability at most `δo`) or its
-  session's outcome is in a bad event of probability at most `δ` in every session it runs.
--/
+/-! The bridge's probability steps over any family of sessions, with no Flock definition (`soundAt_of_sessions`). -/
 
 @[expose] public section
 
@@ -60,7 +48,6 @@ open FlockSoundness ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **The union bound for a fixed strategy, over a finite family of events.** -/
 theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι → α → Prop) (g : Game α)
     (σ : Game.Strategy g) : Game.prob (fun a => ∃ i ∈ s, E i a) g σ ≤ ∑ i ∈ s, Game.prob (E i) g σ := by
   classical
@@ -121,10 +108,6 @@ def SessionSamplingDesign {Ω : Type} [Fintype Ω] {S : ℕ} {Sess : Type u} {Ou
     Pouw.RelativeSecurity.prob (fun x => E (sess x) (out x)) ≤
       (∑ x, (Game.prob (E (sess x)) (G (sess x)) (τ (sess x))).toReal) / (Fintype.card (Paths Ω S) : ℝ)
 
-/-- **`SoundAt` from a family of sessions**: when proof `i` of round `w` runs the session `sess x w i` with outcome
-`out x w i`, the window's sampling design at each `(w, i)` is the sessions' (`SessionSamplingDesign`), every unsound proof is off (`Off`, of
-probability at most `δo` at each `(w, i)`) or has its session's outcome in `Bad`, and `Bad` has probability at most
-`δ ≥ 0` in every session a path runs, then each proof is unsound with probability at most `δo + δ`. -/
 theorem soundAt_of_sessions {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)
     {Sess : Type u} {Out : Sess → Type} (G : ∀ s, Game (Out s)) (τ : ∀ s, Game.Strategy (G s))
     (Bad : ∀ s, Out s → Prop) (sess : Paths Ω S → Fin S → Fin nπ → Sess) (out : ∀ x w i, Out (sess x w i))

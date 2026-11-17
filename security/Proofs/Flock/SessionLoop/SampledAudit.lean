@@ -4,29 +4,8 @@ public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.ZkAny.SampledSessions
 public import Proofs.Flock.ZkAny.RecordHiding
 
-/-!
-# A sampled audit's view at any values, at the deployed session loop
-
-`Flock.Guarantees.SampledAuditAnyDeployed` is `Flock.Guarantees.SampledAuditAny` with its sampled sessions `ℓ` sessions
-of the deployed session loop, one after another, and the value service's commitments `N` hm96 leaves at the pinned key.
-Each session is `SessionLoopZKAnyDeployed`'s release (`LeanRelease.ofLoopLink` at `Loop.realOf src`, every session at
-the same `L₀` and `src`), at its `Finish` verdict, against a verifier `V*` of its `refK x + 2` rounds; its worker and
-values are any the stack chose, as functions of the registration's randomness, the sample and the earlier sessions'
-randomness and messages, where the values' unswitched round encoding is causal and the transport's trusts hold at the
-worker (`LeanRelease.TrustsStop`); its statement, its `V*` and `V*`'s tape are functions of the admitted record, the
-sample and the earlier sessions' messages. Per outcome of the sessions' verdicts, on every event, the audit's view is
-within `SampledAuditAny`'s bound of the simulators' (`Loop.anySim`, run in turn, each given the earlier simulated
-messages), the sessions' errors (`Loop.anyErr`, each at most `εS j` at its verdict) added, and `δ` the record's hiding
-at hm96's leaves, `N·2δ₁` with `δ₁` the hiding gap at the pinned key (`FlockSoundness.ZK.ideal_hm96`).
-
-`Flock.SecurityProofs.SampledAuditAnyDeployed` proves it: `FlockSoundness.ZK.sampledAudit_zkOut` at the first conjunct
-of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96` for `δ`.
-
-The released bytes here are the session loop's messages (`ZKOut`). What reaches the auditor is the held relay's frames
-(`ZKOutRelay`), which `Flock.Guarantees.SampledAuditAnyRelayDeployed` covers (`SessionLoop/SampledRelay.lean`). The
-simulators' coins at each session's statement are a type of the session's index alone (`eC`), which holds where the
-statements session `j` can take have one shape.
--/
+/-! `SampledAuditAnyDeployed`, proved at the session loop's messages (`ZKOut`), not the held relay's frames that reach the
+auditor. -/
 
 @[expose] public section
 

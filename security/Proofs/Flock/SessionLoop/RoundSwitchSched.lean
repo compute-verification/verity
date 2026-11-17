@@ -4,23 +4,7 @@ public import Proofs.Flock.SessionLoop.PcsRank
 public import Proofs.Flock.SessionLoop.PiopState
 public import Proofs.Flock.SessionLoop.RoundSwitchFrame
 
-/-!
-# A rep's schedule and frame at its ring switch's rounds
-
-A rep's ring switch (`Drive.openStep`'s first rounds) follows its algebraic phase: round `0` carries the opening's
-label, at which the frame runs the rep's rank check on the algebraic phase's coins, and the frame is past the masked
-phase from then on.
-
-* **`Bind.openStep_switch_sv`**, **`Bind.sched_switch_sv`**: as `Bind.openStep_switch_at` and `Bind.sched_switch_at`,
-  with the switched vectors named: each claim's, of the zerocheck's and lincheck's claims at the points of the coins the
-  schedule was fed (`FlockComplete.LigLock.Fed.PtsAt`) and then the extra claims.
-* **`Ranked.repState_pre_pcs`**: where the loop's state at a rep's last algebraic round takes the round's coins, the
-  frame is in the algebraic phase at its last position and holds the algebraic phase's coins, at their counts, after the
-  earlier rep's claim points.
-* **`Ranked.rank_of_rankFails`**: there, where the rank stop passes, the rank check holds.
-* **`Ranked.repState_switched`**: where the loop's state at a later ring-switch round takes its coins, the frame is
-  outside every masked phase.
--/
+/-! A rep's schedule and frame at its ring switch's rounds, with the claims' switched vectors named. -/
 
 @[expose] public section
 
@@ -41,9 +25,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ feed_eq CoinAt repOpening_feed cutAs
 open Switch (rsBody)
 open Loop
 
-/-- **The opening's first rounds are the ring switch's, at its claims' switched vectors**: as `openStep_switch_at`,
-where each claim's switched vector is the claim's in the PIOP's claims, the zerocheck's and lincheck's at the points of
-the coins fed (`repPiop_rec`) and then the extra claims. -/
 theorem openStep_switch_sv (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) (hdom : dom.size < 2 ^ 64)
     (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
@@ -100,9 +81,6 @@ theorem openStep_switch_sv (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (d
   simp only [Array.toList_append, List.nil_append, Array.size_empty, Nat.sub_zero] at e2
   exact e2.symm
 
-/-- **A rep's schedule fed `a` of the opening's coins, at its claims' switched vectors**: as `sched_switch_at`, where
-each claim's switched vector is the claim's in the PIOP's claims at the points of the algebraic phase's coins
-(`openStep_switch_sv`). -/
 theorem sched_switch_sv {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -146,10 +124,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker MaskSlot K_SKIP N_INNER LABEL_ZC ma
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-- **The frame taking a rep's last algebraic round's coins**: where the frame holds the rep's phase and rank (`Inv`)
-after round `a` and takes round `a`'s coins into a state in the algebraic phase outside level 0, it was before the
-opening's label: the coins it holds are rounds `0 … a`'s, each answered the round's count, after the earlier rep's
-points. -/
 theorem inv_answer_pre {c c'' : Cfg} {p : Array (Array F128)} {cs : ℕ → Array F128} {nn : ℕ → ℕ} {a : ℕ}
     {S m : Masker} (hI : Inv c p cs nn a S) (ha : S.answer c'' (cs a) = .ok m) (hon : m.on = true)
     (hl : m.l0 = false) :
@@ -191,11 +165,6 @@ theorem inv_answer_pre {c c'' : Cfg} {p : Array (Array F128)} {cs : ℕ → Arra
     · exact (hsz i hi).1
     · exact hsize
 
-/-- **At a rep's last algebraic round the frame holds the algebraic phase's coins**: where the loop's state there
-(`m + k_log − 6` rounds in) takes the round's coins `cs`, the frame is in the algebraic phase, outside level 0, at its
-absorbed position after the phase (`repState_piop`), holding rounds `0 … m + k_log − 7`'s coins (`cr`), answered at
-the algebraic phase's counts, after the earlier rep's claim points (`cr0`'s rounds, sent as bytes) at rep `1`
-(`run_head`, `inv_answer_pre`). -/
 theorem repState_pre_pcs {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -273,17 +242,12 @@ theorem repState_pre_pcs {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order
     simp only [↓reduceIte] at ha'
     exact absurd ha' (answer_owed_none _ rfl)
 
-/-- **Where the rank stop passes in the algebraic phase at its last position, the rank check holds** on the claim
-points of the coins the frame holds, after the earlier rep's. -/
 theorem rank_of_rankFails {c : Cfg} {s : Masker} (hf : LeanRelease.rankFails c s = false) (hon : s.on = true)
     (hd : s.done = false) (hl : s.l0 = false) (hp : s.pos = c.nPiop) {ms : MaskSlot} (hm : c.mask = some ms)
     {P : Array (Array F128)} (hP : claimPoints c.lay s.coins = .ok P) :
     maskRank (s.prior ++ P) ms (c.lay.nLc + K_SKIP) = 128 * (s.prior ++ P).size := by
   simpa [LeanRelease.rankFails, hon, hd, hl, hp, hm, hP] using hf
 
-/-- **Past the ring switch's first round the frame is outside every masked phase**: where the loop's state at a rep's
-ring-switch round `k ≥ 1`, at most the claims' count and `γ`'s, takes the round's coins, the frame took the opening's
-label (`Bind.sched_switch_at`, `Flags.sched_flags`) and is past the masked phase. -/
 theorem repState_switched {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}

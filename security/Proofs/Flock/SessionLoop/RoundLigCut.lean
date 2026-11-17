@@ -10,23 +10,8 @@ public import Proofs.Flock.Claims.ZK.RepRet
 public import Proofs.Flock.Claims.ZK.L0PinCut
 public import Proofs.Flock.Claims.ZK.FinishRank
 
-/-!
-# The cut session at a rep's Ligerito rounds past level 0, on the opened coins alone
-
-Cut at a round `n` of rep `2j + r`'s Ligerito opening after level 0's close (from `ligP0 + k₀ + 4` to the last before
-the inner proof), the rep's PIOP returns at `ligP0` (`piopCut_ret`) and its Ligerito opening, which returns past `n`
-when cut later (`ligeritoCut_ret`), throws at `n` with `n + 1` bodies (`ligeritoCut_cut_agree`, `prefix_of_agree'`). The
-cut session stopped at `n` sent there what that opening sent (`runCut_cutRep`, carrying the log's size).
-
-* `CutFree.repCut_lig_stop`: the rep from a source, cut at such a round, throws there in its Ligerito opening, after
-  its PIOP returned at `ligAt`, wherever its rank check passes and its pair's coins are independent.
-* `Masked.repCut_lig_stop`: that stop at a `Live` statement's table `j`'s rep `r`, answered by the opened coins, where
-  the coins below the cut show no refusal, with the PIOP's basis `ligBasis` (`piopCut_lig`).
-* `Masked.runCut_cutRep_size`, `Masked.runCut_cutRep_size_of_ret`: `runCut_cutRep` and its `_of_ret` form, with the cut
-  session's log reaching `n`.
-* **`Masked.runCut_lig`**: the cut session stopped at such a round of rep `2j + r` reached it and sent there what the
-  rep's Ligerito opening, cut there, sent, from the end of its PIOP at `ligP0` with the basis `ligBasis`.
--/
+/-! The cut session at a rep's Ligerito rounds past level 0, on the opened coins alone, where they show no refusal
+(`Masked.runCut_lig`). -/
 
 @[expose] public section
 
@@ -38,11 +23,6 @@ namespace FlockComplete.CutFree
 open Flock Transcript Replay
 
 set_option maxHeartbeats 2000000 in
-/-- **The cut's rep at a round of its Ligerito opening**: answered by `asksCut` cut at a round `n` of the opening
-(from its first, `ligAt`, up to the last), at a `--zk` schedule of `m ∈ [25, 35]` and a fold defined at every point
-of the lincheck's shape, from any source, level-0 commitment and pads commitment, the rep's PIOP returns at `ligAt` and
-its Ligerito opening, cut at `n`, throws there with `n + 1` bodies, as the rep does, wherever its rank check passes and
-its pair's coins are independent. -/
 theorem repCut_lig_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
@@ -102,12 +82,7 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **A rep stopped at a round of its Ligerito opening past level 0's close, on the opened coins alone**: at a `Live`
-statement whose coins below the cut `n` (from `ligP0 + k₀ + 4` up to the opening's last round) show no refusal, the cut
-rep answered by the opened coins from its first send `repBase x (2j + r)`, from any source, level-0 commitment and pads
-commitment, returns from its PIOP at `ligP0` with the basis `ligBasis` (at any witness and tape) and throws at `n` in
-its Ligerito opening, with `n + 1` bodies. Its rank check passes (`rank_at_unrefused`) and its pair's coins are
-independent, both below the cut. -/
+/-- Holds where the coins below the cut `n` show no refusal, at any witness and tape. -/
 theorem repCut_lig_stop {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s0} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) {n : ℕ}
@@ -208,8 +183,6 @@ theorem repCut_lig_stop {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.
   exact ⟨T, sws, t₃, l₃, e, L, hl₃, hb, hL, hLs, hR⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s stop, reaching it**: `runCut_cutRep`, where the rep's log `L` reaches `n`, with
-the cut session's log reaching `n` too. -/
 theorem runCut_cutRep_size {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -301,7 +274,7 @@ theorem runCut_cutRep_size {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDe
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))))
     (2 * j.val + r.val) (by simpa using hk) ?_ ⟨?_, fun h => absurd h (by norm_num)⟩ ?_
-  · -- the reps before `2j + r` return by `n`, as at the ZK server's stop
+  ·
     rintro k hk' ⟨streams, proofs⟩ ls ⟨hls, hpts⟩
     obtain ⟨extras', hxe'⟩ := hexts k hk'
     obtain ⟨ic', hic'⟩ := padsTreeCut_go
@@ -337,7 +310,7 @@ theorem runCut_cutRep_size {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDe
       exact hrp (by omega)
   · rw [repBase_eq hsx]
     simp [FlockComplete.repStartZk]
-  · -- rep `2j + r` stops at `n`
+  ·
     rintro ⟨streams, proofs⟩ l₀ ⟨hl₀, hpts⟩
     have hp := hpri (2 * j.val + r.val) streams hpts
     have e2 : (2 * j.val + r.val) / 2 = j.val := by omega
@@ -365,8 +338,6 @@ theorem runCut_cutRep_size {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDe
       rw [hbs]
       exact Claims.ZKServer.Loop.getElem!_append_shift (hl₀.trans hl.symm) (by omega)
 
-/-- **The cut session at rep `2j + r`'s stop, reaching it, from the earlier reps' returns alone**:
-`runCut_cutRep_size` with rep `0`'s claim points at the opened coins read off its return (`repCut_points`). -/
 theorem runCut_cutRep_size_of_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -421,11 +392,7 @@ theorem runCut_cutRep_size_of_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → 
     (by rw [show 2 * (k / 2) = k by omega]; exact hl') hrep
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at a round of rep `2j + r`'s Ligerito opening past level 0's close, on the opened coins alone**:
-where the coins below the cut `n` (from `ligP0 + k₀ + 4` up to the opening's last round) show no refusal, the cut
-session stopped at `n` reached it and sent there what the rep's Ligerito opening, cut at `n`, sent from the end of its
-PIOP at `ligP0`, with the PIOP's basis `ligBasis` (at any witness and tape), level 0's commitment and the rep's source:
-the earlier reps return (`repCut_ret`, `runCut_cutRep_size_of_ret`) and the rep stops there (`repCut_lig_stop`). -/
+/-- Holds where the coins below the cut `n` show no refusal, at any witness and tape. -/
 theorem runCut_lig {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))

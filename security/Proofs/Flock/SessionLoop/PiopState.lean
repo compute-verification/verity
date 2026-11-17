@@ -36,15 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.FrameOuter
 
-/-!
-# The frame's state through the PIOP's scheduled rounds
-
-A rep's frame checks each scheduled round against itself (`Loop.schedReqs`). Where the schedule's round 0 is the
-zerocheck's binding with the stream's domain and its later rounds are the PIOP's (`piopFr`, `piopK`, `piopN`), the frame
-is in the algebraic phase from the binding on, outside the inner proof and level 0, at the absorbed position of the
-values the rounds before carry, owing the round's coins (`Loop.run_piop`). The algebraic phase's schedule is such a
-schedule (`Sched.rounds_piop`), so the loop's state at a rep's PIOP round is that (`Loop.repState_piop`).
--/
+/-! The frame's state through a rep's PIOP rounds (`Loop.repState_piop`). -/
 
 @[expose] public section
 
@@ -54,10 +46,6 @@ open _root_.Flock (F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree LABEL_ZC)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **The frame through the PIOP's round `a`**, from a rep's start past an earlier rep's coins: where the schedule's
-round 0 is the zerocheck's binding with the stream's domain, its rounds `1` to `a` are the PIOP's, and the rounds and
-coins up to round `a` neither end the rep nor leave it owing none, the frame is in the algebraic phase, outside the inner
-proof and level 0, at the absorbed position of the values of rounds `0` to `a`, owing round `a`'s coins. -/
 theorem run_piop {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {m kLog : ℕ} {digest cap dom root : ByteArray}
     {lay : _root_.Flock.Zk.PadLayout} {mk : ℕ → F128} (hm : 14 ≤ m) (hm' : m < 2 ^ 64)
@@ -184,9 +172,6 @@ theorem run_piop {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
       · rw [he2] at ho
         exact (ho hs1o).elim
 
-/-- **The loop's state at a rep's PIOP round `a + 1`**: where the frame takes round `a`'s coins at the rep's state
-after it, with the values of rounds `0` to `a` inside the configuration's order, it is in the algebraic phase, outside
-the inner proof and level 0, at their absorbed position (`run_piop` on the skeleton's rounds, `Sched.rounds_piop`). -/
 theorem repState_piop {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}

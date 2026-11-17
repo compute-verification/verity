@@ -2,14 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.ExecTemplatePlace
 
-/-!
-# A typed template's layout, from `Stmt.setupH` (1e for templates, T3)
-
-`ExecTemplatePlace.lean` places a template's block rows from `TemplateLayout`, the accepted statement's layout facts. This
-file derives them from what `Stmt.setupH` accepted for a template (`setupH_spec_typed`, `parseTyped_spec`,
-`parse_facts_tmpl`, `check_facts_typed`, `delta_typed`) and what `Typed.read` built it from (`read_template`,
-`templateOf_spec`, `blockOf_spec`).
--/
+/-! A typed template's layout, from what `Stmt.setupH` accepted (`setupH_templateLayout`, `setupH_blockFacts`). -/
 
 @[expose] public section
 
@@ -18,8 +11,6 @@ open Flock FlockLevel3
 namespace FlockSoundness
 
 open Compose Flock.DeriveAll Types.Dag
-
-/-! ## The class's unit is one of its layouts -/
 
 theorem forIn_yield_push {α β : Type} {f : α → Array β → Except String (ForInStep (Array β))}
     (hf : ∀ a b s, f a b = .ok s → ∃ x, s = .yield (b.push x)) :
@@ -34,7 +25,6 @@ theorem forIn_yield_push {α β : Type} {f : α → Array β → Except String (
     simp only [Array.size_push, List.length_cons] at this ⊢
     omega
 
-/-- `deriveAll` derives one `D` per layout. -/
 theorem deriveAll_size {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (h : deriveAll types ls info words unit = .ok done) : done.size = ls.size := by
@@ -66,7 +56,6 @@ theorem deriveChecked_deriveAll {types : String → Option CircuitType} {ls : Ar
 theorem const_mem_order (done : Array D) (u : D) : u.const ∈ order done u := by
   simp [order, segment]
 
-/-- **The class's unit is one of its layouts**: `deriveChecked`'s order holds the unit's constant, one of its rows. -/
 theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) : unit < ls.size := by
@@ -78,7 +67,6 @@ theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.BlockL
   rw [hu] at this
   exact absurd this (by decide)
 
-/-- **The unit's inputs are self rows with no Δ entry**: its own check (`checkLayout`, the unit's `Chk.rowIs`). -/
 theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) :
@@ -102,7 +90,6 @@ theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.Bl
       exact ⟨this.1.1, this.2⟩
   | gen sha n vb lo => exact absurd rfl (genLayout_spec h hown).1
 
-/-- **`UnitShape` with its input field discharged**: the unit's inputs carry no Δ entry by its own check. -/
 theorem unitShape_of {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done)
@@ -119,9 +106,6 @@ theorem unitShape_of {types : String → Option CircuitType} {ls : Array Flock.B
     UnitShape done (done.getD unit default) :=
   ⟨hcr, ho, fun x hx => (unit_inputs hd x hx).2, hpr, hcp⟩
 
-/-! ## The tables the class holds -/
-
-/-- **A held table's words are its bytes, read as `u32`** (`hold`). -/
 theorem hold_words {types : Array (String × CircuitType)} {tables : List (String × ByteArray)} {held : Array Typed.Held}
     (h : Typed.hold types tables = .ok held) :
     ∀ x ∈ held.toList, x.words = (Array.range (x.bytes.size / 4)).map fun i => rd32 x.bytes (4 * i) := by
@@ -160,7 +144,6 @@ theorem hold_words {types : Array (String × CircuitType)} {tables : List (Strin
     · simp [Functor.map, Except.map, throw, throwThe, MonadExceptOf.throw] at hs
 
 set_option maxHeartbeats 1000000 in
-/-- **What `classOf` returns**: its class holds the tables `hold` read, and its type is the unit layout's. -/
 theorem classOf_facts {mj : Lean.Json} {tables : List (String × ByteArray)} {kt : Typed.Class × CircuitType}
     (h : Typed.classOf mj tables = .ok kt) :
     (∃ types, Typed.hold types tables = .ok kt.1.held) ∧
@@ -223,7 +206,6 @@ theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt 
     (h : Typed.classOf mj tables = .ok kt) : ∃ types, Typed.hold types tables = .ok kt.1.held :=
   (classOf_facts h).1
 
-/-- **A template read's block is `templateOf` on the unit layout's own type.** -/
 theorem read_template_ty {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class}
     {t : Typed.Template} (h : Typed.read tags bytes tables = .ok (k, .inr t)) :
     ∃ name ty, Typed.templateOf name k.done k.ls k.unit ty k.held = .ok t ∧
@@ -246,7 +228,6 @@ theorem read_template_ty {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       obtain ⟨rfl, rfl⟩ := h
       exact ⟨s.2.1, kt.2, hv, hty⟩
 
-/-- **The class `Typed.read` returns holds its tables' words as their bytes, read as `u32`.** -/
 theorem read_held {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class}
     {r : Net ⊕ Typed.Template} (h : Typed.read tags bytes tables = .ok (k, r)) :
     ∀ x ∈ k.held.toList, x.words = (Array.range (x.bytes.size / 4)).map fun i => rd32 x.bytes (4 * i) := by
@@ -269,10 +250,6 @@ theorem read_held {tags : Tags} {bytes : ByteArray} {tables : List (String × By
   subst hk
   exact hold_words hh
 
-/-! ## The rows' wires are into the rows' circuits -/
-
-/-- **The rows' own wires are into the rows' circuits**: each chain's `cv` into a `sha512x3` slot, each row's hm96 `cv`
-into its hm96 slot. -/
 theorem rowWires_dst (ports : Array Port) (sha hm : ℕ) :
     ∀ w ∈ (HmRow.rowWires ports sha hm).toList,
       (w.dst.1 = sha ∧ w.dst.2.1 < (HmRow.rowSlots ports).1) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size) := by
@@ -320,8 +297,6 @@ theorem rowWires_dst (ports : Array Port) (sha hm : ℕ) :
         (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
       (fun k hk1 hk out hout => hinner k hk1 hk out hout) hout⟩
 
-/-- **Δ's other flat rows, for a template, are input bits of the rows' circuits' slots**: no leaf map or cut, and the
-wires are the rows' own chains (`parse_facts_tmpl`). -/
 theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : TypedBlock} (P : ParseFactsT tags t c)
     (C : CheckFactsT c tb) (hok : ∀ n, n = c.shaNet ∨ n = c.hmNet → NetOK (c.nets.getD n default).2) {x : ℕ}
     (hx : DeltaIn c x) :
@@ -345,7 +320,7 @@ theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : Type
   have hall := rowSlots_all c.ports
   rcases hx with ⟨g, hg, p, hp, k, hk, i, hi, t, ht, rfl⟩ | ⟨g, hg, p, hp, i, hi, t, ht, rfl⟩ | ⟨k, hk, j, hj, t, ht, rfl⟩ |
     ⟨g, hg, e, he, t, ht, rfl⟩ | ⟨g, hg, w, hw, t, ht, rfl⟩
-  · -- a bit of a row's chain
+  ·
     obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hp) _ (getElem_mem_toList' hk)
     have hsz := C.sha_in.1
     have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i < 6 := by omega
@@ -353,18 +328,18 @@ theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : Type
       (getElem_mem_toList' (by rw [hsz]; exact hidx)) t ?_
     rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
     exact ht
-  · -- a bit of a row's hm96 slot
+  ·
     obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
     refine hbit _ (Or.inr rfl) g hg p ?_ _ (getElem_mem_toList' hil) t (by rw [hw]; exact ht)
     rw [C.perVu_hm, ← hws]
     exact lt_of_lt_of_le hp (le_nextPow2 _)
-  · -- no leaf map
+  ·
     rw [P.leavesIn, P.upv, Nat.mod_one] at hj
     exact absurd hj (by simp)
-  · -- no leaf cut
+  ·
     rw [P.leafCuts] at he
     cases he
-  · -- the rows' own wires
+  ·
     rw [P.wires] at hw
     have hwd := rowWires_dst c.ports c.shaNet c.hmNet w hw
     by_cases hq : w.dst.2.2 < (portCols (c.nets.getD w.dst.1 default).2.inGroups).size
@@ -379,9 +354,6 @@ theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : Type
     · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)] at ht
       exact absurd ht (show ¬ t < 0 by omega)
 
-/-! ## A template circuit's nets -/
-
-/-- **A net built from derived rows fits its slot, and its constant row reads itself.** -/
 theorem netOfD_fit {d : D} {nm : String} {n : Net} (h : Typed.netOfD d nm = .ok n) :
     n.constPos < 2 ^ n.unitLog ∧ 7 ≤ n.unitLog ∧ (n.unitLog ≤ 32 → ConstRow n) := by
   obtain ⟨hl, -, -, -, hcst, hin, hca, hcb, -⟩ := Typed.netOfD_ok h
@@ -397,8 +369,6 @@ theorem netOfD_fit {d : D} {nm : String} {n : Net} (h : Typed.netOfD d nm = .ok 
     · subst hj; simp [lookupEntry]
     · simp [hj, Ne.symm hj, lookupEntry]
 
-/-- **A template circuit's nets**: the root first, then the placed layouts' circuits, then the file's own text nets and
-lookup slots. -/
 theorem tmpl_nets {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c) {i : ℕ}
     (hi : i < c.nets.size) :
     (i = 0 ∧ (c.nets.getD i default).2 = t.root) ∨
@@ -431,8 +401,6 @@ theorem tmpl_nets {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFac
       rw [List.getElem?_append_right (by simp; omega)] at hget
       exact List.mem_of_getElem? hget
 
-/-! ## A placed layout's net -/
-
 theorem placedNet_derive {l : Flock.BlockLayout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
     (h : Typed.placedNet l d nm held = .ok n) (hown : l.own = .derive) : d.reads = #[] := by
   unfold Typed.placedNet at h
@@ -443,7 +411,6 @@ theorem placedNet_derive {l : Flock.BlockLayout} {d : D} {nm : String} {held : A
   · rename_i hr
     simpa using hr
 
-/-- **A generated layout's net carries its own read and held table**: `placedNet` checks the read is its record's. -/
 theorem placedNet_gen {l : Flock.BlockLayout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
     (h : Typed.placedNet l d nm held = .ok n) {sha : String} {nb vb lo : ℕ} (hown : l.own = .gen sha nb vb lo) :
     ∃ r hd, d.reads.toList = [r] ∧ r.table = sha ∧ r.n = nb ∧ r.lo = lo ∧ held.find? (·.sha512 == sha) = some hd ∧
@@ -468,7 +435,6 @@ theorem placedNet_gen {l : Flock.BlockLayout} {d : D} {nm : String} {held : Arra
       · simp at h
   · simp at h
 
-/-- **A generated layout's own check**: its table has `2^n` words, `lo < n`, and no read covers its constant. -/
 theorem gen_facts {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j < ls.size) {sha : String} {nb vb lo : ℕ}
@@ -482,7 +448,6 @@ theorem gen_facts {types : String → Option CircuitType} {ls : Array Flock.Bloc
   simp only [Chk.oneAt, Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, Option.isNone_iff_eq_none] at hone
   exact hone.2
 
-/-- **A placed layout's net fits its slot, and its constant row reads itself**, a generated read's lookup included. -/
 theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j < ls.size) {nm : String}
@@ -509,7 +474,6 @@ theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.
     rw [hlk, lookupEntry_uncovered hcv, add_zero]
     exact hc3
 
-/-- **No read covers a template unit's own rows**: `templateOf` refuses one in its own region. -/
 theorem templateOf_reads_past {name : String} {done : Array D} {ls : Array Flock.BlockLayout} {unit : ℕ} {ty : CircuitType}
     {held : Array Typed.Held} {t : Typed.Template} (h : Typed.templateOf name done ls unit ty held = .ok t) :
     ∀ r ∈ (done.getD unit default).reads.toList, (done.getD unit default).size ≤ r.prod0 := by
@@ -528,8 +492,6 @@ section template
 variable {name : String} {done : Array D} {ls : Array Flock.BlockLayout} {unit : ℕ} {ty : CircuitType}
   {held : Array Typed.Held} {t : Typed.Template}
 
-/-- **Placed layout `k`'s circuit is its derivation's net**: its layout is one a part places, at place `k` among them, and
-its net is `netOfD` of that layout's rows, but for a generated read's lookup. -/
 theorem layout_at (htm : Typed.templateOf name done ls unit ty held = .ok t) {k : ℕ} (hk : k < t.layouts.size) :
     ∃ j, j < ls.size ∧ (∃ p ∈ (done.getD unit default).parts, p.1 = j) ∧
       ((List.range ls.size).filter fun j => (done.getD unit default).parts.any (·.1 == j)).idxOf j = k ∧
@@ -544,7 +506,6 @@ theorem layout_at (htm : Typed.templateOf name done ls unit ty held = .ok t) {k 
   exact ⟨_, List.mem_range.1 hmem.1, ⟨p, hp, by simpa using hpj⟩,
     List.Nodup.idxOf_getElem (List.nodup_range.filter _) k hk', _, hnet⟩
 
-/-- **Part `p`'s layout is placed**, at place `k` among the placed layouts, and its circuit is its derivation's net. -/
 theorem part_at (htm : Typed.templateOf name done ls unit ty held = .ok t) {p : ℕ × ℕ}
     (hp : p ∈ (done.getD unit default).parts) :
     ∃ k, ∃ hk : k < t.layouts.size,
@@ -560,8 +521,6 @@ theorem part_at (htm : Typed.templateOf name done ls unit ty held = .ok t) {p : 
   subst hj
   exact ⟨_, hk, rfl, hjl, rest⟩
 
-/-! ## The block's parts -/
-
 theorem toList_eq_map_range {α : Type} [Inhabited α] (xs : Array α) :
     xs.toList = (List.range xs.size).map fun i => xs.getD i default := by
   apply List.ext_getElem (by simp)
@@ -569,7 +528,6 @@ theorem toList_eq_map_range {α : Type} [Inhabited α] (xs : Array α) :
   simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
   simp [Array.getD, show n < xs.size by simpa using h1]
 
-/-- The parts on circuit `1 + k` in the block are the template's parts on placed layout `k`. -/
 theorem blockOf_filter (t : Typed.Template) (k : ℕ) :
     ((HmRow.blockOf t).parts.filter (·.1 == 1 + k)).size = (t.parts.toList.filter (·.1 == k)).length := by
   rw [← Array.length_toList, Array.toList_filter]
@@ -598,8 +556,6 @@ theorem part_slot_inj {i i' : ℕ} (hi : i < t.parts.size) (hi' : i' < t.parts.s
   · exact h
   · exact absurd h2.symm (Nat.ne_of_lt (HmRow.slotOf_lt_of_lt h hi h1.symm))
 
-/-- **A part's placed net is a `PartNet`**: its derivation's rows, and a generated read's lookup from the table the
-class holds for it. -/
 theorem partNet_of {types : String → Option CircuitType} {info : String → Option TableInfo}
     (hd : deriveChecked types ls info (Typed.wordsIn held) unit = .ok done)
     (hheld : ∀ h ∈ held.toList, h.words = (Array.range (h.bytes.size / 4)).map fun i => rd32 h.bytes (4 * i))
@@ -619,8 +575,6 @@ theorem partNet_of {types : String → Option CircuitType} {info : String → Op
     · rw [hwr]; exact hheld hdh (by simpa using Array.mem_of_find?_eq_some hfind)
     · rw [htab, hn]; exact hws
 
-/-- **Every net of an accepted template circuit fits its slot, and its constant row reads itself**: the root and the
-placed layouts' nets are their derivations' (`netOfD`), the others are text nets or lookup slots. -/
 theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     (htm : Typed.templateOf name done ls unit ty held = .ok t) {types : String → Option CircuitType}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)}
@@ -651,10 +605,6 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     rw [hd]
     exact ⟨by decide, fun h => absurd h hi⟩
 
-/-! ## An input's message bit is a column of the block -/
-
-/-- **The rows' circuits fit their slots and their input ports lie in their input rows**: they are the file's own text
-nets or lookup slots, past the template's (`CheckFactsT.rows_after`). -/
 theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
     (C : CheckFactsT c (HmRow.blockOf t)) : ∀ n, n = c.shaNet ∨ n = c.hmNet → NetOK (c.nets.getD n default).2 := by
   obtain ⟨-, -, -, -, -, -, -, -, hbrl, -⟩ := HmRow.blockOf_spec t
@@ -680,8 +630,6 @@ theorem starts_size (c : Circuit) : (Typed.starts c).size = c.ports.size := by
   | nil => intro acc; simp
   | cons p L ih => intro acc; rw [List.foldl_cons, ih]; simp only [Array.size_push, List.length_cons]; omega
 
-/-- **The port a row word's leaf is in** (`copySrc`'s, as `HmRow.delta` finds it) is one of the file's ports, when it has
-one. -/
 theorem portAt_lt (c : Circuit) (hne : 0 < c.ports.size) (x : ℕ) :
     ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0 < c.ports.size := by
   rw [← starts_size c] at hne ⊢
@@ -689,8 +637,6 @@ theorem portAt_lt (c : Circuit) (hne : 0 < c.ports.size) (x : ℕ) :
   | none => exact hne
   | some q => exact List.mem_range.1 (List.mem_reverse.1 (List.mem_of_find?_eq_some hf))
 
-/-- **A message bit's column is in the block**: for a row of the file, any byte and bit, it is a column of a `sha512x3`
-slot's message port or, past the row's chain, of its hm96 slot's `pad`. -/
 theorem msgCol_lt {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
     (C : CheckFactsT c (HmRow.blockOf t)) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
     (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
@@ -749,10 +695,6 @@ theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flo
     (hty : (ls.getD unit default).type.bind types = some ty) : (done.getD unit default).inCols.size = ty.inBits :=
   (checkLayout_spec ((deriveChecked_spec hd).1 unit (unit_lt hd)) hty).2.2.1
 
-/-! ## The accepted template statement's layout -/
-
-/-- **`TemplateLayout` for a template statement, from its parse and check.** For the circuit `parse` accepted for the
-template `t` that `templateOf` built from the class's derivation. -/
 theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c) (C : CheckFactsT c (HmRow.blockOf t))
     (htm : Typed.templateOf name done ls unit ty held = .ok t) {types : String → Option CircuitType}
     {info : String → Option TableInfo} (hd : deriveChecked types ls info (Typed.wordsIn held) unit = .ok done)
@@ -857,8 +799,6 @@ end template
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **The accepted template statement's parse and check facts, from `Stmt.setupH`** (`tags.typed`, a template read): its
-circuit carries the class `k` (`Circuit.cls`), and `ParseFactsT` and `CheckFactsT` hold for it. -/
 theorem setupH_factsT (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t)) :
@@ -882,9 +822,6 @@ theorem setupH_factsT (ht : tags.typed = true)
         C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
   · cases hrn
 
-/-- **The accepted template statement's layout, from `Stmt.setupH`** (`tags.typed`, a template read). Its circuit carries
-the class `k` (`Circuit.cls`), and `TemplateLayout` holds for the class's unit, over the words of the tables it holds.
-A part may place a derived layout or a generated read. -/
 theorem setupH_templateLayout (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t)) :
@@ -895,15 +832,10 @@ theorem setupH_templateLayout (ht : tags.typed = true)
   obtain ⟨name, ty, htm⟩ := Typed.read_template hr
   exact ⟨hcls, P'.typed, templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk⟩
 
-/-- **The unit's shape, from `deriveChecked`**: its constant row and order (`unit_const_row`, `order_cols`), its
-inputs (`unit_inputs`), and its parts' reads (`part_reads`, `callee_prod`). -/
 theorem unitShape_of_class (k : Typed.Class) : UnitShape k.done (k.done.getD k.unit default) :=
   unitShape_of k.hd (unit_const_row k.hd) (order_cols k.hd) (fun _ hp _ hc => part_reads k.hd hp hc)
     (fun _ hp _ hc _ hr => callee_prod k.hd hp hc hr)
 
-/-- **1e's facts at every template instance of an accepted template statement** (T3): for the class `k` its circuit
-carries, the block rows at `Typed.col c tb g c` are the unit's block row there, in the model of the accepted statement.
-The parts may be derived layouts or generated reads. -/
 theorem setupH_blockFacts (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
@@ -932,8 +864,6 @@ theorem filter_range_eq (w : ℕ) : ∀ n, w < n → (List.range n).filter (fun 
       simp
 
 
-/-! ## The unit's inputs copy their message bits -/
-
 namespace TemplateLayout
 
 variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
@@ -942,7 +872,6 @@ variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} 
 set_option hygiene false in
 local notation "𝒖" => done.getD unit default
 
-/-- **The typed tail at an input column's position**: that input's copy entries, `(i, i)` and `(i, copySrc g w)`. -/
 theorem tail_count_input (hd : deriveChecked types ls info words unit = .ok done)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size)
     (side : Bool) (j : ℕ) :
@@ -1016,8 +945,6 @@ theorem tail_count_input (hd : deriveChecked types ls info words unit = .ok done
   rw [hb0, hc0, List.flatMap_singleton, hget]
   simp
 
-/-- The block rows at a net slot's column, counted: the slot net's row there, placed; Δ's first-loop pairs there; and the
-typed tail there. -/
 theorem entry_raw (T : TemplateLayout st tb words done 𝒖) {n sl off y : ℕ} {d : D} (hn : n < st.c.nets.size)
     (hns : n ≠ st.c.shaNet) (hnh : n ≠ st.c.hmNet) (hat : AtSlot st.c n sl off y)
     (hnet : ∃ nm, Typed.netOfD d nm = .ok { (st.c.nets.getD n default).2 with lookup := none }) (LB : List ℕ)
@@ -1061,8 +988,6 @@ theorem copy_sum (y s j : ℕ) :
   · subst hj; simp
   · simp [hj, Ne.symm hj]
 
-/-- **An input of template instance `g` copies its message bit**: the block rows at its position read exactly
-`copySrc g w`, in `A` and in `B` (the input copies, over the unit's self input rows). -/
 theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size) (j : ℕ) :
     rangesEntry st (slotEntryA st) (Typed.col st.c tb g 𝒖.inCols[w]) j +
@@ -1160,9 +1085,6 @@ theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T :
             rw [hy, hb0']; rfl]
         exact copy_sum _ _ _
 
-/-- **An input of template instance `g` is a copy row of its message bit**, in the model of the accepted statement (when
-the message bit's position is in the block). A satisfying witness then carries the message bit there
-(`CopyRow.block_eq`): a table class's `copy`. -/
 theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g w : ℕ} (hg : g < st.c.g)
     (hw : w < 𝒖.inCols.size) (hs : Typed.copySrc st.c g w < 2 ^ st.c.kLog) :
@@ -1179,9 +1101,6 @@ theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T :
 
 end TemplateLayout
 
-/-- **An accepted template statement's inputs read message bits inside the block**: input `w` of template instance `g`
-copies `Typed.copySrc st.c g w`, a message bit of one of the file's rows (`msgCol_lt`). The file has a row, since the
-instance's inputs are its rows' words (`checkTyped`) and the unit has input `w`. -/
 theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
@@ -1201,8 +1120,6 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
   unfold Typed.copySrc
   exact msgCol_lt P' C' hg (portAt_lt st.c hne _) _ _ (Nat.mod_lt _ (by norm_num))
 
-/-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of
-template instance `g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement. -/
 theorem setupH_inputCopy {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}

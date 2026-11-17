@@ -4,28 +4,8 @@ public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Flock.Soundness.Audit.Stratified
 public import Proofs.Flock.Soundness.E2E
 
-/-!
-# The executable stratified sample, and the e2e theorems at its sampling design
-
-`Flock.Draw.stratified` is the verifier's executable stratified sample: `Flock.Draw.subset` on each stratum's own stream,
-local indices mapped to the stratum's units (`Stratum.unit`), and the union sorted, or `none` if a stream runs out.
-`ExecStrata σ k S` says the executable strata `S` are the model's: the same `k`, the same sizes, and each stratum's
-units run over `σ`'s stratum.
-
-* `stratified_exec_escape_le`: over independent uniform streams, the executable sample misses `B` with probability at most
-  `SamplingDesign.stratified`'s missProb, the product over strata of `subset_exec_escape_le` (`ExecSample.lean`).
-* `execStratified`: the executable sample as a sampling design, a sample that runs out sampling every unit. `execStratified_escape_le`: it
-  misses each set with at most `SamplingDesign.stratified`'s missProb. `execStratified_miss_le`: its count curve is at most
-  `SamplingDesign.stratified`'s, which `stratified_miss_eq_greedy` computes.
-* `flock_e2e_sampled_exec`, `flock_e2e_count_exec`: `flock_e2e_sampled` and `flock_e2e_count` (`E2E.lean`) at that sampling design, the
-  count curve bounded by `SamplingDesign.stratified`'s `miss`.
-
-The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live sample,
-`Flock.Draw.drawWith` on the challenger's coins, extends a stream that runs out and reruns, rather than sampling every
-unit; `ExecSampleOS.lean` proves the same bounds for it.
-
-`stratumK` is the count sampling design's `k` by `rfl`: `countRule_eq_sample` (`Audit/FlockWork.lean`).
--/
+/-! The executable stratified sample escapes no more often than `SamplingDesign.stratified`
+(`stratified_exec_escape_le`), and the e2e theorems at its sampling design. -/
 
 @[expose] public section
 
@@ -44,17 +24,13 @@ def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.D
   ∀ s, (S s).k = k s ∧ (S s).size = (stratum σ s).card ∧
     (range (S s).size).image (S s).unit = (stratum σ s).map Fin.valEmbedding
 
-/-- The verifier's executable stratified sample as a sampling design: stratum `s`'s stream is `L s` uniform bytes (A3), and a sample
-whose stream runs out samples every unit. The live sample extends such a stream and reruns instead: `execOS`
-(`ExecSampleOS.lean`). -/
+/-- The live sample extends a stream that runs out and reruns instead (`execOS`). -/
 def execStratified (S : Fin m → Flock.Draw.Stratum) (L : Fin m → ℕ) : SamplingDesign n where
   Ω := (s : Fin m) → Fin (L s) → Fin 256
   draw ω := match Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (ω s)) with
     | some D => univ.filter fun u => u.val ∈ D
     | none => univ
 
-/-- A `forIn` in `Option` whose body runs `g i` and appends its values under `u i`: when it succeeds, every `g i` did,
-and every value it appended is in the result. -/
 theorem forIn_append (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ) (F : ℕ → Array ℕ → Option (ForInStep (Array ℕ)))
     (hF : ∀ i out, F i out = (g i).bind fun l => some (ForInStep.yield (out ++ l.map (u i)))) :
     ∀ (l : List ℕ) (out res : Array ℕ), forIn l out F = some res →
@@ -79,8 +55,6 @@ theorem forIn_append (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ) 
       · exact ⟨li, hg, fun j hj => hout _ (Array.mem_append_right _ (Array.mem_map_of_mem hj))⟩
       · exact his i' hi'
 
-/-- **What a successful stratified sample holds**: every stratum's `subset` succeeded, and each of its local indices'
-units is in the sample. -/
 theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray) (D : Array ℕ)
     (h : Flock.Draw.stratified strata streams = some D) :
     ∀ i < strata.size, ∃ li, Flock.Draw.subset strata[i]!.k strata[i]!.size (streams.getD i ByteArray.empty) = some li ∧
@@ -104,10 +78,8 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
   rw [← hD', SampleExec.mem_qsort]
   exact hmem j hj
 
-/-- **The executable stratified sample escapes no more often than the model's.** Its probability space is independent
-uniform streams: that the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`,
-`uniform/io-getrandombytes`), which `sampleOS_stratified_escape_le` (`ExecSampleOS.lean`) takes for the live sample, reruns
-included. -/
+/-- Its probability space is independent uniform streams; that the challenger's coins are uniform is A3
+(`Assumptions.UniformRandomBytes`), which `sampleOS_stratified_escape_le` takes for the live sample. -/
 theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     prCoin (fun f : (s : Fin m) → Fin (L s) → Fin 256 =>
@@ -115,7 +87,6 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
           ∀ u ∈ B, u.val ∉ D) ≤
       (stratified σ k hk).missProb B := by
   classical
-  -- stratum `s`'s local indices whose units are in `B`
   let Bl : (s : Fin m) → Finset (Fin (S s).size) := fun s =>
     univ.filter fun j => ∃ u ∈ B, (S s).unit j.val = u.val
   have hkS : ∀ s, (S s).k ≤ (S s).size := fun s => by rw [(hS s).1, (hS s).2.1]; exact hk s
@@ -146,7 +117,6 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         rw [stratified_escape]
         refine Finset.prod_le_prod fun s _ => ?_
         rw [subset_escape]
-        -- `B`'s units in stratum `s` are the units of `Bl s`'s indices, so `Bl s` is at least as large
         have hcard : (B.filter (σ · = s)).card ≤ (Bl s).card := by
           have hsub : (B.filter (σ · = s)).map Fin.valEmbedding ⊆ (Bl s).image fun j => (S s).unit j.val := by
             intro x hx
@@ -171,7 +141,6 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         rw [hden]
         exact ENNReal.div_le_div_right (by exact_mod_cast hnum) _
 
-/-- The executable sample as a sampling design escapes no more often than `SamplingDesign.stratified`: a sample that runs out samples every unit. -/
 theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     (execStratified (n := n) S L).missProb B ≤ (stratified σ k hk).missProb B := by
@@ -193,7 +162,6 @@ theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
       exact ⟨D, hD, fun u hu huD => Finset.disjoint_left.1 hd (Finset.mem_filter.2 ⟨Finset.mem_univ _, huD⟩) hu⟩
     · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
-/-- The executable sample's count curve is at most `SamplingDesign.stratified`'s, which `stratified_miss_eq_greedy` computes. -/
 theorem execStratified_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (K : ℕ) :
     (execStratified (n := n) S L).miss K ≤ (stratified σ k hk).miss K :=
@@ -201,7 +169,6 @@ theorem execStratified_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : 
 
 end SamplingDesign
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
@@ -214,7 +181,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's sampling design**: `flock_e2e_sampled` with `L := SamplingDesign.execStratified St Ls`. -/
 theorem flock_e2e_sampled_exec
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -231,8 +197,6 @@ theorem flock_e2e_sampled_exec
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab vb k Rw M ρ t' :=
   P.flock_e2e_sampled H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr ht σ hCR
 
-/-- **The e2e count curve at the executable's sampling design**: `flock_e2e_count` with `L := SamplingDesign.execStratified St Ls`, its count
-curve bounded by `SamplingDesign.stratified`'s `miss` for the strata the executable's describe (`ExecStrata`). -/
 theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (hS : SamplingDesign.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)

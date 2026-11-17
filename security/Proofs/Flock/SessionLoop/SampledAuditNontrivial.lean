@@ -5,25 +5,7 @@ public import Proofs.Flock.SessionLoop.ZkAnyHonest
 public import Proofs.Flock.SessionLoop.Leak
 public import Proofs.Core.ValueSalts
 
-/-!
-# `SampledAuditAnyDeployed`'s conclusion can fail
-
-`Flock.Guarantees.SampledAuditAnyDeployed` concludes `Loop.AuditAnyAt`: the audit's view is within the registration's
-bound of the simulators' and the sessions' errors. That conclusion fails at a stack that reads the key, as
-`Verity.ValueSalts.RegisteredLeakage`'s does: at the witnesses' value service, with no hm96 leaf, the stack that hands a
-record of its own as registration 0, its public commitment `true` and its record tag the key, is always admitted with a
-`true` commitment, while no genuine or ideal record has one and, run at the key `false`, it forges only when the key is
-`false`.
-
-* `Loop.auditSv`: the witness's value service, two keys, one session and tag, no hm96 leaf, every public commitment
-  `false` and the record tag the key; `Loop.auditSt`: its stack, which hands a record of its own as registration 0,
-  public commitment `true` and record tag the key.
-* `Loop.auditQ`: sessions at the concrete statement and its trace, the honest values and the honest worker of the
-  session loop's release on the tape's samples, against `Loop.helloRej`; `Loop.auditCB` and `Loop.auditEC`, their
-  simulators' coins as they are.
-* `Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial`: there, at no sampled session, `AuditAnyAt` fails:
-  `1 ≤ 1 · (0 + 0 + 0) + 1/2 + 0` is false.
--/
+/-! `SampledAuditAnyDeployed`'s conclusion fails at a stack that reads the key. -/
 
 @[expose] public section
 

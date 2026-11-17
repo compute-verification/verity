@@ -38,33 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameRanked
 
-/-!
-# The session loop's frame past the inner proof's label
-
-`LeanRelease.LiveInner` is `LiveRoundEq`'s equation at the inner proof's rounds, which the loop's frame releases itself
-(`LeanRelease.withInner`). Its release side rests on the frame being outside every masked phase there, so that it frees
-no word of the round and releases it as it came:
-
-* `Loop.InnerOff`: once the inner proof's label came (`Masker.inner`), the frame is outside a masked phase (`on`), past
-  the opening's label (`done`) and, at a layout with level 0, past its close (`doneL0`). Every label keeps it
-  (`innerOff_label`: the inner proof's label asks for it, and no later label opens a phase), and so does every absorbed
-  value, round, check, answer and step of the frame (`innerOff_step`), so `Frame.run` from `{}` keeps it
-  (`innerOff_run`), and so does `Loop.repState` (`innerOff_repState`).
-* `Loop.roundFree_offAt`, `Loop.check_offAt`: outside every masked phase, past the inner proof's label or not, a round
-  frees no word and leaves as its frames came, so the frame's check passes a device round only where it is the
-  scheduled round.
-* `Loop.check_inner0`, `Loop.check_innerSched`: the inner proof's round 0 passes at any state as it came, and its later
-  rounds do outside a masked phase at a row of pads within a `u64`'s count; the frame's own rounds (`Frame.innerSched`)
-  pass only as themselves.
-* `Loop.InnerOffAny`: the states `Loop.progOf` and `Loop.freshOf` give keep it (`innerOffAny_progOf`,
-  `innerOffAny_freshOf`), and so does every answer (`innerOffAny_answer`), so the state the frame takes coins at does.
-  `LeanRelease.ofLoop_answered_on`: at the session loop's own frames, once the inner proof's label came the state a
-  round is checked at is outside every masked phase. `LeanRelease.ofLoop_answered_inner`: past a rep's schedule, that
-  state counts the inner proof's round, below its last, at a row of pads within a `u64`'s count.
-* `LeanRelease.release_of_live`, `LeanRelease.scheduled_innerAt`, `LeanRelease.release_innerAt`: at the inner proof's
-  rounds (`Loop.InnerAt`) `withInner`'s session loop releases the inner proof's round `Loop.innerOf` schedules, as it
-  came, after a live run's device round.
--/
+/-! Past the inner proof's label the session loop's frame is outside every masked phase and releases each round as it came. -/
 
 @[expose] public section
 
@@ -83,8 +57,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **Past the inner proof's label the frame is outside every masked phase**: once the label came, it is outside a
-masked phase, past the opening's label and, at a layout with level 0, past level 0's close. -/
 def InnerOff (c : Cfg) (s : Masker) : Prop :=
   s.inner.isSome = true → s.on = false ∧ s.done = true ∧ (c.lig = true → s.doneL0 = true)
 
@@ -99,7 +71,6 @@ theorem innerOff_rel {c : Cfg} {s s' : Masker} (hs : InnerOff c s) (h : Flags.Re
   obtain ⟨x, y, z⟩ := hs hq
   exact ⟨a2.trans x, a1.trans y, fun hl => a4.trans (z hl)⟩
 
-/-- The inner proof's label, where the frame takes it, leaves it outside every masked phase. -/
 theorem innerOff_labelInner {c : Cfg} {s : Masker} {q : Masker × ByteArray}
     (h : s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 = .ok q) :
     q.1.on = false ∧ q.1.done = true ∧ (c.lig = true → q.1.doneL0 = true) := by
@@ -120,8 +91,6 @@ theorem innerOff_labelInner {c : Cfg} {s : Masker} {q : Masker × ByteArray}
       · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hi, hd, hon] at h
         all_goals cases h
 
-/-- Outside every masked phase, past the opening's label and level 0's close, a label other than the inner proof's
-opens none: the zerocheck's label comes only before the opening's, and level 0's opening only before its close. -/
 theorem innerOff_labelPast {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (hon : s.on = false)
     (hd : s.done = true) (hL : c.lig = true → s.doneL0 = true) (hI : isLabel l _root_.Flock.Zk.LABEL_INNER = false)
     (h : s.label c l = .ok q) : q.1.on = false ∧ q.1.done = true ∧ (c.lig = true → q.1.doneL0 = true) := by
@@ -160,7 +129,6 @@ theorem innerOff_label {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × Byt
   · rw [Ranked.eq_of_isLabel hI] at h
     exact innerOff_labelInner h
 
-/-- **A round keeps the frame outside every masked phase past the inner proof's label**, whatever its bytes. -/
 theorem innerOff_roundFree {c : Cfg} {s : Masker} {content : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
     (hs : InnerOff c s) (h : roundFree c s content n = .ok q) : InnerOff c q.2.1 := by
   unfold roundFree at h
@@ -263,8 +231,6 @@ theorem innerOff_check {c : Cfg} {s s' : Masker} {v r out : ByteArray} {n : ℕ}
   | none => exact innerOff_round (check_none h) hs
   | some w => exact innerOff_round (check_some h) hs
 
-/-- **Coins the frame takes keep it outside every masked phase past the inner proof's label**, at any configuration
-they are taken at: past the label they only count the inner proof's rounds, and before it they leave it unread. -/
 theorem innerOff_answer {c c' : Cfg} {s s' : Masker} {cs : Array F128} (hs : InnerOff c s)
     (h : s.answer c' cs = .ok s') : InnerOff c s' := by
   cases hi : s.inner with
@@ -290,7 +256,6 @@ theorem innerOff_answer {c c' : Cfg} {s s' : Masker} {cs : Array F128} (hs : Inn
       split <;> (try split) <;> exact ⟨hon, hd, hL⟩
 
 open _root_.Flock.ZkServer.Frame (Reply) in
-/-- **A step of the frame keeps it outside every masked phase past the inner proof's label**, whatever the request. -/
 theorem innerOff_step (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (q : _root_.Flock.ZkServer.Frame.Req)
     (hs : InnerOff c st.m) : InnerOff c (_root_.Flock.ZkServer.Frame.step c st q).2.m := by
   cases q with
@@ -364,7 +329,6 @@ theorem innerOff_stepEq {c : Cfg} {st st' : _root_.Flock.ZkServer.Frame.State} {
   rw [h] at h1
   exact h1
 
-/-- **The frame over any requests stays outside every masked phase past the inner proof's label.** -/
 theorem innerOff_run (c : Cfg) : ∀ (st : _root_.Flock.ZkServer.Frame.State) (qs : List _root_.Flock.ZkServer.Frame.Req),
     InnerOff c st.m → InnerOff c (_root_.Flock.ZkServer.Frame.run c st qs).1.m
   | st, [], hs => hs
@@ -390,8 +354,6 @@ theorem innerOff_repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs 
   · exact innerOff_empty c
   · exact innerOff_runIf c _
 
-/-- **A round outside every masked phase, past the inner proof's label or not**: where the frame takes it, it frees no
-word and releases its frames as they came, then the squeeze. -/
 theorem roundFree_offAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} (hon : s.on = false)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -413,8 +375,6 @@ theorem roundFree_offAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n 
   rw [data_append', h2, sq_enc]
   simp
 
-/-- **Outside every masked phase a round passes only as itself**: where the frame's check passes the device round `v`
-against the scheduled round `r`, past the inner proof's label or not, `v` is `r` and leaves as `r`'s frames. -/
 theorem check_offAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} {v out : ByteArray}
     (hon : m.on = false) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
@@ -429,7 +389,6 @@ theorem check_offAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n :
   rw [hv] at hf
   exact (roundFree_offAt hon hm hp hk h0 hn hf).2
 
-/-- The inner proof's label, where the frame takes it, leaves as its label frame. -/
 theorem label_inner_out (c : Cfg) (s : Masker) {q : Masker × ByteArray}
     (h : s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 = .ok q) :
     q.2 = labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 := by
@@ -478,8 +437,6 @@ theorem stepAt_one_off (c : Cfg) (r : Masker × ByteArray × Array ℕ × ℕ) (
   rw [h2]
   simp [maskFrames, encs]
 
-/-- **The inner proof's round 0 leaves as it came**: wherever the frame takes it, it frees no word and releases the
-label frame, `final_c'` and `ε`'s squeeze unmasked. -/
 theorem roundFree_inner0_out {c : Cfg} {s : Masker} {w' : ByteArray} (hw : w'.size = 16) {n : ℕ}
     {q : ByteArray × Masker × Array ℕ}
     (h : roundFree c s (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1) n =
@@ -521,8 +478,6 @@ theorem roundFree_inner0_out {c : Cfg} {s : Masker} {w' : ByteArray} (hw : w'.si
   rw [data_append', hd1, hb1, sq_enc]
   simp [ownFrames, encs]
 
-/-- **The inner proof's round 0 passes only as itself**: where the frame's check passes the device round `v` against
-the scheduled round 0, at any state, `v` is that round and leaves as it came. -/
 theorem check_inner0 {c : Cfg} {m s' : Masker} {w' : ByteArray} (hw : w'.size = 16) {n : ℕ} {v out : ByteArray}
     (h : check c m v (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1) n =
       .ok (out, s', none)) :
@@ -557,9 +512,6 @@ theorem maskFrames_own (c : Cfg) (s : Masker) (w t : ByteArray) :
   | 2, _ => maskFrames_bytes t
   | _ + 3, _ => maskFrames_vec _
 
-/-- **The inner proof's rounds 1 to 3 pass only as themselves outside every masked phase**: where the frame's check
-passes the device round `v` against the ZK server's own round `k`, at a state outside a masked phase, `v` is that round
-and leaves as it came. -/
 theorem check_innerAt {c : Cfg} {m s' s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) {k n : ℕ}
     (hk0 : 0 < k) (hk4 : k < 4) (hon : m.on = false) (hrow : c.rowH.size < 2 ^ 64) {v out : ByteArray}
     (h : check c m v (ownRound c s w t n k) n = .ok (out, s', none)) :
@@ -579,9 +531,6 @@ theorem check_innerAt {c : Cfg} {m s' s : Masker} {w t : ByteArray} (hw : w.size
   refine ⟨hv.trans e.symm, ?_⟩
   rw [ho, maskFrames_own c s w t hk0, hX]
 
-/-- **The frame's own inner rounds pass only as themselves**: where the frame's check passes the device round `v`
-against the inner proof's round `k` as the frame schedules it (`Frame.innerSched`), at a state outside a masked phase
-and a row of pads within a `u64`'s count past round 0, `v` is that round and the release is that round as it came. -/
 theorem check_innerSched {c : Cfg} {m s' s : Masker} {fin : Array ByteArray} {n k : ℕ} {v out : ByteArray}
     (hk : k < INNER_ROUNDS)
     (h : check c m v (_root_.Flock.ZkServer.Frame.innerSched c s fin n k) n = .ok (out, s', none))
@@ -607,7 +556,6 @@ theorem check_innerSched {c : Cfg} {m s' s : Masker} {fin : Array ByteArray} {n 
     rw [e] at h ⊢
     exact check_innerAt hw ht hk0 hk hon hrow h
 
-/-- `InnerOff` at some configuration. -/
 def InnerOffAny (s : Masker) : Prop := ∃ c, InnerOff c s
 
 theorem innerOffAny_answer {c' : Cfg} {s s' : Masker} {cs : Array F128} (hs : InnerOffAny s)
@@ -644,9 +592,6 @@ end Loop
 namespace LeanRelease
 
 open Loop in
-/-- **At the session loop's own frames, past the inner proof's label a round is checked outside every masked phase**:
-where the frame takes the stream's coins after `e0 :: h1` at `m` (`ofLoop_frameAnswer`: at `Loop.progOf` or
-`Loop.freshOf` of the decoded coins) and the inner proof's label came, `m` is outside a masked phase. -/
 theorem ofLoop_answered_on (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -671,12 +616,6 @@ theorem ofLoop_answered_on (T : CoinLayer.TableData)
   exact (hc hi).1
 
 open Loop in
-/-- **At the loop's own frames, past a rep's schedule the frame takes coins inside the inner proof**: where the frame
-takes the coins after `e0 :: h1` at `m` and the next round is rep stream `k`'s round `j + 1`, past the end of its
-schedule so far on its own table and salts (`rsched`, `Count.RealTabs`), the round is the inner proof's round
-`j + 1 - rsched.size`, `m` counts it (`repState_own_inner`; past the inner proof's last round the rep's state owes no
-coins, `repState_past`), and the round's configuration has a row of pads within a `u64`'s count (`Session.sizesOk`,
-where the loop serves `x`). -/
 theorem ofLoop_answered_inner (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -773,9 +712,6 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
   · exact ⟨h4, repState_own_inner c' _ t (k % 2) dom xs hi _ _ _ hal hs h4 hF, hrow⟩
   · exact absurd hF (answer_owed_none _ (repState_past c' t (k % 2) dom xs hi _ _ _ hal hs (by omega)))
 
-/-- **The release of a live frame round against a fixed scheduled round**: where a live run's worker sends the device
-round `v` at a frame round whose scheduled round is `r` at every value, the frame's check passes `v` against `r` at the
-state the frame takes the coins at, and the release is the round the check releases, tagged `0`. -/
 theorem release_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (v : Msg) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hk : L.kindAt x h.length = .masked) (hv : wk x w ρ h 0 = some (v, false)) {r : ByteArray}
@@ -788,8 +724,6 @@ theorem release_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker)
   obtain ⟨fr, hf⟩ := Sched.roundFree_round (check_none hc)
   exact ⟨m, out, s', ha, hc, release_of_roundFree L x ρ h false v ha rfl hf⟩
 
-/-- **The round in a device round's place at the inner proof's rounds** of `withInner`'s session loop: where the loop
-schedules no round of its own (`Loop.schedOf`), `withInner`'s round (`Loop.innerOf`). -/
 theorem scheduled_innerAt
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -818,13 +752,6 @@ theorem scheduled_innerAt
   simp only [hin]
 
 open Loop in
-/-- **At the inner proof's rounds `withInner`'s session loop releases its own round as it came**: where a live run's
-worker sends the device round `v` after a history at the inner proof's rounds (`Loop.InnerAt`), on the rep's own tables
-where `real` answers the loop's (`hR`) at a statement the loop serves, the round in the device round's place is the
-inner proof's round `Loop.innerOf` schedules, and the device round and the release are that round. Its round 0 passes
-at any state (`check_inner0`), its rounds 1 to 3 outside every masked phase (`ofLoop_answered_on`, past the inner
-proof's label, which the rep's state counts: `ofLoop_answered_inner`); at its round 4 the frame refuses the round
-(`check_inner_done`), and past it the coins before it. -/
 theorem release_innerAt
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

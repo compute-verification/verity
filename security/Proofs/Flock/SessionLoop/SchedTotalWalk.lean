@@ -5,24 +5,7 @@ public import Proofs.Flock.Claims.Complete.Reps
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# The opening does not stop at admissible answers
-
-`FrameAsks` counts the opening's asks and `FrameRho` follows its answers, both wherever it goes on, so both hold at a
-program that stops. This file is their total counterpart: past its PIOP, the opening (`Finish.repOpening` on the live
-channel `Drive.stepAsks coins true`), answered each round's count of coins within an admissibility `A`, never stops,
-where `A` makes `ρ₁`'s answer independent of `ρ₀`'s.
-
-* `ST A Q s hs`: from the answers `hs`, on answers in `A` of each round's count, `s` asks or ends in `Q`, and never
-  stops (`st_bind`, `st_mono`); `st_feed`: fed answers in `A`, it is still `ST` where the feed leaves it.
-* `totO A coins`: `ST` on the opening's channel past the coins it was given, as a `Total` (`totOT`, `totOL` over the
-  transcript and Ligerito's prover state), so the walks of `Reps` show the opening's steps after `ρ₁` don't stop.
-* `OS A P B p`, `OSL A P B p`: a transcript program over `OpenM`, and one over Ligerito's prover state, from a channel
-  state and answers in `P`, on answers in `A`, does not stop and ends in `B`; with `bind`, `pure`, `if`, loops,
-  transcript steps and squeezes (`os_*`, `osl_*`), the squeezes counting the answers (`PL`).
-* **`ligeritoPZk_st`**, **`repOpening_st`**: the masked Ligerito, and the opening past the PIOP, don't stop where `A`
-  makes the answer after `ρ₀`'s independent of it.
--/
+/-! The opening past its PIOP does not stop at admissible answers (`repOpening_st`). -/
 
 @[expose] public section
 
@@ -35,11 +18,8 @@ open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP LP LigSt
 open FlockComplete.JsonRT (Total)
 open FlockComplete.JsonRT.Total (bind' pure' lift_st forIn_range forIn_array)
 
-/-- **Admissible answers**: `A hs cs`, the answer `cs` at the answers so far `hs`. -/
 abbrev Adm := Hist → Array F128 → Prop
 
-/-- **A step program that does not stop** at answers in `A`: from the answers `hs`, answered each round's count of
-coins in `A`, it asks or ends, with a value and answers in `Q` where it ends. -/
 def ST {α : Type} (A : Adm) (Q : α → Hist → Prop) : Step α → Hist → Prop
   | .done a, hs => Q a hs
   | .fail _, _ => False
@@ -77,7 +57,6 @@ theorem feed_ask {α : Type} (c : ByteArray) (n : ℕ) (k : Array F128 → Step 
     (Step.ask c n k).feed (x :: L) rs = (k x).feed L (rs.push (c, n)) :=
   rfl
 
-/-- **Fed, a program keeps the rounds it had sent**, and sends more. -/
 theorem feed_keeps {α : Type} : ∀ (s : Step α) (L : List (Array F128)) (rs : Array (ByteArray × ℕ)),
     rs.size ≤ (s.feed L rs).2.size ∧ ∀ i < rs.size, (s.feed L rs).2[i]? = rs[i]?
   | s, [], rs => by rw [Loop.feed_nil]; exact ⟨le_rfl, fun _ _ => rfl⟩
@@ -90,9 +69,6 @@ theorem feed_keeps {α : Type} : ∀ (s : Step α) (L : List (Array F128)) (rs :
     refine ⟨by omega, fun i hi => ?_⟩
     rw [he i (by rw [Array.size_push]; omega), Array.getElem?_push, ite_eq_right (Nat.ne_of_lt hi)]
 
-/-- **Fed answers in `A`, a program that does not stop** does not stop where the feed leaves it, on the answers it took:
-each answer fed of its round's count and in `A` at the answers before it, `rs`'s rounds and the feed's `j`-th the round
-after them. -/
 theorem st_feed {α : Type} {Q : α → Hist → Prop} : ∀ (s : Step α) (L : List (Array F128))
     (rs : Array (ByteArray × ℕ)) (hs : Hist), ST A Q s hs →
     (∀ j (hj : j < L.length) c n, (s.feed L rs).2[rs.size + j]? = some (c, n) →
@@ -125,9 +101,6 @@ theorem st_feed {α : Type} {Q : α → Hist → Prop} : ∀ (s : Step α) (L : 
         ((k x).feed L (rs.push (c, n))).2.size - (rs.size + 1) + 1 by omega, List.take_succ_cons]
     simpa only [List.append_assoc, List.singleton_append] using ih
 
-/-! ## Not stopping as a `Total` -/
-
-/-- **Not stopping on the opening's channel** past the coins it was given, at answers in `A`. -/
 def totO (A : Adm) (coins : Got) : Total OpenM where
   T x P := ∀ got hs, Past coins got → ST A (fun r _ => P r.1 ∧ Past coins r.2) (x.run got) hs
   mono h hq got hs hp := st_mono (fun r _ hr => ⟨hq _ hr.1, hr.2⟩) _ _ (h got hs hp)
@@ -139,10 +112,8 @@ def totO (A : Adm) (coins : Got) : Total OpenM where
     subst hv
     exact ⟨h, hp⟩
 
-/-- Not stopping over the transcript. -/
 abbrev totOT (A : Adm) (coins : Got) : Total (TMW OpenM) := (totO A coins).st Flock.Transcript
 
-/-- Not stopping over Ligerito's state too. -/
 abbrev totOL (A : Adm) (coins : Got) : Total (LP OpenM) := (totOT A coins).st LigState
 
 variable {coins : Got}
@@ -152,7 +123,6 @@ theorem past_push {got : Got} (h : Past coins got) (cs : Array F128) : Past coin
   rw [Array.size_push]
   omega
 
-/-- **A live round does not stop** past the coins it was given, at an answer of its count in `A`. -/
 theorem st_round_live {Q : (ℕ → F128) × Got → Hist → Prop} (coins got : Got) (c : ByteArray) (hs : Hist)
     (h : Past coins got) (hQ : ∀ cs : Array F128, A hs cs → Q ((fun i => cs[i]!), got.push cs) (hs ++ [cs])) :
     ST A Q (((stepAsks coins true).round c).run got) hs := by
@@ -255,14 +225,9 @@ theorem queryP_tot (coins : Got) (nonce : ℕ → ℕ → UInt64) (ms : _root_.F
     | (with_reducible apply liftT_tot)
     | (with_reducible apply sampleVecP_tot))
 
-/-! ## Transcript programs over `OpenM` that don't stop -/
-
-/-- **A transcript program over `OpenM` that does not stop**: from a channel state and answers in `P`, on answers in
-`A`, it does not stop, and where it ends it ends in `B`. -/
 def OS {α : Type} (A : Adm) (P : Got → Hist → Prop) (B : α → Got → Hist → Prop) (p : TMW OpenM α) : Prop :=
   ∀ t got hs, P got hs → ST A (fun r hs' => B r.1.1 r.2 hs') ((p.run t).run got) hs
 
-/-- Past the coins given, at `m` answers. -/
 abbrev PL (coins : Got) (m : ℕ) : Got → Hist → Prop := fun g hs => Past coins g ∧ hs.length = m
 
 theorem os_bind {α β : Type} {P : Got → Hist → Prop} {B : α → Got → Hist → Prop} {C : β → Got → Hist → Prop}
@@ -279,7 +244,6 @@ theorem os_pure {α : Type} {P : Got → Hist → Prop} {B : α → Got → Hist
     (h : ∀ g hs, P g hs → B a g hs) : OS A P B (pure a : TMW OpenM α) :=
   fun _ got hs hP => h got hs hP
 
-/-- A step that neither asks nor stops nor moves the channel keeps `P`. -/
 theorem os_det {α : Type} {P : Got → Hist → Prop} {p : TMW OpenM α}
     (h : ∀ t got, ∃ r, ((p.run t).run got) = .done (r, got)) : OS A P (fun _ => P) p := by
   intro t got hs hP
@@ -296,12 +260,10 @@ theorem os_liftTM {α : Type} {P : Got → Hist → Prop} (x : Flock.Transcript.
     rw [hp]
     rfl
 
-/-- `p` doesn't stop past the coins given where it returns in `totOT`. -/
 theorem os_of_tot {α : Type} {p : TMW OpenM α} {Q : α → Prop} (h : (totOT A coins).T p Q) :
     OS A (fun g _ => Past coins g) (fun a g _ => Q a ∧ Past coins g) p :=
   fun t got hs hP => h t got hs hP
 
-/-- **A live squeeze's answer**: of `n ≠ 0` coins, it takes one answer in `A`, its value the answer's words. -/
 theorem os_squeezeP_live (kind : UInt8) {n : ℕ} (hn0 : n ≠ 0) (h0 : Hist) :
     OS A (fun g hs => Past coins g ∧ hs = h0)
       (fun v g hs => Past coins g ∧ ∃ cs, hs = h0 ++ [cs] ∧ A h0 cs ∧ v = (Array.range n).map fun i => cs[i]!)
@@ -313,7 +275,6 @@ theorem os_squeezeP_live (kind : UInt8) {n : ℕ} (hn0 : n ≠ 0) (h0 : Hist) :
   obtain ⟨cs, rfl, rfl, hA⟩ := h
   exact ⟨past_push hI cs, cs, rfl, hA, rfl⟩
 
-/-- **A live squeeze's count**: a squeeze of `n` coins takes one answer, none for `n = 0`. -/
 theorem os_squeezeP (kind : UInt8) (n m : ℕ) :
     OS A (PL coins m) (fun _ => PL coins (m + (sq n).length)) (squeezeP (stepAsks coins true) kind n) := by
   rintro t got hs ⟨hI, hl⟩
@@ -334,7 +295,6 @@ theorem os_sampleVecP (n m : ℕ) :
 theorem os_sampleKP (m : ℕ) : OS A (PL coins m) (fun _ => PL coins (m + 1)) (sampleKP (stepAsks coins true)) :=
   os_bind (os_squeezeP 2 2 m) fun _ => os_pure _ fun _ _ h => h
 
-/-- **A live `F256` squeeze's value is its answer's first two words**, its answer in `A`. -/
 theorem os_sampleKP_val (h0 : Hist) :
     OS A (fun g hs => Past coins g ∧ hs = h0)
       (fun v g hs => Past coins g ∧ ∃ cs, hs = h0 ++ [cs] ∧ A h0 cs ∧ v = (⟨cs[0]!, cs[1]!⟩ : _root_.Flock.F256))
@@ -345,7 +305,6 @@ theorem os_sampleKP_val (h0 : Hist) :
   rintro g hs ⟨hI, cs, rfl, hA, rfl⟩
   exact ⟨hI, cs, rfl, hA, by simp⟩
 
-/-- **A loop over `[0:n]`**, step `i` from `J i` yielding into `J (i + 1)`. -/
 theorem os_forIn {σ : Type} (n : ℕ) (J : ℕ → σ → Got → Hist → Prop) (body : ℕ → σ → TMW OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, OS A (J i u) (fun r g hs => ∃ v, r = .yield v ∧ J (i + 1) v g hs) (body i u)) (u : σ) :
     OS A (J 0 u) (fun r => J n r) (forIn [:n] u body) := by
@@ -380,9 +339,6 @@ theorem st_run' {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} 
   refine st_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _
     (st_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _ h) <;> exact h
 
-/-! ## Over Ligerito's prover state -/
-
-/-- `OS` over the Ligerito prover's state: from any state. -/
 def OSL {α : Type} (A : Adm) (P : Got → Hist → Prop) (B : α → Got → Hist → Prop) (p : LP OpenM α) : Prop :=
   ∀ st, OS A P (fun r => B r.1) (p.run st)
 
@@ -412,7 +368,6 @@ theorem osl_liftT {α : Type} {P : Got → Hist → Prop} {B : α → Got → Hi
   show OS A _ _ (StateT.lift m st)
   exact os_bind h fun a => os_pure (B := fun (r : α × LigState) => B r.1) (a, st) fun _ _ hb => hb
 
-/-- A step that neither asks nor stops nor moves the channel keeps `P`. -/
 theorem osl_det {α : Type} {P : Got → Hist → Prop} {p : LP OpenM α}
     (h : ∀ st t got, ∃ r, (((p.run st).run t).run got) = .done (r, got)) : OSL A P (fun _ => P) p :=
   fun st => os_det (h st)
@@ -433,12 +388,10 @@ theorem osl_powP {P : Got → Hist → Prop} (nonce : ℕ → ℕ → UInt64) (k
   exact osl_bind (osl_det fun _ _ _ => ⟨_, rfl⟩) fun _ =>
     osl_bind (osl_det fun _ _ _ => ⟨_, rfl⟩) fun _ => osl_liftTM _ fun _ => ⟨_, rfl⟩
 
-/-- `p` doesn't stop past the coins given where it returns in `totOL`. -/
 theorem osl_of_tot {α : Type} {p : LP OpenM α} {Q : α → Prop} (h : (totOL A coins).T p Q) :
     OSL A (fun g _ => Past coins g) (fun a g _ => Q a ∧ Past coins g) p :=
   fun st => os_of_tot (h st)
 
-/-- **A loop over `[0:n]`**, step `i` from `J i` yielding into `J (i + 1)`. -/
 theorem osl_forIn {σ : Type} (n : ℕ) (J : ℕ → σ → Got → Hist → Prop) (body : ℕ → σ → LP OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, OSL A (J i u) (fun r g hs => ∃ v, r = .yield v ∧ J (i + 1) v g hs) (body i u)) (u : σ) :
     OSL A (J 0 u) (fun r => J n r) (forIn [:n] u body) := by
@@ -468,7 +421,6 @@ theorem osl_forIn_bind {σ β : Type} {n : ℕ} (J : ℕ → σ → Got → Hist
     (hf : ∀ r, OSL A (J n r) C (f r)) : OSL A P C (forIn [:n] u body >>= f) :=
   osl_bind (osl_mono (osl_forIn n J body hb u) h0 fun _ _ _ h => h) hf
 
-/-- The answers so far, as a ghost. -/
 theorem osl_ghost {α : Type} {I : Got → Prop} {R : Hist → Prop} {B : α → Got → Hist → Prop} {p : LP OpenM α}
     (h : ∀ h0, R h0 → OSL A (fun g hs => I g ∧ hs = h0) B p) : OSL A (fun g hs => I g ∧ R hs) B p :=
   fun st t got hs ⟨hI, hR⟩ => h hs hR st t got hs ⟨hI, rfl⟩
@@ -483,12 +435,9 @@ theorem os_run_bind {α β : Type} {P : Got → Hist → Prop} {B : α → Got �
     (hf : ∀ a, OS A (B a.1) C (f a)) : OS A P C (p.run st >>= f) :=
   os_bind (hp st) hf
 
-/-! ## The opening -/
-
 theorem sq_length {n : ℕ} (h : n ≠ 0) : (sq n).length = 1 := by
   simp [sq, h]
 
-/-- **The ring switch's answers**: one a claim, then the batching's (none for no claims). -/
 theorem ringSwitchP_st (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim) (m : ℕ) :
     OS A (PL coins m) (fun _ => PL coins (m + claims.size + (sq claims.size).length))
       (_root_.Flock.ZkServer.Finish.ringSwitchP (stepAsks coins true) sv claims) := by
@@ -505,8 +454,6 @@ theorem ringSwitchP_st (sv : ℕ → Array F128) (claims : Array _root_.Flock.Cl
   · refine os_bind (os_sampleVecP _ _) fun _ => ?_
     exact os_pure _ fun _ _ h => h
 
-/-- **The masked Ligerito does not stop** from `m` answers, where `A` makes the answer after `ρ₀`'s, at `z`'s, `β₀`'s
-and the `k₀` lanes' past `m`, independent of it. -/
 theorem ligeritoPZk_st (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)
     (cm0 : _root_.Flock.ZkServer.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (m : ℕ)
@@ -610,8 +557,6 @@ theorem ligeritoPZk_st (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Sche
       | (with_reducible apply FlockComplete.JsonRT.Total.liftTM; intro _; exact ⟨_, rfl⟩)
       | split)
 
-/-- **The opening past its PIOP does not stop** where `A` makes the answer after `ρ₀`'s, past the ring switch's, `z`'s,
-`β₀`'s and the `k₀` lanes', independent of it. -/
 theorem repOpening_st (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (lay : _root_.Flock.Zk.PadLayout)
     (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (claims : Array _root_.Flock.Claim)
     (h : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)

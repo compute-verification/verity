@@ -2,19 +2,8 @@ module
 
 public import Proofs.Flock.SessionLoop.SchedAt
 
-/-!
-# The switched session at a rep's level-0 rounds
-
-At rep stream `2j + r`'s round `ligP0 + i`, `i ≤ k₀ + 3`, the switched session sends level 0's body `i`
-(`LigLock.l0BodyAt`) at the opened coins from `ligP0`, the rep's basis (`Masked.ligBasis`) and the pads its source fixes
-(`LigLock.padsL0`): the earlier reps return and the rep's PIOP returns (`Masked.runCut_cutL0_of_ret`).
-
-* `LigLock.l0BodyAt_ne_nil`: every level-0 body ends with a squeeze.
-* `Masked.runCut_l0Body`: where the coins show no refusal by round `ligP0 + i`, the cut session there sends body `i`.
-  The earlier reps return (`repCut_ret`, their `β` rounds before the rep's start); the rep's rank check passes
-  (`rank_at_unrefused`), so its PIOP returns (`piopCut_ret`).
-* **`Loop.enc_l0`**, **`Loop.swMsgAt_l0`**: so the switched session's message there is that body, tagged `0`.
--/
+/-! The switched session sends level 0's bodies at a rep's level-0 rounds where the coins show no refusal
+(`Loop.swMsgAt_l0`). -/
 
 @[expose] public section
 
@@ -25,7 +14,6 @@ namespace FlockComplete.LigLock
 
 open Flock
 
-/-- **Every level-0 body ends with a squeeze**, so none is empty. -/
 theorem l0BodyAt_ne_nil {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray}
     {sch : Schedule} {t b : Array F128} {lay : Zk.PadLayout} {h : Array F128} {rep : ℕ}
     {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64} (i : ℕ) :
@@ -47,11 +35,7 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s level-0 round `i`, on the opened coins alone**: where the coins show no refusal
-by round `ligP0 + i`, `i ≤ k₀ + 3`, the cut session stopped there sends level 0's body `i` at the opened coins from
-`ligP0`, the rep's basis and the pads `padsL0` of the rep's source, at any table `t` and extra lanes `extra`. The
-earlier reps return (`repCut_ret`: their `β` rounds come before the rep's start, `betaSlot_lt_repBase`); the rep's
-rank check passes (`rank_at_unrefused`), so its PIOP returns (`piopCut_ret`); so `runCut_cutL0_of_ret`. -/
+/-- Holds where the coins show no refusal by round `ligP0 + i`, at any table `t` and extra lanes `extra`. -/
 theorem runCut_l0Body {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -186,10 +170,7 @@ open _root_.Flock (V SessionSpec)
 
 namespace Loop
 
-/-- **The switched session's level-0 round `i` of rep stream `2j + r`**: where the coins show no refusal by round
-`ligP0 + i`, `i ≤ k₀ + 3`, the session sends level 0's body `i` at the opened coins from `ligP0`, the tape's packed
-table and extra lanes, the rep's basis and the switched source's `padsL0`, tagged `0` (`Masked.runCut_l0Body`: the
-views' level-0 commitments and the pads commitment return quietly). -/
+/-- Holds where the coins show no refusal by round `ligP0 + i`. -/
 theorem enc_l0 (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
@@ -270,7 +251,6 @@ theorem enc_l0 (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x)
   rw [enc_finS_of C h0 (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hlt'), ← hsrc, hb]
 
-/-- **`enc_l0` at the session's message after the openings `cs`**: `swMsgAt` sends round `cs.length`. -/
 theorem swMsgAt_l0 (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (cs : List finS.Coin) (hlt : cs.length < refK x) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
