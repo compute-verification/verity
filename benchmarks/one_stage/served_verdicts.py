@@ -346,7 +346,7 @@ COPIED_FROM = ("a prover-side copy of each piece's answer file as the served nod
                "an edit to that file on the node or to its copy changes its row")
 #: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
 #: verdict was computed, and where the record is composed none of them is run again or held to anything.
-TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
+TAKEN_AS_GIVEN = "a verdict computed on the workload's node and handed in is taken as given, for the whole chain"
 DEVELOPMENT_RUN = ("a development run (DEVELOPMENT=1): its sampled proofs may stand on a development challenger "
                    "session's coins, not the auditor device's, so none of its verdicts is of record")
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
@@ -2380,6 +2380,12 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    if development and "integrity" in rows:
+        r = rows["integrity"]
+        rows["integrity"] = {"verdict": "missing", "owner": r.get("owner"), "why": f"{DEV_VERDICT}: {DEVELOPMENT_RUN}",
+                             "development": r, **({"answer_from": r["answer_from"]} if "answer_from" in r else {})}
+    if development and answer is not None:
+        lean, answer = f"{lean}; {DEVELOPMENT_RUN}, so Lean's answer {answer.get('verdict')} is not the record's", None
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"

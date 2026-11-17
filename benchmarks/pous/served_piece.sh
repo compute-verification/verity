@@ -22,7 +22,8 @@
 # among it, and the lease ends with that process: no answer is waited for on the card.
 #
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
-# (default 128, in a systemd scope where this user can make one: PoUS's case is held by the Python and written as its
+# (default 128, in a systemd scope where this user can make one, else under prlimit's address-space limit, else not
+# answered: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line): PoUB-P2's case answered by
 # poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
 # collect), and its case to SERVE_DIR/private/bandwidth; then PoUS's case answered by pous-run-protocol, which must
@@ -94,9 +95,15 @@ fi
 rc=$?
 stamp "the sessions' part exit $rc"
 [ "$rc" = 0 ] || exit "$rc"
-scope=()
-command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
-  && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+  scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then
+  # RLIMIT_AS binds each process alone: each Lean served_piece.py starts gets the whole limit, not a share of it.
+  scope=(prlimit "--as=$((${ANSWERS_MEM_GB:-128} << 30))" --)
+else
+  echo "POUS: no answer: this host makes no systemd user scope and runs no prlimit: the answers run only under a memory limit of their own"
+  exit 2
+fi
 CUDA_VISIBLE_DEVICES='' "${scope[@]}" "$PY" "${ARGS[@]}" --answers 2>> "$DIR/pous.log"
 rc=$?
 stamp "the answers' part exit $rc"
