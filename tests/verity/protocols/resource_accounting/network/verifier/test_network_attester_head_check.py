@@ -29,7 +29,7 @@ def _profiled(lw, opening, honest):
 def cases(tmp_path_factory):
     """Head checks of the service's execution phases with a profile, each end's row its honest head's counts, by name:
     (instance, the part that refuses it or None). The honest heads of both ends in each window, and heads each wrong in
-    one input; an edited head is committed under its own root and its certificate's signed digest is its own, so only
+    one input; an edited head is committed under its own root and its attestation's signed digest is its own, so only
     the edit can refuse it."""
     run = Run(tmp_path_factory.mktemp("heads"))
     lw, honest = run.lw, [run.honest(w) for w in range(3)]
@@ -58,7 +58,7 @@ def cases(tmp_path_factory):
         "another salt": (replace(e0, salt=i0.salt), "opening"),
         "another path": (replace(e0, path=e0.path[::-1]), "opening"),
         "another signed digest": (replace(e0, signed=i0.signed), "signed"),
-        "another certifier salt": (replace(e0, salt_c=i0.salt_c), "signed"),
+        "another attester salt": (replace(e0, salt_c=i0.salt_c), "signed"),
         "a certificate that signs the unsalted record digest": (replace(e0, signed=tagged_sha512(RECORD_TAG, e0.head)),
                                                                 "signed"),
         "an unset deadline bit": (edited(0, deadline=False), None),
@@ -116,7 +116,7 @@ def test_the_head_check_is_its_reference(cases, bare):
     """The whole Definition on every case, with and without a profile, against its reference, and its ANDs by part at the
     deployed T = 600. What the parts' tests can't reach is the opening's wiring: the head's bytes into its row digest,
     its salt into hm96's leaf, and the leaf's position (direction, 1) in N2's tree; and the signed digest's: the head's
-    bytes into its record digest, and that digest and the attester's salt into the digest the certificate signs.
+    bytes into its record digest, and that digest and the attester's salt into the digest the attestation signs.
     Building and compiling the commitment gadgets' Boolean bodies takes about 75 s, once."""
     insts = [i for i, _ in cases.values()]
     assert HC.evaluate(*insts) == [int(HC.reference(i)) for i in insts]
