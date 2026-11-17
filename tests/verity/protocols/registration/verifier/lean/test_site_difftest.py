@@ -149,7 +149,7 @@ ENTRIES = {
     "over-hbm": ("capacity", Entry("", locs=(Loc("gpu9", "device", "node0", sheet=A),
                                              Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=(64 << 30) + 1)))),
     "empty-memory": ("capacity", Entry("", locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),))),
-    "foreign-certifier": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
+    "foreign-attester": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                          links=UPLINK9)),
     "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
@@ -160,7 +160,7 @@ ENTRIES = {
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME, timebase="tb0")
 HOUSED = Entry("", locs=(VM0, Loc("chal9", "challenger", "vm0", "auditor", scheme=SCHEME)))
-"""An auditor's device at the site with a second memory challenger in it; the onsite auditor holds their keys and the
+"""An auditor's device at the site with a second memory attester in it; the onsite auditor holds their keys and the
 host's time base."""
 LATERS = [*(e for _, e in ENTRIES.values()), HOUSED]
 

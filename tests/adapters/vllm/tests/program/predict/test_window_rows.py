@@ -254,7 +254,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
     """Id requests (`id_form.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
     answered ids 100 + i and 200 + i, through the network attester at ``cls``'s scan schedule for the transfer blocks of
-    3 execution phases of its buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
+    3 execution phases of its buckets (`scan_traffic.serve`, network accounting's tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""
     import importlib.util
     import sys
@@ -301,7 +301,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
         assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
     assert SS.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
-    with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
+    with pytest.raises(ValueError, match="refuses the network attester's ingress rows"):
         SS.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
     with pytest.raises(ValueError, match="give the ingress rows to it, 63, not 40"):
         SS.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)
@@ -766,7 +766,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
 
 def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
     """At a class whose norm after down_proj is cut at its residual add (`test_window_circuit.SPLIT`), each add part holds its
-    words of the node's sum, which is `RMSNormFusedCudaAdd_v1` on the node's x and res, and the tail the node's value, which
+    words of the node's sum, which is `RMSNormFusedCudaAdd_v2` on the node's x and res, and the tail the node's value, which
     is `RMSNormFusedCudaTail_v1` on the parts' sums in order of AT; every unit is filled."""
     low, _f, values, _w, slots = _window(SPLIT, SPLIT_GRAIN)
     rows = WR.Rows(low, slots, values)
@@ -898,3 +898,27 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
         pub[name] = _public(c, tmp_path / name)
     assert pub["served"] == pub["other"]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])
+
+
+@pytest.mark.slow
+def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
+    """Slow (minutes) for the window's close, which no cheaper path to `Window.write` skips."""
+    low, _f, values, _w, slots = window
+    c, words = low.circuit, SS.words(CLASS.scan)
+    assert c.registered.values == (SS.SCAN_STATE,)
+    program, digest = c.program()[0], WC.population_digest(c)
+    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
+    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 0, window=RUN)
+    vals = {**values, SS.SCAN_STATE: state}
+    win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
+    win.supply(CR)
+    WR.Rows(low, slots, vals).record(win)
+    win.write(win.close(), tmp_path, {}, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    (e,) = rec["registered"]
+    scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
+    want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
+    assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
+    assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
+    assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
+        CLASS.buckets, words, CR.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())

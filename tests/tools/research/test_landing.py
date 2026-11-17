@@ -44,7 +44,6 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
-        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.q.now = lambda: self.clock
         self.d = self.make(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
@@ -303,9 +302,9 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
            "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
-           "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
+           "  layers: PouwVerifier.Credit imports Flock.Program, outside PouwVerifier.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -697,11 +696,11 @@ def _plan_doc(n: int) -> dict:
 
 def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agreement_checks_changed(world, monkeypatch):
     """`beside_args`: lean-agreement runs (`--agreement`) only when the merges above the base change what it checks, as
-    check.py finds against that base, and is skipped by name else; lean-audit fails on a record difference
+    the base's own declaration names it, and is skipped by name else; lean-audit fails on a record difference
     (`--no-regenerate`); ratchet-gate judges the merges above `--base`: the base given, the tip's first parent when the tip is
     the base, and none for a root."""
     asked, changed = [], [False]
-    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool, at=None: asked.append((base, commit, tool, at)) or (
         {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
@@ -712,7 +711,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     changed[0] = True
     assert h.d.beside_args(sha, base) == ({"base": base, "agreement": True, "no_regenerate": True}, [],
                                           f" --base {base[:12]} --agreement --no-regenerate")
-    assert asked == [(base, sha, "check")] * 2
+    assert asked == [(base, sha, "check", base)] * 2
     assert h.d.beside_args(sha, sha)[0]["base"] == _git(h.q.workdir, "rev-parse", f"{sha}^1") == base
     root = _git(h.q.workdir, "rev-list", "--max-parents=0", base)
     assert h.d.beside_args(root, root) == ({"base": None, "agreement": True, "no_regenerate": True}, [],
@@ -1069,7 +1068,7 @@ def test_a_refused_notice_is_told_again_and_one_told_is_not(world, monkeypatch):
     assert state["told"] == [] and "could not post" in logged[-1]
     ok[0] = True
     h.d.tell(state, ["k"], "#1 conflicts", "circuits", "lean")
-    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @circuits @lean")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue: told @circuits @lean")
     assert sent[-1] == ("@circuits @lean queue: #1 conflicts", ("@circuits", "@lean"))
     h.d.tell(state, ["k"], "#1 conflicts", "circuits")
     assert len(sent) == 2

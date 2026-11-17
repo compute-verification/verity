@@ -9,7 +9,6 @@ from verity.commitments import domains
 from verity.errors import InvalidArtifact
 
 from verity_vllm.commitments import leaves as L
-
 from verity_vllm.commitments.leaves import (
     LeafOpening,
     LeafTree,

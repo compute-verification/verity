@@ -725,7 +725,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_
 
 def test_the_seeds_derive_from_the_window_salt():
     """The units' salt is PoUW's window salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
-    stand-in reveal (the salt coin's, standing in for the certifier's), and a unit's noise and receipt seeds are of that
+    stand-in reveal (the salt coin's, standing in for the network attester's), and a unit's noise and receipt seeds are of that
     salt; another reveal, window, stream or prover gives another salt and other seeds."""
     import hashlib
 

@@ -5,7 +5,8 @@ description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verif
 O(circuit description), never O(unrolled circuit).
 
 The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladder of configs up to B0 (`Config.b0()`,
-30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
+30 layers) and at Llama 3.2 1B's sizes (`llama32-1b`: its layers, widths, heads and vocabulary, B0's other constants),
+word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
 * `measure`, the inference-only check: `inference-only-check --policy` (`InferenceOnlyCheck.Desc`, one summary per Definition) on an instance whose θ is
@@ -22,8 +23,10 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
 ~~~sh
 verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
 verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
-research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
+research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
+research run --on auto --project verity --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/job.sh measure --config llama32-1b --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
@@ -45,7 +48,7 @@ all through `--policy`, `--policy --unrolled` and the Python reference, which mu
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
 
 ~~~sh
-B1_BUILD=$(python3 -c 'import json; print(json.load(open("benchmarks/sampling_plan/glm53_blocks.json"))["build"])')
+B1_BUILD=$(python3 -c 'import json; print(json.load(open("calibration/sampling_plan/glm53_blocks.json"))["build"])')
 research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
@@ -171,7 +174,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 
 `members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
 circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
-an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
+an audit's `window/case-v2.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
 two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
 template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
 verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.

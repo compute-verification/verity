@@ -22,9 +22,8 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
 
 #: every Pearl-C name in use: `schemes.SCHEMES`, `pouw_pearl_c_device.SCHEMES`, Pearl-C4 and its -h3, and PearlC's
 #: price-override spelling
-NAMES_IN_USE = ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1@sm_120",
-                "pearl-c-sm120-v1", "pearl-c-sm120-unpromoted-v1-h3", "pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0-h3",
-                "pearl-c-mxfp4-v0")
+NAMES_IN_USE = ("pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1-h3@sm_120", "pearl-c-sm120-unpromoted-v1-h3",
+                "pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0-h3", "pearl-c-mxfp4-v0")
 
 
 @pytest.mark.parametrize("name", NAMES_IN_USE)
@@ -37,13 +36,14 @@ def test_the_parts_are_the_names_parts():
     assert (s.family, s.device, s.forming, s.precision, s.hashing, s.prices) == ("pearl-c", "sm120-unpromoted", "v1", "e4m3", "h3", None)
     c4 = SchemeId.parse("pearl-c-nvfp4-v0")
     assert (c4.family, c4.device, c4.precision, c4.hashing) == ("pearl-c4", "sm120", "nvfp4", "h0")
-    assert SchemeId.parse("pearl-c-h100-v1@sm_120").prices == "sm_120"
+    assert SchemeId.parse("pearl-c-h100-v1-h3@sm_120").prices == "sm_120"
 
 
 @pytest.mark.parametrize("name, why", [
     ("pearl-c-a100-v1-h3", "device 'a100'"),
     ("pearl-c-sm120-hot-v1-h3", "device 'sm120-hot'"),
     ("pearl-c-sm120-v9-h3", "forming 'v9'"),
+    ("pearl-c-h100-v0-h3", "forming 'v0'"),
     ("pearl-c-sm120-v1-h7", "hashing 'h7'"),
     ("pearl-c-sm120-v1-h1", "hashing 'h1'"),
     ("pearl-c-sm120-v1-h2", "hashing 'h2'"),
@@ -69,7 +69,7 @@ def test_hash_format_reads_a_name_an_id_or_a_scheme_object():
     class Scheme:
         hashing = "h3"
     assert hash_format("pearl-c-sm120-v1-h3") is HASH_FORMATS["h3"]
-    assert hash_format(SchemeId.parse("pearl-c-h100-v1")) is HASH_FORMATS["h0"]
+    assert hash_format(SchemeId.parse("pearl-c-nvfp4-v0")) is HASH_FORMATS["h0"]
     assert hash_format(Scheme()) is HASH_FORMATS["h3"]
     with pytest.raises(ValueError, match="no hashing format"):
         hash_format(object())
@@ -149,8 +149,8 @@ def test_a_gated_variant_serves_its_scheme_and_schedule_at_every_gated_shape():
 
 def test_a_variant_is_refused_for_each_thing_it_lacks():
     v = variant()
-    got = variant_refusals(v, "pearl-c-sm120-v1", "h3o", [(18944, 3584)], None)
-    assert got == ["pearl-c-sm120/3f0a91c2d4e5 computes pearl-c-sm120-v1-h3, not pearl-c-sm120-v1",
+    got = variant_refusals(v, "pearl-c-h100-v1-h3", "h3o", [(18944, 3584)], None)
+    assert got == ["pearl-c-sm120/3f0a91c2d4e5 computes pearl-c-sm120-v1-h3, not pearl-c-h100-v1-h3",
                    "pearl-c-sm120/3f0a91c2d4e5 runs deferred, serial, not h3o",
                    "pearl-c-sm120/3f0a91c2d4e5: (n, k) = (18944, 3584): the kernel takes k a multiple of 1024 in [1, 16777216] "
                    "and n a multiple of 128",

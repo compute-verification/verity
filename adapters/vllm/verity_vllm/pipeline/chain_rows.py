@@ -56,10 +56,16 @@ from functools import cache
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 
-from verity.commitments.periods import rows as CS, wiring as WI
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import CHAIN_OF, Template, template, values_widths
+from verity_vllm.pipeline.serving_templates import (
+    CHAIN_OF,
+    Template,
+    template,
+    values_widths,
+)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
@@ -86,7 +92,11 @@ class Place(NamedTuple):
 
 @cache
 def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
-    from verity_vllm.definitions.registry.sparse_mla_split import check_split_statics, combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import (
+        check_split_statics,
+        combine_cols,
+        split_blocks,
+    )
 
     check_split_statics(T, NS)
     out: list[Place] = []
@@ -110,7 +120,10 @@ def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
 
 @cache
 def _places(T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[Place, ...]:
-    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import (
+        combine_cols,
+        split_blocks,
+    )
 
     out = list(_plan(T, NS, BN, DV))
     whole = {(p.key, p.split, p.col): j for j, p in enumerate(out)}
@@ -143,7 +156,7 @@ def _places(T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[Place, ...]:
                     ("m", None, "o0", blocks[-1]), ("l", None, "o1", blocks[-1]), ("o", None, "o0", last[(s, c)]))))
         for c in range(DV // G):
             reads = tuple((p, s, o, ends[(s, c)]) for p, o in (("lse", "o1"), ("o", "o0")) for s in range(n))
-            if G != combine_cols(DV):
+            if combine_cols(DV) != G:
                 out.append(Place(("combine", n, G), col=c, reads=reads))
                 continue
             j = whole[(("combine", n), 0, c)]
@@ -294,7 +307,12 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity_vllm.definitions.numerics.sparse_mla_split_twins import combine_rows, head_end_rows, split_chain_rows, split_end_rows
+    from verity_vllm.definitions.numerics.sparse_mla_split_twins import (
+        combine_rows,
+        head_end_rows,
+        split_chain_rows,
+        split_end_rows,
+    )
 
     tp = template(m.template)
     k = kind(tp)
@@ -334,7 +352,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         y = y.reshape(NH, DV)
         pl = key_places(S) if k == "keys" else places(S)
 
-        def key_cols(p: Place, c: int) -> np.ndarray:
+        def key_cols(p: Place, c: int, kv: np.ndarray = kv) -> np.ndarray:
             return kv[p.keys[0]:p.keys[1], c * p.key[-1]:(c + 1) * p.key[-1]]
 
         def returned(p: Place, h: int) -> list[np.ndarray]:
@@ -353,7 +371,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
 
         at = [(h, pl[j]) for h in range(1 if k == "keys" else NH) for j in positions(tp, S)]
 
-        def own(nm: str) -> np.ndarray | None:
+        def own(nm: str, at: list = at) -> np.ndarray | None:
             if k in ("values", "keys"):
                 return np.stack([key_cols(p, p.col) for _h, p in at]) if nm == "kv" else None
             if k == "scores" and (c := re.fullmatch(r"kv(\d+)", nm)):
@@ -470,9 +488,9 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
                         w.setdefault((f"in{g[nm]}" + ("" if s is None else f".{s}"), o), []).append(unit[(rid, int(r["i"]), h, hit[0])])
                     for nm, c in _key_reads(pl[j], d["statics"]):
                         p = pl[j]
-                        if (hit := keys.get((rid, int(r["i"]), p.split, p.block, c, p.key[3]))) is None:
+                        if (key_hit := keys.get((rid, int(r["i"]), p.split, p.block, c, p.key[3]))) is None:
                             raise ValueError(f"{t}: row {r['i']}'s {_writer(Place(('keys', p.keys[1] - p.keys[0], p.key[3]), p.split, p.block, p.keys, c))} the partition does not name")
-                        w.setdefault((f"in{g[nm]}", "o0"), []).append(hit)
+                        w.setdefault((f"in{g[nm]}", "o0"), []).append(key_hit)
         if w:
             writers[t] = [(p, o, np.asarray(x, dtype=np.int64)) for (p, o), x in w.items()]
     out = []

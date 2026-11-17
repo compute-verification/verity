@@ -69,7 +69,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   `of` and `link` are
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
   Programs the record's.
-* **Advice windows** (``--advice-opening``, a TP Commit, network certification under arbitrary vLLM usage): the advice (I1's
+* **Advice windows** (``--advice-opening``, a TP Commit, network attestation under arbitrary vLLM usage): the advice (I1's
   canonical encoding: everything serving made unpredictable) is private, and the docket binds the root of its hiding
   commitment and its bits (`advice_windows.commit_advice`). The verifier is handed the commitment's opening, the named gap until
   the compiler's wiring is proved in zero knowledge, and derives rank r's window from the record, the advice it opens and its own
@@ -146,7 +146,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the network attester's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a network attester execution phase's cells, `certifier.network_attester_rows`), committed under that value's salts
+  registered value's (a network attester execution phase's cells, `attester.network_attester_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the network attester signed, which the caller read under the network attester's key), the same reads, record and negatives as a row
   table's (below). `a5_network_attester.py` is their stand-in.
@@ -304,6 +304,14 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
+
+
+def verifying(a: argparse.Namespace) -> dict[str, Any]:
+    """`tie` with the window's open root where it registers a value afresh, no earlier record's output: that value's
+    domain binds the root (`docket.unwindowed`)."""
+    t = tie(a)
+    fresh = set(t.get("registered") or ()) - set(t.get("outputs") or ())
+    return {"window_root": a.window_root, **t} if fresh and getattr(a, "window_root", None) is not None else t
 
 
 def declared(a: argparse.Namespace) -> dict[str, Any]:
@@ -531,8 +539,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window, held)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        return {name: {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted,
-                       "python": py, "lean": side}}
+        # a value registered afresh binds the window's open root, so under another root R7 refuses the docket first
+        bound = window != root and "R7-domain" in (((side or {}).get("refused") or {}).get("codes") or ())
+        return {name: {"refused": py is not None and (accepted is False and at == SELECT_COINS or bound),
+                       "accepted": accepted, "python": py, "lean": side}}
 
     bad = {**AC.negatives(ev, a.coins.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
     neg = [workers.submit(name, functools.partial(negative, name, coins, held)) for name, (coins, held) in bad.items()]
@@ -942,7 +952,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **tie(a), **declared(a)).to_json()
+                                     **verifying(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1161,8 +1171,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
                 "challenger": (live or {}).get("challenger"), "handle": s.get("handle"), "closing": s.get("closing")}
 
-    # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
-    # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
+    # every member's statement is staged before any session flips a coin, and the sessions run one at a time
+    # (`ONE_AT_A_TIME`): they run in the members' order, on the proof server's one prover or each as its own process
     # pair, and only Lean's checks of finished members, outside any ZK server, overlap the next member's session. A process
     # pair's session holds its memory estimate from the pool while it runs, and the checks run `LeanPool`'s workers at a
     # time beside it; a proof server's sessions are the server's, which the pool holds nothing for, and its checks stay
@@ -1250,12 +1260,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
         if drawn is not None:
             result["own_reads"] = True
+        pm = members_proof(members, done, not plain(a), one=on_stage)
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a), one=on_stage),
-                   **stage_case(a, relay is not None))
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
+                   per_member=pm, **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1275,11 +1285,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
+        pm = members_proof(members, done, not plain(a))
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
-                   per_member=members_proof(members, done, not plain(a)),
+                   served=given["served"], v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
+                   tied=verifying(a), per_member=pm,
                    coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
                    family=stream.family(draw), member_trees=relay is not None, challenger_key=a.coins.held()["key"])
     result["draw_counts"] = counts
@@ -1307,12 +1318,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
 
         def registration(name: str, program_: Program, ports: dict, layer: str | None, **day: Any) -> dict[str, dict]:
-            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **tie(a), **day)
+            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **verifying(a), **day)
             return {name: a0.negative(v)}
 
         def history_root(name: str, wrong: dict) -> dict[str, dict]:
             v = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
-                        **tie(a))
+                        **verifying(a))
             return {name: a0.negative(v)}
 
         parts: list[dict[str, dict] | Negative] = []
@@ -1345,7 +1356,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             parts.append({"proved-set-short-of-the-draw": a0.negative(v)})
         parts.append(workers.submit("transfer gates", functools.partial(
             transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_sample, sampled_design, proved,
-            tie(a))))
+            verifying(a))))
         parts.append(workers.submit("audit record", functools.partial(
             a0.audit_negatives, result, sampled_design, a.delta, session_roots, served=sorted(served_units))))
         parts += coin_neg
@@ -1433,9 +1444,7 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in SPOT's one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for SPOT, in ``out/case-sampled.json``; or why there is neither in
-    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
-    (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
-    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
+    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`), the v2 case is the per-member form's (`case_members`) and ``v2`` is not read. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
     challenger's key ``challenger_key`` as its session's start had it (`a5_coins.held`'s, which no evidence names), the
     family ``family`` the sample read them from (its docket's own, `a5_coins.family`) and the window's root
@@ -1455,28 +1464,22 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
+    if per_member is not None:
+        v2, build, named = per_member, functools.partial(case_members, c.case()), member_trees
+    else:
+        build, named = functools.partial(case_v2, c.case(), sessions), True
     if v2 is not None:
         try:
             if isinstance(v2, str):
                 raise ValueError(v2)
-            zk = case_v2(c.case(), sessions, **v2)
-            if coins is not None:
+            zk = build(**v2)
+            if coins is not None and named:
                 zk = case_coins(zk, coins, challenger_key, family, window_root)
             sampled = case_with_form(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
-    if per_member is not None:
-        try:
-            if isinstance(per_member, str):
-                raise ValueError(per_member)
-            pm = case_members(c.case(), **per_member)
-            if coins is not None and member_trees:
-                pm = case_coins(pm, coins, challenger_key, family, window_root)
-            (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
-        except Exception as x:  # noqa: BLE001 -- as the v1 case's
-            (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
 def case_written(out: Path) -> dict:
@@ -1602,7 +1605,7 @@ def link_points(sampling_design: dict, population: int, members: Sequence[dict])
     """The docket's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
     sampled proof blocks under the sampled sampling design over the samples that end (one that runs out of coins fails the window:
-    `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
+    `draw_ran_out`): one whose fewest and most open different link points. Or
     why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here for every window; the docket's check refuses them where the audit's case is of the per-member
     form (`per_member`)."""
@@ -1700,8 +1703,10 @@ ARCHIVE_LINK_HELP = ("link each member's circuit file into the archive under its
 ZK_SERVER_LOOP = "flock-zk-server"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
 SAMPLE_FILE = "draw.json"
-#: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
-ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
+#: the verifier's order of an audit's sampled members' sessions, which keeps them one after another
+ONE_AT_A_TIME = ("the verifier takes the members' sessions only one after another on the window's challenger session, no "
+                 "line of a member's coin tree before the closing round of the one before (Challenger.membersOrder, "
+                 "MEMBERS_ORDER)")
 
 
 def one_session(s: str) -> int:
