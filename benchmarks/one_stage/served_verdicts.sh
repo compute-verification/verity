@@ -508,8 +508,12 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
   # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
-  # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
-  BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3}
+  # each tied row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
+  case ${ROW_ID:-${ROW##*/}} in
+    llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager)
+      BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3} ;;
+    *) : "${BUILD_OF_RECORD:?served_verdicts.sh: no Build of record of ${ROW_ID:-${ROW##*/}}: pin its PROGRAM_DIGEST:MANIFEST_DIGEST in this case, or give BUILD_OF_RECORD}" ;;
+  esac
 fi
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}

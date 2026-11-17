@@ -279,6 +279,42 @@ def test_the_h100_node_sets_up_its_own_tied_row_and_serves_none_before_its_build
     assert got.returncode != 0 and f"builds name no traced Build of {row} on vy-h100-1" in got.stderr
 
 
+SETUP_PIN = re.search(r"\npin=\$\(python3 - [^\n]*<<'EOF'\n(.*?)\nEOF\n", (HERE / "setup.sh").read_text(), re.S)[1]
+VERDICTS = HERE.parents[3] / "benchmarks" / "one_stage" / "served_verdicts.sh"
+
+
+def build_of_record(row: str) -> subprocess.CompletedProcess:
+    """What `served_verdicts.sh`'s tied form sets BUILD_OF_RECORD to for `row`, given none."""
+    case = re.search(r"\n  case \$\{ROW_ID:-\$\{ROW##\*/\}\} in\n.*?\n  esac\n", VERDICTS.read_text(), re.S)[0]
+    return subprocess.run(["bash", "-c", case + 'echo "$BUILD_OF_RECORD"'], capture_output=True, text=True, check=False,
+                          env={"PATH": os.environ["PATH"], "ROW_ID": row})
+
+
+def setup_pin(tmp_path: Path, row: str, program: str, manifest: str) -> subprocess.CompletedProcess:
+    (got := tmp_path / "predicted.json").write_text(json.dumps({"program_digest": program, "manifest_digest": manifest}))
+    return subprocess.run([sys.executable, "-c", SETUP_PIN, str(HERE.parents[3]), row, "unsloth/Llama-3.2-1B", str(got)],
+                          capture_output=True, text=True, check=False)
+
+
+def test_setup_holds_the_h200_tied_rows_predicted_build_to_the_verdicts_build_of_record_for_its_row(tmp_path):
+    row = PLACEMENT["tied_row"]
+    got = build_of_record(row)
+    assert got.returncode == 0, got.stderr
+    program, manifest = got.stdout.strip().split(":")
+    assert len(program) == len(manifest) == 128
+    assert setup_pin(tmp_path, row, program, manifest).returncode == 0
+    refused = setup_pin(tmp_path, row, program, "0" * 128)
+    assert refused.returncode == 1 and f"are not served_verdicts.sh's BUILD_OF_RECORD, {program}:{manifest}" in refused.stdout
+
+
+def test_a_tied_row_with_no_build_of_record_is_set_up_and_refused_a_window(tmp_path):
+    row = H100["rows"]["tied_row"]
+    got = build_of_record(row)
+    assert got.returncode != 0 and f"no Build of record of {row}" in got.stderr
+    told = setup_pin(tmp_path, row, "a" * 128, "b" * 128)
+    assert told.returncode == 0 and f"{row} has no served_verdicts.sh's BUILD_OF_RECORD: its predicted {'a' * 128}:{'b' * 128}" in told.stdout
+
+
 def test_no_file_of_the_served_run_names_the_retired_node():
     assert not [f.name for f in HERE.rglob("*") if f.is_file() and b"vy-dc-h200" in f.read_bytes()]
 

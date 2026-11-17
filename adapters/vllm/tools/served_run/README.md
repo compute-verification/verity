@@ -122,7 +122,8 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
 
 1. `CARD=N CORES=A-B END=UTC run.sh setup [--tie]`, once per row and node: `setup.sh` makes what the window reads,
    each step skipped where its result is there unless `STEPS` names it: the INT8 pin, the taps, Flock's build, and the
-   row's predicted Build, held to its pin (INT8: `test_predict.py`'s; BF16: `served_verdicts.sh`'s `BUILD_OF_RECORD`),
+   row's predicted Build, held to its pin (INT8: `test_predict.py`'s; BF16: its row's `BUILD_OF_RECORD` in `served_verdicts.sh`, and a
+   row with none set up and its predicted digests named, while its window is refused),
    its traced Build and their compare. Its last line names the run id to add to `builds`. A tap's bytes change when it
    is rebuilt even where its sources don't, so a rebuilt tap is not live until its exactness test passes on the card
    (`fa_tap_exactness_gpu.py`, the guarded build against the default build's record): only then does setup install
