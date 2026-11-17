@@ -2310,6 +2310,8 @@
     {"file": "security/Proofs/Slowdown/Threads.lean", "count": 1},
     {"file": "security/Proofs/Slowdown/Untied.lean", "count": 15},
     {"file": "security/Proofs/Slowdown/Witnesses.lean", "count": 10},
+    {"file": "security/Proofs/Spot/ChiPool.lean", "count": 6},
+    {"file": "security/Proofs/Spot/SamplePressure.lean", "count": 7},
     {"file": "security/Proofs/WeightSecurity.lean", "count": 2},
     {"file": "security/Proofs/WeightSecurity/Deployed.lean", "count": 3},
     {"file": "security/Proofs/WeightSecurity/FaultedTwo.lean", "count": 2},
