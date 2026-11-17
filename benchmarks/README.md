@@ -170,9 +170,8 @@ directory and its README among its inputs, which the test checks too.
 
 ## Metrics
 
-Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `applications/`, `infra/` or `tools/` the command names:
-`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
+Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the code that records them
+(`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
@@ -203,7 +202,7 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -238,9 +237,40 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 `tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
 doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
-or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing or whose
-directory never names the id, a metric whose command's first script is outside the directory of the file declaring it,
-and a shared `metrics.toml` directly under `benchmarks/`.
+or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
+the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
+
+## On VCF's Slurm cluster
+
+The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
+nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under the account its credentials name.
+Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
+`/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
+
+~~~text
+infra/vcf/payload.sh origin/main --tool native_peak -- python benchmarks/native_peak/measure.py --dtype bf16 --sizes 8192 \
+  | research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/NAME.tar.gz'
+research pods ssh vy-control-verity -- 'cd /data/vcf-jobs && SEND=/data/vcf/payloads/NAME.tar.gz setsid -f bash \
+  /data/vcf/vcf-job-run.sh NAME main 30 /data/vcf/vcf-bench.sh --nodelist=h100-sxm-8-0 --gres=gpu:1 --cpus-per-task=16 \
+  --mem=64G > NAME.launch.log 2>&1 < /dev/null'
+~~~
+
+The job builds the tree's environment with uv on the node's disk (`--sync`, default `--all-packages --extra torch`:
+CUDA torch from PyPI) and runs the command under `research run --local-only`, so its run directory is the one our
+machines write. `vcf-job-run.sh` copies it to `/data/vcf-jobs/NAME-STAMP/result/runs/RUN/`, publishes it with
+`research data custody RUN_DIR --publish` (`vcf-publish.sh OUT PAYLOAD` retries that), and removes the job's
+directory on the cluster; `NAME.launch.log` and `sacct.txt` give the Slurm job, the node and its wait and run times.
+Read it back as any run: `research data show RUN`.
+
+Such a record names its machine `vcf-NODE` (`execution.machine`) and its cost provider `vcf`. It has no lease and
+no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with other users, it has no rate, and
+nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
+have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
+`h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
+its PATH, and the H100 has no card file in `hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
+capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
+after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
+of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.
 
 ## Index
 
@@ -356,7 +386,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's application is `applications/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
-| `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
 | `word_codec/` | the store's Sloth codecs (the word codec, the KV codec that PoUB's `codec.py` mirrors, the wide codecs): each a byte-exact reference, a CUDA kernel and its benchmark | maintained |
 | `codec_tensor/` | PoUB's receipts, leaves and receipt tree on the GPU, and the tensor-core wide-word codec | maintained |
 | `property_redteam/` | attacks on the stacking property and on the gate model's counts behind the encode bound | maintained |

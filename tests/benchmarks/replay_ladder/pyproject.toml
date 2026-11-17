@@ -15,6 +15,7 @@ inputs = ["benchmarks/replay_ladder", "benchmarks/serve_tax/serve_tax.py",
     "benchmarks/network_e2e/traces/traffic.py",
     "adapters/vllm/manifests/checkpoints.json",
     "tools/config/verity_config",
+    "benchmarks/harness/verity_bench",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
 ]
