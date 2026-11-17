@@ -14,13 +14,13 @@ digest under the certifier's salt (`certificateDigest`), and the message it sign
 `verity.commitments.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
 `tagged_sha512` is core's `Identity.taggedSha512`, which refuses what Python refuses. Every other SHA-512 is
 `Flock.Sha512.hash`, and what each such call hashes has a name of its own (`leafInput`, `nodeInput`, `emptyInput`,
-`certificateInput`, `messageInput`), as the properties (`security/Properties/Certifier/Check.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
+`certificateInput`, `messageInput`), as the properties (`security/Properties/Certifier/Check.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkVerifier.Difftest` holds these to the
 Python on generated inputs.
 -/
 
 @[expose] public section
 
-namespace NetworkCheck
+namespace NetworkVerifier
 
 open Flock
 
@@ -296,4 +296,4 @@ def certificateMessage (keyId session : ByteArray) (link : String) (direction : 
     (digest : ByteArray) : E ByteArray :=
   Sha512.hash <$> messageInput keyId session link direction window digest
 
-end NetworkCheck
+end NetworkVerifier

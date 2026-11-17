@@ -3,14 +3,14 @@ module
 /-!
 # The connection rows' bounds
 
-The constants the period's check (`NetworkCheck.Period`) holds a schedule's connection rows to: the bytes a cell's
+The constants the period's check (`NetworkVerifier.Period`) holds a schedule's connection rows to: the bytes a cell's
 payload holds under lengths rows, the most slots, ids and classes a row or a schedule has, a class's size, the keys a
 schedule has only where it sets them, and what the check says of a schedule with connection rows.
 -/
 
 @[expose] public section
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 /-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `id_form.ID_FIELD_BYTES`):
 with lengths rows a cell's payload holds at least this much, so a request's head and first prompt id are in its first
@@ -46,4 +46,4 @@ def connectionRowsRefusal : String :=
   "schedule: connection rows: the check reads no connection rows' registration, so it refuses a schedule with \
     lengths rows, content rows or request words (connectionRowsCheck)"
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

@@ -1447,7 +1447,7 @@ def test_bytes_that_are_at_most_one_request_are_released_whole(name):
 def test_the_parameters_digest_binds_every_parameter():
     """Each integer parameter, the egress form and the response cap move the digest, as do the cell kinds and the
     reasons it binds; a schedule without a cap hashes neither it nor its reason, so its digest is the period check's
-    (`NetworkCheck.Period.Schedule.digest`, over the integer fields and the first six reasons). An egress form other
+    (`NetworkVerifier.Period.Schedule.digest`, over the integer fields and the first six reasons). An egress form other
     than id or bytes is refused."""
     moved = [dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}) for f in INTEGER_FIELDS]
     moved += [dataclasses.replace(PARAMS, egress="id"), CAPPED, dataclasses.replace(CAPPED, max_tokens_cap=5)]
