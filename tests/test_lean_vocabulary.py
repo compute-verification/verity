@@ -850,11 +850,11 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.SamplingDesign":
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Inputs.lean::PouwVerifier.SamplingDesign":
         "duplicate of `Flock.Draw.SamplingDesign`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Inputs.lean::PouwVerifier.Window":
         "duplicate of the execution block (no canonical yet): becomes a reading of it: the execution block's record (compute-accounting)",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Pass.lean::PouwVerifier.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
         "homonym, a frame's hash kind: rename (compute-accounting)",

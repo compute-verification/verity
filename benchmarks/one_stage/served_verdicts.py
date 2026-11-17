@@ -127,7 +127,7 @@ Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` c
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
-window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+window's circuit to, and the Lean `PouwVerifier.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
@@ -327,7 +327,7 @@ def pearlplus_why(challenger: str) -> str:
     """Why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's on
     `challenger` (`challenger_of`)."""
     return (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
-            "reference replay's (verify_run.py), not PouwCheck's ZK proof")
+            "reference replay's (verify_run.py), not PouwVerifier's ZK proof")
 
 
 def pearlplus_coins_from(challenger: str) -> dict[str, str]:
@@ -395,7 +395,7 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
-PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
+PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
@@ -422,7 +422,7 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
 PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
+#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwVerifier.PearlPlus`
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
 #: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
@@ -1984,7 +1984,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
+    4. **Lean.** The Lean `PouwVerifier.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
        sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
@@ -2073,10 +2073,10 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"no Lean PouwCheck.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
     if not isinstance(lean, dict) or lean.get("verdict") != "accept":
         v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwCheck.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
     source = (answer["profile"] or {}).get("source")
     if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
         return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
