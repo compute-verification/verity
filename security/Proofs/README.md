@@ -27,7 +27,7 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
     (`Proofs.Flock.Soundness.PlanDraw`).
   - `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
-  - `tests/benchmarks/two_stage/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
+  - `tests/benchmarks/one_stage/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
     `Proofs.Flock.SamplingGeneric.TwoAt` and runs `TwoGuard.lean` beside it, which imports them.
   - `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
 

@@ -49,7 +49,7 @@ and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean mo
 copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
-      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --main FILE \\
+      python benchmarks/one_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --main FILE \\
         --out DIR [--altered]
 """
 from __future__ import annotations
