@@ -9,6 +9,8 @@ difftest holds (`LEAN_HELD`), its ``drawn`` the sample count and its W the Pytho
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
+``lean --launch`` runs it beside the Python's verifier only once the coin record is written, and ``--printout`` holds that
+run to the same command line and executable before holding its printout as above.
 
 ``served_passes.py case`` on the Lean answer written there writes the run's case's parts for remote's composite of record
 (`verity/pouw/pearl-plus/v1`): its params, the retained manifests, the window record W the verdict held the passes to,
@@ -205,6 +207,76 @@ def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_pas
     rc, answer, check = lean(tmp_path, verify, d, tmp_path / "none")
     assert (rc, answer) == (2, None) and check["reason"] == f"no Lean executable at {tmp_path / 'none'}"
     assert not (tmp_path / "argv").exists()
+
+
+def launch(tmp_path: Path, d: Path, exe: Path, *more: str) -> tuple[int, dict]:
+    """``lean --launch`` on serve dir `d` with `more` (verify's arguments), its exit and its record."""
+    f = tmp_path / "lean-launch.json"
+    rc = SP.main(["lean", "--launch", str(f), "--passes", str(d), "--exe", str(exe), *more])
+    return rc, json.loads(f.read_text())
+
+
+def test_the_launch_runs_no_lean_verifier_before_the_pythons_coin_record_is_written(run, tmp_path):
+    """A Lean verifier that finds no coin record writes its own on the node's sample, so the launch refuses where
+    ``DIR/coin.json`` is missing or empty, the executable never runs and nothing is written there; the comparison on that
+    launch refuses too."""
+    import shutil
+
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    shutil.copytree(d, bare := tmp_path / "bare")
+    for empty in (False, True):
+        (bare / SP.COIN).unlink(missing_ok=True)
+        if empty:
+            (bare / SP.COIN).write_text("")
+        rc, ran = launch(tmp_path, bare, exe, "--draws", "3", "--test-instance")
+        assert (rc, ran["argv"], ran["rc"], ran["check_cost"]) == (2, None, None, None)
+        assert ran["reason"].startswith(f"no coin record at {bare / SP.COIN}: ")
+    assert not (tmp_path / "argv").exists() and (bare / SP.COIN).read_text() == ""
+    rc, answer, check = lean(tmp_path, verify, d, exe, "--printout", str(tmp_path / "lean-launch.json"))
+    assert (rc, answer) == (2, None) and check["reason"].startswith("the launched Lean verifier didn't run: no coin record")
+
+
+def test_the_comparison_refuses_a_launched_lean_verifier_that_ran_another_command_line_or_executable(run, tmp_path):
+    """The launched run is held to the command line verify's document gives (`lean_argv`) and to ``--exe``'s SHA-256: a
+    launch on other draws, without the test instance or on an executable changed since writes no answer and removes one
+    there."""
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    out = tmp_path / "piece" / "pearlplus-lean.json"
+    for more in (["--draws", "4", "--test-instance"], ["--draws", "3"]):
+        assert launch(tmp_path, d, exe, *more)[0] == 0
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("{}")
+        rc, answer, check = lean(tmp_path, verify, d, exe, "--printout", str(tmp_path / "lean-launch.json"))
+        assert (rc, answer, check["lean"]) == (2, None, None) and check["reason"].startswith(f"{SP.LAUNCHED_ELSEWHERE}: "), more
+    assert launch(tmp_path, d, exe, "--draws", "3", "--test-instance")[0] == 0
+    exe.write_text(exe.read_text() + "\n")
+    rc, answer, check = lean(tmp_path, verify, d, exe, "--printout", str(tmp_path / "lean-launch.json"))
+    assert (rc, answer) == (2, None) and check["reason"] == "the launched Lean verifier's executable is not --exe's, by SHA-256"
+
+
+def test_with_the_lean_verifier_launched_beside_the_pythons_both_outputs_are_the_sequential_ones(run, tmp_path):
+    """``verify --concurrent`` writes the document and answer ``verify`` wrote, and ``lean --launch`` then ``--printout``
+    the Lean answer and both-verdicts document ``lean`` wrote; only each ``check_cost`` differs, by ``concurrent``."""
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
+        rc, beside, answer = T.served_verify(d, tmp_path / "both" / "verify.json", "--concurrent")
+    assert rc == 0 and beside["check_cost"] == {**doc["check_cost"], "concurrent": True}
+    assert {**beside, "check_cost": None} == {**doc, "check_cost": None}
+    assert answer == json.loads((verify.parent / "answer.json").read_text())
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(SP, "CLOCK", iter((10.0, 13.25, 20.0, 23.25)).__next__)
+        rc, alone, check = lean(tmp_path / "seq", verify, d, exe)
+        assert launch(tmp_path, d, exe, "--draws", "3", "--test-instance")[0] == 0
+    rc2, together, check2 = lean(tmp_path / "both", verify, d, exe, "--printout", str(tmp_path / "lean-launch.json"))
+    assert (rc2, together) == (rc, alone) == (0, {**printout(doc), "tie": None})
+    assert check["check_cost"] == {"seconds": 3.25, "node": NODE}
+    assert check2["check_cost"] == {"seconds": 3.25, "node": NODE, "concurrent": True}
+    assert check2.pop("launched") == str(tmp_path / "lean-launch.json")
+    assert {**check2, "check_cost": None} == {**check, "check_cost": None}
 
 
 def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
