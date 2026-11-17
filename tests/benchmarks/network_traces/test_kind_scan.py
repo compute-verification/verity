@@ -82,7 +82,7 @@ def _paths(found: list[KS.Finding]) -> list[tuple[str, str]]:
     return [(f.file, f.path) for f in found]
 
 
-def test_the_pieces_answer_and_certificates_are_of_the_public_kinds(tmp_path, period):
+def test_the_pieces_answer_and_attestations_are_of_the_public_kinds(tmp_path, period):
     """The answer's fields are structure, the protocol's outputs and a hiding commitment, and the attestations' the
     network attester's; the piece releases none of the verifier's coins or samples."""
     d = _dir(tmp_path / "d", *_case(period))
@@ -90,7 +90,7 @@ def test_the_pieces_answer_and_certificates_are_of_the_public_kinds(tmp_path, pe
     assert signed["records"] and signed["rows"]
     found, kinds = KS.scan(d)
     assert found == [] and {k for k in KS.KINDS if kinds[k]} == {KS.S, KS.O, KS.M, KS.X}, (found, kinds)
-    assert kinds[KS.X] == len(KS.CERTIFICATE_DOC) * (len(signed["records"]) + len(signed["rows"]))
+    assert kinds[KS.X] == len(KS.ATTESTATION_DOC) * (len(signed["records"]) + len(signed["rows"]))
     assert KS.main([str(d)]) == 0
 
 
