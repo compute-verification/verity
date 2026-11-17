@@ -1366,6 +1366,19 @@ def observed_summary(D: np.ndarray, C: np.ndarray, err: np.ndarray) -> dict:
 
 #: result.json must stay under the store's 1 MiB; a --chain record's operands run to tens of KiB each
 RESULT_OPERAND_HEX_MAX = 512
+METRIC = "circuits/tensor-core-mismatched-words"
+
+
+def record(out: Path, instruction: str, device: str, results: dict, primary: str | None) -> None:
+    if primary is None or "sweep" not in results:
+        return
+    from verity_bench import kit
+    sw = results["sweep"]
+    card = "-".join(device.lower().split()).removeprefix("nvidia-")
+    fields = {"instruction": instruction, "card": card, "words_compared": sw["gated_elements"], "model": primary, "tiles": "sweep"}
+    m = kit.writer(out).measurement(METRIC, sw["total_mismatches_vs_model"][primary], "words", mark="measured",
+                                    member=f"{instruction}-{card}", extra=fields)
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
 
 
 def slim_record(rec: dict) -> dict:
@@ -1845,6 +1858,7 @@ def main(argv: list[str] | None = None) -> int:
         tmp = out / "result.json.tmp"
         tmp.write_text(json.dumps(result, indent=1))
         os.replace(tmp, out / "result.json")
+        record(out, INSTRUCTION_ID[instr], identity["device"], results, primary)
     if results.get("candidate_finding") and primary is None:
         print("candidates reproducing every word:", results["candidate_finding"]["agreeing"], flush=True)
     print("FAILURES" if failures else ("ALL HARDWARE WORDS REPRODUCED" if primary is not None or not fams else "CAPTURE RECORDED"), failures,
