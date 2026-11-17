@@ -17,9 +17,9 @@ One run, in order:
    `W` is freed after the plain arm. After the timed reps one more decode must give back `W`'s digest (a race in the
    persistent decode would show only under timing; a mismatch publishes nothing), and its peak device memory is recorded.
    Which decode ran (kernel, rows, calls) is recorded per phase (`implementation.decode_paths`).
-4. **The limit, fixed before any load.** With no load running, the memory challenger calibrates its loopback round trip
+4. **The limit, fixed before any load.** With no load running, the memory attester calibrates its loopback round trip
    and fixes the limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are
-   comparable. The allowance is a loopback one (a remote memory challenger's round trip adds to it).
+   comparable. The allowance is a loopback one (a remote memory attester's round trip adds to it).
 5. **Timed audits** against the responder serving `C` from device memory:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
@@ -65,7 +65,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-MEMORY_CHALLENGER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "timed_audit.py"
+MEMORY_ATTESTER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "timed_audit.py"
 SALT = bytes(range(24))
 VECTORS = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
@@ -125,11 +125,11 @@ def busy_wait(ns: int) -> None:
 
 
 class ControlResponder:
-    """A responder speaking `pous_native.cu`'s wire (`memory_challenger.py`), whose answer to each challenge the harness supplies through
+    """A responder speaking `pous_native.cu`'s wire (`memory_attester.py`), whose answer to each challenge the harness supplies through
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
-    server time through the memory challenger's logical clock instead."""
+    server time through the memory attester's logical clock instead."""
 
     def __init__(self, block_bytes: int, answer: Callable[[int], tuple[bytes, int, int, int]], real_delay: bool = False,
                  wait: Callable[[int], None] = busy_wait) -> None:
@@ -525,7 +525,7 @@ def decode_after_timing(backend: Backend, c: Any, tags: Any, w_digest: str) -> d
 
 # --- the audits -----------------------------------------------------------------------------------------------------------
 
-def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
+def _memory_attester_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
     cmd = [sys.executable, str(script), "--ready", str(ready), "--leaves", str(leaves), "--out", str(result),
            "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, "--clock", a.clock]
     cmd += ["--k", str(a.k)] if a.k else []
@@ -536,16 +536,16 @@ def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path
     return cmd + extra
 
 
-def _memory_challenger_env() -> dict[str, str]:
+def _memory_attester_env() -> dict[str, str]:
     paths = [str(ROOT), str(ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
 def leave_reserved(a: Any) -> None:
-    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's CPUs;
-    threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread, not
+    """Move every thread of this process (the load loop, CUDA's own threads) off the memory attester's and responder's CPUs;
+    threads started later inherit the mask, and the responder and memory attester pin themselves back.  Every thread, not
     only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there
-    and takes whole scheduler slices from the memory challenger."""
+    and takes whole scheduler slices from the memory attester."""
     here = set(os.sched_getaffinity(0))
     reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
     if not reserved or not here - reserved:
@@ -559,15 +559,15 @@ def leave_reserved(a: Any) -> None:
 
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
                     tag: str = "calibrate") -> dict[str, Any]:
-    """The memory challenger's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged
+    """The memory attester's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged
     against."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"{tag}.json"
-    cmd = _memory_challenger_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
+    cmd = _memory_attester_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
     with (out / f"{tag}.log").open("w") as log:
-        subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT).wait()
+        subprocess.Popen(cmd, env=_memory_attester_env(), stdout=log, stderr=subprocess.STDOUT).wait()
     responder.stop()
     return json.loads(result.read_text()) if result.exists() else {}
 
@@ -575,8 +575,8 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
 def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, leaves: Path, out: Path, tag: str, a: Any,
                 load: Callable[[], Any] | None, limit_ns: int | None = None, sync: Callable[[], Any] | None = None,
                 extra: Sequence[str] = ()) -> dict[str, Any]:
-    """One memory challenger process (`script`, with `extra` arguments) against the responder `start()` returns, judged
-    against `limit_ns` when given, with `load` run until the memory challenger exits.  Every load call is synchronized
+    """One memory attester process (`script`, with `extra` arguments) against the responder `start()` returns, judged
+    against `limit_ns` when given, with `load` run until the memory attester exits.  Every load call is synchronized
     (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones.  The answers' blocks stay in
     `audit-{tag}.json` beside `ready-{tag}.json`, where a replay of the verdict reads them, and out of the returned copy,
     which the result embeds."""
@@ -584,10 +584,10 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"audit-{tag}.json"
-    cmd = _memory_challenger_cmd(script, ready, leaves, result, a, limit_ns, list(extra))
+    cmd = _memory_attester_cmd(script, ready, leaves, result, a, limit_ns, list(extra))
     completed = 0
     with (out / f"audit-{tag}.log").open("w") as log:
-        proc = subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, env=_memory_attester_env(), stdout=log, stderr=subprocess.STDOUT)
         if load is None:
             proc.wait()
         else:
@@ -907,14 +907,14 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a)     # P5: fix the limit with no load running
+    cal = calibrate_limit(native_start, fields, MEMORY_ATTESTER, out, a)     # P5: fix the limit with no load running
     limit = int(cal.get("limit_ns") or 0)
-    honest = audit_round(native_start, fields, MEMORY_CHALLENGER, leaves, out, "honest", a,
+    honest = audit_round(native_start, fields, MEMORY_ATTESTER, leaves, out, "honest", a,
                          (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: ControlResponder(width, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit)
+        return audit_round(start, fields, MEMORY_ATTESTER, leaves, out, tag, a, None, limit)
 
     value = control("value", control_answers(c_host, width, zero=set(range(0, p.blocks, 10))))
     late = control("late", control_answers(c_host, width, late_every=10, late_ns=limit + LATE_EXTRA_NS))

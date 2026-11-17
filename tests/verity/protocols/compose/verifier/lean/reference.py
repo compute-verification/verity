@@ -3,7 +3,7 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 `Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case_twin`
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
-attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
+attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the network attester's
 certificates and one-stage's answers, `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `inference_only_reference.check_theta`, behind the protocol's decoders,

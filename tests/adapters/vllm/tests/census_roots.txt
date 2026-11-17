@@ -65,7 +65,7 @@ verity_vllm.definitions.numerics.twins      # the twins register their kernels w
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
 # and code outside the package call
 verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
-verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
+verity_vllm.engine.stock      # a stock engine at the pin with no protocol on
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
 verity_vllm.protocols

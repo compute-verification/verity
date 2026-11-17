@@ -36,6 +36,8 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
+`job.sh` needs GNU time at `/usr/bin/time`, cargo, lake (or curl to install elan), 32 cores and 128 GB of memory with an oprove behind the ZK server (else 64), and refuses, before it builds anything, a machine that lacks one.
+
 ## What the verdict says
 
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
@@ -45,8 +47,8 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
   statements that refused it and those that rightly accepted it.
 - **Forgeries** (`--forge`, default none): the pod script's forged statements (`FORGE`, `rec_vstage --forge`: message, sum, comb,
   top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one run each. A forgery is refused when
-  one of its statements is, whether the ZK server stopped it before release (`ZK-SERVER-REFUSED`, an older run's
-  `FIREWALL-REFUSED`) or Lean refused it, and a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
+  one of its statements is, whether the ZK server stopped it before release (`ZK-SERVER-REFUSED`)
+  or Lean refused it, and a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
   rows are left out of the outer totals. `--max-min` counts every statement a forgery stages (`FORGED`: message, comb
   and filler every algebra part, sum those and L0 and L3), each sized as its honest statement's release. With coef, dirs
   or message among them, the **`forge-after`** step runs after lean (unless
@@ -110,7 +112,7 @@ them, so a cancelled run's rows are still read.
   (`t.*`), the host witness (`h.witness`) and `wait.verifier`, which is what is left of `e2e_s` (the run waiting on
   its verifier: the `rec_live` proxy, or `serve`, whose `verify_s` and `handle_s` are in the row's `extra`). Behind
   the ZK server, the prover's buckets also hold its waits on the Lean session loop, and the two reps overlap. So there the
-  cost is read from the loop's own process: `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds, peak RSS and lifetime, from the run's process
+  cost is read from the loop's own process: `flock-zk-server`'s CPU seconds, peak RSS and lifetime, from the run's process
   samples (`resources.jsonl`, the run's telemetry beside `out/`).
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in
   use, sampled every half second (`gpu-mib.txt`, a lower bound). For CPU steps, each tool's `/usr/bin/time -v` peak RSS.

@@ -40,17 +40,14 @@ from rec_rows import Row, Stat, compose_row, forge_after_rows, forged, forgeries
 log = logging.getLogger(__name__)
 
 SCHEMA = "recursion-e2e/v1"
-#: oprove's mode through the ZK server, as 85-rec-reprice.sh's MODES and its oprove directories name it, and the name
-#: runs recorded before it carry
-ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"
-#: the summary's key for the ZK server's Lean session loop, and the one results recorded before it hold
-LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"
-#: the ZK server's Lean session loop's process name, which the run's process samples carry, then a recorded run's
-LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")
-#: the lines a prover's stop starts with; a recorded run's ZK server refused as ``FIREWALL-REFUSED``
-STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")
-#: prover buckets a recorded run names otherwise, by the name read
-RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}
+#: oprove's mode through the ZK server, as 85-rec-reprice.sh's MODES and its oprove directories name it
+ZK_SERVER_MODE = "zk_server"
+#: the summary's key for the ZK server's Lean session loop
+LOOP = "lean_session_loop"
+#: the ZK server's Lean session loop's process name, which the run's process samples carry
+LOOP_PROCESS = "flock-zk-server"
+#: the lines a prover's stop starts with
+STOPS = ("ZK-SERVER-REFUSED", "PROVER-STOPPED")
 #: the icheck row of a run recorded while 85 still timed V*'s Python hashing reference there; V*'s verdict is Lean's now
 RECORDED_VSTAR = ("rec_vstar", ("icheck/time-vstar.txt", "V*'s hashing reference over the inner run"))
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
@@ -95,7 +92,6 @@ def _bucket_sums(buckets: list[dict[str, Any]] | None) -> dict[str, float]:
     for b in buckets or []:
         for k, v in b.items():
             if k.startswith("t.") and isinstance(v, (int, float)):
-                k = RECORDED_BUCKETS.get(k, k)
                 sums[k] = sums.get(k, 0.0) + float(v)
     return sums
 
@@ -244,9 +240,8 @@ def read(root: Path) -> dict[str, Any]:
     cpu_prover = params(root).get("OPROVE_GPU") == "0"
     for o in repeats(root, "oprove")[:1]:
         for d in sorted((p for p in (o / "oprove").glob("*") if p.is_dir()), key=lambda p: p.name):
-            named = next((m for m in (ZK_SERVER_MODE, RECORDED_MODE, "host", "dev") if d.name.endswith("-" + m)), "dev")
-            stmt = d.name[: -len(named) - 1] if d.name.endswith("-" + named) else d.name
-            mode = mode_name(named)
+            mode = next((m for m in (ZK_SERVER_MODE, "host", "dev") if d.name.endswith("-" + m)), "dev")
+            stmt = d.name[: -len(mode) - 1] if d.name.endswith("-" + mode) else d.name
             rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"
                                    + (", CPU prover" if cpu_prover else "")))
             rows[-1].extra |= {"mode": mode, "statement": stmt, "prover": "cpu" if cpu_prover else "gpu"}
@@ -313,7 +308,7 @@ def read(root: Path) -> dict[str, Any]:
         rows += negative_rows(ng[0] / "lean")
     forgeries(rows)
     s = summary(rows)
-    loop = [e for name in LOOP_PROCESSES for e in processes(root.parent / "resources.jsonl", name)]
+    loop = processes(root.parent / "resources.jsonl", LOOP_PROCESS)
     if loop:
         s[LOOP] = loop
     steps = step_status(root)
@@ -497,14 +492,12 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
     for d in docs:
         for r in d["rows"]:
             r = {**r, "extra": {**r.get("extra", {}), "run": d.get("ref") or d.get("run")}}
-            if "mode" in r["extra"]:
-                r["extra"]["mode"] = mode_name(r["extra"]["mode"])
             by[(r["step"], r["stage"], r["extra"].get("mode", ""))] = r
     order = {s: i for i, s in enumerate(ORDER)}
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
     objs = [Row.from_json(r) for r in rows]
     s = summary(objs)
-    loop = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in loop_samples(d.get("summary", {}))]
+    loop = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in d.get("summary", {}).get(LOOP) or []]
     if loop:
         s[LOOP] = loop
     # a merged result is one recursive run only as far as its runs' steps are: each step's exits, from the last run with it
@@ -518,22 +511,11 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
-def loop_samples(s: dict[str, Any]) -> list[dict[str, Any]]:
-    """A summary's process samples of the ZK server's Lean session loop, under ``LOOP`` or a recorded result's
-    ``RECORDED_LOOP``."""
-    return s.get(LOOP) or s.get(RECORDED_LOOP) or []
-
-
-def mode_name(m: str) -> str:
-    """An oprove mode as MODES names it now, from a run's directory name or a recorded result's row."""
-    return ZK_SERVER_MODE if m == RECORDED_MODE else m
-
-
 def loop_line(s: dict[str, Any]) -> str | None:
     """The table's line on the ZK server's Lean session loop, from the run's process samples (``processes``); None where
     they hold none."""
-    if not loop_samples(s):
+    if not s.get(LOOP):
         return None
     return "The ZK server's Lean session loop (from the run's process samples): " + "; ".join(
         f"{e['cpu_s']:.0f} CPU s, peak RSS {e['rss_hwm_gb']} GB, {e['threads']} threads, seen {e['first'][11:19]}–"
-        f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in loop_samples(s)) + "."
+        f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in s[LOOP]) + "."

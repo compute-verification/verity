@@ -47,12 +47,12 @@ from sass_semantics import classify  # noqa: E402
 MM = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 #: the device census file an architecture family reads its priced kinds from
 DEVICE_CENSUS = {"sm_120": MM / "census" / "DS-120.csv", "sm_100": MM / "devices" / "sm_100" / "census.csv",
-                 "sm_90": MM / "devices" / "sm_90" / "census.csv", "sm_80": MM / "devices" / "sm_80" / "census.csv"}
+                 "sm_90": MM / "devices" / "sm_90" / "census.csv"}
 #: the rows file whose `DS_tensor` row gives each operand type's data-sheet tensor peak
 DEVICE_ROWS = {"sm_120": MM / "rows.csv", "sm_100": MM / "devices" / "sm_100" / "rows.csv",
-               "sm_90": MM / "devices" / "sm_90" / "rows.csv", "sm_80": MM / "devices" / "sm_80" / "rows.csv"}
+               "sm_90": MM / "devices" / "sm_90" / "rows.csv"}
 #: NVIDIA's Instruction Set Reference table an architecture family maps to
-ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell", "sm_80": "ampere"}
+ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell"}
 #: an MMA SASS base -> the census-kind token its peak would appear under (QMMA covers FP8/FP6/FP4 mma.sync on sm_120)
 MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA", "BMMA": "BMMA", "DMMA": "DMMA",
                   "HGMMA": "HGMMA", "IGMMA": "IGMMA", "QGMMA": "QGMMA", "OGMMA": "OGMMA", "BGMMA": "BGMMA",

@@ -15,7 +15,7 @@ sampled sessions, adversarial edits of them and named negative controls; `benchm
 step judges its session here.
 
 The record goes as `to_json` writes its parts, `trusted` as sorted hex and `schemes` by id, each one the port verifies
-(`MemoryChallenger.KNOWN_SCHEMES`: `memory_challenger.LMS` and the test signers' ids).  Where the Lean refuses the record
+(`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS` and the test signers' ids).  Where the Lean refuses the record
 (a scheme id it doesn't verify, a field `to_json` can't have written), `verdict` raises `ValueError` and `judge` rejects
 the session: it fails closed, never to the Python."""
 

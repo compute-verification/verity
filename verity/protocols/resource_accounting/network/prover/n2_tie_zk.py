@@ -653,7 +653,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_tie_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="each ingress execution phase's bucket rows proved --zk as IoTieRequest, "
-                                     "decided by the tie's verifier of record, and the tie built from the outcomes")
+                                     "decided by the tie's verifier, and the tie built from the outcomes")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

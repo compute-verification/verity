@@ -107,7 +107,7 @@ def absent(m: dict) -> list[str]:
 def log(tmp_path: Path, beta: int = BETA, *more: registration.Entry, composite: str = "onsite",
         links: tuple[Link, ...] | None = None, name: str = "registration") -> Path:
     """A committed registration log, in the file ``name``, of one host behind a network attester that splits its
-    uplink, the host's side at ``beta`` bits a second, with a memory challenger's link, which is no boundary link, and
+    uplink, the host's side at ``beta`` bits a second, with a memory attester's link, which is no boundary link, and
     a day's declaration, which is no site entry; or of ``links`` in place of those three."""
     links = links or (Link("uplink0", ("node0", "cert0"), beta, 100_000), Link("uplink0-out", ("cert0", OUTSIDE), BEYOND, 0),
                       Link("chal0-link", ("chal0", "node0"), 7, 1_000_000))

@@ -74,8 +74,6 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
   wrap correction to H1V3 on the CPU before `sbench.sh` asks for a GPU.
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
   `PYTHONPATH`).
-- `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
-  H200 or B200.
 - `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed.
 
 ## Tools

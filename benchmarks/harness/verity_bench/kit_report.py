@@ -154,8 +154,10 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
     `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
     appends each of `measured`, the keywords of a `Writer.measurement`, at its own ``mark`` where it gives one (a chosen
-    parameter's, which no run measured), else at `mark` (``"measured"`` where None), to the run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
-    `<name>.json` it holds.
+    parameter's, which no run measured), else at `mark` (``"measured"`` where None), to the run's result
+    (`kit.writer`). An empty variable names no place. Inside pytest a place in the research run the process started
+    under is refused, before anything is written (`kit.refuse_the_started_run`). With `document` False the place keeps
+    the `<name>.json` it holds.
 
     `ran_with` (`ran_with()`'s pair, or None for a record that predates the field, printed as `NOT_STATED`) is printed
     after the text's first line and is the document's ``ran_with``; below it, `NOT_AN_AUDIT` unless the coins are the
@@ -217,6 +219,9 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
         place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
     if place:
         place = Path(place)
+        from verity_bench.kit import refuse_the_started_run
+
+        refuse_the_started_run(place)
         if document:
             place.mkdir(parents=True, exist_ok=True)
             (place / f"{name}.json").write_text(line + "\n")

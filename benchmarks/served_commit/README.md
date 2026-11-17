@@ -39,8 +39,7 @@ graphs is `adapters/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
 
 - **Provides:** the arms the shared harness runs (`arm.py`, `served_arm.py`, `prof_arm.py`), the tensor-parallel decode
   step (`tp_decode.py`) and the scripts that launch and profile them.
-- **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/kernels/moe_align`,
-  which imports `tp_decode`.
+- **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms.
 - **Loads:** the vLLM integration's `commit`, `pipeline`, `engine`, `acquire`, `correspondence`, `query` and `protocols`
   packages; `verity.circuits`, `verity_vllm.definitions`, `verity.commitments` and `verity.commitments.cuda`;
   `benchmarks/harness` (`verity_bench`); torch and vLLM.

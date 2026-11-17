@@ -79,6 +79,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -110,7 +111,7 @@ INTERVAL = "Student's t 95% over the lifetime pairs, t at the pairs less one, ev
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of its default arms'
 #: ours, and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
 MATCH = {"glm53": "vllm/prod-replay-match-glm53", "llama32-1b": "vllm/prod-replay-match-glm53"}
-ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
+ADVICE = {"glm53": "vllm/prod-advice-bits-glm53", "llama32-1b": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
 #: the replay's match it is held to: every served token given back
 MATCH_TARGET = 100.0
@@ -145,6 +146,8 @@ INDEX_TOPK = "index_topk"
 TOPK, TOPK_LOG = "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG"
 #: what the report keeps in OUT of the canonical top-k's counters, which its processes keep outside it (`topk_kept`)
 TOPK_KEPT = "topk_counters.json"
+#: where in OUT each process's own counters file is kept whole, under its directory's name: its rows by device
+TOPK_FILES = "topk-log"
 #: by model, as the benchmark names it: what is known of leaving the context limit to vLLM (``auto``: whether vLLM
 #: then starts, at which settings, why not, and the run that showed it)
 LIMITS = HERE / "limits.json"
@@ -294,6 +297,14 @@ def topk_counters(dirs: list[Path]) -> dict | None:
             "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
+def keep_topk_files(out: Path, name: str, d: Path) -> None:
+    """Each process's counters file in ``d`` copied whole to OUT/`TOPK_FILES`/``name``, so its rows by device reach
+    the store with the run, where `topk_counters` keeps only their sums."""
+    for f in sorted(d.glob("dsa_topk.*.json")) if d.is_dir() else ():
+        (out / TOPK_FILES / name).mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(f, out / TOPK_FILES / name / f.name)
+
+
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     """The canonical top-k's counters of the replay's processes and of serving's (`topk_counters`). The processes keep
     them on the node, outside the run's directory, under the job's private one (the benchmark's PRIVATE: an arm's
@@ -307,6 +318,8 @@ def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     if private is None:
         return {"kept": True, **before} if before else {"kept": False, "replay": None, "served": None}
     log = S.ARMS[ours].env.get(TOPK_LOG) if ours in S.ARMS else None
+    for name in ([replay, *(d.name for d in arm_dirs(out, ours))] if log else ()):
+        keep_topk_files(out, name, Path(log.replace(S.PRIVATE, str(private / name))))
     kept = {name: topk_counters([Path(log.replace(S.PRIVATE, str(private / d))) for d in ds]) if log else None
             for name, ds in (("replay", [replay]), ("served", [d.name for d in arm_dirs(out, ours)]))}
     kept["served"] = kept["served"] or before.get("served")
@@ -342,6 +355,8 @@ def topk_by_dir(out: Path, private: Path | None, dirs: list[Path]) -> dict | Non
     if private is None:
         return before.get("dirs")
     logs = {d.name: log for d in dirs if (log := (json.loads((d / "meta.json").read_text()).get("env") or {}).get(TOPK_LOG))}
+    for name, log in logs.items():
+        keep_topk_files(out, name, Path(log.replace(S.PRIVATE, str(private / name))))
     kept = {name: topk_counters([Path(log.replace(S.PRIVATE, str(private / name)))]) or (before.get("dirs") or {}).get(name)
             for name, log in logs.items()}
     if kept:
@@ -856,7 +871,8 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
     has it (``charged``, the bits of the code it builds and decodes back; ``alone``, the counts' entropy over the rows
     that verified drafts, which is not sent; ``derived`` where the audited block computes it). ``bits`` is what is
     charged: the arrivals, unless the serve is under the tick, and the kept count's ``charged``. Not measured where ours holds no such pass or it can't be read back, or where the loader
-    refuses it: a schedule its replay does not reproduce, which it names the step of, or a serve with no draft."""
+    refuses it: a schedule its replay does not reproduce, which it names the step of. A serve with no draft keeps no
+    draft, so its kept count is 0 bits."""
     arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or not (arm_dir / load / f"rep-{rep}" / "meta.json").is_file():
         return not_measured(f"{ours} holds no pass {load} rep {rep}, the one the replay re-runs: the advice is that "

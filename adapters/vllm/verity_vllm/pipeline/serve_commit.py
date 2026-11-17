@@ -664,7 +664,7 @@ class CommitWindows:
 
     def read_extras(self) -> None:
         """`_extras_of` the committer's registered weights, read now rather than at the first seal: before a remote session
-        holds the weights encoded where the engine holds them (`serve_remote`), so each seal carries the bytes committed."""
+        holds the weights encoded where the engine holds them (`serve_poub`), so each seal carries the bytes committed."""
         reg = getattr(self.com, "weights", None)
         if self.seal is not None and reg is not None:
             self._extras_of(self.com, SimpleNamespace(weight_registration=reg))

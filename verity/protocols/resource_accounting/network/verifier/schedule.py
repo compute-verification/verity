@@ -128,7 +128,7 @@ def run_shaper(
     syncs: Sequence[ClockSync],
     certifier: Certifier,
 ) -> list[BlockGrid]:
-    """An honest sender's shaper driving a certifier over len(syncs) windows.
+    """An honest sender's shaper driving a network attester over len(syncs) windows.
 
     Frame k is handed at its logical bucket h(k), or later if it wasn't ready by then. A late frame delays those behind
     it, so the grid deviates from the Program's and the window is a violation. Returns the network certificates."""
