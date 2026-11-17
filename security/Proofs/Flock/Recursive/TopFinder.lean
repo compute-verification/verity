@@ -197,7 +197,7 @@ def heldTop (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt)
     (cs.stream? "stacked/rep0").bind fun s => s.tops[0]?
 
 def topDom (st : Flock.Stmt) (reg : Lean.Json) (size : ℕ) : Option ByteArray :=
-  (Flock.RecVStar.registration (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
+  (Flock.RecVStar.docket (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
     (Flock.Registered.domain pe.1 Flock.RecVStar.STACKED Flock.RecVStar.TOP_ROW_WORDS size
       Flock.Registered.WORD_BITS).toOption
 

@@ -108,7 +108,7 @@ they are part of the premise, which `TopColl.cand` reads. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),
-    Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
+    Flock.RecVStar.docket (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
       Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap salt bcs
 
 /-- It refuses a registration META does not bind, and a binding round of R's stream whose top does not make the
