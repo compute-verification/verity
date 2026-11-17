@@ -11,7 +11,7 @@ non-negative integer; `Int` holds the Python's signed integers, and Python's `&`
 `Int.emod` by `2^k`.
 
 Each definition's doc names the definition of `security/Definitions/Core/Scalar.lean` it must equal, to be proved in
-`security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
+`security/Proofs` as the network attester's program's copies are; where Security defines none yet, the Python function is the definition.
 -/
 
 @[expose] public section

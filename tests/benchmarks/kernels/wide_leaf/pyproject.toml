@@ -1,0 +1,10 @@
+# The wide level-0 leaf's bench. Not a package: run.sh runs on a GPU node, per its header. The suite holds wleaf.py's
+# result: what it writes through the harness kit's writer from the steps' verdicts.
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+inputs = ["benchmarks/kernels/wide_leaf",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config", "verity/__init__.py", "verity/errors.py"]

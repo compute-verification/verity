@@ -1,4 +1,4 @@
-"""PoUS's audit answer as a Boolean circuit: the label the memory challenger received for round j is label i_j of C, by
+"""PoUS's audit answer as a Boolean circuit: the label the memory attester received for round j is label i_j of C, by
 its hiding leaf.  One input per round, k per audit.
 
     PousAnswerOpens_v1{N}           (block: Array<8N>, h: Array<512>, y: Array<1536>, bc: Array<1024>) -> Array<1>
@@ -12,14 +12,14 @@ Every array is of `Value<1>`.  Byte strings (the block, digests, salts, commit s
 being bit t mod 8 of byte ⌊t/8⌋ (hm96's order); a chaining value is SHA-512's eight words, each least significant bit
 first.  Every compression is core's `verity.commitments.gates.sha512.compress_gadget`, 58,120 ANDs at most.
 
-**The statement.** For round j the memory challenger signs (i_j, send, receipt, h), where h is the digest of the 2,056
+**The statement.** For round j the memory attester signs (i_j, send, receipt, h), where h is the digest of the 2,056
 bytes it received.  C's leaf i_j is ``hm96-sha512/row/v2``: the frame leaf over the commit string ``bc = b ‖ c`` of the
 inner digest x = SHA-512(P(16448) ‖ block) (`rowleaf.sha512_row_v2_prefix`), with salt y and hm96's pinned key.
 `PousAnswerOpens_v1` is 1 iff
 
     x = SHA-512(P(8N) ‖ block) equals h,   and   hm96-sha512's commit string of (x, y) equals bc.
 
-So h must be the label's ``sha512/row/v2`` digest: the memory challenger hashes P's constant midstate onward, the same
+So h must be the label's ``sha512/row/v2`` digest: the memory attester hashes P's constant midstate onward, the same
 17 compressions as a plain SHA-512 of the label.  The signature over the record, the index and the leaf's place under
 C's root are other parts of the session's statement.
 
@@ -192,4 +192,4 @@ def _answer_body(B, S, block, h, y, bc):
 PousAnswerOpens = CompositeDefinition(
     "PousAnswerOpens", 1, ("N",), _answer_sig, _answer_body, conformance="protocol-defined",
     doc="1 iff the N-byte block's sha512/row/v2 digest is h and its hm96-sha512 commit string under salt y is bc: the "
-        "memory challenger's hash of round j's answer and C's hiding leaf i_j open to the same block (N = 2056 for P2)")
+        "memory attester's hash of round j's answer and C's hiding leaf i_j open to the same block (N = 2056 for P2)")

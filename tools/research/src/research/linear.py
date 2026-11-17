@@ -604,7 +604,8 @@ class Linear:
           (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
         - unheard: filed by a person (a creator and no bot) and not assigned to that person (a note to themself), not yet
           started, with no comment UNHEARD_H after it was filed.
-          The sweep rings its lane for it, so no lane subscribes to its team's issue events, which wake it for its own.
+          The Slack events service rings its lane when it is filed, and the sweep again for this, so no lane subscribes to
+          its team's issue events, which wake it for its own.
         The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
         - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (Pacific).
@@ -856,13 +857,6 @@ class Linear:
         if not r["success"]:
             raise LinearError(f"Linear didn't link {url}: attachmentLinkGitHubPR returned success false")
         return True
-
-    def issues(self, team: str, state: str | None = None) -> list[dict]:
-        """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""
-        f = {"team": {"id": {"eq": self.team(team)["id"]}},
-             "state": {"name": {"eqIgnoreCase": state}} if state else {"type": {"nin": ["completed", "canceled"]}}}
-        q = "query($f: IssueFilter!) { issues(filter: $f, first: 250) { nodes { identifier title createdAt state { name } } } }"
-        return sorted(self.gql(q, {"f": f})["issues"]["nodes"], key=lambda i: i["createdAt"])
 
     def subscribers(self, issue_id: str) -> list[str]:
         q = "query($id: String!) { issue(id: $id) { subscribers { nodes { name } } } }"

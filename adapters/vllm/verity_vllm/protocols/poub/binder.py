@@ -35,8 +35,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-
-from verity_vllm.engine.hooks import Hooks
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
     IDENTITY,
     Append,
@@ -51,6 +49,8 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
+
+from verity_vllm.engine.hooks import Hooks
 
 if TYPE_CHECKING:
     from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles

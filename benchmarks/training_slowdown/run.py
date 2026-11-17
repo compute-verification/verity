@@ -1,8 +1,8 @@
 """`verity bench training-slowdown CONFIG`: every job of an attack config and of its honest config, each found by its
 label and run where it is missing, and their grade once every one has its record.
 
-    verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]]
-        [--weights] [--starts FILE] [--starts-root DIR] [--device DEVICE]
+    verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]
+        | --library [--root DIR]] [--weights] [--starts FILE] [--starts-root DIR] [--device DEVICE]
 
 A config (`training_slowdown.config`; a bare NAME is `attacks/NAME.toml`) and its honest config expand into jobs, one
 per seed and split, each labelled `training-slowdown=<digest>/<seed>/<split>` (`config.Job.label`). Each time it runs,
@@ -54,6 +54,10 @@ a seed or split the config doesn't list, which it doesn't read; else from each j
 writing `$OUT/<the config's digest>/slowdown.json` where the command has an `$OUT`, and nothing where it has none. A
 config that names no honest config has no grade, which the command says. The grade's own command, which reads a
 whole directory, stays for `--also` and `--as-if-assumed`.
+
+`--library` runs no job and reads no store: it traces the config's step on this machine's CPU and prints its row
+(`training_slowdown.library` of that one entry), whose slowdown is the bound on one traced step, with no job trained;
+with `--root DIR` (else `$OUT`) it writes `library.json` and the metric's point too, and prints the point's line.
 
 `--dry-run` prints what it would run, runs nothing and grades nothing. The command exits 0 when every job has its
 record and the grade answers, or the config names no honest config; 3 when a job is still pending (its run id says
@@ -390,7 +394,9 @@ def parse(argv=None) -> argparse.Namespace:
     where = ap.add_mutually_exclusive_group()
     where.add_argument("--local", action="store_true", help="run the missing jobs here, one after another")
     where.add_argument("--on", metavar="MACHINE", help="run the missing jobs on MACHINE (research run --on)")
-    ap.add_argument("--root", type=Path, help="--local's directory of jobs (default $OUT)")
+    where.add_argument("--library", action="store_true",
+                       help="run no job: trace the config's step on this CPU and print its slowdown (library.py)")
+    ap.add_argument("--root", type=Path, help="--local's directory of jobs, or --library's output (default $OUT)")
     ap.add_argument("--pool", help="with --on, the machine's pool")
     ap.add_argument("--weights", action="store_true",
                     help="each job this call runs keeps its last checkpoint's whole state (default: no weights)")
@@ -408,6 +414,10 @@ def parse(argv=None) -> argparse.Namespace:
 
 def main(argv=None, store: Store | None = None) -> int:
     a = parse(argv)
+    if a.library:
+        from training_slowdown import library
+        out = a.root or (Path(SHARED.OUT) if SHARED.OUT else None)
+        return library.main([str(find(a.config)), "--starts", str(a.starts), *(["--out", str(out)] if out else [])])
     reg = starts.registry(a.starts)
     cfg = config.load(find(a.config), reg)
     configs = [cfg] + [h for h in [config.honest(cfg, reg)] if h]

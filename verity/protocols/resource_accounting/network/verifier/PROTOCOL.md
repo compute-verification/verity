@@ -2,7 +2,7 @@
 
 The **network attester** is the auditor's device on a boundary link of a spatial unit (the machines behind network
 attesters). It shapes each link into a fixed grid of buckets and frames, records exactly that grid and one status per
-execution phase, and once per execution phase signs a **network certificate** over a salted digest of the record. What
+execution phase, and once per execution phase signs a **network attestation** over a salted digest of the record. What
 it bounds is how much a covert sender can move across the boundary through **when** frames leave, once the content and
 order of every frame are fixed by the declared Program.
 
@@ -16,7 +16,7 @@ order of every frame are fixed by the declared Program.
   read on one clock; on two devices, within 1.03 s of each other), prose only. The network attester's program's Lean reads
   neither.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
-  and the record's digest hidden under a salt the network attester samples ("Network certificates").
+  and the record's digest hidden under a salt the network attester samples ("Network attestations").
 - **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The network attester (`grid`)"), the set of clock-sync
   values Σ_sync, the network attester's key id and session, and the execution phases audited.
 
@@ -30,7 +30,7 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
-- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- a period, onsite's network attestation subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
 - an active network attester's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
   (`verity/network-rows/v1`), over the network attester's program's `NetworkAttester.Rows`. It does not hold an egress cell to
   the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
@@ -111,12 +111,12 @@ the status instead, which is 64 bytes per execution phase, or about 92 KB per li
 
 v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are unchanged, and the audit still takes them.
 
-## Network certificates (`certificate`)
+## Network attestations (`certificate`)
 
 **The trust change.** The **network attester**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
 committed record reaches the auditor as published. Instead, once per execution phase whose status is complete, the
-network attester signs a **network certificate**: a signature over a hiding digest of the execution phase's record, salted by the
+network attester signs a **network attestation**: a signature over a hiding digest of the execution phase's record, salted by the
 network attester (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
@@ -150,7 +150,7 @@ This is LMS's network-certificate role digest (`verity.commitments.crypto.lms.ce
 network attester's 16-byte LMS identifier. `session` is the network attester's session id: 32 bytes (`lms.SESSION_BYTES`) the
 challenger samples for the session and issues to the network attester, and the audit takes from its parameters, as it takes the
 key; the record head and `service.encode` don't carry it. The tag is the message's own domain separation, distinct from
-the ids of the checks that read it: the network certificate check `verity/network-certificate/v4` and the audit over
+the ids of the checks that read it: the network attestation check `verity/network-certificate/v4` and the audit over
 every record `verity/network-records/v3`. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
 h = 20, the whole SHA-512 output, not truncated), and its unforgeability is `euf-cma/lms-sha512-n64`.
 The network attester's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
@@ -278,7 +278,7 @@ Stated in Lean: `NetworkCheck.TransferBlocks`'s network attester form (`Kind.net
 active network attester's records, both ends at the network attester's grid and parameters digest, with no sync read;
 `service.NetworkAttesterProfile` is the Python reference.
 
-## A period, as onsite's network certification subprotocol (`verity/certifier/v0`)
+## A period, as onsite's network attestation subprotocol (`verity/certifier/v0`)
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has its one form, the rows form, its formats and the bound `K` it
@@ -1029,7 +1029,7 @@ link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 
-The goal is network certification for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
+The goal is network attestation for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the

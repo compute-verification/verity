@@ -3,7 +3,7 @@
 its answer the core form of the session's own (`p2_case.answer`), and every field equal: an honest session accepted
 with its credited reads, one whose receipts skip a unit's reads and one whose openings are out of form rejected, and
 one stopped before its last window is verified undecided. A toy party's case, and a case whose request is edited off
-`SESSION` in any value, are refused naming each one. The memory challenger's close is checked before the log is
+`SESSION` in any value, are refused naming each one. The memory attester's close is checked before the log is
 replayed, each refusal by name: a key the params don't trust, a line count or a chain that isn't the case's (its
 head, the commitment's digest and the clock floor, then its log), a
 signature that doesn't verify, a close replayed under another session, a coin that isn't the challenger's whole coin,
@@ -29,7 +29,7 @@ from test_p2_party import SESSION_ID, TOY, Lying, Prover, exe, request, run, sig
 from verity.commitments import domains
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period as pous
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -206,7 +206,7 @@ def test_edits_of_the_log_are_refused_or_change_the_answer(exe, lean, store) -> 
 def _close_edits(case) -> dict:
     ev = _evidence(case)
     log, close, n = ev["log"], ev["close"], len(ev["log"])
-    other = signer(b"p2-case-test/another memory challenger")
+    other = signer(b"p2-case-test/another memory attester")
     params = case["params"]
     return {
         "untrusted": (_with(case, close=p2_case.close_of(other, SESSION_ID, p2_case.head_of(case), log)), UNTRUSTED),
@@ -237,7 +237,7 @@ def test_a_close_that_does_not_sign_the_log_is_refused_by_name_before_the_replay
 def test_the_check_trusts_the_keys_its_params_name(lean, honest) -> None:
     """The same log, signed by another key that the params trust instead, is accepted: the params' list, never the
     close, says which keys are trusted."""
-    other = signer(b"p2-case-test/another memory challenger")
+    other = signer(b"p2-case-test/another memory attester")
     case = _with_log(honest, _evidence(honest)["log"], by=other)
     case = case | {"params": case["params"] | {"trusted": [other.public_key.hex()]}}
     assert replayed(lean, case)["verdict"] == "accept"
@@ -263,7 +263,7 @@ def _wipe_record() -> bytes:
 
 @pytest.mark.parametrize("record", [_pous_record, _wipe_record], ids=["pous-session", "wipe"])
 def test_another_subprotocols_record_signed_for_the_session_is_refused_as_a_close(lean, honest, record) -> None:
-    """The memory challenger's key signs a PoUS session record, or a wipe record, for the case's session id; put in
+    """The memory attester's key signs a PoUS session record, or a wipe record, for the case's session id; put in
     the case as its close, it is refused by name: those records are 64-byte digests, and P2's is raw bytes of another
     length (`Poub.P2Close.closeRecord_ne_pous`, `closeRecord_ne_wipe`)."""
     r = record()
@@ -275,7 +275,7 @@ def test_another_subprotocols_record_signed_for_the_session_is_refused_as_a_clos
 
 def test_the_close_bytes() -> None:
     """P2's tag, NUL-ended and a prefix of no other separator nor any of them of it; the record, raw bytes of the tag's
-    length plus 72; the message, the role's (`lms.memory_challenger_message`)."""
+    length plus 72; the message, the role's (`lms.memory_attester_message`)."""
     tag = b"verity/remote-bandwidth/p2/close/v0\0"
     assert p2_case.CLOSE_TAG == tag and len(tag) == 36
     others = [v.encode() for k, v in domains.TABLE.items() if k != "POUB_P2_CLOSE"]
@@ -285,7 +285,7 @@ def test_the_close_bytes() -> None:
     record = p2_case.close_record(3, chain)
     assert record == tag + (3).to_bytes(8, "big") + chain and len(record) == 108
     key = signer().key
-    assert lms.memory_challenger_message(key.I, SESSION_ID, record) == hashlib.sha512(
+    assert lms.memory_attester_message(key.I, SESSION_ID, record) == hashlib.sha512(
         (34).to_bytes(8, "big") + b"verity/memory-challenger-record/v1" + key.I
         + (40).to_bytes(8, "big") + (32).to_bytes(8, "big") + SESSION_ID
         + (108).to_bytes(8, "big") + record).digest()
@@ -355,3 +355,18 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
     assert p2_case.store_root(case) == reg.root
     assert p2_case.same_store(case, space.case) is None
     assert replayed(lean, case)["verdict"] == "accept"
+
+
+def test_the_trusted_keys_are_the_pins_and_never_the_cases_own() -> None:
+    key = b"the close's key"
+
+    def case(close) -> dict:
+        evidence = {} if close is None else {"close": close}
+        return {"evidence": json.dumps(evidence).encode().hex(), "params": {"trusted": [b"listed".hex()]}}
+    signed = case({"public_key": key.hex()})
+    assert p2_case.trusting(signed, hashlib.sha512(key).hexdigest())["params"]["trusted"] == [key.hex()]
+    assert p2_case.trusting(signed, hashlib.sha512(b"listed").hexdigest())["params"]["trusted"] == []
+    assert p2_case.trusting(case(None), hashlib.sha512(key).hexdigest())["params"]["trusted"] == []
+    assert signed["params"]["trusted"] == [b"listed".hex()]
+    with pytest.raises(ValueError):
+        p2_case.trusting(case({"public_key": "not hex"}), hashlib.sha512(key).hexdigest())

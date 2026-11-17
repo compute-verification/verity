@@ -411,7 +411,7 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert (stock["steps"], stock["draft_accepted_share"], stock["tokens_per_draft"]) == (2000, 50.0, 3.5)
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving "
-                                    "compute over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
+                                    "time over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
     assert ("  the cost is the mean of the lifetimes' costs, a lifetime's being prod-record's seconds for the passes "
             "both arms counted in it over prod's, less one, a pass's seconds from its users' first send to the last "
             "one's last answer; one lifetime an arm gives no interval and so no verdict\n"
@@ -667,7 +667,7 @@ def test_a_cost_over_server_lifetimes_pairs_the_same_pass_of_the_same_lifetime_a
     assert S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.45)["verdict"] == "misses"
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.50%, 0.50%] of stock's "
-                                    "serving compute over 2 server lifetimes an arm, 4 users; target 1%: meets")
+                                    "serving time over 2 server lifetimes an arm, 4 users; target 1%: meets")
     assert ("last answer; its interval is Student's t over the lifetimes, and the verdict is its upper end against the target\n"
             "  passes taken as independent: 0.50% [0.50%, 0.50%], 6 reps, the median over them with its interval; in no "
             "verdict\n"
@@ -768,10 +768,10 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
         files[-1].write_text(json.dumps(a))
     assert S.main(["cost", *map(str, files), "--arm", "prod-record", "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving compute over 1 ")
+    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving time over 1 ")
     assert (tmp_path / "out" / "serving_cost.txt").read_text() == text
     r = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
-    assert list(r)[:4] == ["value", "unit", "commit", "run"] and r["reference"] == "prod"
+    assert list(r)[:4] == ["value", "unit", "commit", "run"] and r["reference"] == "prod" and r["unit"] == S.SESSION_UNIT
     ok, first, what, measurements = S.result_of(r)
     assert ok and first == text.splitlines()[0] and what["loads"] == ["agentic"] and what["arm"] == "prod-record"
     assert [(m["name"], m["value"], m["ci95"], m["target"], m["verdict"], m["users"], m["lifetimes"]) for m in measurements] == [

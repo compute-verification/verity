@@ -11,9 +11,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 
 from verity_vllm.compiler import replay_step as RS
-from verity.protocols.resource_accounting.network.verifier.head_check import ands
 
 ROOT = Path(__file__).parent.parent.parent.parent.parent.parent
 #: a fetched fixture (`artifacts.json`), beside its writer's other vectors, which `suites.py` fetches before the suite runs
@@ -165,14 +165,14 @@ def test_the_circuit_is_the_reference_under_kv_pressure(pc, asy):
     for _ in range(1500):
         run = []
         for i in range(rng.randint(0, S.R)):
-            O, P = rng.randint(1, 8), rng.randint(1, 60)
+            n_out, P = rng.randint(1, 8), rng.randint(1, 60)
             if asy and rng.random() < 0.3:
-                run.append(RS.Req(i, P, O, O, P + O - 1, rng.randint(0, 1), 1))
+                run.append(RS.Req(i, P, n_out, n_out, P + n_out - 1, rng.randint(0, 1), 1))
                 continue
-            out = rng.randint(0, O - 1)
+            out = rng.randint(0, n_out - 1)
             comp = min(rng.choice((P + out - 1, rng.randint(0, P + out - 1), 16 * rng.randint(1, 4) - rng.randint(0, 1))),
                        P + out - 1)
-            run.append(RS.Req(i, P, O, out, comp, rng.randint(0, 1) if asy else 0))
+            run.append(RS.Req(i, P, n_out, out, comp, rng.randint(0, 1) if asy else 0))
         arr = tuple(RS.Req(80 + a, rng.randint(1, 40), rng.randint(1, 5)) for a in range(rng.randint(0, S.A)))
         cases.append((RS.State(tuple(run), (), rng.randint(0, 3)),
                       RS.Inputs(arr, (1, 0), ret=tuple(rng.choice((0, 1, 2, 3, 5)) for _ in range(S.R)))))

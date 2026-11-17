@@ -17,6 +17,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
 __all__ = ["Attack", "CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
            "Vector", "all_attacks", "attacks", "card", "census", "census_files", "census_lines", "citations", "cites",
            "device", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
@@ -153,7 +155,7 @@ def card(data: Path = DATA, of: str = "card") -> dict:
     if sku is None:
         raise SystemExit(f"{data / 'model.toml'} names no {of}; add {of} = \"SKU\", a file of hardware/cards/")
     try:
-        return load_card(sku)
+        return load_card(sku, directory=CARD_FILES)
     except KeyError as e:
         raise SystemExit(f"{data / 'model.toml'}: {e.args[0]}") from None
 

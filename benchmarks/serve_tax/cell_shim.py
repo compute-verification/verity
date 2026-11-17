@@ -4,7 +4,7 @@ vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completi
 The network attester (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
 in its id egress form takes a canonical token-id request (`id_form.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
-side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
+side of the network attester, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
 
 - a completion's body becomes the id request of its fields (`id_fields`): its model, its prompt as token ids (a text
   prompt encoded by the served model's tokenizer, as vLLM's server encodes one), ``max_tokens``, ``temperature``,
@@ -13,14 +13,14 @@ side of the certifier, the client's thin shim (that module's `cells` and `Shim`)
   ``ignore_eos`` is the one such field, and it is taken, unsent, only as true: the arm's server decodes every request
   to its ``max_tokens`` (`servetax_plugin`, ``to_length``), which is what that field asks of stock vLLM, so a body
   that doesn't ask for it would get an answer it didn't ask for;
-- the request goes to the certifier in cells on a connection of its own, and each ``DATA`` cell that comes back is
+- the request goes to the network attester in cells on a connection of its own, and each ``DATA`` cell that comes back is
   written at once as one streamed chunk with the cell's token id and no text, so the client's first-token and
-  inter-token times are the times the certifier's cells arrive; the ``END`` is the usage chunk and ``[DONE]``;
-- a connection the certifier refuses is a 503 and one it fails or cuts before its first id a 502; one that fails or is
+  inter-token times are the times the network attester's cells arrive; the ``END`` is the usage chunk and ``[DONE]``;
+- a connection the network attester refuses is a 503 and one it fails or cuts before its first id a 502; one that fails or is
   cut after an id is closed without the stream's last chunk, so the client counts it failed and never as a short answer.
 
-Each connection's record is one line of ``--log``, in the keys of the certifier's serving program's `connection_log`
-(every cell's kind and arrival after the certifier's origin, the request's and the response's digests), which is what the certifier's offline
+Each connection's record is one line of ``--log``, in the keys of network attestation's serving program's `connection_log`
+(every cell's kind and arrival after the network attester's origin, the request's and the response's digests), which is what network attestation's offline
 check reads as its ``client.json`` (`client_doc`), with the request's id, its token counts and the HTTP status beside
 them. A request the shim did not send has a line too, with why (``unsent``): one it refused, and one it never read
 whole, its client having closed first. No prompt and no token id is kept.
@@ -28,7 +28,7 @@ whole, its client having closed first. No prompt and no token id is kept.
     python cell_shim.py --deployment CERTIFIER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
 
-The certifier's listener is read from ``endpoints.json`` beside ``--deployment``, which its serve command writes there.
+The network attester's listener is read from ``endpoints.json`` beside ``--deployment``, which its serve command writes there.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ from verity.protocols.resource_accounting.network.verifier.network_attester impo
 
 #: the longest request body taken
 BODY_BYTES = 1 << 24
-#: the file beside the certifier's ``deployment.json`` that names its listener (`network_attester_serve.ENDPOINTS`)
+#: the file beside the network attester's ``deployment.json`` that names its listener (`network_attester_serve.ENDPOINTS`)
 ENDPOINTS = "endpoints.json"
 #: what an id request holds for the sampling fields a greedy body doesn't name: neither changes a greedy answer
 SENT = {"top_p": 1.0, "seed": 0}
@@ -139,7 +139,7 @@ def _error(status: int, why: str) -> bytes:
 class HttpShim:
     """The listener (the module docstring). ``connect`` opens a connection to the network attester, ``encode`` is the
     served model's tokenizer on a text, ``log`` takes each connection's record, and ``clock`` reads the time the
-    records' arrivals are in, ``origin`` the certifier's on that clock."""
+    records' arrivals are in, ``origin`` the network attester's on that clock."""
 
     def __init__(self, connect: Callable[[], Awaitable[tuple[Any, Any]]], cell_bytes: int,
                  encode: Callable[[str], list[int]], log: Callable[[dict], None] = lambda record: None,
@@ -211,7 +211,7 @@ class HttpShim:
                   "request_bytes": len(request), "request_sha256": hashlib.sha256(request).hexdigest(),
                   "prompt_tokens": len(fields["prompt"]), "max_tokens": fields["max_tokens"]}
         kinds, arrivals, digest, data_bytes, ids, ordinal = [], [], hashlib.sha256(), 0, 0, None
-        outcome = status = None  # the connection's outcome as the certifier's own `Shim` reads one, and the HTTP status answered
+        outcome = status = None  # the connection's outcome as the network attester's own `Shim` reads one, and the HTTP status answered
         name = "cmpl-" + (request_id or str(index))
         stream = _head(200, [(b"content-type", b"text/event-stream"), (b"cache-control", b"no-cache"),
                              (b"transfer-encoding", b"chunked")])
@@ -284,7 +284,7 @@ class HttpShim:
 
 
 def client_doc(lines: list[dict]) -> dict:
-    """The shim's records as the ``client.json`` the certifier's offline check reads (its program's ``check``): one
+    """The shim's records as the ``client.json`` network attestation's offline check reads (its program's ``check``): one
     connection each request it sent, in the order sent."""
     return {"connections": [x for x in lines if "unsent" not in x]}
 
