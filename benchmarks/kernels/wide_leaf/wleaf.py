@@ -2,8 +2,9 @@
 """The wide level-0 commitment leaf against today's leaf on one card: `run.sh`'s Python, with the steady harness's
 modules (`verity_bench.steady`, `steady_node`, `steady_cards`) on its path. Each command writes under the run's `out/`.
 
-  wleaf.py lease --max-min M -- CMD...
-      CMD under one gpu-lease of one card (`kit.lease`) on the NUMA node of the run's CPUs (`steady_cards.cards_near`),
+  wleaf.py lease --max-min M [--on CARD] -- CMD...
+      CMD under one gpu-lease of the card CARD, else of one card (`kit.lease`) on the NUMA node of the run's CPUs
+      (`steady_cards.cards_near`), refusing a CARD on another node,
       pinned to them, preemptible, as the steady harness's point takes its lease.
   wleaf.py host
       inside the lease: the kit's host stamp (`kit.host_stamp`, the lease's one card) and the card's NUMA node, to
@@ -60,7 +61,11 @@ def lease(a: argparse.Namespace) -> int:
               "a GPU slot's: launch it through a slot of the node whose line gives that many", file=sys.stderr)
         return 2
     near = steady_cards.cards_near(cpus, steady_node._ask)
-    on = ",".join(map(str, near["cards"])) if near.get("cards") else None
+    if a.on is not None and near.get("cards") and a.on not in near["cards"]:
+        print(f"wleaf: card {a.on} isn't on the NUMA node of the run's CPUs ({steady_node._spans(cpus)}), whose cards are "
+              f"{near['cards']}: name a card and cores of one node", file=sys.stderr)
+        return 2
+    on = str(a.on) if a.on is not None else ",".join(map(str, near["cards"])) if near.get("cards") else None
     *argv, dashdash = kit.lease(1, a.max_min, on=on, cores=steady_node._spans(cpus))
     print(f"wleaf: one card {'of ' + on if on else '(the node says no card near the run CPUs: ' + str(near.get('why')) + ')'}"
           f", pinned to {len(cpus)} CPUs", flush=True)
@@ -209,6 +214,7 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("lease")
     s.add_argument("--max-min", type=int, required=True)
+    s.add_argument("--on", type=int, help="the card to lease, by index (else any card near the run's CPUs)")
     s.add_argument("command", nargs="+")
     sub.add_parser("host")
     s = sub.add_parser("step")
