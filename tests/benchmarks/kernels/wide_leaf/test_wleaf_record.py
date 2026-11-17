@@ -2,8 +2,10 @@
 leaves were timed, each the wide leaf's median over today's, its member the model and the card. CPU only."""
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
+import sys
 import tomllib
 import types
 from pathlib import Path
@@ -52,6 +54,25 @@ def test_passed_steps_record_both_ratios_under_the_model_and_card(wleaf: types.M
         assert "monitoring period" in m["not_said"] and "unit cover" in m["not_said"]
     assert time["own_gpu_s"] == [3.2, 3.1, 3.3] and time["wide_gpu_s"] == [2.4, 2.5, 2.3]
     assert (size["own_proof_bytes"], size["wide_proof_bytes"]) == (2_400_000, 8_800_000)
+
+
+def test_the_member_takes_the_card_records_short(wleaf: types.ModuleType, tmp_path: Path) -> None:
+    wleaf.record(tmp_path, STEPS, {**HOST, "card": "NVIDIA H100 80GB HBM3"}, STAGE, "llama-3.2-1b")
+    assert [m["member"] for m in _result(tmp_path)["measurements"]] == ["llama-3.2-1b-h100"] * 2
+
+
+def test_a_card_off_the_run_cpus_numa_node_is_refused_before_any_lease(
+        wleaf: types.ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    import verity_bench
+    from verity_bench import steady_cards
+    node = types.SimpleNamespace(_ask=None, _spans=lambda cpus: f"{cpus[0]}-{cpus[-1]}")
+    monkeypatch.setattr(verity_bench, "steady_node", node, raising=False)
+    monkeypatch.setitem(sys.modules, "verity_bench.steady_node", node)
+    monkeypatch.setattr(wleaf.os, "sched_getaffinity", lambda pid: set(range(60, 70)))
+    monkeypatch.setattr(steady_cards, "cards_near", lambda cpus, ask: {"numa_nodes": [1], "cards": [4, 5, 6, 7]})
+    monkeypatch.setattr(wleaf.subprocess, "run", lambda *a, **k: pytest.fail("leased a card off the node"))
+    assert wleaf.lease(argparse.Namespace(on=2, max_min=60, command=["true"])) == 2
+    assert "card 2 isn't on the NUMA node of the run's CPUs (60-69), whose cards are [4, 5, 6, 7]" in capsys.readouterr().err
 
 
 def test_a_step_that_failed_its_checks_records_no_measurement(wleaf: types.ModuleType, tmp_path: Path) -> None:

@@ -247,8 +247,8 @@ There is no GitHub Actions CI. `check` (`verity check`, `tools/check/check.py`) 
 suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
 `tools/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
-`circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
-out; a candidate's check still runs it, and its red there holds nothing.
+`circuit-check --all` fits inside the rest of the check: a recorded check and the move of `main` leave it out; a
+candidate's check still runs it, and its red there holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
