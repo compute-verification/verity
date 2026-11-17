@@ -1072,7 +1072,7 @@ OPENED_IN = {
                        "axis in the vocabulary's role; as a circuit it would be an E-way mux tree per weight element (1,008 ANDs at "
                        "E = 64, 2,032 at E = 128)",
 }
-#: templates checked by opening the committed table, not as a circuit (benchmarks/census/subcircuits.json commitment_opening)
+#: templates checked by opening the committed table, not as a circuit (calibration/census/subcircuits.json commitment_opening)
 OPENED = {
     "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
     "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "

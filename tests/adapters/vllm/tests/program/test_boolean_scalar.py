@@ -1,7 +1,7 @@
 """`verity_vllm.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
 `F32Sqrt_v1`: each is Boolean, names its word primitive, and agrees with it on edge and random words (both zeros, the
 infinities, NaNs with either sign and payload, subnormals, every binade's ends, the i32 range's edges); their gate counts are
-pinned. `F32Sqrt_v2` is held on every one of the 2^32 words by `benchmarks/f32_exhaustive/run.py boolean F32Sqrt`."""
+pinned. `F32Sqrt_v2` is held on every one of the 2^32 words by `calibration/f32_exhaustive/run.py boolean F32Sqrt`."""
 from __future__ import annotations
 
 import numpy as np

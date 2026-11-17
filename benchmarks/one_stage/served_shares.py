@@ -49,7 +49,7 @@ from typing import Any
 from verity.device import READINGS, load_card, readings
 
 HERE = Path(__file__).resolve().parent
-CARD_FILES = HERE.parents[1] / "hardware/cards"
+CARD_FILES = HERE.parents[1] / "calibration/hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import served_overhead as O  # noqa: E402

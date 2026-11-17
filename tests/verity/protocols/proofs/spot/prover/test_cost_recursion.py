@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[6]
 
 
 def test_a_session_scales_to_every_machine_window_of_each_deployment():
-    deps = R.deployments(ROOT / "benchmarks/census/deployments.json", ROOT / "benchmarks/slowdown/data/reference.toml")
+    deps = R.deployments(ROOT / "calibration/census/deployments.json", ROOT / "benchmarks/slowdown/data/reference.toml")
     assert [d["id"] for d in deps] == [R.DEPLOYMENT, R.WORLD] and deps[0]["machines"] == 12500 and deps[1]["machines"] > 1e7
     s = R.session(RESULT)
     assert (s["prover_s"], s["auditor_s"], s["statements"], s["baseline_zk_e2e_s"]) == (600.0, 60.0, 12, 20.0)
