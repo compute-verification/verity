@@ -10,4 +10,4 @@ def _stop_roots() -> list[Any]:
     a model of 131,072 ids."""
     from verity_vllm.program.frontend.stop_rule import class_definition
 
-    return [class_definition(4, (3, 7), 64), class_definition(4, (), 64), class_definition(1024, (154820, 154827, 154829), 131072)]
+    return [class_definition(4, (3, 7), 64), class_definition(4, (), 64), class_definition(1024, (154820, 154827, 154829), 262144)]

@@ -11,30 +11,31 @@ from typing import Any, Callable
 #: one word and the latent rows' 576 words at the first class, where they are already over circuit-check's input budget and
 #: read lazily (`circuit_check.targets.lazy_operands`)
 RANGES = {
-    "DsaTopKMask_v2{N=4096..131072 step 2048,TOPK=2048}": (
-        "N=4096", "N=131072",
-        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
+    "DsaTopKMask_v2{N=4096..262144 step 2048,TOPK=2048}": (
+        "N=4096", "N=262144",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=133120", "N=8192", "N=131072", "N=260096",
     ),
-    "DsaButterflySettings_v2{N=4096..131072 step 2048,K=2048}": (
-        "N=4096", "N=131072",
-        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
+    "DsaButterflySettings_v2{N=4096..262144 step 2048,K=2048}": (
+        "N=4096", "N=262144",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=133120", "N=8192", "N=131072", "N=260096",
     ),
-    "DsaButterflyRows_v2{N=4096..131072 step 2048,K=2048,W=1..576,E=16}": (
-        "N=4096,W=576", "N=4096,W=1", "N=131072,W=1",
-        "N=6144,W=1", "N=10240,W=1", "N=18432,W=1", "N=34816,W=1", "N=67584,W=1", "N=8192,W=1", "N=129024,W=1",
+    "DsaButterflyRows_v2{N=4096..262144 step 2048,K=2048,W=1..576,E=16}": (
+        "N=4096,W=576", "N=4096,W=1", "N=262144,W=1",
+        "N=6144,W=1", "N=10240,W=1", "N=18432,W=1", "N=34816,W=1", "N=67584,W=1", "N=133120,W=1", "N=8192,W=1",
+        "N=131072,W=1", "N=260096,W=1",
     ),
-    "DsaTopKRow_v2{N=4096..131072 step 2048,TOPK=2048}": (
-        "N=4096", "N=131072",
-        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
+    "DsaTopKRow_v2{N=4096..262144 step 2048,TOPK=2048}": (
+        "N=4096", "N=262144",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=133120", "N=8192", "N=131072", "N=260096",
     ),
-    "DsaTopKMaskCounted_v2{N=4096..131072 step 2048,TOPK=2048}": (
-        "N=4096", "N=131072",
-        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024", "N=40960", "N=43008",
+    "DsaTopKMaskCounted_v2{N=4096..262144 step 2048,TOPK=2048}": (
+        "N=4096", "N=262144",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=133120", "N=8192", "N=131072", "N=260096", "N=40960", "N=43008",
     ),
     # `dsa_topk_mask`'s sidecar's RANGES on bits, over the same rows below their size class and at the same spots, each held to its
     # word Definition there by its word view (``circuit-check --as-call --ranges DsaButterflyRowsPad_v2``)
-    "DsaButterflyRowsPad_v2{T=2049..131071,N=4096..131072 step 2048,K=2048,W=1..576,E=16}": (
-        "T=2049,N=4096,W=576", "T=131071,N=131072,W=1",
+    "DsaButterflyRowsPad_v2{T=2049..262143,N=4096..262144 step 2048,K=2048,W=1..576,E=16}": (
+        "T=2049,N=4096,W=576", "T=262143,N=262144,W=1",
         "T=4095,N=4096,W=1",
     ),
 }
