@@ -17,7 +17,7 @@ public import MemoryAttester.Difftest
 /-!
 # The memory challenger's verdicts, as executable Lean
 
-The library of the package `core_memory_attester`: the memory challenger's two verdicts, their record formats and
+The library of the package `core_memory_challenger`: the memory challenger's two verdicts, their record formats and
 crypto, and each verdict behind the core protocol interface (`Core.Protocol`).
 
 * `Records`, the coin tree, the session commitment, the round record and the records root, and `SignedMessage`, the

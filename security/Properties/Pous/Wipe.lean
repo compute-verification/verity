@@ -8,7 +8,7 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # An accepted wipe meets the survivor bound it publishes
 
-For a session it accepts and certifies, `MemoryAttester.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
+For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
 `StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
 (`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the egress count
 the evidence gives the check (`WipeProtocol.Evidence.egress`; no session signs one), `egress_mib` whole MiB. No network

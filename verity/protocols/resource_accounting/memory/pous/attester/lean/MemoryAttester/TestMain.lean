@@ -7,7 +7,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-! `memory-attester-test`: the core protocol command line (`Core.Protocol.main`) of `MemoryAttester.testProtocol`,
+/-! `memory-challenger-test`: the core protocol command line (`Core.Protocol.main`) of `MemoryChallenger.testProtocol`,
 `memory-challenger`'s verdict under a protocol id of its own, which accepts the test signers' schemes and only them. It
 reads and prints what `memory-challenger` does: `id`, `check PARAMS COMMITMENT EVIDENCE` on three files, or `serve`, one
 case a line on standard input and one outcome line out for each. `tests/test_protocol.py` drives `serve` against

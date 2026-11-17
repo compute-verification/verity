@@ -8,8 +8,8 @@ public import Definitions.Certifier.Guarantees.Marks
 /-!
 # An accepted wipe's egress is the network attester's count over the wipe's span
 
-`MemoryAttester.WipeProtocol.protocol` (`verity/wipe/v0`) publishes an egress `E` (`egress_mib`), and the survivor
-bound it certifies is of the foreign content plus `E` (`MemoryAttester.Properties.WipeSurvivorBound`). `WipeCountTied`
+`MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) publishes an egress `E` (`egress_mib`), and the survivor
+bound it certifies is of the foreign content plus `E` (`MemoryChallenger.Properties.WipeSurvivorBound`). `WipeCountTied`
 says what `E` is when a count of the network attester over the wipe's span is accepted beside the wipe, under the
 device's parameters: at least the bits the device sent in the execution phases from the start mark's phase to the end
 mark's phase plus the device's tail, phases that hold every cell the device sends from the start mark on out of what it
@@ -72,7 +72,7 @@ is of every cell the device sends in them.
 ## What it does not say
 
 * It stops at the marks. That the fill began after the start mark was handled and that the end mark was handled after
-  the wipe closed is the memory challenger's run (`MemoryAttester.Properties.WipeSigned`, once the session signs
+  the wipe closed is the memory challenger's run (`MemoryChallenger.Properties.WipeSigned`, once the session signs
   `start_mark`) and the end message's being of the signature.
 * Anything of an unmarked wipe. Its signed `start_mark` is empty, and a SHA-512 output is 64 bytes, so the memory
   challenger's antecedent is false and the statement holds vacuously. Such a wipe is charged the whole memory
