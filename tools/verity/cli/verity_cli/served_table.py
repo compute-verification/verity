@@ -910,7 +910,7 @@ def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[s
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
-    served window when the workload's party is here; a gate's side as started by the gate; and the onsite check (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
+    execution phase when the workload's party is here; a gate's side as started by the gate; and the onsite check (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
