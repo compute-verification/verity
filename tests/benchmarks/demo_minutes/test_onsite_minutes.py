@@ -1,4 +1,4 @@
-"""`onsite_minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
+"""`onsite_minutes.py`: the onsite application's minutes from the prover node's run's start to the auditor device's run's end, written
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 

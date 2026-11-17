@@ -346,7 +346,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
-- `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
+- `rehearsal.sh check|serve|audit|compose|probe`: the remote application's served path as one command a node, each verb
   `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
   that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
   gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served

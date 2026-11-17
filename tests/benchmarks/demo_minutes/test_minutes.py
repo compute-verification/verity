@@ -1,4 +1,4 @@
-"""`minutes.py`: the remote demo's minutes from its first run's start to its last run's end, written only for a verdict
+"""`minutes.py`: the remote application's minutes from its first run's start to its last run's end, written only for a verdict
 of the goal's three checks on a commit of main, and refused with its reason otherwise."""
 from __future__ import annotations
 

@@ -104,7 +104,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 
 @pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
     path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
@@ -670,7 +670,7 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
 
 
 def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
-    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    """An application whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
     cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
     (tmp_path / "out").mkdir()
