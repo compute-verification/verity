@@ -421,7 +421,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.protocols.resource_accounting.memory.pous.verifier.schemes)")
     ap.add_argument("--impl", required=True, choices=sorted(IMPLS))
     ap.add_argument("--weight-set", required=True, help="an id of benchmarks/pous/weight_sets.json")
-    ap.add_argument("--hardware", required=True, help="a census hardware id (benchmarks/census/hardware.json), e.g. l40s-48gb/bf16")
+    ap.add_argument("--hardware", required=True, help="a census hardware id (calibration/census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v3-gpu): an untimed placement, which runs the gates, encode, "

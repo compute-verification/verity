@@ -7,7 +7,7 @@ from pathlib import Path
 import fold_opt_fx as fx
 import fold_wide32 as w32
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
 def test_fold_wide3_at_32_bits(tmp_path):

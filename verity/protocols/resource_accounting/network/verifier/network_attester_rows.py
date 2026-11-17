@@ -43,11 +43,11 @@ since the rows and the wiring are the record's).
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
     cells digest = tagged_sha512(CELLS_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the cells digest: the attester's message for the execution phase in its
-session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
+and its attestation is `Issuer.sign`'s of the cells digest: the attester's message for the execution phase in its
+session (`certificate.certificate_message`). The wire record's attestation of the same execution phase signs its salted
 record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
-**The registration** (`registration`) is the head and its certificate as one JSON object, kept whole on a run's
+**The registration** (`registration`) is the head and its attestation as one JSON object, kept whole on a run's
 private side: `wiring` is private, and the auditor's gate publishes the object less it:
 
     {"format": REGISTRATION, "value", "link", "direction", "window", "parameters", "cell_bytes", "rows", "words",
@@ -57,7 +57,7 @@ private side: `wiring` is private, and the auditor's gate publishes the object l
 `value` is the registered value's name (`<link>/<direction>/<window>`), `words` and `word_bits` a row's S·B/2 leaves of
 16 bits, and `layout` the rows' order: row t − first_bucket is bucket t, of `slots` slots, `connection_slots` = r a
 connection. `check_registration` is the verifier's read of it: the head is the execution phase's, its domain, rows, row
-format and layout are the ones the schedule's parameters give, and its certificate verifies under the network
+format and layout are the ones the schedule's parameters give, and its attestation verifies under the network
 attester's key in the session over the head's digest.
 
 **How a proof block reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the
@@ -437,7 +437,7 @@ def _layout(params: NetworkAttesterParams, window: int) -> dict[str, int]:
 
 def registration(head: CellsHead, certificate: Certificate, params: NetworkAttesterParams) -> dict[str, Any]:
     """The record a proof block's registered port reads: the head, the rows' format and order, and the
-    certificate. A run keeps it whole on its private side; the auditor's gate publishes it less the wiring."""
+    attestation. A run keeps it whole on its private side; the auditor's gate publishes it less the wiring."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
