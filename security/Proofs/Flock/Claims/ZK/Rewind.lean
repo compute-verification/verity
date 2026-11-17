@@ -40,29 +40,13 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The rewinding argument, over abstract runs
-
-* Uniform averages: a bijection keeps `Pr` (`Pr_equiv`), a product's `Pr` is the average of the sections in either order
-  (`Pr_prod_left`, `Pr_prod_right`), independent coordinates multiply (`Pr_and_prod`), and averages of pointwise close
-  functions are close (`Ex_abs_sub_le`).
-* The union bound (`Pr_exists_le`), and one of `n` independent samples has one sample's sampling design (`Pr_coord`), so an event
-  of the first sample and one of `n` others is at most `n` times one of two samples (`Pr_exists_coord_le`).
-* `Pr_hybrid`: `N` independent samples of `A` and of `B`, each within `δ` on every event, are within `N·δ` on every
-  event.
-* `rewind_close`: the first run's transcript is within `1/(N+1) + Pr[binding failure]` of the output of `N` rewinds that
-  rerun the same prover on fresh tapes until one opens the first run's coins again (`gkOut`). The proof is the
-  involution swapping the first run with the first successful rewind; what is left is the first run opening some coins
-  and no rewind opening any, `Q·(1−Q)^N ≤ 1/(N+1)` (`mul_one_sub_pow_le`).
--/
+/-! The rewinding argument, over abstract runs. -/
 
 @[expose] public section
 
 namespace Claims.ZKMal
 
 open Claims
-
-/-! ## Uniform averages -/
 
 theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : β → Prop) :
     Pr (fun a => p (e a)) = Pr p := by
@@ -93,7 +77,6 @@ theorem Pr_const {α : Type} [Fintype α] [Nonempty α] (P : Prop) [Decidable P]
   rw [Pr_eq_sum]
   split_ifs <;> simp [this.ne']
 
-/-- An event splits on another. -/
 theorem Pr_split {α : Type} [Fintype α] (p q : α → Prop) :
     Pr p = Pr (fun a => p a ∧ q a) + Pr (fun a => p a ∧ ¬ q a) := by
   classical
@@ -122,7 +105,6 @@ theorem Ex_mul_const {α : Type} [Fintype α] (f : α → ℝ) (c : ℝ) : Ex (f
 theorem Ex_const_add {α : Type} [Fintype α] [Nonempty α] (c : ℝ) (f : α → ℝ) : Ex (fun a => c + f a) = c + Ex f := by
   rw [Ex_add, Ex_const]
 
-/-- **Independent coordinates multiply.** -/
 theorem Pr_and_prod {α β : Type} [Fintype α] [Fintype β] (p : α → Prop) (q : β → Prop) :
     Pr (fun s : α × β => p s.1 ∧ q s.2) = Pr p * Pr q := by
   classical
@@ -136,7 +118,6 @@ theorem Pr_and_prod {α β : Type} [Fintype α] [Fintype β] (p : α → Prop) (
   rw [Ex_mul_const, Pr_eq_sum p]
   rfl
 
-/-- **Averages of pointwise close functions are close.** -/
 theorem Ex_abs_sub_le {α : Type} [Fintype α] {f g b : α → ℝ} (h : ∀ a, |f a - g a| ≤ b a) :
     |Ex f - Ex g| ≤ Ex b := by
   have e : Ex f - Ex g = Ex fun a => f a - g a := by
@@ -148,7 +129,6 @@ theorem Ex_abs_sub_le {α : Type} [Fintype α] {f g b : α → ℝ} (h : ∀ a, 
   have := Ex_mono (f := fun a => -b a) (g := fun a => f a - g a) fun a => (abs_le.mp (h a)).1
   linarith
 
-/-- **The union bound.** -/
 theorem Pr_exists_le {α : Type} [Fintype α] : ∀ (n : ℕ) (p : Fin n → α → Prop),
     Pr (fun a => ∃ i, p i a) ≤ ∑ i, Pr (p i)
   | 0, p => by simp [Pr_false]
@@ -162,7 +142,6 @@ theorem Pr_exists_le {α : Type} [Fintype α] : ∀ (n : ℕ) (p : Fin n → α 
       rw [e, Fin.sum_univ_succ]
       exact (Pr_or_le _ _).trans (add_le_add le_rfl (Pr_exists_le n _))
 
-/-- **One of `n` independent samples** has the sampling design of one sample. -/
 theorem Pr_coord {α β : Type} [Fintype α] [Fintype β] [Nonempty β] {n : ℕ} (i : Fin n) (p : α → β → Prop) :
     Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 := by
   classical
@@ -173,7 +152,6 @@ theorem Pr_coord {α β : Type} [Fintype α] [Fintype β] [Nonempty β] {n : ℕ
   rw [Pr_fst (β := {j // j ≠ i} → β) (p a)] at e
   exact e
 
-/-- **An event that does not read the middle coordinate** has its probability over the other two. -/
 theorem Pr_mid {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [Nonempty β] (p : α → γ → Prop) :
     Pr (fun q : α × β × γ => p q.1 q.2.2) = Pr fun q : α × γ => p q.1 q.2 := by
   rw [Pr_prod_left, Pr_prod_left]
@@ -183,7 +161,6 @@ theorem Pr_mid {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [Nonempt
   rw [← e]
   exact Pr_fst (β := β) (p a)
 
-/-- **An event of the first sample and one of `n` others** is at most `n` times the event of two samples. -/
 theorem Pr_exists_coord_le {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (n : ℕ) (p : α → β → Prop) :
     Pr (fun q : α × (Fin n → β) => ∃ i, p q.1 (q.2 i)) ≤ n * Pr fun q : α × β => p q.1 q.2 := by
   have e : ∀ i : Fin n, Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 :=
@@ -191,7 +168,6 @@ theorem Pr_exists_coord_le {α β : Type} [Fintype α] [Fintype β] [Nonempty β
   refine (Pr_exists_le (α := α × (Fin n → β)) n fun i q => p q.1 (q.2 i)).trans (le_of_eq ?_)
   simp only [e, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- `Q·(1−Q)^N ≤ 1/(N+1)` on `[0, 1]`. -/
 theorem mul_one_sub_pow_le (Q : ℝ) (h0 : 0 ≤ Q) (h1 : Q ≤ 1) (N : ℕ) : Q * (1 - Q) ^ N ≤ 1 / (N + 1) := by
   have hb : 1 + N * Q ≤ (1 + Q) ^ N := one_add_mul_le_pow (by linarith) N
   have hy0 : 0 ≤ (1 - Q) ^ N := pow_nonneg (by linarith) N
@@ -203,10 +179,6 @@ theorem mul_one_sub_pow_le (Q : ℝ) (h0 : 0 ≤ Q) (h1 : Q ≤ 1) (N : ℕ) : Q
   rw [le_div_iff₀ (by positivity)]
   nlinarith
 
-/-! ## Hybrids over independent samples -/
-
-/-- **`N` independent samples**: if `A` and `B` are within `δ` on every event, `N` independent copies of each are within
-`N·δ` on every event. -/
 theorem Pr_hybrid {Ω₁ Ω₂ M : Type} [Fintype Ω₁] [Nonempty Ω₁] [Fintype Ω₂] [Nonempty Ω₂] (A : Ω₁ → M) (B : Ω₂ → M)
     (δ : ℝ) (h : ∀ E : M → Prop, |Pr (fun a => E (A a)) - Pr (fun b => E (B b))| ≤ δ) :
     ∀ (N : ℕ) (f : (Fin N → M) → Prop),
@@ -247,9 +219,6 @@ theorem Pr_hybrid {Ω₁ Ω₂ M : Type} [Fintype Ω₁] [Nonempty Ω₁] [Finty
       push_cast
       linarith
 
-/-! ## The rewinds -/
-
-/-- **The first rewind that opened every coin**, its transcript; `d` if none did. -/
 def firstSucc {X : Type} (d : X) : (N : ℕ) → (Fin N → St × X) → X
   | 0, _ => d
   | N + 1, ys => if (ys 0).1 = .succ then (ys 0).2 else firstSucc d N fun i => ys i.succ
@@ -265,20 +234,16 @@ theorem firstSucc_eq {X : Type} (d : X) : ∀ (N : ℕ) (ys : Fin N → St × X)
           simp only [hlt 0 (Fin.succ_pos i), ite_false]
           exact firstSucc_eq d N _ i hi fun j hj => hlt j.succ (Fin.succ_lt_succ_iff.mpr hj)
 
-/-- What the first run passes on: its transcript if it opened no coin vector, else the coins. -/
 def viewOf {Ω C X : Type} (Rc : Ω → Option C) (τ : Ω → X) (r : Ω) : X ⊕ C :=
   match Rc r with
   | none => .inl (τ r)
   | some c => .inr c
 
-/-- **The Goldreich–Kahan output**: the first run's transcript if it opened no coin vector, else the first of the
-rewinds at its coins that opened them all (`d` if none did). -/
 def gkOut {C X : Type} {N : ℕ} (d : X) (v : X ⊕ C) (Y : C → Fin N → St × X) : X :=
   match v with
   | .inl t => t
   | .inr c => firstSucc d N (Y c)
 
-/-- **A binding failure** among the rewinds before the first that opened every coin. -/
 def gkMM {C X : Type} {N : ℕ} (v : X ⊕ C) (Y : C → Fin N → St × X) : Prop :=
   match v with
   | .inl _ => False
@@ -288,7 +253,6 @@ section Rewind
 
 variable {Ω C X : Type} [Fintype Ω] [Nonempty Ω]
 
-/-- The swap of the first run with rewind `i`. -/
 def swapAt {N : ℕ} (i : Fin N) (p : Ω × (Fin N → Ω)) : Ω × (Fin N → Ω) := (p.2 i, Function.update p.2 i p.1)
 
 omit [Fintype Ω] [Nonempty Ω] in
@@ -296,10 +260,6 @@ theorem swapAt_swapAt {N : ℕ} (i : Fin N) (p : Ω × (Fin N → Ω)) : swapAt 
   obtain ⟨a, α⟩ := p
   simp [swapAt]
 
-/-- **The Goldreich–Kahan rewinds are close to the first run**: against rewinds of the same prover on fresh tapes, a run
-opens `c` exactly when a rewind at `c` succeeds (`h1`), a successful rewind is the run (`h2`), and a rewind that stops
-before a binding failure is a run that opens nothing (`h3`). Then the output is within `1/(N+1)` plus the probability of
-a binding failure of the first run's transcript. -/
 theorem rewind_close (N : ℕ) (d : X) (Rc : Ω → Option C) (τ : Ω → X) (st : C → Ω → St) (T : C → Ω → X)
     (h1 : ∀ c r, st c r = .succ ↔ Rc r = some c) (h2 : ∀ c r, st c r = .succ → T c r = τ r)
     (h3 : ∀ c r, st c r = .abort → Rc r = none) (Ev : X → Prop) :

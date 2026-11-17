@@ -34,21 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.CutPrefix
 
-/-!
-# The rep from a source that misses the ZK server at `final_c`
-
-`repCut_fw` takes a source whose masked values below `zp 64` are the ZK server's. Here the source may differ at
-`final_c`'s pad (`lay.fc`): the PIOP reads `mk lay.fc` only into the zerocheck proof it returns (`zerocheckCut_fc`), the
-replay reads that proof's `finalC` only into its constraints (`replay_ok_fc`), and Ligerito and the constraints do not
-read it. So where the ZK server's rep returns, the rep from the source runs through its PIOP, Ligerito opening, replay and
-constraints with the ZK server's coins and logs, and its first inner body, `label LABEL_INNER ‖ absorbF finalC`, carries
-the source's `masked lay.fc` (`repCut_fw_inner`).
-
-* `zerocheckCut_fc`, `lincheckCut_fc`, `piopCut_fc_go`: the PIOP at masked values that differ at `fc` alone.
-* `replay_fc`, `replay_ok_fc`: the replay at zerocheck proofs that differ in `finalC` alone.
-* `innerCut_first`: the inner proof stopped at its first round sends `InZ.t₁`'s frame.
-* `repCut_fw_inner`: the rep from the source stopped at the inner proof's first round.
--/
+/-! The rep from a source that misses the ZK server at `final_c`. -/
 
 @[expose] public section
 
@@ -62,10 +48,7 @@ theorem bind_congr₂ {m : Type → Type} [Monad m] {α β : Type} {x y : m α} 
   subst hxy
   exact bind_congr h
 
-/-! ## The PIOP -/
-
 set_option maxHeartbeats 1000000 in
-/-- **The zerocheck reads `mk lay.fc` only into its proof's `finalC`.** -/
 theorem zerocheckCut_fc (io : FlockComplete.Asks PS) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     {mk mk' : ℕ → F128} (hm : m - 6 ≤ lay.nMlv) (hne : ∀ i, i ≠ lay.fc → mk' i = mk i) :
     FlockComplete.zerocheckCut io m digest cap root lay mk' =
@@ -102,7 +85,6 @@ theorem zerocheckCut_fc (io : FlockComplete.Asks PS) (m : ℕ) (digest cap root 
       hne (lay.ml i 1) (by simp only [Zk.PadLayout.ml, Zk.PadLayout.fc, Zk.PadLayout.fa]; omega)]
   · rfl
 
-/-- **The lincheck does not read `mk lay.fc`.** -/
 theorem lincheckCut_fc (io : FlockComplete.Asks PS) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout)
     {mk mk' : ℕ → F128} (zc : ZcOut) (hne : ∀ i, i ≠ lay.fc → mk' i = mk i) :
     FlockComplete.lincheckCut io c m lay mk' zc = FlockComplete.lincheckCut io c m lay mk zc := by
@@ -118,8 +100,6 @@ theorem map_run_go {α β : Type} (f : α → β) {x : TMW PS α} {t t' : Transc
   rw [← bind_pure_comp, FlockComplete.Replay.bind_go h]
   rfl
 
-/-- **The PIOP from a source that differs at `fc` alone**: where the PIOP from `{src with masked := mk}` returns, the
-PIOP from `src` returns the same, its zerocheck proof's `finalC` the source's `masked lay.fc`. -/
 theorem piopCut_fc_go (io : FlockComplete.Asks PS) (st : Setup) (lay : Zk.PadLayout) (src : FlockComplete.RepSrc)
     (mk : ℕ → F128) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ)
     (hm : st.m - 6 ≤ lay.nMlv) (hne : ∀ i, i ≠ lay.fc → src.masked i = mk i)
@@ -151,14 +131,11 @@ theorem piopCut_fc_go (io : FlockComplete.Asks PS) (st : Setup) (lay : Zk.PadLay
   rw [FlockComplete.Replay.bind_go h₄]
   rfl
 
-/-! ## The replay -/
-
 theorem map_unit_pure {α : Type} (a b : α) :
     ((fun _ => ()) <$> (pure a : TM α)) = (fun _ => ()) <$> (pure b : TM α) := by
   simp only [map_pure]
 
 set_option maxHeartbeats 2000000 in
-/-- **The replay reads the zerocheck proof's `finalC` only into what it returns.** -/
 theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (params : PcsParams)
     (zp : ZerocheckProof) (lp : LincheckProof) (ss : Array (Array F128)) (lg : LigeritoProof) (root : ByteArray)
     (v : F128) :
@@ -178,7 +155,6 @@ theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (par
         | exact map_unit_pure _ _
         | refine bind_congr fun _ => ?_)
 
-/-- **The replay returns at zerocheck proofs that differ in `finalC` alone**, at the same transcript. -/
 theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {params : PcsParams}
     {zp : ZerocheckProof} {lp : LincheckProof} {ss : Array (Array F128)} {lg : LigeritoProof} {root : ByteArray}
     (v : F128) {t tt : Transcript} {rp : Zk.Replayed}
@@ -201,10 +177,6 @@ theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {
     cases e2
     exact ⟨a', rfl⟩
 
-/-! ## The inner proof's first round -/
-
-/-- **The inner proof stopped at its first round** sends that round's frame, at `InZ.t₁`: the transcript after
-`label LABEL_INNER ‖ absorbF finalC`. -/
 theorem innerCut_first (coin : ℕ → ℕ → F128) {n : ℕ} (lay : Zk.PadLayout) (ic : FlockComplete.InnerCommit)
     (finalC : F128) (src : FlockComplete.RepSrc) (cons : Array (String × Zk.Lin)) (t : Transcript)
     {l : Array Claims.Msg} (hn : n ≤ l.size) :
@@ -222,15 +194,7 @@ theorem innerCut_first (coin : ℕ → ℕ → F128) {n : ℕ} (lay : Zk.PadLayo
   rw [if_pos hn] at hs
   exact FlockComplete.LigLock.bind_go_err hs
 
-/-! ## The rep -/
-
 set_option maxHeartbeats 2000000 in
-/-- **The rep from a source that misses the ZK server at `fc` reaches its inner proof**: answered by `asksCut` from the
-log `l`, where the ZK server's rep returns, a source that holds what the ZK server computes below `zp 64` but at `fc`
-(`hmk`), with `repCut_fw`'s `hpiop` and `hlig` and no `hinner`, runs its PIOP (the ZK server's, its zerocheck proof's
-`finalC` the source's `masked lay.fc`) and its Ligerito opening at the ZK server's logs, with the inner proof's first
-round below `n`; stopped there, the rep from the source sends the inner proof's first frame, at the source's
-`masked lay.fc`. -/
 theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
@@ -301,7 +265,6 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     rw [throw_run_go] at h'
     cases h'
   obtain ⟨inner, t₈, l₈, h₈, -⟩ := run_bind_ok hc
-  -- the ZK server's inner proof drew its first coin, so that round is below `n`
   have hl₄n : l₄.size < n := by
     unfold FlockComplete.innerP at h₈
     try dsimp only at h₈
@@ -323,7 +286,6 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     try dsimp only
     rw [FlockComplete.Replay.bind_go h₃]
     rfl
-  -- the PIOP: the ZK server's at the source made the ZK server's at `fc`, then the source's
   have hPC' := piopCut_fw coin n st _ g _
     { src with masked := fun i => if i = (Zk.PadLayout.new st.m st.kLog sch.k0).fc then
         vals[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]! + pads.h[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]!
@@ -337,7 +299,6 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     hn hpiop hP
   have hPC := piopCut_fc_go _ st _ src _ _ _ extras prior words (by exact Nat.le_refl _)
     (fun i hi => by simp only [if_neg hi]) hPC'
-  -- Ligerito: the source's opening is the ZK server's
   have h₄' := h₄
   rw [← hm] at h₄'
   have hL : ((FlockComplete.ligeritoCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st.merkle sch T
@@ -346,7 +307,6 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     rw [FlockComplete.LigLock.ligeritoCut_alike coin n _ st.merkle sch T cm0 g _ _ pads.h rep tPad extra lanePad salt
       src t₃ l₃ (hlig zp lp ss T sws t₃ l₃ hP), FlockComplete.Replay.bind_go h₄']
     rfl
-  -- the replay and the constraints
   have hrp' : (Zk.replay st (Zk.PadLayout.new st.m st.kLog sch.k0)
       { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp, ringSwitches := ss,
         ligerito := FlockComplete.eraseL lg } ic.root).run (Transcript.init t₄.rounds dom) = .ok (rp, tt) := by
@@ -357,7 +317,6 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
       .ok lgc := by
     rw [ligeritoConstraints_eraseL']
     exact hlgc
-  -- the logs grow, and below the inner proof's first round the cut at it runs as the cut at `n`
   obtain ⟨bs₃, hbs₃, -⟩ := FlockComplete.CutPrefix.go_of_shift
     (FlockComplete.CutPrefix.piopCut_shift coin n st _ src _ _ extras prior words t₀) rfl hPC
   obtain ⟨bs₄, hbs₄, -⟩ := FlockComplete.CutPrefix.go_of_shift

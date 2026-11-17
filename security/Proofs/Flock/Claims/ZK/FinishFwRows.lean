@@ -45,21 +45,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A worker's rows from the ZK server's own run
-
-`FinishStopAt.rowsAt_of_cons` decides a table's rows at its own sample. Here they are decided at the ZK server's run on a
-rep's request (`repFwC`, answered by `asksCut`): where it goes on, its constraints are the first seven rows on its masked
-values `vals + h` (`tauFw_vals`) and none fails on the request's pads `h`, and where that holds at both reps, at masked
-values that are the worker's clear values plus `h`, the worker's rows hold (`rowsAt_of_fw`).
-
-* `LaneVals`: a Ligerito proof's out-of-domain value, lane messages and pair's sums are the view's masked values
-  (`LaneAt`'s value fields).
-* **`tauFw_vals`**: `tauFw`, with level 0 read off the returned proof: its record's target is the opening's `T` and its
-  coins the model's (`hrec`, at the run's steps), its values are the view's (`LaneVals`) and its restart is `T'`.
-* **`rowsAt_of_fw`**: where, at each rep, constraints on the layout's length that are the first seven rows on the
-  clear values plus pads `h` (`h_ab = h_a·h_b`, `h_w = h_x·h_y`) don't fail on `h`, the rows hold.
--/
+/-! A worker's rows from the ZK server's own run. -/
 
 @[expose] public section
 
@@ -68,8 +54,6 @@ namespace Claims.ZKMal.Masked
 open FlockSoundness.Refine (fOf gOf)
 open FlockSoundness (execArith)
 
-/-- **Level 0's values read at the view**: its out-of-domain value, lane messages and pair's sums are the view's masked
-values (`LaneAt`'s value fields). -/
 structure LaneVals {mPts : ℕ} (Tz : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts) (st : _root_.Flock.Stmt) {nE : ℕ}
     (v : Fin nE → FlockLevel3.GF128) (lg : _root_.Flock.LigeritoProof) (zl : _root_.Flock.Zk.Level0Msgs) : Prop where
   oodVal : fOf lg.oodValues[0]! = FlockSoundness.Discharge.Composed.msgAt v
@@ -96,9 +80,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The ZK server's seven rows, level 0 read off its proof**: `tauFw`'s, where, at the run's steps, level 0's record's
-target is the opening's `T` and its coins are the model's (`hrec`), and the returned proof's level 0 values are the
-view's (`LaneVals`) and its restart is `T'`. -/
 theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
@@ -226,10 +207,6 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
 
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **Where the ZK server goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
-on the layout's length are the first seven rows on the worker's clear values plus pads `h` of the layout's length (with
-`h_ab = h_a·h_b` and `h_w = h_x·h_y`), and none fails on `h`, the worker's rows hold at the mask slot `u` and level 0's
-hiding `V` (`noFail_iff_rows`, `rowsAt_of_rows`). -/
 theorem rowsAt_of_fw (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (u : (C.T c).tab.onVals.Mask) (V : (C.T c).tab.onVals.Vis),

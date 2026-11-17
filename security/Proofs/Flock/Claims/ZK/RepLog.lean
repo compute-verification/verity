@@ -42,21 +42,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A cut rep's rounds are its log's bodies (`repCut_rounds`)
-
-`repCut` answered by `asksCut coin N` records a round at each squeeze of `n > 0` coins and logs the squeeze's framed bytes
-as its body. Here, by a walk of the rep under a simulation that keeps an invariant of the transcript and the log
-(`logS`, `Inv`), each recorded round `j` from a log of `L` bodies is (`RoundAt`):
-
-* at most `B` coins, all of them `coin (L + j)`'s, with no digest;
-* its bytes the log's body `L + j`, which end in the squeeze's frame, after pending bytes that start with the rep's domain
-  frame at round `0` and with no domain frame after (`Lead`).
-
-The squeezes' sizes are those of `RepRounds.lean`'s walk (`repPZk_grows`): the zerocheck's `6` and `m - 13`, the ring
-switch's `7` and claims, Ligerito's `n` and its levels' (the recursive levels' out-of-domain sizes carried by the loop,
-`loopR_logs`), and the inner proof's constraints and `Zk.Q`.
--/
+/-! A cut rep's rounds are its log's bodies (`repCut_rounds`). -/
 
 @[expose] public section
 
@@ -66,10 +52,6 @@ open Flock Transcript FlockComplete With
 open FlockComplete.JsonRT (go_pure go_bind_ok monadLift_go loopR forIn_loopR)
 open FlockSoundness.Refine (Frame label_enc absorbF_enc absorbSlice_enc absorbBytes_enc framed_enc init_enc header_data)
 
-/-! ## The invariant -/
-
-/-- **A round's pending bytes as they start**: the stream's domain frame first at round `0`, and no domain frame (op `1`)
-first after it. -/
 def Lead (dom : ByteArray) (j : ℕ) (b : List UInt8) : Prop :=
   if j = 0 then ∃ r, b = (Frame.dom dom).enc ++ r else b.head? ≠ some 1
 
@@ -96,8 +78,6 @@ theorem op_vec (vs : List F128) : (Frame.vec vs).op ≠ 1 := by show (3 : UInt8)
 theorem op_bytes (b : ByteArray) : (Frame.bytes b).op ≠ 1 := by show (5 : UInt8) ≠ 1; decide
 theorem op_sq (k : UInt8) (n : ℕ) : (Frame.sq k n).op ≠ 1 := by show (4 : UInt8) ≠ 1; decide
 
-/-- **Round `j` of a rep whose log started at `L` bodies**: at most `B` coins, `coin (L + j)`'s, no digest, and bytes the
-log's body `L + j`, its pending bytes (`Lead`) then the squeeze's frame. -/
 structure RoundAt (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (l : Array Claims.Msg) (j : ℕ) (r : Round) :
     Prop where
   pos : 0 < r.n
@@ -107,7 +87,6 @@ structure RoundAt (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L :
   sent : ∃ c, r.bytes = some c ∧ l[L + j]? = some (Claims.toMsg c) ∧
     ∃ p kind, c.data.toList = p ++ (Frame.sq kind r.n).enc ∧ Lead dom j p
 
-/-- **The invariant**: one body logged per round from `L`, the pending bytes as a round's start, and each round as above. -/
 structure Inv (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) :
     Prop where
   size : l.size = L + t.rounds.size
@@ -155,14 +134,10 @@ theorem Inv.squeeze {t : Transcript} {l : Array Claims.Msg} (h : Inv coin B dom 
     · have hlt := (Array.getElem?_eq_some_iff.1 hj).1
       exact (hr j r hj).push (by omega) _
 
-/-! ## The simulation -/
-
-/-- A transcript computation of the pure session that keeps `I` of its transcript and log. -/
 def Logs (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : TMW PS α) : Prop :=
   ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
     (y.run t).go l = (.ok (a, t'), l') → I t l → I t' l'
 
-/-- **The simulation of `Logs`**: a transcript computation of the pure session is related to itself when it keeps `I`. -/
 def logS (I : Transcript → Array Claims.Msg → Prop) : With.Sim (TMW PS) (TMW PS) where
   R _ y := Logs I y
   pure a t l a' t' l' h hI := by
@@ -187,9 +162,6 @@ def logS (I : Transcript → Array Claims.Msg → Prop) : With.Sim (TMW PS) (TMW
       cases h2
       exact hI
 
-/-! ## The steps -/
-
-/-- A squeeze of at most `B` coins keeps the invariant: of `0`, its frame stays pending; else it records the round. -/
 theorem squeezeP_logs (kind : UInt8) {n : ℕ} (hn : n ≤ B) :
     (logS (Inv coin B dom L)).R (squeezeP (asksCut coin N) kind n) (squeezeP (asksCut coin N) kind n) := by
   intro t l a t' l' h hI
@@ -203,7 +175,6 @@ theorem squeezeP_logs (kind : UInt8) {n : ℕ} (hn : n ≤ B) :
   · obtain ⟨-, -, rfl, rfl⟩ := squeezeP_cut_inv coin kind h0 h
     exact hI.squeeze (Nat.pos_of_ne_zero h0) hn kind
 
-/-- A verifier action that appends a frame other than a domain frame and keeps the rounds keeps the invariant. -/
 theorem liftTM_logs {α : Type} (x : TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds ∧
       ∃ f : Frame, f.op ≠ 1 ∧ t'.pending.data.toList = t.pending.data.toList ++ f.enc) :
@@ -247,7 +218,6 @@ theorem get_logs : (logS (Inv coin B dom L)).R (get : TMW PS Transcript) get := 
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   exact hI
 
-/-- A computation of the pure session that sends nothing, lifted to the transcript, keeps the invariant. -/
 theorem liftPS_logs {α : Type} (y : PS α) (hq : ∀ l, (y.go l).2 = l) :
     (logS (Inv coin B dom L)).R (StateT.lift y : TMW PS α) (StateT.lift y) := by
   intro t l a t' l' e hI
@@ -316,9 +286,6 @@ theorem queryP_logs_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch
   queryP_logs nonce ms _ cm (by have := hq j; omega)
     (by have := hq j; have := Nat.log2_le_self ((sch.levels.getD j default).q - 1); omega)
 
-/-! ## The loops, with an invariant of their state -/
-
-/-- `Logs` of a transcript computation that returns a value with `Q`. -/
 def Post (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : TMW PS α) (Q : α → Prop) : Prop :=
   ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
     (y.run t).go l = (.ok (a, t'), l') → I t l → I t' l' ∧ Q a
@@ -361,7 +328,6 @@ theorem Post.liftV (v : V α) : Post I (StateT.lift (monadLift v : PS α) : TMW 
   cases e2
   exact ⟨hI, by cases v <;> simp_all⟩
 
-/-- `Post` of a Ligerito step, from every Ligerito state. -/
 def PostL (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : LP PS α) (Q : α → Prop) : Prop :=
   ∀ s, Post I (y.run s) fun p => Q p.1
 
@@ -398,7 +364,6 @@ theorem PostL.forIn_list (f : ℕ → β → LP PS (ForInStep β)) (J : β → P
     | done b' => exact PostL.pure hr
     | yield b' => exact ih b' hr
 
-/-- **A loop that keeps an invariant of its state keeps `I`.** -/
 theorem loopR_logs (J : β → Prop) (r : Std.Legacy.Range) (b : β) (f : ℕ → β → LP PS (ForInStep β)) (hb : J b)
     (hf : ∀ i b, J b → PostL I (f i b) fun s => J s.value) :
     ((logS I).st LigState).R (loopR r b f) (loopR r b f) := by
@@ -414,8 +379,6 @@ theorem oodIntroP_logs_loop (nonce : ℕ → ℕ → UInt64) (D : ℕ) (hD : D �
     ((logS (Inv coin B dom L)).st LigState).R (oodIntroP (asksCut coin N) nonce g (b.1 - 4 + 1))
       (oodIntroP (asksCut coin N) nonce g (b.1 - 4 + 1)) :=
   oodIntroP_logs nonce g _ (by omega) h1
-
-/-! ## The rep's phases -/
 
 theorem zerocheckCut_logs (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout) (mk : ℕ → F128) (h6 : 6 ≤ B)
     (hm : m - 13 ≤ B) :
@@ -460,7 +423,6 @@ theorem piopCut_logs (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root 
 
 -- `ligeritoCut`'s unfolded run with its loops (`forIn_loopR`), the invariant checked at each step with `omega`
 set_option maxHeartbeats 1000000 in
-/-- **The cut's Ligerito opening keeps the invariant**, given `2`, `n + 1` and every level's `q + 1` at most `B`. -/
 theorem ligeritoCut_logs (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) (h2 : 2 ≤ B) (hn : sch.n + 1 ≤ B)
     (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) :
@@ -505,8 +467,6 @@ theorem innerCut_logs (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (s
   sim_walk [sampleP_logs h1, squeezeP_logs _ hQ, squeezeP_logs_cons lay cons hc, label_logs, absorbF_logs,
     absorbSlice_logs, absorbBytes_logs]
 
-/-- **A cut rep keeps the invariant**, given `Zk.Q`, `m - 13`, its claims, `n + 1` and every level's `q + 1` at most
-`B`. -/
 theorem repCut_logs (st : Setup) (sch : Schedule) (rep : ℕ) (dm : ByteArray) (cm0 : Commit) (extras : Array Claim)
     (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) (hQ : Zk.Q ≤ B)
     (hm : st.m - 13 ≤ B) (hx : extras.size + 2 ≤ B) (hn : sch.n + 1 ≤ B)
@@ -531,9 +491,6 @@ theorem repCut_logs (st : Setup) (sch : Schedule) (rep : ℕ) (dm : ByteArray) (
   simp only [Array.size_append, List.size_toArray, List.length_cons, List.length_nil, h3, h2]
   omega
 
-/-- **A cut rep's rounds are its log's bodies**: where `repCut` answered by `asksCut coin N` returns from the rep's
-domain's fresh transcript and a log of `l.size` bodies, it logged one body per round, and round `j` is `RoundAt` the
-log's body `l.size + j`. -/
 theorem repCut_rounds (st : Setup) (sch : Schedule) (rep : ℕ) (cm0 : Commit) (extras : Array Claim)
     (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) (hQ : Zk.Q ≤ B)
     (hm : st.m - 13 ≤ B) (hx : extras.size + 2 ≤ B) (hn : sch.n + 1 ≤ B)

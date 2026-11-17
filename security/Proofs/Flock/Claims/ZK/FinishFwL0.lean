@@ -37,18 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 
-/-!
-# Level 0's values from the ZK server's run
-
-The ZK server computes level 0's opening itself: where `repFwC` returns, its Ligerito proof's out-of-domain value,
-lane messages and pair's sums are `ligeritoPZk_lanes`' closed forms at the coins from the round the opening begins, on
-its packed table and the basis of its PIOP's switched vectors, plus the pads. Those closed forms are `l0Clear`'s at the
-same coins, table and basis (`LigLock.tabS_foldKs`, `LigLock.wS_foldKs`, and the lane coins, point and weights at the
-replies, `Level0.laneCh_coins`, `Level0.lanePoint_coins`, `Level0.laneW0_coins`).
-
-* **`Finish.repFwC_l0`**: where `repFwC` returns and its PIOP ends at round `p₀` with basis `b`, level 0's values in its
-  proof are `l0Clear` at the coins from `p₀`, the packed table and `b`, plus the pads.
--/
+/-! Level 0's values from the ZK server's run. -/
 
 @[expose] public section
 
@@ -56,7 +45,6 @@ namespace FlockComplete.LigLock
 
 open Flock Replay
 
-/-- **`tabS` is the iterated fold** of the table at the lane coins, lowest variable first. -/
 theorem tabS_foldKs (coin : ℕ → ℕ → F128) (p0 : ℕ) (t : Array F128) :
     ∀ k, tabS coin p0 t k = Lg.foldKs ((List.range k).map (chS coin p0)) (embedF t)
   | 0 => rfl
@@ -66,7 +54,6 @@ theorem tabS_foldKs (coin : ℕ → ℕ → F128) (p0 : ℕ) (t : Array F128) :
     rw [List.foldl_append]
     rfl
 
-/-- **`wS` is the iterated fold** of the first weights at the lane coins. -/
 theorem wS_foldKs (coin : ℕ → ℕ → F128) (p0 : ℕ) (b : Array F128) (n : ℕ) :
     ∀ k, wS coin p0 b n k = Lg.foldKs ((List.range k).map (chS coin p0)) (wS coin p0 b n 0)
   | 0 => rfl
@@ -86,7 +73,6 @@ open Flock
 variable {coin : ℕ → ℕ → F128} {resp : ℕ → Claims.Msg} (hc : ∀ k, coinOf (resp k) = coin k)
 include hc
 
-/-- The lane coins at replies whose coins are `coin`'s are `chS`'s. -/
 theorem laneCh_coins (k L : ℕ) : laneCh resp k L = (List.range k).map (LigLock.chS coin L) := by
   unfold laneCh
   refine List.map_congr_left fun i _ => ?_
@@ -94,13 +80,11 @@ theorem laneCh_coins (k L : ℕ) : laneCh resp k L = (List.range k).map (LigLock
   rw [hc]
   rfl
 
-/-- The out-of-domain point at replies whose coins are `coin`'s is `zS`'s. -/
 theorem lanePoint_coins (n L : ℕ) : lanePoint resp n L = LigLock.zS coin L n := by
   unfold lanePoint
   rw [hc]
   rfl
 
-/-- The first weights at replies whose coins are `coin`'s are `wS`'s. -/
 theorem laneW0_coins (n L : ℕ) (b : Array F128) : laneW0 resp n L b = LigLock.wS coin L b n 0 := by
   unfold laneW0
   rw [lanePoint_coins hc, hc]
@@ -119,10 +103,6 @@ theorem take_range_map {α : Type} (f : ℕ → α) {j k : ℕ} (hj : j ≤ k) :
 
 -- one proof of over a hundred lines down `piopFw`'s unfolded run at level 0, `rw`, `dsimp` and `norm_num` on each step
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values from the ZK server's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
-coins are `coin`'s, returns, and its PIOP ends at round `p₀` having switched to the basis `b`, its proof's
-out-of-domain value, lane messages and pair's sums are level 0's clear values at the coins from `p₀` on the packed
-table `g` and `b` (`l0Clear`), plus the pads, at each value's layout position. -/
 theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims.Msg)
     (hc : ∀ k, FlockComplete.coinOf (resp k) = coin k) (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
@@ -169,7 +149,6 @@ theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims
   try dsimp only at h
   obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
   try dsimp only at h
-  -- the PIOP ends at `p₀` with basis `b`
   have hpf : ((piopFw (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) g
       (fun i => vals[i]! + pads.h[i]!) (FlockComplete.flat cm0.cap) ic.root extras).run t₀).go l =
         (.ok ((zp, lp, ss, T, sws), t₃), l₃) := by
@@ -181,7 +160,6 @@ theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims
     rw [FlockComplete.Replay.bind_go h₃]
     rfl
   obtain ⟨hbv, hl₃⟩ := hb _ _ _ _ _ _ _ hpf
-  -- the proof's Ligerito and level 0 are the opening's
   obtain ⟨tr', t₅, l₅, h₅, hg⟩ := run_bind_ok h
   rw [get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
@@ -203,7 +181,6 @@ theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims
   obtain ⟨ip, t₈, l₈, -, hp⟩ := run_bind_ok hc'
   simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
   obtain ⟨⟨rfl, -⟩, -⟩ := hp
-  -- the opening's lane phase in closed form, at the replies from `p₀`
   have hS4 := FlockComplete.SimInner.ligeritoPZk_ok coin n resp hc _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ t₃ l₃ _ _ h₄
   have hLF := FlockComplete.L0.ligeritoPZk_lanes resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hn hk0 hS4
   rw [hbv, hl₃] at hLF

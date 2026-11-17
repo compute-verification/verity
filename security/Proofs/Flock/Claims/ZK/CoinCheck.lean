@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.GK
 public import Proofs.Flock.Soundness.ZK.GK.Extract
 
-/-!
-# The coin-tree check as an oracle program (`coin-tree/hm96-sha512/v2`)
-
-The deployed masked prover reads the verifier's opening of one (stream, round) position, its coins, `T_n`, salt and
-Merkle path, and walks the keyed coin tree from it, every hash `SHA-512(ν ‖ ·)` under the prover's session nonce `ν`,
-to the root the verifier committed at `Hello` (`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §9). `treeChk` is that walk as an
-`OC` program, so its `H` calls are logged: the chain from `T_n` up, the round digest, the salt hash, the hm96 leaf,
-then the path (`reachK`). An answer that is not 64 bytes fails the check, as no SHA-512 output is.
-
-**`Proto.binding_of_tree`**: a committed-coin protocol whose check is this walk, and whose coin is read from the
-opening's coins, meets `Binding`, with no hypothesis on `H`. Two openings that pass and read as different coins
-conflict under the root, so T6 located (`coinPairs_coll`) gives an aligned pair of hash inputs that collide under
-`H(ν ‖ ·)`. Each is an input the walk asked (`coinPairs_mem`, `reachK_passes`), so the two checks' logs hold a
-collision.
--/
+/-! The coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program, so its `H` calls are logged. -/
 
 @[expose] public section
 
@@ -74,38 +60,27 @@ def treeChk (T : GK.CoinTree Dg Coin Salt) (ν : List UInt8) (root : Dg) (pos : 
         reachK ν T op fun r => .ret (decide (r = root))
       else .ret false
 
-/-! ## The inputs a walk hashes -/
-
-/-- The chain's hash inputs, `T_0`'s first. -/
 def chainIns (Hd : List UInt8 → Dg) (tag : List UInt8) (E : CoinEnc Dg Coin Salt) : List Coin → Dg → List (List UInt8)
   | [], _ => []
   | c :: r, Tn => (tag ++ E.coin c ++ E.dig (chainTop Hd E tag Tn r)) :: chainIns Hd tag E r Tn
 
-/-- The path's hash inputs, from the leaf up. -/
 def walkIns (Hd : List UInt8 → Dg) (ME : Enc Unit Dg) : ℕ → Dg → List Dg → List (List UInt8)
   | _, _, [] => []
   | idx, a, s :: r => upIn ME idx a s :: walkIns Hd ME (idx / 2) (up Hd ME idx a s) r
 
-/-- The round digest's input. -/
 def rIn (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) : List UInt8 :=
   T.roundTag ++ op.pos ++ T.E.dig (chainTop Hd T.E T.chainTag op.Tn op.cs)
 
-/-- The salt hash's input. -/
 def sIn (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) : List UInt8 := T.sp ++ T.E.salt op.y
 
-/-- The hm96 leaf's input. -/
 def lIn (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) : List UInt8 :=
   T.lp ++ T.E.dig (T.mix (Hd (rIn Hd T op)) op.y) ++ T.E.dig (Hd (sIn T op))
 
-/-- **Every input an opening's walk hashes.** -/
 def opIns (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) :
     List (List UInt8) :=
   chainIns Hd T.chainTag T.E op.cs op.Tn ++
     rIn Hd T op :: sIn T op :: lIn Hd T op :: walkIns Hd T.ME op.idx (Hd (lIn Hd T op)) op.sibs
 
-/-! ## A passing walk asks every input -/
-
-/-- **`p` passing asks every input of `ins` under `ν` and gets a digest, and `k` then passes, within `p`'s calls.** -/
 def Passes (H : Msg → Msg) (ν : List UInt8) (p : OC Bool) (ins : List (List UInt8)) (k : OC Bool) : Prop :=
   (p.eval H).1 = true → (∀ i ∈ ins, (ν ++ i, H (ν ++ i)) ∈ (p.eval H).2 ∧ (H (ν ++ i)).length = 64) ∧
     (k.eval H).1 = true ∧ (k.eval H).2 ⊆ (p.eval H).2
@@ -159,7 +134,6 @@ theorem walkK_passes (ME : Enc Unit Dg) : ∀ (idx : ℕ) (a : Dg) (sibs : List 
       rw [e] at h
       exact h
 
-/-- **A passing walk asks every input it hashes**, and its continuation passes at the root the opening reaches. -/
 theorem reachK_passes (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) (k : Dg → OC Bool) :
     Passes H ν (reachK ν T op k) (opIns (keyedDg H ν) T op) (k (T.reach (keyedDg H ν) op)) := by
   have h1 := chainK_passes H ν T.chainTag T.E op.cs op.Tn fun t0 =>
@@ -180,8 +154,6 @@ theorem reachK_passes (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coi
   refine h.mono H ν fun i hi => ?_
   simp only [opIns, List.mem_append, List.mem_cons] at hi ⊢
   tauto
-
-/-! ## T6's aligned inputs are the walks' -/
 
 theorem walkPairs_mem (Hd : List UInt8 → Dg) (ME : Enc Unit Dg) : ∀ (idx : ℕ) (a a' : Dg) (sibs sibs' : List Dg),
     ∀ p ∈ GK.walkPairs Hd ME idx a a' sibs sibs', p.1 ∈ walkIns Hd ME idx a sibs ∧ p.2 ∈ walkIns Hd ME idx a' sibs'
@@ -212,8 +184,6 @@ theorem chainPairs_mem (Hd : List UInt8 → Dg) (E : CoinEnc Dg Coin Salt) (tag 
       · obtain ⟨e1, e2⟩ := chainPairs_mem Hd E tag r r' Tn Tn' hlen' p hp
         exact ⟨List.mem_cons_of_mem _ e1, List.mem_cons_of_mem _ e2⟩
 
-/-- **The inputs of T6's aligned pairs are the two walks'**: for openings of one position and leaf with equally many
-coins, each pair's first input is one the first opening's walk hashes, and its second one the second's. -/
 theorem coinPairs_mem (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (o o' : GK.CoinOpening Dg Coin Salt)
     (hpos : o'.pos = o.pos) (hidx : o'.idx = o.idx) (hlen : o.cs.length = o'.cs.length) :
     ∀ p ∈ GK.coinPairs Hd T.E T.mix T.chainTag T.roundTag o.pos T.lp T.sp T.ME o.idx o.cs o'.cs o.Tn o'.Tn o.y o'.y
@@ -247,10 +217,6 @@ theorem coinPairs_mem (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (o
   · obtain ⟨a, b⟩ := chainPairs_mem Hd T.E T.chainTag o.cs o'.cs o.Tn o'.Tn hlen p hc
     exact ⟨Or.inl a, Or.inl b⟩
 
-/-! ## Binding -/
-
-/-- **The coin-tree check binds in its own calls**: two openings of one position that pass and carry different coins
-leave a collision among the two checks' `H` calls. -/
 theorem treeChk_binding (T : GK.CoinTree Dg Coin Salt) (root : Dg) (pos : List UInt8) (idx n depth : ℕ)
     (op op' : GK.CoinOpening Dg Coin Salt)
     (h : ((treeChk T ν root pos idx n depth (some op)).eval H).1 = true)
@@ -289,10 +255,6 @@ theorem treeChk_binding (T : GK.CoinTree Dg Coin Salt) (root : Dg) (pos : List U
 
 end Walk
 
-/-- **`Binding` for a protocol whose check is the coin-tree walk** (`coin-tree/hm96-sha512/v2`): at statement `x`, nonce
-`ν` (its bytes `nb ν` key the tree) and commitment `ρ`, coin `j`'s opening is checked by `treeChk` against the tree
-`T x ρ` and root `root x ρ`, at the position, leaf, coin count and depth the round fixes; and the coin an opening reads as
-is a function of its coins. -/
 theorem Proto.binding_of_tree {W : Type} (G : Proto W) (H : Msg → Msg) {Coin Salt : Type}
     (T : Msg → Msg → GK.CoinTree Dg Coin Salt) (nb : G.Nonce → List UInt8) (root : Msg → Msg → Dg)
     (parse : Msg → Option (GK.CoinOpening Dg Coin Salt)) (pos : Msg → Msg → ℕ → List UInt8)

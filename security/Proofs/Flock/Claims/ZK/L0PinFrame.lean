@@ -39,25 +39,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FinishLig
 
-/-!
-# Level 0's scheduled rounds, fed
-
-The frame's schedule runs a rep's opening live (`Drive.openStep`), fed the stream's coins a round at a time
-(`Step.feed`). Its rounds are the cut session's: fed the coins from a log's round on, the opening over `OpenM` sends
-what the cut run over `PS` logs, and returns what it returns, so level 0's scheduled rounds are `l0BodyAt`'s bodies at
-the fed coins and zero pads.
-
-* **`Step` is a lawful monad** (`lawfulStepL0`).
-* **A feeding** (`feedR`): what a step program goes on as, the rounds it sent and the coins left; `Step.feed` is it
-  (`feed_eq`), and a bind's is its parts' (`feedR_bind`).
-* **The feeding simulation** (`feedSim`, `FR`, `FeedOk`): past the coins it was given, a program over `OpenM` fed the
-  coins from round `l.size` on and the cut run over `PS` from the log `l` agree: where the feeding ends within the cut,
-  the run returns its value having logged its rounds; where the cut falls within them, the run stops past the openings
-  having logged them up to the cut's.
-* **The channels** (`fr_round`, `asksRel_feed`): a live round of the opening's channel, fed, is `asksCut`'s.
-* **`repOpening_feed`**: so a rep's opening over `OpenM`, fed, is its cut run (`repOpening_rel`), and
-  **`repOpening_cutL0`**: the cut run past the ring switch stops having sent level 0's bodies.
--/
+/-! Level 0's scheduled rounds, fed. -/
 
 @[expose] public section
 
@@ -87,7 +69,6 @@ instance lawfulStepL0 : LawfulMonad Step := LawfulMonad.mk'
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := step_bind_assoc)
 
-/-- **`s` fed the coins `cs`**: what it goes on as, the rounds it sent and the coins left. -/
 def feedR {α : Type} (s : Step α) (cs : List (Array F128)) :
     Step α × List (ByteArray × Nat) × List (Array F128) :=
   match s, cs with
@@ -115,7 +96,6 @@ theorem feedR_rest {α : Type} : ∀ (s : Step α) (cs : List (Array F128)),
     simp only [feedR, List.length_cons, List.drop_succ_cons]
     exact feedR_rest (k z) rest
 
-/-- A bind's feeding, from its first part's. -/
 def bindR {α β : Type} (g : α → Step β) :
     Step α × List (ByteArray × Nat) × List (Array F128) → Step β × List (ByteArray × Nat) × List (Array F128)
   | (.done a, sent, rest) => ((feedR (g a) rest).1, sent ++ (feedR (g a) rest).2.1, (feedR (g a) rest).2.2)
@@ -139,18 +119,13 @@ theorem feedR_bind {α β : Type} (g : α → Step β) : ∀ (s : Step α) (cs :
     simp only [Step.bind, feedR] at e ⊢
     rw [e, ← h]
 
-/-- The round the step program asks for next, if it does. -/
 def pendC {α : Type} : Step α → List ByteArray
   | .ask c _ _ => [c]
   | _ => []
 
-/-- The rounds a feeding sent, and the one it asks for next. -/
 def sentQ {α : Type} (t : Step α × List (ByteArray × Nat) × List (Array F128)) : List ByteArray :=
   t.2.1.map (·.1) ++ pendC t.1
 
-/-- **A feeding and a cut run agree**: where the feeding ends, within the cut, the run returns the same value having
-logged its rounds; where the cut falls within its rounds, the run stops past the openings having logged the rounds up
-to the cut's. -/
 def FeedOk {α : Type} (n : Nat) (coins : Got) (t : Step (α × Got) × List (ByteArray × Nat) × List (Array F128))
     (out : Except String α × Array Claims.Msg) (l : Array Claims.Msg) : Prop :=
   (∀ a got', t.1 = .done (a, got') → l.size + (sentQ t).length ≤ n →
@@ -158,7 +133,6 @@ def FeedOk {α : Type} (n : Nat) (coins : Got) (t : Step (α × Got) × List (By
   (l.size ≤ n → n < l.size + (sentQ t).length →
     out = (.error "past the openings", l ++ (((sentQ t).take (n + 1 - l.size)).map Claims.toMsg).toArray))
 
-/-- The coins `cs` are the coins from round `p` on. -/
 def CoinAt (coin : Nat → Nat → F128) (p : Nat) (cs : List (Array F128)) : Prop :=
   ∀ j (hj : j < cs.length), coin (p + j) = fun i => cs[j][i]!
 
@@ -167,8 +141,6 @@ theorem coinAt_drop {coin : Nat → Nat → F128} {p : Nat} {cs : List (Array F1
   intro j hj
   rw [List.getElem_drop, ← h (m + j) (by simp at hj; omega), Nat.add_assoc]
 
-/-- **The feeding relation**: from every state past the given coins and every log, fed the coins from the log's
-round on. -/
 def FR (coin : Nat → Nat → F128) (n : Nat) (coins : Got) {α : Type} (x : OpenM α) (y : PS α) : Prop :=
   ∀ (got : Got) (l : Array Claims.Msg) (cs : List (Array F128)), coins.size ≤ got.size → CoinAt coin l.size cs →
     FeedOk n coins (feedR (x.run got) cs) (y.go l) l
@@ -274,8 +246,6 @@ theorem fr_fail {coin : Nat → Nat → F128} {n : Nat} {coins : Got} {α : Type
   · rw [hx] at hd
     cases cs <;> simp [feedR] at hd
 
-/-- **The feeding simulation**: a rep's opening over `OpenM`, past the coins it was given and fed the coins from the
-log's round on, is the cut run over `PS`. -/
 def feedSim (coin : Nat → Nat → F128) (n : Nat) (coins : Got) : _root_.Flock.With.Sim OpenM PS where
   R := FR coin n coins
   pure a := fr_done a (fun _ => rfl) (fun _ => rfl)
@@ -286,8 +256,6 @@ def feedSim (coin : Nat → Nat → F128) (n : Nat) (coins : Got) : _root_.Flock
     | error e => exact fr_fail e fun _ => rfl
     | ok a => exact fr_done a (fun _ => rfl) (fun _ => rfl)
 
-/-- **A live round, fed**: past the coins it was given, the opening's round asks for its coins and returns the ones fed
-to it, past the cut's round the cut run's. -/
 theorem fr_round (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (c : ByteArray) :
     FR coin n coins ((stepAsks coins true).round c) ((asksCut coin n).round c) := by
   intro got l cs hg hc
@@ -334,24 +302,19 @@ theorem fr_link (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (a b : Arr
     FR coin n coins ((stepAsks coins true).link a b) ((asksCut coin n).link a b) :=
   fr_fail _ fun _ => rfl
 
-/-- `asksCut` as the ZK server's `Asks`. -/
 def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.ZkServer.Finish.Asks PS :=
   ⟨(asksCut coin n).link, (asksCut coin n).round⟩
 
 theorem cutAsks_toC (coin : Nat → Nat → F128) (n : Nat) : (cutAsks coin n).toC = asksCut coin n := rfl
 
-/-- **The opening's channel, fed, is the cut's.** -/
 theorem asksRel_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) :
     AsksRel (feedSim coin n coins) (stepAsks coins true).toC (cutAsks coin n).toC :=
   ⟨fr_link coin n coins, fr_round coin n coins⟩
-
-/-! ## The opening, fed -/
 
 section Opening
 
 open _root_.Flock.ZkServer.Finish (repOpening repOpening_rel commitFw ligeritoPZk_fw ringSwitchP_eq)
 
-/-- **A rep's opening, fed, is its cut run.** -/
 theorem repOpening_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout)
@@ -365,9 +328,6 @@ theorem repOpening_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (s
   repOpening_rel (feedSim coin n coins) (asksRel_feed coin n coins) st hm sch lay tPad rep g cm0 claims h extra lanePad
     salt
 
-/-- **A rep's cut opening past its ring switch**: where the ring switch from the log `l` returns at `l₂`, cut
-`j < k₀ + 4` rounds past it, the opening stops having sent level 0's first `j + 1` bodies after `l₂`, at the coins from
-round `l₂.size`, the switch's target and basis and the opening's pads. -/
 theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout)
@@ -393,8 +353,6 @@ theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
     hk hn)
 
 end Opening
-
-/-! ## Level 0's bodies read few coins -/
 
 section Congr
 
@@ -423,7 +381,6 @@ theorem wS_congr {k n : Nat} (b : Array F128) (hz : ∀ i < n, coin p0 i = coin'
     simp only [wS]
     rw [hch j (by omega), wS_congr b hz hb0 hch j (by omega)]
 
-/-- **Level 0's bodies read only their rounds' coins**: `z`'s `n`, `β₀`'s first and each lane challenge's two. -/
 theorem l0BodyAt_congr {P : List UInt8} {T : F128} {cap : ByteArray} {sch : _root_.Flock.Schedule} {t b : Array F128}
     {lay : _root_.Flock.Zk.PadLayout} {h : Array F128} {rep : Nat} {extra : Nat → Nat → F128}
     {nonce : Nat → Nat → UInt64} (hz : ∀ i < sch.n, coin p0 i = coin' p0' i)
@@ -446,8 +403,6 @@ theorem l0BodyAt_congr {P : List UInt8} {T : F128} {cap : ByteArray} {sch : _roo
   · rfl
 
 end Congr
-
-/-! ## The scheduled opening -/
 
 section Sched
 
@@ -482,8 +437,6 @@ theorem sentQ_fail {α β : Type} (e : String) (g : α → Step β) (cs : List (
 theorem getThe_run {β : Type} (f : Got → _root_.Flock.TMW OpenM β) (t : _root_.Flock.Transcript) (got : Got) :
     ((getThe Got >>= f).run t).run got = ((f got).run t).run got := rfl
 
-/-- **A rep's scheduled opening is its opening past its PIOP**: fed, `openStep` sends nothing, or its PIOP on the
-algebraic phase's coins returned having taken them all, and it sends what the opening from there sends. -/
 theorem openStep_sent (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
@@ -525,10 +478,6 @@ theorem openStep_sent (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : 
   · rw [hp] at hna
     exact hna.elim
 
-/-- **Level 0's scheduled rounds**: fed the coins from the log `l`'s round on, where `openStep` sends anything, its
-PIOP returned having taken the algebraic phase's coins; and where the ring switch's cut run from there returns at `l₂`,
-the rounds it sent up to `j < k₀ + 4` past the switch are level 0's first `j + 1` bodies at the fed coins from round
-`l₂.size`, the switch's target and basis and zero pads. -/
 theorem openStep_l0 (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)

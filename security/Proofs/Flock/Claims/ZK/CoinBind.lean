@@ -36,22 +36,7 @@ import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Soundness.Merkle
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The coin-tree check binds the whole opening
-
-`treeChk_binding` binds an opening's coins. The deployed opening (`coin-tree/hm96-sha512/v2`, `Resp::Coins`) is bare
-words: which of them are coins, `T_n`, salt and path is the statement's schedule, so the coin the prover hands on is read
-from the whole opening. Every part of an opening is a hash input on its walk to the root, so two openings of one position
-that pass and differ anywhere still collide:
-
-* `walkPairs_coll_any`, `chainPairs_coll_any`, `coinPairs_coll_any`: `walkPairs_coll`, `chainPairs_coll` and
-  `coinPairs_coll` with the two sides differing anywhere (a node or a sibling; a coin or `T_n`; a coin, `T_n`, the salt
-  or the path);
-* `treeChk_binding_any`: two openings of one position that pass and differ leave a collision among the two checks' `H`
-  calls;
-* `Proto.binding_of_open`: a committed-coin protocol whose check is the walk on an opening read at the round's context,
-  and whose coin is a function of the opening's message, meets `Binding`, with no hypothesis on `H`.
--/
+/-! The coin-tree check binds the whole opening: two passing openings of one position that differ anywhere collide. -/
 
 @[expose] public section
 
@@ -63,8 +48,6 @@ section Walk
 
 variable {D Col : Type} (H : List UInt8 → D) (E : Enc Col D)
 
-/-- **`walkPairs_coll` with the walks differing anywhere**: two walks of equal length that start at different nodes or
-take different siblings, and meet, collide at an aligned step. -/
 theorem walkPairs_coll_any : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
     sibs.length = sibs'.length → (a ≠ a' ∨ sibs ≠ sibs') → walk H E idx a sibs = walk H E idx a' sibs' →
       ∃ p ∈ walkPairs H E idx a a' sibs sibs', p.1 ≠ p.2 ∧ H p.1 = H p.2
@@ -102,8 +85,6 @@ section Chain
 
 variable {D Coin Salt : Type} (H : List UInt8 → D) (E : CoinEnc D Coin Salt)
 
-/-- **`chainPairs_coll` with the chains differing anywhere**: two chains of equally many coins that differ on a coin or
-on `T_n`, and reach one `T_0`, collide at an aligned link. -/
 theorem chainPairs_coll_any (tag : List UInt8) : ∀ (cs cs' : List Coin) (Tn Tn' : D), cs.length = cs'.length →
     (cs ≠ cs' ∨ Tn ≠ Tn') → chainTop H E tag Tn cs = chainTop H E tag Tn' cs' →
       ∃ p ∈ (chainPairs H E tag cs cs' Tn Tn').2.2, p.1 ≠ p.2 ∧ H p.1 = H p.2
@@ -137,8 +118,6 @@ section Opening
 
 variable {D Coin Salt : Type} (H : List UInt8 → D) (E : CoinEnc D Coin Salt)
 
-/-- **T6, located, with the openings differing anywhere**: two openings of one position, of equally many coins and path
-nodes, that differ on a coin, `T_n`, the salt or the path, and reach one root, leave a colliding aligned pair. -/
 theorem coinPairs_coll_any (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -205,8 +184,6 @@ theorem opening_eq {op op' : GK.CoinOpening Dg Coin Salt} (h1 : op.pos = op'.pos
   subst h1 h2 h3 h4 h5 h6
   rfl
 
-/-- **The coin-tree check binds the whole opening in its own calls**: two different openings of one position that pass
-leave a collision among the two checks' `H` calls. -/
 theorem treeChk_binding_any (T : GK.CoinTree Dg Coin Salt) (root : Dg) (pos : List UInt8) (idx n depth : ℕ)
     (op op' : GK.CoinOpening Dg Coin Salt)
     (h : ((treeChk T ν root pos idx n depth (some op)).eval H).1 = true)
@@ -249,10 +226,6 @@ theorem treeChk_binding_any (T : GK.CoinTree Dg Coin Salt) (root : Dg) (pos : Li
 
 end Walk
 
-/-- **`Binding` for a protocol whose check is the coin-tree walk on an opening read in context**: at statement `x`,
-nonce `ν` and commitment `ρ`, coin `j`'s message is read as an opening at that round (`parse x ρ j`) and checked by
-`treeChk` against the tree `T x ρ` and root `root x ρ`; and two messages that read as one opening there read as one
-coin. -/
 theorem Proto.binding_of_open {W : Type} (G : Proto W) (H : Msg → Msg) {Coin Salt : Type}
     (T : Msg → Msg → GK.CoinTree Dg Coin Salt) (nb : G.Nonce → List UInt8) (root : Msg → Msg → Dg)
     (parse : Msg → Msg → ℕ → Msg → Option (GK.CoinOpening Dg Coin Salt)) (pos : Msg → Msg → ℕ → List UInt8)

@@ -37,19 +37,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 
-/-!
-# `FinishLane`: level 0's two lane rows on a view's masked values, constants included
-
-`TauLig`'s `lanesA` gives `ligeritoConstraints`' two rows as `rowsOf`'s lane limbs by coefficient. Where level 0's
-proof reads the view's masked values (the out-of-domain value, the lane rounds' messages, `e₀`, `e₁`), its target is the
-opening's `T` (`openT`) and its restart is `T'`, the two rows are `rowsOf`'s rows 5 and 6 as whole forms.
-
-* **`laneRunR`**, **`laneRowR`**: `laneRun` and `laneRow` are the executable's lane claim (`ZkExec.Rel2`, the constant
-  included).
-* **`lanesR`**: `ligeritoConstraints`' two rows are `limbRows` of `laneRow` (`ofZk`).
-* `LaneAt`: level 0's proof read at the view, `lanesR`'s premises; `LaneCoins`: its record's coins the model's, all
-  `TauLig.lanesA` reads for the rows' coefficients.
--/
+/-! Level 0's two lane rows on a view's masked values, constants included. -/
 
 @[expose] public section
 
@@ -79,7 +67,6 @@ theorem rel2_konst' {np s : ℕ} (hs : s = np) (w : _root_.Flock.F256) :
   subst hs
   exact ZkExec.rel2_konst w
 
-/-- Level 0's out-of-domain claim `T + β·(y + h_ood)` on forms, the constant included (`claim0A`'s). -/
 theorem claim0R {np s : ℕ} (hs : s = np) (i : Fin np) {idx : ℕ} (hi : i.val = idx) (T y β : _root_.Flock.F128) :
     ZkExec.Rel2 (ZkSession.cK (FlockLevel3.embed (fOf T)) + FlockLevel3.embed (fOf β) •
         (ZkSession.cK (FlockLevel3.embed (fOf y)) + ZkSession.padF i))
@@ -98,7 +85,6 @@ theorem claim0R {np s : ℕ} (hs : s = np) (i : Fin np) {idx : ℕ} (hi : i.val 
   · simp only [ZkExec.liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.snd_add,
       Prod.smul_snd, smul_eq_mul, add_zero, map_add, map_mul]
 
-/-- **A row read from an executable constraint is it** (`ofZk`), where they agree coefficient by coefficient. -/
 theorem ofZk_of_linRel {nE : ℕ} {ℓ : ZkSession.Lin FlockLevel3.GF128 (nE + 4)} {x : _root_.Flock.Zk.Lin}
     (h : ZkExec.LinRel ℓ x) : Composed.ofZk x = ℓ := by
   obtain ⟨-, hc, ha⟩ := h
@@ -114,9 +100,6 @@ section Lane
 variable {mPts : ℕ} (Tz : ZkSession.TabZK FlockLevel3.GF128 mPts) (st : _root_.Flock.Stmt)
   (c : Composed.CoinsZK (Composed.RestOf Tz st)) (r : Fin 2) {nE : ℕ} (v : Fin nE → FlockLevel3.GF128)
 
-/-- **The model's lane rounds are the executable's**, constants included: after `k ≤ k₀` lane rounds, `laneRun` is the
-folded claim (`laneStepE`), where level 0's target is `openT`, its out-of-domain value and lane messages are the view's
-masked values, and its coins are the model's. -/
 theorem laneRunR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (hlen : (Composed.layOf Tz st).len = nE + 4)
     (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (hT : fOf rec.target = Composed.openT Tz st c r sh)
@@ -177,8 +160,6 @@ theorem laneRunR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (hle
     simp only [Composed.laneRun, ZkSession.QuadL.eval, ZkSession.fromMsgL, Composed.mkK, hc,
       FlockSoundness.Refine.gOf_mul, pow_two]
 
-/-- **The model's lane row is the executable's `laneLhs`**, constants included: `laneRunR` at `k₀`, the pair's sums
-`e₀, e₁` the view's masked values under the model's `ρ`, and the restart `T'` the proof's. -/
 theorem laneRowR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
     (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (zl : _root_.Flock.Zk.Level0Msgs)
@@ -230,8 +211,6 @@ theorem laneRowR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' 
   simp only [Composed.laneRow, Fin.sum_univ_two, r0, r1, sub_eq_add_neg, Fin.val_zero, Fin.val_one, Fin.isValue]
   abel
 
-/-- **Level 0's two lane rows are `rowsOf`'s rows 5 and 6** as whole forms: `limbRows` of the model's lane row, read
-from `ligeritoConstraints`' two constraints (`ofZk`). -/
 theorem lanesR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
     (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (zl : _root_.Flock.Zk.Level0Msgs)
@@ -261,9 +240,6 @@ theorem lanesR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 
   · exact ofZk_of_linRel h0
   · exact ofZk_of_linRel h1
 
-/-- **Level 0's proof read at the view** (`lanesR`'s premises): its record's target is the opening's `T`, its coins are
-the model's, its out-of-domain value, lane messages and pair's sums are the view's masked values, and its restart is
-`T'`. -/
 structure LaneAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂) (lg : _root_.Flock.LigeritoProof)
     (rec : _root_.Flock.Zk.L0Rec) (zl : _root_.Flock.Zk.Level0Msgs) : Prop where
   target : fOf rec.target = Composed.openT Tz st c r sh
@@ -282,7 +258,6 @@ structure LaneAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' 
     (Composed.msgAt v ((Composed.layOf Tz st).lgE 1 1))
   tPrime : gOf zl.tPrime = T'
 
-/-- `lanesR` at `LaneAt`. -/
 theorem lanesAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
     (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (zl : _root_.Flock.Zk.Level0Msgs) (hL : LaneAt Tz st c r v sh T' lg rec zl)
@@ -292,8 +267,6 @@ theorem lanesAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' :
       ZkSession.limbRows execArith (Composed.laneRow Tz st c r v sh T') k :=
   lanesR Tz st c r v sh T' hlen lg rec zl hL.target hL.ood hL.lane hL.rho hL.oodVal hL.msg hL.e0 hL.e1 hL.tPrime hlgc
 
-/-- **Level 0's record holds the model's coins**: its out-of-domain coin, lane challenges and pair coins, `LaneAt`'s
-coin fields, all `lanesA`'s coefficients read. -/
 structure LaneCoins (rec : _root_.Flock.Zk.L0Rec) : Prop where
   ood : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i)
   lane : ∀ j (hj : j < Tz.sch.k0), rec.challenges[j]! = c.rest.lane r ⟨j, hj⟩

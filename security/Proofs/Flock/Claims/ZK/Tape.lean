@@ -33,20 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A reference session's tape bounds its tables
-
-`RefSession.TapeOK` asks that the tape be read before the last coin with fibers of one size (`eP x`). Every fiber is
-then nonempty, so `eP x` is onto every table's base and every pre-final leaf's salt (`eP_surjective`), and one finite
-tape carries at most `log₂ |Tape|` independent 1536-bit salts. Every table has its two `τ` leaves, so at every
-statement a session whose tape is read so has fewer tables than tapes (`J_lt_card_of_tapeOK`), and a session with
-statements of every table count has no such tape (`not_tapeOK`).
-
-The masked scope bounds no table count: `Claims.Flock.InScope true` asks `tables ≤ 1` only when `zk` is false. A
-reference session of the whole `--zk` scope needs a tape read per statement, which `Claims.ZKmalR`'s one finite tape
-type for every statement, the one `Claims.Flock.ZK` reads, does not give, and `Claims.ZKmalRx`'s statement-indexed
-tapes do.
--/
+/-! A reference session's tape bounds its tables. -/
 
 @[expose] public section
 
@@ -54,8 +41,6 @@ namespace Claims.ZKMal.RefSession
 
 open FlockSoundness.Discharge
 
-/-- **A tape read with fibers of one size is onto**: every base and every assignment of the pre-final leaves' salts is
-read from some tape. -/
 theorem eP_surjective (S : RefSession) (hT : S.TapeOK) (x : Msg) : Function.Surjective (S.eP x) := by
   intro p
   obtain ⟨t0⟩ := S.neTape
@@ -64,8 +49,6 @@ theorem eP_surjective (S : RefSession) (hT : S.TapeOK) (x : Msg) : Function.Surj
   obtain ⟨⟨t, ht⟩⟩ := (Nat.card_pos_iff.mp hpos).1
   exact ⟨t, ht⟩
 
-/-- **A good tape bounds the tables**: at every statement, a session whose tape is read with fibers of one size has
-fewer tables than tapes. -/
 theorem J_lt_card_of_tapeOK (S : RefSession) (hT : S.TapeOK) (x : Msg) : S.J x < Fintype.card S.Tape := by
   classical
   have hs : Function.Surjective fun t => (S.eP x t).2 := fun y => by
@@ -82,8 +65,6 @@ theorem J_lt_card_of_tapeOK (S : RefSession) (hT : S.TapeOK) (x : Msg) : S.J x <
     _ ≤ Fintype.card ZkView.Salt ^ Fintype.card (ZkView.Leaves fun j => (S.C x j).z) := Nat.pow_le_pow_left hS _
     _ ≤ Fintype.card S.Tape := h1
 
-/-- **No good tape at every table count**: a session with statements of every table count has no tape read with
-fibers of one size. -/
 theorem not_tapeOK (S : RefSession) (hJ : ∀ N, ∃ x, N ≤ S.J x) : ¬ S.TapeOK := fun hT => by
   obtain ⟨x, hx⟩ := hJ (Fintype.card S.Tape)
   exact absurd (S.J_lt_card_of_tapeOK hT x) (not_lt.mpr hx)

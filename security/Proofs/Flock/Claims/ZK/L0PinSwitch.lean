@@ -36,21 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The ring switch's rounds, and the PIOP's last transcript
-
-Level 0's scheduled rounds (`LigLock.Fed.openStep_l0`) start past the ring switch's cut run from the PIOP's last
-transcript. This file states both:
-
-* **The ring switch's bodies** (`ringSwitchCut_bodies`, `rsBody`): answered by `asksCut` with room for its
-  `claims.size + 1` asks, the cut ring switch returns, having sent, after the pending bytes and the opening's label,
-  each claim's round (the ring switch's label, the claim's switched vector, a squeeze of `7`), then `γ`'s squeeze of
-  `claims.size`, and leaves nothing pending. The loop is `forIn_bind_go`, each step's state left open.
-* **The PIOP leaves nothing pending** (`EndE`, `endE_repPiop`): a rep's PIOP that returns on the opening's coins ends
-  on the lincheck's last squeeze.
-* **The rounds' shapes** (`pcsRound_rs`, `qRound_rs`, `qRound_gamma`): from empty pending bytes the switch's first
-  round is the opening's (`Flags.PcsRound`), and its later rounds and `γ`'s are quiet (`Quiet.QRound`).
--/
+/-! The ring switch's rounds, and the PIOP's last transcript. -/
 
 @[expose] public section
 
@@ -62,8 +48,6 @@ open _root_.Flock.ZkServer.Frame (LABEL_PCS)
 open FlockSoundness.Refine (Frame encs label_enc absorbSlice_enc framed_enc)
 open FlockComplete (PS asksCut ringSwitchCut)
 open FlockComplete.Replay (afterSq bind_go liftTM_ok)
-
-/-! ## A loop whose steps' states are left open -/
 
 theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript) (B : ℕ → Claims.Msg)
     (L n : ℕ)
@@ -91,8 +75,6 @@ theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T
     rw [hs'', show a + 1 + k = a + (k + 1) by omega]
     exact ⟨s'', by simp⟩
 
-/-- **A loop, then a continuation**: what holds of the continuation's run from every state the loop may end in holds
-of the whole. -/
 theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
     (B : ℕ → Claims.Msg) (L n : ℕ) {t₀ : Flock.Transcript} (hT : T 0 = t₀)
     (hbody : ∀ i < n, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
@@ -105,30 +87,22 @@ theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ
   rw [← hT, bind_go hs]
   exact hf s
 
-/-! ## The ring switch, round by round -/
-
-/-- The transcript after the opening's label. -/
 def pcsT (t : Flock.Transcript) : Flock.Transcript :=
   { t with pending := t.pending ++ header 2 0 "flock-pcs-open-batch-v0".toUTF8.size ++
       padded "flock-pcs-open-batch-v0".toUTF8 }
 
-/-- The transcript of the switch's round `i` before its squeeze: the ring switch's label and `sv i` absorbed. -/
 def rsPre (sv : ℕ → Array F128) (i : ℕ) (t : Flock.Transcript) : Flock.Transcript :=
   let p := t.pending ++ header 2 0 "flock-ring-switch-v0".toUTF8.size ++ padded "flock-ring-switch-v0".toUTF8 ++
     header 3 2 (sv i).size
   { t with pending := (sv i).foldl F128.pushBytes p }
 
-/-- The transcript of the switch's loop from `t₀`: round `i` squeezes `7` coins at body `L + i`. -/
 def rsLoopT (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) : ℕ → Flock.Transcript
   | 0 => t₀
   | i + 1 => afterSq (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7 (coin (L + i))
 
-/-- The body the switch's round `i` sends. -/
 def rsLoopB (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Claims.Msg :=
   Claims.toMsg (framed (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7)
 
-/-- **The switch's bodies** after the pending bytes `P`, of `N` claims: round `i < N` the ring switch's label, the
-claim's switched vector and a squeeze of `7`, the first after `P` and the opening's label; round `N` `γ`'s squeeze. -/
 def rsBody (sv : ℕ → Array F128) (N : ℕ) (P : List UInt8) (i : ℕ) : Claims.Msg :=
   if i < N then
     (if i = 0 then P ++ (Frame.label "flock-pcs-open-batch-v0".toUTF8).enc else []) ++
@@ -160,8 +134,6 @@ theorem rsLast (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ)
   rw [rsBody, if_neg (lt_irrefl _)]
   simp only [Claims.toMsg, framed_enc, rsLoopT, afterSq, empty_toList, List.nil_append]
 
-/-- **The cut ring switch, answered by `asksCut` with room for its asks**: from `l`, with `claims.size + 1` asks before
-round `n`, it returns, having sent `rsBody` after `t`'s pending bytes, and leaves nothing pending. -/
 theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
     (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : l.size + claims.size + 1 ≤ n) :
@@ -193,13 +165,10 @@ theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
     List.map_cons, List.map_nil, List.append_assoc]
   rw [rsLast sv coin l.size (pcsT t) hN t.pending.data.toList]
 
-/-! ## The PIOP's last transcript -/
-
 section Piop
 
 open _root_.Flock.ZkServer.Drive (Step OpenM)
 
-/-- **A program that ends with nothing pending**: wherever it returns, its transcript holds no pending bytes. -/
 def EndE {α : Type} (p : TMW OpenM α) : Prop :=
   ∀ t got r, (p.run t).run got = Step.done r → r.1.2.pending = ByteArray.empty
 
@@ -229,7 +198,6 @@ theorem endE_ret {α β : Type} {p : TMW OpenM α} {g : α → TMW OpenM β} (hp
   subst e'
   exact hp t got x hx
 
-/-- The transcript after a squeeze of `n` coins of `kind` from `t`, answered by `coin`. -/
 def sqT (t : Flock.Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Flock.Transcript :=
   { t with
     pending := ByteArray.empty
@@ -270,7 +238,6 @@ theorem endE_lincheckFw (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (c : _roo
     refine endE_bind fun _ => ?_
     exact endE_ret (endE_sampleP io) fun _ => ⟨_, rfl⟩
 
-/-- **A rep's PIOP ends on the lincheck's last squeeze**, nothing pending. -/
 theorem endE_repPiop (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (st : _root_.Flock.Setup)
     (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray) (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) :
     EndE (_root_.Flock.ZkServer.Finish.repPiop io st lay cap root extras mk) := by
@@ -283,8 +250,6 @@ theorem endE_repPiop (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (st : _root_
 
 end Piop
 
-/-! ## The rounds' shapes -/
-
 theorem plain_rs (sv : ℕ → Array F128) (i : ℕ) (hs : (sv i).size < 2 ^ 64) :
     ∀ f ∈ [Frame.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList], Quiet.Plain f := by
   intro f hf
@@ -296,7 +261,6 @@ theorem plain_rs (sv : ℕ → Array F128) (i : ℕ) (hs : (sv i).size < 2 ^ 64)
   · refine ⟨show (sv i).toList.length < 2 ^ 64 by simpa using hs, fun b e => ?_⟩
     cases e
 
-/-- **The switch's first round from empty pending bytes is the opening's.** -/
 theorem pcsRound_rs (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hs : (sv 0).size < 2 ^ 64) {c : ByteArray}
     (hc : c.data.toList = rsBody sv N [] 0) : Flags.PcsRound (c, 7) := by
   refine ⟨[.label "flock-ring-switch-v0".toUTF8, .vec (sv 0).toList], 2, ?_, plain_rs sv 0 hs, .inl rfl,
@@ -306,7 +270,6 @@ theorem pcsRound_rs (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hs : (sv
   simp only [LABEL_PCS, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append,
     List.append_assoc]
 
-/-- **The switch's later rounds are quiet.** -/
 theorem qRound_rs (sv : ℕ → Array F128) {N i : ℕ} (hi : i ≠ 0) (hiN : i < N) (hs : (sv i).size < 2 ^ 64)
     {c : ByteArray} (hc : c.data.toList = rsBody sv N [] i) : Quiet.QRound (c, 7) := by
   refine ⟨[.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList], 2, ?_, plain_rs sv i hs, .inl rfl,
@@ -314,7 +277,6 @@ theorem qRound_rs (sv : ℕ → Array F128) {N i : ℕ} (hi : i ≠ 0) (hiN : i 
   show c.data.toList = encs _ ++ (Frame.sq 2 7).enc
   rw [hc, rsBody, if_pos hiN, if_neg hi, List.nil_append]
 
-/-- **`γ`'s squeeze is quiet.** -/
 theorem qRound_gamma (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hN' : N < 2 ^ 64) {c : ByteArray}
     (hc : c.data.toList = rsBody sv N [] N) : Quiet.QRound (c, N) := by
   refine ⟨[], 2, ?_, ?_, .inl rfl, hN, hN'⟩

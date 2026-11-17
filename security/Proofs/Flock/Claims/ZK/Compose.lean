@@ -4,38 +4,7 @@ public import Proofs.Flock.Claims.ZK.Interact
 public import Proofs.Flock.Claims.ZK.Rewind
 public import Proofs.Flock.Claims.ZK.Indexed
 
-/-!
-# Sequential composition of `ZKmalR`
-
-Two protocols run in turn: `A` at the statement `x`, then `B` at a statement `Seq.xB x u` that a selection `u`, read
-from `A`'s history, picks. `zkmalR_seqU` proves the composed protocol `ZKmalR` from `A`'s and from `B`'s at each unit
-(`ZKmalAt`), with one coin type for `B`'s simulator at every unit, so the units need not be finitely many
-(Goldreich–Oren's sequential composition, with the hybrids in Wee's order): the hybrid that changes `B` keeps `A` real,
-so `B`'s `Fork` is charged against a verifier whose tape is `A`'s real run, and the one that changes `A` runs `B`'s
-simulator after it, a function of `A`'s transcript and fresh coins. `zkmalR_seq` is its corollary for finitely many
-units and `B` one `ZKmalR` protocol, whose simulator flips coins for every unit.
-
-The composed tape is `forkTape a`: a guess `j < a + 1`, both nonces, and two rests for `A`, of which `A` reads the
-second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at `j = a`, so its collision is `B`'s at
-`A`'s real run, and at `j < a` it is `A`'s: the composed `Fork` is at least `(a·Fork_A + Fork_B)/(a + 1)`, and `γ` adds
-up to `(a + 1)·g` where `γ_A ≤ a·g` and `γ_B ≤ g`. `zkmalR_iter` composes `n + 1` sessions in turn, the
-`j + 1`-th at the unit the first `j + 1`'s history selects, at `a = c + j` where the first has `γ₀ ≤ c·g`:
-`ε₀ + Σ_{j < n} eB j` and `(c + n)·g`, so `n·g` after a first protocol that rewinds nothing (`zkmalR_iter_const`:
-`ε₀ + n·eB` where the later sessions are one protocol). A session's `ZKmalR` gives its `ZKmalAt` at each unit on
-coins for every unit (`ZKmalR.at_pi`) or on coins in bijection with its simulator's there (`ZKmalR.at_equiv`).
-
-Both are proved at one statement (`zkmalAt_seqU`, `zkmalAt_iter`, from `A`'s and `B`'s `ZKmalAt` there) and read at
-every statement: nothing at `x` reads another statement, so the tapes and the number of sessions may be chosen per
-statement. A session whose tape is its own type at each unit's statement is one prover on one tape at `x` through
-bijections of the nonces and of the rests (`ZKmalAt.of_equiv`). `ZKmalRx` is the spec's statement-indexed form
-(`Definitions/Core/Interaction.lean`; `ZKmalR` its constant case, `zkmalRx_const`), and `zkmalRx_iter` meets it with
-`m x` sessions.
-
-`zkmalAt_seqG` and `zkmalAt_iterG` are the general forms, of which `zkmalAt_seqU` and `zkmalAt_iter` are the case
-`go = goesOn`: the simulator goes on where a test `go` holds, which need agree with `goesOn` only at `A`'s honest
-transcripts (as a claim's own test may), and `B`'s zero knowledge is read only at the units `A`'s honest runs select
-(`Seq.Reach`), so a session's rounds need be fixed only there.
--/
+/-! Sequential composition of `ZKmalR`, Goldreich–Oren's, with the hybrids in Wee's order. -/
 
 @[expose] public section
 
@@ -43,9 +12,6 @@ namespace Claims.ZKMal
 
 open Claims
 
-/-! ## Transcripts in two parts -/
-
-/-- `τB` after `τA` where `τA` goes on, else `τA`. -/
 def cont (k : ℕ) (τA τB : List (Msg × Out)) : List (Msg × Out) := if goesOn k τA then τA ++ τB else τA
 
 theorem goesOn_cons (k : ℕ) (a : Msg) (m : Msg) (τ : List (Msg × Out)) :
@@ -56,7 +22,6 @@ theorem goesOn_length {k : ℕ} {τ : List (Msg × Out)} (h : goesOn k τ = true
   simp only [goesOn, Bool.and_eq_true, beq_iff_eq] at h
   exact h.1
 
-/-- **`m + n` rounds are `m` rounds, then `n` more where the first `m` go on.** -/
 theorem interact_add (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (m n : ℕ) (hist : List (Msg × Msg)),
       interact ask pm (m + n) hist =
@@ -74,7 +39,6 @@ theorem interact_add (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
       | acc => simp [cont, goesOn, isMsg]
       | rej => simp [cont, goesOn, isMsg]
 
-/-- **Rounds after a history are rounds against the verifier and prover that read it first.** -/
 theorem interact_shift (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (h0 : List (Msg × Msg)) :
     ∀ (n : ℕ) (h : List (Msg × Msg)),
       interact ask pm n (h0 ++ h) =
@@ -117,7 +81,6 @@ theorem runStar_comap {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (f : 
     (ω : Ω') (θ : Θ) : runStar H (P.comap f) Vs x ω θ = runStar H P Vs x (f ω) θ :=
   stepWith_comap H P f x ω _ _ _ _ _
 
-/-- The run reads the prover only at `x` and its tape. -/
 theorem stepWith_congr {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x : Msg) (ω : Ω) (ω' : Ω')
     (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x hist ω' = P.next x hist ω) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
@@ -135,9 +98,6 @@ theorem runStar_congr {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (P' :
     runStar H P' Vs x ω' θ = runStar H P Vs x ω θ :=
   stepWith_congr H P P' x ω ω' _ h _ _ _ _
 
-/-! ## Two protocols in turn -/
-
-/-- The composed prover: `A`'s on its tape for `A`'s rounds, then `B`'s on its own, after `A`'s history. -/
 def Seq.prover {WA WB ΩA ΩB : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB) (w : WA) :
     Prover (ΩA × ΩB) :=
   ⟨fun x hist ω => if hist.length < Q.kA x then (PA w).next x hist ω.1 else
@@ -147,7 +107,6 @@ def Seq.prover {WA WB ΩA ΩB : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover Ω
 /-- `V*` for the first `k` rounds. -/
 def _root_.Claims.VStar.head {Θ : Type} (Vs : VStar Θ) (k : Msg → ℕ) : VStar Θ := ⟨k, Vs.next⟩
 
-/-- `V*` after the prover's messages `pre` at `x`, for `k` rounds: its tape is `V*`'s and `pre`. -/
 def _root_.Claims.VStar.after {Θ : Type} (Vs : VStar Θ) (x : Msg) (k : Msg → ℕ) : VStar (Θ × List Msg) :=
   ⟨k, fun _ as θ' => Vs.next x (θ'.2 ++ as) θ'.1⟩
 
@@ -157,18 +116,14 @@ theorem spUnder_eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) (pre
   | .hash q k => by simp only [spUnder, SP.eval, spUnder_eval H ask pre (k (H q))]
   | .ask as k => by simp only [spUnder, SP.eval, spUnder_eval H ask pre (k (ask (pre ++ as)))]
 
-/-- A simulator program's transcript against `V*` at `θ`. -/
 def spOut {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (p : SP (List (Msg × Out))) :
     List (Msg × Out) :=
   (p.eval H fun as => ((Vs.next x as θ).eval H).1).1
 
-/-- **The composed simulator**: `simG` where `A`'s transcript goes on. -/
 def Seq.simU {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
     [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) : Simulator :=
   Q.simG SA CB progB fun x => goesOn (Q.kA x)
 
-/-- **The composed simulator at `B`'s simulator**, where the units are finitely many: `B`'s coins are `SB`'s at every
-unit. -/
 def Seq.sim {WA WB TA : Type} (Q : Seq WA WB TA) [∀ x, Fintype (Q.U x)] [∀ x, DecidableEq (Q.U x)]
     (SA SB : Simulator) : Simulator :=
   Q.simU SA (fun x => (u : Q.U x) → SB.C (Q.xB x u)) fun x u c => SB.prog (Q.xB x u) (c u)
@@ -188,7 +143,6 @@ theorem Seq.simG_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (C
   · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
   · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
 
-/-- **The composed run is `A`'s run, then where it goes on `B`'s run** against `V*` after `A`'s messages. -/
 theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
     (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
     (hk : ∀ u, kB (Q.xB x u) = nB x) (hV : Vs.k x = Q.kA x + nB x) (ωA : ΩA) (ωB : ΩB) :
@@ -231,10 +185,6 @@ theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → P
     rw [← hl, List.take_left, List.drop_left, List.append_nil]
   · rfl
 
-/-! ## The prover's calls -/
-
-/-- **Every call in a run's `pLog` is one round's**: the trace's own, or the prover's on the history before some
-round. -/
 theorem stepWith_pLog_mem {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = hist.map Prod.fst →
       ∀ e ∈ (stepWith H P x ω vnext n hist as t).pLog, e ∈ t.pLog ∨
@@ -282,7 +232,6 @@ theorem runStar_msgs_length_le {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) 
   rw [ZKMal.runStar_msgs]
   exact interact_length_le _ _ _ _
 
-/-- **`A`'s calls are the composed run's.** -/
 theorem Seq.pLog_A {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
     (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
     (hk : ∀ u, kB (Q.xB x u) = nB x) (hV : Vs.k x = Q.kA x + nB x) (ωA : ΩA) (ωB : ΩB) :
@@ -307,7 +256,6 @@ theorem Seq.pLog_A {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Pr
     rw [histOf_length, List.length_take]; omega
   simpa only [Seq.prover, hs, ite_true] using he
 
-/-- **Where `A`'s run goes on, `B`'s calls are the composed run's.** -/
 theorem Seq.pLog_B {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
     (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
     (hk : ∀ u, kB (Q.xB x u) = nB x) (hV : Vs.k x = Q.kA x + nB x) (ωA : ΩA) (ωB : ΩB)
@@ -335,9 +283,6 @@ theorem Seq.pLog_B {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Pr
     rw [← hl, List.take_left, List.drop_left]
     exact he
 
-/-! ## The composed tape -/
-
-/-- `forkTape` with the guess and the rest it leaves unread. -/
 def forkEquiv (a : ℕ) (NA ΩA NB ΩB : Type) :
     (Fin (a + 1) × NA × NB × ΩA) × (ΩA × ΩB) ≃ Fin (a + 1) × ((NA × ΩA) × (NB × ΩB)) × ΩA where
   toFun s := (s.1.1, forkTape a s, if (s.1.1 : ℕ) < a then s.1.2.2.2 else s.2.1)
@@ -350,7 +295,6 @@ def forkEquiv (a : ℕ) (NA ΩA NB ΩB : Type) :
     obtain ⟨j, ⟨⟨νA, r⟩, νB, rB⟩, o⟩ := q
     by_cases h : (j : ℕ) < a <;> simp [forkTape, h]
 
-/-- **`forkTape` reads a uniform tape**: an event of the two sessions' tapes has its probability. -/
 theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] [Nonempty ΩA] [Fintype NB] [Fintype ΩB]
     (p : (NA × ΩA) × (NB × ΩB) → Prop) : Pr (fun s => p (forkTape a s)) = Pr p := by
   have e := Pr_equiv (forkEquiv a NA ΩA NB ΩB) fun q => p q.2.1
@@ -359,14 +303,11 @@ theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] 
   simp only [Pr_fst p]
   exact Ex_const _
 
-/-- **One unit's coins among every unit's** have the sampling design of that unit's. -/
 theorem Pr_pi_at {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
     [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p := by
   have e := Pr_equiv (Equiv.piSplitAt i β) fun q => p q.1
   rw [← Pr_fst (β := (j : {j // j ≠ i}) → β j) p, ← e]
   rfl
-
-/-! ## The composed `Fork` -/
 
 theorem findColl_ne_none_mono {l₁ l₂ m₁ m₂ : List (Msg × Msg)} (h₁ : ∀ e ∈ l₁, e ∈ m₁) (h₂ : ∀ e ∈ l₂, e ∈ m₂)
     (h : findColl (l₁ ++ l₂) ≠ none) : findColl (m₁ ++ m₂) ≠ none := by
@@ -385,8 +326,6 @@ theorem Fork_pr_le {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonem
     change findColl _ = some (u, v) at h
     rw [h]; simp
 
-/-- **The composed `Fork` is at least `A`'s at `a` of its `a + 1` guesses, and `B`'s at the last**, where `B`'s is
-charged at `A`'s real run, and only where that run goes on. -/
 theorem Seq.fork_ge {WA WB NA ΩA NB ΩB Θ : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (w : WA) (H : Msg → Msg)
@@ -467,10 +406,6 @@ theorem Seq.fork_ge {WA WB NA ΩA NB ΩB Θ : Type} [Fintype NA] [Nonempty NA] [
     exact findColl_ne_none_mono (Q.pLog_B PA PB w H Vs θ x kB nB hk hV _ _ hgo)
       (Q.pLog_B PA PB w H Vs θ x kB nB hk hV _ _ hgo) hc
 
-/-! ## The hybrids -/
-
-/-- **`B`'s relation holds at every unit an honest run of `A` at `x` selects**, against every `V*`, at that run's
-tape: what `B`'s statement reads of `A`'s messages (a commitment) is what `A` committed. -/
 def Seq.RelOnAt {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA) (RA : Rel WA)
     (RB : Rel WB) (x : Msg) : Prop :=
   ∀ w, RA x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
@@ -478,13 +413,10 @@ def Seq.RelOnAt {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA 
       RB (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
         (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
 
-/-- `RelOnAt` at every statement. -/
 def Seq.RelOn {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA) (RA : Rel WA)
     (RB : Rel WB) : Prop :=
   ∀ x, Q.RelOnAt H PA RA RB x
 
-/-- **A unit an honest run of `A` at `x` selects** against some `V*`, where that run goes on: the units at which
-`B`'s zero knowledge is read. -/
 def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA) (RA : Rel WA) (x : Msg)
     (u : Q.U x) : Prop :=
   ∃ w, RA x w ∧ ∃ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
@@ -493,8 +425,6 @@ def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA �
 
 theorem Finder.pr_nonneg (H : Msg → Msg) (F : Finder) : 0 ≤ F.Pr H := Pr_nonneg _
 
-/-- **Two hybrids**: change the second coordinate at each value of the first, then the first at each value of the
-second. -/
 theorem abs_sub_le_hybrid {TA TB CA CB : Type} [Fintype TA] [Fintype TB] [Fintype CA] [Fintype CB] [Nonempty CB]
     (pR : TA → TB → Prop) (pH : TA → CB → Prop) (pS : CA → CB → Prop) (b : TA → ℝ) (d : ℝ)
     (hB : ∀ t, |Pr (pR t) - Pr (pH t)| ≤ b t) (hA : ∀ c, |Pr (fun t => pH t c) - Pr (fun c' => pS c' c)| ≤ d) :
@@ -507,7 +437,6 @@ theorem abs_sub_le_hybrid {TA TB CA CB : Type} [Fintype TA] [Fintype TB] [Fintyp
     exact (Ex_abs_sub_le (b := fun _ => d) hA).trans (Ex_const d).le
   exact (abs_sub_le _ _ _).trans (add_le_add h1 h2)
 
-/-- **`ZKmalR` at one statement `x`**, at a simulator given there by its coins `C` and its program `prog`. -/
 def ZKmalAt {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : ℕ)
     (P : W → Prover (N × Ω)) (R : W → Prop) (x : Msg) (C : Type) [Fintype C] (prog : C → SP (List (Msg × Out)))
     (ε γ : ℝ) : Prop :=
@@ -520,8 +449,6 @@ theorem zkmalR_iff_at {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
     ZKmalR H k P R S εzk γ ↔ ∀ x, ZKmalAt H (k x) P (R x) x (S.C x) (S.prog x) (εzk x) (γ x) :=
   Iff.rfl
 
-/-- **`ZKmalR` at a unit, on coins for every unit**: of finitely many units with statements `xs`, `S` at `xs u` reads
-its coordinate `u`. -/
 theorem _root_.Claims.ZKmalR.at_pi {W N Ω U : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype U]
     [DecidableEq U] {H : Msg → Msg} {k : Msg → ℕ} {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ}
     (h : ZKmalR H k P R S εzk γ) (xs : U → Msg) (u : U) :
@@ -531,7 +458,6 @@ theorem _root_.Claims.ZKmalR.at_pi {W N Ω U : Type} [Fintype N] [Nonempty N] [F
   rw [Pr_pi_at (β := fun u' => S.C (xs u')) u (fun c => Ev (spOut H Vs θ (xs u) (S.prog (xs u) c)))]
   exact h (xs u) w hw Θ Vs θ hV Ev
 
-/-- **`ZKmalR` at a statement, on coins in bijection with its simulator's there.** -/
 theorem _root_.Claims.ZKmalR.at_equiv {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
     {k : Msg → ℕ} {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ}
     (h : ZKmalR H k P R S εzk γ) (xs : Msg) {C : Type} [Fintype C] (e : C ≃ S.C xs) :
@@ -540,8 +466,6 @@ theorem _root_.Claims.ZKmalR.at_equiv {W N Ω : Type} [Fintype N] [Nonempty N] [
   rw [Pr_equiv e (fun c => Ev (spOut H Vs θ xs (S.prog xs c)))]
   exact h xs w hw Θ Vs θ hV Ev
 
-/-- **`ZKmalAt` for a prover that runs `P` at `x` on its tape through a bijection of nonces and one of rests**: a
-session whose tape at each unit's statement is its own type is, at `x`, one prover on one tape for every unit. -/
 theorem ZKmalAt.of_equiv {W N Ω N' Ω' : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype N']
     [Nonempty N'] [Fintype Ω'] [Nonempty Ω'] {H : Msg → Msg} {k : ℕ} {P : W → Prover (N × Ω)} {R : W → Prop}
     {x : Msg} {C : Type} [Fintype C] {prog : C → SP (List (Msg × Out))} {ε γ : ℝ}
@@ -563,16 +487,6 @@ theorem ZKmalAt.of_equiv {W N Ω N' Ω' : Type} [Fintype N] [Nonempty N] [Fintyp
   rw [hr, hf]
   exact h w hw Θ Vs θ hV Ev
 
-/-- **Sequential composition at one statement, continuing where `go` holds.** At `x`, `A` then `B` at the unit `A`'s
-history selects is `ZKmalAt` with the simulator that runs `SA`, then, where `go` holds at its transcript, `B`'s program
-at that unit on coins of their own (`simG`): `ε` adds up, with `B`'s at every unit `A`'s honest runs select at most
-`eB` (`Reach`), and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` there), to `(a + 1)·g` against the composed `Fork`. `go` need
-agree with `goesOn` only at `A`'s honest transcripts (`hgo`), so the simulator may test whether to go on as the claim's
-does. The composed tape is `forkTape a`. `B`'s hybrid keeps `A` real and gives `V*` `A`'s messages as its tape
-(`Vs.after`): `B`'s zero knowledge is against every tape, chosen after `H`, at the witness `A`'s tape gives, where `B`'s
-relation holds (`RelOnAt`). `A`'s runs `B`'s program after `A`'s transcript, a function of that transcript and coins
-independent of `A`'s. The units need not be finitely many. Nothing is read at another statement, so the tapes may be
-chosen per statement. -/
 theorem zkmalAt_seqG {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (x : Msg) (nB : Msg → ℕ)
@@ -658,8 +572,6 @@ theorem zkmalAt_seqG {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
     have h2 := mul_le_mul_of_nonneg_left hF hg
     nlinarith
 
-/-- **Sequential composition at one statement**: `zkmalAt_seqG` where the simulator goes on as `goesOn` does
-(`simU`), with `B`'s zero knowledge at every unit. -/
 theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (x : Msg) (nB : Msg → ℕ)
@@ -674,7 +586,6 @@ theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
   zkmalAt_seqG Q H x nB PA PB RA RB SA CB progB _ εA γA eB g a hA (fun u _ => hB u) hR
     (fun _ _ _ _ _ _ => rfl) he0 hγA hg
 
-/-- **Sequential composition of `ZKmalR`**: `zkmalAt_seqU` at every statement. -/
 theorem zkmalR_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (nB : Msg → ℕ)
@@ -690,8 +601,6 @@ theorem zkmalR_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fin
     zkmalAt_seqU Q H x nB PA PB RA RB SA CB progB (εA x) (γA x) (eB x) (g x) a (hA x) (hB x) (hR x) (he0 x)
       (hγA x) (hg x)
 
-/-- **Sequential composition at `B`'s simulator**, where the units are finitely many: `zkmalR_seqU` at `Seq.sim`,
-whose coins for `B` are `SB`'s at every unit, from `B`'s `ZKmalR` at every unit's statement. -/
 theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) [∀ x, Fintype (Q.U x)] [∀ x, DecidableEq (Q.U x)] (H : Msg → Msg) (kB nB : Msg → ℕ)
@@ -708,29 +617,18 @@ theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fint
   have h := hB.at_pi (Q.xB x) u w' hw' Θ Vs θ (hVk.trans (hk x u).symm) Ev
   exact h.trans (add_le_add (hε x u) (mul_le_mul_of_nonneg_right (hγ x u) (Finder.pr_nonneg _ _)))
 
-/-! ## `n` sessions in turn -/
-
-/-- **`n + 1` sessions in turn**: `P₀`, then session `j + 1` (`PB j`) after the first `j + 1`, at the unit their
-history selects (`Q j`), on `forkTape (c + j)`. -/
 def iterProver {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
     [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (P₀ : WA → Prover (T₀.at c NB ΩB 0))
     (PB : ℕ → WB → Prover (NB × ΩB)) : (n : ℕ) → WA → Prover (T₀.at c NB ΩB n)
   | 0 => P₀
   | n + 1 => fun w => ((Q n).prover (iterProver T₀ c NB ΩB Q P₀ PB n) (PB n) w).comap (forkTape (c + n))
 
-/-- The simulator of `n + 1` sessions in turn: `iterSimG` going on where the first `j + 1`'s simulated transcript does
-(`goesOn`, `Seq.simU`). -/
 def iterSim {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
     [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
     [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
     (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out))) : ℕ → Simulator :=
   iterSimG T₀ c NB ΩB Q S₀ CB progB fun n x => goesOn ((Q n).kA x)
 
-/-- **Sequential composition of `N + 1` sessions at one statement, continuing where `go` holds.** At `x`, the first
-`ZKmalAt` with `ε₀` and `γ₀ ≤ c·g`, and session `j + 1 ≤ N` `ZKmalAt` with `eB j` and `g` on coins `CB j x` at every
-unit the first `j + 1`'s honest runs select (`Reach`), where `(Q n).kA x` counts the first `n + 1` sessions' rounds
-(`hk`) and `go j` agrees with `goesOn` at their honest transcripts (`hgo`): the `N + 1` in turn are `ZKmalAt` with
-`ε₀ + Σ_{j < N} eB j` and `(c + N)·g`. Nothing is read of a session after the `N + 1`-th. -/
 theorem zkmalAt_iterG {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
     (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (x : Msg) (nB : ℕ → Msg → ℕ)
     (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : ℕ → WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : ℕ → Rel WB)
@@ -771,12 +669,6 @@ theorem zkmalAt_iterG {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype 
       rw [Finset.sum_range_succ, ← add_assoc]
       exact h
 
-/-- **Sequential composition of `n + 1` sessions at one statement.** At `x`, the first `ZKmalAt` with `ε₀` and
-`γ₀ ≤ c·g`, and session `j + 1` `ZKmalAt` every unit with `eB j` and `g` on coins `CB j x`, where `(Q n).kA x` counts
-the first `n + 1` sessions' rounds (`hk`): the `n + 1` in turn are `ZKmalAt` with `ε₀ + Σ_{j < n} eB j` and
-`(c + n)·g` (`zkmalAt_iterG` at `goesOn`). A first protocol that rewinds nothing (`γ₀ = 0`) takes `c = 0`, and `n`
-sessions after it cost `n·g`. Nothing is read at another statement, so `T₀`, `NB`, `ΩB` and `n` may be chosen per
-statement. -/
 theorem zkmalAt_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
     (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (x : Msg) (nB : ℕ → Msg → ℕ)
     (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : ℕ → WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : ℕ → Rel WB)
@@ -792,7 +684,6 @@ theorem zkmalAt_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype �
   zkmalAt_iterG T₀ c Q H x nB P₀ PB RA RB S₀ CB progB _ ε₀ γ₀ g eB n h₀ (fun n _ u _ => hB n u)
     (fun n _ => hR n) (fun _ _ _ _ _ _ _ _ => rfl) (fun n _ => hk n) hγ₀ (fun n _ => he0 n) hg
 
-/-- **Sequential composition of `n + 1` sessions**: `zkmalAt_iter` at every statement. -/
 theorem zkmalR_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
     (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (nB : ℕ → Msg → ℕ)
     (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : ℕ → WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : ℕ → Rel WB)
@@ -810,7 +701,6 @@ theorem zkmalR_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype Ω
     zkmalAt_iter T₀ c Q H x nB P₀ PB RA RB S₀ CB progB (ε₀ x) (γ₀ x) (g x) (fun j => eB j x) (h₀ x)
       (fun n u => hB n x u) (fun n => hR n x) (fun n => hk n x) (hγ₀ x) (fun n => he0 n x) (hg x) n
 
-/-- `zkmalR_iter` where every later session is one protocol with `eB` at every unit: `ε₀ + n·eB`. -/
 theorem zkmalR_iter_const {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (nB : Msg → ℕ)
     (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : Rel WB)
@@ -828,15 +718,12 @@ theorem zkmalR_iter_const {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fint
   simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul] at h
   exact h
 
-/-! ## Statement-indexed tapes -/
-
 theorem zkmalRx_iff_at {W : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
     [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x))
     (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) :
     ZKmalRx N Ω H k P R S εzk γ ↔ ∀ x, ZKmalAt H (k x) (fun w => P w x) (R x) x (S.C x) (S.prog x) (εzk x) (γ x) :=
   Iff.rfl
 
-/-- The simulator of `m x + 1` sessions at each `x`, on `x`'s tapes. -/
 def iterSimX {WA WB : Type} (T₀ : Msg → SeqTape) (c : ℕ) (NB ΩB : Msg → Type) [∀ x, Fintype (NB x)]
     [∀ x, Nonempty (NB x)] [∀ x, Fintype (ΩB x)] [∀ x, Nonempty (ΩB x)]
     (Q : (x : Msg) → (n : ℕ) → Seq WA WB ((T₀ x).at c (NB x) (ΩB x) n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
@@ -846,8 +733,6 @@ def iterSimX {WA WB : Type} (T₀ : Msg → SeqTape) (c : ℕ) (NB ΩB : Msg →
   C x := (iterSim (T₀ x) c (NB x) (ΩB x) (Q x) S₀ CB (progB x) (m x)).C x
   prog x := (iterSim (T₀ x) c (NB x) (ΩB x) (Q x) S₀ CB (progB x) (m x)).prog x
 
-/-- **`m x + 1` sessions in turn on statement-indexed tapes**: at each `x`, `zkmalAt_iter` on `x`'s tapes with
-`m x` sessions after the first, so the number of sessions and every tape may grow with the statement. -/
 theorem zkmalRx_iter {WA WB : Type} (T₀ : Msg → SeqTape) (c : ℕ) (NB ΩB : Msg → Type) [∀ x, Fintype (NB x)]
     [∀ x, Nonempty (NB x)] [∀ x, Fintype (ΩB x)] [∀ x, Nonempty (ΩB x)]
     (Q : (x : Msg) → (n : ℕ) → Seq WA WB ((T₀ x).at c (NB x) (ΩB x) n)) (H : Msg → Msg) (nB : ℕ → Msg → ℕ)

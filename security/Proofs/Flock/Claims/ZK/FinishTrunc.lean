@@ -40,22 +40,7 @@ import Proofs.Flock.Claims.ZK.FrameCount
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
-/-!
-# The ZK server's rounds as the session's, at coins that agree below each round's count
-
-`repFw_cut` answers the session's rounds with the port's own coins (`coinsFrom`), which are `0` past each round's count.
-The session's opened coins are not: an opening carries its round's `n` coins and then more bytes, all of which its coin
-reads. A squeeze reads only its first `n` coins, and the port checks `n` against its coins' count (`asksOf`, at the round
-header's `u64`), so the two runs agree wherever every squeeze is below `2^64`:
-
-* **A squeeze** (`squeezeP_br`): where the port's round returns, it read coins of the squeeze's count (`asksOf_round_ok`,
-  `Count.framed_count`), and the session's coin agrees with them there.
-* **Each phase of the rep, given its squeezes' sizes** (`sampleP_br`, …, `innerP_br`). The recursive levels'
-  out-of-domain sizes ride Ligerito's loop (`loopG_bridge`), whose invariant holds of what the port's step returns
-  (`PRet`), with no walk of the step's calls.
-* **`repFwC_br`**: `repFwC` at the port's coins and at any coins that agree with them below each round's count, from the
-  session's round `base`, given `m − 13`, the claims, `n + 1` and every level's `q + 1` bounded.
--/
+/-! The ZK server's rounds as the session's, at coins that agree below each round's count. -/
 
 @[expose] public section
 
@@ -84,8 +69,6 @@ theorem pure_st {M N : Type → Type} [Monad M] [Monad N] [MonadExceptOf String 
     [MonadLiftT V M] [MonadLiftT V N] (S : Sim M N) {σ α : Type} (a : α) (s : σ) :
     S.R ((Pure.pure a : StateT σ M α) s) ((Pure.pure a : StateT σ N α) s) :=
   S.pure (a, s)
-
-/-! ## The bridge, with what the port's run returns -/
 
 theorem bridge_bind_ok {base : ℕ} {α β : Type} {x : StateT ℕ V α} {y : FlockComplete.PS α} {f : α → StateT ℕ V β}
     {g : α → FlockComplete.PS β} (Q : α → Prop) (hxy : (bridge base).R x y)
@@ -122,7 +105,6 @@ theorem bridgeL_bind_ok {base : ℕ} {α β : Type} {x : FlockComplete.LP (State
   bridgeT_bind_ok (fun p => Q p.1) (hxy s) (fun t k p t' k' h => hQ s t k p.1 p.2 t' k' h) fun p hp =>
     hfg p.1 hp p.2
 
-/-- A lifted verdict's value: what follows it is related at the value it returns. -/
 theorem bridgeT_liftV_bind {base : ℕ} {α β : Type} (v : V α) {f : α → TMW (StateT ℕ V) β}
     {g : α → TMW FlockComplete.PS β} (hfg : ∀ a, v = .ok a → ((bridge base).st Transcript).R (f a) (g a)) :
     ((bridge base).st Transcript).R (StateT.lift (monadLift v : StateT ℕ V α) >>= f)
@@ -134,7 +116,6 @@ theorem bridgeT_liftV_bind {base : ℕ} {α β : Type} (v : V α) {f : α → TM
   | error e0 => intro e; cases e
   | ok b => intro e; cases e; rfl
 
-/-- **What a Ligerito step of the port returns**, wherever it returns. -/
 def PRet {α : Type} (x : FlockComplete.LP (StateT ℕ V) α) (Q : α → Prop) : Prop :=
   ∀ s t k a s' t' k', ((x.run s).run t).run k = .ok (((a, s'), t'), k') → Q a
 
@@ -155,7 +136,6 @@ theorem PRet.bind {α β : Type} {x : FlockComplete.LP (StateT ℕ V) α} {f : �
   obtain ⟨⟨⟨⟨a, s'⟩, t'⟩, k'⟩, -, e⟩ := bok e
   exact hf a s' t' k' b s'' t'' k'' e
 
-/-- **A loop whose port steps keep an invariant of its state is related**, its steps related at the invariant. -/
 theorem loopG_bridge {base : ℕ} {β : Type} (I : β → Prop) (r : Std.Legacy.Range) (b : β)
     (f : ℕ → β → FlockComplete.LP (StateT ℕ V) (ForInStep β))
     (g : ℕ → β → FlockComplete.LP FlockComplete.PS (ForInStep β)) (hb : I b)
@@ -175,9 +155,6 @@ theorem loopG_bridge {base : ℕ} {β : Type} (I : β → Prop) (r : Std.Legacy.
     | done b' => exact With.Sim.pure _ b'
     | yield b' => exact ih b' hst
 
-/-! ## A squeeze -/
-
-/-- **A round of the port that returns** read the rep's coins at its round, of the header's count. -/
 theorem asksOf_round_ok {coins : Array (Array F128)} {c : ByteArray} {k k1 : ℕ} {co : ℕ → F128}
     (h : ((asksOf coins).round c).run k = .ok (co, k1)) :
     ∃ cs, coins[k]? = some cs ∧ cs.size = (u64OfLE c (c.size - 8)).toNat ∧ co = (fun i => cs[i]!) ∧ k1 = k + 1 := by
@@ -203,8 +180,6 @@ variable (coins : Array (Array F128)) (base N : ℕ) (coin : ℕ → ℕ → F12
 
 include hn hc
 
-/-- **A squeeze below `2^64` coins is related**: where the port's round returns, it read the rep's coins at its round, of
-the squeeze's count, and the session's coin agrees with them there. -/
 theorem squeezeP_br (kind : UInt8) {m : ℕ} (hm : m < 2 ^ 64) :
     ((bridge base).st Transcript).R (FlockComplete.squeezeP (asksOf coins).toC kind m)
       (FlockComplete.squeezeP (FlockComplete.asksCut coin N) kind m) := by
@@ -285,7 +260,6 @@ theorem queryP_br_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch :
   queryP_br coins base N coin hn hc nonce ms _ cm (by have := hq j; omega)
     (by have := hq j; have := Nat.log2_le_self ((sch.levels.getD j default).q - 1); omega)
 
-/-- **The masked Ligerito is related**, given `n + 1` and every level's `q + 1` at most `65536`. -/
 theorem ligeritoPZk_br (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : FlockComplete.Commit)
     (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hN : sch.n + 1 ≤ 65536)
@@ -371,8 +345,6 @@ theorem innerP_br (lay : Zk.PadLayout) (p : FlockComplete.PadsZk) (ic : FlockCom
     squeezeP_br coins base N coin hn hc _ (lt64 (show Zk.Q ≤ 65536 by decide)),
     squeezeP_br_cons coins base N coin hn hc lay cons hcs, zk_tauCommitmentWith_sim (bridge base) hh]
 
-/-- **The ZK server's rep is related**, at the port's coins and at the session's coins from round `base`, given
-`m − 13`, `n + 1` and every level's `q + 1` at most `65536` and the claims below `2^64`. -/
 theorem repFwC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
     (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128)

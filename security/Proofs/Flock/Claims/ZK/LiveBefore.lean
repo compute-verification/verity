@@ -2,27 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Release
 
-/-!
-# The model's stop, round by round
-
-The deferred release stands in for the worker once a round of the session failed (`ZkServer.wkD`, at `ZkServer.live`,
-which reads every round so far, the current one's included). Here is that bit one round at a time, in the terms the
-session loop's stop (`Frames.Sessions.stopped`) is stated in:
-
-* `ZkServer.liveBefore`: every round before the one after `h` passed; `live_eq_liveBefore`: a history is live where
-  every earlier round passed and the current one does; `liveBefore_snoc`: one round on, every earlier round passed
-  exactly where the history was live; `liveBefore_snoc_pass`: so a round that passes leaves it as it was.
-* `LeanRelease.takes_of_pass`: a device round the frame passes it takes; `cross_and_pass`: where Rust's checks fail
-  only device rounds the frame fails, they decide nothing beside it.
-* `LeanRelease.toSrv_pass_frame`, `toSrv_pass_own`, `toSrv_pass_recomp`: below the `Finish`, the server's pass at a
-  frame round is Rust's checks' and the frame's pass decision on the worker's device round; at the `Hello` it passes;
-  at the link it passes where the worker's value is the ZK server's own.
-* **`LeanRelease.nextD_frame_stop`**: so at a frame round below the `Finish` the deferred release is the Lean frame's
-  release of the device round where no earlier round failed (`b`, the stop bit) and it passes, else of the scheduled
-  round as a stopped rep's; **`stop_frame_snoc`**: and one round on, the stop bit is again whether a round failed.
-* `nextD_frame_cross`, `liveBefore_snoc_cross`: a frame round Rust's checks fail is released as the scheduled round
-  of a stopped rep, and one round on a round has failed.
--/
+/-! The model's stop, round by round. -/
 
 @[expose] public section
 
@@ -30,19 +10,16 @@ namespace Claims.ZKServer
 
 namespace ZkServer
 
-/-- **Every round before the one after `h` passed.** -/
 def liveBefore {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Bool :=
   (List.range h.length).all fun i => S.pass wk x w ρ κ (h.take i)
 
-/-- **A history is live where every earlier round passed and the current one does.** -/
 theorem live_eq_liveBefore {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : S.live wk x w ρ κ h = (S.liveBefore wk x w ρ κ h && S.pass wk x w ρ κ h) := by
   unfold live liveBefore
   rw [List.range_succ, List.all_append]
   simp only [List.all_cons, List.all_nil, Bool.and_true, List.take_length]
 
-/-- **One round on, every earlier round passed exactly where the history was live.** -/
 theorem liveBefore_snoc {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) (e : Msg × Msg) : S.liveBefore wk x w ρ κ (h ++ [e]) = S.live wk x w ρ κ h := by
   unfold liveBefore live
@@ -52,7 +29,6 @@ theorem liveBefore_snoc {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg
   refine forall_congr' fun i => imp_congr_right fun hi => ?_
   rw [List.take_append_of_le_length (by omega)]
 
-/-- **A round that passes leaves whether every earlier round passed as it was.** -/
 theorem liveBefore_snoc_pass {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) (e : Msg × Msg) (hp : S.pass wk x w ρ κ h = true) :
     S.liveBefore wk x w ρ κ (h ++ [e]) = S.liveBefore wk x w ρ κ h := by
@@ -62,7 +38,6 @@ end ZkServer
 
 namespace LeanRelease
 
-/-- **A device round the frame passes it takes.** -/
 theorem takes_of_pass {W R : Type} (L : LeanRelease W R) {x : Msg} {w : W} {ρ : R} {h : List (Msg × Msg)} {v : Msg}
     (hp : L.pass x w ρ h v = true) : L.takes x ρ h v = true := by
   unfold pass at hp
@@ -94,7 +69,6 @@ theorem takes_of_pass {W R : Type} (L : LeanRelease W R) {x : Msg} {w : W} {ρ :
         intro hp
         cases hp
 
-/-- **Where Rust's checks fail only device rounds the frame fails, they decide nothing beside it.** -/
 theorem cross_and_pass {W R : Type} {L : LeanRelease W R} {x : Msg} {j : ℕ} {w : W} {ρ : R} {h : List (Msg × Msg)}
     {v : Msg} (hcr : L.cross x j w ρ h v = false → L.pass x w ρ h v = false) :
     (L.cross x j w ρ h v && L.pass x w ρ h v) = L.pass x w ρ h v := by
@@ -103,14 +77,11 @@ theorem cross_and_pass {W R : Type} {L : LeanRelease W R} {x : Msg} {j : ℕ} {w
     rfl
   · rfl
 
-/-- The server refuses no round below the `Finish`. -/
 theorem toSrv_refuses_lt {W R : Type} (L : LeanRelease W R) {x : Msg} {w : W} {ρ : R} {h : List (Msg × Msg)}
     (hlt : h.length < L.last x) : L.toSrv.refuses x w ρ h = false := by
   change (decide (h.length = L.last x) && L.finStops x w ρ h) = false
   rw [decide_eq_false (Nat.ne_of_lt hlt), Bool.false_and]
 
-/-- **Below the `Finish` the server's pass at a frame round is Rust's checks' and the frame's pass decision** on the
-worker's device round `v`. -/
 theorem toSrv_pass_frame {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hlt : h.length < L.last x)
     {v : Msg} (hv : wk x w ρ h 0 = some (v, false)) :
@@ -128,7 +99,6 @@ theorem toSrv_pass_frame {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker
   · rw [L.takes_of_pass hp]
     cases L.cross x h.length w ρ h v <;> rfl
 
-/-- **The `Hello` passes**, below the `Finish`. -/
 theorem toSrv_pass_own {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .own) (hlt : h.length < L.last x) :
     L.toSrv.pass wk x w ρ κ h = true := by
@@ -138,7 +108,6 @@ theorem toSrv_pass_own {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) 
   unfold ZkServer.check
   rw [show L.toSrv.kind x h.length 0 = .own from hk]
 
-/-- **The link passes where the worker's value is the ZK server's own**, below the `Finish`. -/
 theorem toSrv_pass_recomp {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .recomputed) (hlt : h.length < L.last x)
     (hv : wk x w ρ h 0 = some (L.ownMsg x w ρ h, false)) : L.toSrv.pass wk x w ρ κ h = true := by
@@ -150,9 +119,6 @@ theorem toSrv_pass_recomp {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worke
   simp only [decide_eq_true_eq]
   rfl
 
-/-- **The deferred release at a frame round below the `Finish`** is the Lean frame's release of the worker's device
-round `v` where every earlier round passed and `v` passes Rust's checks and the frame's, else of the scheduled round
-as a stopped rep's. -/
 theorem nextD_frame {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hn : h.length + 1 < n x)
     (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false)) :
@@ -173,9 +139,6 @@ theorem nextD_frame {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (wk : L
       (by unfold ZkServer.wkD; simp only [hlv, ↓reduceIte]; exact hv)]
     rfl
 
-/-- **The deferred release at a frame round below the `Finish`, at the stop bit**: where `b` is whether an earlier
-round failed and Rust's checks fail only device rounds the frame fails, it is the Lean frame's release of the device
-round `v` where `b` is off and `v` passes the frame's pass decision, else of the scheduled round as a stopped rep's. -/
 theorem nextD_frame_stop {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (wk : L.toSrv.Worker) (x : Msg) (w : W)
     (ρ : R) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hn : h.length + 1 < n x)
     (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
@@ -186,8 +149,6 @@ theorem nextD_frame_stop {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (w
       else L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h))) := by
   rw [L.nextD_frame n wk x w ρ κ h hk hn hlt hv, Bool.and_assoc, cross_and_pass hcr, hb, Bool.not_not]
 
-/-- **One frame round on, the stop bit is again whether a round failed**: where `b` was whether an earlier round
-failed, it or the round's failing the frame's pass decision is whether a round up to it failed. -/
 theorem stop_frame_snoc {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hlt : h.length < L.last x)
     {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
@@ -197,7 +158,6 @@ theorem stop_frame_snoc {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker)
   rw [ZkServer.liveBefore_snoc, ZkServer.live_eq_liveBefore, L.toSrv_pass_frame wk x w ρ κ h hk hlt hv,
     cross_and_pass hcr, hb, Bool.not_and]
 
-/-- **A frame round Rust's checks fail is released as the scheduled round of a stopped rep**, below the `Finish`. -/
 theorem nextD_frame_cross {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (wk : L.toSrv.Worker) (x : Msg) (w : W)
     (ρ : R) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hn : h.length + 1 < n x)
     (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
@@ -207,7 +167,6 @@ theorem nextD_frame_cross {W R : Type} (L : LeanRelease W R) (n : Msg → ℕ) (
   rw [L.nextD_frame n wk x w ρ κ h hk hn hlt hv, hc, Bool.and_false, Bool.false_and,
     ite_eq_right Bool.false_ne_true]
 
-/-- **One frame round on from a round Rust's checks fail, a round has failed.** -/
 theorem liveBefore_snoc_cross {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hlt : h.length < L.last x)
     {v : Msg} (hv : wk x w ρ h 0 = some (v, false)) (hc : L.cross x h.length w ρ h v = false) (e : Msg × Msg) :

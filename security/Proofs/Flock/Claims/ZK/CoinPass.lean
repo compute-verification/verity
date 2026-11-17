@@ -33,31 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A history the release's coin check passes, at every tape
-
-The release reads the transport's coin check at the tape's nonce (`LeanRelease.opens`), and at the deployed coin layer
-that check is the session's (`LeanRelease.checkIs_coinLayer`, from `LeanRelease.HelloParses` and
-`LeanRelease.ReqsFollow`). Those premises leave the frame rounds a history to be live at: at every tape, past the
-server's `Hello` and the link, there is a history whose answer and first opening the check passes
-(`LeanRelease.opens_coinPass`), so where the frame took the link's coins, the coins it takes there are its own
-(`answered = frameAnswer`). A
-premise that asked the openings to pass under every nonce would leave none, since the walk keys every hash with it.
-
-* `ansOf ν p b k`: `Hello`'s answer, `Resp::Coins` of 20 words: the root the opening `b` of the place `p` walks to under
-  the nonce bytes `ν` and the session key `k`, then `k`. The verifier builds its tree after `Hello`, under its nonce,
-  so its answer reads `ν`.
-* `openMsg p b`: `Resp::Coins` of the opening's `n + 16 + 4·depth` words `b`, for any `b` that reads back as itself at
-  `p` (`Reads`); the all-zero opening does (`reads_zeros`).
-* `chkAt_open`: the session's check passes that opening under that answer, at SHA-512.
-* `LeanRelease.opens_coinPass`: at coin `0`'s place (the `session` stream's round `0`), where it is in the schedule and
-  the protocol has a coin, the release's check passes `[(m₀, ansOf …), (m₁, openMsg …)]` at every tape, every key with
-  bit 2047 clear and every opening that reads back; `opens_coinPass_zeros` at the all-zero key and opening.
-
-Whether the frame round there is live reads nothing more of the check: it is the frame's own taking of the coins
-(`frameAnswer`) and the round (`Frame.round`). `HelloParses` and `ReqsFollow` are hypotheses here, as
-`Flock.zk_server_lean_coinLayer` takes them; at the session loop both are theorems (`Claims/ZK/SessionLean.lean`).
--/
+/-! A history the release's coin check passes, at every tape. -/
 
 @[expose] public section
 
@@ -65,25 +41,16 @@ namespace Claims.ZKMal.CoinPass
 
 open Claims FlockSoundness.Merkle FlockSoundness.ZK CoinLayer
 
-/-- The opening of the place `p` whose words are all zero. -/
 def zeros (p : Place) : List UInt8 := List.replicate (16 * p.n + 256 + 64 * p.depth) 0
 
-/-- The all-zero session key. -/
 def zeroKey : List UInt8 := List.replicate 256 0
 
-/-- **The opening `b` reads back as itself** at the place `p`: its words, read at `p` (`openOf`) and joined again, are
-`b`. -/
 def Reads (p : Place) (b : List UInt8) : Prop := join (openOf p b) = b
 
-/-- `Resp::Coins` of the opening `b` of the place `p`: its `n + 16 + 4·depth` words. -/
 def openMsg (p : Place) (b : List UInt8) : Msg := frame (p.n + 16 + 4 * p.depth) b
 
-/-- **`Hello`'s answer that the opening `b` of the place `p` opens** under the nonce bytes `ν` and the session key `k`:
-`Resp::Coins` of 20 words, the root the opening's walk reaches, then `k`. -/
 def ansOf (ν : List UInt8) (p : Place) (b k : List UInt8) : Msg :=
   frame 20 [] ++ CoinOpen.reachVal ν ⟨k.toArray⟩ (openOf p b) ++ k
-
-/-! ## The all-zero opening reads back -/
 
 theorem fix_zeros (n a : ℕ) : (fix n (List.replicate a (0 : UInt8))).val = List.replicate n (0 : UInt8) := by
   show (List.replicate a (0 : UInt8) ++ List.replicate n (0 : UInt8)).take n = List.replicate n (0 : UInt8)
@@ -121,8 +88,6 @@ theorem reads_zeros (p : Place) : Reads p (zeros p) := by
     List.replicate_append_replicate]
   unfold zeros
   congr 1
-
-/-! ## The answer -/
 
 theorem u32le_length (v : ℕ) : (u32le v).length = 4 := by
   simp [u32le, u32be]
@@ -173,7 +138,6 @@ theorem ans_getD (ν : List UInt8) (p : Place) (b k : List UInt8) : (ansOf ν p 
   rw [ans_head] at h
   exact h
 
-/-- **The answer is the coin tree's** (`answerOK`): 20 words, the key's bit 2047 clear. -/
 theorem ansOf_ok (ν : List UInt8) (p : Place) (b k : List UInt8) (hk : k.length = 256)
     (hbit : k.getD 255 0 &&& 0x80 = 0) : answerOK (ansOf ν p b k) = true := by
   unfold answerOK
@@ -198,9 +162,6 @@ theorem zeroKey_length : zeroKey.length = 256 := by
 theorem zeroKey_bit : zeroKey.getD 255 0 &&& 0x80 = 0 := by
   rfl
 
-/-! ## The opening passes -/
-
-/-- An opening that reads back parses at its place, under an answer that is the coin tree's. -/
 theorem parseD_open (p : Place) (ρ b : Msg) (hp : p.ok = true) (hρ : answerOK ρ = true) (hb : Reads p b) :
     parseD p ρ (openMsg p b) = some (openOf p b) := by
   have hd : (openMsg p b).drop 5 = b := frame_drop _ _
@@ -211,8 +172,6 @@ theorem parseD_open (p : Place) (ρ b : Msg) (hp : p.ok = true) (hρ : answerOK 
   rw [hm]
   rfl
 
-/-- **The session's check passes the opening** at the place `pl j` in the schedule, under the answer it opens, at
-SHA-512. -/
 theorem chkAt_open (pl : ℕ → Place) (j : ℕ) (hok : (pl j).ok = true) (ν b k : List UInt8) (hb : Reads (pl j) b)
     (hk : k.length = 256) (hbit : k.getD 255 0 &&& 0x80 = 0) :
     ((CoinOpen.chkAt pl ν (ansOf ν (pl j) b k) j (openMsg (pl j) b)).eval CoinOpen.shaH).1 = true := by
@@ -235,12 +194,6 @@ open Claims Claims.ZKMal
 
 namespace LeanRelease
 
-/-- **The release's coin check passes a history at every tape** at the deployed coin layer: where the coin check reads
-the session's `Hello` with the tape's nonce (`HelloParses`), the transport requests the openings at the
-schedule's places (`ReqsFollow`), coin `0`'s place is in the schedule and the protocol has a coin, the check passes
-`Hello`'s answer `ansOf` (the root the opening `b` walks to under the tape's nonce and the key `k`) and the opening
-`openMsg` of coin `0`, at every tape, key with bit 2047 clear and opening that reads back. There, where the frame took
-the link's coins, the coins it takes are its own (`frameAnswer`). -/
 theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg)
     (hP : HelloParses nr T L x) (hF : ReqsFollow nr T L x) (hok : (CoinLayer.place nr x 0).ok = true)
@@ -267,7 +220,6 @@ theorem opens_coinPass (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     exact CoinPass.chkAt_open (CoinLayer.place nr x) 0 hok (CoinLayer.nb ν) b k hb hk hbit
   exact ⟨ho, fun hA => answered_append hA (m₁, CoinPass.openMsg (CoinLayer.place nr x 0) b) ho⟩
 
-/-- **`opens_coinPass` at the all-zero key and opening.** -/
 theorem opens_coinPass_zeros (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg)
     (hP : HelloParses nr T L x) (hF : ReqsFollow nr T L x) (hok : (CoinLayer.place nr x 0).ok = true)

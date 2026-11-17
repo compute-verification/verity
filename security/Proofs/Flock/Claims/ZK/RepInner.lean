@@ -34,24 +34,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FinishSrc
 
-/-!
-# The cut rep's inner proof returns on its coins alone
-
-Answered by `asksCut`, the inner proof sends four bodies (`ε`, the batching coins, `β`, the query coins), and its only
-refusal past them reads the coin `β`. The ZK server's `innerP` also stops on a batched constraint that fails and commits
-to `τ`, neither of which sends; the cut's `innerCut` does neither. So where the ZK server's inner proof returns, the
-cut's returns from a log of the same size, with a log of the same size, whatever either reads.
-
-* **Steps** (`fw_coined`, `fw_sampleVecP`, `fw_throw_bind`, `fw_lift_pure_bind`): a step whose return reads only the
-  log's size returns the same on both sides; two batching squeezes of nonzero sizes both send one body; a throw on the
-  left returns nothing; a pure step on the left sends nothing.
-* **`innerP_cut_fw`**: the ZK server's inner proof and the cut's, from logs of one size.
--/
+/-! The cut rep's inner proof returns on its coins alone. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete.CutFree
 
@@ -65,7 +53,6 @@ theorem fw_coined {m : TMW PS α} (hm : Coined m) {t t' : Transcript} {l l' : Ar
   obtain ⟨t₁', L', e, hL⟩ := hm t t' l l' a t₁ L h hl
   exact ⟨a, t₁', L', e, hL, rfl⟩
 
-/-- **Two squeezes of nonzero sizes** each send one body, refused at the same log sizes. -/
 theorem fw_sampleVecP (coin : ℕ → ℕ → F128) (n : ℕ) {k k' : ℕ} (hk : k ≠ 0) (hk' : k' ≠ 0) {t t' : Transcript}
     {l l' : Array Claims.Msg} (hl : l'.size = l.size) :
     Fw (fun _ _ => True) (((sampleVecP (asksCut coin n) k).run t).go l)
@@ -96,9 +83,6 @@ theorem fw_lift_pure_bind {S : γ → δ → Prop} {a : α} {f : α → TMW PS �
   rw [bind_go (x := StateT.lift (pure a)) rfl]
   exact h
 
-/-- **The cut's inner proof returns where the ZK server's does**: answered by `asksCut`, from logs of one size, where
-the ZK server's `innerP` at SHA-512 returns, `innerCut` from any source, commitment, `final_c` and constraints returns,
-with a log of the same size. -/
 theorem innerP_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic ic' : InnerCommit) (finalC finalC' : F128) (src : RepSrc) (cons cons' : Array (String × Zk.Lin))
     {t t' : Transcript} {l l' : Array Claims.Msg} (hl : l'.size = l.size) :

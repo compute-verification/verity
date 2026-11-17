@@ -34,32 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.CROnly.Hiding
 
-/-!
-# The deployed masked session on a class of statements, and per statement
-
-`Flock.zk_deployZk_masked` reads its tape plan with fibers of one size at every `Live` statement, and
-`Flock.zk_deployZk_masked_at` at one. Between them:
-
-* `Flock.zk_deployZk_masked_on` (and `_on_gap`): the claim on a class `A` of statements, the tape read with fibers of one
-  size on `A`'s `Live` statements. `Claims.Flock.ZK` keeps one tape at every statement, so this is its form on a class.
-* A class tape bounds the class's table count (`jOf_lt_card_of_fibersEq`): a map with fibers of one size from a nonempty
-  finite type is onto (`FibersEq.surjective`), and every table has a pre-final leaf with its own 1536-bit salt. So no tape
-  plan is read with fibers of one size at every `Live` statement once `Live` has statements of every table count
-  (`not_fibersEq_live`), and `Flock.zk_deployZk_masked_gap`'s `hT` holds only on a class of bounded table count. The
-  masked scope caps the table count at `zkTableCap`, so `Live` is one (`OneTape`, `jOf_le_cap`).
-  On a class of two or more statements, the rounds read one executable tape (`TapePlan.tapeZk`) at each of them, so a
-  class tape is a layout of the executable's tape coordinates shared by the class's statements, not a product of their
-  tables' randomness: one `TapeZk.mask` can't carry two statements' independent slot words.
-* `ZKfam`: `Claims.ZKmalRx`'s body at a family of masked records `D x` (the record of statement `x` at `x`, tape
-  `(D x).Nonce × (D x).Rest`, simulator `famSim D`). `ZKmalRx (fun x => (D x).Nonce) (fun x => (D x).Rest) H
-  (fun x => (D x).V.k x + 1) (fun w x => (D x).prover w) R (famSim D)` unfolds to it, and at one record it is
-  `Claims.Flock.ZK`'s `ZKmalR` (`zkFam_const_iff`). `zkFam_of` reads it from `Claims.Flock.ZK` at every record, at each
-  record's own statement.
-* `Flock.zk_deployZk_masked_atMask_rx`: `ZKfam` at the mask tape of each statement (`TapePlan.atMask x (z x)`, the tape
-  of `x`'s tables' randomness), at `ε_zk = 8·n_L·gap + 8t·n_L·gap + 2·3^{-t}` on the masked scope and `1` outside it, with
-  no tape premise, under the round plan's `Causal` and the three rounds at each statement.
-  `Flock.zk_deployZk_masked_atMask_stop_rx` is it at a stopping round plan, its third round `ZkTables.honestPR`'s alone.
--/
+/-! The deployed masked session on a class of statements, and per statement. -/
 
 @[expose] public section
 
@@ -72,8 +47,6 @@ open CoinLayer
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **A map with fibers of one size from a nonempty finite type is onto**: its fiber at a value it takes is nonempty,
-and every fiber has that size. -/
 theorem FibersEq.surjective {α β : Type} [Finite α] [Nonempty α] {f : α → β} (hf : FibersEq f) :
     Function.Surjective f := by
   obtain ⟨a₀⟩ := ‹Nonempty α›
@@ -86,8 +59,6 @@ theorem FibersEq.surjective {α β : Type} [Finite α] [Nonempty α] {f : α →
 
 namespace Masked
 
-/-- **A tape read with fibers of one size at `x` bounds `x`'s tables**: it is onto the pre-final leaves' salts
-(`FibersEq.surjective`), and each table has a pre-final leaf, with `2^{1536}` salts. -/
 theorem jOf_lt_card_of_fibersEq {C : Tabs} (U : TapePlan C) {x : Msg} (h : FibersEq (U.tape x)) :
     jOf x < Fintype.card U.Tape := by
   classical
@@ -106,14 +77,10 @@ theorem jOf_lt_card_of_fibersEq {C : Tabs} (U : TapePlan C) {x : Msg} (h : Fiber
     _ ≤ Fintype.card ZkView.Salt ^ Fintype.card (ZkView.Leaves fun j => (C x j).z) := Nat.pow_le_pow_left hS _
     _ ≤ Fintype.card U.Tape := h1
 
-/-- **A class tape bounds the class's table count**: read with fibers of one size on `A`'s `Live` statements, each has
-fewer tables than tapes. -/
 theorem jOf_lt_card_on {C : Tabs} (U : TapePlan C) {A : Msg → Prop} (hT : ∀ x, A x → Live x → FibersEq (U.tape x))
     {x : Msg} (hA : A x) (hx : Live x) : jOf x < Fintype.card U.Tape :=
   jOf_lt_card_of_fibersEq U (hT x hA hx)
 
-/-- **No tape at every `Live` statement**: once `Live` has statements of every table count, no tape plan is read with
-fibers of one size at all of them (`Flock.zk_deployZk_masked`'s `hT`). -/
 theorem not_fibersEq_live {C : Tabs} (hJ : ∀ N, ∃ x, Live x ∧ N ≤ jOf x) (U : TapePlan C) :
     ¬ ∀ x, Live x → FibersEq (U.tape x) := fun hT => by
   obtain ⟨x, hx, hN⟩ := hJ (Fintype.card U.Tape)
@@ -124,10 +91,6 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session on a class of statements** `A`: `ε_zk` on `A`'s statements
-in the masked scope and `1` elsewhere, the tape read with fibers of one size on `A`'s `Live` statements, which bounds
-their table count (`jOf_lt_card_on`). At `A = (· = x₀)` it is `Flock.zk_deployZk_masked_at`'s form at any tape plan, at
-`A = ⊤` `Flock.zk_deployZk_masked`. -/
 theorem Flock.zk_deployZk_masked_on (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (A : Msg → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hc : Q.Causal)
@@ -145,7 +108,6 @@ theorem Flock.zk_deployZk_masked_on (H : Msg → Msg) (nr : Msg → ℕ → ℕ)
     (fun _ _ hR => and_congr_right fun _ => live_iff hR) fun _ => le_rfl
 
 open Classical in
-/-- **`Flock.zk_deployZk_masked_on` at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): no hiding premise. -/
 theorem Flock.zk_deployZk_masked_on_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (A : Msg → Prop) (t : ℕ) (ht : 0 < t) (hc : Q.Causal)
     (hT : ∀ x, A x → Live x → FibersEq (U.tape x))
@@ -165,18 +127,12 @@ section Family
 
 variable {Coin Col T : Type}
 
-/-- **A family of masked records' simulator**: at `x`, the simulator of the record of `x`. -/
 noncomputable def famSim (D : Msg → Claims.Flock.ZkDeploy Coin Col T) : Simulator where
   C x := (D x).S.C x
   fin x := (D x).S.fin x
   ne x := (D x).S.ne x
   prog x := (D x).S.prog x
 
-/-- **`Claims.ZKmalRx`'s body at a family of masked records** `D`: at `x`, the reference prover of the record of `x`
-(`(D x).prover`, on the tape `(D x).Nonce × (D x).Rest` of `x`'s own) against every malicious verifier of that record's
-`(D x).V.k x + 1` rounds, within `ε_zk x` of the family's simulator (`famSim`) plus `γ x` times `Fork`'s collision
-probability. `Claims.ZKmalRx (fun x => (D x).Nonce) (fun x => (D x).Rest) H (fun x => (D x).V.k x + 1)
-(fun w x => (D x).prover w) R (famSim D) εzk γ` unfolds to it. -/
 def ZKfam (H : Msg → Msg) (D : Msg → Claims.Flock.ZkDeploy Coin Col T) (R : Rel Claims.Flock.Wit)
     (εzk γ : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = (D x).V.k x + 1 → ∀ (Ev : List (Msg × Out) → Prop),
@@ -184,15 +140,11 @@ def ZKfam (H : Msg → Msg) (D : Msg → Claims.Flock.ZkDeploy Coin Col T) (R : 
         Pr (fun c : (famSim D).C x => Ev ((famSim D).out H Vs θ x c))|
       ≤ εzk x + γ x * (Fork H ((D x).prover w) Vs θ x).Pr H
 
-/-- **At one record, `ZKfam` is `Claims.Flock.ZK`'s `ZKmalR`**: `ZKmalR` is `ZKfam`'s case of one tape at every
-statement. -/
 theorem zkFam_const_iff {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {εzk γ : Msg → ℝ} :
     ZKfam H (fun _ => D) (Claims.Flock.R D.parse) εzk γ ↔
       ZKmalR H (fun x => D.V.k x + 1) D.prover (Claims.Flock.R D.parse) D.S εzk γ :=
   Iff.rfl
 
-/-- **`Claims.Flock.ZK` at every record gives `ZKfam`**, at each record's `ε_zk` at its own statement: `ZKfam` reads
-the record of `x` at `x` only. -/
 theorem zkFam_of {H : Msg → Msg} {D : Msg → Claims.Flock.ZkDeploy Coin Col T} {R : Rel Claims.Flock.Wit}
     {ε : Msg → Msg → ℝ} {ε' γ : Msg → ℝ} (h : ∀ x₀, Claims.Flock.ZK H (D x₀) (ε x₀) γ)
     (hR : ∀ x w, R x w → Claims.Flock.R (D x).parse x w) (hε : ∀ x, ε x x ≤ ε' x) : ZKfam H D R ε' γ :=
@@ -200,14 +152,11 @@ theorem zkFam_of {H : Msg → Msg} {D : Msg → Claims.Flock.ZkDeploy Coin Col T
 
 end Family
 
-/-- **The deployed masked records at the mask tape of each statement**: the record of `x₀` at
-`TapePlan.atMask x₀ (z x₀)`, the tape of `x₀`'s tables' randomness with its mask words the tables'. -/
 noncomputable abbrev maskedAt (nr : Msg → ℕ → ℕ) (P : Composed.LigProver) (Q : RoundPlan (tabC P))
     (z : (x₀ : Msg) → Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (x₀ : Msg) :
     Claims.Flock.ZkDeploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace :=
   zkDeployed _root_.Flock.Readable.relation nr (tableData P Q (TapePlan.atMask x₀ (z x₀))) t
 
-/-- `ε_zk` at `x` if `x = x₀` is `ε_zk` at `x`. -/
 theorem ite_self_and_le {S : Prop} [Decidable S] {x : Msg} {E : ℝ} [Decidable (x = x ∧ S)] :
     (if x = x ∧ S then E else 1) ≤ if S then E else 1 := by
   split_ifs with h1 h2 h2
@@ -217,11 +166,6 @@ theorem ite_self_and_le {S : Prop} [Decidable S] {x : Msg} {E : ℝ} [Decidable 
   · exact le_rfl
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session on statement-indexed tapes**: `ZKfam` (`Claims.ZKmalRx`'s
-body) at the records `maskedAt`, each statement's prover on the tape of its own tables' randomness, at
-`ε_zk = 8·n_L·gap + 8t·n_L·gap + 2·3^{-t}` on the masked scope and `1` outside it, with no tape premise
-(`Flock.zk_deployZk_masked_atMask_gap` at each statement). Under the round plan's `Causal` and, at each statement, the
-three rounds at its mask tape. -/
 theorem Flock.zk_deployZk_masked_atMask_rx (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (Q : RoundPlan (tabC P)) (z : (x₀ : Msg) → Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (ht : 0 < t)
     (hc : Q.Causal)
@@ -240,9 +184,6 @@ theorem Flock.zk_deployZk_masked_atMask_rx (H : Msg → Msg) (nr : Msg → ℕ �
     (fun _ _ h => h) fun _ => ite_self_and_le
 
 open Classical in
-/-- **`Flock.zk_deployZk_masked_atMask_rx` at a stopping round plan** (`RoundPlan.stop`): at each statement, the third
-round is `ZkTables.honestPR`'s alone (`Flock.zk_deployZk_masked_atMask_stop_gap`): after `refK x` openings whose coins
-some table refuses, its next message is `[]`. -/
 theorem Flock.zk_deployZk_masked_atMask_stop_rx (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg)

@@ -48,23 +48,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A deployed rep's ring-switch target is the opening's
-
-`fwRows_at` takes the ZK server's ring-switch target `T` as the opening's (`Composed.openT`) at the view's masked claims'
-`ŝ`. Here that is read off the deployed rep: `repFwC`'s ring switch on table `j`'s rep `r`, answered by the opened coins
-(`ligCoin`) from the rep's base, on the packed table of the witness's trace (`ligTab`), with extra claims at the
-statement's region claims' points.
-
-* `FlockComplete.ringSwitchCut_T`: a returned ring switch's `T` is `Σ_k γ_k·β_k`, `β_k = dot (eq r''_k) (t(s_k))`, at
-  its coins, whatever the switched vectors.
-* **`Masked.fwTarget_at`**: at the deployed rep, `T = openT` at the view's `ν + maskHom`: claim `k`'s `β_k` is the
-  model's `recombine` (`Refine.recombine_eq`); claims `0` and `1` send the view's `ŝ` (as `fwRows_at` reads them), and
-  region claim `k − 2` sends the witness's region message (`sv_region`), which is the public one at a valid witness
-  (`Composed.coinedOf_reg`, `complete_tabC`); the coins are `czExe`'s `rpp` and `rsGamma` (`repSlot_eq`).
-
-Neither reads the worker's clear values: `openT` reads `ν`, which reads the witness alone.
--/
+/-! A deployed rep's ring-switch target is the opening's. -/
 
 @[expose] public section
 
@@ -75,8 +59,6 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **A returned ring switch's target at its coins**: `T = Σ_k γ_k·dot (eq r''_k) (t(s_k))`, claim `k`'s `r''` at
-`l.size + k` and the batching `γ` at `l.size + |claims|`, whatever the switched vectors. -/
 theorem ringSwitchCut_T (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
     (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128}
     {sws : Array Switched}
@@ -144,7 +126,6 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- Entry `i` of a list of pairs is pair `i / 2`'s at `i % 2`. -/
 theorem pairs_get {α β γ : Type} [Inhabited α] [Inhabited γ] (g : α → β → γ) (p0 p1 : β) :
     ∀ (L : List α) (i : ℕ), i < 2 * L.length →
       (L.flatMap fun a => [g a p0, g a p1])[i]! = g L[i / 2]! (if i % 2 = 0 then p0 else p1)
@@ -157,8 +138,6 @@ theorem pairs_get {α β γ : Type} [Inhabited α] [Inhabited γ] (g : α → β
       simp only [List.flatMap_cons, List.cons_append, List.nil_append, List.getElem!_cons_succ]
       exact pairs_get g p0 p1 L i' (by simp only [List.length_cons] at hi; omega)
 
-/-- **Extra coordinate `i` at two link points** is region `i / 2`'s point at link point `i % 2`, past its six skip
-coordinates. -/
 theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F128) :
     ∀ i < 2 * st.regions.size, (_root_.Flock.ZkServer.Drive.extras st #[p0, p1])[i]! =
       (st.regionPoint st.regions[i / 2]! (if i % 2 = 0 then p0 else p1)).extract 6
@@ -177,10 +156,6 @@ theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F12
   exact h
 
 set_option maxHeartbeats 1000000 in
-/-- **A deployed rep's ring-switch target is the opening's**: where `repFwC`'s zerocheck, lincheck and ring switch on
-table `j`'s rep `r`, answered by the opened coins from the rep's base at the packed table of the witness's trace (`hg`),
-return with extra claims at the region points of the link (`Drive.extras`, `hxsz`, `hxs`), the ring switch's `T` is
-`Composed.openT` at the view's `ν + maskHom`. -/
 theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -227,17 +202,14 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
   have hm14 : 14 ≤ st.m := by
     rw [hSm]
     exact hm14'
-  -- the extra claims: two per region
   obtain ⟨hpts, hmp⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
   have hA2 : (_root_.Flock.abcClaims st.m st.kLog zc lc).size = 2 := FlockComplete.abcClaims_size _ _ _ _
   have hN : (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs).size = 2 + 2 * (stAt x j).regions.size := by
     rw [Array.size_append, hA2, hxsz, hpts]
-  -- the runs' lengths
   obtain ⟨hzc, hl₁⟩ := FlockComplete.zerocheckCut_at (ligCoin c) n hm14 _ _ _ _ _ h₁
   obtain ⟨hlc, hl₂⟩ := FlockComplete.lincheckCut_at (ligCoin c) n _ _ _ _ _ h₂
   obtain ⟨-, hl₃, -⟩ := FlockComplete.ringSwitchCut_sws (ligCoin c) n _ _ (by rw [hN]; omega) h₃
   rw [hN] at hl₃
-  -- claims `0` and `1` send the view's `ŝ`
   have hsw : ss[0]! = Composed.shArr (((tabC PE x j).T (czExe PE x c j)).tab.onVals.nu (wtOf PE x w j, v j) +
           ((tabC PE x j).T (czExe PE x c j)).tab.onVals.maskHom
             (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1) (2 * r.val) ∧
@@ -325,7 +297,6 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
     rw [swViewE_sHat] at e1
     exact ⟨e0, e1⟩
   have hss := FlockComplete.ringSwitchCut_ss (ligCoin c) n _ _ h₃
-  -- region claim `k − 2` sends the public message
   have hreg : ((tabC PE x j).T (czExe PE x c j)).tab.sReg (wtOf PE x w j) =
       ((tabC PE x j).T (czExe PE x c j)).tab.pubReg :=
     Composed.coinedOf_reg PE (zkTab x j).table (stAt x j) (zkTab x j).wf.1 (zkTab x j).wf.2 rfl (zkTab x j).whole
@@ -388,7 +359,6 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
     simp only [FlockSoundness.Refine.vecOf]
     rw [getElem!_pos _ v'.val (by rw [Array.size_ofFn]; exact v'.isLt), Array.getElem_ofFn]
     rfl
-  -- the target, claim by claim
   have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]

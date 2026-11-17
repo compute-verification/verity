@@ -38,33 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The release at the session loop (`flock-zk-server session`)
-
-The session loop (`Flock.ZkServer.Session`, live PROTOCOL.md §10.4) decides what crosses to the auditor from pure functions
-of the statement's setup (`Flock.ZkServer.SessionPlan`): the `Hello` (`Hello.msg`), what its coin check reads of it
-(`helloOf`: the tree, the link points and the nonce), each opening's stream and count (`planOf`, `reqAt`), and when
-`Finish` leaves (`State.finish`: once the schedule's last opening has). `LeanRelease.loop` is a release with those, at the
-masked session the statement `x` sets up (`sessOf`: Flock's setup, else the recursive statement's), and here the
-transport's trusts on them are theorems:
-
-* `LeanRelease.loop_helloIs`: its `Hello` is `CoinLayer.helloMsg`, by `rfl`.
-* `LeanRelease.loop_helloParses`: its coin check reads the tape's nonce, and reads no `Hello` only where the schedule has no
-  place for coin `0` (`helloOf` and `CoinLayer.slot` both refuse a tree whose streams are not the session's, `streamsOk`).
-* `LeanRelease.loop_reqsFollow`: its requests follow the schedule (`CoinOpen.Follows`) at the coin counts it asks for
-  (`Loop.loopNr`). A rep's planned rounds are the verifier's (`Loop.repPlan_size`: `repCoins` has
-  `FlockDeploy.repRounds true` entries, by `decide +kernel` over the `--zk` schedules, `Loop.ligOk_lt`), so the plan has
-  `refK x - 1` openings (`Loop.refK_plan`), and opening `j + 1`'s stream and round are `CoinLayer.slot`'s (`Loop.fst_plan`,
-  `Loop.count_opened`).
-* `LeanRelease.loop_last`: `Finish` is round `refK x + 1`.
-* `LeanRelease.loop_coinsRead`: the coins a frame takes are the loop's reading of the auditor's last answer
-  (`Frames.feedOf`, which the loop feeds the round's frame, `Frames.coins`), the decoded coin's words (`Loop.readCoins`).
-
-**`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` at that release, with the transport's other trusts
-(`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it
-runs at `x`'s setup: the loop sets up from the auditor's sample (`Hello.Setup.setup`), which is `x`'s where `x` reads
-(`FlockDeploy.Ins.setup`).
--/
+/-! The release at the session loop (`flock-zk-server session`). -/
 
 @[expose] public section
 
@@ -76,23 +50,18 @@ open _root_.Flock.ZkServer.Session (INNER_CONS replayCoins ligeritoCoins repCoin
 open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace Loop
 
 variable {wideLeaf : Bool}
 
-/-! ## A rep's rounds -/
-
-/-- Ligerito's rounds at `m`'s `--zk` schedule, less those of no coins, are the verifier's `k0 + 7 + 11 R`, and a
-schedule needs `m ≥ 25`. -/
 def ligOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) =>
     decide (25 ≤ m) && ((ligeritoCoins sch).filter (· != 0)).size == sch.k0 + 7 + 11 * (sch.levels.size - 1)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
 theorem ligOk_lt : ∀ (w : Bool) (m : Fin 36), ligOk w m.val = true := by decide +kernel
 
 theorem queries0_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.queries0 wideLeaf m = .error e := by
@@ -157,7 +126,6 @@ theorem repRounds_true (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt
           (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
       | .error _ => 0 := rfl
 
-/-- **A rep's planned openings are the verifier's rounds**: `repPlan` has `FlockDeploy.repRounds true` entries. -/
 theorem repPlan_size (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) :
     (repPlan spec st).size = FlockDeploy.repRounds true spec st := by
   rw [repRounds_true]
@@ -173,8 +141,6 @@ theorem repPlan_size (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) 
   | ok p =>
     obtain ⟨sch, tp⟩ := p
     exact repCoins_size h (by omega)
-
-/-! ## Locating a rep round -/
 
 theorem locate_cons_lt {c i k : ℕ} {cs : List ℕ} (h : i < c) : CoinLayer.locate (c :: cs) k i = (k, i) := by
   show (if i < c then (k, i) else CoinLayer.locate cs (k + 1) (i - c)) = _
@@ -284,13 +250,10 @@ theorem map_range_getElem! {β : Type} [Inhabited β] (a : Array β) (h : β →
   simp only [List.length_map, List.length_range] at h1
   simp [h1]
 
-/-! ## The loop's plan -/
-
 /-- The rep streams' round counts in `SessionSpec.repStreams` order, as `CoinLayer.slot` reads them. -/
 def roundsOf (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : List ℕ :=
   (List.range spec.repStreams.size).map fun k => FlockDeploy.repRounds true spec sts[k / 2]!
 
-/-- `planOf`'s openings stream by stream. -/
 def plansOf (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : List (List (String × ℕ)) :=
   (List.range spec.repStreams.size).map fun k => (repPlan spec sts[k / 2]!).toList.map (repName spec k, ·)
 
@@ -317,8 +280,6 @@ theorem rounds_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.St
   have e2 := map_range_getElem! sts (fun st => 2 * FlockDeploy.repRounds true spec st)
   have e3 := foldl_add (fun st => 2 * FlockDeploy.repRounds true spec st) sts.toList 0
   rw [e1, e2, ← Array.foldl_toList, e3, Nat.zero_add]
-
-/-! ## The streams -/
 
 theorem streamsOk_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {ct : _root_.Flock.CoinTree.Spec} (h : streamsOk spec sts ct = true) :
@@ -362,8 +323,6 @@ theorem ne_session {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTree
   rw [e, idx_session hs] at h1
   omega
 
-/-! ## The schedule's places -/
-
 theorem slot_zero {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hc : spec.coinTree = some ct) (hok : streamsOk spec sts ct = true) :
@@ -395,8 +354,6 @@ theorem fst_plan {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stm
   obtain ⟨_, _, rfl⟩ := hq
   simp
 
-/-! ## The loop's requests -/
-
 /-- **The loop's request for opening `j`** at `x`: `reqAt` at the plan and link points of the masked session `x` sets up
 (`sessOf`). -/
 def reqOf (x : Msg) (j : ℕ) : String × ℕ :=
@@ -418,7 +375,6 @@ theorem reqOf_eq {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpe
     reqOf x j = reqAt (planOf spec sts) (spec.points * spec.mPts) j :=
   reqOf_sess (sessOf_flock hs) j
 
-/-- The streams' indices in the tree of the first `j` openings `req` asks for. -/
 def openedAt (ct : _root_.Flock.CoinTree.Spec) (req : ℕ → String × ℕ) (j : ℕ) : List ℕ :=
   (List.range j).map fun i => ct.streams.toList.idxOf (req i).1
 
@@ -496,8 +452,6 @@ theorem follows_gen {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _ro
     rw [e]
     exact follows_gen hs hc hok ms (j + 1) (by omega)
 
-/-! ## The loop's `Hello` -/
-
 /-- **What the loop's coin check reads of the session's `Hello`** at `x` and the nonce `ν`: `helloOf` at the masked
 session `x` sets up (`sessOf`) and the nonce's bytes. -/
 def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.ZkServer.Coins.Hello :=
@@ -542,8 +496,6 @@ theorem helloChkAt_error {x : Msg} {ν : CoinLayer.Nonce} {e : String} (h : hell
         cases h
       · simp only [hok, Bool.false_eq_true, ↓reduceIte]
 
-/-! ## The loop's `Finish` -/
-
 /-- **The round the loop's `Finish` leaves at** at `x`: past `Hello` and every opening of the schedule (`State.finish`),
 the plan's size `+ 2`. Where `x` sets up no session with a tree of its own streams no opening leaves, and neither does
 `Finish`; the round is then the protocol's. -/
@@ -554,8 +506,6 @@ def lastOf (x : Msg) : ℕ :=
     | some ct => if streamsOk spec sts ct then (planOf spec sts).size + 2 else refK x + 1
     | none => refK x + 1
   | none => refK x + 1
-
-/-! ## The coins the loop feeds a frame -/
 
 /-- **The coins the loop feeds the frame** after `h`: `Frames.feedOf` of the last opening at its request's count. -/
 def coinsAt (x : Msg) (h : List (Msg × Msg)) : Array _root_.Flock.F128 :=
@@ -569,7 +519,6 @@ def readCoins (x : Msg) (cs : List FlockDeploy.Coin) : Array _root_.Flock.F128 :
   | some c => c.vals (min (loopNr x (cs.length - 1)) _root_.Flock.ZkServer.Frames.COIN_MAX)
   | none => #[]
 
-/-- `feedOf` of an opening is its decoded coin's words. -/
 theorem feedOf_rd (n : ℕ) (m : Msg) :
     _root_.Flock.ZkServer.Frames.feedOf n m = (CoinLayer.rd m).vals (min n _root_.Flock.ZkServer.Frames.COIN_MAX) := by
   unfold _root_.Flock.ZkServer.Frames.feedOf _root_.Flock.ZkServer.Frame.words FlockDeploy.Coin.vals
@@ -611,7 +560,6 @@ noncomputable def loop (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     coinsOf := Loop.coinsAt
     last := Loop.lastOf }
 
-/-- **The coins the loop's frames take read the history only through the decoded coins**: `Loop.readCoins` of them. -/
 theorem loop_coinsRead (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) :
@@ -624,14 +572,12 @@ theorem loop_coinsRead (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
   · rfl
   · exact Loop.feedOf_rd _ b
 
-/-- **The loop's `Hello` is `flock-zk-server hello`'s.** -/
 theorem loop_helloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) :
     HelloIs nr T (loop nr T L₀) x :=
   fun _ _ => rfl
 
-/-- **The loop's coin check reads the session's `Hello` with the tape's nonce.** -/
 theorem loop_helloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) :
@@ -646,7 +592,6 @@ theorem loop_helloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     exact rfl
   | error e => exact Loop.helloChkAt_error h
 
-/-- **The loop requests each opening at the schedule's place**, at the coin counts it asks for (`Loop.loopNr`). -/
 theorem loop_reqsFollow (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)) (x : Msg) :
@@ -656,7 +601,6 @@ theorem loop_reqsFollow (T : CoinLayer.TableData)
   rw [Loop.refK_plan hs hok] at hms
   exact Loop.follows_gen hs hc hok ms 0 (by omega)
 
-/-- **The loop's `Finish` is one past the last coin.** -/
 theorem loop_last (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) :
@@ -667,11 +611,8 @@ end LeanRelease
 
 open FlockSoundness.Discharge
 
-/-- **`Flock.zk_server_lean_coinLayer` at the session loop** (`LeanRelease.loop`): its `Hello`, its coin check's reading
-of it, its requests, the coins its frames take and its `Finish`'s round are theorems (`loop_helloIs`, `loop_helloParses`,
-`loop_reqsFollow`, `loop_coinsRead`, `loop_last`), at the coin counts the loop requests (`Loop.loopNr`) and the coins'
-reading `Loop.readCoins`; the transport's other trusts (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables'
-side are `Flock.zk_server_lean_coinLayer`'s. -/
+/-- The transport's other trusts (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side are
+`Flock.zk_server_lean_coinLayer`'s; it reads the loop as run at `x`'s setup. -/
 theorem Flock.zk_server_lean_loop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ) (ht : 0 < t)

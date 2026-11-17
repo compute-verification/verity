@@ -36,18 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`
-
-The claim is the spec's `Claims.ZKmalR` (the real run lasts the protocol's `k(x)` rounds, and the bound adds `γ` times
-the probability that `Fork`, two real runs of the honest prover on one nonce, finds a collision among the prover's
-SHA-512 calls), and Flock's is `Claims.Flock.ZK`, at the masked verifier's rounds `D.V.k` plus the `Hello` that commits
-every coin. This module adds:
-
-* **ZK bits** (`ZKmalR.bits`): under `StrictBirthday` at `Fork` the collision term is at most `γ·q²/2^513`.
-* **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
-* What `findColl` finds (`findColl_ne_none_iff`, `findColl_collision`).
--/
+/-! Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`. -/
 
 @[expose] public section
 
@@ -55,8 +44,7 @@ namespace Claims.ZKMal
 
 open Claims
 
-/-- **ZK bits, proposed**: `ZKmalR` with its collision term bounded by the strict birthday bound at `Fork`, for every
-verifier whose two runs with the honest prover make at most `q` SHA-512 calls. -/
+/-- **ZK bits, proposed**: `ZKmalR` with its collision term bounded by the strict birthday bound at `Fork`. -/
 def ZKmalBits {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : Msg → ℕ)
     (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ q : ℝ,
@@ -65,20 +53,15 @@ def ZKmalBits {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω
     |Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
       ≤ εzk x + γ x * (q ^ 2 / 2 ^ (513 : ℝ))
 
-/-- **`ZKmalR` gives ZK bits** at a nonnegative `γ`: the collision term is `Fork`'s success, which the strict birthday
-bound caps. -/
 theorem ZKmalR.bits {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : Msg → ℕ}
     {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
     (h : ZKmalR H k P R S εzk γ) : ZKmalBits H k P R S εzk γ := by
   intro x w hR Θ Vs θ hk q hq hSB Ev
   exact (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left (hSB q hq) (hγ x)))
 
-/-- **The simulator's cost, worst case**: at most `bound(x)` calls (hash and ask) on every coin, against every
-verifier. -/
 def SimCostLe (H : Msg → Msg) (S : Simulator) (bound : Msg → ℕ) : Prop :=
   ∀ x (c : S.C x) (ask : List Msg → Out), ((S.prog x c).eval H ask).2 ≤ bound x
 
-/-- A worst-case bound is an expected one. -/
 theorem SimCostLe.simCost {H : Msg → Msg} {S : Simulator} {bound : Msg → ℕ} (h : SimCostLe H S bound) :
     SimCost H S fun x => (bound x : ℝ) := by
   intro x ask
@@ -89,9 +72,6 @@ theorem SimCostLe.simCost {H : Msg → Msg} {S : Simulator} {bound : Msg → ℕ
     _ = (bound x : ℝ) * Fintype.card (S.C x) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
 
-/-! ## What `findColl` finds -/
-
-/-- `findColl` finds a collision exactly when two calls in the log have different inputs and one output. -/
 theorem findColl_ne_none_iff : ∀ l : List (Msg × Msg),
     findColl l ≠ none ↔ ∃ p ∈ l, ∃ q ∈ l, p.1 ≠ q.1 ∧ p.2 = q.2
   | [] => by simp [findColl]
@@ -123,7 +103,6 @@ theorem findColl_ne_none_iff : ∀ l : List (Msg × Msg),
             · exact absurd ⟨hne, heq⟩ (hn p hp')
             · exact ⟨p, hp', q, hq', hne, heq⟩
 
-/-- A collision in a log of `H` calls is a collision of `H`. -/
 theorem findColl_collision (H : Msg → Msg) : ∀ l : List (Msg × Msg), (∀ p ∈ l, p.2 = H p.1) →
     ∀ u v, findColl l = some (u, v) → Collision H u v
   | [], _, _, _, h => by simp [findColl] at h
@@ -147,10 +126,6 @@ end Claims.ZKMal
 
 namespace Claims.Flock
 
-/-- **Flock's `ZK` at a given prover and simulator**: what `Claims.Flock.ZK` says of a masked record, at the record's
-reference prover and simulator (`ZK_iff_at`), stated at any. The proofs prove it at a committed-coin protocol's prover,
-which is a masked record's reference prover where the protocol's messages are the record's (`ZKMal.Proto.Honest`,
-`ZKMal.zk_zkOf`). -/
 def ZKAt {Coin Col T N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (D : Deploy Coin Col T) (P : Wit → Prover (N × Ω)) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
   D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk γ

@@ -4,21 +4,7 @@ public import Flock.ZkServer.Skeleton
 public import Flock.ZkServer.SessionPlan
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
-/-!
-# The algebraic phase's coin counts
-
-The loop requests each rep round's coins at the plan's count (`Session.repPlan`, `Loop.loopNr_succ`), and the frame
-checks the device against the rep's scheduled rounds (`schedSoFar`), so a round's frame takes its coins only where the
-two counts agree. This file counts the algebraic phase's (`Skeleton.rounds`): the recording channel (`Skeleton.recAsks`)
-keeps each round's count as its squeeze header holds it, a squeeze of no coins is no round, and the masked zerocheck and
-lincheck squeeze `replayCoins`' counts in order.
-
-* `Tally ns Q p`: the transcript program `p` over `RecM`, wherever it returns, returns a value satisfying `Q` and has
-  recorded the rounds `ns` after those it started with; with its `pure`, `bind`, `throw`, transcript steps and loops over
-  a range (`tally_pure`, `tally_bind`, `tally_throw`, `tally_liftTM`, `tally_forIn`).
-* `tally_squeezeP`, `zerocheckFw_tally`, `lincheckFw_tally`, `repPiop_tally`: the squeezes' counts, the zerocheck's
-  and lincheck's, and the PIOP's.
--/
+/-! The algebraic phase's coin counts. -/
 
 @[expose] public section
 
@@ -28,15 +14,11 @@ open _root_.Flock (V F128 Transcript TMW liftTM)
 open _root_.Flock.ZkServer.Skeleton (RecM recAsks)
 open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 
-/-- The rounds' counts the recording channel has kept. -/
 def cnts (s : Array (ByteArray × ℕ) × ℕ) : List ℕ := s.1.toList.map Prod.snd
 
-/-- **A transcript program's counts**: wherever `p` returns, its value satisfies `Q`, and the recording channel has
-kept the rounds `ns` after those it started with. -/
 def Tally {α : Type} (ns : List ℕ) (Q : α → Prop) (p : TMW RecM α) : Prop :=
   ∀ t s a t' s', ((p.run t).run s) = .ok ((a, t'), s') → Q a ∧ cnts s' = cnts s ++ ns
 
-/-- A round's count: none for a squeeze of no coins. -/
 def sq (n : ℕ) : List ℕ := if n = 0 then [] else [n]
 
 theorem rec_bind_ok {α β : Type} {x : RecM α} {f : α → RecM β} {s : Array (ByteArray × ℕ) × ℕ} {b : β}
@@ -83,7 +65,6 @@ theorem tally_liftTM {α : Type} (x : _root_.Flock.Transcript.TM α) :
     cases h
     exact ⟨trivial, by simp⟩
 
-/-- **A loop over `[0:n]`'s counts**: each step from any value yields, having recorded `ms`. -/
 theorem tally_forIn {σ : Type} (n : ℕ) (ms : List ℕ) (body : ℕ → σ → TMW RecM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, Tally ms (fun r => ∃ v, r = .yield v) (body i u)) (u : σ) :
     Tally (List.replicate n ms).flatten (fun _ => True) (forIn [:n] u body) := by
@@ -109,9 +90,6 @@ theorem tally_forIn_bind {σ β : Type} {n : ℕ} {ms ms' : List ℕ} {R : β �
     (hf : ∀ r, Tally ms' R (f r)) : Tally ((List.replicate n ms).flatten ++ ms') R (forIn [:n] u body >>= f) :=
   tally_bind (tally_forIn n ms body hb u) fun r _ => hf r
 
-/-! ## The squeezes -/
-
-/-- A squeeze's framed bytes end with its count. -/
 theorem framed_count (t : Flock.Transcript) (kind : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
     (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat = n := by
   have e : Flock.Transcript.framed t kind n =
@@ -124,7 +102,6 @@ theorem framed_count (t : Flock.Transcript) (kind : UInt8) {n : ℕ} (hn : n < 2
   rw [hs, e, FlockSoundness.Discharge.ZkView.u64OfLE_mid]
   rw [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt hn]
 
-/-- **A squeeze's count**: a squeeze of `n` coins records one round of `n`, none for `n = 0`. -/
 theorem tally_squeezeP (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
     Tally (sq n) (fun _ => True) (squeezeP recAsks kind n) := by
   intro t s a t' s' h
@@ -161,12 +138,8 @@ theorem tally_throw_bind {α β : Type} {ns : List ℕ} {R : β → Prop} (e : S
     Tally ns R (throw e >>= f) :=
   tally_eq (tally_bind (Q := fun _ => False) (ms := []) (tally_throw e) fun _ h => h.elim) (List.append_nil ns)
 
-/-! ## The algebraic phase -/
-
-/-- The masked zerocheck's counts: `6`, `m - 13` (none when it is `0`), `z`'s, and one a round. -/
 def zcCounts (m : ℕ) : List ℕ := [6] ++ sq (m - 13) ++ [1] ++ (List.replicate (m - 6) [1]).flatten
 
-/-- The masked lincheck's counts: `α`'s and `β`'s, one a round, and `r'`'s. -/
 def lcCounts (kLog : ℕ) : List ℕ := [1, 1] ++ (List.replicate (kLog - 6) [1]).flatten ++ [1]
 
 theorem zerocheckFw_tally (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
@@ -227,7 +200,6 @@ theorem lincheckFw_tally (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.P
     · exact tally_throw_bind _ _
   · simp [lcCounts]
 
-/-- **A rep's PIOP's counts**: the zerocheck's, then the lincheck's. -/
 theorem repPiop_tally (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hm : st.m < 2 ^ 64) :
     Tally (zcCounts st.m ++ lcCounts st.fold.kLog) (fun _ => True) (repPiop recAsks st lay cap root extras mk) := by
@@ -252,7 +224,6 @@ theorem tally_run' {α : Type} {ns : List ℕ} {Q : α → Prop} {p : TMW RecM �
     cases h
     exact hp t s a' t' s'' hx
 
-/-- **The algebraic phase's scheduled rounds' counts** are the PIOP's. -/
 theorem rounds_counts {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : st.m < 2 ^ 64) (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
     alg.toList.map Prod.snd = zcCounts st.m ++ lcCounts st.fold.kLog := by
@@ -280,7 +251,6 @@ theorem rounds_counts {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray}
         exact List.set_getElem_self _
     · cases h
 
-/-- The PIOP's counts are the masked replay's, a squeeze of no coins no round. -/
 theorem piop_counts (m kLog : ℕ) :
     zcCounts m ++ lcCounts kLog = (_root_.Flock.ZkServer.Session.replayCoins m kLog).toList.filter (· != 0) := by
   have e : ∀ n, (List.replicate n [1]).flatten = List.replicate n 1 := fun n => by

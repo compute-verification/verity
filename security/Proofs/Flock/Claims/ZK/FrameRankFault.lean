@@ -3,29 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.FrameRanked
 public import Proofs.Flock.Claims.ZK.FrameBeta
 
-/-!
-# The frames refuse a rank-deficient mask slot (`FrameUnrefused`'s rank fault)
-
-At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
-no rep past whose `β` round it runs has its rank check refuse at the opened coins (`Masked.RankBad`, `Masked.Thrown`'s
-first disjunct). The opening at
-the rep's inner round 2 (`betaSlot`) finds the frame in the inner proof, past the opening's label, where the rank check
-held (`Ranked.ownReqs_rank`); what it read is the session's:
-
-* `Ranked.cnt`, `Ranked.alg_cnt`: the algebraic phase's rounds answer `6`, `m − 13`, then one coin each.
-* `Ranked.flatR_len`, `Ranked.flatR_getElem?`, **`Ranked.frame_points`**: on the rounds' coins laid end to end, at those
-  counts, the frame's claim points are `MaskRank.claimPoints` at the rounds (`Rank.claimPoints_frame`).
-* `Ranked.words_wordBytes`, `Ranked.foldl_append_toList`: an earlier rep's coins, sent as bytes, read back as its
-  rounds' coins laid end to end.
-* **`Ranked.repState_rank`**: at the loop's state at a rep's inner round, inside the inner proof or owing coins, the
-  frame held the rounds' coins, at the algebraic phase's counts, and the rank check held on them after the earlier
-  rep's points.
-* `Loop.wordsAt_slot`, `Loop.wordsAt_size`, `Loop.loopNr_rep`: the coins the loop hands a rep's state are the opened
-  coins, as many as the rep's plan asks.
-* **`LeanRelease.rank_of_prog`**: the rank check holds at the opened coins wherever the loop's state at a rep's inner
-  round is inside the inner proof or owes coins.
-* **`LeanRelease.rank_unrefused`**: the fault.
--/
+/-! The frames refuse a rank-deficient mask slot (`FrameUnrefused`'s rank fault). -/
 
 @[expose] public section
 
@@ -40,7 +18,6 @@ namespace Ranked
 
 open Loop
 
-/-- **The algebraic phase's count at its round `k`**: the zerocheck head's `6`, the outer round's `m − 13`, then one. -/
 def cnt (m k : ℕ) : ℕ := if k = 0 then 6 else if k = 1 then m - 13 else 1
 
 theorem cnt_two {m k : ℕ} (h : 2 ≤ k) : cnt m k = 1 := by
@@ -56,7 +33,6 @@ theorem counts_eq {m kLog : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) :
   rw [show m + kLog - 8 = 1 + (m - 6) + 1 + 1 + (kLog - 6) + 1 by omega]
   simp [Count.zcCounts, Count.lcCounts, Count.sq, e, show m - 13 ≠ 0 by omega, List.replicate_add]
 
-/-- **The algebraic phase's rounds answer `6`, `m − 13`, then one coin each**, `m + k_log − 6` of them. -/
 theorem alg_cnt {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : 14 ≤ st.m) (hk : 6 ≤ st.fold.kLog) (hm' : st.m < 2 ^ 64)
     (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
@@ -106,7 +82,6 @@ theorem flatR_getElem? (cs : ℕ → Array F128) : ∀ {d k e : ℕ}, k < d → 
       rw [List.getElem?_append_right (by omega), Nat.add_sub_cancel_left, Array.getElem?_toList,
         Array.getElem?_eq_getElem he]
 
-/-- Past round `1`, rounds `0 … n + 1` at the algebraic phase's counts hold `6 + (m − 13) + n` coins. -/
 theorem flatR_len {cs : ℕ → Array F128} {m D : ℕ} (hs : ∀ i < D, (cs i).size = cnt m i) :
     ∀ n, n + 2 ≤ D → (flatR cs (n + 2)).length = 6 + (m - 13) + n
   | 0, h => by
@@ -128,9 +103,6 @@ theorem flatR_len_one {cs : ℕ → Array F128} {m D : ℕ} (hs : ∀ i < D, (cs
   rw [flatR_succ, List.length_append, e0, hs 0 (by omega)]
   simp [flatR, cnt]
 
-/-- **The frame's claim points at the rounds' coins laid end to end**: on `m + k_log − 6` rounds at the algebraic
-phase's counts, whose coins are `coin`'s, `Frame.claimPoints` at the rep's layout returns `MaskRank.claimPoints` at
-`coin`, as lists (`Rank.claimPoints_frame`). -/
 theorem frame_points {m kLog : ℕ} (k0 : ℕ) (hm : 14 ≤ m) (hk : 6 ≤ kLog) (cs : ℕ → Array F128) (a : Array F128)
     (ha : a.toList = flatR cs (m + kLog - 6)) (hs : ∀ i < m + kLog - 6, (cs i).size = cnt m i)
     (coin : ℕ → ℕ → F128) (hv : ∀ i < m + kLog - 6, ∀ e < cnt m i, (cs i)[e]! = coin i e) :
@@ -160,7 +132,6 @@ theorem frame_points {m kLog : ℕ} (k0 : ℕ) (hm : 14 ≤ m) (hk : 6 ≤ kLog)
 
 theorem toBytes_dsize (a : F128) : a.toBytes.data.size = 16 := by simp [F128.toBytes]
 
-/-- **An array's words, sent as bytes, read back.** -/
 theorem words_wordBytes (P : Array F128) :
     _root_.Flock.ZkServer.Frame.words (_root_.Flock.ZkServer.Frame.wordBytes P) 0 P.size = P := by
   refine Array.ext (by rw [words_size]) fun i h1 h2 => ?_
@@ -202,7 +173,6 @@ theorem take_flatMap (cr : Array (Array F128)) :
       Array.getElem?_eq_getElem (show n < cr.size by omega)]
     simp [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (show n < cr.size by omega)]
 
-/-- **An earlier rep's coins laid end to end**: its first `n` rounds'. -/
 theorem prior_toList (cr : Array (Array F128)) {n : ℕ} (hn : n ≤ cr.size) :
     ((cr.extract 0 n).foldl (· ++ ·) #[]).toList = flatR (fun i => cr.getD i #[]) n := by
   rw [← Array.foldl_toList, foldl_append_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero,
@@ -225,10 +195,6 @@ theorem flatR_lt_of_pos (cs : ℕ → Array F128) {k d : ℕ} (hk : k < d) (hp :
   have := flatR_lt cs hk hp
   omega
 
-/-- **At a rep's inner round `e` the rank check held on the algebraic phase's coins**: where the loop's state there is
-inside the inner proof or owes coins, the frame held the rounds `0 … m + k_log − 7`'s coins (`cr`), answered at the
-algebraic phase's counts, and the rank check held at their claim points, after the earlier rep's (`cr0`'s rounds, sent
-as bytes) at rep `1`. -/
 theorem repState_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}
@@ -325,7 +291,6 @@ end Ranked
 
 namespace Loop
 
-/-- **The coins the loop hands a rep's state are the opened coins**: round `p`'s word `e`, below the round's count. -/
 theorem wordsAt_slot (T : ZKMal.CoinLayer.TableData) (x : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     {s p e : ℕ} (hp : p < s) (hs : s ≤ ops.length)
     (he : e < (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) p).size) :
@@ -361,7 +326,6 @@ theorem take_sum_lt {rs : List ℕ} {q i : ℕ} (hq : q < rs.length) (hi : i < r
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hq, Option.getD_some] at hi
   omega
 
-/-- **The loop asks rep `q`'s round `i` for its plan's count.** -/
 theorem loopNr_rep {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q i : ℕ} (hq : q < spec.repStreams.size)
     (hi : i < (roundsOf spec sts).getD q 0) :
@@ -384,7 +348,6 @@ theorem crMap_getD (f : ℕ → Array F128) (n : ℕ) {i : ℕ} (hi : i < n) :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hi)]
   simp
 
-/-- A rep's start lays out the statement's pads at its schedule's `k0`, and its mask slot. -/
 theorem start_eq {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : MaskSlot}
     (h : _root_.Flock.ZkServer.Drive.start st = .ok (lay, mask)) :
     ∃ sch tp, _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp) ∧
@@ -397,14 +360,12 @@ theorem start_eq {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : MaskSlot}
   subst h2
   exact ⟨sch, tp, hs, h1.symm, hm⟩
 
-/-- Names a loop state's coins. -/
 theorem repState_args {c c'' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {n : ℕ}
     {cs : Array F128} {m : Masker} (h : (repState c t rep dom xs hi cr0 cr ns n).answer c'' cs = .ok m) :
     ∃ cr0' cr', cr0' = cr0 ∧ cr' = cr ∧ (repState c t rep dom xs hi cr0' cr' ns n).answer c'' cs = .ok m :=
   ⟨_, _, rfl, rfl, h⟩
 
-/-- Names the coins of a loop state inside the inner proof or owing coins. -/
 theorem repState_named {c : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {n : ℕ}
     (h : (repState c t rep dom xs hi cr0 cr ns n).inner.isSome = true ∨
@@ -413,8 +374,6 @@ theorem repState_named {c : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : �
       (repState c t rep dom xs hi cr0' cr' ns n).owed ≠ none) :=
   ⟨_, _, rfl, rfl, h⟩
 
-/-- Where the loop's state is inside the inner proof or owes coins, the rep's algebraic rounds and its schedule so far
-on the coins before the last are defined. -/
 theorem repState_ok_of {c : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {n : ℕ}
     (h : (repState c t rep dom xs hi cr0 cr ns n).inner.isSome = true ∨
@@ -439,12 +398,6 @@ namespace LeanRelease
 open Loop Ranked
 
 set_option maxHeartbeats 400000 in
-/-- **A rep's rank check holds where the loop is in its inner proof**: at a `Live` statement the loop serves, on at most
-`refK x` openings that reach table `j`'s rep `r`'s inner round `e`, where the loop's state on the coins before that
-round and any coins `d` there is inside the inner proof or owes coins, the rep's rank check holds at the opened coins.
-The frame is past the opening's label, where the rank check held (`repState_rank`) on the rounds' coins, which are the
-opened ones (`wordsAt_slot`), and, at rep `1`, after rep `0`'s claim points, whose rounds the loop asks for the same
-counts (`loopNr_rep`). Both read as the session's (`frame_points`). -/
 theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
     (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x) {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2)
     (he : e < INNER_ROUNDS)
@@ -693,10 +646,6 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
   rw [hok] at hbad
   exact Bool.noConfusion hbad
 
-/-- **The frames refuse a rank-deficient mask slot**: at a `Live` statement the loop serves, on a live history of at
-most `refK x` openings, past table `j`'s rep `r`'s `betaSlot`, whose last coins the frame takes, the rep's rank check
-holds at the opened coins. The opening at `betaSlot` is the rep's inner round 2, whose coins the frame takes, so the
-loop's state there owes them (`rank_of_prog`). -/
 theorem rank_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

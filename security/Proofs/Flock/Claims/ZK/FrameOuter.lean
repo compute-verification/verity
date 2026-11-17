@@ -42,26 +42,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.FrameTaken
 
-/-!
-# The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
-
-At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
-no table's rep has a zerocheck outer coin `r_e = 1` among the opened coins (`Masked.Refused`'s first disjunct): the rep's
-round 1 squeezes them, and the frame's taking of a round's coins in the algebraic phase stops at `r_e = 1`
-(`Masker.answer`, `zk_veil::Masking::refuse_outer`).
-
-* `Sched.rounds_two`: the algebraic phase's first two scheduled rounds are the zerocheck's binding with `r_skip`'s
-  squeeze of `6` and `r_outer`'s squeeze of `m − 13` alone (`zerocheckFw_head`, then a recording whose first rounds stay
-  put, `recLiftPre`).
-* `Loop.run_outer`: the frame, from a rep's start, takes the binding (the algebraic phase on, `roundFree_zc`), its six
-  coins, and `r_outer`'s round (`roundFree_zcOuter`): it owes `m − 13` coins on the six it kept.
-* `Loop.answer_outer`: where it then takes coins, none of the first `n_mlv − 7` is `1`.
-* `Loop.outer_of_answer`: where the frame takes the coin at `Masked.outerSlot x j r`, rep `2j + r`'s round 1, whose
-  state is that one (`repState_outer`), its outer coins are not `1`.
-* **`LeanRelease.outer_unrefused`**: the fault, on a live history, whose frames took every round's coins.
-* **`LeanRelease.rfOf_outer`**: the same at every coin vector, for the stop rule of the transport's reading (`rfOf`):
-  where it has not fired by a rep's outer coins' round, the frame took that round's coins (`answer_of_refuseOf`).
--/
+/-! The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault). -/
 
 @[expose] public section
 
@@ -80,15 +61,12 @@ section Skel
 open _root_.Flock.ZkServer.Skeleton (RecM recAsks padsFrames)
 open _root_.Flock.ZkServer.Finish (Asks squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 
-/-- Two recordings alike, both holding the rounds `pre` first: as many coins flipped. -/
 def RecPre (pre : List (ByteArray × ℕ)) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ pre <+: s.1.toList ∧ pre <+: s'.1.toList
 
-/-- Two recording programs alike from recordings holding `pre` first. -/
 def RecPreR (pre : List (ByteArray × ℕ)) {α β : Type} (S : α → β → Prop) (x : RecM α) (y : RecM β) : Prop :=
   ∀ s s', RecPre pre s s' → RelV (fun a b => S a.1 b.1 ∧ RecPre pre a.2 b.2) (x s) (y s')
 
-/-- **The recording's lift** from recordings holding `pre` first: a round only adds to them. -/
 def recLiftPre (pre : List (ByteArray × ℕ)) : Lift (M := RecM) recAsks where
   R := RecPreR pre
   pure hab := fun _ _ hs => And.intro hab hs
@@ -112,7 +90,6 @@ def recLiftPre (pre : List (ByteArray × ℕ)) : Lift (M := RecM) recAsks where
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- The masked zerocheck after `r_outer`'s squeeze, at its coins `rOuter`. -/
 def zcTail (io : Asks M) (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (rOuter : Array F128) :
     TMW M (_root_.Flock.ZerocheckProof × _root_.Flock.ZcOut) := do
   let r := _root_.Flock.pinned ++ rOuter
@@ -159,7 +136,6 @@ theorem zcTail_sim {io : Asks M} {L : Lift io} (m : ℕ) (lay : _root_.Flock.Zk.
     refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
     exact sim_pure rfl
 
-/-- A squeeze of `n ≠ 0` coins on the recording: its framed bytes recorded with their count. -/
 theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Flock.Transcript) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
     sampleVecP recAsks n t (rs, k) =
       .ok (((Array.range n).map fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1),
@@ -180,15 +156,12 @@ theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Flock.Tra
     rfl
   rw [e, Count.framed_count t 2 hn]
 
-/-- The second round the recording holds from a rep's start: `r_outer`'s squeeze, framed on an empty pending. -/
 theorem framed_skelT8 (c : ByteArray) (n : ℕ) : framed (skelT8 c) 2 n = ByteArray.empty ++ header 4 2 n :=
   rfl
 
 theorem ok_bind' {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a :=
   rfl
 
-/-- **The recorded PIOP's first two rounds**, from a rep's start: the zerocheck's binding with `r_skip`'s squeeze, then
-`r_outer`'s squeeze alone. -/
 theorem skel_two (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap root dom : ByteArray)
     (hm : 14 ≤ st.m) (hm' : st.m < 2 ^ 64) :
     RelV (fun a b => RecPre [(zcPend st.digest cap root dom ++ header 4 2 6, 6),
@@ -225,7 +198,6 @@ theorem skel_two (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     (lincheckFw_sim st.fold lay (fun _ => 0) zc) (fun u v h => by subst h; exact sim_pure rfl)
     t1 t1' ht s1 s1' hs) fun _ _ h => h.2
 
-/-- The algebraic phase's schedule, related to itself, holds its first two rounds. -/
 theorem rounds_two_rel (st : _root_.Flock.Setup) (k0 : ℕ) (cap dom : ByteArray) (hm : 14 ≤ st.m)
     (hm' : st.m < 2 ^ 64) :
     RelV (fun (a : Array (ByteArray × ℕ)) (_ : Array (ByteArray × ℕ)) =>
@@ -280,8 +252,6 @@ theorem rounds_two_rel (st : _root_.Flock.Setup) (k0 : ℕ) (cap dom : ByteArray
   · rw [Array.getElem?_setIfInBounds_self_of_lt (by omega)]
   · rw [Array.getElem?_setIfInBounds_ne (by omega), hr1]
 
-/-- **The algebraic phase's first two scheduled rounds**: the zerocheck's binding (the statement's, without the pads'
-frames) with `r_skip`'s squeeze of `6`, and `r_outer`'s squeeze of `m − 13` alone. -/
 theorem rounds_two {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : 14 ≤ st.m) (hm' : st.m < 2 ^ 64)
     (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
@@ -295,10 +265,6 @@ end Skel
 
 end Sched
 
-/-! ## The frame through `r_outer`'s round -/
-
-/-- **The zerocheck's binding round at a rep's start**: `roundFree_zcBind` with the stream's domain frame first
-(`Transcript.init`'s), which the frame skips. -/
 theorem roundFree_zcHead (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = false) (hd : s.done = false)
     (hi : s.inner = none) (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -329,7 +295,6 @@ theorem roundFree_zcHead (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     (by simp) (.inl rfl) (by decide) (by decide) hb
   exact ⟨out, fr, hr⟩
 
-/-- The algebraic phase's first scheduled round is the binding's frames, then `r_skip`'s squeeze. -/
 theorem head_encs (st : _root_.Flock.Setup) (cap dom : ByteArray) :
     _root_.Flock.ZkServer.Skeleton.head st cap dom ++ header 4 2 6 =
       ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes st.digest, .bytes cap,
@@ -343,7 +308,6 @@ theorem head_encs (st : _root_.Flock.Setup) (cap dom : ByteArray) :
   simp only [encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.append_assoc, sq_enc,
     _root_.Flock.ZkServer.Frame.LABEL_ZC]
 
-/-- `r_outer`'s scheduled round is its squeeze alone. -/
 theorem outer_encs (n : ℕ) :
     ByteArray.empty ++ header 4 2 n = ByteArray.mk (encs [] ++ (Frame.sq 2 n).enc).toArray := by
   apply ByteArray.ext
@@ -355,7 +319,6 @@ namespace Loop
 
 open _root_.Flock.ZkServer.Frame (check)
 
-/-- A loop each of whose steps yields or refuses, where it returns, yielded at each. -/
 theorem forIn_yield_each {g : ℕ → PUnit → V (ForInStep PUnit)}
     (hg : ∀ i, g i PUnit.unit = .ok (.yield PUnit.unit) ∨ ∃ e, g i PUnit.unit = .error e) :
     ∀ (l : List ℕ) (y : PUnit), forIn l PUnit.unit g = .ok y → ∀ i ∈ l, g i PUnit.unit = .ok (.yield PUnit.unit)
@@ -375,7 +338,6 @@ theorem getElem!_append_size {a b : Array F128} {e : ℕ} (he : e < b.size) : (a
   rw [getElem!_pos (a ++ b) (a.size + e) (by rw [Array.size_append]; omega), getElem!_pos b e he]
   simp
 
-/-- Where the frame takes coins for a round owing `n`, they are `n`. -/
 theorem answer_size {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho : s.owed = some n)
     (h : s.answer cfg cs = .ok m) : cs.size = n := by
   unfold Masker.answer at h
@@ -385,8 +347,6 @@ theorem answer_size {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho :
   simp only [hne, ↓reduceIte] at h
   cases h
 
-/-- **Where the frame takes a round's coins in the algebraic phase**, none at a zerocheck outer coin's place is `1`
-(`Masker.answer`, `refuse_outer`). -/
 theorem answer_outer {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho : s.owed = some n)
     (hi : s.inner = none) (hl : s.l0 = false) (hon : s.on = true) (h : s.answer cfg cs = .ok m) :
     cs.size = n ∧ ∀ e < n, K_SKIP ≤ s.coins.size + e → s.coins.size + e < K_SKIP + (cfg.lay.nMlv - N_INNER) →
@@ -416,7 +376,6 @@ theorem answer_outer {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho 
   simp only [h1, h2, hz', decide_true, Bool.and_self, ↓reduceIte] at hk
   cases hk
 
-/-- **The frame's check of a round against itself**: its state is `roundFree`'s, at the rep's state or its stop. -/
 theorem check_self {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {out : ByteArray} {sx : Masker}
     {why : Option String} (h : check c s r r n = .ok (out, sx, why)) :
     (∃ fr, roundFree c s r n = .ok (out, sx, fr)) ∨
@@ -436,7 +395,6 @@ theorem check_self {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {out : ByteA
   | none => exact Or.inl (key (check_none h))
   | some w => exact Or.inr (key (check_some h))
 
-/-- A round with itself in its place, past which the rep runs on: the frame took it, or refused it and stopped. -/
 theorem run_sched_cons {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {n : ℕ} {r : ByteArray} {rs : List _root_.Flock.ZkServer.Frame.Req}
     (ho : st.m.owed = none) (h2 : (_root_.Flock.ZkServer.Frame.run c st (.round n r (.sched r) :: rs)).2 = false) :
     (∃ out sx why, check c st.m r r n = .ok (out, sx, why) ∧
@@ -453,7 +411,6 @@ theorem run_sched_cons {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {n : �
     refine ⟨out, sx, why, rfl, ?_⟩
     simp only [_root_.Flock.ZkServer.Frame.run, _root_.Flock.ZkServer.Frame.step, ho, hc, _root_.Flock.ZkServer.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]
 
-/-- An earlier rep's coins, past which the rep runs on, add claim points alone. -/
 theorem run_prior (c : Cfg) (P : Array F128) (rs : List _root_.Flock.ZkServer.Frame.Req)
     (h2 : (_root_.Flock.ZkServer.Frame.run c {} ((if P.isEmpty then [] else [.prior P.size (_root_.Flock.ZkServer.Frame.wordBytes P)]) ++
       rs)).2 = false) :
@@ -472,9 +429,6 @@ theorem run_prior (c : Cfg) (P : Array F128) (rs : List _root_.Flock.ZkServer.Fr
       simp only [_root_.Flock.ZkServer.Frame.run, _root_.Flock.ZkServer.Frame.step, hcp,
         _root_.Flock.ZkServer.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]
 
-/-- **The frame through `r_outer`'s round**, from a rep's start past an earlier rep's coins: where the binding's
-round, its coins and `r_outer`'s round (`n` coins) neither end the rep nor leave it owing none, the frame is in the
-algebraic phase, owing `n` coins, on the binding's six. -/
 theorem run_outer {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray} {n : ℕ}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) (hn0 : n ≠ 0)
@@ -553,7 +507,6 @@ theorem run_outer {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.
     obtain ⟨s1, ha, -⟩ := run_coins_cons c _ _ _ h2
     exact absurd ha (answer_owed_none _ rfl)
 
-/-- A rep's schedule so far starts with the algebraic phase's. -/
 theorem schedSoFar_pre {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -572,8 +525,6 @@ theorem schedSoFar_pre {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom :
       exact ⟨_, hs.symm⟩
     · cases hs
 
-/-- **The loop's state at a rep's `r_outer` round**: where the frame takes coins there, they are `m − 13`, and none
-in an outer place of the layout `c''` is `1`. -/
 theorem repState_outer {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}
@@ -612,7 +563,6 @@ theorem repState_outer {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p
     simp only [↓reduceIte] at ha
     exact absurd ha (answer_owed_none cs rfl)
 
-/-- A rep's start lays out `m − 6` residual rounds. -/
 theorem start_nMlv {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
     (h : _root_.Flock.ZkServer.Drive.start st = .ok (lay, mask)) : lay.nMlv = st.m - 6 := by
   unfold _root_.Flock.ZkServer.Drive.start at h
@@ -622,7 +572,6 @@ theorem start_nMlv {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.
   rw [← h.1]
   rfl
 
-/-- A rep's outer coins' round follows `Hello`. -/
 theorem one_le_outerSlot {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (j r : ℕ) : 1 ≤ Masked.outerSlot x j r := by
   have hs : Masked.outerSlot x j r = FlockComplete.repStartZk spec sts (2 * j + r) + 1 := by
@@ -630,11 +579,6 @@ theorem one_le_outerSlot {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array St
     rw [hsx]
   omega
 
-/-- **The frame takes no outer coin `1`**: at a `Live` statement the loop serves, where the frame, after the decoded
-coins `cs` up to table `j`'s rep `r`'s outer coins' round, at a configuration of that round's rep's layout, takes the
-coin `d` that opens them, its outer coin `e` is not `1`. The round is the rep's round 1, `r_outer`'s, its frame there
-in the algebraic phase on the binding's six coins (`repState_outer`), which takes coins only at no outer coin `1`
-(`answer_outer`). -/
 theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s : ℕ}
     (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (he : e < (Masked.stsOf x)[j]!.m - 13)
     (hsd : Masked.outerSlot x j r = s) {cs : List FlockDeploy.Coin} (hcs : cs.length = s) {d : FlockDeploy.Coin}
@@ -729,11 +673,6 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of at most
-`refK x` openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where its slot is among the
-history's openings, is not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the
-algebraic phase on the binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`),
-which it does only at no outer coin `1` (`answer_outer`). -/
 theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -780,10 +719,6 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, hd, Option.map_some, Option.getD_some]
   exact hk
 
-/-- **Where the transport's reading does not refuse the coins `cs`**, past the `Commit`'s, the frame of round
-`cs.length`'s rep answers them at its rep's layout (`takeAt`): where the next round is the same rep's, at the next
-round's configuration, which has that layout and the rep's mask slot, before the rank stop; else at no mask slot, the
-rep's answer before the next rep's start. -/
 theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
     (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
     {cs : List Coin} {n : ℕ} (hn : cs.length = n) (h2 : 2 ≤ n) (h : L.refuseOf pc fc cc x cs = false) :
@@ -808,11 +743,6 @@ theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg →
       cases h
     | ok m => exact ⟨_, m, ha⟩
 
-/-- **The loop's stop rule fires at an outer coin `1`**: at a `Live` statement the loop serves, where the stop rule of
-the transport's reading (`rfOf`) has not fired by round `i` at the coins `c`, table `j`'s rep `r`'s outer coin `e`,
-where its slot is before `i`, is not `1`. The stop rule not firing there means the frame of the slot's rep answered its
-coins (`answer_of_refuseOf`), which it does only at no outer coin `1` (`Loop.outer_of_answer`). It holds at every coin
-vector, where `outer_unrefused` holds on live histories. -/
 theorem rfOf_outer (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -858,7 +788,6 @@ theorem rfOf_outer (T : ZKMal.CoinLayer.TableData)
     rfl
   · decide
 
-/-- **Past the opened coins no outer coin is `1`**: the padding's coins are `0`. -/
 theorem outerAt_pad_ge (T : ZKMal.CoinLayer.TableData) {x : Msg} (cs : List (ZKMal.CoinLayer.session loopNr T).Coin)
     {j r : ℕ} (hs : cs.length ≤ Masked.outerSlot x j r) (e : ℕ) :
     Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x) cs) j r e ≠ 1 := by
@@ -876,10 +805,6 @@ theorem outerAt_pad_ge (T : ZKMal.CoinLayer.TableData) {x : Msg} (cs : List (ZKM
     · decide
   · decide
 
-/-- **The loop's stop rule computes only at `SwOk`'s coins** (`RefSession.StopsOk`): where the stop rule of the
-transport's reading (`rfOf`) has not fired by round `cs.length` at the coins `cs`, padded, no outer coin is `1` at a
-`Live` statement the loop serves, before `cs.length` as the frames took them (`rfOf_outer`) and past it as the padding's
-(`outerAt_pad_ge`); and the coins every table admits are `SwOk`'s (`Loop.swOk_of_admits`). -/
 theorem stopsOk_swOk (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -893,9 +818,6 @@ theorem stopsOk_swOk (T : ZKMal.CoinLayer.TableData)
   · exact rfOf_outer T L₀ real hx hSv _ cs.length hR hj hr2 hs he
   · exact outerAt_pad_ge T cs (Nat.le_of_not_lt hs) e
 
-/-- **A live history's opened coins are `SwOk`'s**: at a statement the loop serves, the coins of a live history of at
-most `refK x` openings the release doesn't refuse have no outer coin `1`, where the frames took them
-(`outer_unrefused`) and past them (`outerAt_pad_ge`). -/
 theorem swOk_of_live (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -914,8 +836,6 @@ theorem swOk_of_live (T : ZKMal.CoinLayer.TableData)
   · exact outer_unrefused T L₀ real wk x w hx hSv ρ κ m₀ ρ₀ ops hl hlive hr hj hr2 hs he
   · exact outerAt_pad_ge T _ (by rw [List.length_map]; exact Nat.le_of_not_lt hs) e
 
-/-- **The same at every prefix of a live history**: its prefixes are live (`live_take`) and, a refusal being for good
-(`refusesCoins_of_take`), not refused. -/
 theorem swOk_take_of_live (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

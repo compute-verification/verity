@@ -38,24 +38,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The pads' opened columns and salts read from the views are the session's (`repOpenRest_pads`)
-
-`FinalRest`'s pads half: in a rep's context (`RepCtx`), where the rep read from the views (`repVE`) and the session's
-rep (`repHE`) both return at one history `l'`, their inner proofs open the same columns and salts.
-
-* `FlockComplete.RunPost`: what every returning run satisfies, with its `bind`, `ite` and `throw` rules.
-* `FlockComplete.repCut_padsAt`, `FlockComplete.repPZk_padsAt`: answered by `asksCut`, both reps open their pads
-  commitment at `padQs`, the last round's `Q` coins mod the commitment's size (`PadsAt`): the sample is the last thing
-  `innerCut` and `innerP` do (`sampleVecP_asksCut`).
-* `Masked.colPAt_exe`, `Masked.srcV_pads`: at an opened position's tree position the views' columns and salt are the
-  codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's pads salt fitted to 192 bytes, as in the session's commitment
-  (`innerCommitP_rows`, `innerCommitP_salts`).
-* `Masked.padPos_of_mem`: a queried position is opened.
-* `Masked.repOpenRest_pads`: the session's rep ends at the next rep's first round (`repExact`), so the last round is
-  `innerOff 3`'s, whose coins are the table's `qP`. Each queried position is then opened (`coinedOf_sP_val`), and there
-  the views' commitment (`fillP`) is the session's.
--/
+/-! The pads' opened columns and salts read from the views are the session's (`repOpenRest_pads`). -/
 
 @[expose] public section
 
@@ -63,7 +46,6 @@ namespace FlockComplete
 
 open Flock
 
-/-- **What every returning run of `m` satisfies**: `P` at its value, its last transcript and its last history. -/
 def RunPost {α : Type} (m : TMW PS α) (P : α → Transcript → Array Claims.Msg → Prop) : Prop :=
   ∀ s l a t l', (m.run s).go l = (.ok (a, t), l') → P a t l'
 
@@ -104,7 +86,6 @@ theorem mono {x : TMW PS β} {Q : β → Transcript → Array Claims.Msg → Pro
 
 end RunPost
 
-/-- **A sample of `m ≠ 0` coins answered by `asksCut`** returns the coin of its round, the last of its history. -/
 theorem sampleVecP_asksCut (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : m ≠ 0) :
     RunPost (sampleVecP (asksCut coin n) m) fun v _ l => v = (Array.range m).map (coin (l.size - 1)) := by
   intro s l v t l' e
@@ -124,11 +105,9 @@ theorem sampleVecP_asksCut (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
     obtain ⟨⟨rfl, -⟩, rfl⟩ := e₂
     simp
 
-/-- **The pads positions the inner proof queries** at its last history `l`: its last round's `Q` coins, each mod `n`. -/
 def padQs (coin : ℕ → ℕ → F128) (l : Array Claims.Msg) (n : ℕ) : Array ℕ :=
   ((Array.range Zk.Q).map (coin (l.size - 1))).map fun w => w.lo.toNat % n
 
-/-- **An inner proof opens `ic` at the queried positions**: its columns and salts are `ic`'s at `padQs`. -/
 def PadsAt (coin : ℕ → ℕ → F128) (ic : InnerCommit) (ip : Zk.InnerProof) (l : Array Claims.Msg) : Prop :=
   ip.opened = (padQs coin l ic.ch.size).map (fun j => (ic.ch[j]!, ic.cm[j]!)) ∧
     ip.salts = (padQs coin l ic.ch.size).map fun j => ic.salts[j]!
@@ -141,7 +120,6 @@ theorem padsAt_last (coin : ℕ → ℕ → F128) (n : ℕ) (ic : InnerCommit) {
     subst hv
     exact hg _)
 
-/-- **`innerCut` answered by `asksCut` opens its commitment at the queried positions.** -/
 theorem innerCut_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128)
     (src : RepSrc) (cons : Array (String × Zk.Lin)) :
     RunPost (innerCut (asksCut coin n) lay ic finalC src cons) fun ip _ l => PadsAt coin ic ip l := by
@@ -152,7 +130,6 @@ theorem innerCut_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (lay : Zk.PadLay
   refine RunPost.ite (RunPost.bind fun _ => ?_) ?_ <;>
     exact RunPost.bind fun _ => padsAt_last coin n ic fun _ => ⟨rfl, rfl⟩
 
-/-- **`innerP` answered by `asksCut` opens its commitment at the queried positions.** -/
 theorem innerP_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) :
     RunPost (innerP (asksCut coin n) hs lay p ic finalC cons) fun ip _ l => PadsAt coin ic ip l := by
@@ -165,7 +142,6 @@ theorem innerP_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (
     refine RunPost.ite (RunPost.bind fun _ => ?_) ?_ <;>
       exact RunPost.bind fun _ => padsAt_last coin n ic fun _ => ⟨rfl, rfl⟩
 
-/-- **The rep from the source answered by `asksCut` opens its pads commitment at the queried positions.** -/
 theorem repCut_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (st : Setup) (sch : Schedule) (rep : ℕ)
     (dom : ByteArray) (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit) (src : RepSrc)
     (prior : Array (List F128)) (words : List ℕ) :
@@ -176,7 +152,6 @@ theorem repCut_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (
     RunPost.bind fun ⟨_, _⟩ => RunPost.bind fun _ =>
       RunPost.bind_pure (RunPost.mono (innerCut_padsAt coin n _ ic _ src _) fun _ _ _ h => h)
 
-/-- **The session's rep answered by `asksCut` opens its pads commitment at the queried positions.** -/
 theorem repPZk_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -197,9 +172,6 @@ open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge CoinLa
 
 attribute [local irreducible] Composed.treeEquiv
 
-/-- **Table `j`'s rep `r` pads column and salt at tree position `p`** at the executable's layout: the codes of
-`h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1` and the tape's pads salt `p` fitted to 192 bytes (`exeOf_pads`' leaf's
-parts), at every coin vector. -/
 theorem colPAt_exe (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     (t : Fin Claims.Flock.zkTableCap → ExeCell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -343,16 +315,12 @@ theorem colPAt_exe (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     rfl
   exact ⟨h1, h2, hs⟩
 
-/-- `atP` at an opened position's tree position is its value. -/
 theorem atP_sP (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     (r : Fin 2) {α : Type} (d : α) (f : Fin (tabC P x j).z.nQ → α) (a : Fin (tabC P x j).z.nQ) :
     atP P x cz j r d f (((tabC P x j).T (cz j)).sP r (.inl a)).val = f a := by
   unfold atP
   simp only [Fin.isLt, ↓reduceDIte, Fin.eta, Equiv.symm_apply_apply]
 
-/-- **The views' pads columns and salt at an opened position are the session's pads'**: at the tree position of opened
-position `a`, table `i`'s rep `r` source from the views reads the codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's
-pads salt fitted to 192 bytes (`colPAt_exe`). -/
 theorem srcV_pads (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
     (hi : i < jOf x) (hr : r < 2) (a : Fin (tabC PE x ⟨i, hi⟩).z.nQ) :
     ((srcV x c w τ i).rep r).ch (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val =
@@ -397,8 +365,6 @@ theorem srcV_pads (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   · exact congrArg FlockLevel3.GF128.val h2
   · exact h3
 
-/-- **A queried position below `L` is opened**: where at most `t` positions are queried, `padPos` places each queried
-position below `L` at some index below `t`, since it lists them first. -/
 theorem padPos_of_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : ℕ} (hq : q ∈ qs) (hqL : q < L) :
     ∃ a : Fin t, Composed.padPos L t qs a = q := by
   have hFn : ((List.range L).filter fun y => decide (y ∈ qs)).Nodup := List.nodup_range.filter _
@@ -413,9 +379,6 @@ theorem padPos_of_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : �
   rw [List.getD_eq_getElem _ _ (by rw [List.length_append]; omega), List.getElem_append_left hk]
   exact hkq
 
-/-- **The pads' opened columns and salts read from the views are the session's** (`FinalRest`'s pads half): in a rep's
-context, where the rep read from the views and the session's rep both return, at one transcript and history and with
-proofs equal up to `eraseZ`, the pads' opened columns and salts agree. -/
 theorem repOpenRest_pads : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
       (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →

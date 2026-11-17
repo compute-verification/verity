@@ -36,25 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The ZK server's rep against the rep from a source
-
-`flock-zk-server finish`'s rep (`repFwC`) computes what it sends from the passed values and the rep's pads; the session's
-rep from a source (`FlockComplete.repCut`) reads the same messages from the source. Here both run on the session's sends
-(`asksCut`), and where the source holds what the ZK server computes, they run alike up to what only the final message
-reads (`eraseZ`):
-
-* **The PIOP** (`piopFw`, `piopCut_fw`): the ZK server's zerocheck, lincheck and ring switch are the source's where the
-  source's masked values are `vals + h` below `zp 64`, the only ones they read
-  (`FlockComplete.CutEq.zerocheckCut_eqAt`, `lincheckCut_eqAt`),
-  and its switched vectors `switchVec g` at the claims, and where the rank check, which the ZK server leaves to the
-  frame, passes (`ringSwitchCut_congr`, `rankCheck_pass_go`).
-* **Ligerito** and **the inner proof**: the session's hybrids, `FlockComplete.LigLock.ligeritoCut_alike` at `LigHyp`
-  and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the ZK server's run. Its inner proof stops on a failing
-  batched constraint, so where it returns, that constraint held (`innerP_batched`).
-* **`repCut_fw`**: where the ZK server's rep returns, the rep from the source, at level 0's commitment erased, returns the
-  same transcript and log, and a proof equal to the ZK server's up to `eraseZ`.
--/
+/-! The ZK server's rep against the rep from a source. -/
 
 @[expose] public section
 
@@ -85,8 +67,6 @@ section
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The ZK server's PIOP**: `repFwC`'s zerocheck, lincheck and ring switch, sending the masked values `mk` and the
-switched vectors of `g` at the claims. -/
 def piopFw (io : FlockComplete.Asks M) (st : Setup) (lay : Zk.PadLayout) (g : Array F128) (mk : ℕ → F128)
     (cap root : ByteArray) (extras : Array Claim) :
     TMW M (ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched) := do
@@ -96,7 +76,6 @@ def piopFw (io : FlockComplete.Asks M) (st : Setup) (lay : Zk.PadLayout) (g : Ar
   let (ss, T, sws) ← FlockComplete.ringSwitchCut io (fun k => switchVec g claims[k]!) claims
   return (zp, lp, ss, T, sws)
 
-/-- **The ring switch reads claim `k`'s switched vector only below the claim count.** -/
 theorem ringSwitchCut_congr (io : FlockComplete.Asks M) {sv sv' : ℕ → Array F128} {claims : Array Claim}
     (h : ∀ k < claims.size, sv k = sv' k) :
     FlockComplete.ringSwitchCut io sv claims = FlockComplete.ringSwitchCut io sv' claims := by
@@ -109,8 +88,6 @@ theorem ringSwitchCut_congr (io : FlockComplete.Asks M) {sv sv' : ℕ → Array 
 end
 
 open FlockComplete (PS)
-
-/-! ## Runs of `PS` step by step -/
 
 theorem run_bind_ok {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t'' : Transcript}
     {l l'' : Array Claims.Msg} {b : β} (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
@@ -130,8 +107,6 @@ theorem get_run_go (t : Transcript) (l : Array Claims.Msg) :
 theorem throw_run_go {α : Type} (e : String) (t : Transcript) (l : Array Claims.Msg) :
     ((throw e : TMW PS α).run t).go l = (.error e, l) := rfl
 
-/-- **Where the inner proof returns at `asksCut`, its batched constraint held** on the pads, at the coins of the rounds
-it drew from: `innerP` stops on a batched constraint that fails. -/
 theorem innerP_batched {coin : ℕ → ℕ → F128} {n : ℕ} {hs : Hashes PS} {lay : Zk.PadLayout}
     {p : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {finalC : F128} {cons : Array (String × Zk.Lin)}
     {t t' : Transcript} {l l' : Array Claims.Msg} {i : Zk.InnerProof}
@@ -195,8 +170,6 @@ theorem rankCheck_pass_go {m kLog : ℕ} {prior : Array (List F128)} {words : Li
   rw [e, if_pos h]
   rfl
 
-/-! ## What only the final message reads -/
-
 theorem eraseC_cap' (cm : FlockComplete.Commit) : (FlockComplete.eraseC cm).cap = cm.cap := rfl
 
 theorem replay_eraseL' (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (params : PcsParams)
@@ -216,11 +189,6 @@ theorem ligeritoConstraints_eraseL' (lay : Zk.PadLayout) (rec : Zk.L0Rec) (lg : 
 theorem eraseL_eraseL' (lg : LigeritoProof) : FlockComplete.eraseL (FlockComplete.eraseL lg) = FlockComplete.eraseL lg := by
   simp only [FlockComplete.eraseL, FlockComplete.eraseLP, Array.map_map, Function.comp_def]
 
-/-! ## The PIOP -/
-
-/-- **The source's PIOP is the ZK server's**: answered by `asksCut`, from a source whose masked values below `zp 64` are
-the ZK server's `mk`, where at the ZK server's zerocheck and lincheck the rank check passes and the source's switched
-vectors are the ZK server's at the claims, `piopCut` returns what `piopFw` returns. -/
 theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (g : Array F128)
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
     (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
@@ -270,16 +238,6 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
   rw [FlockComplete.Replay.bind_go (rankCheck_pass_go l₂ hrk), ringSwitchCut_congr _ hsv]
   exact h
 
-/-! ## The rep -/
-
-/-- **The rep from the source is the ZK server's up to `eraseZ`**: answered by `asksCut` from the log `l`, where the
-ZK server's rep returns a proof `p`, the rep from a source that holds what the ZK server computes returns, at level 0's
-commitment erased, the same transcript and log and a proof `p'` with `eraseZ p' = eraseZ p`. The source holds: the
-masked values `vals + h` below `zp 64`, the PIOP's (`hmk`, where the fold's `kLog` is the setup's: the ZK server's
-passed values are those `zp 64` words); at the ZK server's zerocheck and lincheck, a passing rank check and its switched
-vectors (`hpiop`); at its PIOP, level 0's opening (`hlig`, `LigHyp`), whose masked values from `zp 64` to `h_ab` are
-the ZK server's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`), where the batched
-constraint held, as the ZK server's own inner proof checks (`innerP_batched`). -/
 theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)

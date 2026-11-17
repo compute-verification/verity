@@ -38,40 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What Flock's zero knowledge against a malicious verifier still assumes of the masked prover
-
-`Flock.zkR_gkE_hm96` reads the deployed `--zk` protocol (`G : Proto Flock.Wit`) through the session analysis's objects:
-the session's tables, its hm96 leaves, the leaves' digests and the maps from the prover's randomness to the tables'. A Lean
-model of `flock-circuit --zk`'s messages supplies them:
-
-* `Proto.PreModel`: Lemma C's setting for the messages before the last coin, at the verifier's answers;
-* `Proto.CoinModel`: at each coin vector, Lemma B's (`Proto.OnModel`, where the prover goes on) or Lemma C's at fixed
-  answers (`Proto.OffModel`, where it refuses).
-
-Five Props say what the models must satisfy; `Claims.Hm96Hiding` stays the one named assumption.
-
-* `Proto.MsgLink`: the prover's messages are the session's (`hlink`, `hP`, `hI` before the last coin; `hR`, `hD` at
-  each coin vector), on randomness read through maps with fibers of one size, its table witnesses carrying the public
-  region data;
-* `Proto.SimLink`: the SHVZK simulator is the tables' `S_shvzk` where the prover goes on and the dummy-witness prover
-  where it refuses (`hS`);
-* `Proto.NonDegenerate`: the tables are non-degenerate where the prover goes on (`Rank`, `PadOnto`, each `W^r` a
-  bijection, `PadsOnto`, `β ≠ 0`);
-* `Proto.InnerHolds`: there, a valid witness's pads satisfy the inner constraint `⟨λ, h⟩ = θ`;
-* `Proto.CoinCheck`: the opening check is the coin-tree walk and the coin is read from the opening's coins (`hchk`,
-  `hdec`).
-
-`Proto.prefix_of_models` gives Lemma C's bound on the runs, `Proto.shvzk_of_models` `SHVZK`, and
-`Proto.binding_of_coinCheck` `Binding`. `Flock.zk_of_models` is `Claims.Flock.ZKAt` for a masked `D` whose rounds with
-`Hello` are the protocol's, and `Flock.zkAt_deployZk_of_models` is `Claims.Flock.ZKAt` at `FlockDeploy.deployZk`, both at
-
-  `ε_zk(x) = 8·n_L(x)·δ₁ + 8t·n_B(x)·δ₁ + 2·3^{-t}` and `γ(x) = 4t·3^t`,
-
-`n_L` bounding the pre-final view's leaves and `n_B` each coin vector's hidden leaves (`OnModel.size`) or pre-final leaves
-(`OffModel.size`). `Flock.zk_deployZk_of_models` is `Claims.Flock.ZK` at the masked record `zkOf`, whose reference prover
-is `ZkTables.honestPR`, where `G`'s messages are `ZkTables.honestPR`'s (`Proto.Honest`).
--/
+/-! What Flock's zero knowledge against a malicious verifier still assumes of the masked prover. -/
 
 @[expose] public section
 
@@ -83,11 +50,6 @@ namespace Proto
 
 variable {W : Type}
 
-/-! ## The models -/
-
-/-- **Lemma C's setting at statement `x`** (`Proto.runs_close_hm96`): the session's tables `T a` at the coins the answers
-`a` open, the prover `P` given by `msgs` of its leaves `Hl (dig + M·y, c(y))`, the tables' randomness `e`, the pre-final
-view's cut `out`, the table witnesses of each witness and of the dummy, and the map `eR` from `G`'s randomness. -/
 structure PreModel (G : Proto W) (x : Msg) (Salt B Cc : Type) where
   F : Type
   K : Type
@@ -127,9 +89,6 @@ structure PreModel (G : Proto W) (x : Msg) (Salt B Cc : Type) where
 attribute [instance] PreModel.fieldF PreModel.fieldK PreModel.charF PreModel.groupHi PreModel.finF PreModel.decF
   PreModel.finHi PreModel.decHi PreModel.finΩ PreModel.neΩ PreModel.finL PreModel.decL
 
-/-- **Lemma B's setting at a coin vector where the prover goes on** (`Proto.shvzk_at_hm96`): the session's tables `T`
-with their hm96 leaves `Mh`, the table witnesses, the map `lift` from the tables' views to the prover's messages, and the
-maps `eR`, `eS` from `G`'s randomness and the simulator's to the tables'. -/
 structure OnModel (G : Proto W) (x : Msg) (Salt B Cc : Type) [AddCommGroup B] where
   F : Type
   K : Type
@@ -161,9 +120,6 @@ structure OnModel (G : Proto W) (x : Msg) (Salt B Cc : Type) [AddCommGroup B] wh
 attribute [instance] OnModel.fieldF OnModel.fieldK OnModel.charF OnModel.groupHi OnModel.finF OnModel.decF
   OnModel.finK OnModel.decK OnModel.finHi OnModel.decHi
 
-/-- **Lemma C's setting at fixed answers, at a coin vector where the prover refuses** (`Proto.shvzk_refused_hm96`): the
-session's tables `T`, the prover's messages `msgs` of its leaves, the tables' randomness `e`, the pre-final view's cut
-`out`, the table witnesses, and the maps `eR`, `eS` from `G`'s randomness and the simulator's. -/
 structure OffModel (G : Proto W) (x : Msg) (Salt B Cc : Type) where
   F : Type
   K : Type
@@ -204,17 +160,13 @@ structure OffModel (G : Proto W) (x : Msg) (Salt B Cc : Type) where
 attribute [instance] OffModel.fieldF OffModel.fieldK OffModel.charF OffModel.groupHi OffModel.finF OffModel.decF
   OffModel.finHi OffModel.decHi OffModel.finΩ OffModel.neΩ OffModel.finL OffModel.decL
 
-/-- The model at one coin vector: where the prover goes on, or where it refuses. -/
 abbrev CoinModel (G : Proto W) (x : Msg) (Salt B Cc : Type) [AddCommGroup B] : Type 1 :=
   G.OnModel x Salt B Cc ⊕ G.OffModel x Salt B Cc
-
-/-! ## What each model must satisfy -/
 
 section Props
 
 variable {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup B]
 
-/-- Before the last coin, the prover's messages on `w` and on the dummy are the session's strategy on real hm96 leaves. -/
 def PreModel.Link (M : G.PreModel x Salt B Cc) (H : Msg → Msg) (My : Salt → B) (cs : Salt → Cc) (ν : G.Nonce) (w : W) :
     Prop :=
   (∀ wt ω p a, (M.P wt).msg (ω, p) a = M.msgs wt ω a fun l => M.Hl (M.dig wt ω a l + (p l).1, (p l).2)) ∧
@@ -230,7 +182,6 @@ def PreModel.Link (M : G.PreModel x Salt B Cc) (H : Msg → Msg) (My : Salt → 
   ∀ r, (G.preStrat H x ν (G.dmsg x ν)).msg r =
     (M.P M.wt₀).msg ((M.eR r).1, fun l => (My ((M.eR r).2 l), cs ((M.eR r).2 l)))
 
-/-- Where the prover goes on at `c`, its messages are `lift` of the session's real view on hm96 leaves `(My, cs)`. -/
 def OnModel.Link (M : G.OnModel x Salt B Cc) (H : Msg → Msg) (My : Salt → B) (cs : Salt → Cc) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (w : W) : Prop :=
   (∀ j, (M.Mh j).My = My ∧ (M.Mh j).cs = cs) ∧
@@ -238,24 +189,19 @@ def OnModel.Link (M : G.OnModel x Salt B Cc) (H : Msg → Msg) (My : Salt → B)
   (∀ p, Nat.card {r // M.eR r = p} = M.kR) ∧
   ∀ r, G.realVec H x w ν r c = M.lift fun j => (M.Mh j).viewR (M.wt w j) (M.eR r j).1 (M.eR r j).2
 
-/-- Where the prover goes on at `c`, the simulator's messages are `lift` of the tables' `S_shvzk` outputs on the dummy. -/
 def OnModel.Sim (M : G.OnModel x Salt B Cc) (H : Msg → Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) : Prop :=
   (∀ p, Nat.card {s // M.eS s = p} = M.kS) ∧
   ∀ s, ((G.sim x ν c s).eval H).1 = M.lift fun j => (M.Mh j).simR (M.wt₀ j) (M.eS s j).1 (M.eS s j).2
 
-/-- The tables are non-degenerate: Lemma B's `Rank`, `PadOnto`, each `W^r` a bijection, `PadsOnto` and `β ≠ 0`. -/
 def OnModel.NonDegenerate (M : G.OnModel x Salt B Cc) : Prop :=
   (∀ j, (M.T j).Rank) ∧ (∀ j, (M.T j).PadOnto) ∧
   (∀ j r, Function.Bijective fun p : M.F × M.F => (M.T j).Wr r p.1 p.2) ∧ (∀ j, (M.T j).PadsOnto) ∧
   ∀ j r, (M.T j).β r ≠ 0
 
-/-- `w`'s pads satisfy the inner constraint `⟨λ, h⟩ = θ` in every table. -/
 def OnModel.Inner (M : G.OnModel x Salt B Cc) (w : W) : Prop := ∀ j, (M.T j).InnerHolds (M.wt w j)
 
-/-- The session's hidden leaves. -/
 def OnModel.size (M : G.OnModel x Salt B Cc) : ℕ := ∑ j, Fintype.card (M.T j).Hid
 
-/-- Where the prover refuses at `c`, its messages on `w` and on the dummy are `msgs` of real hm96 leaves. -/
 def OffModel.Link (M : G.OffModel x Salt B Cc) (H : Msg → Msg) (My : Salt → B) (cs : Salt → Cc) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (w : W) : Prop :=
   (∀ r, Nat.card {u // M.e u = r} = M.k) ∧
@@ -269,65 +215,51 @@ def OffModel.Link (M : G.OffModel x Salt B Cc) (H : Msg → Msg) (My : Salt → 
   ∀ r, G.dVec H x ν r c =
     M.msgs M.wt₀ (M.eR r).1 fun l => M.Hl (M.dig M.wt₀ (M.eR r).1 l + My ((M.eR r).2 l), cs ((M.eR r).2 l))
 
-/-- Where the prover refuses at `c`, the simulator sends the dummy-witness prover's messages at `c`. -/
 def OffModel.Sim (M : G.OffModel x Salt B Cc) (H : Msg → Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) : Prop :=
   (∀ r, Nat.card {s // M.eS s = r} = M.kS) ∧ ∀ s, ((G.sim x ν c s).eval H).1 = G.dVec H x ν (M.eS s) c
 
-/-- The session's pre-final leaves. -/
 def OffModel.size (M : G.OffModel x Salt B Cc) : ℕ := Fintype.card M.L
 
-/-- The message link at a coin vector. -/
 def CoinModel.Link : G.CoinModel x Salt B Cc → (Msg → Msg) → (Salt → B) → (Salt → Cc) → G.Nonce →
     (Fin (G.K x) → G.Coin) → W → Prop
   | .inl M => M.Link
   | .inr M => M.Link
 
-/-- The simulator at a coin vector. -/
 def CoinModel.Sim : G.CoinModel x Salt B Cc → (Msg → Msg) → G.Nonce → (Fin (G.K x) → G.Coin) → Prop
   | .inl M => M.Sim
   | .inr M => M.Sim
 
-/-- Non-degenerate tables where the prover goes on; nothing where it refuses. -/
 def CoinModel.NonDegenerate : G.CoinModel x Salt B Cc → Prop
   | .inl M => M.NonDegenerate
   | .inr _ => True
 
-/-- The inner constraint where the prover goes on; nothing where it refuses. -/
 def CoinModel.Inner : G.CoinModel x Salt B Cc → W → Prop
   | .inl M => M.Inner
   | .inr _ => fun _ => True
 
-/-- The leaves the coin vector's bound counts. -/
 def CoinModel.size : G.CoinModel x Salt B Cc → ℕ
   | .inl M => M.size
   | .inr M => M.size
 
 end Props
 
-/-! ## The named hypotheses -/
-
-/-- **The message link**; discharged by a Lean model of `flock-circuit --zk`'s messages built as the session's strategy. -/
 def MsgLink (G : Proto W) (H : Msg → Msg) (R : Rel W) {Salt B Cc : Type} [AddCommGroup B] (My : Salt → B)
     (cs : Salt → Cc) (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc) : Prop :=
   ∀ x w, R x w → ∀ ν, (Mp x ν).Link H My cs ν w ∧ ∀ c, (Mc x ν c).Link H My cs ν c w
 
-/-- **The simulator**; discharged by defining `G.sim` as `lift` of `S_shvzk` where the prover goes on, `dVec` elsewhere. -/
 def SimLink (G : Proto W) (H : Msg → Msg) {Salt B Cc : Type} [AddCommGroup B]
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc) : Prop :=
   ∀ x ν c, (Mc x ν c).Sim H ν c
 
-/-- **The tables' non-degeneracy**; discharged by a model whose prover refuses wherever the self-check finds them degenerate. -/
 def NonDegenerate (G : Proto W) {Salt B Cc : Type} [AddCommGroup B]
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc) : Prop :=
   ∀ x ν c, (Mc x ν c).NonDegenerate
 
-/-- **`InnerHolds`**; discharged by proving each of the ten constraints, affine in `h`, of a valid witness's clear values. -/
 def InnerHolds (G : Proto W) (R : Rel W) {Salt B Cc : Type} [AddCommGroup B]
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc) : Prop :=
   ∀ x w, R x w → ∀ ν c, (Mc x ν c).Inner w
 
-/-- **The coin check**; discharged by defining `G.chk` as the coin-tree walk `treeChk` and `G.dec` as the opening's coins. -/
 def CoinCheck (G : Proto W) : Prop :=
   ∃ (CoinT CSalt : Type) (Tr : Msg → Msg → FlockSoundness.ZK.GK.CoinTree Dg CoinT CSalt) (nb : G.Nonce → List UInt8)
     (root : Msg → Msg → Dg) (parse : Msg → Option (FlockSoundness.ZK.GK.CoinOpening Dg CoinT CSalt))
@@ -336,9 +268,6 @@ def CoinCheck (G : Proto W) : Prop :=
       treeChk (Tr x ρ) (nb ν) (root x ρ) (pos x ρ j) (idx x ρ j) (n x ρ j) (depth x ρ j) (parse m)) ∧
     ∀ m op, parse m = some op → G.dec m = dc op.cs
 
-/-! ## What they give -/
-
-/-- **Lemma C's bound on the runs before the last coin, from a model** (`Proto.runs_close_hm96`). -/
 theorem PreModel.runs_close {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
     [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (M : G.PreModel x Salt B Cc) (H : Msg → Msg)
     (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce)
@@ -351,7 +280,6 @@ theorem PreModel.runs_close {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommG
   exact G.runs_close_hm96 H x ν w M.T M.rep My cs hT1 hδ₁ M.Hl M.msgs M.dig M.P hP M.e M.k he M.out hI (M.wt w) M.wt₀
     hreg hreg₀ M.eR M.kR heR hlink hlink₀ V E
 
-/-- **`SHVZK` at a coin vector where the prover goes on, from a model** (`Proto.shvzk_at_hm96`). -/
 theorem OnModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
     [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (M : G.OnModel x Salt B Cc) (H : Msg → Msg)
     (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce)
@@ -365,7 +293,6 @@ theorem OnModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup S
   exact G.shvzk_at_hm96 H x w ν c M.T M.Mh (fun j => by rw [(hMh j).1, (hMh j).2]; exact hT1) hδ₁ hrank hpad hW
     hpads hβ (M.wt w) M.wt₀ hreg hI M.lift M.eR M.kR heR M.eS M.kS heS hR hS hn E
 
-/-- **`SHVZK` at a coin vector where the prover refuses, from a model** (`Proto.shvzk_refused_hm96`). -/
 theorem OffModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
     [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (M : G.OffModel x Salt B Cc) (H : Msg → Msg)
     (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce)
@@ -378,7 +305,6 @@ theorem OffModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup 
   exact G.shvzk_refused_hm96 H x w ν c M.T M.rep My cs hT1 hδ₁ M.Hl M.msgs M.dig M.e M.k he M.out hI (M.wt w) M.wt₀
     hreg hreg₀ M.eR M.kR heR hR hD M.eS M.kS heS hS hn E
 
-/-- **`SHVZK` at a coin vector, from its model.** -/
 theorem CoinModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
     [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (H : Msg → Msg) (My : Salt → B) (cs : Salt → Cc)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (w : W)
@@ -389,7 +315,6 @@ theorem CoinModel.shvzk {G : Proto W} {x : Msg} {Salt B Cc : Type} [AddCommGroup
   | .inl M, hL, hS, hN, hI, hn => M.shvzk H My cs hT1 hδ₁ ν c w hL hS hN hI hn E
   | .inr M, hL, hS, _, _, hn => M.shvzk H My cs hT1 hδ₁ ν c w hL hS hn E
 
-/-- **Lemma C's bound on the runs before the last coin, at every statement, witness and nonce**, within `2·n_L·δ₁`. -/
 theorem prefix_of_models (G : Proto W) (H : Msg → Msg) (R : Rel W) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc)
@@ -406,7 +331,6 @@ theorem prefix_of_models (G : Proto W) (H : Msg → Msg) (R : Rel W) {Salt B Cc 
       have : (Fintype.card (Mp x ν).L : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
       gcongr
 
-/-- **`SHVZK` from the models**, within `2·n_B·δ₁`. -/
 theorem shvzk_of_models (G : Proto W) (H : Msg → Msg) (R : Rel W) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc)
@@ -417,19 +341,12 @@ theorem shvzk_of_models (G : Proto W) (H : Msg → Msg) (R : Rel W) {Salt B Cc :
   exact CoinModel.shvzk H My cs hT1 hδ₁ ν c w E (Mc x ν c) ((hL x w hR ν).2 c) (hS x ν c) (hN x ν c) (hI x w hR ν c)
     (hnB x ν c)
 
-/-- **`Binding` from the coin check** (`Proto.binding_of_tree`). -/
 theorem binding_of_coinCheck (G : Proto W) (H : Msg → Msg) (h : G.CoinCheck) : G.Binding H := by
   obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := h
   exact G.binding_of_tree H Tr nb root parse pos idx n depth dc hchk hdec
 
 end Proto
 
-/-! ## Flock's zero knowledge from the models -/
-
-/-- **Flock's zero knowledge against a malicious verifier, from the masked prover's models**: `Claims.Flock.ZKAt` at
-`P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`,
-when the deployed verifier's rounds with `Hello` are the protocol's, under `Claims.Hm96Hiding` and the five named
-hypotheses. -/
 theorem Flock.zk_of_models {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
@@ -445,11 +362,6 @@ theorem Flock.zk_of_models {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
     (G.prefix_of_models H _ My cs hT1 hδ₁ Mp Mc nL hnL hL)
     (G.shvzk_of_models H _ My cs hT1 hδ₁ Mp Mc nB hnB hL hS hN hI) Tr nb root parse pos idx n depth dc hchk hdec
 
-/-- **Flock's zero knowledge against a malicious verifier at the deployed masked verifier** `FlockDeploy.deployZk`:
-`Claims.Flock.ZKAt` at `P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at
-`ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose coins are the deployed
-verifier's
-(`deployZk_proto_k`: `Hello` and `D.V`'s rounds are its), under `Claims.Hm96Hiding` and the five named hypotheses. -/
 theorem Flock.zkAt_deployZk_of_models (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
@@ -464,10 +376,6 @@ theorem Flock.zkAt_deployZk_of_models (H : Msg → Msg)
   Flock.zk_of_models H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
     hL hS hN hI hC
 
-/-- **Flock's zero knowledge against a malicious verifier at the masked record of a committed-coin protocol**:
-`Claims.Flock.ZK` at `zkOf rel G coinOf tapeOf (G.simulatorE t (t·3^t))`, the record whose reference prover is
-`ZkTables.honestPR` behind `G`'s `Hello` and opening checks, at `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, under
-`Claims.Hm96Hiding`, the five named hypotheses and `Proto.Honest` (`G`'s messages are `ZkTables.honestPR`'s). -/
 theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
