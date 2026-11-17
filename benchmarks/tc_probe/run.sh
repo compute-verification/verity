@@ -14,6 +14,6 @@ done
 cc=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
 nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | grep -qxF "$cc" \
   || { echo "tc_probe: refused: $ins needs an sm_${BASH_REMATCH[1]}${BASH_REMATCH[2]} GPU (compute capability $cc), and none is visible" >&2; exit 2; }
-OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
+OUT=${OUT:-${RESEARCH_RUN_DIR:-./out}}
 mkdir -p "$OUT"
 exec python benchmarks/tc_probe/tc_probe.py --out "$OUT" "$@"

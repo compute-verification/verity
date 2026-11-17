@@ -800,3 +800,21 @@ def test_the_node_s_settings_are_never_bindings(tmp_path, capsys, monkeypatch):
                        "--state", str(state)], REG) == 2
     assert "binds workers for served-window" in capsys.readouterr().err
     assert not (state / "out.started").exists()
+
+
+def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
+    cfg, piece = R.load(CONFIG, REG), T.PARTIES["pouw"][T.WORKERS]
+    gate = BINDINGS["challenger"]["pouw"]
+    assert "MAIN_FILE" not in piece.variables(cfg, BINDINGS)
+    assert piece.variables(cfg, {"challenger": {"pouw": {**gate, "main-file": "/run/public/challenger/main.txt"}}}
+                           )["MAIN_FILE"] == "/run/public/challenger/main.txt"
+
+
+def test_a_dry_run_counts_what_a_challenger_started_first_writes_as_bound(capsys):
+    start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s: None, lambda c, s: None)
+    rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={T.CHALLENGER: start}))
+    assert rc == 0, err
+    assert {x["party"]: x.get("writes") for x in got["plan"]}[T.CHALLENGER] == {
+        "pouw": ["gate", "peer", "key-sha512", "main-file"]}
+    assert got["dry"][0]["unbound"] == sorted(set(UNBOUND) - {f"challenger.pouw.{k}" for k in ("gate", "peer",
+                                                                                              "key-sha512")})
