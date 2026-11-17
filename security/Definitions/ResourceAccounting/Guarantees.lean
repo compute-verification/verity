@@ -43,8 +43,6 @@ public import Definitions.Poub.Guarantees.RateAuditPooled
 public import Definitions.Poub.Guarantees.RateAuditRemote
 public import Definitions.Poub.Guarantees.RateAuditSketch
 public import Definitions.Pous.Accounting.Guarantees.Responder
-public import Definitions.Slowdown.Guarantees.ServingBlocks
-public import Definitions.Slowdown.Guarantees.ServingBlocks.Witnesses
 public import Definitions.Poub.Guarantees.RemoteHeld
 public import Definitions.Poub.Guarantees.RemoteDraw
 public import Definitions.Poub.Guarantees.RemoteBinding

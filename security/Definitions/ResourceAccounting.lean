@@ -61,8 +61,6 @@ public import Definitions.ResourceAccounting.Requirement.Placed
 public import Definitions.Pous.Accounting.Responder
 public import Definitions.ResourceAccounting.Schedule
 public import Definitions.ResourceAccounting.Served
-public import Definitions.Slowdown.ServingBlocks
-public import Definitions.Slowdown.ServingBlocks.Instances
 public import Definitions.Poub.Tag
 public import Definitions.Pouw.TS
 public import Definitions.Pouw.TS.Fixed
@@ -113,8 +111,6 @@ The area's other guarantees are `Accounting.Guarantees.X`, stated in the module 
   theorems read.
 * `AccelAdditive` (`Additive`): instructions that different subprotocols issue together use at most a period's
   `ρ_r·T` units of each resource `r`.
-* `ServingBlocks.ServingBlockBound` (`ServingBlocks`): a training class's counted weight is at most the overhead lower
-  bound's sum over server blocks, plus the dark remainder's.
 
 ## Assumptions
 
@@ -149,8 +145,7 @@ This module imports the area's definitions; the lock's `layers` lists what they 
   block tags, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
   `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes. `Remote.DrawInstances` holds the
   instances its sampled draw's witnesses are stated at.
-* The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown, and `ServingBlocks` server
-  blocks and a training class's counts.
+* The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown.
 
 ## Where to look
 

@@ -4691,11 +4691,10 @@ CAPPED = ("theorem capped : Guarantees.Capped := by\n  unfold Guarantees.Capped 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_premise_free_exclusion_bound_is_witnessed_by_a_tighter_bound_failing_at_an_explicit_circuit(tmp_path):
-    """On a real build: `Control.capped : Guarantees.Capped`, `∀ n, Bound (min n 3) 5`, takes no premise (as training's
-    `ServingBlocks.UncertifiedElementary` takes none), so its nontrivial witness is the bare `¬ Bound (min 4 3) 2`: a
-    tighter bound fails at an explicit circuit. `Control.bounded`, which takes `Fits n`, still fails with a bare
-    `¬ Bound 6 5`, which drops no premise. A rule that asked every exclusion theorem to drop a premise failed `capped`'s
-    witness too, whatever it stated."""
+    """On a real build: `Control.capped : Guarantees.Capped`, `∀ n, Bound (min n 3) 5`, takes no premise, so its
+    nontrivial witness is the bare `¬ Bound (min 4 3) 2`: a tighter bound fails at an explicit circuit.
+    `Control.bounded`, which takes `Fits n`, still fails with a bare `¬ Bound 6 5`, which drops no premise. A rule that
+    asked every exclusion theorem to drop a premise failed `capped`'s witness too, whatever it stated."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control" / "Partition.lean").write_text(PARTITION.replace(
@@ -6129,11 +6128,10 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
 
 
 def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
-    """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
-    bound at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
-    circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
-    constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
-    and a guarantee with a premise still drops one."""
+    """An exclusion theorem that takes no premise (`premise_free`) has none to drop: its nontrivial witness is the bare
+    `¬ bound` at an explicit circuit, where a tighter bound fails, and a missing witness is asked for in that form. It
+    still negates the bound, constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is
+    a premise all the same, and a guarantee with a premise still drops one."""
     cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
     g = {"reads": [cover], "premises": [], "hypotheses": [],
          "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
