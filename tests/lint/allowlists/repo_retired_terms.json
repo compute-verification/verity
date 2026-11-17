@@ -2014,7 +2014,7 @@
     {"file": "security/Properties/Verity/Soundness.lean", "count": 1},
     {"file": "security/Properties/lakefile.toml", "count": 4},
     {"file": "security/README.md", "count": 4},
-    {"file": "tests/README.md", "count": 1},
+    {"file": "tests/README.md", "count": 2},
     {"file": "tests/adapters/vllm/tests/acquire/call_boundary_programs.py", "count": 3},
     {"file": "tests/adapters/vllm/tests/acquire/test_fa2_tap_bounded.py", "count": 23},
     {"file": "tests/adapters/vllm/tests/acquire/test_fa2_tap_geometry.py", "count": 1},
