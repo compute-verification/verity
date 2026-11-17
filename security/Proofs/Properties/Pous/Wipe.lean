@@ -16,7 +16,7 @@ uniform labels. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs
+namespace MemoryAttester.Properties.SecurityProofs
 
 open Verity
 open scoped ENNReal
@@ -260,8 +260,8 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
         · cases h
 
 theorem exactly_decodes {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
-    (h : MemoryChallenger.exactly f enc j = .ok a) : f j = .ok a := by
-  unfold MemoryChallenger.exactly at h
+    (h : MemoryAttester.exactly f enc j = .ok a) : f j = .ok a := by
+  unfold MemoryAttester.exactly at h
   cases hf : f j with
   | error e => simp [hf, bind, Except.bind] at h
   | ok a0 =>
@@ -413,4 +413,4 @@ theorem wipeSurvivorBoundNontrivial : WipeSurvivorBoundNontrivial := by
   intro C B s b carry κ prf
   exact not_survivorBound_cheat segmentDevice s b carry prf segment_foreign_le segment_eps_lt
 
-end MemoryChallenger.Properties.SecurityProofs
+end MemoryAttester.Properties.SecurityProofs

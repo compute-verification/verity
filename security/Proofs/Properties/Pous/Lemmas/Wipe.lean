@@ -9,7 +9,7 @@ quantifies over every session's parameters, device and PRF. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Verity
 open scoped ENNReal
@@ -42,4 +42,4 @@ def WipeSurvivorBoundNontrivial : Prop :=
             (cheat segmentDevice s b (2 ^ 19) 2152 carry).deltaNet (fun _ _ _ => True) prf
               Finset.univ hold
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties

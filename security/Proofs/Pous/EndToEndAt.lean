@@ -24,7 +24,7 @@ import VCVio.Prelude.Core
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open MemoryChallenger
+open MemoryAttester
 open scoped ENNReal
 
 theorem ofFin_eq_toUInt8 (a : Fin 256) : UInt8.ofFin a = a.val.toUInt8 :=

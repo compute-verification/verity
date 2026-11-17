@@ -9,9 +9,9 @@ is of, or the break. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs
+namespace MemoryAttester.Properties.SecurityProofs
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 
 theorem bits_le_of_units_le {b m : Int} (h : StreamedWipe.egressUnits b ≤ m)
     (hm : m < StreamedWipe.EGRESS_MAX_UNITS) : b ≤ m * StreamedWipe.EGRESS_UNIT_BITS := by
@@ -83,4 +83,4 @@ theorem wipeCountTied_nontrivial :
   · exact absurd ha (by simp [idleDevice])
   · exact h
 
-end MemoryChallenger.Properties.SecurityProofs
+end MemoryAttester.Properties.SecurityProofs

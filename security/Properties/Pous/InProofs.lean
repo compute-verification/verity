@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.Verdict
+public import MemoryAttester.Verdict
 public import Properties.Pous
 public import PousCheck.SetupInProofs
 public import Definitions.Core.Interaction
@@ -11,9 +11,9 @@ stated and not proved. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SessionDeployed
+namespace MemoryAttester.Properties.SessionDeployed
 
-open MemoryChallenger
+open MemoryAttester
 
 /-- **PoUS's session checked inside proofs, as deployed: stated and unproved**, with `sessionInProofs` and
 `UnitOutcome` as parameters: a fixed extractor recovers a signed session that `verdict` accepts, except
@@ -34,7 +34,7 @@ def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
           (verdict schemes trusted expected s c openings).accepted = true) E
         (fun _ => (c.k + 2) * (εKs + εBind)) fun _ => γ
 
-end MemoryChallenger.Properties.SessionDeployed
+end MemoryAttester.Properties.SessionDeployed
 
 namespace PousCheck.Properties.SetupDeployed
 

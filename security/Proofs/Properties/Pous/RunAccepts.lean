@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Pous.Run
-public import Proofs.Properties.Pous.MemoryChallenger.Attest
+public import Proofs.Properties.Pous.MemoryAttester.Attest
 
 /-! `PousCheck.Run.check` accepts a run at P2's deployed point under S1's LMS, without the kernel evaluating SHA-512. -/
 
@@ -9,8 +9,8 @@ public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 namespace Pous.EndToEnd.SecurityProofs.Honest
 
-open MemoryChallenger MemoryChallenger.Properties.SecurityProofs
-open MemoryChallenger.Attest.Properties.SecurityProofs (pub_spec signs)
+open MemoryAttester MemoryAttester.Properties.SecurityProofs
+open MemoryAttester.Attest.Properties.SecurityProofs (pub_spec signs)
 
 local instance instLawfulBEqByteArray_honest : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -284,7 +284,7 @@ theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : By
       field m))
   have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _ k 0 _ σ rfl hk hσs).2
   have hv : lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
-    unfold lmsVerify memoryChallengerMessage
+    unfold lmsVerify memoryAttesterMessage
     simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
     exact hσv
   refine ⟨k.publicKey,

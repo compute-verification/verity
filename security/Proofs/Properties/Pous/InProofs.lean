@@ -1,14 +1,14 @@
 module
 
-public import Properties.Pous.MemoryChallenger
+public import Properties.Pous.MemoryAttester
 public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
 public import Mathlib.Probability.ProbabilityMassFunction.Monad
 public import Lms.Sign
 public import Proofs.Properties.ResourceAccounting.InProofs
-public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.MemoryAttester
 import Proofs.Properties.Pous.WipeSigned
-import Proofs.Properties.Pous.MemoryChallenger.Session
+import Proofs.Properties.Pous.MemoryAttester.Session
 import Proofs.Properties.Hash.Lms
 
 /-! An accepted run meeting `RunGives`' three hypotheses gives a session `verdict` accepts; it says nothing of the
@@ -16,7 +16,7 @@ deployed run, where nothing proves `Gives` and `Carried`. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.InProofs
+namespace MemoryAttester.Properties.InProofs
 
 open Verity.InProofs Verity.Game
 open scoped ENNReal
@@ -94,11 +94,11 @@ def RunGivesNontrivial : Prop :=
           #[]).accepted = false ∧
         ¬ Hash.CollisionIn Verity.sha512 ((constRun v).hashInputs ω)) ≤ 0
 
-end MemoryChallenger.Properties.InProofs
+end MemoryAttester.Properties.InProofs
 
-namespace MemoryChallenger.Properties.InProofs.SecurityProofs
+namespace MemoryAttester.Properties.InProofs.SecurityProofs
 
-open MemoryChallenger MemoryChallenger.Properties.InProofs MemoryChallenger.Properties.SecurityProofs
+open MemoryAttester MemoryAttester.Properties.InProofs MemoryAttester.Properties.SecurityProofs
 open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
 
 theorem runGives : RunGives := by
@@ -173,7 +173,7 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 
 theorem honestDigest_size : honestDigest.size = 64 := by decide
 
 theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m :=
-  MemoryChallenger.Session.Properties.SecurityProofs.message_one _ _ honestDigest_size
+  MemoryAttester.Session.Properties.SecurityProofs.message_one _ _ honestDigest_size
 
 theorem runGives_honest : RunGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
@@ -186,8 +186,8 @@ theorem runGives_honest : RunGivesHonest := by
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨leaf, hleaf⟩ := honest_leaf
   obtain ⟨m, hm⟩ := honest_message leaf
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestWipe m = .ok M := by
-    unfold memoryChallengerMessage
+  obtain ⟨M, hM⟩ : ∃ M, memoryAttesterMessage k.I honestWipe m = .ok M := by
+    unfold memoryAttesterMessage
     simp [hIs]
     exact ⟨_, rfl⟩
   obtain ⟨sig, hsig⟩ :=
@@ -259,4 +259,4 @@ theorem runGives_nontrivial : RunGivesNontrivial := by
   simp only [hclear, hrej, hn, challengePhaseOf, and_true, not_false_eq_true, ↓reduceIte] at h
   exact absurd h (by simp)
 
-end MemoryChallenger.Properties.InProofs.SecurityProofs
+end MemoryAttester.Properties.InProofs.SecurityProofs

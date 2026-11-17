@@ -4,14 +4,14 @@ public import Attest.Period
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Claims
 public import Mathlib
-public import Properties.Pous.MemoryChallenger
+public import Properties.Pous.MemoryAttester
 
 /-! A party's signed period roots and liveness records: what a period's proof establishes (`PeriodSigned`, `PeriodSound`)
 and what the auditor sees of the party (`AuditorSeesSkeleton`). -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Attest.Properties
+namespace MemoryAttester.Attest.Properties
 
 open Flock
 open ResourceAccounting.Assumptions
@@ -335,4 +335,4 @@ def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, ""
 def acceptAll : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
   fun _ _ _ _ _ _ => .ok true
 
-end MemoryChallenger.Attest.Properties
+end MemoryAttester.Attest.Properties

@@ -1,7 +1,7 @@
 module
 
-public import MemoryChallenger.WipeProtocol
-public import Properties.Pous.MemoryChallenger
+public import MemoryAttester.WipeProtocol
+public import Properties.Pous.MemoryAttester
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Basic.ENNReal.Real
 
@@ -10,7 +10,7 @@ the run carries a break; a key also used for another role is outside the model. 
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Flock
 
@@ -85,16 +85,16 @@ structure SignedWipeParty where
   wipes : ByteArray → List WipeRun
 
 /-- The messages the challenger signs under the key `pk`: its PoUS sessions' (`Signed`), and for each wipe it runs under
-`pk` and ends, `memoryChallengerMessage` of the key's identifier, the session id and the wipe's `message`. -/
+`pk` and ends, `memoryAttesterMessage` of the key's identifier, the session id and the wipe's `message`. -/
 def SignedWipeParty.Signed (dev : SignedWipeParty) (pk m : ByteArray) : Prop :=
-  MemoryChallenger.Properties.Signed dev.device pk m ∨
+  MemoryAttester.Properties.Signed dev.device pk m ∨
     ∃ r ∈ dev.wipes pk, ∃ ended rec, r.recorded.ended = some ended ∧ r.message ended = .ok rec ∧
-      memoryChallengerMessage (pk.extract 0 16) r.commitment.session rec = .ok m
+      memoryAttesterMessage (pk.extract 0 16) r.commitment.session rec = .ok m
 
-/-- The message a signed wipe's signature signs: `memoryChallengerMessage` of its key's identifier, its session id and
+/-- The message a signed wipe's signature signs: `memoryAttesterMessage` of its key's identifier, its session id and
 its `message`. -/
 def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
-  (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
+  (s.message >>= memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
 /-- What SHA-512 hashes for a wipe's records tree over `values` under the domain `d`: each leaf, and each node of each
 level below the root (`treeStrings` at the wipe's record schema). -/
@@ -106,7 +106,7 @@ def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List By
       FV3.input "node" [d.id, FV3.uint l, FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the start mark, the fill's readings, batches)` signed under the
-key `pk`: its records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
+key `pk`: its records tree, the input of its `message`, and that of `memoryAttesterMessage`. -/
 def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
     (fillStartNs fillEndNs : Int) (batches : Array StreamedWipe.Batch) : List ByteArray :=
   let head := (StreamedWipe.header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
@@ -277,4 +277,4 @@ def unencodedParams : WipeProtocol.Params := ⟨MEASURED_SERVER, MEASURED_SESSIO
 /-- The memory challengers that ran nothing. -/
 def idleChallenger : SignedWipeParty := ⟨⟨fun _ => []⟩, fun _ => []⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties

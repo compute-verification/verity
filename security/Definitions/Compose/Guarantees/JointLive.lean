@@ -73,7 +73,7 @@ holds there, the seed and the spot reads on the run's outcome, with the strategy
   publishes, `foreignBits b` and `ε_Wipe,b`: for every way of holding foreign content of at least `foreignBits b` bits
   plus the state the fill leaves out and every way of reading it back, the wipe accepts and the content is read back
   with probability at most `ε_Wipe,b` at those moves. This is what the streamed-label wipe's guarantee supplies for
-  every prover strategy (`MemoryChallenger.Properties.WipeSurvivorBound`, from `Pous.Guarantees.StreamedWipeMeetsReads`
+  every prover strategy (`MemoryAttester.Properties.WipeSurvivorBound`, from `Pous.Guarantees.StreamedWipeMeetsReads`
   and `StreamedWipeMeetsFamily`);
 * at every strategy `s` the run's coins at boundary `b` are the wipe's (`Verity.Wipe.OfRun.Preserves`): on the run,
   the foreign content the device holds there, the seed and the spot reads are uniform and independent, as the wipe's

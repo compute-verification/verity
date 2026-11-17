@@ -1,4 +1,4 @@
-"""The wipe as a core protocol (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`): `wipe-protocol-test serve` against
+"""The wipe as a core protocol (`MemoryAttester.WipeProtocol`, `verity/wipe/v0`): `wipe-protocol-test serve` against
 `wipe_protocol_case.test_answer` (the period hook's `outcome` behind the Lean's decoders) on sampled sessions at every batch
 size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON edit or params of another server or
 session, each with a sampled egress in its evidence (`wipe_cases.EGRESS`: none, in range, or outside it); and

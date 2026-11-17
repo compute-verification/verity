@@ -17,7 +17,7 @@ untraced = [
 ]
 # tests/ checks the harness against PoUS itself (verity.protocols.resource_accounting.memory.pous.verifier) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
-# run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
+# run and the Lean programs they start (pous-timed-audit, memory-attester-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py", "verity/protocols/resource_accounting/memory/pous",

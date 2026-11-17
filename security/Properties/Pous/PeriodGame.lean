@@ -11,7 +11,7 @@ challenger's SHA-512 derivation (`PeriodHeldSha512`). -/
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties MemoryChallenger
+open Pous.EndToEnd PousCheck PousCheck.Properties MemoryAttester
 
 open scoped ENNReal
 

@@ -3,22 +3,22 @@ module
 public import Proofs.Properties.Pous.WipeSigned.Json
 public import Aesop.BuiltinRules
 public import Mathlib.Tactic.ToDual
-public import MemoryChallenger.StreamedWipe
+public import MemoryAttester.StreamedWipe
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Data.Finset.Attr
 import Mathlib.Data.Nat.Cast.Order.Basic
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
 import Proofs.Properties.Certifier.Records.Bytes
-import Proofs.Properties.Pous.MemoryChallenger.Sort
+import Proofs.Properties.Pous.MemoryAttester.Sort
 
 /-! The wipe's signed header determines its commitment, whatever characters the ending and the tiers' names hold. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeHeader
+namespace MemoryAttester.Properties.SecurityProofs.WipeHeader
 
-open MemoryChallenger Flock WipeJson
+open MemoryAttester Flock WipeJson
 
 def keys : List (String × Nat) :=
   [("protocol", 0), ("records_tree", 1), ("server", 2), ("session", 3), ("labels", 4), ("label_bytes", 5), ("k", 6),
@@ -204,4 +204,4 @@ theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {sm sm' : By
   exact ⟨commitment_ext (hx v2) (hx v3) (natStr_inj v4) (natStr_inj v6) (natStr_inj v7) (natStr_inj v8) ht,
     pyJsonStr_inj (String.toList_inj.mp v11), hx v15, intStr_inj v12, intStr_inj v13, natStr_inj v14⟩
 
-end MemoryChallenger.Properties.SecurityProofs.WipeHeader
+end MemoryAttester.Properties.SecurityProofs.WipeHeader

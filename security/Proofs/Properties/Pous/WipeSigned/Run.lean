@@ -7,9 +7,9 @@ import Mathlib.Basic.ENNReal.Real
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeRuns
+namespace MemoryAttester.Properties.SecurityProofs.WipeRuns
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 
 def Inv (r : WipeRun) (st : WipeRecorded) : Prop :=
   st.answers.size = st.batches.size ∧
@@ -52,4 +52,4 @@ theorem inv_foldl (r : WipeRun) : ∀ (l : List WipeObserved) (st : WipeRecorded
 theorem inv_recorded (r : WipeRun) : Inv r r.recorded :=
   inv_foldl r r.observed _ ⟨rfl, fun _ _ h => absurd h (Nat.not_lt_zero _), fun h => absurd rfl h⟩
 
-end MemoryChallenger.Properties.SecurityProofs.WipeRuns
+end MemoryAttester.Properties.SecurityProofs.WipeRuns

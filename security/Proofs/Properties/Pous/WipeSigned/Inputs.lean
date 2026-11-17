@@ -3,15 +3,15 @@ module
 public import Proofs.Properties.Pous.WipeSigned.Tree
 import all Init.Data.String.Defs
 import Mathlib.Basic.ENNReal.Real
-import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import Proofs.Properties.Pous.MemoryAttester.Inputs
 
 /-! What the wipe's hashes read, and the wipe's session input told apart from PoUS's by their tags. -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeInputs
+namespace MemoryAttester.Properties.SecurityProofs.WipeInputs
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
 theorem beInt_ok {n : Nat} {x : Int} {w : String} {b : ByteArray} (h : StreamedWipe.beInt n x w = .ok b) :
@@ -164,4 +164,4 @@ theorem tags_differ (a b c a' b' c' : ByteArray) :
   rw [List.getElem?_append_left h1, List.getElem?_append_left h2, tag_byte, wipe_tag_byte] at e
   exact absurd e (by decide)
 
-end MemoryChallenger.Properties.SecurityProofs.WipeInputs
+end MemoryAttester.Properties.SecurityProofs.WipeInputs

@@ -1,4 +1,4 @@
-"""The streamed wipe's verdict on a record (`streamed-wipe-verdict`, `MemoryChallenger.StreamedWipe`) against
+"""The streamed wipe's verdict on a record (`streamed-wipe-verdict`, `MemoryAttester.StreamedWipe`) against
 `streamed_wipe.verdict`: the whole verdict (accepted, and the reasons word for word) on records as
 `wipe_verdict.py` writes them from honest sessions at every batch size (each above 1 refused as uncovered), sessions
 under one adversarial edit (`wipe_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a
@@ -33,7 +33,7 @@ def record(s: W.Session, schemes=M.ts.SCHEMES) -> dict:
 
 
 def reference(j) -> dict:
-    """`MemoryChallenger.StreamedWipe.verdictFn` in Python: decode as the Lean decodes, then `streamed_wipe.verdict`."""
+    """`MemoryAttester.StreamedWipe.verdictFn` in Python: decode as the Lean decodes, then `streamed_wipe.verdict`."""
     signed = W.signed_of(M._get(j, "signed"))
     commitment = W.commitment_of(M._get(j, "commitment"))
     trusted = M.hexes(j, "trusted")
