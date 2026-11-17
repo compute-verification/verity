@@ -159,11 +159,11 @@ def test_verity_run_starts_it_first_binds_what_it_wrote_and_stops_it_at_the_end(
     assert {"public/challenger/bindings.json", "public/challenger/main.txt"} <= set(transcript)
 
 
-def test_a_dry_run_counts_what_the_challenger_writes_as_bound_and_leaves_pouws_gate_unbound(capsys):
+def test_a_dry_run_counts_what_the_challenger_writes_as_bound(capsys):
     assert R.run_main([str(CONFIG), "--dry-run"], REG) == 0
     out = capsys.readouterr().out.splitlines()
     plan = {d["party"]: d for d in (json.loads(x.split(" ", 1)[1]) for x in out if x.startswith("PLAN "))}
     assert plan[T.CHALLENGER]["writes"] == {"sampled-proofs": ["loopback", "main-file"],
                                             "pearl-plus": ["gate", "peer", "lane", "key-sha512", "main-file"]}
     dry = json.loads(next(x for x in out if x.startswith("DRY ")).split(" ", 1)[1])
-    assert {"challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512"} <= set(dry["unbound"])
+    assert dry["unbound"] == []
