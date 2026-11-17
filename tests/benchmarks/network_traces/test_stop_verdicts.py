@@ -1,5 +1,5 @@
 """The stop class's verdict records as the calculator's rows read them (`stop_verdicts`): a head is the
-registration's own, held to the digest its certificate names; a record is its verifier's, and which of the four
+registration's own, held to the digest its attestation names; a record is its verifier's, and which of the four
 verdicts it is is its verdict's format; the answer counts the execution phases held, those of a head read in which
 every class that holds a row has its four verdicts by the network attester's rule, each on that head; every other
 execution phase is charged its whole schedule, so one left out of a run's files charges what it would refused;
@@ -88,7 +88,7 @@ def head(window: int, *counts: int, parameters: bytes = TIED.digest, domain: byt
 
 
 def registration(of: C.Head) -> dict:
-    """A registration, in the verifier's format, of a head, with a certificate that names the head's digest."""
+    """A registration, in the verifier's format, of a head, with an attestation that names the head's digest."""
     return {"format": C.REGISTRATION, "link": of.link, "window": of.window, "parameters": of.parameters.hex(),
             "word_bits": C.WORD_BITS, "row_schema": C.SCHEMA,
             "tables": [{"name": e.name, "rows": e.rows, "words": e.row_bytes * 8 // C.WORD_BITS,
@@ -597,7 +597,7 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
                 got = stop(one, records, served=[*with_streams(SERVED), doc])
                 assert got.held == 0 and got.why[4].startswith(at + f"{who} is registered at `{text}`, not `1/1`")
             assert got.why[4] == at + f"{who} is registered at `{text}`, not `1/1`", (kind, k, n)
-    # the certified read is over no sampled population and the compute audit's rate is not held: a rate or a
+    # the attested read is over no sampled population and the compute audit's rate is not held: a rate or a
     # stream's registration on their records is not read
     assert stop(one, [r | {SV.RATE: "1/8", SV.STREAM: "a digest"} if i >= 2 else r
                       for i, r in enumerate(four(first))]).held == 1

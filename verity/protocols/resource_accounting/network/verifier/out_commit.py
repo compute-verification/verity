@@ -1,6 +1,6 @@
 """The network attester's output value: the output it relayed, committed by the attester as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
-that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
+that attestation alone (`check_out`), so every output proof block's row is a registered read of it, opened against
 the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
 clear.
 
@@ -22,12 +22,12 @@ the rows are what the server sent, which the prover holds.
       ‖ u16be len(schema) ‖ schema ‖ domain (64 bytes) ‖ root (64 bytes)
     out digest = tagged_sha512(OUT_TAG, H)
 
-Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the attester's session
-(`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
+Its attestation is `Issuer.sign`'s of the out digest for the egress execution phase, in the attester's session
+(`certificate.certificate_message`). D is the same in every window, so the attestation is what keeps one window's root
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
 
-**The record** (`CertifiedOut.public`) is the head and its certificate as one public JSON object, what the auditor
+**The record** (`CertifiedOut.public`) is the head and its attestation as one public JSON object, what the auditor
 receives:
 
     {"format": RECORD, "link", "direction", "window", "session", "value", "program", "words", "rows", "word_bits",
@@ -61,7 +61,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 OUT_TAG = "verity-network-certifier/out/v1"
 RECORD = "verity-network-certifier/out-record/v1"
 VALUE = "out"
-#: the link a certificate names when the caller names none
+#: the link an attestation names when the caller names none
 LINK = "out"
 DIRECTION = Direction.EGRESS
 SALT_BYTES = hm96.SHA512.salt_bytes
@@ -187,7 +187,7 @@ class CertifiedOut:
 
     @property
     def public(self) -> dict[str, Any]:
-        """The record the auditor receives and `check_out` reads: the head and its certificate, none of the witness."""
+        """The record the auditor receives and `check_out` reads: the head and its attestation, none of the witness."""
         h, c = self.head, self.certificate
         return {"format": RECORD, "link": c.link, "direction": c.direction.value, "window": c.window,
                 "session": self.session.hex(), "value": h.value, "program": h.program.hex(), "words": h.words,
@@ -227,7 +227,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
     attester's signer (which starts `session` at its first signature and refuses any other session), or its running
     `Issuer` in `session`. `salts`: one a row (default: fresh from the operating system; a test injects its own). Raises
     ValueError on rows of another width or count and `SignerRefused` when the signer refuses, so the window has no out
-    certificate."""
+    attestation."""
     if len(rows) != shape.rows or any(len(r) != shape.words for r in rows):
         raise ValueError(f"the out value is {shape.rows} rows of {shape.words} leaves, not {len(rows)} rows of "
                          f"{sorted({len(r) for r in rows})} leaves")
