@@ -279,12 +279,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnly.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "InferenceOnlyCheck.Properties.Divides": {
    "owner": "@network-accounting",
    "digest": "36bf4fa185c841239d31322d9763e2061e90f0e03f60cf7005d5c7ff7fc11cd5",
@@ -16562,7 +16556,7 @@
    }
   },
   "Definitions.Core.Circuit": {
-   "digest": "a9ef55317ff0b37e8d53d0f6966cb057a2379b4c971787adcb1b1de716f3b713",
+   "digest": "a521a2903775ace6b182f012a0918555fe3ce174667424249c0ead5467ffbe86",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
@@ -16577,9 +16571,7 @@
     "Verity.Circuit.run": "3c7d060c45950ce4dd6de6828c079406d226cd4570161c6f86f64aa72199cfa6",
     "Verity.Circuit.size": "72bd6646c19ce3e502a8b20391366dd1932d3a5e566282b3da6b0a4044d286f2",
     "Verity.Circuit.w": "71844378ec086d9fae9d11086d055d967b6904caee3f9eef3f104f31129a3bee",
-    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5",
-    "Verity.Containment": "2d244d992a640f92e3a1b544ee88dc415faaf8398c50207ff6652451c3a2ab6b",
-    "Verity.Containment.emb": "0ff2bc5d87819c1b137faf92b3e7ce7511dfd198564701bec4b8f44351c82644"
+    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5"
    }
   },
   "Definitions.Core.Compiler": {
@@ -17365,12 +17357,6 @@
     "InferenceOnly.CompliesRate": "57fe163d6f5b4027697c153f649958fae08325fe51f22aaa8c150cdbc303d21e",
     "InferenceOnly.Policy": "2f77812f2dfd2f950e4346ecccd7e21d54a6b9e2bd9397b44e5b757cff4dfb93",
     "InferenceOnly.freshInput": "b648030f3e828c81aa38f42662c0fe4ef5559fba6b65b8b4bf8c30359f473034"
-   }
-  },
-  "Definitions.InferenceOnly.Assumptions.Theta": {
-   "digest": "6bfd28cea787e11018676eb7ff22eccef06f61778d5ec58754ac92b2f0e3d06b",
-   "definitions": {
-    "InferenceOnly.Assumptions.ThetaRegistered": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e"
    }
   },
   "Definitions.Poub.Assumptions.RateAuditDeployed": {
@@ -18373,16 +18359,6 @@
     "ResourceAccounting.Requirement.stepRegion": "3d2931e060e8af46bb9afc07b0257dfdb1bd2df208e16716aaed72e10522aac0",
     "ResourceAccounting.Requirement.work": "cb1397e09effdce91e0339d139b7b0608a93b5eb0793a8000156f07f6bc4dbf6",
     "ResourceAccounting.Window.steps": "db931219b30dab11e55759567a15e8879b50199dee41c5878e7bc35d40516b10"
-   }
-  },
-  "Definitions.Slowdown.Dark": {
-   "digest": "d8f117f1c7d0d52f500cc197d82440847efa5e9c5663f3c96daab7e03668cdb8",
-   "definitions": {
-    "Slowdown.PartialContainment": "4716b57cc3a026d458201434ca329fc09a4b3d07b4ae376dfcc23707f8a6a328",
-    "Slowdown.PartialContainment.S": "f322eae861e40a7fcb54dea52c0a196c76ec8d3ac8882c6fe7e7ce7644bc2a04",
-    "Slowdown.PartialContainment.dark": "9fe02bf0b415ec79f581204e3c43a5ae7df142dd974e9f361905e930faf8c91c",
-    "Slowdown.PartialContainment.emb": "2ef75b334fa5cdcc42ff5c5f02332cdd4fa05a35c1c9361fde5caaed5b7bff80",
-    "Slowdown.PartialContainment.ofContainment": "b647be64a5ad3f549a4ea7883f51d8511e1cdbb2219f196115227d62f2c906b4"
    }
   },
   "Definitions.Spot.Dataflow": {
@@ -25731,13 +25707,9 @@
    }
   },
   "Properties.InferenceOnly.Desc.Verdict": {
-   "digest": "75ff0a8a293ae53875a065bb7d9c84068564d7abbbef31636be73dd8631743aa",
+   "digest": "6aaa1f0331015f40dbdb044cee7b609fd3f25322832af826fb79d0ee618d61ff",
    "definitions": {
     "InferenceOnlyCheck.Properties.DescReports": "27abb57c064766fc0ab6c4bbf9eff2c8e8a479433ef8086b3444f75aec49f796",
-    "InferenceOnlyCheck.Properties.DescThrottles": "d39a62834991c1f82a1b8a21c659c868ca9a5304587fb219d86d06588056f4ac",
-    "InferenceOnlyCheck.Properties.DescThrottlesDark": "d78b3ff6ebb28193ec401580fb100bc4e446b28748f4b427ee8b4c964ec1b94c",
-    "InferenceOnlyCheck.Properties.DescThrottlesDarkSlots": "83ec24dcc87041a6c3fe738e9cf38b0cb510836650f67b0a244dbed74b31ef94",
-    "InferenceOnlyCheck.Properties.DescThrottlesSlots": "d1c693d67a37c5a83f61ea16daef4ce59da5ec2ed3e938dd0b448b8384aebe4a",
     "InferenceOnlyCheck.Properties.DescWitnesses": "9a9a51d5e02eeaa37e2f8c6472709549f73fb059c74362561ec781c5f4300d46",
     "InferenceOnlyCheck.Properties.OnExpansions": "be6a0487798090ad965659f5f49cc7bb5da1d5c4d35e351770df8683e5c740fa"
    }
