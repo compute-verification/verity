@@ -1,7 +1,7 @@
-"""The network certificate check (`NetworkCheck.Check`, `network-check serve`) against `audit.py`, through the difftest
+"""The network certificate check (`NetworkVerifier.Check`, `network-verifier serve`) against `audit.py`, through the difftest
 harness's `ProtocolPort`.
 
-The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
+The reference decodes the protocol's formats (`NetworkVerifier/Check.lean`'s module docstring) and runs the real `Audit`:
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the attester's `LmsKey` in its
 session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
@@ -642,7 +642,7 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("network-check", counted, cases(), package=LEAN)
+PORT = D.ProtocolPort("network-verifier", counted, cases(), package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -678,7 +678,7 @@ def test_a_reference_wrong_on_one_path_is_caught(server):
             return "accept", {}, {}
         return out
 
-    port = D.ProtocolPort("network-check", lambda case: reference(case, own_clock), cases(), package=LEAN)
+    port = D.ProtocolPort("network-verifier", lambda case: reference(case, own_clock), cases(), package=LEAN)
     with pytest.raises(D.Mismatch) as x:
         D.run(port, examples=1200, server=server)
     assert (x.value.lean[0], x.value.python[0]) == ("reject", "accept")

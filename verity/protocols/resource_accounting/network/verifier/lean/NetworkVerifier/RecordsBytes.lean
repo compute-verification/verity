@@ -1,7 +1,7 @@
 module
 
-public import NetworkCheck.Records
-import NetworkCheck.RecordsGrid
+public import NetworkVerifier.Records
+import NetworkVerifier.RecordsGrid
 
 /-!
 # The records check's byte payloads are v4's bits
@@ -21,10 +21,10 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
 
 @[expose] public section
 
-namespace NetworkCheck.RecordsBytes
+namespace NetworkVerifier.RecordsBytes
 
-open NetworkCheck.Records
-open NetworkCheck.Check (bitsOfBytes bytesOfBits bytesOfBitsList byteOfBits)
+open NetworkVerifier.Records
+open NetworkVerifier.Check (bitsOfBytes bytesOfBits bytesOfBitsList byteOfBits)
 open NetworkAttester (ClockSync LogicalFrame)
 
 /-- The eight bits of `n`, most significant first, as `bitsOfBytes` writes a byte. -/
@@ -193,4 +193,4 @@ theorem frameBytes_toEvidence (e : ByteEvidence) (B : Nat) :
   simp only [Function.comp, ByteFrame.toLogical, length_bitsOfBytes]
   by_cases h : f.payload.size = B <;> simp [h] <;> omega
 
-end NetworkCheck.RecordsBytes
+end NetworkVerifier.RecordsBytes
