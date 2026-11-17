@@ -262,7 +262,7 @@ def test_the_units_ands():
     assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
 
 
-#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's proof block
+#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s
 ANDS_ZK = 5_795
 #: `EgressBucket_v1{B=256,R=16,r=4,NR=4,K=64,IB=17,D=22}`'s
 ANDS_CLASS = 11_555
