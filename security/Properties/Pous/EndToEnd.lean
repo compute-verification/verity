@@ -1,6 +1,6 @@
 module
 
-public import PousCheck.Run
+public import PousVerifier.Run
 public import Properties.Pous
 public import Properties.Pous.TimedAudit
 public import Properties.Pous.MemoryAttester
@@ -15,7 +15,7 @@ Two kinds of statement at P2's deployed point (`P2.Params.deployed`: `p = 2^1644
 bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside Lean.
 
 * `RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and assumption free. The composed check
-  of a run (`PousCheck.Run.check`, `pous-run`, Python `run.check`) reads the verifier's list of memory-challenger keys,
+  of a run (`PousVerifier.Run.check`, `pous-run`, Python `run.check`) reads the verifier's list of memory-challenger keys,
   the setup's public outputs, the memory challenger's table of `C*`'s row digests, its signed session and the id the
   auditor designated for the session; when it accepts, the session audits that setup at the deployed point
   (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, blocks of 2,056 bytes, bound to the published root), runs
@@ -70,14 +70,14 @@ Two gaps stood between these statements and the deployed verifier:
   runs at most one session under an id (`memory_challenger.SessionLog`, a file of its own, recorded before the session's
   first challenge), so an audit has at most one session the check accepts; that refusal is the device's code and log,
   not modeled here;
-* **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
+* **G-2**, fixed: the composed setup-to-challenger check is `PousVerifier.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
 -/
 
 @[expose] public section
 
 open MemoryAttester MemoryAttester.Properties
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 
 namespace Pous.EndToEnd
 

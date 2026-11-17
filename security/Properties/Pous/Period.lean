@@ -15,7 +15,7 @@ the verifier reads of the period (`Audits`) is setup's inputs and outputs, fixed
 record, a function of all the run's coins.
 
 * `PeriodHeld`, **about the deployed code**: at every value of the other audits' coins, the verifier's whole decision
-  (`Pous.EndToEnd.Accepted`: `SetupProtocol.protocol.check` and `PousCheck.Run.check`) accepts, with no break in the
+  (`Pous.EndToEnd.Accepted`: `SetupProtocol.protocol.check` and `PousVerifier.Run.check`) accepts, with no break in the
   run's own data (`Audits.Break`: a SHA-512 collision among the strings the run hashes, or an LMS forgery under a key
   of the verifier's list), while the capacity account held fewer than `S · len` bit-ticks over the capacity window,
   with probability at most `δ + ε_max` (`1% + 2^-128`) over the capacity coins.
@@ -68,7 +68,7 @@ boundary (`Pous.Guarantees.ContinuousAudit`), whose verdict is the model's, not 
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 

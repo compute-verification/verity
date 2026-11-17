@@ -73,7 +73,7 @@ export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
 export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
-# p2-v3-mc-gpu the memory attester's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# p2-v3-mc-gpu the memory attester's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_verifier's
 # (pous-timed-audit, timed_audit.py's judge, which p2_v1/harness.py builds again, a no-op after this) where its lakefile
 # declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:

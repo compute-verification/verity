@@ -1,6 +1,6 @@
 module
 
-public import PousCheck.Merkle
+public import PousVerifier.Merkle
 public import Poub.Window
 
 /-!
@@ -21,9 +21,9 @@ y_(i,p)       SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ 
 
 An opening is checked as `p2.check` checks it (`checkOpening`), its failures `audit.FAILURES`' names: `malformed`,
 `receipt-path` (the receipt leaf on the pass's root, as a registered block's), `payload-path` (each of the unit's four
-blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check, `PousCheck.Merkle.packageLeaf` and
+blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check, `PousVerifier.Merkle.packageLeaf` and
 `verifyPath`) and `receipt` (y recomputed from the four blocks). Nothing here decodes a block: vk's leaves are of the
-`C*` the verifier decoded to the committed W at PoUS's setup (`PousCheck.P2` is P2's decode).
+`C*` the verifier decoded to the committed W at PoUS's setup (`PousVerifier.P2` is P2's decode).
 -/
 
 @[expose] public section
@@ -87,8 +87,8 @@ def Registration.digest (r : Registration) : ByteArray :=
 /-- `VerifierKey.check_path(j, block, path)` on the registration's root-only vk: PoUS's leaf of block j under its
 salt, on the root of N leaves. -/
 def Registration.checkPath (r : Registration) (j : Nat) (block : ByteArray) (path : Array ByteArray) : Bool :=
-  block.size == BLOCK_BYTES && PousCheck.Merkle.verifyPath r.root r.blocks j
-    (PousCheck.Merkle.packageLeaf r.salt (j / r.blocksPerSegment) (j % r.blocksPerSegment) block) path
+  block.size == BLOCK_BYTES && PousVerifier.Merkle.verifyPath r.root r.blocks j
+    (PousVerifier.Merkle.packageLeaf r.salt (j / r.blocksPerSegment) (j % r.blocksPerSegment) block) path
 
 /-- `receipts.sign_bits(seed, rows, 8224)`: S_i's rows of 1,028 bytes. -/
 def unitSigns (seed : ByteArray) (rows : Nat) : Array ByteArray :=
