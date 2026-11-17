@@ -427,7 +427,7 @@ class NetworkAttesterParams:
 
     def rows_cells(self, windows: int) -> list[int]:
         """Each connection's cell limit over `windows` windows, the period check's rows-form `cells`
-        (`NetworkVerifier.Period.Schedule.rowsCells`): `egress_cells` for each of the `lanes · windows · window`
+        (`NetworkCheck.Period.Schedule.rowsCells`): `egress_cells` for each of the `lanes · windows · window`
         connections the network attester can carry, as `_tick` admits only while fewer than `lanes` are live and serves
         each connection in its admission bucket."""
         return [self.egress_cells] * (self.lanes * windows * self.window)

@@ -38,7 +38,7 @@ path = "../../../resource_accounting/compute/pouw/verifier/lean/check"
 name = "inference_only_verifier"
 path = "../../../workload_classification/training_detection/inference_only/verifier/lean"
 
-# Communication: the network certifier's period check (`NetworkVerifier.Period`), with the certifier program and the LMS
+# Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
 [[require]]
 name = "network_verifier"

@@ -752,7 +752,7 @@ def wipe_named(k: tuple) -> dict | Exception | None:
 
 
 def span_named(k: tuple) -> dict | Exception:
-    """`Core.Onsite.spanNamed`: what the count's case names of its span (`span.named`, `NetworkVerifier.Span.namedOf`);
+    """`Core.Onsite.spanNamed`: what the count's case names of its span (`span.named`, `NetworkCheck.Span.namedOf`);
     else what refused its parameters or its commitment, which reads as no value."""
     try:
         return span.named(span.params(json.loads(k[1])), span.commitment(k[2]))

@@ -41,7 +41,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   tree's gate in this process, a `relay` to PORT its tunnel): a network attester on the developer's node is no auditor's device,
   so it never stands for the gate.
   Exit as `served_session.session`'s.
-* **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkVerifier.Period`'s rows
+* **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when ``network-rows check`` accepted the network attester's records, the chain accepted and
   ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network attester run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
@@ -50,7 +50,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      late past the network attester's D·τ, or cut) certified no served answer, so there is none for the protocol to
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
      run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
-     `NetworkVerifier.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
+     `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
      deployment's key in its session, then runs the attester program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
      otherwise are refused. It holds no egress cell to the id egress form; step 2 does (`network_attester_chain.io`, which
@@ -180,7 +180,7 @@ ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json
 PROTOCOL = "verity/certifier/v0"
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network attester's records
 ROWS = "verity/network-rows/v1"
-#: the named assumption the attester's guarantee reads (`NetworkVerifier.Period`): the attester is the auditor's device
+#: the named assumption the attester's guarantee reads (`NetworkCheck.Period`): the attester is the auditor's device
 PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"

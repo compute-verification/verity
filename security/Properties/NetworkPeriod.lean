@@ -6,9 +6,9 @@ public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
-# The network period check's bound: what its `K` counts (`NetworkVerifier.Period`)
+# The network period check's bound: what its `K` counts (`NetworkCheck.Period`)
 
-On acceptance, `NetworkVerifier.Period.check` publishes `K`, the sum of a ceiling of `log2` of each factor of
+On acceptance, `NetworkCheck.Period.check` publishes `K`, the sum of a ceiling of `log2` of each factor of
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`'s count at the number the check reads for it, `rowsTerms`'s. A sum
 of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of the count, not equal to it;
 `RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves
@@ -65,7 +65,7 @@ sum of its strata's own, each stratum one `subset:k_s` of its own units at δ sp
 whatever it says of an answer.
 
 `RowsOkHeld` says the rows form accepts no execution phase whose scan's registration names its proof blocks' ok bits
-anywhere but at the constants of the schedule's `T` (`NetworkVerifier.ScanOk`): the schedule has at least two ticks, each
+anywhere but at the constants of the schedule's `T` (`NetworkCheck.ScanOk`): the schedule has at least two ticks, each
 member of the scan (`ScanOk.members`) has a `roots` entry at its constant (`OkEntry`: the port `<member>/o0`, the
 member's proof blocks' count, and the frame domain and the root of that many ok rows under the public salts), and
 every `roots` entry whose port ends `/o0` is some member's constant. So the root a member's `o0` is registered at is

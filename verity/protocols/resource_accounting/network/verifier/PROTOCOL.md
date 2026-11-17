@@ -26,12 +26,12 @@ Where each part is stated in Lean:
   "Capacity";
 - the network attester's program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
   charges as code, proved equal to the analysis's definitions and held to this package by its difftests;
-- the record and certificate encodings: `NetworkVerifier.Certificate` (`verity/protocols/resource_accounting/network/verifier/lean`);
-- the audit: `NetworkVerifier.Check` (`verity/network-certificate/v4`) and `NetworkVerifier.Records`
+- the record and certificate encodings: `NetworkCheck.Certificate` (`verity/protocols/resource_accounting/network/verifier/lean`);
+- the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
-- one execution phase's verdict of record: `NetworkVerifier.TransferBlocks`;
-- a period, onsite's network attestation subprotocol: `NetworkVerifier.Period` (`verity/certifier/v0`);
-- an active network attester's run audited as rows over its certified records: `NetworkVerifier.RowsAudit`
+- one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
+- a period, onsite's network attestation subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- an active network attester's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
   (`verity/network-rows/v1`), over the network attester's program's `NetworkAttester.Rows`. It does not hold an egress cell to
   the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
   caller that runs no io tie holds it itself.
@@ -127,13 +127,13 @@ raw records.
 (`RecordHead.encode`: the execution phase, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
 occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the execution phase's real frames. Its layout,
 the frame tree and the record digest are `certificate.py`'s module docstring, stated in Lean by
-`NetworkVerifier.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
-Python by `NetworkVerifier.Difftest`.
+`NetworkCheck.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
+Python by `NetworkCheck.Difftest`.
 
 **The signed digest** hides the record digest R under `salt_c`, 64 bytes the network attester samples from its own
 randomness, fresh for each record (`Issuer`'s `coins`), never the prover's:
 
-    D = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ R )     (`certificate_digest`, Lean `NetworkVerifier.certificateDigest`)
+    D = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ R )     (`certificate_digest`, Lean `NetworkCheck.certificateDigest`)
 
 The network attester hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord.salt`). R is 64 bytes, so
 D fixes R up to a SHA-512 collision (`cr/sha-512`). D hides R as SHA-512 under a secret, uniform 64-byte prefix does,
@@ -146,7 +146,7 @@ execution phase, so a certificate can't be replayed onto another execution phase
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
 This is LMS's network-certificate role digest (`verity.commitments.crypto.lms.certificate_message`, its tag `lms.ROLES`'
-`network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkVerifier.messageInput` hashed. I is the
+`network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkCheck.messageInput` hashed. I is the
 network attester's 16-byte LMS identifier. `session` is the network attester's session id: 32 bytes (`lms.SESSION_BYTES`) the
 challenger samples for the session and issues to the network attester, and the audit takes from its parameters, as it takes the
 key; the record head and `service.encode` don't carry it. The tag is the message's own domain separation, distinct from
@@ -248,7 +248,7 @@ One execution phase's certificates are registered through the proof system
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. The verdict of record is the Lean's (`NetworkVerifier.TransferBlocks`, `service.OF_RECORD`), with the
+  service's `late`. The verdict of record is the Lean's (`NetworkCheck.TransferBlocks`, `service.OF_RECORD`), with the
   Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its
   claim is the heads' only: both are the network attester's, on its grid under its parameters digest. The egress grid
   is the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
@@ -274,13 +274,13 @@ frames' consistency with the served computation.
 
 ## A network attester link (`service.NetworkAttesterProfile`)
 
-Stated in Lean: `NetworkVerifier.TransferBlocks`'s network attester form (`Kind.networkAttester`), the plain proof block under the
+Stated in Lean: `NetworkCheck.TransferBlocks`'s network attester form (`Kind.networkAttester`), the plain proof block under the
 active network attester's records, both ends at the network attester's grid and parameters digest, with no sync read;
 `service.NetworkAttesterProfile` is the Python reference.
 
 ## A period, as onsite's network attestation subprotocol (`verity/certifier/v0`)
 
-Stated in Lean: `NetworkVerifier.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean`, the
+Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has its one form, the rows form, its formats and the bound `K` it
 publishes. Its parameters list the keys of the link's network attester (`"keys"`), an entry
 for each network attester's session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
@@ -870,8 +870,8 @@ program's `NetworkAttester.Schedule` as its code; `schedule.py` (`expected_grids
 ## The audit (`audit`)
 
 The audit (`Audit.check_link` on every egress link, `Audit.check_ingress_link` on every ingress link) is stated in
-Lean as a core protocol: `NetworkVerifier.Check` (`verity/network-certificate/v4`, certified records) and
-`NetworkVerifier.Records` (`verity/network-records/v3`, raw, committed and certified records). Their module docstrings give
+Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, certified records) and
+`NetworkCheck.Records` (`verity/network-records/v3`, raw, committed and certified records). Their module docstrings give
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
 `status:<reason>`, `advice`, `mismatch`), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_check_protocol.py` and
 `test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
@@ -1662,7 +1662,7 @@ can carry.
   rehearsals of a server that answers in another form.
 
 `NetworkAttesterParams.digest` binds them, with the cell kinds and the fail reasons, and every record head's `parameters` is that
-digest. The period check reads the id form's schedules only (`NetworkVerifier.Period.egressForm`), so a `bytes` run's
+digest. The period check reads the id form's schedules only (`NetworkCheck.Period.egressForm`), so a `bytes` run's
 records are certified under a digest no period check takes. The ticker's slack is `NetworkAttester(slack=…)`, 25 ms by default.
 
 **What the wire is a function of.** On connection q the network attester sends r cells of B bytes each way in every bucket, from
@@ -1695,7 +1695,7 @@ no token is refused because the stop rule ends no response of it. Every other re
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the limit
 (`NetTiming.Guarantees.ResponseCapped`). The limit and its reason enter the parameters' digest, so every record head binds
-them; a schedule with no limit hashes neither and keeps its digest. The period check (`NetworkVerifier.Period`) reads the limit
+them; a schedule with no limit hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the limit
 with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`NetworkAttesterParams.lengths`, id form only, none by default; 1 and 2 are their forms) are what the
@@ -1789,7 +1789,7 @@ more, naming the longest stride that fits. The prover's side (`blocks`) builds e
 registered reads from the network attester's opening and refuses request rows that give another row than the signed
 one. The period check reads a schedule with lengths rows, with content rows and with request words, as `NetworkAttesterParams`
 builds it and at its digest, and refuses it by name in its parameters and in its check
-(`NetworkVerifier.Period.connectionRowsRefusal`): it accepts periods under schedules without lengths rows only, since
+(`NetworkCheck.Period.connectionRowsRefusal`): it accepts periods under schedules without lengths rows only, since
 nothing yet ties the request row to the compute side's committed values or reads the block's verdict and failures.
 
 **The content rows** (`NetworkAttesterParams.content`, with lengths rows only, none by default; `content_rows`) are three
