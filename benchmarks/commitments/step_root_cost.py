@@ -41,8 +41,8 @@ from verity_bench import kit
 #: Llama-3.1-8B's int8 linears and their K
 LINEARS = {"self_attn.qkv_proj": 4096, "self_attn.o_proj": 4096, "mlp.gate_up_proj": 4096, "mlp.down_proj": 14336}
 MODELS = {
-    "llama31-8b": ("Llama-3.1-8B int8", LINEARS, 32),
-    "llama32-1b": ("Llama-3.2-1B int8",
+    "llama31-8b": ("Llama-3.1-8B int8", "llama-3.1-8b", LINEARS, 32),
+    "llama32-1b": ("Llama-3.2-1B int8", "llama-3.2-1b",
                    {"self_attn.qkv_proj": 2048, "self_attn.o_proj": 2048, "mlp.gate_up_proj": 2048, "mlp.down_proj": 8192}, 16),
 }
 METRIC = "proofs/step-roots-seconds"
@@ -59,7 +59,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--out", default=None, help="directory for result.json (default $RESEARCH_RUN_DIR)")
     ns = ap.parse_args(argv)
     ns.workers = [int(w) for w in ns.workers.split(",")]
-    ns.model_name, ns.linears, layers = MODELS[ns.model]
+    ns.model_name, ns.member, ns.linears, layers = MODELS[ns.model]
     ns.layers = layers if ns.layers is None else ns.layers
     if min(ns.batch, ns.layers, ns.k_scale, ns.reps, *ns.workers) <= 0:
         ap.error("--batch, --layers, --k-scale, --reps and --workers must be positive")
@@ -155,10 +155,9 @@ def main(argv: list[str] | None = None) -> int:
                        "ok" if ok else f"reference root {ref.hex()[:16]}")
         model = {"model": ns.model_name, "batch": ns.batch}
         why = None if ok else "the step root is not the reference's"
-        for w, v in by_workers.items():
-            res.measurement(METRIC, v["seconds"] if ok else None, "s", why=why, mark="measured", member=f"w{w}", extra=model)
         best = min(by_workers, key=lambda w: by_workers[w]["seconds"])
-        rest = ([(f"step_roots.w{w}.cold_seconds", v["cold_s"], "s") for w, v in by_workers.items()]
+        rest = ([(f"step_roots.w{w}.seconds", v["seconds"], "s") for w, v in by_workers.items()]
+                + [(f"step_roots.w{w}.cold_seconds", v["cold_s"], "s") for w, v in by_workers.items()]
                 + ([("step_roots.w1.cpu_seconds", by_workers[1]["cpu_s"], "s")] if 1 in by_workers else [])
                 + [(f"sha512_floor.w{w}.seconds", v, "s") for w, v in floor.items()]
                 + [(f"sha512_floor.w{w}.cpu_seconds", v, "s") for w, v in floor_cpu.items()]
@@ -168,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
         for name, value, unit in rest:
             res.measurement(name, value, unit, mark="measured")
         res.measurement(METRIC, by_workers[best]["seconds"] if ok else None, "s", why=why, mark="measured",
-                        extra=model | {"workers": best})
+                        member=f"{ns.member}-cpu", extra=model | {"workers": best})
         res.measurement_file("step_root_cost.json")
     return 0 if ok else 1
 

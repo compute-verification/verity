@@ -12,8 +12,8 @@ What committing values costs under each commitment scheme, on the host and on th
 - `interior_commit_peak.py`: the most memory an interior's commitment holds, made whole and made into its window
   directory (`rows.commit`'s `into`), a process each over the same rows, valid where the two commitments are equal.
 - `step_root_cost.py`: the serving loop's per-step row-table hashing for one int8 decode step of Llama-3.1-8B or Llama-3.2-1B
-  (`--model`), at several worker counts, against a SHA-512 floor over the same bytes; its seconds are the dashboard's
-  `proofs/step-roots-seconds` (`metrics.toml`).
+  (`--model`), at several worker counts, against a SHA-512 floor over the same bytes; its seconds at the fastest worker count are the
+  dashboard's `proofs/step-roots-seconds` (`metrics.toml`), member `llama-3.2-1b-cpu` or `llama-3.1-8b-cpu`.
 - `step_root_gpu.py`: the same hashing on the GPU, overlapped with a graphed proxy of the decode step's linears.
 - `table_read_commit.py`: the same committer over one decode step's DSA table reads (each read's opened row, salt, path and
   output row, per layer) at a batch of long-row requests: GB/s alone, beside a decode-shaped GEMM loop, and the CPU twin's;

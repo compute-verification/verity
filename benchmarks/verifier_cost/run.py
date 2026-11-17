@@ -209,17 +209,13 @@ def record(out: Path, rows: list[dict], bad: list[str]) -> None:
                    "inference-only-check --policy exits 0 on every row and agrees with --unrolled wherever both ran",
                    ", ".join(bad) or "ok")
 
-    def one(r: dict, member: str | None) -> None:
+    for r in rows:
         ok = r["desc"]["rc"] == 0 and r["unrolled"].get("agrees") is not False
-        res.measurement(METRIC, r["desc"]["seconds"] if ok else None, "s", mark="measured", member=member,
-                        why=None if ok else "the check failed or disagreed with --unrolled",
+        res.measurement(METRIC, r["desc"]["seconds"] if ok else None, "s", mark="measured",
+                        member=f"serve-v1-{r['config']}-{r['ir']}-cpu",
+                        why=None if ok else "the verifier refused or disagreed with --unrolled",
                         extra={"workload": "Serve_v1", "max_rss_kb": r["desc"].get("max_rss_kb"),
                                **{k: r[k] for k in ("config", "ir", "description_bytes", "unrolled_gates")}})
-
-    for r in rows:
-        one(r, f"{r['config']}/{r['ir']}")
-    if rows:
-        one(max(rows, key=lambda r: r["unrolled_gates"]), None)
 
 
 PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"

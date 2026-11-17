@@ -118,8 +118,8 @@ def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_p
     assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == set(got["sha512_floor_cpu_s"]) == {"1"}
     assert {"step_roots.w1.cpu_seconds", "salts.cpu_seconds"} <= {m["name"] for m in check.doc["measurements"]}
     metric = [m for m in check.doc["measurements"] if m["name"] == mod.METRIC]
-    assert [m.get("member") for m in metric] == ["w1", None]
-    assert {m["model"] for m in metric} == {"Llama-3.2-1B int8"} and metric[-1]["mark"] == "measured"
+    assert [(m["member"], m["model"], m["workers"], m["mark"]) for m in metric] == [
+        ("llama-3.2-1b-cpu", "Llama-3.2-1B int8", 1, "measured")]
 
 
 def test_commit_cost_tool_is_registered() -> None:
