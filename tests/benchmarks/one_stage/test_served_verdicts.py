@@ -2441,9 +2441,10 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
 def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
         tmp_path, monkeypatch, live, design):
     """The tied audit's rule, its summary's ``sampling_design`` held to the sampling design R commits, decides what PoUW's
-    accept of record covers: at a stratified rate every table W registers has a sampled reader, and the row says nothing
-    more; at any other rule the row's profile and the record's reason say the weaker tie with the rule, so nothing reads
-    it as the tied guarantee."""
+    accept of record covers: at a stratified rate, a stratum of each reader template, which the launch's preflight admits
+    under the tie only where each table's readers are templates of their own, the row says nothing more; at any other rule
+    the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
+    guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
@@ -2454,7 +2455,7 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
     said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
     assert reason.startswith("PoUW: accept") and reason.endswith(said), reason
-    assert weaker is None or f"sampled {design}, not a stratified rate" in weaker
+    assert weaker is None or f"sampled {design}, which takes no stratum of each reader template" in weaker
 
 
 def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_its_exact_credit(tmp_path, monkeypatch, live):
@@ -3639,8 +3640,8 @@ def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--sampling-design", "--t
 def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_readers_on_a_port_a_sampled_block(
         tmp_path, tied, extra, ports):
     """Under H1_TIE the tables the window circuit reads are H1's W's, so V3c's audit is tied to W (records_audit's --tie,
-    with H1's names' prefix h1/) at a stratified rate, a stratum of each table's readers, so every table has a sampled
-    reader, on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied
+    with H1's names' prefix h1/) at a stratified rate, a stratum of each reader template, so a table whose readers are
+    templates of its own has a sampled reader, on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied
     window's audit is at the default rate on 16 ports, the rule its window-commit committed the window under."""
     if tied:
         _tied_commit(tmp_path, "same")
@@ -4772,8 +4773,9 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
 
 
 def _no_reader(sampling_design: str) -> str:
-    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate "
-            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {_published(sampling_design)}")
+    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, and only a stratified rate "
+            "(stratified-rate:NUM/DEN) samples a stratum of each reader template, which reaches every table only where "
+            f"each table's readers are templates of their own: V3C_LAW is {_published(sampling_design)}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
