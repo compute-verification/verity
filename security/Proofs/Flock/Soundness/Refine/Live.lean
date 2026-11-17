@@ -2,19 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Tapes
 
-/-!
-# The live session, and simulating it in the model
-
-The transfer (the refinement `ExecRefines`) compares two interactions. The **live** one is the challenger's session as
-the executable sees it: the prover sends framed bytes, the server flips coins, and at the end the executable checks what
-the server recorded. The **model** one is the compiled game the soundness theorems bound.
-
-* `Sim pL pg L g` is a simulation of a live interaction `L` by a model interaction `g`. It is data: how the model answers
-  each live move, bijections between their coins, and a strategy for the model wherever no live run can succeed. With it
-  come the facts that make a live acceptance (`pL`) a model acceptance (`pg`). `Sim.strategy` is the model strategy it
-  plays against a live one, and `Sim.prob_le` compares the two probabilities.
-* `liveTable` is one table's live session on the Blake3 unsalted path, whose server retains every round's bytes.
--/
+/-! The live session as the executable sees it, and its simulation by the model's compiled game (`Sim`,
+`Sim.prob_le`). -/
 
 @[expose] public section
 
@@ -52,8 +41,6 @@ def strategy : {L : Game β} → {g : Game α} → Sim pL pg L g → Strategy L 
   | _, _, .coin e f, s => fun c' => (f c').strategy (s (e c'))
   | _, _, .dead _ σ, _ => σ
 
-/-- **The model accepts at least as often.** Against any live strategy, the live verdict holds with probability at most
-that of the model's verdict against the simulated strategy. -/
 theorem prob_le : ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g) (s : Strategy L),
     prob pL L s ≤ prob pg g (d.strategy s)
   | _, _, .ret h, _ => by
@@ -77,7 +64,6 @@ inductive Out : {β : Type} → Game β → β → Prop
   | coin {β C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (c : C) {b : β} :
       Out (k c) b → Out (@Game.coin β C iF iN k) b
 
-/-- An interaction none of whose outcomes satisfies `p` satisfies it with probability `0`. -/
 theorem prob_eq_zero_of_out {p : β → Prop} : ∀ {L : Game β}, (∀ b, Out L b → ¬ p b) → ∀ s : Strategy L, prob p L s = 0
   | .ret b, h, _ => by classical simp only [prob]; simp [h b (.ret b)]
   | .send _ k, h, s => by simp only [prob]; exact prob_eq_zero_of_out (fun b hb => h b (.send s.1 hb)) s.2
@@ -85,13 +71,11 @@ theorem prob_eq_zero_of_out {p : β → Prop} : ∀ {L : Game β}, (∀ b, Out L
       simp only [prob]
       exact Finset.sum_eq_zero fun c _ => by rw [prob_eq_zero_of_out (fun b hb => h b (.coin c hb)) (s c), mul_zero]
 
-/-- An outcome of `g.bind f` is an outcome of `f a`, for an outcome `a` of `g`. -/
 theorem Out.of_bind {γ : Type} {f : β → Game γ} : ∀ {g : Game β} {c : γ}, Out (g.bind f) c → ∃ b, Out g b ∧ Out (f b) c
   | .ret b, _, h => ⟨b, .ret b, h⟩
   | .send _ k, _, .send m h => let ⟨b, hb, hc⟩ := Out.of_bind h; ⟨b, .send m hb, hc⟩
   | @Game.coin _ C _ _ k, _, .coin x h => let ⟨b, hb, hc⟩ := Out.of_bind h; ⟨b, .coin x hb, hc⟩
 
-/-- An outcome of `g.map f` is the image of an outcome of `g`. -/
 theorem Out.of_map {γ : Type} {f : β → γ} {g : Game β} {c : γ} (h : Out (g.map f) c) : ∃ b, Out g b ∧ c = f b := by
   obtain ⟨b, hb, hc⟩ := Out.of_bind h
   cases hc
@@ -154,7 +138,6 @@ theorem roundOf_coins (dg : ByteArray → ByteArray) (b : ByteArray) (c : Array 
   rw [getElem!_pos c i h₂]
   rfl
 
-/-- A live run's streams extend the rounds they had. -/
 theorem liveRounds_out (dg : ByteArray → ByteArray) : ∀ (N : ℕ) (acc : List Round × List Round)
     {rs : List Round × List Round}, Out (liveRounds dg N acc) rs → ∃ l₀ l₁, rs = (acc.1 ++ l₀, acc.2 ++ l₁)
   | 0, acc, _, .ret _ => ⟨[], [], by simp⟩

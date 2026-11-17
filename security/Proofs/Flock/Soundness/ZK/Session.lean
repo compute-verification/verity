@@ -11,33 +11,9 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.SHVZK
 
-/-!
-# Zero knowledge of one session of `J` masked tables
-
-The paper's Lemmas A and B are per session, with `J` tables (`docs/zk-proof-public.md` §4.2, §4.3), and the Lean ones of
-`SHVZK` and `RealLeaves` are per table. The step between them is a product:
-
-* the session's tables use disjoint randomness (§2.2: table `j` reads its own ranges of the session's two ChaCha20 streams,
-  `purpose | j << 32`, and its own salt trees), which the PRG step makes independent uniform samples per table. The salts
-  are not a stream's: every leaf's salt is the operating system's bytes, uniform under A3
-  (`Assumptions.UniformRandomBytes`; `Discharge.ZkView.OsSalts`), so the PRG step is the masks' and padding's only;
-* no claim or message reads two tables' witnesses or masks, so at fixed coins the session's view is the tuple of its
-  tables' views, each a function of its own table's randomness. The tables' witnesses may overlap (two sampled proof blocks in
-  different tables can read one row); they are fixed.
-
-The one place the tables meet is the link exchange, and it carries only public values: the link points are the verifier's
-coins, `Link(0)` is the constant 0 for every table, and each table's region claims at the shared points send their public
-values (H_reg, `sReg w = pubReg`). The session's other framing (`Register`, `Hello`, the one `Commit` with every table's
-cap) is a public function of the statement, the coins and the tables' views.
-
-So the session's statements follow from the tables' by two facts about independent components: equal distributions give
-equal distributions of the tuples (`SameDist.pi`), and closeness adds up (`prCoin_pi_close`, one table at a time).
-
-* `Session.session_shvzk`: Lemma B in world `W₁` for the session: its view and the tuple of `S_shvzk`'s are equally
-  distributed.
-* `Session.session_prefinal_indep`: Lemma A at a non-degenerate coin vector, for the session.
-* `Session.session_shvzk_hm96`: Lemma B with real hm96 leaves, within `Σ_j 2·|Hid_j|·δ₁`.
--/
+/-! Zero knowledge of one session of `J` masked tables from its tables', by independence (`SameDist.pi`,
+`prCoin_pi_close`); every leaf's salt is the operating system's bytes, uniform under
+`Assumptions.UniformRandomBytes`. -/
 
 @[expose] public section
 
@@ -49,7 +25,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **Independent components.** Tuples of independent components have equal distributions when each component's do. -/
 theorem SameDist.pi {J : ℕ} {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)] [∀ j, Fintype (Ω' j)]
     (f : ∀ j, Ω j → V j) (g : ∀ j, Ω' j → V j) (h : ∀ j, SameDist (f j) (g j)) :
     SameDist (fun ω : ∀ j, Ω j => fun j => f j (ω j)) (fun σ : ∀ j, Ω' j => fun j => g j (σ j)) := by
@@ -70,7 +45,6 @@ theorem SameDist.pi {J : ℕ} {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)
   · convert count f v
   · convert count g v
 
-/-- The induction behind `prCoin_pi_close`. -/
 theorem prCoin_pi_close_aux : ∀ (J : ℕ) {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)] [∀ j, Nonempty (Ω j)]
     [∀ j, Fintype (Ω' j)] [∀ j, Nonempty (Ω' j)] (f : ∀ j, Ω j → V j) (g : ∀ j, Ω' j → V j) (ε : Fin J → ℝ≥0∞),
     (∀ j (E : V j → Prop), prCoin (fun ω => E (f j ω)) ≤ prCoin (fun σ => E (g j σ)) + ε j) →
@@ -94,7 +68,6 @@ theorem prCoin_pi_close_aux : ∀ (J : ℕ) {Ω Ω' V : Fin J → Type} [∀ j, 
     rw [avg_const, avg_const]
   | succ n ih =>
     intro Ω Ω' V _ _ _ _ f g ε h E
-    -- component `0`, with the others part of the experiment
     have hA : prCoin (fun ω : ∀ j, Ω j => E fun j => f j (ω j))
         = prCoin (fun p : (∀ j : Fin n, Ω j.succ) × Ω 0 =>
             E (Fin.cons (f 0 p.2) fun j => f j.succ (p.1 j))) := by
@@ -144,10 +117,6 @@ theorem prCoin_pi_close_aux : ∀ (J : ℕ) {Ω Ω' V : Fin J → Type} [∀ j, 
         rw [hC, Fin.sum_univ_succ]
         ring
 
-/-- **Closeness adds up over independent components**: if for every `j` and every event, component `j`'s probability under
-`f j` is at most its probability under `g j` plus `ε j`, then for every event on the tuple, its probability under the
-`f`s is at most its probability under the `g`s plus `Σ_j ε j`. One component at a time, with the others part of the
-experiment. -/
 theorem prCoin_pi_close {J : ℕ} {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)] [∀ j, Nonempty (Ω j)]
     [∀ j, Fintype (Ω' j)] [∀ j, Nonempty (Ω' j)] (f : ∀ j, Ω j → V j) (g : ∀ j, Ω' j → V j) (ε : Fin J → ℝ≥0∞)
     (h : ∀ j (E : V j → Prop), prCoin (fun ω => E (f j ω)) ≤ prCoin (fun σ => E (g j σ)) + ε j)
@@ -161,22 +130,16 @@ variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] {J : ℕ} (T : Fin
 
 variable [CharP F 2]
 
-/-- **The session's view** at fixed coins: each table's view, on its witness `w j` and its own randomness `ω j`. -/
 noncomputable def view (w : Fin J → W) (ω : ∀ j, (T j).Rand) : ∀ j, (T j).View := fun j => (T j).view (w j) (ω j)
 
-/-- **`S_shvzk` for the session**: each table's simulator, on its dummy witness `w₀ j` and its own randomness. -/
 noncomputable def sim (w0 : Fin J → W) (σ : ∀ j, (T j).SimRand) : ∀ j, (T j).View := fun j => (T j).sim (w0 j) (σ j)
 
-/-- The session's pre-final view in world `W₀`. -/
 noncomputable def preView (w : Fin J → W) (ω : ∀ j, (T j).Rand) : ∀ j, (T j).PreView :=
   fun j => (T j).preView (w j) (ω j)
 
 variable [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K]
   [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
 
-/-- **Lemma B in world `W₁` for a session of `J` tables** (§4.3): at fixed coins that are non-degenerate for every table,
-with each table's witness satisfying H_reg and `InnerHolds`, the session's view and the tuple of the tables' `S_shvzk`
-outputs have the same distribution. -/
 theorem session_shvzk (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
     (hβ : ∀ j r, (T j).β r ≠ 0) (w : Fin J → W) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg)
@@ -186,8 +149,6 @@ theorem session_shvzk (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (fun j => (T j).table_shvzk (hrank j) (hpad j) (hW j) (hpads j) (hβ j) (w j) (hreg j) (hinner j) (w0 j))
 
 omit [Fintype K] [DecidableEq K] in
-/-- **Lemma A at a non-degenerate coin vector, for a session of `J` tables** (§4.2): the session's pre-final views on two
-tuples of witnesses carrying the public region data are equally distributed. -/
 theorem session_prefinal_indep (hrank : ∀ j, (T j).Rank)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hβ : ∀ j r, (T j).β r ≠ 0)
     (w w' : Fin J → W) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg) (hreg' : ∀ j, (T j).sReg (w' j) = (T j).pubReg) :
@@ -204,11 +165,6 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] {J :
   [AddCommGroup Salt] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K]
   [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
 
-/-- **Lemma B with real hm96 leaves for a session of `J` tables** (§4.3): under each table's hypotheses of
-`table_shvzk_hm96`, every event on the session's view has probabilities within `Σ_j 2·|Hid_j|·δ₁` of each other under the
-real prover (every table's hidden leaves real hm96 leaves of what they commit) and under the tuple of the tables'
-`S_shvzk` with real leaves, in both directions. `|Hid_j|` counts table `j`'s unopened leaves, so the sum is at most the
-paper's `2·δ₁·N_hid` with `N_hid` summed over the session's tables. -/
 theorem session_shvzk_hm96 {C : Type} (M : ∀ j, (T j).Hm96 C) {δ₁ : ℝ≥0∞}
     (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)

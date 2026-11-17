@@ -8,19 +8,8 @@ public import Spot.Run
 public import Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
 
-/-!
-# The steps of an accepted two-stage run (part 5)
-
-An accepted two-stage run of `Run.run` passed its first stage on the challenger's bytes with no closure map, its second
-stage over the first stage's proved units, and round 2's statement check with no code (`accepted_steps`). The run's
-answer names `accept` only where the boundary audit and round 2's attached record both read accepted; round 2's record
-reads accepted only where its check has no code (`codes_of_attach`), and that check at the form's switch has no code
-only where the check with the form allowed has none (`check_true_of_codes`).
-
-Each stage's check of its challenges gave no code on the bytes it read (`Run.coinsCode … = none`, in
-`accepted_steps`), and each stage's registration passed the registration check with no code (`accepted_registered`).
-The walks are public: `run_path` over `Run.run` at either switch, `interiorSteps_ok` over the interior's steps.
--/
+/-! An accepted two-stage run of `Run.run` passed its first stage on the challenger's bytes with no closure map, its
+second stage over the first stage's proved units, and round 2's statement check with no code (`accepted_steps`). -/
 
 @[expose] public section
 
@@ -28,29 +17,24 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
-/-- An object `Json.mkObj` builds is a well-formed map. -/
 theorem mkObj_wf (l : List (String × Json)) : ∃ m : Std.TreeMap.Raw String Json compare,
     Json.mkObj l = .obj m ∧ m.WF :=
   ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩
 
-/-- `getD` of `Json.mkObj l` at a key no entry of `l` has is `null`. -/
 theorem getD_mkObj_none {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false) :
     Spot.getD (Json.mkObj l) k = .null := by
   rw [Json.mkObj, getD_obj, Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false hk]
   all_goals rfl
 
-/-- `getD` of `Json.mkObj l` at a key of `l`'s, its keys distinct, is its value. -/
 theorem getD_mkObj_mem {l : List (String × Json)} {k : String} {v : Json}
     (hd : l.Pairwise fun a b => ¬compare a.1 b.1 = .eq) (hm : (k, v) ∈ l) : Spot.getD (Json.mkObj l) k = v := by
   rw [Json.mkObj, getD_obj, Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.LawfulEqCmp.compare_eq_iff_eq.2 rfl) hd hm]
   all_goals rfl
 
-/-- **A refused run names no symbol.** -/
 theorem symbol_refused (step : String) (codes : Array String) :
     Spot.getD (Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) "symbol" = .null :=
   getD_mkObj_none (by simp)
 
-/-- **An answer's symbol** is the one it lists, its other keys and the staged interior entry's distinct from it. -/
 theorem symbol_answer (receipt draw read symbol pub audit : Json) (staged : List (String × Json))
     (hs : staged = [] ∨ ∃ e, staged = [("interior", e)]) :
     Spot.getD (Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", read), ("symbol", symbol),
@@ -60,19 +44,16 @@ theorem symbol_answer (receipt draw read symbol pub audit : Json) (staged : List
       simp [List.pairwise_cons, Std.compare_eq_iff_eq]
   · simp
 
-/-- A Boolean whose negation is not true is true. -/
 private theorem of_not_not {b : Bool} (h : ¬(!b) = true) : b = true := by
   cases b
   · exact absurd rfl h
   · rfl
 
-/-- Two values `!=` does not tell apart are equal. -/
 private theorem eq_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : ¬(a != b) = true) : a = b := by
   cases hab : a == b
   · exact absurd (by simp [bne, hab]) h
   · exact eq_of_beq hab
 
-/-- An option that is no `some` is `none`. -/
 private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some c → False) : o = none := by
   cases o with
   | none => rfl
@@ -80,11 +61,6 @@ private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some 
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 8000000 in
-/-- **A run's answer**, at either switch: refused at a step, or past every step: the boundary registration passed the
-registration check under the sampling design the rule gives its population and the work table the rule expands, the first stage
-ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
-stage ran over the first stage's proved units, then the second stage's audit, and the answer names `accept` where
-both audits read accepted. -/
 theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
@@ -124,7 +100,6 @@ theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
         by assumption, by assumption, by assumption, by assumption, by assumption,
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun hs => by simp at hs⟩
 
-/-- **The second stage under a two-stage rule with an interior** is the interior's steps. -/
 theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}
     {k : Spot.Select.Counts} {it : Spot.Run.Interior} {inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)}
     (hr : i.rule = .twoStage grain replay k) (hi : i.interior = some it)
@@ -143,10 +118,6 @@ theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json}
       exact ⟨x, rfl, by rw [← h]⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **The interior's steps, accepted**: the interior is the run's, its cells and counts are the replay block's and the
-rule's, its record states the population the replay sample gives those cells and passed the registration check under
-the subset sampling design at that population, its second stage is `selectSecond` on its bytes over the replay sample, and the
-check of its challenges gave no code on the bytes it read. -/
 theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
     {sample : Array ℕ} {x : Spot.Run.Interior × Json × Json × Json × ℕ}
     (h : Spot.Run.interiorSteps i it k sample = .ok (.ok x)) :
@@ -168,8 +139,6 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
     | (cases h; exact ⟨rfl, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
         by assumption, by assumption⟩)
 
-/-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
-second stage's sample, the answer whether round 2's attached record reads accepted, and one staged entry. -/
 private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
     {receipt draw samplingDesign : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
     (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
@@ -193,7 +162,6 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
        exact ⟨⟨_, h.2.symm⟩, _, _, by assumption, by assumption, h.1.symm⟩)
 
 set_option maxHeartbeats 4000000 in
-/-- **A boundary record is a well-formed object**: `Record.record` answers with one. -/
 private theorem record_wf {x : Spot.Record.Input} {r : Json} (h : Spot.Record.record x = .ok r) :
     ∃ m : Std.TreeMap.Raw String Json compare, r = .obj m ∧ m.WF := by
   unfold Spot.Record.record at h
@@ -204,7 +172,6 @@ private theorem record_wf {x : Spot.Record.Input} {r : Json} (h : Spot.Record.re
     | focus (cases h; done)
     | (cases h; exact ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩)
 
-/-- **An audit record is a well-formed object.** -/
 private theorem audit_wf {i : Spot.Run.Input} {v : Spot.Docket.Verifier} {record receipt draw samplingDesign : Json}
     {proved : Array Int} {instances : Int} {served sessionRoots r : Json} {named : Array String}
     (h : Spot.Run.audit i v record receipt draw samplingDesign proved instances served sessionRoots named = .ok r) :
@@ -213,12 +180,6 @@ private theorem audit_wf {i : Spot.Run.Input} {v : Spot.Docket.Verifier} {record
   obtain ⟨x, _, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
   exact record_wf h
 
-/-- **Part 5: the steps of an accepted two-stage run.** Its first stage ran with no closure map on the challenger's
-bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands, and the run's check of them gave no
-code on the bytes it read (`Run.coinsCode`, under the run's key, its copy of main's history and its family); its second
-stage ran on the interior's bytes over the units the first stage proves, at the replay block's cells and the rule's
-counts, and the same check gave no code on the bytes it read, under the same key and the interior's family; and
-round 2's statement check with the form allowed reports no code at the `Own` the run builds (`runOwn`). -/
 theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     i.closure = none ∧
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
@@ -264,12 +225,6 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
       none_of_forall hcoins₂, hstrata, ?_⟩
     exact check_true_of_codes (codes_of_attach hwf hacc.symm)
 
-/-- **The registrations an accepted two-stage run checked.** Its boundary record passed the registration check with
-no code, under the run's parameters with the sampling design the rule gives the record's population and the work table the rule
-expands; and its interior record states the population the first stage's proved units give the replay block's cells,
-and passed the registration check with no code under the interior's parameters with the subset sampling design at that
-population. The first stage's sample is `accepted_steps`'s: `Rule.tableOver`, `Select.resolve` and `Select.select` are
-functions of the run's input. -/
 theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
         (draw : Json) (rest : Array ℕ) (read : ℕ) (ns : Array ℕ),
@@ -299,8 +254,6 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
     exact ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, hn, hrule, hlaw, ht, of_not_not hchk, hres, hsel,
       hns, eq_of_not_bne hpop, of_not_not hchk₂⟩
 
-/-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the sample object
-its first stage's select returned, under `Select.resolve`'s rule and the work table `Rule.tableOver` expands. -/
 theorem answer_sample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (rest : Array ℕ) (read : ℕ),
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =

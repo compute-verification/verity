@@ -7,15 +7,7 @@ public import Flock.Ligerito
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Runs of the executable's Ligerito programs
-
-The executable's Ligerito verifier (`Flock.Ligerito`) runs in `LM = StateT LState TM`: the running claim `s`, the round
-polynomial `q`, the cursors into the proof's lists, and the out-of-domain and consistency contexts, over the replay
-transcript. A run that succeeds, `x st t = .ok ((a, st'), t')`, is taken apart one step at a time, as `Exec` does for
-`TM`: `lbind_ok` peels a `bind`, and `lift_bind`, `lget_bind`, `lset_bind`, `lmodify_bind` peel the steps that read or
-write one of the two states.
--/
+/-! Runs of the executable's Ligerito programs in `LM`, taken apart one step at a time. -/
 
 @[expose] public section
 
@@ -75,9 +67,6 @@ theorem lmodify_ok {g : LState → LState} {st st' : LState} {t t' : Transcript}
     (h : (modify g : LM PUnit) st t = .ok ((a, st'), t')) : st' = g st ∧ t' = t := by
   cases h; exact ⟨rfl, rfl⟩
 
-/-! ## The Ligerito helpers -/
-
-/-- `nextMsg`: the next sumcheck message of the proof, absorbed; the message cursor moves on. -/
 theorem nextMsg_ok {p : LigeritoProof} {st st' : LState} {t t' : Transcript} {m : F256 × F256}
     (h : nextMsg p st t = .ok ((m, st'), t')) :
     p.messages[st.msg]? = some m ∧ st' = { st with msg := st.msg + 1 } ∧ Keeps t t' := by
@@ -104,7 +93,6 @@ theorem nextMsg_bind {p : LigeritoProof} {f : F256 × F256 → LM β} {st st' : 
   obtain ⟨hm, rfl, hk⟩ := nextMsg_ok h₁
   exact ⟨m, t₁, hm, hk, h₂⟩
 
-/-- `nextOod`: the next out-of-domain value of the proof; the cursor moves on. -/
 theorem nextOod_bind {p : LigeritoProof} {f : F128 → LM β} {st st' : LState} {t t' : Transcript} {b : β}
     (h : (nextOod p >>= f) st t = .ok ((b, st'), t')) :
     ∃ v, p.oodValues[st.ood]? = some v ∧ f v { st with ood := st.ood + 1 } t = .ok ((b, st'), t') := by
@@ -119,7 +107,6 @@ theorem nextOod_bind {p : LigeritoProof} {f : F128 → LM β} {st st' : LState} 
     obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₁
     exact ⟨v, rfl, h₂⟩
 
-/-- `nonceFrom`: a present nonce, the state unchanged. -/
 theorem nonceFrom_bind {xs : Array UInt64} {i : ℕ} {what : String} {f : UInt64 → LM β} {st st' : LState}
     {t t' : Transcript} {b : β} (h : (nonceFrom xs i what >>= f) st t = .ok ((b, st'), t')) :
     ∃ v, xs[i]? = some v ∧ f v st t = .ok ((b, st'), t') := by
@@ -132,7 +119,6 @@ theorem nonceFrom_bind {xs : Array UInt64} {i : ℕ} {what : String} {f : UInt64
     obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₁
     exact ⟨v, rfl, h₂⟩
 
-/-- `claimPow`: a claim-batching nonce, absorbed; the cursor moves on. -/
 theorem claimPow_bind {p : LigeritoProof} {f : PUnit → LM β} {st st' : LState} {t t' : Transcript} {b : β}
     (h : (claimPow p >>= f) st t = .ok ((b, st'), t')) :
     ∃ t₁, Keeps t t₁ ∧ f () { st with cbn := st.cbn + 1 } t₁ = .ok ((b, st'), t') := by
@@ -147,7 +133,6 @@ theorem claimPow_bind {p : LigeritoProof} {f : PUnit → LM β} {st st' : LState
   obtain ⟨rfl, rfl⟩ := pure_ok h₃
   exact ⟨_, k₂, h₂⟩
 
-/-- `challenge`: a `K` coin (the next round's two coins), the claim `s ← q(r)`, and the next message's polynomial. -/
 theorem challenge_bind {p : LigeritoProof} {f : F256 → LM β} {st st' : LState} {t t' : Transcript} {b : β}
     (h : (challenge p >>= f) st t = .ok ((b, st'), t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 2 ∧ ∃ m t₁, p.messages[st.msg]? = some m ∧
@@ -167,8 +152,6 @@ theorem challenge_bind {p : LigeritoProof} {f : F256 → LM β} {st st' : LState
   subst hr'
   exact ⟨hlt, hn, m, _, hm, k₄.2.trans hr₃, k₄.1.trans hk₃, h₂⟩
 
-/-- `oodIntro`: an out-of-domain point (round `t.k`'s `dim` coins), its value and intro message from the proof, and the
-batching coin (round `t.k + 1`); the claim and the polynomial gain the intro scaled by the coin. -/
 theorem oodIntro_bind {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0) {f : PUnit → LM β} {st st' : LState}
     {t t' : Transcript} {b : β} (h : (oodIntro p dim split >>= f) st t = .ok ((b, st'), t')) :
     (t.rounds[t.k]!).n = dim ∧ (t.rounds[t.k + 1]!).n = 1 ∧ ∃ y m t₁, p.oodValues[st.ood]? = some y ∧
@@ -202,14 +185,11 @@ theorem oodIntro_bind {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0) {
 
 theorem range_size (n : ℕ) : [:n].size = n := by simp [Std.Legacy.Range.size]
 
-/-- The consistency value `e = Σ_j eq(α)[j]·Σ_l eq_K(fold)[l]·row_j[l]` (`Flock.Ligerito` step 10), as the executable folds it. -/
 def consE (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) (fold : Array F256) : F256 :=
   (List.range q).foldl (fun e j =>
     e + F256.smul ((List.range rows[j]!.size).foldl
       (fun acc l => acc + F256.smul (eqTableK fold)[l]! (rows[j]!)[l]!) 0) (eqTable alpha)[j]!) 0
 
-/-- `queryLevel`: the query coins (round `t.k`, `q` coins) give the positions, the consistency coins (round `t.k + 1`)
-the batching vector; the Merkle check passes, and the consistency value is `consE`. -/
 theorem queryLevel_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Transcript} {b : β}

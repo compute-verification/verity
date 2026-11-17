@@ -16,15 +16,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `PadNonvanishing40`, proved
-
-`Assumptions.Zk.PadNonvanishing40` says `Ŵ_cols(ω_q) + PAD_C ≠ 0` for `cols ≤ 40` and `q < 2^(cols+1)`. It holds outright:
-`Ŵ_cols(ω_q)` is bit `cols` of `q`, so 0 or 1, and `PAD_C = x` is neither.
-
-* `What_omega`: `Ŵ_i(ω_q) ∈ {0, 1}` for `i < 64`, `q < 2^(i+1)`.
-* `padNonvanishing40`: the instance Lemma B's row (ii) reads (`Composed.zkViewAt_of_ok`), so no `--zk` headline takes it.
--/
+/-! `Assumptions.Zk.PadNonvanishing40` holds outright (`padNonvanishing40`): `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x`
+is neither. -/
 
 @[expose] public section
 
@@ -32,7 +25,6 @@ namespace FlockSoundness.ZK
 
 open FlockLevel3 Polynomial
 
-/-- `s_i` is additive: GF(2^128) has characteristic 2, so each step `s ↦ s² + c·s` is. -/
 theorem sPoly_eval_add : ∀ (i : ℕ) (a b : GF128), (sPoly i).eval (a + b) = (sPoly i).eval a + (sPoly i).eval b
   | 0, a, b => by simp [sPoly]
   | i + 1, a, b => by
@@ -43,7 +35,6 @@ theorem sPoly_eval_zero : ∀ i, (sPoly i).eval (0 : GF128) = 0
   | 0 => by simp [sPoly]
   | i + 1 => by simp [sPoly, sPoly_eval_zero i]
 
-/-- `s_i` vanishes at `β_j = x^j` for `j < i`. -/
 theorem sPoly_eval_beta : ∀ i j, j < i → (sPoly i).eval (beta j) = 0
   | 0, _, h => absurd h (Nat.not_lt_zero _)
   | i + 1, j, h => by
@@ -65,7 +56,6 @@ theorem two_pow_xor_of_lt {k r : ℕ} (hr : r < 2 ^ k) : 2 ^ k ^^^ r = 2 ^ k + r
   · subst hj; simp [Nat.testBit_lt_two_pow hr]
   · simp [hj]
 
-/-- `ω_{2^k + r} = x^k + ω_r` for `r < 2^k`: bit `k` of the low word is the coefficient of `x^k`. -/
 theorem omega_two_pow_add (k r : ℕ) (hk : k < 64) (hr : r < 2 ^ k) :
     omega (2 ^ k + r) = beta k + omega r := by
   simp only [omega, beta, Flock.F128.monomial, hk, ↓reduceIte]
@@ -81,7 +71,6 @@ theorem omega_two_pow_add (k r : ℕ) (hk : k < 64) (hr : r < 2 ^ k) :
   rw [hk', Nat.mod_eq_of_lt hk, Nat.one_shiftLeft, Nat.mod_eq_of_lt h64, Nat.mod_eq_of_lt (by omega : r < 2 ^ 64),
     Nat.mod_eq_of_lt hsum, two_pow_xor_of_lt hr]
 
-/-- `s_i(ω_q) = 0` for `q < 2^k`, `k ≤ i`. -/
 theorem sPoly_eval_omega_lt : ∀ k ≤ 64, ∀ q < 2 ^ k, ∀ i, k ≤ i → (sPoly i).eval (omega q) = 0
   | 0, _, q, hq, i, _ => by
     obtain rfl : q = 0 := by simpa using hq
@@ -94,7 +83,6 @@ theorem sPoly_eval_omega_lt : ∀ k ≤ 64, ∀ q < 2 ^ k, ∀ i, k ≤ i → (s
       rw [omega_two_pow_add k r (by omega) hr, sPoly_eval_add, sPoly_eval_beta i k (by omega),
         sPoly_eval_omega_lt k (by omega) r hr i (by omega), add_zero]
 
-/-- `Ŵ_i(ω_q)` is 0 or 1 on the first `2^(i+1)` domain points. -/
 theorem What_omega (i : ℕ) (hi : i < 64) (q : ℕ) (hq : q < 2 ^ (i + 1)) :
     What i (omega q) = 0 ∨ What i (omega q) = 1 := by
   have hs : (sPoly i).eval (omega q) = 0 ∨ (sPoly i).eval (omega q) = (sPoly i).eval (beta i) := by
@@ -117,7 +105,6 @@ theorem padC_ne_zero : Refine.fOf Flock.Zk.PAD_C ≠ 0 := by
 theorem padC_ne_one : Refine.fOf Flock.Zk.PAD_C ≠ 1 := by
   rw [GF128.one_eq]; intro h; exact absurd (h : Flock.Zk.PAD_C = 1) (by decide)
 
-/-- **`PadNonvanishing40` holds.** -/
 theorem padNonvanishing40 : Assumptions.Zk.PadNonvanishing40 := by
   unfold Assumptions.Zk.PadNonvanishing40 Assumptions.PadNonvanishing
   intro cols hcols q hq

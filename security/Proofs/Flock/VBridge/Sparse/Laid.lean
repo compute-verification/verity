@@ -20,21 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.ResUnit
 
-/-!
-# The sparse-phase unit laid out
-
-The verifier's `rec-sparse/…` unit is `Flock.RecSparse.unitLaid sh`: one input of all its ports' words, cut by name
-(`ports`), then `steps`, laid out one 16-bit port per word. This file states what its output columns hold.
-
-* The values. `stepVals_eq`: `stepVals` at the builder's residuals is `outOf` at `Defs`' (`resArr`), element by element.
-* The rows. `fresh_steps`: `steps` adds rows only as `fresh` does, so `laid_rows` reads them.
-* The ports. `portOf`: the input bits `unitNet'` gives port `nm` (`unitNet'_run`). The message ports' first bits are
-  `rowForms` (`flatMap_portOf`), `v`'s and `tau`'s are slices after them (`portOf_v`, `portOf_tau`), and `SparseIn` on the
-  input columns gives `StepsIn` (`stepsIn_of`).
-* The theorem. `laid_sparse`: whenever the laid-out unit's rows hold at `v`, if its input columns hold `w`, `vv` and the
-  slots' types (`SparseIn`), its output columns from `sparseBase` hold `outOf`'s residuals, 128 bits each, and with `T > 1`
-  from bit 512 each type with its low `T_LOG` bits cleared.
--/
+/-! The laid-out sparse-phase unit computes `outOf` (`laid_sparse`). -/
 
 @[expose] public section
 
@@ -48,8 +34,6 @@ open FlockSoundness.Refine (fOf fOf_add fOf_mul fOf_zero fOf_injective)
 open FlockVBridge.OfVStar (rowForms rowCol bit_rowForms rowCol_lt length_rowForms flatMap_rowForms varSlices
   varSlices_append length_varSlices slices_vars_foldl take_vars le_portWords bit_of_length_le slices_eq
   run_input_bind' foldl_replicate bitOf_zero)
-
-/-! ## Lists -/
 
 theorem foldl_congr2 {α β : Type} {f g : α → β → α} : ∀ {l : List β} {a b : α}, a = b →
     (∀ x ∈ l, ∀ c, f c x = g c x) → l.foldl f a = l.foldl g b
@@ -114,7 +98,6 @@ theorem mem_zip_varSlices {α : Type} (f : α → ℕ) : ∀ (l : List α) (k : 
       · obtain ⟨k', hk⟩ := mem_zip_varSlices f l (k + 16 * f a) h
         exact ⟨k', by simp only [List.map_cons, varSlices, List.zip_cons_cons]; exact List.mem_cons_of_mem _ hk⟩
 
-/-- A flattened list of ports' first bits, at port `nm`'s offset: port `nm`'s bits. -/
 theorem bit_flatMap_offset (z : Var → Bool) (G : String → List Lin) : ∀ (ps : List (String × ℕ)),
     (ps.map (·.1)).Nodup → (∀ p ∈ ps, 128 * p.2 ≤ (G p.1).length) → ∀ {nm : String} {n : ℕ}, (nm, n) ∈ ps →
     ∀ i < 128 * n, bit z (ps.flatMap fun p => (G p.1).take (128 * p.2)) (128 * offset ps nm + i) = bit z (G nm) i
@@ -133,13 +116,10 @@ theorem bit_flatMap_offset (z : Var → Bool) (G : String → List Lin) : ∀ (p
           bit_append_len z _ _ (by rw [List.length_take]; omega)]
         exact bit_flatMap_offset z G ps hn.2 (fun p hp => hl p (List.mem_cons_of_mem _ hp)) h i hi
 
-/-! ## The values -/
-
 section Values
 
 variable (sh : Flock.RecSparse.Shape)
 
-/-- `stepVals` at residual values `R` that are `Defs`' residuals `rs` by name is `outOf`'s output at `rs`. -/
 theorem stepVals_outOf (R : String → F128) (rs wA vA : Array F128) (τA : Array ℕ)
     (hR : ∀ r ∈ names (shOf sh), R (str r) = rget (shOf sh) rs r) :
     stepVals sh R (wA[·]!) (vA[·]!) (τA[·]!) = (outOf (shOf sh) rs wA vA τA).1.toList := by
@@ -212,16 +192,12 @@ theorem stepVals_outOf (R : String → F128) (rs wA vA : Array F128) (τA : Arra
     · rw [Ne, List.map_eq_nil_iff, List.range_eq_nil]
       exact (Nat.two_pow_pos _).ne'
 
-/-- **`stepVals` is `outOf`**: at the builder's residuals (`rval`), `steps`' values are `outOf`'s output at `Defs`'
-residuals (`resArr`). -/
 theorem stepVals_eq (wA vA : Array F128) (τA : Array ℕ) :
     stepVals sh (rval sh (wA[·]!) (vA[·]!)) (wA[·]!) (vA[·]!) (τA[·]!) =
       (outOf (shOf sh) (resArr (shOf sh) wA vA) wA vA τA).1.toList :=
   stepVals_outOf sh _ _ wA vA τA fun _ hr => rval_rget sh wA vA hr
 
 end Values
-
-/-! ## The rows -/
 
 theorem fresh_forIn {σ : Type} (f : ℕ → σ → M (ForInStep σ)) (hf : ∀ j s, Fresh (f j s)) :
     ∀ (l : List ℕ) (s : σ), Fresh (forIn l s f)
@@ -275,7 +251,6 @@ theorem fresh_demux (tau : Array Lin) : ∀ (js : List ℕ) (lists : List (List 
       simp only [Flock.RecSparse.demux]
       exact Fresh.bind' (fresh_demuxLevel tau j lists) fun l => fresh_demux tau js l
 
-/-- **`steps` adds rows only as `fresh` does.** -/
 theorem fresh_steps (sh : Flock.RecSparse.Shape) (P : String → List Lin) : Fresh (Flock.RecSparse.steps sh P) := by
   unfold Flock.RecSparse.steps
   generalize Flock.RecSparse.structureOf sh = p
@@ -297,8 +272,6 @@ theorem fresh_steps (sh : Flock.RecSparse.Shape) (P : String → List Lin) : Fre
   · simp only [pure_bind]
     exact Fresh.pure' _
 
-/-! ## The ports by name -/
-
 section Ports
 
 variable (sh : Flock.RecSparse.Shape)
@@ -307,10 +280,8 @@ theorem portWords_eq (n : ℕ) : Flock.RecSparse.portWords n = VStar.portWordsOf
   unfold Flock.RecSparse.portWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_CHUNK VStar.portWordsOf
   omega
 
-/-- The message ports' words. -/
 def msgWords : List ℕ := (messagePorts sh).map fun p => VStar.portWordsOf p.2
 
-/-- The ports after the message ports: with `T > 1` `tau`, then `v`. -/
 def restPorts : List (String × ℕ) :=
   (if sh.stacked then [("tau", Flock.RecSparse.tauWords sh)] else []) ++
     [("v", VStar.portWordsOf (Flock.RecSparse.nv sh))]
@@ -327,10 +298,8 @@ theorem ports_snd : (Flock.RecSparse.ports sh).map (·.2) = msgWords sh ++ (rest
 theorem inWords_eq : Flock.RecSparse.inWords sh = ((Flock.RecSparse.ports sh).map (·.2)).foldl (· + ·) 0 := by
   simp only [Flock.RecSparse.inWords, List.foldl_map]
 
-/-- The input bit where `tau`'s port starts, after the message ports. -/
 def tauBase : ℕ := 16 * (msgWords sh).sum
 
-/-- The input bit where `v`'s port starts, after `tau`'s. -/
 def vBaseS : ℕ := tauBase sh + (if sh.stacked then 16 * Flock.RecSparse.tauWords sh else 0)
 
 theorem inWords_16 :
@@ -338,12 +307,10 @@ theorem inWords_16 :
   rw [inWords_eq, OfVStar.foldl_add, ports_snd]
   cases hst : sh.stacked <;> simp [restPorts, vBaseS, tauBase, hst, List.sum_append] <;> omega
 
-/-- The input bits `unitNet'` gives port `nm`. -/
 def portOf (nm : String) : List Lin :=
   ((((Flock.RecSparse.ports sh).zip (varSlices 0 ((Flock.RecSparse.ports sh).map (·.2)))).find?
     (·.1.1 = nm)).map (·.2)).getD []
 
-/-- **The unit is `steps` on its ports by name.** -/
 theorem unitNet'_run : (Flock.RecSparse.unitNet' sh).run St.empty =
     (Flock.RecSparse.steps sh (portOf sh)).run ⟨16 * Flock.RecSparse.inWords sh, []⟩ := by
   unfold Flock.RecSparse.unitNet'
@@ -351,7 +318,6 @@ theorem unitNet'_run : (Flock.RecSparse.unitNet' sh).run St.empty =
   rw [run_input_bind', inWords_eq, slices_eq, slices_vars_foldl]
   rfl
 
-/-- The ports' names. -/
 inductive PName where
   | h
   | pre (j : ℕ)
@@ -448,7 +414,6 @@ theorem nodup_mp : ((messagePorts sh).map (·.1)).Nodup := by
   rw [ports_eq, List.map_append, List.map_map] at h
   exact (List.nodup_append.1 h).1
 
-/-- The message ports' first bits are `rowForms`'. -/
 theorem flatMap_portOf :
     (messagePorts sh).flatMap (fun p => (portOf sh p.1).take (128 * p.2)) = rowForms (messagePorts sh) 0 := by
   rw [flatMap_zip_of (fun p b => b.take (128 * p.2)) (fun p => portOf sh p.1) (messagePorts sh)
@@ -471,10 +436,6 @@ theorem portOf_tau (hst : sh.stacked = true) :
     refine List.mem_append.2 (Or.inr ?_)
     simp [restPorts, tauBase, hst, varSlices])
 
-/-! ## The inputs -/
-
-/-- The input columns hold `w`'s bits where the message ports put them (`rowCol`), `vv`'s on `v`'s port and with
-`T > 1` each slot's type on `tau`'s, `w` and `vv` zero past the ports' elements. -/
 structure SparseIn (w vv : ℕ → F128) (τ : ℕ → ℕ) (v : ℕ → Bool) : Prop where
   hw : ∀ q < 128 * ((messagePorts sh).map (·.2)).sum, v (rowCol (messagePorts sh) 0 q) = wbit w q
   hv : ∀ q < 128 * Flock.RecSparse.nv sh, v (vBaseS sh + q) = wbit vv q
@@ -501,7 +462,6 @@ theorem sparseIn_col {w vv : ℕ → F128} {τ : ℕ → ℕ} {v z : ℕ → Boo
     rw [hz _ (by omega)]
     exact hin.htau hst s hs b hb
 
-/-- `SparseIn` gives `StepsIn` at the ports by name. -/
 theorem stepsIn_of {z : Var → Bool} {w vv : ℕ → F128} {τ : ℕ → ℕ} (hin : SparseIn sh w vv τ z) :
     StepsIn sh (portOf sh) z w vv τ := by
   have HW : ∀ q, bit z ((messagePorts sh).flatMap fun p => (portOf sh p.1).take (128 * p.2)) q = wbit w q := by
@@ -543,20 +503,13 @@ theorem stepsIn_of {z : Var → Bool} {w vv : ℕ → F128} {τ : ℕ → ℕ} (
     rw [portOf_tau sh hst, bit_vars _ _ _ hj]
     exact hin.htau hst s hs b hb
 
-/-! ## The laid-out unit -/
-
-/-- The unit's input ports, one 16-bit port per word. -/
 def sparseInBits : Array ℕ := Array.replicate (Flock.RecSparse.inWords sh) 16
 
-/-- Where its output columns start. -/
 def sparseBase : ℕ :=
   outStart ((Flock.RecSparse.unitNet' sh).run St.empty).2 (sparseInBits sh)
     (Array.replicate (Flock.RecSparse.outWords sh) 16)
 
-/-- **The laid-out sparse-phase unit computes `outOf`**: whenever its rows hold at `v`, if its input columns hold `w`,
-`vv` and the slots' types `τ` (`SparseIn`), its output columns from `sparseBase` hold `outOf`'s residuals at `Defs`'
-residuals (`resArr`), 128 bits each, and with `T > 1` from bit 512 each type with its low `T_LOG` bits cleared. At
-`T_LOG ≤ 16`. -/
+/-- Holds at `T_LOG ≤ 16`. -/
 theorem laid_sparse (ht16 : sh.tLog ≤ 16) (v : ℕ → Bool)
     (h : LaidRows (Flock.RecSparse.unitLaid sh) (inRowsOf (sparseInBits sh)) v) (wA vA : Array F128) (τA : Array ℕ)
     (hin : SparseIn sh (wA[·]!) (vA[·]!) (τA[·]!) v) :

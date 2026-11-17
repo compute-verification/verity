@@ -8,24 +8,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# One rep with hidden unit circuits, on the transcript
-
-The rep's transcript program at a holo shape (`rec_algebra.Shape.holo`), the record `rec_session` relays: `repProg`
-(`RepConverse.lean`) with the lincheck's end as `rec_live.holo_rounds` records it. `z_partial`'s round squeezes no coins
-(its frames end in a squeeze of none, `Relay._split`), and a round of its own absorbs the hidden part's fold `h` (64
-elements) and squeezes `r'`. The rounds end at `dot (comb + h) z_partial` (`RecAlgebra.addH`), which over F is
-`holoLincheck`'s check (`RecAlgebra.fOf_dot_holo`).
-
-* `closeEmpty`: a squeeze of no coins that closes its round. `Transcript.squeeze 2 0` only frames its header; the record
-  keeps the round, so the program consumes it, as `RecAlgebra.RoundCoins.ofRounds` skips it.
-* `holoLincheckT`: `Flock.lincheck` with `z_partial`'s round closed, `h` absorbed and the check at `comb + h`.
-* `holoRepProg`: the zerocheck, `holoLincheckT`, ring switching and Ligerito.
-* `holoLcMsgs`, `holoRepMsgs`: the model's messages, `lcMsgs` and `repMsgs` with `h` after `z_partial`.
-
-`HoloRefines.lean` refines the program to the model's `holoRepC`; `HoloRepConverse.lean` gives its run from its
-stages' checks.
--/
+/-! One rep with hidden unit circuits as a transcript program (`holoRepProg`), with `z_partial`'s round of no coins. -/
 
 @[expose] public section
 
@@ -35,8 +18,7 @@ open Flock Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A squeeze of no coins that closes its round** (`rec_session.Relay._split`): round `k` issued no coins and answers
-the bytes framed before it; it clears `pending` and moves to round `k + 1`. -/
+/-- Round `k` issued no coins; the record keeps the round, so the program consumes it. -/
 def closeEmpty : TM Unit := fun t =>
   match t.rounds[t.k]? with
   | none => .error s!"R2: round {t.k}: the verifier issued no such round"
@@ -45,8 +27,6 @@ def closeEmpty : TM Unit := fun t =>
     else if ¬ r.answers (framed t 2 0) then .error s!"R2: round {t.k}: the proof's messages differ from z_partial's round"
     else .ok ((), { t with pending := ByteArray.empty, k := t.k + 1 })
 
-/-- **The lincheck with hidden units** (§10 with L4′): `Flock.lincheck` (Piop.lean:125–150), then `z_partial`'s round
-closed (`closeEmpty`), `h` absorbed in `r'`'s round, and the rounds' claim checked at `comb + h`. -/
 def holoLincheckT (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) (hpart : Array F128) : TM LcOut := do
   let kLog := c.kLog
   let rhoIn := zc.rho.extract 0 (kLog - 6)
@@ -76,8 +56,6 @@ def holoLincheckT (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) (hpart : Ar
   let w := dot (skipWeights rPrime) p.zPartial
   return { w, rPrime, rIn := ts.reverse }
 
-/-- **The rep's transcript program with hidden units**: `repProg` with `holoLincheckT` on the hidden part's fold
-`hpart`. -/
 def holoRepProg (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpart : Array F128) (extras : Array Claim) :
     TM Unit := do
   let zc ← Flock.bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
@@ -85,17 +63,13 @@ def holoRepProg (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpart : Array F
   let (T, sws) ← Flock.ringSwitch st.m (Flock.abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
   Flock.ligerito st.merkle sch T p.cap p.ligerito (Flock.basis sws)
 
-/-- The lincheck's messages with hidden units: `lcMsgs`, then `h`. -/
 def holoLcMsgs (kLog : ℕ) (p : LincheckProof) (hpart : Array F128) : List Game.Msg :=
   lcMsgs kLog p ++ [⟨Fin 64 → 𝔽, vecOf 64 hpart⟩]
 
-/-- **The messages of one rep with hidden units**: `repMsgs` with `h` after `z_partial`. -/
 def holoRepMsgs {D : Type} (st : Setup) (sch : Flock.Schedule) (nClaims : ℕ) (p : Proof) (hpart : Array F128)
     (capD : Array ByteArray → Model.Cap D) : List Game.Msg :=
   zcMsgs st.m p.zerocheck ++ holoLcMsgs st.kLog p.lincheck hpart ++ opMsgs nClaims p.ringSwitches ++
     ligMsgs p.ligerito capD sch
-
-/-! ## The round of no coins -/
 
 theorem closeEmpty_ok {t t' : Transcript} (h : closeEmpty t = .ok ((), t')) :
     ∃ r, t.rounds[t.k]? = some r ∧ r.n = 0 ∧ r.answers (framed t 2 0) ∧
@@ -113,7 +87,6 @@ theorem closeEmpty_ok {t t' : Transcript} (h : closeEmpty t = .ok ((), t')) :
         obtain ⟨-, ht⟩ := Prod.mk.inj h
         exact ⟨r, hr, Decidable.of_not_not h1, Decidable.of_not_not h2, ht.symm⟩
 
-/-- `closeEmpty` then `f`: round `t.k` issued no coins, and `f` continues from round `t.k + 1`. -/
 theorem closeEmpty_bind {β : Type} {f : Unit → TM β} {t t' : Transcript} {b : β}
     (h : (closeEmpty >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 0 ∧
@@ -127,7 +100,6 @@ theorem closeEmpty_bind {β : Type} {f : Unit → TM β} {t t' : Transcript} {b 
   subst ht
   exact ⟨hlt, by rw [hget]; exact hn, ⟨t.rounds, t.k + 1, ByteArray.empty⟩, rfl, rfl, h₂⟩
 
-/-- A round of no coins that answers the framed bytes `L` is closed by `closeEmpty`. -/
 theorem closeEmpty_answered {t : Transcript} {L : List UInt8} (hlt : t.k < t.rounds.size)
     (hN : (t.rounds[t.k]!).n = 0) (ha : (t.rounds[t.k]!).answers ⟨L.toArray⟩)
     (hL : t.pending.data.toList ++ (Frame.sq 2 0).enc = L) :

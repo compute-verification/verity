@@ -7,22 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The lincheck accepts when its checks hold (`Flock.Piop`)
-
-`lincheck_of_checks` is `lincheck_refines`' converse on the executable's side: the verifier's `lincheck`
-(Piop.lean:126–151) returns `.ok`, with the claim it hands on and the transcript it leaves, when
-
-* each round it squeezes issued one coin and answers the bytes the lincheck framed before it (`LcAnswered`: the label
-  and `α`, `β`, each round's two messages and its challenge, `z_partial` and `r'`; the chunks of
-  `Discharge.Exec.lcFrames`, which `lincheck_emitted` shows an accepting run consumes);
-* its rounds (Piop.lean:134–142), on those rounds' coins, end at `dot comb z_partial` with challenges `ts`: the fold of
-  `lStep` from `α·v_A + v_B + β` (`Flock.RecAlgebra.lcFold`), which is the check of Piop.lean:148;
-* the statement's circuit fold at `α`, `β` and `ts` is `comb` (Piop.lean:143–145), of the width Piop.lean:146 checks.
-
-`lincheck_plays_of_checks` feeds it to `lincheck_refines`: the model's lincheck plays the proof's messages on those
-coins and returns the executable's `ab` claim.
--/
+/-! The lincheck accepts when its checks hold (`lincheck_of_checks`). -/
 
 @[expose] public section
 
@@ -32,10 +17,8 @@ open Flock Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- Round `r` issued one coin and answers the bytes `L`. -/
 def OneCoin (r : Round) (L : List UInt8) : Prop := r.n = 1 ∧ r.answers ⟨L.toArray⟩
 
-/-- A round that retained the bytes `L` answers them. -/
 theorem answers_of_retains {r : Round} {L : List UInt8} (h : Retains r L) : r.answers ⟨L.toArray⟩ := by
   unfold Retains at h
   unfold Round.answers
@@ -49,10 +32,6 @@ theorem answers_of_retains {r : Round} {L : List UInt8} (h : Retains r L) : r.an
     subst h
     simp
 
-/-- **The lincheck's rounds answer its frames.** From `t`, the rounds the lincheck squeezes (Piop.lean:129–151) each
-issued one coin and answer what was framed before them: `t`'s pending bytes, the label and `α`'s squeeze; `β`'s
-squeeze; per round `j < kLog − 6` its messages `q1`, `qinf` and its challenge's squeeze; `z_partial` and `r'`'s
-squeeze. -/
 structure LcAnswered (t : Transcript) (kLog : ℕ) (p : LincheckProof) : Prop where
   alpha : OneCoin t.rounds[t.k]! (t.pending.data.toList ++ encs [.label "flock-lincheck-v0".toUTF8, .sq 1 1])
   beta : OneCoin t.rounds[t.k + 1]! (encs [.sq 1 1])
@@ -87,7 +66,6 @@ private theorem pure_of (a : α) (t : Transcript) : (pure a : TM α) t = .ok (a,
 private theorem check_of {b : Bool} {why : String} {t : Transcript} (hb : b = true) : check b why t = .ok ((), t) := by
   subst hb; rfl
 
-/-- A squeeze of one coin from a round that issued one and answers the framed bytes returns its first coin. -/
 private theorem sample_of {t : Transcript} {L : List UInt8} (h : OneCoin t.rounds[t.k]! L)
     (hL : t.pending.data.toList ++ (Frame.sq 1 1).enc = L) :
     sample t = .ok ((t.rounds[t.k]!).coins.getD 0 0, ⟨t.rounds, t.k + 1, ByteArray.empty⟩) := by
@@ -107,9 +85,6 @@ private theorem sample_of {t : Transcript} {L : List UInt8} (h : OneCoin t.round
   rw [bind_of hsq]
   rfl
 
-/-- **A loop answering one round per step.** If every step of the body, with nothing pending, consumes the next round,
-which meets `Q`, and yields `step i s c` for its coins `c`, leaving nothing pending, then the loop over
-`a, …, a + n − 1` from round `base + a` yields the fold of `step` over rounds `base + a, …, base + a + n − 1`. -/
 private theorem forIn_of_rounds {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (step : ℕ → σ → Array F128 → σ)
     (Q : ℕ → Round → Prop)
     (hbody : ∀ i s (t : Transcript), t.pending = ByteArray.empty → Q i t.rounds[t.k]! →
@@ -141,13 +116,6 @@ private theorem forIn_range_of {σ : Type} (body : ℕ → σ → TM (ForInStep 
 
 end Run
 
-/-- **The lincheck accepts when its checks hold** (`lincheck_refines`' converse, Piop.lean:126–151). From a
-transcript `t` whose rounds answer the lincheck's frames (`LcAnswered`), with `α`, `β`, the rounds' coins `C j` and `r'`
-the first coins of rounds `t.k`, `t.k + 1`, `t.k + 2 + j` and `t.k + 2 + (k_log − 6)`: when the rounds (the fold
-of `lStep` on `p`'s round messages and `C`, `Flock.RecAlgebra.lcFold`) from `α·v_A + v_B + β` end at
-`dot comb z_partial` with challenges `ts` (Piop.lean:148), and the circuit fold at `α`, `β`, `ts` is `comb` of width
-64 (Piop.lean:143–146), the verifier's lincheck returns `w = dot (skipWeights r') z_partial`, `r'` and `ts`
-reversed, having consumed its `k_log − 3` rounds with nothing left pending. -/
 theorem lincheck_of_checks (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) (t : Transcript)
     (ha : LcAnswered t c.kLog p) {ts comb : Array F128}
     (hfold : (List.range' 0 (c.kLog - 6)).foldl (fun s j => lStep p.rounds j s (t.rounds[t.k + 2 + j]!).coins)
@@ -192,10 +160,6 @@ theorem lincheck_of_checks (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckPro
   rfl
 
 open Game FlockLevel3 in
-/-- **The lincheck's plays from its checks.** Under `lincheck_of_checks`' conditions, on a circuit fold realizing `S`
-and a zerocheck output that is the model's `zc'`, the model's lincheck, played with the proof's lincheck messages and
-the coins of rounds `t.k, …, t.k + 2 + (k_log − 6)`, returns the claim `lincheck_of_checks` hands on, as `ab`
-(`lincheck_refines`). -/
 theorem lincheck_plays_of_checks (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (t : Transcript)
     (hwf : RoundsWF t.rounds) (ha : LcAnswered t c.kLog p) {ts comb : Array F128}

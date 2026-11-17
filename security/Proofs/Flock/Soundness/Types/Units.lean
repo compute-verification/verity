@@ -6,22 +6,8 @@ public import Proofs.Flock.Soundness.Types.Flatten
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 
-/-!
-# A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
-
-`RowsL1` (`E2E.lean`) says that at values with 1 on the units' constants, a unit wrong on the program's Boolean circuit `CB`
-is wrong on its rows, the audit's circuit `C`. `rowsL1_of_pairs` proves it from one `UnitPair` per unit:
-- on `C`, the unit is an instance of its composed rows (`Partition.IsRowsUnit`), those `deriveChecked` derives for its type;
-- on `CB`, it is an instance of its type's unit gates (`Partition.IsGatesUnit` of `Types.Flatten.unitGates`: the type's
-  flattening, then a copy of each output, so that each output is a gate of its own, as each output row is a row);
-- `CB`'s values are read off `C`'s through a gate map `m`: the Boolean unit's inputs and `one` read its rows' input columns
-  and constant, and each committed gate of it is an output's copy, read off that output's row, committed in `C`.
-
-A unit's local evaluation satisfies its rows (`IsRowsUnit.sat_localEval`), so its output rows carry its type's `evalT`
-(`IsRowsUnit.localEval_compose`, from `Rows.compose_eval_unit`). On `CB` its local evaluation is its gates' values
-(`IsGatesUnit.localEval_eq`), so its outputs' copies carry the same `evalT` (`IsGatesUnit.localEval_type`, from
-`flatten_eval`). The partition enters only through the pairs, so the theorem holds whatever chose the units.
--/
+/-! `RowsL1` from one `UnitPair` per unit (`rowsL1_of_pairs`); the partition enters only through the pairs, so it
+holds whatever chose the units. -/
 
 @[expose] public section
 
@@ -31,7 +17,6 @@ namespace FlockSoundness
 
 open Audit Types.Dag Types.Flatten Compose
 
-/-- A gate as a `Verity.Boolean.Op`, its arguments renamed by `w`. -/
 def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Verity.Boolean.Op N
   | .input => .input
   | .and a b => .and (w a) (w b)
@@ -43,9 +28,7 @@ namespace Types.Flatten
 variable (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ) (F : ℕ)
   (t : CircuitType)
 
-/-- **A unit's gates**: type `t`'s flattening, then a copy `g ∧ g` of each output's gate `g`, so that each output is a gate
-of its own, as each output of the unit's rows is a row of its own (`form · 1`). Output `o`'s copy is gate
-`(flatten …).1.size + o`. -/
+/-- Output `o`'s copy is gate `(flatten …).1.size + o`. -/
 def unitGates : Array Gate :=
   (flatten types words loOf F t).1 ++ ((List.range t.outputs.size).map fun o =>
     Gate.and ((flatten types words loOf F t).2.getD o 0) ((flatten types words loOf F t).2.getD o 0)).toArray
@@ -89,7 +72,6 @@ theorem gval_unitGates_lt (inp : ℕ → Bool) {j : ℕ} (hj : j < (flatten type
   rw [hx] at e
   exact e.gval inp hj
 
-/-- Output `o`'s copy carries output `o`'s gate. -/
 theorem gval_unitGates_copy (inp : ℕ → Bool) {o : ℕ} (ho : o < t.outputs.size) :
     gval inp (unitGates types words loOf F t) ((flatten types words loOf F t).1.size + o) =
       gval inp (flatten types words loOf F t).1 ((flatten types words loOf F t).2.getD o 0) := by
@@ -118,9 +100,6 @@ namespace Audit.Partition
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
-/-- **Unit `u` is an instance of the gate array `gs`**, whose first `k` gates are inputs. Gate `j` is the circuit's gate
-`wire j`: the inputs are gates outside the unit, and every other gate is the unit's, its operation over the wired
-arguments. The unit's gates are exactly these. -/
 structure IsGatesUnit (u : Fin n) (gs : Array Gate) (k : ℕ) where
   wire : ℕ → Fin C.N
   input : ∀ j (hj : j < gs.size), j < k → gs[j] = .input
@@ -133,7 +112,6 @@ namespace IsGatesUnit
 
 variable {P} {u : Fin n} {gs : Array Gate} {k : ℕ} (W : P.IsGatesUnit u gs k)
 
-/-- **The unit's local evaluation is its gates' values**, on inputs that agree with the transcript on its input gates. -/
 theorem localEval_eq (h : Topo gs) (Xv : Fin C.N → Bool) {inp : ℕ → Bool} (hinp : ∀ j < k, inp j = Xv (W.wire j)) :
     ∀ j < gs.size, P.localEval Xv u (W.wire j) = gval inp gs j := by
   intro j
@@ -171,8 +149,6 @@ theorem localEval_eq (h : Topo gs) (Xv : Fin C.N → Bool) {inp : ℕ → Bool} 
       simp only [Gate.lift, Verity.Boolean.Op.apply, Gate.step]
       rw [ih a ha (by omega), gval_prefix h inp (Nat.le_of_lt hj) ha]
 
-/-- **The unit computes its type.** An instance of type `t`'s unit gates (its inputs and `one` the first `inBits + 1`)
-carries on output `o`'s copy `evalT`'s output `o` of the transcript on its inputs, when `one` reads 1. -/
 theorem localEval_type {types : String → Option CircuitType} {words : String → Option (Array ℕ)} {loOf : ℕ → ℕ}
     {F : ℕ} {t : CircuitType} (W : P.IsGatesUnit u (unitGates types words loOf F t) (t.inBits + 1))
     (Xv : Fin C.N → Bool) (h1 : Xv (W.wire t.inBits) = true) {o : ℕ} (ho : o < t.outputs.size) :
@@ -198,7 +174,6 @@ theorem localEval_outside (Xv : Fin C.N → Bool) {c : Fin R.w} (hc : ∀ i, c �
     P.localEval Xv u (I.wire c) = Xv (I.wire c) :=
   P.localEval_of_not_mem Xv (I.outside c hc)
 
-/-- **The unit's local evaluation satisfies its rows.** -/
 theorem sat_localEval (Xv : Fin C.N → Bool) : R.Sat fun c => P.localEval Xv u (I.wire c) := by
   intro i
   show P.localEval Xv u (I.wire (R.comp i)) = _
@@ -208,9 +183,6 @@ theorem sat_localEval (Xv : Fin C.N → Bool) : R.Sat fun c => P.localEval Xv u 
 variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
-/-- **The unit computes its type through its composed rows.** With its constant at 1, the local evaluation of an instance
-of `deriveChecked`'s composed rows carries on output `o`'s row `evalT`'s output `o` of the transcript on its input
-columns. -/
 theorem localEval_compose (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) {h : Ordered (ofBlock words done (done.getD unit default))}
     (I : P.IsRowsUnit u (Rows.compose (ofBlock words done (done.getD unit default)) h)) (Xv : Fin C.N → Bool)
@@ -231,10 +203,6 @@ end Audit.Partition
 
 open Audit.Partition
 
-/-- **One unit's rows and gates, and how the Boolean circuit's values are read off the audit's** (`m`). On `C` the unit is
-an instance of the rows `deriveChecked` composes for layout `idx`, of type `t`; on `CB`, of `t`'s unit gates. Through `m`,
-the Boolean unit's inputs and `one` read its rows' input columns and constant, and each of its committed gates is an
-output's copy, read off that output's row: a gate of the unit, committed in `C`. -/
 structure UnitPair {C CB : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (u : Fin n) where
   types : String → Option CircuitType
@@ -266,11 +234,8 @@ namespace UnitPair
 variable {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N} {u : Fin n}
   (U : UnitPair P PB m u)
 
-/-- The audit's gate the unit's constant reads. -/
 abbrev oneGate : Fin C.N := U.rows.wire (Rows.compose (ofBlock U.words U.done (U.done.getD U.idx default)) U.ord).one
 
-/-- **Correct on its rows, correct on its gates.** At values carrying 1 on the unit's constant, a unit correct on the
-audit's circuit is correct on the Boolean circuit, its values read off the audit's through `m`. -/
 theorem correct (vals : Fin C.N → Bool) (h1 : vals U.oneGate = true) (hc : P.Correct vals u) :
     PB.Correct (vals ∘ m) u := by
   intro g hg hgu
@@ -290,8 +255,6 @@ theorem correct (vals : Fin C.N → Bool) (h1 : vals U.oneGate = true) (hc : P.C
 
 end UnitPair
 
-/-- **`RowsL1` from one pair per unit.** At values carrying 1 on `ones`, which holds each unit's constant, every unit wrong
-on the Boolean circuit `CB` (its values read off the audit's through `m`) is wrong on its rows. -/
 theorem rowsL1_of_pairs {C CB : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (ones : Finset (Fin C.N)) (U : ∀ u, UnitPair P PB m u) (hones : ∀ u, (U u).oneGate ∈ ones) :
     P.RowsL1 PB (fun vals => vals ∘ m) ones := by

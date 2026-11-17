@@ -6,21 +6,7 @@ public import Proofs.Flock.Verifier.Transcript
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Runs of the executable's transcript programs
-
-The executable verifier's phases are programs in `TM = StateT Transcript (Except String)` (`Flock.Transcript`). A run that
-succeeds, `x t = .ok (a, t')`, is taken apart one step at a time: each lemma below peels one step off the front of a
-`bind` and says what that step did.
-
-* Labels, absorbs and proof-of-work nonces change only the pending bytes: `t` and `t'` have the same rounds and the same
-  round counter (`Keeps`).
-* A squeeze of `n ≠ 0` coins consumes the next round, which issued `n` coins, and returns that round's coins.
-* A check that passes changes nothing.
-
-`Adv t t' cs` records what a stretch of a run consumed: the same rounds, and the coins of the rounds from `t.k` to
-`t'.k` are `cs`, in order (`consumed`). It composes (`Adv.trans`), so a phase's coins are its steps' coins, concatenated.
--/
+/-! Runs of the executable's transcript programs in `TM`, taken apart one step at a time. -/
 
 @[expose] public section
 
@@ -28,7 +14,6 @@ namespace FlockSoundness.Refine
 
 open Flock Transcript
 
-/-- The executable's `==` on field elements is equality. -/
 instance instLawfulBEqF128_flockSoundness : LawfulBEq F128 where
   eq_of_beq {a b} h := by
     cases a with | mk alo ahi => cases b with | mk blo bhi =>
@@ -51,11 +36,9 @@ instance instLawfulBEqF256_flockSoundness : LawfulBEq F256 where
     show ((a0 == a0) && (a1 == a1)) = true
     simp
 
-/-- `t'` follows `t` on the same rounds, and the rounds consumed in between have the coins `cs`. -/
 def Adv (t t' : Transcript) (cs : List (Array F128)) : Prop :=
   t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧ consumed t.rounds t.k t'.k = cs
 
-/-- Every read of a well-formed record's rounds has the round's coin count; a read past the end is the empty round. -/
 theorem RoundsWF.get {rs : Array Round} (h : RoundsWF rs) (i : ℕ) : (rs[i]!).coins.size = (rs[i]!).n := by
   by_cases hi : i < rs.size
   · exact h i hi
@@ -92,8 +75,6 @@ theorem Adv.step {t t' : Transcript} (hr : t'.rounds = t.rounds) (hk : t'.k = t.
     Adv t t' [(t.rounds[t.k]!).coins] :=
   ⟨hr, by omega, by rw [hk, consumed_succ]⟩
 
-/-! ## Peeling one step -/
-
 variable {α β : Type}
 
 theorem bind_ok {x : TM α} {f : α → TM β} {t t' : Transcript} {b : β} (h : (x >>= f) t = .ok (b, t')) :
@@ -114,7 +95,6 @@ theorem modify_bind {g : Transcript → Transcript} {f : Unit → TM β} {t t' :
   cases h₁
   exact h₂
 
-/-- A step that keeps the rounds and the round counter. -/
 def Keeps (t t' : Transcript) : Prop := t'.k = t.k ∧ t'.rounds = t.rounds
 
 theorem Keeps.adv {t t' : Transcript} (h : Keeps t t') : Adv t t' [] := Adv.of_keeps h.1 h.2
@@ -151,7 +131,6 @@ theorem check_bind {c : Bool} {why : String} {f : Unit → TM β} {t t' : Transc
   | false => cases h₁
   | true => cases h₁; exact ⟨rfl, h₂⟩
 
-/-- A squeeze of `n ≠ 0` coins consumes round `t.k`, which issued `n` coins, and returns its coins. -/
 theorem squeeze_ok {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {t t₁ : Transcript} {cs : Array F128}
     (h : squeeze kind n t = .ok (cs, t₁)) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = n ∧ cs = (t.rounds[t.k]!).coins ∧ t₁.rounds = t.rounds ∧
@@ -164,7 +143,6 @@ theorem squeeze_ok {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {t t₁ : Transcript}
   subst ht
   exact ⟨hlt, hget ▸ hrn, hget ▸ hc, rfl, rfl⟩
 
-/-- `sampleVec n` then `f`: round `t.k` issued `n` coins, and `f` continues with them. -/
 theorem sampleVec_bind {n : ℕ} (hn : n ≠ 0) {f : Array F128 → TM β} {t t' : Transcript} {b : β}
     (h : (sampleVec n >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = n ∧
@@ -181,7 +159,6 @@ theorem sample_ok {t t₁ : Transcript} {c : F128} (h : sample t = .ok (c, t₁)
   obtain ⟨rfl, rfl⟩ := pure_ok h₂
   exact ⟨hlt, hn', hcs ▸ rfl, hr, hk⟩
 
-/-- `sample` then `f`: round `t.k` issued one coin, and `f` continues with it. -/
 theorem sample_bind {f : F128 → TM β} {t t' : Transcript} {b : β} (h : (sample >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 1 ∧
       ∃ t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 ∧ f ((t.rounds[t.k]!).coins.getD 0 0) t₁ = .ok (b, t') := by
@@ -198,7 +175,6 @@ theorem sampleK_ok {t t₁ : Transcript} {c : F256} (h : sampleK t = .ok (c, t�
   obtain ⟨rfl, rfl⟩ := pure_ok h₂
   exact ⟨hlt, hn', hcs ▸ rfl, hr, hk⟩
 
-/-- `sampleK` then `f`: round `t.k` issued two coins, and `f` continues with them as one `F256`. -/
 theorem sampleK_bind {f : F256 → TM β} {t t' : Transcript} {b : β} (h : (sampleK >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 2 ∧
       ∃ t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 ∧
@@ -207,9 +183,6 @@ theorem sampleK_bind {f : F256 → TM β} {t t' : Transcript} {b : β} (h : (sam
   obtain ⟨hlt, hn', hc, hr, hk⟩ := sampleK_ok h₁
   exact ⟨hlt, hn', t₁, hr, hk, hc ▸ h₂⟩
 
-/-! ## Loops over a range, every step yielding -/
-
-/-- A loop `for i in [a:a + n]` whose every step yields: run the body on `i = a, …, a + n − 1`. -/
 theorem forIn_range'_cons {σ : Type} (a n : ℕ) (s : σ) (g : ℕ → σ → TM (ForInStep σ)) :
     (forIn (List.range' a (n + 1)) s g : TM σ) =
       g a s >>= fun r => match r with
@@ -223,9 +196,6 @@ theorem forIn_range_eq {σ : Type} (n : ℕ) (s : σ) (g : ℕ → σ → TM (Fo
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp [Std.Legacy.Range.size]
 
-/-- **A loop consuming one round per step.** If every step of the body consumes the next round, which issued `N`
-coins, and yields `step i s c` for that round's coins `c`, then a loop over `a, …, a + n − 1` from round
-`base + a` consumes rounds `base + a, …, base + a + n − 1` and returns the fold of `step` over their coins. -/
 theorem forIn_rounds {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (step : ℕ → σ → Array F128 → σ) (N : ℕ)
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
       (t.rounds[t.k]!).n = N ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 ∧

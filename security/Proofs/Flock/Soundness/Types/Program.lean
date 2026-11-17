@@ -4,24 +4,8 @@ public import Proofs.Flock.Soundness.Types.Units
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 
-/-!
-# A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)
-
-A program (`UProg`) is `k` inputs, input `one` the constant, then units in order. A unit (`UnitSpec`) is the verifier's
-derivation for its layout, `deriveChecked` on a type `t`. Each input bit of a unit reads a
-source (`Src`): a program input other than the constant, or an earlier unit's output. Several bits of a unit may read one
-source. The statement's zero, which its forced-zero rows carry, is a program input like `one`, a constant of the
-statement and no unit's gate: a zero leaf's bits, and a leaf cut's bits past its leaf, read it. From it:
-- `toRows`, its rows circuit `C` (a `Lowering.Prog`): each unit's composed rows, its input columns on their sources' output
-  rows, its constant on `one`;
-- `CB`, its Boolean circuit: each unit's unit gates (`Types.Flatten.unitGates`), its inputs on their sources' copies, its
-  `one` on `one`;
-- `mapG`, reading each input, `one` and copy of `CB` off `C`: an input off the same input, a copy off its output's row.
-
-Every unit output is an output of both circuits. `pairs` gives one `UnitPair` per unit, so `rowsL1`: at values with 1 on
-`one`, every unit wrong on the Boolean circuit is wrong on its rows. It carries `E2E.lean`'s theorems, which are about the
-rows circuit, to the Boolean circuit (`UProg.flock_e2e_count`, `Types/ProgramE2E.lean`).
--/
+/-! A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them
+(`rowsL1`). -/
 
 @[expose] public section
 
@@ -30,8 +14,6 @@ open Flock Flock.DeriveAll
 namespace FlockSoundness
 
 open Audit Types.Dag Types.Flatten Compose Audit.Partition
-
-/-! ## `flatten`'s input gates are its first `inBits + 1` -/
 
 theorem Types.Flatten.Gate.lift_args {N : ℕ} (w : ℕ → Fin N) (g : Gate) : (g.lift w).args = g.args.map w := by
   cases g <;> rfl
@@ -45,7 +27,6 @@ theorem Types.Flatten.Gate.lift_lift {N M : ℕ} (w : ℕ → Fin N) (f : Fin N 
 
 namespace Types.Flatten
 
-/-- `gs'` is `gs` followed by gates none of which is an input. -/
 def Fresh (gs gs' : Array Gate) : Prop := ∃ more : List Gate, gs' = gs ++ more.toArray ∧ ∀ g ∈ more, g ≠ .input
 
 theorem Fresh.refl (gs : Array Gate) : Fresh gs gs := ⟨[], by simp, by simp⟩
@@ -201,7 +182,6 @@ theorem flatten_size : t.inBits + 2 ≤ (flatten types words loOf F t).1.size :=
   simp at this
   omega
 
-/-- **`flatten`'s input gates are exactly its first `inBits + 1`**: the type's inputs and `one`. -/
 theorem flatten_input_iff {j : ℕ} (hj : j < (flatten types words loOf F t).1.size) :
     (flatten types words loOf F t).1[j] = .input ↔ j < t.inBits + 1 := by
   have hf := flatten_fresh types words loOf F t
@@ -216,7 +196,6 @@ theorem flatten_input_iff {j : ℕ} (hj : j < (flatten types words loOf F t).1.s
     · intro h; exact absurd h this
     · intro h; omega
 
-/-- **A unit's input gates are exactly its first `inBits + 1`.** -/
 theorem unitGates_input_iff {j : ℕ} (hj : j < (unitGates types words loOf F t).size) :
     (unitGates types words loOf F t)[j] = .input ↔ j < t.inBits + 1 := by
   have hs := flatten_size types words loOf F t
@@ -232,10 +211,6 @@ theorem unitGates_input_iff {j : ℕ} (hj : j < (unitGates types words loOf F t)
 
 end Types.Flatten
 
-/-! ## A unit, and its output columns -/
-
-/-- **One unit of a program**: the verifier's derivation for its layout (`deriveChecked` on layout `idx`, of type `t`),
-and the depth and read split its gates are flattened at. -/
 structure UnitSpec where
   types : String → Option CircuitType
   ls : Array BlockLayout
@@ -262,8 +237,6 @@ namespace UnitSpec
 
 variable (s : UnitSpec)
 
-/-- **A unit's output columns are distinct**: they end its logical order, which `deriveChecked` checks has no repeat
-(`order_sound`). -/
 theorem outCols_nodup : (s.done.getD s.idx default).outCols.toList.Nodup := by
   have hn := (order_sound s.hd 0).1
   generalize s.done.getD s.idx default = u at hn ⊢
@@ -271,16 +244,12 @@ theorem outCols_nodup : (s.done.getD s.idx default).outCols.toList.Nodup := by
   rw [DeriveAll.segment] at hn
   exact List.Nodup.of_map _ hn.of_append_right.of_append_right
 
-/-- The unit's rows, in logical order. -/
 abbrev R : Rows := Rows.compose (ofBlock s.words s.done (s.done.getD s.idx default)) (ofBlock_ordered s.hd)
 
-/-- The unit's gates. -/
 abbrev gs : Array Gate := unitGates s.types s.words s.loOf s.F s.t
 
-/-- The size of its flattening: output `o`'s copy is gate `fsize + o`. -/
 abbrev fsize : ℕ := (flatten s.types s.words s.loOf s.F s.t).1.size
 
-/-- Output `o`'s logical column. -/
 abbrev out (o : ℕ) : ℕ :=
   lidx (ofBlock s.words s.done (s.done.getD s.idx default)) ((s.done.getD s.idx default).outCols.getD o 0)
 
@@ -299,8 +268,6 @@ theorem gs_size : s.gs.size = s.fsize + s.t.outputs.size := unitGates_size _ _ _
 
 theorem fsize_ge : s.t.inBits + 2 ≤ s.fsize := flatten_size _ _ _ _ _
 
-/-- **An output column is not an input column**: an input's row is `c · c` and needs no Δ entry, and an output's row
-copies a form times the constant, which has one. -/
 theorem outCols_not_inCols {o : ℕ} (ho : o < s.t.outputs.size) :
     (s.done.getD s.idx default).outCols.getD o 0 ∉ (s.done.getD s.idx default).inCols := by
   obtain ⟨-, -, hin, -, hone, hins, wire, -, houts⟩ :=
@@ -351,22 +318,14 @@ theorem out_inj {o o' : ℕ} (ho : o < s.t.outputs.size) (ho' : o' < s.t.outputs
 
 end UnitSpec
 
-/-! ## The program -/
-
-/-- Where a unit's input bit reads: program input `a`, or output `o` of unit `v`. -/
 inductive Src
   | input (a : ℕ)
   | out (v o : ℕ)
 
-/-- A source a unit may read: a program input other than the constant, or an output of one of the units `outs` lists by
-output count. -/
 def Src.Valid (k one : ℕ) (outs : List ℕ) : Src → Prop
   | .input a => a < k ∧ a ≠ one
   | .out v o => v < outs.length ∧ o < outs.getD v 0
 
-/-- **A program of units over circuit types**: `k` inputs, input `one` the constant, then units in order. Each input bit
-of each unit reads a program input other than the constant or an earlier unit's output, several bits possibly the same
-source. The index lists the units' output counts. -/
 inductive UProg (k one : ℕ) : List ℕ → Type
   | inputs : UProg k one []
   | snoc {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
@@ -376,7 +335,6 @@ namespace UProg
 
 variable {k one : ℕ}
 
-/-- The number of units. -/
 @[reducible] def n : {outs : List ℕ} → UProg k one outs → ℕ
   | _, .inputs => 0
   | _, .snoc p .. => p.n + 1
@@ -394,19 +352,14 @@ theorem valid_snoc {outs : List ℕ} {x : ℕ} {src : Src} (h : src.Valid k one 
     rw [List.getD_append _ _ _ _ hv]
     exact ho
 
-/-! ### The rows circuit -/
-
-/-- The rows circuit's gates. -/
 @[reducible] def rowsN : {outs : List ℕ} → UProg k one outs → ℕ
   | _, .inputs => k
   | _, .snoc p s .. => p.rowsN + s.R.nComp
 
-/-- The gate of unit `v`'s output `o`'s row (`one` for none). -/
 def outGate : {outs : List ℕ} → UProg k one outs → ℕ → ℕ → ℕ
   | _, .inputs, _, _ => one
   | _, .snoc p s .., v, o => if v = p.n then p.rowsN + (s.out o - s.t.inBits) else p.outGate v o
 
-/-- A source's gate in the rows circuit. -/
 def srcGate {outs : List ℕ} (p : UProg k one outs) : Src → ℕ
   | .input a => a
   | .out v o => p.outGate v o
@@ -489,12 +442,10 @@ theorem srcGate_inj {outs : List ℕ} (p : UProg k one outs) {s s' : Src} (h : s
       obtain ⟨rfl, rfl⟩ := p.outGate_inj h.1 h.2 h'.1 h'.2 he
       rfl
 
-/-- A new unit's input columns, wired to their sources' gates. -/
 def insOf {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) : Fin s.R.nIn → Fin p.rowsN :=
   fun c => ⟨p.srcGate (src c.val), p.srcGate_lt (valid c.val (by rw [← s.nIn_eq]; exact c.isLt))⟩
 
-/-- The constant's gate. -/
 def oneOf (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Fin p.rowsN :=
   ⟨one, Nat.lt_of_lt_of_le hk p.k_le_rowsN⟩
 
@@ -502,26 +453,19 @@ theorem insOf_ne (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : Un
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) : ∀ c, p.insOf s src valid c ≠ p.oneOf hk :=
   fun c h => p.srcGate_ne_one hk (valid _ (by rw [← s.nIn_eq]; exact c.isLt)) (congrArg Fin.val h)
 
-/-- **The program's rows circuit**, a `Lowering.Prog`: each unit's composed rows, its input columns wired to their
-sources' gates and its constant to `one`. -/
 def toRows (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Prog p.rowsN p.n
   | _, .inputs => .inputs k
   | _, .snoc p s src valid =>
     .snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_ne hk s src valid)
 
-/-! ### The Boolean circuit -/
-
-/-- The Boolean circuit's gates: the inputs, then each unit's gates past its inputs and `one`. -/
 @[reducible] def boolN : {outs : List ℕ} → UProg k one outs → ℕ
   | _, .inputs => k
   | _, .snoc p s .. => p.boolN + (s.gs.size - (s.t.inBits + 1))
 
-/-- The gate of unit `v`'s output `o`'s copy (`one` for none). -/
 def copyGate : {outs : List ℕ} → UProg k one outs → ℕ → ℕ → ℕ
   | _, .inputs, _, _ => one
   | _, .snoc p s .., v, o => if v = p.n then p.boolN + (s.fsize + o - (s.t.inBits + 1)) else p.copyGate v o
 
-/-- A source's gate in the Boolean circuit. -/
 def srcB {outs : List ℕ} (p : UProg k one outs) : Src → ℕ
   | .input a => a
   | .out v o => p.copyGate v o
@@ -555,12 +499,9 @@ theorem srcB_lt {outs : List ℕ} (p : UProg k one outs) {s : Src} (h : s.Valid 
   | input a => exact Nat.lt_of_lt_of_le h.1 p.k_le_boolN
   | out v o => exact (p.copyGate_spec h.1 h.2).2
 
-/-- Gate `j` of unit `s`, appended to `p` and reading `src`, as a gate of the program: an input its source's gate, `one`
-the constant, any other its place after `p`'s gates. -/
 def wireB {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src) (j : ℕ) : ℕ :=
   if j < s.t.inBits then p.srcB (src j) else if j = s.t.inBits then one else p.boolN + (j - (s.t.inBits + 1))
 
-/-- `wireB` as a gate (`one` past the unit's gates). -/
 def wireF (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src) (j : ℕ) :
     Fin (p.boolN + (s.gs.size - (s.t.inBits + 1))) :=
   if h : p.wireB s src j < p.boolN + (s.gs.size - (s.t.inBits + 1)) then ⟨_, h⟩
@@ -582,7 +523,6 @@ theorem wireF_val (hk : one < k) {outs : List ℕ} (p : UProg k one outs) {s : U
   unfold wireF
   rw [dite_eq_left (p.wireB_lt hk valid hj)]
 
-/-- The gates' operations: a unit's gates over its gates' wires. -/
 def opB (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Verity.Boolean.Op p.boolN
   | _, .inputs, _ => .input
   | _, .snoc p s src .., g =>
@@ -618,7 +558,6 @@ theorem topoB (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) (g :
         · have := p.k_le_boolN; omega
         · omega
 
-/-- The gates' units: a unit's gates past its inputs and `one` are its. -/
 def unitB : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Option (Fin p.n)
   | _, .inputs, _ => none
   | _, .snoc p .., g => if h : g.val < p.boolN then (p.unitB ⟨g.val, h⟩).map Fin.castSucc else some (Fin.last p.n)
@@ -636,29 +575,22 @@ theorem input_iffB (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs)
       omega
 
 open Classical in
-/-- Every unit output's copy. -/
 noncomputable def outsB {outs : List ℕ} (p : UProg k one outs) : Finset (Fin p.boolN) :=
   Finset.univ.filter fun g => ∃ v o, v < outs.length ∧ o < outs.getD v 0 ∧ g.val = p.copyGate v o
 
-/-- **The program's Boolean circuit**: each unit's unit gates, its inputs on their sources' copies and its `one` on
-`one`; every unit output's copy an output. -/
 noncomputable abbrev CB (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Verity.Boolean.Circuit :=
   ⟨p.boolN, p.opB hk, p.topoB hk, p.outsB⟩
 
-/-- Its partition into the program's units. -/
 noncomputable abbrev PB (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Partition (p.CB hk) p.n :=
   ⟨p.unitB, p.input_iffB hk⟩
 
 open Classical in
-/-- Every unit output's row. -/
 noncomputable def outsC {outs : List ℕ} (p : UProg k one outs) : Finset (Fin p.rowsN) :=
   Finset.univ.filter fun g => ∃ v o, v < outs.length ∧ o < outs.getD v 0 ∧ g.val = p.outGate v o
 
-/-- **The program's rows circuit** (`Prog.circuit`), every unit output's row an output. -/
 noncomputable abbrev C (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Verity.Boolean.Circuit :=
   ⟨p.rowsN, (p.toRows hk).op, (p.toRows hk).topo, p.outsC⟩
 
-/-- Its partition into the program's units (`Prog.partition`). -/
 noncomputable abbrev P (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Partition (p.C hk) p.n :=
   ⟨(p.toRows hk).unit, (p.toRows hk).input_iff⟩
 
@@ -672,9 +604,6 @@ theorem mem_outsB {outs : List ℕ} (p : UProg k one outs) (g : Fin p.boolN) :
   classical
   simp [outsB]
 
-/-! ### Reading the Boolean circuit off the rows circuit -/
-
-/-- **The gate map**: an input reads the same input, a copy its output's row (`one` for any other gate). -/
 def mapG (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Fin p.rowsN
   | _, .inputs, g => g
   | _, .snoc p s .., g =>
@@ -728,8 +657,6 @@ theorem mapG_srcB (hk : one < k) {outs : List ℕ} (p : UProg k one outs) {s : S
   | input a => exact p.mapG_input hk _ h.1
   | out v o => exact p.mapG_copy hk h.1 h.2
 
-/-! ### Gates and units, old and new -/
-
 theorem unitB_input (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) {a : ℕ} (ha : a < p.boolN), a < k →
     p.unitB ⟨a, ha⟩ = none
   | _, .inputs, _, _, _ => rfl
@@ -771,9 +698,6 @@ theorem opB_new (hk : one < k) {outs : List ℕ} {p : UProg k one outs} {s : Uni
       (s.gs[g.val - p.boolN + (s.t.inBits + 1)]'(p.gs_bound s g.isLt h)).lift (p.wireF hk s src) := by
   simp only [opB, h, dite_false, p.gs_bound s g.isLt h, dite_true]
 
-/-! ### Each unit's instances -/
-
-/-- The new unit is an instance of its unit gates, through `wireF`. -/
 def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) :
     ((snoc p s src valid).PB hk).IsGatesUnit (Fin.last p.n) s.gs (s.t.inBits + 1) where
@@ -820,7 +744,6 @@ def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
     rw [ite_eq_right (by omega), ite_eq_right (by omega)]
     omega
 
-/-- An earlier unit's instance, after a unit is appended. -/
 def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {v : Fin p.n} {gs : Array Gate} {kk : ℕ}
     (W : (p.PB hk).IsGatesUnit v gs kk) : ((snoc p s src valid).PB hk).IsGatesUnit v.castSucc gs kk where
@@ -856,14 +779,10 @@ def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
     obtain ⟨j, hj, hkj, hw⟩ := W.onto _ hv'
     exact ⟨j, hj, hkj, Fin.ext (by simp [hw])⟩
 
-/-- A `Prog`-level instance from the audit's. -/
 def rowsWireOf {N m : ℕ} {q : Prog N m} {os : Finset (Fin N)} {u : Fin m} {R : Rows}
     (I : (q.partition os).IsRowsUnit u R) : q.RowsWire u R :=
   ⟨I.wire, I.shared, I.mem, I.op, I.outside, I.onto⟩
 
-/-! ### Committed gates -/
-
-/-- A committed gate of an earlier unit was committed before the unit was appended. -/
 theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin (snoc p s src valid).boolN}
     {v : Fin p.n} (hg : g ∈ ((snoc p s src valid).PB hk).committed)
@@ -937,7 +856,6 @@ theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
         · exact absurd hwv (hin one hk)
         · omega
 
-/-- A committed gate of the new unit is one of its copies. -/
 theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin (snoc p s src valid).boolN}
     (hg : g ∈ ((snoc p s src valid).PB hk).committed)
@@ -984,7 +902,6 @@ theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) 
       rw [unitB_new hh, hv] at hne
       exact hne rfl
 
-/-- A committed gate of the rows circuit stays committed when a unit is appended. -/
 theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin p.rowsN}
     (hg : g ∈ (p.P hk).committed) : Fin.castAdd s.R.nComp g ∈ ((snoc p s src valid).P hk).committed := by
@@ -1020,10 +937,6 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
       intro he
       exact hne (Option.map_injective (Fin.castSucc_injective _) he)
 
-/-! ### One pair per unit -/
-
-/-- **The new unit's pair**: its composed rows, its unit gates, its inputs and `one` on the same sources, and each
-committed copy read off its output's row. -/
 noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) :
     UnitPair ((snoc p s src valid).P hk) ((snoc p s src valid).PB hk) ((snoc p s src valid).mapG hk)
@@ -1104,8 +1017,6 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     · rw [hi]
       exact IsRowsUnit.mem _ _
 
-/-- **An earlier unit's pair, after a unit is appended**: the same derivation, its instances shifted, and its committed
-gates as before. -/
 noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {v : Fin p.n}
     (U : UnitPair (p.P hk) (p.PB hk) (p.mapG hk) v) :
@@ -1161,7 +1072,6 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
       rw [hℓu]
       rfl
 
-/-- **One pair per unit.** -/
 noncomputable def pairs (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → (u : Fin p.n) →
     UnitPair (p.P hk) (p.PB hk) (p.mapG hk) u
   | _, .inputs, u => u.elim0
@@ -1188,8 +1098,6 @@ theorem pairs_oneGate (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one ou
       rw [Fin.val_castAdd]
       exact pairs_oneGate hk p v
 
-/-- **`RowsL1` for every program of units.** At values carrying 1 on `one`, every unit wrong on the program's Boolean
-circuit, its values read off the rows circuit through `mapG`, is wrong on its rows. -/
 theorem rowsL1 (hk : one < k) {outs : List ℕ} (p : UProg k one outs) :
     (p.P hk).RowsL1 (p.PB hk) (fun vals => vals ∘ p.mapG hk) {⟨one, Nat.lt_of_lt_of_le hk p.k_le_rowsN⟩} :=
   rowsL1_of_pairs _ _ _ _ (p.pairs hk) fun u => Finset.mem_singleton.2 (Fin.ext (p.pairs_oneGate hk u))

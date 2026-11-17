@@ -9,19 +9,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.RunSkel
 import VCVio.Prelude.Core
 
-/-!
-# L4′: the lincheck with hidden units, at the residuals
-
-A holo shape (`rec_algebra.Shape.holo`) absorbs the hidden part's fold `h` in a round of its own after `z_partial`
-(`H_ROUND`), and its comb operands are `comb[l] + h[l]` (`("combh", l)`). Its `GfResiduals_v1{S}` is the plain one's
-with `h` inserted into w at `p`, the elements before `H_ROUND` (`holoS`): w's later slots move up 64 and comb slot `l`'s
-operand gains `w[p + l]`. `residuals_of_holo`: its residuals at w with `h` inserted (`insH`) are the plain ones with
-comb `comb + h` (`addH`). `lincheck_of_residuals_holo`: so when they are zero the lincheck's rounds end at
-`dot (comb + h) z_partial`, which over F is `holoLincheck`'s check `Σ_s (folded[s] + h[s])·z_partial[s] = claim`
-(`fOf_dot_holo`). It starts from the plain S (`hpl`): at a holo shape `structureOf` is already the holo S, and
-`lincheck_of_residuals_hw` reads its residuals at w itself, ending the rounds at `dot (comb + h) z_partial` for the `h`
-w holds (`hOfW`).
--/
+/-! At a holo shape the residuals are the plain ones at `comb + h`, and when they are zero the lincheck's rounds end
+at `holoLincheck`'s check (`residuals_of_holo`, `lincheck_of_residuals_holo`). -/
 
 @[expose] public section
 
@@ -29,41 +18,29 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-! ## The holo structure -/
-
-/-- w's slot `i` once `h` is inserted at `p`. -/
 def shiftW (p i : Nat) : Nat := if i < p then i else i + 64
 
-/-- A term of the holo S: w's slots moved past `h`, and comb slot `c0 + l` with `w[p + l]` added. -/
 def holoTerm (p c0 : Nat) : Term → Array Term
   | .w i => #[.w (shiftW p i)]
   | .wt i u => #[.wt (shiftW p i) u]
   | .v j => if c0 ≤ j ∧ j < c0 + 64 then #[.v j, .w (p + (j - c0))] else #[.v j]
 
-/-- **The holo S** (`rec_algebra._build` on a holo shape): the plain S with `h`'s 64 elements inserted into w at `p`,
-the comb's slots from `c0`. -/
 def holoS (p c0 : Nat) (S : GfS) : GfS :=
   ⟨S.nw + 64, S.nv, S.ops.map (·.flatMap (holoTerm p c0)),
     S.res.map fun r => ⟨r.mul, r.add.flatMap (holoTerm p c0)⟩⟩
 
-/-- w with `h` inserted at `p`. -/
 def insH (p : Nat) (w h : Array F128) : Array F128 :=
   Array.ofFn (n := w.size + 64) fun i =>
     if i.val < p then w[i.val]! else if i.val < p + 64 then h[i.val - p]! else w[i.val - 64]!
 
-/-- `comb + h`. -/
 def addH (comb h : Array F128) : Array F128 := Array.ofFn (n := 64) fun i => comb[i.val]! + h[i.val]!
 
-/-- A ring switch's 128 slots lie on one side of `p`. -/
 def WtClear (p : Nat) : Term → Prop
   | .wt i _ => p ≤ i ∨ i + 128 ≤ p
   | _ => True
 
-/-- Every ring switch of S lies on one side of `p` (a holo shape's read the claims' `s`, which follow `h`). -/
 def HoloOk (p : Nat) (S : GfS) : Prop :=
   (∀ op ∈ S.ops, ∀ t ∈ op, WtClear p t) ∧ ∀ r ∈ S.res, ∀ t ∈ r.add, WtClear p t
-
-/-! ## Reads -/
 
 theorem insH_get {p : Nat} {w : Array F128} (h : Array F128) (hp : p ≤ w.size) (i : Nat) :
     (insH p w h)[i]! = if i < p then w[i]! else if i < p + 64 then h[i - p]! else w[i - 64]! := by
@@ -108,8 +85,6 @@ theorem app_get (V a : Array F128) (j : Nat) : (V ++ a)[j]! = if j < V.size then
     · rw [getElem!_pos (V ++ a) j (by rw [Array.size_append]; omega), getElem!_pos a (j - V.size) ha,
         Array.getElem_append_right (by omega)]
     · rw [getElem!_neg (V ++ a) j (by rw [Array.size_append]; omega), getElem!_neg a (j - V.size) ha]
-
-/-! ## Values -/
 
 theorem afoldl_congr {α β : Type} (f g : β → α → β) :
     ∀ (l : List α), (∀ a ∈ l, ∀ b, f b a = g b a) → ∀ b, l.foldl f b = l.foldl g b
@@ -182,7 +157,6 @@ theorem resValue_holo {S : GfS} (hc : comb.size = 64) (hp : p ≤ w.size) (hok :
   rw [Array.foldl_flatMap, afoldlA_congr _ _ r.add
     (fun t ht b => termValue_holo V comb h w hc hp t (hr t ht) b) 0]
 
-/-- **The holo residuals are the plain ones at `comb + h`.** -/
 theorem residuals_of_holo {S : GfS} {rs : Array F128} (hc : comb.size = 64) (hp : p ≤ w.size) (hok : HoloOk p S)
     (hres : residuals (holoS p V.size S) (insH p w h) (V ++ comb) = .ok rs) :
     residuals S w (V ++ addH comb h) = .ok rs := by
@@ -198,9 +172,6 @@ theorem residuals_of_holo {S : GfS} {rs : Array F128} (hc : comb.size = 64) (hp 
     simp only [holoS, Array.map_map]
     exact congrArg Except.ok (Array.map_congr_left fun r hr => (resValue_holo hc hp hok r (hok.2 r hr)).symm)
 
-/-! ## The lincheck -/
-
-/-- `verifierRows` places the comb last, and nothing else it returns reads it. -/
 theorem verifierRows_comb {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) :
@@ -215,9 +186,6 @@ theorem verifierRows_comb {sh : Shape} {rounds : Array (Array F128)} {extras : A
   cases hb'
   exact hb₂
 
-/-- **L4′ at a rep.** When the holo S's residuals (`holoS`, the comb's slots from `v.size − 64`) at w with `h` inserted
-at `p` are all zero, on the v `verifierRows` gives at the rep's coins, a proof carrying the lincheck messages ends the
-verifier's lincheck rounds at `dot (comb + h) z_partial`: `holoLincheck`'s check (`fOf_dot_holo`). -/
 theorem lincheck_of_residuals_holo {sh : Shape} {w comb h : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
@@ -236,14 +204,12 @@ theorem lincheck_of_residuals_holo {sh : Shape} {w comb h : Array F128} {cons : 
   exact lincheck_of_residuals hpl (hV (addH comb h)) hS hw (addH_size comb h) hacc
     (residuals_of_holo hc hp hok hres) hzero hpf hC
 
-/-- w's `h` as the comb's elements read it (`hOf`): zero off a holo shape. -/
 def hOfW (sh : Shape) (w : Array F128) : Array F128 := Array.ofFn (n := 64) fun l => hOf sh w l.val
 
 theorem hOfW_get (sh : Shape) (w : Array F128) {l : Nat} (hl : l < 64) : (hOfW sh w)[l]! = hOf sh w l := by
   rw [getElem!_pos (hOfW sh w) l (by simpa [hOfW] using hl)]
   simp only [hOfW, Array.getElem_ofFn]
 
-/-- The comb w holds is the comb plus `hOfW` (`decoded_comb_get`). -/
 theorem decoded_comb_eq (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) :
     (decoded sh w comb cons).comb = addH comb (hOfW sh w) := by
   apply Array.ext
@@ -256,10 +222,6 @@ theorem decoded_comb_eq (sh : Shape) (w comb : Array F128) (cons : Nat → Nat �
     rw [addH_get comb _ hi, hOfW_get sh w hi] at e2
     exact e1.symm.trans e2
 
-/-- **L4′ at a holo shape.** `lincheck_of_residuals_dec` with the comb w holds written out: when the residuals of
-`structureOf sh`, whose comb operands at a holo `sh` read w's `h`, are all zero, a proof carrying the lincheck messages
-ends the verifier's lincheck rounds at `dot (comb + h) z_partial` for w's `h` (`hOfW`): `holoLincheck`'s check
-(`fOf_dot_holo`). -/
 theorem lincheck_of_residuals_hw {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
@@ -275,7 +237,6 @@ theorem lincheck_of_residuals_hw {sh : Shape} {w comb : Array F128} {cons : Nat 
   have h := lincheck_of_residuals_dec hrows hS hw hc hacc hres hzero hpf hC
   rwa [decoded_comb_eq sh w comb cons] at h
 
-/-- **`holoLincheck`'s check over F**: `dot (comb + h) z_partial` is `Σ_s (comb[s] + h[s])·z_partial[s]`. -/
 theorem fOf_dot_holo (comb h zp : Array F128) :
     fOf (dot (addH comb h) zp) = ∑ s : Fin 64, (fOf comb[s.val]! + fOf h[s.val]!) * fOf zp[s.val]! := by
   rw [fOf_dot _ _ 64 (addH_size comb h)]

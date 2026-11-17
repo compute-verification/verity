@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.AddressFacts.Row
 
-/-!
-# Round 2's row is the read's
-
-`second-read` (`Spot.SecondStage.readOk`) holds every read of a registered-reads entry at a port a link or a wire
-names to the row `placedOk` names, and at a template's own port of the interior record to the row `rowsOk` names.
-`placedOk_read` and `rowsOk_read` read that off the two checks at one slot (`readsAt`), and `readFact` assembles them
-by the read's kind (`placedRow`): `AddressRow.ReadFact`.
-
-Each proof cases on the entry's `reads_from` and `reads` so that its reader and the check's reduce together: the two
-are separate matches on the same fields.
--/
+/-! Round 2's row is the read's (`readFact`). -/
 
 @[expose] public section
 
@@ -22,9 +12,6 @@ namespace AddressRow
 
 open Lean (Json)
 
-/-- **An entry `placedOk` passes has the leaf count it names, and each read of it is a row it names**: where `placedOk`
-passes entry `e` of `leaves` leaves against rows `row`, the entry's leaf count is `leaves`, and the read of slot `u`
-(`readsAt`) is the row `row` names for `u`, which names one. -/
 theorem placedOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
     {u pos : ℕ} (hok : Spot.SecondStage.placedOk q p e leaves row = true) (hrd : readsAt e u = some pos) :
     Spot.nat? (Spot.getD e "leaves") = some leaves ∧ row u = some pos := by
@@ -125,8 +112,6 @@ theorem placedOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : �
                   exact ⟨hL.trans (congrArg some hle), congrArg some h1.2.symm⟩
           · simp [hfu] at hrd
 
-/-- **An entry `placedOk` passes has the leaf count it names**, whether or not a slot reads it: `placedOk` compares the
-entry's leaf count before it looks at a read. -/
 theorem placedOk_leaves {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
     (hok : Spot.SecondStage.placedOk q p e leaves row = true) :
     Spot.nat? (Spot.getD e "leaves") = some leaves := by
@@ -159,16 +144,11 @@ theorem placedOk_leaves {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves
           simp only [hfst, Bool.and_eq_true] at hok
           exact hL.trans (congrArg some (by simpa using hok.1))
 
-/-- **A read `placedOk` passes is its row**: where `placedOk` passes entry `e` against rows `row`, the read of slot `u`
-(`readsAt`) is the row `row u` names. -/
 theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
     {u pos r : ℕ} (hok : Spot.SecondStage.placedOk q p e leaves row = true) (hrd : readsAt e u = some pos)
     (hrow : row u = some r) : pos = r :=
   Option.some.inj ((placedOk_at hok hrd).2.symm.trans hrow)
 
-/-- **An entry `rowsOk` passes is over some units, and each read of it is its unit's first row**: where `rowsOk`
-passes entry `e` of `l` leaves over `units` units against the units `unit` names, there are units, and the read of slot
-`u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a unit. -/
 theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
     {u pos b l : ℕ} (hok : Spot.SecondStage.rowsOk q p e units unit = true)
     (hl : Spot.nat? (Spot.getD e "leaves") = some l) (hrd : readsAt e u = some pos) (hb : unit u = some b) :
@@ -257,17 +237,12 @@ theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ}
               exact ⟨hpos, h1.2⟩
         · simp [hfu] at hrd
 
-/-- **A read `rowsOk` passes is its unit's first row**: where `rowsOk` passes entry `e` of `l` leaves over `units` units
-against the units `unit` names, the read of slot `u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a
-unit. -/
 theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
     {u pos b l : ℕ} (hok : Spot.SecondStage.rowsOk q p e units unit = true)
     (hl : Spot.nat? (Spot.getD e "leaves") = some l) (hrd : readsAt e u = some pos) (hb : unit u = some b) :
     pos = b * (l / units) :=
   (rowsOk_at hok hl hrd hb).2
 
-/-- **Round 2's row is the read's** (`ReadFact`): at each kind of read `placedRow` names a row for, `second-read`'s
-case for it (`readOk`) passes the entry through `placedOk` or `rowsOk` at that row. -/
 theorem readFact : ReadFact := by
   intro own named p port v e l u row pos hok hv hl hpl hrd
   simp only [Spot.SecondStage.readOk, hv] at hok

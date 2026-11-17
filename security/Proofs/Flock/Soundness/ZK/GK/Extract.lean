@@ -7,26 +7,8 @@ import Mathlib.Tactic.Set
 import Mathlib.Tactic.SplitIfs
 import Proofs.Flock.Soundness.Merkle
 
-/-!
-# Zero knowledge: T6's extraction as an algorithm
-
-T6: two openings of one coin position (`Proofs.Flock.Soundness.ZK.CoinBinding`'s model) that disagree on a coin and reach
-one root give a collision of `H`. The simulator's `⊥_bind` term needs the collision computed, so that a finder can output
-it and `SHA512CRStrict` bound its probability. This file computes it, and states T6 only of the computed pair.
-
-The extraction lines up the hash inputs of the two openings node by node, `coinPairs`: the Merkle path's steps
-(`walkPairs`), the hm96 leaf, the salt hash, the round digest, and the chain from `T_0` down (`chainPairs`, bottom up, one
-pass). `findColl` returns the first pair whose inputs differ and whose hashes agree. T6's case split shows such a pair
-exists (`coinPairs_coll`), so the output is a collision (`coinColl_isColl`). It hashes each listed input once: at most
-`2·(|path| + 3 + n)` evaluations of `H` for openings of `n` coins (`coinPairs_length_le`).
-
-* `findColl`, `findColl_isColl`: the first colliding pair of a list;
-* `walkPairs_coll`, `chainPairs_coll`: two walks, or two chains, that meet collide at one of the aligned inputs;
-* `coinColl`, `coinColl_isColl`: T6's collision, computed; `coinCollKeyed`, `coinCollKeyed_isColl` for the keyed tree
-  (`coin-tree/hm96-sha512/v2`, the hash `fun m => H (ν ++ m)`);
-* `CoinTree`, `CoinOpening`, `Conflict`, `conflicts`, `bindColl`, `bindColl_isColl`: the same at the level of two views'
-  lists of openings, the form the simulator's `⊥_bind` outcome takes.
--/
+/-! Zero knowledge: T6's extraction as an algorithm, computing the collision of `H` from two conflicting coin
+openings (`coinColl_isColl`, `bindColl_isColl`). -/
 
 @[expose] public section
 
@@ -34,17 +16,14 @@ namespace FlockSoundness.ZK.GK
 
 open FlockSoundness.Merkle
 
-/-- A finder's output: two byte strings, or nothing (as `StrictCR.Pair`). -/
 abbrev Pair : Type := Option (List UInt8 × List UInt8)
 
-/-- The output is a collision of `H`: `SHA512CRStrict`'s event with `out = id`. -/
 def IsColl {D : Type} (H : List UInt8 → D) (o : Pair) : Prop := ∃ x y, o = some (x, y) ∧ x ≠ y ∧ H x = H y
 
 section Find
 
 variable {D : Type} [DecidableEq D] (H : List UInt8 → D)
 
-/-- The first pair of the list whose inputs differ and whose hashes agree. -/
 def findColl (ps : List (List UInt8 × List UInt8)) : Pair :=
   ps.find? fun p => decide (p.1 ≠ p.2 ∧ H p.1 = H p.2)
 
@@ -63,7 +42,6 @@ section Walk
 
 variable {D Col : Type} (H : List UInt8 → D) (E : Enc Col D)
 
-/-- The inputs of two walks' steps, side by side, from the leaves up. -/
 def walkPairs : ℕ → D → D → List D → List D → List (List UInt8 × List UInt8)
   | idx, a, a', s :: r, s' :: r' =>
       (upIn E idx a s, upIn E idx a' s') :: walkPairs (idx / 2) (up H E idx a s) (up H E idx a' s') r r'
@@ -77,8 +55,6 @@ theorem walkPairs_length_le : ∀ (idx : ℕ) (a a' : D) (sibs sibs' : List D),
       simp only [walkPairs, List.length_cons]
       exact Nat.succ_le_succ (walkPairs_length_le _ _ _ r r')
 
-/-- **A walk binds, located**: two walks from different nodes that meet collide at a step, and the colliding inputs are
-one of the aligned pairs. -/
 theorem walkPairs_coll : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
     sibs.length = sibs'.length → a ≠ a' → walk H E idx a sibs = walk H E idx a' sibs' →
       ∃ p ∈ walkPairs H E idx a a' sibs sibs', p.1 ≠ p.2 ∧ H p.1 = H p.2
@@ -105,7 +81,6 @@ section Chain
 
 variable {D Coin Salt : Type} (H : List UInt8 → D) (E : CoinEnc D Coin Salt)
 
-/-- Two chains, bottom up in one pass: their tops and the inputs of their links side by side, top first. -/
 def chainPairs (tag : List UInt8) : List Coin → List Coin → D → D → D × D × List (List UInt8 × List UInt8)
   | c :: r, c' :: r', Tn, Tn' =>
       let below := chainPairs tag r r' Tn Tn'
@@ -134,8 +109,6 @@ theorem chainPairs_length_le (tag : List UInt8) : ∀ (cs cs' : List Coin) (Tn T
       simp only [chainPairs, List.length_cons]
       exact Nat.succ_le_succ (chainPairs_length_le tag r r' Tn Tn')
 
-/-- **A chain binds, located**: two chains of equally many coins that disagree on a coin and reach one `T_0` collide at
-a link, and the colliding inputs are one of the aligned pairs. -/
 theorem chainPairs_coll (tag : List UInt8) : ∀ (cs cs' : List Coin) (Tn Tn' : D), cs.length = cs'.length → cs ≠ cs' →
     chainTop H E tag Tn cs = chainTop H E tag Tn' cs' →
       ∃ p ∈ (chainPairs H E tag cs cs' Tn Tn').2.2, p.1 ≠ p.2 ∧ H p.1 = H p.2
@@ -163,8 +136,6 @@ section Opening
 
 variable {D Coin Salt : Type} (H : List UInt8 → D) (E : CoinEnc D Coin Salt)
 
-/-- **The aligned hash inputs of two openings of one coin position**: the Merkle path's steps from the leaves up, the hm96
-leaves, the salt hashes, the round digests, and the chains from `T_0` down. -/
 def coinPairs (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8) (MerkleE : Enc Unit D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) : List (List UInt8 × List UInt8) :=
   let ch := chainPairs H E chainTag cs cs' Tn Tn'
@@ -176,7 +147,6 @@ def coinPairs (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8
   let l' := lp ++ E.dig (mix (H r') y') ++ E.dig (H s')
   walkPairs H MerkleE idx (H l) (H l') sibs sibs' ++ (l, l') :: (s, s') :: (r, r') :: ch.2.2
 
-/-- The extraction's size: at most `|path| + 3 + n` aligned pairs, so at most `2·(|path| + 3 + n)` evaluations of `H`. -/
 theorem coinPairs_length_le (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8) (MerkleE : Enc Unit D)
     (idx : ℕ) (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) :
     (coinPairs H E mix chainTag roundTag pos lp sp MerkleE idx cs cs' Tn Tn' y y' sibs sibs').length ≤
@@ -191,8 +161,6 @@ theorem coinPairs_length_le (mix : D → Salt → D) (chainTag roundTag pos lp s
   have h2 := chainPairs_length_le H E chainTag cs cs' Tn Tn'
   omega
 
-/-- **T6, located**: where two openings of one position, with equally many coins and a coin on which they disagree, both
-walk from their leaves to one root, one of the aligned pairs is a collision of `H`. -/
 theorem coinPairs_coll (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -233,12 +201,10 @@ theorem coinPairs_coll (mix : D → Salt → D) (hmix : ∀ y, Function.Injectiv
 
 variable [DecidableEq D]
 
-/-- **T6's collision, computed**: the first aligned pair of the two openings that collides. -/
 def coinColl (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8) (MerkleE : Enc Unit D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) : Pair :=
   findColl H (coinPairs H E mix chainTag roundTag pos lp sp MerkleE idx cs cs' Tn Tn' y y' sibs sibs')
 
-/-- **T6 as an algorithm**: under `coinPairs_coll`'s hypotheses, `coinColl` outputs a collision of `H`. -/
 theorem coinColl_isColl (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -250,15 +216,11 @@ theorem coinColl_isColl (mix : D → Salt → D) (hmix : ∀ y, Function.Injecti
   findColl_isColl H (coinPairs_coll H E mix hmix chainTag roundTag pos lp sp root idx cs cs' Tn Tn' y y' sibs sibs'
     hlen hne hsibs MerkleE h h')
 
-/-- T6's collision for the keyed tree (`coin-tree/hm96-sha512/v2`, every hash `fun m => H (ν ++ m)`), as a collision of
-`H` itself: the colliding inputs with the prefix `ν`. -/
 def coinCollKeyed (ν : List UInt8) (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8) (MerkleE : Enc Unit D)
     (idx : ℕ) (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) : Pair :=
   (coinColl (fun m => H (ν ++ m)) E mix chainTag roundTag pos lp sp MerkleE idx cs cs' Tn Tn' y y' sibs sibs').map
     fun p => (ν ++ p.1, ν ++ p.2)
 
-/-- **T6 as an algorithm, keyed tree**: under `coinPairs_coll`'s hypotheses at the hash `fun m => H (ν ++ m)`,
-`coinCollKeyed` outputs a collision of `H`. -/
 theorem coinCollKeyed_isColl (ν : List UInt8) (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -277,8 +239,6 @@ theorem coinCollKeyed_isColl (ν : List UInt8) (mix : D → Salt → D) (hmix : 
   rfl
 
 end Opening
-
-/-! ## Two views' openings -/
 
 /-- The coin tree's fixed parameters (`coin-tree/hm96-sha512/v1`): the encodings, the Merkle tree's, the salt mix with
 its injectivity, and the domain tags. -/
@@ -303,12 +263,9 @@ structure CoinOpening (D Coin Salt : Type) where
 
 variable {D Coin Salt : Type} (H : List UInt8 → D) (T : CoinTree D Coin Salt)
 
-/-- The root an opening reaches. -/
 def CoinTree.reach (op : CoinOpening D Coin Salt) : D :=
   walk H T.ME op.idx (coinLeaf H T.E T.mix T.chainTag T.roundTag op.pos T.lp T.sp op.Tn op.cs op.y) op.sibs
 
-/-- **Two openings conflict** under `root`: one position, equally many coins and path nodes, different coins, and both
-reach `root`. -/
 def Conflict (root : D) (op op' : CoinOpening D Coin Salt) : Prop :=
   op.pos = op'.pos ∧ op.idx = op'.idx ∧ op.cs.length = op'.cs.length ∧ op.sibs.length = op'.sibs.length ∧
     op.cs ≠ op'.cs ∧ T.reach H op = root ∧ T.reach H op' = root
@@ -318,25 +275,20 @@ instance instDecidableConflictOfDecidableEq [DecidableEq D] [DecidableEq Coin] (
   unfold Conflict
   infer_instance
 
-/-- One opening of each list, every pair. -/
 def openPairs (os os' : List (CoinOpening D Coin Salt)) : List (CoinOpening D Coin Salt × CoinOpening D Coin Salt) :=
   os.flatMap fun op => os'.map fun op' => (op, op')
 
 variable [DecidableEq D] [DecidableEq Coin]
 
-/-- **`⊥_bind`**: some opening of the first list and some of the second conflict under `root`. -/
 def conflicts (root : D) (os os' : List (CoinOpening D Coin Salt)) : Bool :=
   (openPairs os os').any fun q => decide (Conflict H T root q.1 q.2)
 
-/-- **The `⊥_bind` collision**: T6's collision from the first conflicting pair of openings, nothing if none conflict. -/
 def bindColl (root : D) (os os' : List (CoinOpening D Coin Salt)) : Pair :=
   match (openPairs os os').find? (fun q => decide (Conflict H T root q.1 q.2)) with
   | some (op, op') => coinColl H T.E T.mix T.chainTag T.roundTag op.pos T.lp T.sp T.ME op.idx op.cs op'.cs op.Tn op'.Tn
       op.y op'.y op.sibs op'.sibs
   | none => none
 
-/-- **T6 as an algorithm, on views**: when two lists of openings conflict under a root, `bindColl` outputs a collision of
-`H`. -/
 theorem bindColl_isColl (root : D) (os os' : List (CoinOpening D Coin Salt)) (h : conflicts H T root os os' = true) :
     IsColl H (bindColl H T root os os') := by
   unfold conflicts at h
@@ -353,13 +305,9 @@ theorem bindColl_isColl (root : D) (os os' : List (CoinOpening D Coin Salt)) (h 
   exact coinColl_isColl H T.E T.mix T.mix_inj T.chainTag T.roundTag op.pos T.lp T.sp root op.idx op.cs op'.cs op.Tn op'.Tn
     op.y op'.y op.sibs op'.sibs hlen hne hsibs T.ME h1 h2
 
-/-- **The `⊥_bind` collision for the keyed tree** (`coin-tree/hm96-sha512/v2`, every hash `fun m => H (ν ++ m)`), as a
-collision of `H`: the colliding inputs with the prefix `ν`. -/
 def bindCollKeyed (ν : List UInt8) (root : D) (os os' : List (CoinOpening D Coin Salt)) : Pair :=
   (bindColl (fun m => H (ν ++ m)) T root os os').map fun p => (ν ++ p.1, ν ++ p.2)
 
-/-- **T6 as an algorithm, on views, keyed tree**: when two lists of openings conflict under a root of the keyed tree,
-`bindCollKeyed` outputs a collision of `H`. -/
 theorem bindCollKeyed_isColl (ν : List UInt8) (root : D) (os os' : List (CoinOpening D Coin Salt))
     (h : conflicts (fun m => H (ν ++ m)) T root os os' = true) : IsColl H (bindCollKeyed H T ν root os os') := by
   obtain ⟨a, b, hab, hne, heq⟩ := bindColl_isColl (fun m => H (ν ++ m)) T root os os' h

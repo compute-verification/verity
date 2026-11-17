@@ -10,17 +10,7 @@ import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays
 import VCVio.Prelude.Core
 
-/-!
-# The zerocheck refines the model's (`Flock.Piop`)
-
-`zerocheck_refines`: if the executable's `bindAndZerocheck` succeeds, the model's `zerocheck`, played with the
-proof's zerocheck messages (`zcMsgs`) and the coins of the rounds the executable consumed, returns `some zc'`, and `zc'`
-is the executable's output read in the model's field (`ZcRel`).
-
-The residual rounds (Z6) are a loop in the executable and a recursion in the model. `zStep` is one round as the
-executable computes it; `residual_plays` runs the model's rounds on the fold of `zStep`, and `forIn_rounds` shows the
-executable's loop is that fold.
--/
+/-! The zerocheck refines the model's (`zerocheck_refines`). -/
 
 @[expose] public section
 
@@ -30,7 +20,6 @@ open Flock FlockLevel3 Game Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- One residual round (Z6) as the executable computes it, on round `i`'s messages and coins `c`. -/
 def zStep (r : Array F128) (rounds : Array (F128 × F128)) (i : ℕ) (s : F128 × Array F128) (c : Array F128) :
     F128 × Array F128 :=
   let g := rounds[i]!
@@ -65,15 +54,12 @@ theorem zStep_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : ℕ →
       rw [List.foldl_cons, ih (zStep r rounds i s (C i))]
       simp [zStep]
 
-/-- The model's `residualStep` on the words of `zStep`. -/
 theorem residualStep_zStep (r : Array F128) (rounds : Array (F128 × F128)) (i : ℕ) (s : F128 × Array F128)
     (c : Array F128) :
     Model.residualStep (fOf r[i]!) (fOf s.1) (fOf rounds[i]!.1) (fOf rounds[i]!.2) (fOf c[0]!) =
       fOf (zStep r rounds i s c).1 := by
   simp only [Model.residualStep, zStep, getElem!_eq_getD c 0, fOf_add, fOf_mul, fOf_inv, fOf_one]
 
-/-- **The residual rounds.** The model's `residualRounds`, fed round `i`'s messages `rounds[i]` and coins `C i`, ends
-with the challenges and the claim of the fold of `zStep`. -/
 theorem residual_plays (r : Array F128) (rounds : Array (F128 × F128)) (C : ℕ → Array F128) :
     ∀ (n a : ℕ) (s : F128 × Array F128), (∀ i ∈ List.range' a n, (C i).size = 1) →
       Plays fOf (Model.residualRounds n (fun j : Fin n => fOf r[a + j.val]!) (fOf s.1))
@@ -128,10 +114,6 @@ theorem consumed_eq_map (rs : Array Round) (k n : ℕ) :
   funext i
   simp
 
-/-- **The zerocheck refines the model's** (`Flock.Piop`). If the executable's statement binding and zerocheck
-succeed from `t` to `t'`, the model's zerocheck, played with the proof's zerocheck messages and the coins of the rounds
-consumed from `t` to `t'`, returns the executable's output, read in the model's field, its `z` round `t.k + 2`'s first
-coin and its `ρ` rounds `t.k + 3 + i`'s, and `t'` is `m − 6 + 3` rounds on. -/
 theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t t' : Transcript) (zc : Flock.ZcOut) (hwf : RoundsWF t.rounds)
     (h : bindAndZerocheck m digest cap p t = .ok (zc, t')) :
@@ -155,7 +137,6 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
   obtain ⟨t₁₁, k₁₁, h⟩ := absorbF_bind h
   obtain ⟨t₁₂, k₁₂, h⟩ := absorbF_bind h
   obtain ⟨rfl, rfl⟩ := pure_ok h
-  -- the rounds and the counter, in terms of `t`
   have hr₄ : t₄.rounds = t.rounds := by rw [k₄.2, k₃.2, k₂.2, k₁.2]
   have hk₄ : t₄.k = t.k := by rw [k₄.1, k₃.1, k₂.1, k₁.1]
   have hr₈ : t₈.rounds = t.rounds := by rw [k₈.2, k₇.2, r₆, r₅, hr₄]
@@ -173,7 +154,6 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
   have hsz₀ : c₀.size = 6 := by rw [hc₀, hwf₄ t₄.k lt₄, n₄]
   have hsz₁ : c₁.size = m - 13 := by rw [hc₁, hwf₅ t₅.k lt₅, n₅]
   have hsz₂ : c₂.size = 1 := by rw [hc₂, hwf₈ t₈.k lt₈, n₈]
-  -- the residual rounds: one round consumed per step
   rw [forIn_range_eq] at hloop
   obtain ⟨hr₁₀, hk₁₀, hn₁₀, hs⟩ := forIn_rounds _ (zStep (pinned ++ c₁) p.rounds) 1 (by
       intro i st tt b tt' hb
@@ -194,14 +174,12 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
   have hCsz : ∀ i ∈ List.range' 0 (m - 6), (C i).size = 1 := fun i hi => by
     have hwf₉ : RoundsWF t₉.rounds := hr₉ ▸ hwf
     rw [hC]; simp only; rw [RoundsWF.get hwf₉, hn₁₀ i hi]
-  -- the coins consumed
   have hcoins : consumed t.rounds t.k t'.k = c₀ :: c₁ :: c₂ :: (List.range' 0 (m - 6)).map C := by
     rw [hkt, consumed_append t.rounds (show t.k ≤ t.k + 1 by omega) (by omega),
       consumed_append t.rounds (show t.k + 1 ≤ t.k + 2 by omega) (by omega),
       consumed_append t.rounds (show t.k + 2 ≤ t.k + 3 by omega) (by omega), consumed_succ, consumed_succ,
       consumed_succ, consumed_eq_map, hc₀, hc₁, hc₂, hr₄, hk₄, hr₅, hk₅, hr₈, hk₈, hC, hr₉, hk₉]
     rfl
-  -- the model's arithmetic on the executable's words
   have hz : fOf c₂[0]! = fOf (c₂.getD 0 0) := by rw [getElem!_eq_getD]
   have hpcM : (∑ i : Fin 64, execArith.lagΛ (fOf (c₂.getD 0 0)) i * vecOf 64 p.round1c i) =
       fOf (dot (lagrange nodesL den6Inv (c₂.getD 0 0)) p.round1c) := by
@@ -260,7 +238,6 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
     rw [hs2, getElem!_pos _ _ (by simp), Array.getElem_append_right (by simp)]
     simp [hC, hr₉, hk₉]
 
-/-- **The zerocheck refines the model's**: `zerocheck_refines_coins` without the coins. -/
 theorem zerocheck_refines (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t t' : Transcript) (zc : Flock.ZcOut) (hwf : RoundsWF t.rounds)
     (h : bindAndZerocheck m digest cap p t = .ok (zc, t')) :

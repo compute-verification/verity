@@ -21,25 +21,8 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.VBridge.Family.UnitName
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# A part's input keys, from V*'s META
-
-`RecVStar.checkParsed` (`VStarFamily.hparsed`) holds a part circuit's input leaves and row ports to the ones V* wrote,
-so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the bit of V*'s port it lies in:
-
-* `vstarRows_get`: the ports parsed as V*'s input rows have their words and bits, and start where V*'s do;
-* `srcKey_laid`: at the verifier's `unitLaid`, the key of input bit `16 · (words before q) + k` is bit `k` of port `q`
-  (`srcKey_inOrder`);
-* `repKeys_part`: part `p`'s circuit has those keys at V*'s part `pt.S`'s ports (`RepKeys`);
-* `srcKey_v`, `srcKey_row`: so the `v` column `vBase + q` is bit `q` of the port V* names `v`, and the row column
-  `rowCol q` is a bit of the row port it lies in (`rowCol_at`), named as V* names it;
-* `part_counts`, `part_link`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
-  `VStarFamily.hpart`, `RecVStar.checkPart`), so the keys hold at the verifier's part (`partRep`, which `rowCol` and
-  `vBase` read only through those counts): `partVCols` and `partRowCols` (`PartRowCols`);
-* its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts`), so a row column of
-  element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
-  parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
--/
+/-! A part's input keys are the bits of V*'s ports they lie in, from `RecVStar.checkParsed` (`partRowCols_holds`,
+`partRowBits_holds`). -/
 
 @[expose] public section
 
@@ -49,8 +32,6 @@ open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge
 
-/-- **V*'s input rows, port by port**: ports whose (name, words, bits) begin with V*'s input rows of words `ws` have
-their names, words and 16 bits a word, and start past the words of the rows before them. -/
 theorem vstarRows_get {ports : Array Flock.Port} {ins : List String} {ws : List ℕ} {rest : List (String × ℕ × ℕ)}
     (h : ports.toList.map (fun p => (p.name, p.words, p.bits)) =
       (ins.zip ws).map (fun (nm, w) => (nm, w, 16 * w)) ++ rest)
@@ -90,9 +71,6 @@ theorem take_sum_add_le (l : List ℕ) {q : ℕ} (hq : q < l.length) : (l.take q
   simp only [Option.toList_some, List.sum_cons, List.sum_nil]
   omega
 
-/-- **The verifier's `rec-residuals` unit keys its inputs by the rows V* wrote**: at `unitLaid` (one group of 16-bit
-ports from column 0), with one unit per VU whose leaves are its input words in order and ports V*'s input rows of
-words `ws`, the key of input bit `16 · (ws before q) + k` is bit `k` of port `q` (`srcKey_inOrder`). -/
 theorem srcKey_laid {c : Flock.Circuit} (hU : Built c.unit) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     {name : String} (hn : netOf name (RecResiduals.unitLaid S ns nv) = .ok c.unit)
     (hleaves : c.leavesIn.size = c.upv ∧
@@ -135,8 +113,6 @@ theorem srcKey_laid {c : Flock.Circuit} (hU : Built c.unit) {S : Flock.RecOpen.G
   rw [hst, Nat.zero_mul, Nat.zero_add] at key
   exact key
 
-/-- **A circuit keys V*'s part `S`'s input ports** (`InnerRepCheck{S}`'s, `repPorts`): port `q` has V*'s name and words,
-and the key of input bit `16 · (words before q) + k` is its bit `k`. -/
 def RepKeys (c : Flock.Circuit) (S : VStar.RepS) : Prop :=
   ∀ q (hq : q < (repPorts S).length), ∃ hq' : q < c.ports.size,
     c.ports[q].name = (S.ports.map (·.1) ++ ["v"])[q]! ∧ c.ports[q].words = (repPorts S)[q] ∧
@@ -159,8 +135,6 @@ theorem names_v (S : VStar.RepS) : (S.ports.map (·.1) ++ ["v"])[S.ports.length]
     List.getElem_append_right (by simp only [List.length_map, Nat.le_refl])]
   simp only [List.length_map, Nat.sub_self, List.getElem_singleton]
 
-/-- **`v`'s columns at V*'s part**: port `S.ports.length` is `v`, and the key of column `vBase S + q`, for `q` within
-`v`'s `128 nv` bits, is its bit `q`, within its row. -/
 theorem srcKey_v {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : ℕ) :
     ∃ qv : Fin c.ports.size, c.ports[qv].name = "v" ∧ ∀ q < 128 * S.gf.nv, ∃ _ : q < Layout.portRowW c qv,
       Aliased.srcKey c (0 * n + (vBase S + q)) = .msg qv.val (q / 8) (q % 8) := by
@@ -187,8 +161,6 @@ theorem names_row (S : VStar.RepS) {i : ℕ} (hi : i < S.ports.length) :
   rw [getElem!_pos _ _ (by rw [List.length_append, List.length_map, List.length_singleton]; omega),
     List.getElem_append_left (by rw [List.length_map]; exact hi), List.getElem_map]
 
-/-- **A row column `rowCol` lies in one row port**: bit `q` of the row ports is bit `e` of port `i`, past the ports
-before it. -/
 theorem rowCol_at : ∀ (ps : List (String × ℕ)) (k q : ℕ), q < 128 * (ps.map (·.2)).sum →
     ∃ i, ∃ hi : i < ps.length, ∃ e < 128 * ps[i].2, q = 128 * ((ps.map (·.2)).take i).sum + e ∧
       rowCol ps k q = k + 16 * ((ps.map fun p => VStar.portWordsOf p.2).take i).sum + e
@@ -215,8 +187,6 @@ theorem rowCol_at : ∀ (ps : List (String × ℕ)) (k q : ℕ), q < 128 * (ps.m
         simp only [List.map_cons, List.take_succ_cons, List.sum_cons]
         omega
 
-/-- **The row columns at V*'s part**: row column `rowCol S.ports 0 q` is keyed by bit `e` of row port `i`, named as
-V* names it, where `q` is bit `e` of the `i`-th row's `128 n` bits. -/
 theorem srcKey_row {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : ℕ) {q : ℕ}
     (hq : q < 128 * (S.ports.map (·.2)).sum) :
     ∃ (i : Fin c.ports.size) (hi : i.val < S.ports.length) (e : ℕ) (_ : e < 128 * S.ports[i.val].2),
@@ -235,7 +205,6 @@ theorem srcKey_row {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : �
   · rw [Nat.zero_mul, Nat.zero_add, hr, Nat.zero_add, ← repPorts_take S (Nat.le_of_lt hi)]
     exact hkey e hb
 
-/-- `rowCol` reads only the ports' element counts. -/
 theorem rowCol_snd : ∀ (ps ps' : List (String × ℕ)), ps.map (·.2) = ps'.map (·.2) → ∀ k q,
     rowCol ps k q = rowCol ps' k q
   | [], [], _, _, _ => rfl
@@ -246,7 +215,6 @@ theorem rowCol_snd : ∀ (ps ps' : List (String × ℕ)), ps.map (·.2) = ps'.ma
     unfold rowCol
     rw [h.1, rowCol_snd ps ps' h.2]
 
-/-- So does `vBase`. -/
 theorem vBase_snd {S S' : VStar.RepS} (h : S.ports.map (·.2) = S'.ports.map (·.2)) : vBase S = vBase S' := by
   have e : ∀ S : VStar.RepS, S.ports.map (fun p => VStar.portWordsOf p.2) = (S.ports.map (·.2)).map VStar.portWordsOf :=
     fun S => by simp only [List.map_map, Function.comp_def]
@@ -255,7 +223,6 @@ theorem vBase_snd {S S' : VStar.RepS} (h : S.ports.map (·.2) = S'.ports.map (·
 theorem partRep_snd (ns : List ℕ) (nv : ℕ) : (partRep ns nv).ports.map (·.2) = ns := by
   simp only [partRep, List.map_map, Function.comp_def, List.map_id']
 
-/-- The verifier's part `p` is one of its groups. -/
 theorem part_lt {sh : Flock.Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecAlgebra.structureOf sh = .ok S) (hg : RecResiduals.groups S (RecResiduals.portSizes sh) = .ok gs) {p : ℕ}
     {x : RecOpen.GfS × List ℕ × ℕ} (h : RecResiduals.part sh p = .ok x) : p < gs.size := by
@@ -275,7 +242,6 @@ theorem part_lt {sh : Flock.Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ �
       exact hp
     · cases h
 
-/-- The verifier's part `p`'s row ports are its `p`-th group's. -/
 theorem partPorts_eq {sh : Flock.Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecAlgebra.structureOf sh = .ok S) (hg : RecResiduals.groups S (RecResiduals.portSizes sh) = .ok gs) {p : ℕ}
     (hp : p < gs.size) : RecVStar.partPorts sh p = .ok gs[p].2.1 := by
@@ -287,7 +253,6 @@ theorem partPorts_eq {sh : Flock.Shape} {S : RecAlgebra.GfS} {gs : Array (Array 
   rw [getElem?_pos gs p hp]
   rfl
 
-/-- An element of a `flatMap` past the blocks before its own. -/
 theorem flatMap_getElem? {α β : Type} (g : α → List β) (len : α → ℕ) (hl : ∀ x, (g x).length = len x) :
     ∀ (l : List α) (i o : ℕ) (hi : i < l.length), o < len l[i] →
       (l.flatMap g)[((l.map len).take i).sum + o]? = (g l[i])[o]?
@@ -302,7 +267,6 @@ theorem flatMap_getElem? {α β : Type} (g : α → List β) (len : α → ℕ) 
       Nat.add_sub_cancel_left]
     exact flatMap_getElem? g len hl l i o (Nat.lt_of_succ_lt_succ hi) ho
 
-/-- **`wIdx`'s element `o` of its `i`-th port** is that port's start in w plus `o`. -/
 theorem wIdx_get (sizes P : Array ℕ) {i o : ℕ} (hi : i < P.size) (ho : o < sizes[P[i]]!) {a : ℕ}
     (ha : a < (PartS.wIdx sizes P).size) (hae : a = ((P.toList.map (sizes[·]!)).take i).sum + o) :
     (PartS.wIdx sizes P)[a] = (RecResiduals.starts sizes)[P[i]]! + o := by
@@ -331,7 +295,6 @@ theorem take_sum_lt (ns : List ℕ) {i i' e : ℕ} (hi : i < ns.length) (he : e 
   have := take_sum_le ns (show i + 1 ≤ i' from h)
   omega
 
-/-- **One position of blocks `ns` laid end to end** is one block's and one offset in it. -/
 theorem take_sum_inj (ns : List ℕ) {i i' e e' : ℕ} (hi : i < ns.length) (hi' : i' < ns.length) (he : e < ns[i])
     (he' : e' < ns[i']) (h : (ns.take i).sum + e = (ns.take i').sum + e') : i = i' ∧ e = e' := by
   rcases Nat.lt_trichotomy i i' with hlt | rfl | hgt
@@ -341,7 +304,6 @@ theorem take_sum_inj (ns : List ℕ) {i i' e e' : ℕ} (hi : i < ns.length) (hi'
   · have := take_sum_lt ns hi' he' hgt
     omega
 
-/-- **One slot of w is one port's element**: past each port's start (`starts`), within it. -/
 theorem starts_inj (sizes : Array ℕ) {x y o o' : ℕ} (ho : o < sizes[x]!) (ho' : o' < sizes[y]!)
     (h : (RecResiduals.starts sizes)[x]! + o = (RecResiduals.starts sizes)[y]! + o') : x = y ∧ o = o' := by
   have hx : x < sizes.size := by
@@ -357,8 +319,6 @@ theorem starts_inj (sizes : Array ℕ) {x y o o' : ℕ} (ho : o < sizes[x]!) (ho
   rw [getElem!_pos sizes y hy, ← Array.getElem_toList] at ho'
   exact take_sum_inj sizes.toList (by simpa using hx) (by simpa using hy) ho ho' h
 
-/-- **A part's row column of bit `e` of its row-port element `a`, keyed to bit `b` of port `q`**: element `a` is
-element `o` of the whole S's row port `x` (`wIdx_get`), `b` is bit `e` of it, and `q` is named as `x` (`srcKey_row`). -/
 theorem rowBit_of {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : ℕ) {sizes P : Array ℕ}
     {names : Array String} (hns : S.ports.map (·.2) = P.toList.map (sizes[·]!))
     (hnm : S.ports.map (·.1) = P.toList.map (names[·]!)) {a e : ℕ} (ha : a < (PartS.wIdx sizes P).size) (he : e < 128)
@@ -408,9 +368,6 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-- **Part `p`'s circuit keys V*'s part `pt.S`'s ports** (`srcKey_laid`): its unit is the verifier's `unitLaid`
-(`check_part`, at `HUnitName`), and its leaves and row ports are the ones V* wrote (`hparsed`, `checkParsed_ok`), whose
-input rows are `pt.S`'s (`innerUnit_ok`). -/
 theorem repKeys_part (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) : OfVStar.RepKeys (F.Vs j).c pt.S := by
   have hname := F.hUnitName_of hne
@@ -434,9 +391,6 @@ theorem repKeys_part (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin
       show (pt.S.ports.map (·.1) ++ ["v"]).length = (OfVStar.repPorts pt.S).length
       rw [OfVStar.repPorts_length, List.length_append, List.length_map, List.length_singleton]) hq
 
-/-- **V*'s part is the verifier's part**: part `p`'s statement's row ports' elements and v elements are those of the
-verifier's part `p` at its shape, and its row ports are named the whole S's at the part's ports (`hpart`,
-`checkPart_ok`, at the unit name and plain META `check_part` reads). -/
 theorem part_counts (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hpart : RecResiduals.part F.sh p = .ok (S, ns, nv)) :
@@ -458,9 +412,6 @@ theorem part_counts (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin 
   rw [e F.sh (OfVStar.shape?_holo F.hsh)] at h
   exact h
 
-/-- **The verifier's part `p`'s row ports and v are V*'s part's**, and V*'s part's row ports are named the whole S's
-at `p`'s ports (`part_counts` at the part `check_part` gives, which is `nsOf` and `nvOf`'s, `part_eq`, and whose ports
-are `partsOf`'s, `partPorts_eq`). -/
 theorem part_link (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
     nsOf F.sh p = pt.S.ports.map (·.2) ∧ nvOf F.sh p = pt.S.gf.nv ∧
@@ -479,8 +430,6 @@ theorem part_link (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.
   exact ⟨by rw [nsOf, hgp, ← hns, h1], by rw [nvOf, hgp, ← hnv, h2],
     by rw [hgp]; exact h3 _ (OfVStar.partPorts_eq hS hg hp)⟩
 
-/-- **The `v` columns' keys at part `p`'s statement**: `srcKey_v` at V*'s part (`repKeys_part`), which is the verifier's
-(`part_link`). -/
 theorem partVCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
     ∃ qv : Fin (F.Vs j).c.ports.size, (F.Vs j).c.ports[qv].name = "v" ∧
@@ -492,8 +441,6 @@ theorem partVCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.
   rw [hns, hnv, OfVStar.vBase_snd (OfVStar.partRep_snd _ _)]
   exact OfVStar.srcKey_v (F.repKeys_part hne hj) _
 
-/-- **`PartRowCols` at part `p`'s statement**: `srcKey_row` at V*'s part (`repKeys_part`), which is the verifier's
-(`part_link`). -/
 theorem partRowCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
     ∀ q < 128 * (nsOf F.sh p).sum,
@@ -508,12 +455,9 @@ theorem partRowCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin 
   rw [rowColOf, hns, OfVStar.rowCol_snd _ pt.S.ports (OfVStar.partRep_snd _ _)]
   exact hk
 
-/-- **`PartRowCols` holds** at every family with a history. -/
 theorem partRowCols_holds (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartRowCols :=
   fun _ _ _ _ hj => F.partRowCols hne hj
 
-/-- **A row column of part `p`'s statement is keyed by its element's bit of its port in w**: `rowBit_of` at V*'s part
-(`repKeys_part`), which is the verifier's, named the whole S's at `p`'s ports (`part_link`). -/
 theorem rowBit (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
     {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {a e : ℕ} (ha : a < (wIOf F.sh p).size) (he : e < 128)
     {q : Fin (F.Vs j).c.ports.size} {b : ℕ}
@@ -526,8 +470,6 @@ theorem rowBit (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stm
   rw [rowColOf, hns, OfVStar.rowCol_snd _ pt.S.ports (OfVStar.partRep_snd _ _)] at hk
   exact OfVStar.rowBit_of (F.repKeys_part hne hj) _ hns.symm hnm ha he hk
 
-/-- **`PartRowBits` holds** at every family with a history: two parts' keys of one element's bit are that element's
-bit of its port in w (`rowBit`), one port and one element of it (`starts_inj`). -/
 theorem partRowBits_holds (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartRowBits := by
   intro p p' j j' nm pt nm' pt' hj hj' a a' e ha ha' hw he q b q' b' hk hk' _ _
   obtain ⟨x, o, ho, hx, hb, hn⟩ := F.rowBit hne hj ha he hk

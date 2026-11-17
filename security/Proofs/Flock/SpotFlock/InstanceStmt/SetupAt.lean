@@ -4,14 +4,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Inputs
 public import Proofs.Flock.SpotFlock.InstanceStmt.Setup
 public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 
-/-! # The two-instance statement's setup at the fixed nets
-
-`setup_rX` is the reading's setup (`Read.setup`) at any layouts of the fixed nets, any circuit SHA-512 and any class,
-under `setupTables_X`'s premises, as `FlockDeploy.Concrete.setup_rC` is the concrete statement's. `setup_x` is it at the
-statement's own: where the verifier's two fixed nets build (`FixedNetsBuild`), every premise holds, the nets' from their
-build (`FlockDeploy.fixedNets_parse`, `sha_lines`, `hm_lines`), the class from `classOf_eq`, and the texts and the hello
-from their values holding only integers (`Texts`). Its one table is `tabAt r`.
--/
+/-! The two-instance statement's setup where the verifier's two fixed nets build (`setup_x`). -/
 
 @[expose] public section
 open Flock RecDeploy.VStarNets
@@ -45,23 +38,18 @@ theorem setup_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : 
   exact setupTables_X r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd
     hd2 hid hhello
 
-/-! ## At the fixed nets -/
-
 abbrev AF : Sparse := sparseOf (HmNets.shaLaid ()).ra
 abbrev BF : Sparse := sparseOf (HmNets.shaLaid ()).rb
 abbrev AF' : Sparse := sparseOf (HmNets.hmLaid ()).ra
 abbrev BF' : Sparse := sparseOf (HmNets.hmLaid ()).rb
 
-/-- The statement's circuit at the fixed nets. -/
 noncomputable abbrev cF : Circuit :=
   cO (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
 
-/-- The statement's session and its one table at the fixed nets, each text and the hello named. -/
 noncomputable abbrev tabAt (r : Run) : SessionSpec × Array Stmt :=
   tabX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X (s3X (hexOf classHash))
     (s4X r (hexOf circuitHash) (hexOf classHash)) (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX
 
-/-- **The statement's setup**, where the verifier's two fixed nets build. -/
 theorem setup_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : Read.setup (ins r).read = .ok (tabAt r) := by
   have hp := FlockDeploy.fixedNets_parse hn
   have hCe : classHash.isEmpty = false := classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())

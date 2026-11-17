@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.AddressFacts.BitsIn
 
-/-!
-# Each source bit inside its own port
-
-`bitsOwn_of_two`: `BitsOwn`'s source half where the second stage's design evaluates (`two`), and its written half
-from `WrittenOwn`.
-
-A source bit's commitment position is Bits' (`Spot.Bits.rowBit`): bit `8 · byte + bit` of the row port `p` its key is
-a message bit of (`srcPos`). Bits keys an input a message bit only below its port's `bits` (`msgAt`), so `p` is one of
-the circuit's ports and the bit is inside its `bits` (`rowBit_bits`). The design evaluates only where every template's
-reference statement's ports are rows the hidden-output proof covers (`templateOk`'s `ProvedScope.v2Row`), each of
-`16 · words` bits, and that statement's circuit is the member's (`memberCircuit`).
--/
+/-! `BitsOwn` where the second stage's design evaluates (`bitsOwn_of_two`). -/
 
 @[expose] public section
 
@@ -21,9 +10,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-! ## Bits' message bits -/
-
-/-- A leaf word's message bit is inside its port's `bits`. -/
 theorem msgAt_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {x t : ℕ} {wide : Bool} {p byte bit : ℕ}
     (hm : Spot.Bits.msgAt c ix x t wide = .msg p byte bit) : 8 * byte + bit < (c.ports.getD p default).bits := by
   unfold Spot.Bits.msgAt at hm
@@ -36,7 +22,6 @@ theorem msgAt_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {x t : ℕ}
     omega
   · cases hm
 
-/-- A unit input's message bit is inside its port's `bits`. -/
 theorem srcAt_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {k p' t p byte bit : ℕ}
     (hs : Spot.Bits.srcAt c ix k p' t = .msg p byte bit) : 8 * byte + bit < (c.ports.getD p default).bits := by
   unfold Spot.Bits.srcAt at hs
@@ -51,7 +36,6 @@ theorem srcAt_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {k p' t p b
       · cases hs
       · cases hs
 
-/-- A stacked input's message-bit key is inside its port's `bits`. -/
 theorem srcKey_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {x p byte bit : ℕ}
     (hs : Spot.Bits.srcKey c ix x = .msg p byte bit) : 8 * byte + bit < (c.ports.getD p default).bits := by
   unfold Spot.Bits.srcKey at hs
@@ -60,7 +44,6 @@ theorem srcKey_bits {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {x p byte 
   · exact srcAt_bits hs
   · cases hs
 
-/-- Bits' commitment position of a source is a message bit's: bit `8 · byte + bit` of the row port `p`. -/
 theorem srcPos_msg {c : _root_.Flock.Circuit} {u : ℕ} {k : Spot.Bits.Src} {r : Spot.Bits.RowPos}
     (hs : Spot.Bits.srcPos c u k = some r) :
     ∃ p byte bit, k = .msg p byte bit ∧ r.row = (c.ports.getD p default).name ∧ r.bit = 8 * byte + bit := by
@@ -71,7 +54,6 @@ theorem srcPos_msg {c : _root_.Flock.Circuit} {u : ℕ} {k : Spot.Bits.Src} {r :
     exact ⟨p, byte, bit, rfl, rfl, rfl⟩
   · cases hs
 
-/-- **A source gate's commitment position is a bit inside a port of its row's name.** -/
 theorem rowBit_bits {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPos}
     (hr : Spot.Bits.rowBit c n g = some r) :
     ∃ p, p < c.ports.size ∧ c.ports[p]!.name = r.row ∧ r.bit < c.ports[p]!.bits := by
@@ -92,11 +74,8 @@ theorem rowBit_bits {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPos
     rw [hg] at hb hrow
     exact ⟨p, hp, hrow.symm, by rw [hbit]; exact hb⟩
 
-/-! ## At the held code -/
-
 variable {h : Held}
 
-/-- A source bit is a member's source gate with Bits' commitment position. -/
 theorem rowBit_of_mem {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) :
     ∃ ht : t < h.ms.length, ∃ g, Spot.Bits.rowBit h.ms[t].1 h.ms[t].2.size g = some r := by
   unfold sourceBits at hs
@@ -120,7 +99,6 @@ theorem rowBit_of_mem {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sou
     subst h2 h3
     exact ⟨hm', g, hr'⟩
 
-/-- Where the design evaluates, each port of a template's member circuit is a row of `16 · words` bits. -/
 theorem bits_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t p : ℕ} (ht : t < h.ms.length)
     (hp : p < (memberCircuit h t).ports.size) :
     (memberCircuit h t).ports[p]!.bits = 16 * (memberCircuit h t).ports[p]!.words := by
@@ -139,14 +117,11 @@ theorem bits_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d
     exact hv.1.1.2
 
 variable (h) in
-/-- **Each written bit's row is a port of its member's circuit and its bit inside that port's `16 w` bits**:
-`BitsOwn`'s written half. -/
 def WrittenOwn : Prop :=
   ∀ y ∈ writtenBits h.ms, ∃ q, q < (memberCircuit h y.2.1).ports.size ∧
     (memberCircuit h y.2.1).ports[q]!.name = y.2.2.row ∧
     y.2.2.bit < 16 * (memberCircuit h y.2.1).ports[q]!.words
 
-/-- **`BitsOwn` where the design evaluates**, its written half from `WrittenOwn`. -/
 theorem bitsOwn_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hW : WrittenOwn h) :
     BitsOwn h := by
   refine ⟨?_, hW⟩
@@ -164,8 +139,6 @@ theorem bitsOwn_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     rw [← h16, hm]
     exact hb
 
-/-- **`BitsInPorts` where the design evaluates**, each member naming its ports once (`PortsOnce`) and each written
-bit inside its own port (`WrittenOwn`). -/
 theorem bitsInPorts_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h)
     (hW : WrittenOwn h) : BitsInPorts h :=
   bitsInPorts_of hO (bitsOwn_of_two hd hW)

@@ -14,18 +14,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# V*'s algebra over symbolic values, evaluated
-
-`run_sim`: `run` over the symbolic values (`Lin`), evaluated at the message elements' values, is `run` over F on the
-evaluated messages, with the same coins flipped: the residuals are the symbolic residuals evaluated, and the coin-derived
-points are the same.
-
-* `Lin.eval` reads a symbolic value at the elements' values; it is a `Hom`: it commutes with every operation `run`
-  uses (zero, `^`, `sm`, `mv` where it succeeds, constants).
-* `Sim f x y`: whenever the coin computation `x` succeeds, `y` succeeds with `f` of its result, the same coins flipped;
-  `SimL` is the same through Ligerito's state. Each function `run` calls has its lemma, in the order `run` calls them.
--/
+/-! `run` over symbolic values, evaluated, is `run` over F on the evaluated messages, with the same coins flipped
+(`run_sim`). -/
 
 @[expose] public section
 
@@ -33,9 +23,6 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine FlockLevel3
 
-/-! ## Evaluating symbolic values -/
-
-/-- A dict's value: `Σ x · g k` over its entries. -/
 def tEval {κ : Type} (g : κ → F128) : Terms κ → F128
   | [] => 0
   | (k, x) :: r => x * g k + tEval g r
@@ -73,7 +60,6 @@ theorem tEval_scale {κ : Type} (g : κ → F128) (s : F128) :
     simp only [List.map_cons, tEval, tEval_scale g s r]
     (apply fOf_injective; simp only [fOf_add, fOf_mul]; ring)
 
-/-- A symbolic value at the elements' values `val`: `Σ t[k]·val k + c + Σ q[(a, b)]·val a·val b`. -/
 def Lin.eval (val : Key → F128) (a : Lin) : F128 :=
   tEval val a.t + a.c.getD 0 + tEval (fun ab => val ab.1 * val ab.2) a.q
 
@@ -112,9 +98,6 @@ theorem Lin.eval_var (val : Key → F128) (k : Key) : (Lin.var k).eval val = val
   simp only [Lin.eval, Lin.var, tEval, Option.getD]
   (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_zero, fOf_one]; ring)
 
-/-! ## Maps that commute with the operations -/
-
-/-- `h` commutes with `run`'s operations: zero, `^`, `sm`, `mv` where it succeeds, and constants. -/
 structure Hom {α β : Type} [Val α] [Val β] (h : α → β) : Prop where
   zero : h Val.zero = Val.zero
   add : ∀ a b, h (Val.add a b) = Val.add (h a) (h b)
@@ -122,7 +105,6 @@ structure Hom {α β : Type} [Val α] [Val β] (h : α → β) : Prop where
   mv : ∀ a b z, Val.mv a b = .ok z → Val.mv (h a) (h b) = .ok (h z)
   cst : ∀ c, h (Val.cst c) = Val.cst c
 
-/-- Evaluation is a `Hom` from the symbolic values to F. -/
 theorem Lin.eval_hom (val : Key → F128) : Hom (Lin.eval val) where
   zero := Lin.eval_zero val
   add := Lin.eval_xor val
@@ -136,10 +118,8 @@ section Hom
 
 variable {α β : Type} [Val α] [Val β] {h : α → β}
 
-/-- A K value's image, coordinate-wise. -/
 def KV.map (h : α → β) (x : KV α) : KV β := (h x.1, h x.2)
 
-/-- A round polynomial's image, coefficient-wise. -/
 def KV3.map (h : α → β) (q : KV α × KV α × KV α) : KV β × KV β × KV β :=
   (KV.map h q.1, KV.map h q.2.1, KV.map h q.2.2)
 
@@ -214,9 +194,6 @@ theorem getD_map (hh : Hom h) (xs : Array α) (i : Nat) : (xs.map h).getD i Val.
 
 end Hom
 
-/-! ## Computations and their images -/
-
-/-- `y` is `x`'s image under `f`: when `x` succeeds, `y` succeeds with `f` of its result, the same coins flipped. -/
 def Sim {A B : Type} (f : A → B) (x : CM A) (y : CM B) : Prop :=
   ∀ k src a k', x k src = .ok (a, k') → y k src = .ok (f a, k')
 
@@ -273,13 +250,10 @@ theorem liftE' {f : A → B} {e₁ : Except String A} {e₂ : Except String B}
 
 end Sim
 
-/-! ## The maps on messages, points and Ligerito's state -/
-
 section Maps
 
 variable {α β : Type} [Val α] [Val β]
 
-/-- The messages' image under `h`. -/
 def Messages.map (h : α → β) (M : Messages α) : Messages β where
   ab := M.ab.map h
   c := M.c.map h
@@ -311,9 +285,6 @@ def LSt.map (h : α → β) (st : LSt α) : LSt β := ⟨KV.map h st.s, KV3.map 
 
 end Maps
 
-/-! ## Ligerito's state: computations and their images -/
-
-/-- `y` is `x`'s image: from the image of a state, `y` succeeds with `f` of `x`'s result and `fs` of its state. -/
 def SimL {α β A B : Type} (fs : LSt α → LSt β) (f : A → B) (x : LM α A) (y : LM β B) : Prop :=
   ∀ st, Sim (fun p => (f p.1, fs p.2)) (x st) (y (fs st))
 
@@ -366,8 +337,6 @@ theorem modify' {m : LSt α → LSt α} {m' : LSt β → LSt β} (hm : ∀ st, f
   exact Sim.pure' (by rw [hm])
 
 end SimL
-
-/-! ## `run` and its image -/
 
 section Run
 

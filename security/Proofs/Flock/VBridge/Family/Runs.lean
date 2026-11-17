@@ -20,22 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.VBridge.Runs.Rep
 
-/-!
-# `TableFiles.Runs` from both reps' algebra
-
-`runs_of_files` proves `TableFiles.Runs G` for table files `G` whose fields are what the family's other objects make
-them, from `AlgebraHolds` and `AccHolds` at each rep's values `d r` (the family's `F.rep`): each rep's run is
-`Runs.run_of_frames`. Its round-by-round frame hypotheses come from one statement about the rep's stream, `FramedAt`:
-its rounds hold the chunks of the rep's frames (`repFrames`, as `rep_rounds` reads them off an accepting `verifyRep`),
-each round retaining its chunk's bytes and issuing the coins its chunk's closing squeeze asks for.
-
-* `FramedAt.block`, `FramedAt.flat`: a chunk, and a loop's chunks, from the front of the frames.
-* `framed_frames`: the zerocheck's, the lincheck's, ring switching's and Ligerito's rounds from `FramedAt`.
-* `run_of_files`: one rep's run; `runs_of_files`: `TableFiles.Runs` at table files `RunsFrom` describes;
-  `hRuns_of`: `HRuns` at a family whose table files it describes.
-* `valid_fast`, `valid_extras_wf`, `valid_roundsWF`, `valid_decode`: the fields of `RunsFrom` that `TableFiles.Valid`
-  already gives.
--/
+/-! `TableFiles.Runs` from both reps' algebra (`runs_of_files`). -/
 
 @[expose] public section
 
@@ -47,14 +32,11 @@ open FlockSoundness.Discharge.DecodeZL (chunks_single chunks_append_of_closed)
 open FlockSoundness.Discharge.Recursion (HClass)
 open FlockVBridge.Runs (run_of_frames)
 
-/-- The coins a chunk's closing squeeze asks for. -/
 def sqCount (c : List Frame) : ℕ :=
   match c.getLast? with
   | some (.sq _ n) => n
   | _ => 0
 
-/-- **The rounds from `o` hold the frames `fs`**: round `o + k` retained the bytes of chunk `k` of `fs` and issued the
-coins the chunk's closing squeeze asks for, which `squeeze` checks (Transcript.lean:75-86). -/
 def FramedAt (rs : Array Round) (o : ℕ) (fs : List Frame) : Prop :=
   ∀ k < (chunks fs).1.length, Retains rs[o + k]! (encs ((chunks fs).1.getD k [])) ∧
     (rs[o + k]!).n = sqCount ((chunks fs).1.getD k [])
@@ -84,7 +66,6 @@ theorem split {F₁ F₂ : List Frame} {C : List (List Frame)} (h₁ : chunks F�
     rwa [List.getElem?_append_right (by omega), Nat.add_sub_cancel_left, ← Nat.add_assoc,
       ← List.getD_eq_getElem?_getD] at this
 
-/-- A chunk at the front of the frames is round `o`'s. -/
 theorem block {F₁ F₂ : List Frame} (h₁ : chunks F₁ = ([F₁], [])) (h : FramedAt rs o (F₁ ++ F₂)) :
     (Retains rs[o]! (encs F₁) ∧ (rs[o]!).n = sqCount F₁) ∧ FramedAt rs (o + 1) F₂ := by
   obtain ⟨h₁', h₂⟩ := split h₁ h
@@ -92,7 +73,6 @@ theorem block {F₁ F₂ : List Frame} (h₁ : chunks F₁ = ([F₁], [])) (h : 
   have := h₁' 0 (by rw [h₁]; simp)
   simpa [h₁] using this
 
-/-- A loop's chunks at the front of the frames, one per iteration, are rounds `o` to `o + n - 1`. -/
 theorem flat {F : ℕ → List Frame} (hF : ∀ i, chunks (F i) = ([F i], [])) {a n : ℕ} {F₂ : List Frame}
     (h : FramedAt rs o ((List.range' a n).flatMap F ++ F₂)) :
     (∀ i < n, Retains rs[o + i]! (encs (F (a + i))) ∧ (rs[o + i]!).n = sqCount (F (a + i))) ∧
@@ -105,9 +85,6 @@ theorem flat {F : ℕ → List Frame} (hF : ∀ i, chunks (F i) = ([F i], [])) {
 
 end FramedAt
 
-/-- A rep's frames (`repFrames`, `n + 1` claims), cut into its chunks: the zerocheck's three rounds and its loop, the
-lincheck's first two rounds (the first after the zerocheck's final values), its loop and its last round, ring
-switching's first claim (after the batching label), its other claims and `γ`'s round, then Ligerito's frames. -/
 theorem repFrames_eq (st : Setup) (sch : Flock.Schedule) (D : ByteArray) (n : ℕ) (p : Proof) (T : F128) :
     repFrames st sch D (n + 1) p T =
       ([.dom D, .label "flock-r1cs-v0".toUTF8, .bytes st.digest, .bytes (p.cap.foldl (· ++ ·) ByteArray.empty),
@@ -129,7 +106,6 @@ theorem repFrames_eq (st : Setup) (sch : Flock.Schedule) (D : ByteArray) (n : �
       ligFrames sch T p.cap p.ligerito)))))))))) := by
   simp [repFrames, zcFrames, lcFrames, rsFrames, List.range'_succ]
 
-/-- A round that retained `L` answers every byte string whose bytes are `L`. -/
 theorem answersL_of_retains {r : Round} {L : List UInt8} (h : Retains r L) : AnswersL r L := by
   intro c hc
   unfold Retains at h
@@ -148,7 +124,6 @@ theorem oneCoin_of {r : Round} {L : List UInt8} (h : Retains r L) (hn : r.n = 1)
 theorem sq_enc (k : UInt8) (n : ℕ) : (Transcript.header 4 k n).data.toList = (Frame.sq k n).enc := by
   simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
 
-/-- The bytes ring switching's first claim answers (Opening.lean:68-79): the batching label, then the claim's. -/
 theorem rsFramed_zero (s : Array F128) : (rsFramed (rsPending ByteArray.empty 0) s).data.toList =
     encs [.label "flock-pcs-open-batch-v0".toUTF8, .label "flock-ring-switch-v0".toUTF8, .vec s.toList, .sq 2 7] := by
   simp only [rsFramed, rsPending]
@@ -157,7 +132,6 @@ theorem rsFramed_zero (s : Array F128) : (rsFramed (rsPending ByteArray.empty 0)
   rw [label_enc, label_enc, sq_enc]
   simp [encs]
 
-/-- The bytes ring switching's later claims answer (Opening.lean:74-79). -/
 theorem rsFramed_succ (s : Array F128) (k : ℕ) : (rsFramed (rsPending ByteArray.empty (k + 1)) s).data.toList =
     encs [.label "flock-ring-switch-v0".toUTF8, .vec s.toList, .sq 2 7] := by
   simp only [rsFramed, rsPending]
@@ -166,7 +140,6 @@ theorem rsFramed_succ (s : Array F128) (k : ℕ) : (rsFramed (rsPending ByteArra
   rw [label_enc, sq_enc]
   simp [encs]
 
-/-- `Flock.fast100` has schedules for `m ≥ 22` only (Schedule.lean:47-48). -/
 theorem le_of_fast100 {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some s) : 22 ≤ m := by
   by_contra hc
   have : Flock.fast100 m = none := by
@@ -175,9 +148,6 @@ theorem le_of_fast100 {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some
   rw [this] at h
   cases h
 
-/-- **A rep's rounds, from its stream holding its frames**: when the rounds of `t` (at round 0, the domain pending)
-hold the chunks of `repFrames` at `n` claims, they carry the zerocheck's, the lincheck's, ring switching's and
-Ligerito's rounds as `Runs.run_of_frames` asks for them. -/
 theorem framed_frames (st : Setup) (sch : Flock.Schedule) (D : ByteArray) (n : ℕ) (hn : n ≠ 0) (p : Proof) (T : F128)
     (t : Transcript) (ht : t.k = 0) (hp : t.pending.data.toList = (Frame.dom D).enc) (hm14 : 14 ≤ st.m)
     (h : FramedAt t.rounds 0 (repFrames st sch D n p T)) :
@@ -274,24 +244,15 @@ theorem framed_frames (st : Setup) (sch : Flock.Schedule) (D : ByteArray) (n : �
     rwa [show 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1 + 1 + n + 1 + i =
       3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1 + (n + 1) + 1 + i by omega] at this
 
-/-! ## The runs -/
-
 variable {cls : HClass}
 
-/-- **Rep `r`'s run of the table files** (`TableFiles.Runs`' body at `r`): `Runs.run_of_frames` at the table's setup,
-schedule, extra claims, rep `r`'s proof file and its stream's replay transcript, its frame hypotheses from the stream
-holding the rep's frames (`framed_frames`). -/
 theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d)
     (hacc : AccHolds sh d)
-    -- the table's setup and schedule
     (hm : G.st.m = sh.m) (hkL : G.st.fold.kLog = sh.kLog) (hkS : G.st.kLog = sh.kLog) (hkm : G.st.kLog ≤ G.st.m)
     (hsch : sh.sched = G.sch) (hf : Flock.fast100 G.st.m = some G.sch)
-    -- the table's extra claims
     (hxs : d.extras = G.extras)
     (hext : ∀ j < G.extras.size, G.extras[j]!.skip.size = 64 ∧ G.extras[j]!.x.size = G.st.m - 6)
-    -- the stream's coins
     (hd : d.rounds = (G.stream r).rounds.map (·.coins)) (hne : NoEmpty d.rounds) (hwf : RoundsWF (G.stream r).rounds)
-    -- the proof file: its decode, the messages w holds, the comb port and the levels' openings
     (hdec : decodeProof (shapeOf G.st G.sch G.extras.size) (G.bytes r) = .ok (G.proof r))
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) (G.proof r).zerocheck)
@@ -308,7 +269,6 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
     (hopen : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ∀ cs ∈ info.lg.conss.toList, Opened G.st.merkle G.sch (G.proof r).cap (G.proof r).ligerito
         (decoded sh d.w d.comb d.cons) cs)
-    -- the stream's rounds: the rep's frames at w's batched value
     (hfr : FramedAt (G.stream r).rounds 0 (repFrames G.st G.sch (G.spec.domain G.spec.tables[G.i]! r).toUTF8
       (2 + G.extras.size) (G.proof r) (valOf sh d.w d.comb d.cons .T))) :
     ∃ t₄ : Flock.Transcript, repProg G.st G.sch (G.proof r) G.extras
@@ -322,11 +282,6 @@ theorem run_of_files (G : TableFiles cls) (r : ℕ) (sh : Shape) (d : RepData) (
     hxs hext hsch hf hdec hzp hlp hpl hrsw hmessages hoodValues hyr hinitialCap hfoldPts hopen hn₀ hn₁ hn₂ hnr ha₀ ha₁
     ha₂ har hlc hrn hra hgn hga hlg
 
-/-- **What `TableFiles.Runs` asks of the table files**, at the verifier's shape `sh` and each rep's values `d r` (the
-family's `F.rep`): the setup's dimensions are the shape's and its schedule `fast100`'s; the extra claims are each rep's
-and of the shapes the verifier's claims have; and for each rep, the stream's coins are the rep's, its rounds well
-formed, its proof file decodes to messages w holds with Merkle openings that open, and its rounds hold the rep's frames
-(`FramedAt`, at w's batched value `T`). -/
 structure RunsFrom (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) : Prop where
   m : G.st.m = sh.m
   foldKLog : G.st.fold.kLog = sh.kLog
@@ -360,8 +315,6 @@ structure RunsFrom (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) : P
     (G.spec.domain G.spec.tables[G.i]! r).toUTF8 (2 + G.extras.size) (G.proof r)
       (valOf sh (d r).w (d r).comb (d r).cons .T))
 
-/-- **`TableFiles.Runs` from both reps' algebra**: at table files that `RunsFrom` describes, when both reps meet E's
-preconditions, each rep's program runs (`run_of_files`). -/
 theorem runs_of_files (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) (h : RunsFrom G sh d)
     (hpl : sh.holo = false) (halg : ∀ r, AlgebraHolds sh (d r) ∧ AccHolds sh (d r)) : G.Runs := by
   intro r hr
@@ -371,8 +324,6 @@ theorem runs_of_files (G : TableFiles cls) (sh : Shape) (d : Fin 2 → RepData) 
     hpl (h.ringSwitches r') (h.messages r') (h.oodValues r') (h.yr r') (h.initialCap r') (h.foldPts r') (h.opened r')
     (h.framed r')
 
-/-! ## The fields `TableFiles.Valid` gives -/
-
 section valid
 
 open FlockSoundness.Model FlockSoundness.Discharge.Recursion
@@ -380,10 +331,8 @@ open FlockSoundness.Model FlockSoundness.Discharge.Recursion
 variable {G : TableFiles cls} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {M : Hidden cls} {nT nR : ℕ}
   {T : Fin nT → Type} {CT : Fin nR → Type} {t : List (List (SMsg T) × ((k : Fin nR) → CT k))}
 
-/-- `RunsFrom.fast` from `Valid`. -/
 theorem valid_fast (hv : G.Valid regs M T CT t) : Flock.fast100 G.st.m = some G.sch := hv.2.2.2.2.1
 
-/-- `RunsFrom.extras_wf` from `Valid`: the extra claims realize the model's (`ClaimRel`). -/
 theorem valid_extras_wf (hv : G.Valid regs M T CT t) :
     ∀ j < G.extras.size, G.extras[j]!.skip.size = 64 ∧ G.extras[j]!.x.size = G.st.m - 6 := by
   obtain ⟨hmS, -, -, -, -, hext, -, hex, -⟩ := hv
@@ -392,20 +341,16 @@ theorem valid_extras_wf (hv : G.Valid regs M T CT t) :
   have c := hrel j (by rw [← hsz]; exact hj)
   exact ⟨c.skip_size, by rw [hmS]; exact c.x_size⟩
 
-/-- `RunsFrom.roundsWF` from `Valid`: rep `r`'s stream is one of the record's. -/
 theorem valid_roundsWF (hv : G.Valid regs M T CT t) (r : ℕ) (hr : r < 2) : RoundsWF (G.stream r).rounds := by
   obtain ⟨-, -, -, -, -, -, hwf, -, hrep, -⟩ := hv
   exact hwf _ (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some (hrep r hr).1))
 
-/-- `RunsFrom.decode` from `Valid`. -/
 theorem valid_decode (hv : G.Valid regs M T CT t) (r : ℕ) (hr : r < 2) :
     decodeProof (shapeOf G.st G.sch G.extras.size) (G.bytes r) = .ok (G.proof r) := by
   obtain ⟨-, -, -, -, -, -, -, -, hrep, -⟩ := hv
   exact (hrep r hr).2.1
 
 end valid
-
-/-! ## `HRuns` -/
 
 section family
 
@@ -418,8 +363,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
-/-- **`HRuns` at any family whose table files `RunsFrom` describes** at its shape and reps, at every accepted outer
-proof whose reps meet E's preconditions. -/
 theorem hRuns_of (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (h : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
       (∀ r, AlgebraHolds F.sh (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r) ∧

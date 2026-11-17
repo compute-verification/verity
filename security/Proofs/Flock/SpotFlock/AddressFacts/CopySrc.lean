@@ -8,27 +8,14 @@ public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.BitsKeyProg
 public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
-/-!
-# The copy at a source bit
-
-`copiesRef_src`: `CopiesAt`'s source half where the second stage's design evaluates and each member names its ports
-once. At a source bit of member `t`'s unit `k`, the column `pickAny` chooses copies the bit's port bit (`CopiesRef`'s
-input case).
-
-A source bit is Bits' commitment position of a source gate `g = 2 + k·B + b` whose input `b` is its own key
-(`rowBit`), the gate's index its position (`posOf_of_lt_inputs`). Unit `k`'s input column `b` is on that gate
-(`exists_wire_src`), so `pickAny` chooses a column on it (`pickAny_of_wire`), with no condition that the unit reads it.
-Bits' position there is the bridge's row bit (`rowBit_keyRowOf`), whose port and bit the column's key is
-(`Layout.keyRowOf_wire`), and with each port named once that port is the address map's (`portNamed_eq`).
--/
+/-! `CopiesAt`'s source half where the second stage's design evaluates and each member names its ports once
+(`copiesRef_src`). -/
 
 @[expose] public section
 
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge
-
-/-! ## Bits' source positions -/
 
 theorem srcPos_leaf {c : _root_.Flock.Circuit} {u : ℕ} {k : Spot.Bits.Src} {r : Spot.Bits.RowPos}
     (hs : Spot.Bits.srcPos c u k = some r) : r.leaf = u := by
@@ -70,8 +57,6 @@ theorem srcKey_bit8 {c : _root_.Flock.Circuit} {ix : Spot.Bits.Index} {x p byte 
   · exact srcAt_bit8 hs
   · cases hs
 
-/-- **What a source gate's commitment position says of the gate**: it is `2 + u·B + b` for a unit `u` below `n`, its
-input `b` is its own key, a message bit, and the position's leaf is `u`. -/
 theorem rowBit_facts {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPos}
     (hr : Spot.Bits.rowBit c n g = some r) :
     2 ≤ g ∧ 0 < ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn ∧
@@ -93,7 +78,6 @@ theorem rowBit_facts {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPo
     refine ⟨by omega, by omega, by omega, ?_, srcPos_leaf hr, p, byte, bit, hk⟩
     exact hc.2
 
-/-- A source bit is a member's source gate with Bits' commitment position, at the gate's position. -/
 theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) :
     ∃ ht : t < h.ms.length, ∃ g, Spot.Bits.rowBit h.ms[t].1 h.ms[t].2.size g = some r ∧
       x = Spot.Bits.base h.ms t + g := by
@@ -119,10 +103,6 @@ theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t
     subst h2 h3
     exact ⟨hm', g, hr', h1.symm⟩
 
-/-! ## Unit columns on source gates -/
-
-/-- **A unit's input column is on its own source gate**: input `b`, its own key, of unit `u` reads gate
-`2 + u·B + b`. -/
 theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : ℕ}
     (outs : Finset (Fin (Layout.keyN c hU n))) (u : Fin n) {b : ℕ} (hb : b < Layout.keyB c hU)
     (hself : Aliased.keyIdx c (Layout.keyB c hU) ⟨b, hb⟩ = some ⟨b, hb⟩) :
@@ -146,7 +126,6 @@ theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : FlockSoundness.Built c.
 
 variable {h : Held}
 
-/-- **`pickAny` chooses a column on a wire wherever the unit has one**: `picks_pickAny` from the column alone. -/
 theorem pickAny_of_wire {t : ℕ} (ht : t < h.ms.length) (hU : FlockSoundness.Built h.ms[t].1.unit) {k : ℕ}
     (hk : k < h.ms[t].2.size) (y : Fin (keyC h t ht hU).N)
     (hy : ∃ cc : Fin ((Placed.keyProg h.ms[t].1 hU h.ms[t].2.size).rows ⟨k, hk⟩).w,
@@ -169,10 +148,6 @@ theorem pickAny_of_wire {t : ℕ} (ht : t < h.ms.length) (hU : FlockSoundness.Bu
   unfold pickAny
   rw [dite_eq_left ht, dite_eq_left hU, dite_eq_left hk, dite_eq_left hex, dite_eq_left hc]
 
-/-! ## The copy -/
-
-/-- **`CopiesAt`'s source half**: where the design evaluates and each member names its ports once, at a source bit of
-member `t`'s unit `k` the column `pickAny` chooses has the bit's port bit as its key. -/
 theorem copiesRef_src {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h)
     {i t k : ℕ} {rp : Spot.Bits.RowPos} (hs : (i, t, rp) ∈ sourceBits h.ms) (hleaf : rp.leaf = k) :
     ∃ m, h.ms[t]? = some m ∧ CopiesRef m.1 (pickAny h t k i) (portNamed h t rp.row) rp.bit := by

@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.AddressFacts.CopyOut
 public import Proofs.Pouw.MonitoringPeriod.Sort
 
-/-!
-# Each member names its ports once
-
-`portsOnce_of_rows`: `PortsOnce` where the second stage's design evaluates, so the width and the copy at the address
-map rest on the design and the wiring alone (`widthFact_of_design`, `copyFact_of_design`).
-
-A member's circuit is a committed circuit unrolled (`member_commit`), whose parse ends in `HmOut.checkRows`, flat or
-templated. `checkRows` sorts the input rows' names with the output ports' names and refuses two equal neighbours, so
-those names are distinct (`nodup_of_sort`, on `Array.qsort`'s sort and permutation of strings). Its rows are the input
-rows, then one row per run of output ports named after the run's first port; with each run one port (`OutRowsS`,
-from `scopeOkH`), the rows' names are those names in order (`ports_names`). Unrolling keeps the rows.
--/
+/-! Each member names its ports once where the second stage's design evaluates (`portsOnce_of_rows`). -/
 
 @[expose] public section
 
@@ -22,9 +11,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge
 
-/-! ## Distinct names from a sort -/
-
-/-- A list sorted by a reflexive, antisymmetric relation whose neighbours differ has no repeats. -/
 theorem nodup_of_sorted {α : Type} {R : α → α → Prop} {l : List α} (hs : l.Pairwise R) (hrefl : ∀ a, R a a)
     (hanti : ∀ a b, R a b → R b a → a = b) (hn : ∀ i (hi : i + 1 < l.length), l[i] ≠ l[i + 1]) : l.Nodup := by
   rw [List.Nodup, List.pairwise_iff_getElem]
@@ -40,8 +26,6 @@ theorem nodup_of_sorted {α : Type} {R : α → α → Prop} {l : List α} (hs :
       exact hrefl _
   exact hn i (by omega) (hanti _ _ h1 h2)
 
-/-- **Strings whose sort has no two equal neighbours are distinct**: `S` the sort of `A`, a permutation of it sorted
-by a reflexive, antisymmetric relation. -/
 theorem nodup_of_sort {R : String → String → Prop} {A S : Array String} (hp : S.toList.Perm A.toList)
     (hs : S.toList.Pairwise R) (hrefl : ∀ a, R a a) (hanti : ∀ a b, R a b → R b a → a = b)
     (h : ∀ x, x < S.size - 1 → ¬S[x]! = S[x + 1]!) : A.toList.Nodup := by
@@ -51,10 +35,6 @@ theorem nodup_of_sort {R : String → String → Prop} {A S : Array String} (hp 
   rw [getElem!_pos S i (by omega), getElem!_pos S (i + 1) hi'] at hne
   simpa only [Array.getElem_toList] using hne
 
-/-! ## What `HmOut.checkRows` checks of the names -/
-
-/-- **What `HmOut.checkRows` checks of the rows' names**: the input rows and the output rows are all the rows, output
-row `j` is named after its run's first output port, and the input rows' names with the output ports' are distinct. -/
 theorem checkRows_names {c : _root_.Flock.Circuit} (h : _root_.Flock.HmOut.checkRows c = .ok ()) :
     _root_.Flock.HmOut.nIn c + c.outRowPorts.size = c.ports.size ∧
       (∀ j, j < c.outRowPorts.size → (c.outPorts[(_root_.Flock.HmOut.outGroup c j).1]?.map (·.1)) =
@@ -75,7 +55,6 @@ theorem checkRows_names {c : _root_.Flock.Circuit} (h : _root_.Flock.HmOut.check
     nodup_of_sort (Properties.Poub.qsort_toList_perm _ _)
       (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_sorted _) String.le_refl (fun _ _ => String.le_antisymm) hnm⟩
 
-/-- **The rows' names are the input rows' then the output ports'**, where each output row holds one output port. -/
 theorem ports_names {c : _root_.Flock.Circuit}
     (hsz : _root_.Flock.HmOut.nIn c + c.outRowPorts.size = c.ports.size)
     (hrep : c.outRowPorts = Array.replicate c.outPorts.size 1)
@@ -100,7 +79,6 @@ theorem ports_names {c : _root_.Flock.Circuit}
     have hq : _root_.Flock.HmOut.nIn c + j < c.ports.size := by omega
     simp [Array.getD, hq]
 
-/-- **A circuit `HmOut.checkRows` passes names each row once**, where each output row holds one output port. -/
 theorem nodup_of_checkRows {c : _root_.Flock.Circuit} (hc : _root_.Flock.HmOut.checkRows c = .ok ())
     (hrep : c.outRowPorts = Array.replicate c.outPorts.size 1) : (c.ports.toList.map (·.name)).Nodup := by
   obtain ⟨hsz, hname, hnd⟩ := checkRows_names hc
@@ -117,11 +95,8 @@ theorem unrolled_rows (c : _root_.Flock.Circuit) :
     · exact ⟨rfl, rfl, rfl⟩
   · exact ⟨rfl, rfl, rfl⟩
 
-/-! ## The members -/
-
 variable {h : Held}
 
-/-- **`PortsOnce` where the design evaluates**, from what each member's parse checks of its rows and its scope. -/
 theorem portsOnce_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : PortsOnce h := by
   intro t ht
   obtain ⟨r, c, hty, hc, hm⟩ := member_commit hd ht
@@ -136,13 +111,10 @@ theorem portsOnce_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s = 
   · obtain ⟨tu, c₀, -, hck, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases hC
     exact nodup_of_checkRows hck hrep
 
-/-- **The width at the address map where the design evaluates and the wiring holds.** -/
 theorem widthFact_of_design {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (W : Wiring h) :
     WidthFact h (addressOf h) :=
   widthFact_of_two hd (portsOnce_of_rows hd) W
 
-/-- **The copy at the address map where the design evaluates, the wiring holds and each counted gate's row is the
-address map's.** -/
 theorem copyFact_of_design {s : AuditStatement} {d : Design.Two} {ω : ℕ → ℕ} {keep : ℕ → Bool}
     (hd : two h s = some d) (W : Wiring h) (hrow : RowFact h ω keep (addressOf h)) : CopyFact h (addressOf h) :=
   copyFact_of_two hd (portsOnce_of_rows hd) W hrow

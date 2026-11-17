@@ -24,28 +24,9 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
-
-The prover writes each session's `pub.bin` (`rec_residuals.write`, `rec_residuals.py:468`); the verifier builds the
-reads file's `rec-c<k>` entries from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:156-168`;
-`rec_residuals.commits_entry`, `rec_residuals.py:402-410`): two leaves, the frame-v3 tree over the `c_k`'s `b ‖ c`.
-At an accepting session `Registered.check` opens each sampled instance's table row against that root, so the row's leaf is
-the `c_k`'s, or the verifier's opening and the honest one collide:
-
-* `commitsRoot`, `commitsSib`: the verifier's entry's root over two `b ‖ c`, and the honest opening's sibling;
-  `opens_commitsRoot`: the honest opening is accepted; `treeLeaf_eq_or_collides`: an accepted opening at the same
-  position has the `c_k`'s leaf, or `openPair` collides (`Flock.Registered.opensLeaf_binding`);
-* `opens_of_acceptsZKR`: at a transcript the session accepts, a sampled proof block's row of a port of `own` opens the port's root
-  at the position `own` gives (`checked_of_acceptsHJ`, without a registrant), at the table the unit is sampled into;
-* `HOwnRoots`, `RowsSampled`, `PortNamesUnique`: what the family's sessions must be for that: the verifier's reads files'
-  roots are `commitsRoot` over the history's `c_k`, an accepted transcript samples every unit that reads a round's
-  commitment and labels it itself, and a circuit's port names are distinct;
-* `pubCommits_or_collides`: at every history and accepting session, each row of `Sk i j` registers `cmtOf (bc cOf)`'s
-  digest of `t`'s stage-`i` commitment (`VCommits` at the row), or `openPair` collides;
-* `HPubRows`, `pubCommits_of_pubRows`: where the verifier compares the public file's `rec-c<k>` rows with the `c_k`
-  itself, `PubCommits` holds exactly, at every history.
--/
+/-! The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
+(`pubCommits_or_collides`), and exactly where the verifier compares the rows with the `c_k` itself
+(`pubCommits_of_pubRows`). -/
 
 @[expose] public section
 
@@ -58,26 +39,18 @@ open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundne
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-! ## The verifier's entry of two `c_k` -/
-
-/-- **The verifier's root over two rows' `b ‖ c`** (`rec_residuals.commits_entry`): the frame-v3 node over the two
-`hm96-sha512/row/v1` leaves of their tree leaves, the root `Registered.climb` reaches over two leaves. -/
 def commitsRoot (dom c0 c1 : ByteArray) : ByteArray :=
   Registered.node dom 0 0 (Registered.rowLeaf dom 0 (Hm96.Default512.treeLeaf c0))
     (Registered.rowLeaf dom 1 (Hm96.Default512.treeLeaf c1))
 
-/-- Row `x`'s `b ‖ c` of two. -/
 def commitAt (c0 c1 : ByteArray) (x : ℕ) : ByteArray := if x = 0 then c0 else c1
 
-/-- The honest opening of row `x` under `commitsRoot`: the other row's leaf. -/
 def commitsSib (dom c0 c1 : ByteArray) (x : ℕ) : ByteArray :=
   if x = 0 then Registered.rowLeaf dom 1 (Hm96.Default512.treeLeaf c1)
   else Registered.rowLeaf dom 0 (Hm96.Default512.treeLeaf c0)
 
 theorem treeLeaf_size (b : ByteArray) : (Hm96.Default512.treeLeaf b).size = 64 := Sha512.hash_size _
 
-/-- **The honest opening is accepted**: row `x < 2`'s `b ‖ c` opens `commitsRoot` at `x` through `commitsSib`, at a
-port of `hm96-sha512/row/v1` rows. -/
 theorem opens_commitsRoot {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.leaves = 2)
     (hs : reg.schema = HmRow.ROW_SCHEMA) (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2) :
     Registered.opens reg (commitAt c0 c1 x) x (commitsSib reg.domain c0 c1 x) = true := by
@@ -98,8 +71,6 @@ theorem opens_commitsRoot {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.
   refine ⟨⟨hx, trivial⟩, ?_⟩
   interval_cases x <;> simp [Registered.climbL, commitAt, commitsSib, commitsRoot]
 
-/-- **An accepted opening of row `x` under `commitsRoot` has row `x`'s leaf**, or it and the honest opening collide
-(`opensLeaf_binding`, `openPair` the extractor). -/
 theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl : reg.leaves = 2)
     (hs : reg.schema = HmRow.ROW_SCHEMA) (hr : reg.root = commitsRoot reg.domain c0 c1) {x : ℕ} (hx : x < 2)
     {bc path : ByteArray}
@@ -112,13 +83,6 @@ theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl 
   · exact Or.inr (Registered.opensLeaf_binding reg x _ path _ _ (treeLeaf_size _) (treeLeaf_size _) he h
       (opens_commitsRoot hl hs hr hx))
 
-/-! ## A session's accepted rows -/
-
-/-- **An accepted transcript opens a sampled proof block's registered row** (`checked_of_acceptsHJ`, at a port of `own` rather
-than a registrant's read): where the transcript's sample `d` samples unit `u` into its table (`partOf`), that table's sampled
-statement (`HmOut.drawn` at `drawJ`) labels it `idx`, and `reg ∈ own` is the circuit's port `q` by name and gives
-position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q` opens `reg`'s root at `x` through the header's
-path. -/
 theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
     (hacc : AcceptsZKR zo.I zo.own tr) {reg : Registered.Port} (hmem : reg ∈ zo.own) {u : Fin nv}
@@ -172,8 +136,6 @@ theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} 
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
   exact ⟨_, by rw [hx, hdig]; exact hopens⟩
 
-/-- **A row's digest is fixed by its leaf**: `vb_cs_inl`'s digest at the public file's `b ‖ c` is `cmtOf`'s at a `b ‖ c`
-of the same tree leaf. -/
 theorem h512_of_treeLeaf {b : ByteArray} {l : List UInt8}
     (h : Hm96.Default512.treeLeaf b = Hm96.Default512.treeLeaf ⟨l.toArray⟩) :
     Refine.H512 (Refine.K512.leafPrefix ++ b.data.toList) = Refine.H512 (Refine.K512.leafPrefix ++ l) := by
@@ -184,8 +146,6 @@ theorem h512_of_treeLeaf {b : ByteArray} {l : List UInt8}
   have hl : l = (⟨l.toArray⟩ : ByteArray).data.toList := by simp
   rw [hl, ← data_append, ← data_append, bytes_of_list, bytes_of_list]
   exact h
-
-/-! ## At the family -/
 
 section family
 
@@ -199,23 +159,15 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-- **The verifier's `rec-c<k>` roots are its own, over the history's `c_k`**: at every history `t`, each port of session
-`j`'s reads file registering `rec-c<k>` has two `hm96-sha512/row/v1` leaves and the root `commitsRoot` over two `b ‖ c`,
-row `x`'s the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k` (rep `x`'s message round `k`, `sel`'s
-row `x`) where `t` has that round. V* builds them from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:164`; `rec_residuals.commits_entry`,
-`rec_residuals.py:402-410`). The check that establishes it: the verifier computes its reads file's `rec-c<k>` entries
-itself from the round commitments it holds, by `commitsRoot` (no file the prover sends carries them). -/
+/-- The check that establishes it: the verifier computes its reads file's `rec-c<k>` entries itself from the round
+commitments it holds, by `commitsRoot`. -/
 def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
   ∀ R ω t R₂ j, ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ k, cIndex reg.value = some k → reg.leaves = 2 ∧
     reg.schema = HmRow.ROW_SCHEMA ∧ ∃ c₀ c₁, reg.root = commitsRoot reg.domain c₀ c₁ ∧ ∀ x < 2, ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
       commitAt c₀ c₁ x = ⟨(cOf e.1).toArray⟩
 
-/-- **An accepted transcript samples the units that read a round's commitment, and labels them itself**: at every
-history, each transcript session `j` accepts has a sample that samples every unit some round-commitment port of `own`
-reads into its table (`partOf`, at the table's sample `drawJ`), and that table's sampled statement (`HmOut.drawn`) labels
-the unit with the unit. U4 (`checkFull` at the record's sample, which `verity-verify-proof --registered --draw` runs) samples those
-units in full; the labels are the verifier's own where its partition derives the units (`Registered.derived`, which
-`Registered.check` requires). -/
+/-- U4 (`checkFull` at the record's sample) samples those units in full; the labels are the verifier's own where its
+partition derives the units (`Registered.derived`). -/
 def RowsSampled : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
     Registered.roundCommitment reg.value = true → ∀ (u : Fin (F.Vs j).nv) x, reg.reads[u.val]? = some (some x) →
@@ -225,8 +177,7 @@ def RowsSampled : Prop :=
           .ok dp ∧ Registered.unitIndices dp = .ok idx ∧
         u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
 
-/-- **A session's circuit names each port once**: a fact of V*'s circuits (`rec_residuals.statement`'s ports are
-`S["ports"]`'s names, distinct). -/
+/-- A fact of V*'s circuits (`rec_residuals.statement`'s ports are `S["ports"]`'s names, distinct). -/
 def PortNamesUnique : Prop :=
   ∀ j (q q' : Fin (F.Vs j).c.ports.size), (F.Vs j).c.ports[q].name = (F.Vs j).c.ports[q'].name → q = q'
 
@@ -242,10 +193,6 @@ theorem find_of_unique (hu : F.PortNamesUnique) (j : Fin F.stmts.size) (q : Fin 
     Nat.ne_of_lt hk (congrArg Fin.val (hu j ⟨k, hk'⟩ q he))
   simpa using hne
 
-/-- **`PubCommits` at accepting sessions, up to a SHA-512 collision.** At every history `t` whose stage-`i` commitment is
-`e.1` and every registration, at each session that accepts some transcript, each row `(u, q)` of `skOf`'s commit
-strings registers `cmtOf (bc cOf)`'s digest of `e.1` (`VCommits` at the row), or the verifier's opening of the public
-file's row and the honest opening of the `c_k` collide (`openPair`). -/
 theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs F.own F.sel) (hown : F.HOwn)
     (hroots : F.HOwnRoots cOf) (hdrawn : F.RowsSampled) (hnames : F.PortNamesUnique) :
     ∀ i R ω (t : List (Cm × (ℐ).Coin)) (e : Cm × (ℐ).Coin), t[i]? = some e → ∀ R₂ j,
@@ -282,21 +229,14 @@ theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs
     rw [hat] at h
     exact ⟨reg, x, path, _, _, h⟩
 
-/-- Obligation: discharged by a verifier check that `pub.bin`'s rows at its `rec-c<k>` reads are the `c_k` it holds (not
-run today).
-**The public file's round-commitment rows are the `c_k`'s**: at every history `t`, where session `j`'s circuit port
-`q` is a port of its reads file registering `rec-c<k>` and unit `u` reads it at row `x`, the public file's `b ‖ c` of
-`u`'s row `q` is the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k`. The check that establishes it:
-the verifier compares `pub.bin`'s rows at its `rec-c<k>` reads with the `c_k` it holds (`rec_vstage.py:164`), rather
-than opening them against `commits_entry`'s root (`Flock.Registered.check`), which binds them only up to a SHA-512
-collision (`pubCommits_or_collides`). -/
+/-- No verifier check discharges it: the verifier opens `pub.bin`'s rows against `commits_entry`'s root, which binds
+them only up to a SHA-512 collision (`pubCommits_or_collides`). -/
 def HPubRows (cOf : Cm → List UInt8) : Prop :=
   ∀ R ω t R₂ j, ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ k, cIndex reg.value = some k →
     ∀ (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size) x, (F.Vs j).c.ports[q].name = reg.name →
       reg.reads[u.val]? = some (some x) → ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
         (F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size = ⟨(cOf e.1).toArray⟩
 
-/-- **`PubCommits` from the verifier's checks** (`HOwn`, `HPubRows`), at every accepting session (and at every other). -/
 theorem pubCommits_of_pubRows (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs F.own F.sel) (hown : F.HOwn)
     (hrows : F.HPubRows cOf) : F.PubCommits (F.bc cOf) := by
   intro i R ω t e he R₂ j _ u q hpos

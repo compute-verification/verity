@@ -9,15 +9,7 @@ public import Proofs.Flock.Soundness.ExecSample
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# The units a first-stage sample proves are the ones its select drew (part 1)
-
-`Select.select` under a sampling design, with no closure map, builds its sample object from the sampling design's entries, the population and the
-units it drew (`select_shape`), and checks it (`Draw.checkDraw`). The sampling design `Draw.flockSamplingDesign` accepts has no `closure` key
-(`flockSamplingDesign_keys`, `closure_not_key`), so the sample carries none, and the checked sample's units ascend; so the units the
-sample proves (`Draw.proved`, read back as naturals) are the select's (`proved_select`). This is the step from the
-run's sample, `(Draw.proved draw).map Int.toNat`, to the model's, `RegTwo.sample`, which is the select's units.
--/
+/-! The units a first-stage sample proves are the ones its select drew (`proved_select`). -/
 
 @[expose] public section
 
@@ -25,7 +17,6 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
-/-- `getD` of `Json.mkObj (l ++ [(k, v)])` at `k` is `v`: the last entry for a key is the one the object holds. -/
 theorem getD_mkObj_last (l : List (String × Json)) (k : String) (v : Json) :
     Spot.getD (Json.mkObj (l ++ [(k, v)])) k = v := by
   rw [Json.mkObj, getD_obj, Std.TreeMap.Raw.ofList_eq_insertMany_empty, Std.TreeMap.Raw.insertMany_append,
@@ -33,7 +24,6 @@ theorem getD_mkObj_last (l : List (String × Json)) (k : String) (v : Json) :
     Std.TreeMap.Raw.getElem?_insert_self (Std.TreeMap.Raw.WF.insertMany Std.TreeMap.Raw.WF.emptyc)]
   rfl
 
-/-- **A sampling design `flockSamplingDesign` accepts has its kind's keys**, none of them `closure`. -/
 theorem flockSamplingDesign_keys {samplingDesign : Json} {n : ℕ} {r : Flock.Draw.SamplingDesign} (h : Spot.Draw.flockSamplingDesign samplingDesign n = .ok r) :
     ∃ names : Array String, Spot.keys? samplingDesign = some (Spot.sortStrings names) ∧ "closure" ∉ names := by
   unfold Spot.Draw.flockSamplingDesign at h
@@ -49,7 +39,6 @@ theorem flockSamplingDesign_keys {samplingDesign : Json} {n : ℕ} {r : Flock.Dr
          simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hk'
          exact ⟨_, hk', by simp⟩)
 
-/-- **An object whose keys are `names`' has no key outside `names`.** -/
 theorem closure_not_key {samplingDesign : Json} {names : Array String} (hk : Spot.keys? samplingDesign = some (Spot.sortStrings names))
     (hX : "closure" ∉ names) : ((Spot.entries samplingDesign).toList.map Prod.fst).contains "closure" = false := by
   cases samplingDesign with
@@ -66,8 +55,6 @@ theorem closure_not_key {samplingDesign : Json} {names : Array String} (hk : Spo
     exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).1 h2
   | _ => simp [Spot.keys?] at hk
 
-/-- **A select under a sampling design, with no closure map, accepted**: its sampling design `flockSamplingDesign` accepts, its sample object is the sampling design's
-entries with the population and the units it drew, and `checkDraw` passes it. -/
 private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)
     (h : Spot.Select.select rule p query table none src = .ok (draw, units, read)) :
@@ -98,8 +85,6 @@ private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query
          obtain ⟨rfl, rfl, -⟩ := h
          exact ⟨_, _, _, by assumption, rfl, by assumption⟩)
 
-/-- **Part 1: the units a first-stage sample proves are the ones its select drew**: under a sampling design, with no closure map,
-`(Draw.proved draw).map Int.toNat` is the select's units. -/
 theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)
     (h : Spot.Select.select rule p query table none src = .ok (draw, units, read)) :

@@ -22,20 +22,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Algebra.Lincheck
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 
-/-!
-# `prog_of_checks`' Ligerito hypothesis from E
-
-`hlg_of_residuals` gives `Refine.prog_of_checks`' `hlg` at a rep: from E's preconditions at the rep's values
-(`ligerito_of_residuals`' `hrows hS hw hc hacc hres hzero`), the proof file's decode and the fields that hold V*'s
-messages, the stream's coins and the levels' openings, the verifier's `ligerito` (Ligerito.lean:165–277) returns from
-round `k₂ + n + 1` at ring switching's `T` and switched claims (`rsT`, `rsSws`), having consumed every recorded round,
-on every record whose rounds from there retain the bytes it frames.
-
-* `ligerito_of_residuals_at`: `ligerito_of_residuals` with its start round, the rounds the zerocheck, the lincheck and
-  ring switching sample (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
-* `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
-  query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
--/
+/-! `Refine.prog_of_checks`' Ligerito hypothesis `hlg` at a rep, from E (`hlg_of_residuals`, `hlg_of_frames`). -/
 
 @[expose] public section
 
@@ -48,7 +35,6 @@ open FlockSoundness.Discharge.Exec (chunks ligFrames ligerito_frames)
 
 variable {c : Array (Array F128)}
 
-/-- V*'s level loop records one consistency context per iteration (Structure.lean:415–432). -/
 theorem levelsLoop_count [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch : Flock.Schedule} {R : ℕ}
     (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
@@ -89,7 +75,6 @@ theorem levelsLoop_count [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch 
       rw [levelsLoop_count hq fuel (i + 1) _ _ _ st₃ _ out st' k' (by omega) h, e₃, Array.size_push, hc₁]
       omega
 
-/-- V*'s Ligerito up to its final check records one consistency context per level (Structure.lean:436–450). -/
 theorem ligeritoRun_conss [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {M : Messages F128} {T : F128}
     {k₀ k' : ℕ} {initCh : Array F256} {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -132,9 +117,6 @@ theorem ligeritoRun_conss [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {
   clear h₁ h₂ h₃ h₄ h₅ eA
   omega
 
-/-- **Ligerito at a rep, from its start round.** `ligerito_of_residuals` with the round V*'s Ligerito starts at: after
-the zerocheck's `3 + (m − 6)` rounds, the lincheck's `3 + (k_log − 6)` and ring switching's `n + 1` for its `n` claims
-(Structure.lean:532–539). -/
 theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info RecAlgebra.Lin}
     {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128} (hm : 14 ≤ sh.m)
@@ -177,26 +159,16 @@ theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat 
     RecAlgebra.ligerito_checks h4 (fun x hx => hzero x (by rw [hrs]; simp [hx]))
   exact ⟨ext, st, k, hl, hd, hmsg, hood, hlc', hf⟩
 
-/-- **`prog_of_checks`' `hlg` from E** (Ligerito.lean:165–277; Verify.lean:49). At a rep whose values meet E's
-preconditions (`hrows … hzero`, at the shape `sh` of the setup `st` and its `fast100` schedule), whose proof file
-decodes and holds V*'s Ligerito messages, OOD values and final `y_r` and the commitment's cap as its initial cap, whose
-levels' openings pass (`Opened`, at the consistency contexts V*'s coins give), at ring switching's `T` and switched
-claims as V* computes them (`hT`, `hsws`), on a record whose coins are the rep's: the verifier's Ligerito returns from
-round `k₂ + n + 1` with every recorded round consumed, on the record whose rounds from there retain the bytes `F` it
-frames. -/
 theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Flock.Schedule} {p : Proof}
     {bytes : ByteArray} {extras : Array Claim} {t : Transcript} {v : Array F128} {info : Info RecAlgebra.Lin}
     {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128}
-    -- E's preconditions at the rep
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : d.w.size = S.nw) (hc : d.comb.size = 64)
     (hacc : ∀ r < 2, valOf sh d.w d.comb d.cons (.acc1 r) + valOf sh d.w d.comb d.cons (.acc0 r) =
       kapSum kappa r d.cons)
     (hres : residuals S d.w v = .ok rs) (hzero : ∀ x ∈ rs, x = 0)
-    -- the shape
     (hm : 14 ≤ st.m) (hsm : sh.m = st.m) (hsk : sh.kLog = st.fold.kLog) (hsch : sh.sched = sch)
     (hf : Flock.fast100 st.m = some sch)
-    -- the proof file
     (hdec : decodeProof (shapeOf st sch extras.size) bytes = .ok p)
     (hmessages : p.ligerito.messages =
       (decoded sh d.w d.comb d.cons).msgs.map fun mm => (RecAlgebra.kv mm.1, RecAlgebra.kv mm.2))
@@ -204,11 +176,9 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
     (hyr : p.ligerito.finalProof.yr = (decoded sh d.w d.comb d.cons).yr)
     (hinitialCap : (p.ligerito.initialCap == p.cap) = true)
     (hopen : ∀ cs ∈ info.lg.conss.toList, Opened st.merkle sch p.cap p.ligerito (decoded sh d.w d.comb d.cons) cs)
-    -- ring switching's `T` and switched claims
     {claims : Array Claim} {rpp : ℕ → Array F128} {gamma : Array F128} (hn : claims.size = 2 + d.extras.size)
     (hT : rsT claims p.ringSwitches rpp gamma = valOf sh d.w d.comb d.cons .T)
     (hsws : rsSws claims rpp gamma = info.rs.sws)
-    -- the record
     (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
     (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1) :
@@ -253,8 +223,6 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
   · rw [← getElem!_pos t.rounds j hj']
     exact hb j (by omega) hj'
 
-/-- A record fits the bytes `F` from round `k₀` to its end when its coins are `c`'s, its rounds well formed and each
-retains `F`'s bytes. -/
 theorem fits_of {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ} (hcoins : ∀ j < rs.size, (c)[j]! = (rs[j]!).coins)
     (hwf : RoundsWF rs) (hb : ∀ j, k₀ ≤ j → j < rs.size → (rs[j]!).bytes = some (F j)) :
     RecAlgebra.Fits c F rs k₀ rs.size := fun j hj hj' =>
@@ -272,22 +240,16 @@ theorem bytes_of_retains {r : Round} {B : ByteArray} {L : List UInt8} (h : Retai
     have e : C.data = B.data := Array.ext' (hc.trans hB.symm)
     cases C; cases B; cases e; rfl
 
-/-- **`prog_of_checks`' `hlg` from E, at named frames** (Ligerito.lean:165–277). `hlg_of_residuals` with the bytes
-each Ligerito round retains named: round `k₂ + n + 1 + i` retains the `i`-th round of `ligFrames` (the frames the
-verifier's Ligerito emits, `Exec.ligerito_frames`) at V*'s `T`, the commitment's cap and the proof's Ligerito fields. -/
 theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Flock.Schedule} {p : Proof}
     {bytes : ByteArray} {extras : Array Claim} {t : Transcript} {v : Array F128} {info : Info RecAlgebra.Lin}
     {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {rs : Array F128}
-    -- E's preconditions at the rep
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : d.w.size = S.nw) (hc : d.comb.size = 64)
     (hacc : ∀ r < 2, valOf sh d.w d.comb d.cons (.acc1 r) + valOf sh d.w d.comb d.cons (.acc0 r) =
       kapSum kappa r d.cons)
     (hres : residuals S d.w v = .ok rs) (hzero : ∀ x ∈ rs, x = 0)
-    -- the shape
     (hm : 14 ≤ st.m) (hsm : sh.m = st.m) (hsk : sh.kLog = st.fold.kLog) (hsch : sh.sched = sch)
     (hf : Flock.fast100 st.m = some sch)
-    -- the proof file
     (hdec : decodeProof (shapeOf st sch extras.size) bytes = .ok p)
     (hmessages : p.ligerito.messages =
       (decoded sh d.w d.comb d.cons).msgs.map fun mm => (RecAlgebra.kv mm.1, RecAlgebra.kv mm.2))
@@ -295,15 +257,12 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
     (hyr : p.ligerito.finalProof.yr = (decoded sh d.w d.comb d.cons).yr)
     (hinitialCap : (p.ligerito.initialCap == p.cap) = true)
     (hopen : ∀ cs ∈ info.lg.conss.toList, Opened st.merkle sch p.cap p.ligerito (decoded sh d.w d.comb d.cons) cs)
-    -- ring switching's `T` and switched claims
     {claims : Array Claim} {rpp : ℕ → Array F128} {gamma : Array F128} (hn : claims.size = 2 + d.extras.size)
     (hT : rsT claims p.ringSwitches rpp gamma = valOf sh d.w d.comb d.cons .T)
     (hsws : rsSws claims rpp gamma = info.rs.sws)
-    -- the record
     (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
     (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1)
-    -- the Ligerito rounds' frames
     (hfr : ∀ i < (chunks (ligFrames sch (valOf sh d.w d.comb d.cons .T) p.cap p.ligerito)).1.length,
       Retains (t.rounds[k₂ + claims.size + 1 + i]!)
         (encs ((chunks (ligFrames sch (valOf sh d.w d.comb d.cons .T) p.cap p.ligerito)).1.getD i []))) :

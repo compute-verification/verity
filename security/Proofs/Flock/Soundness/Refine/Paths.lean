@@ -8,13 +8,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The Merkle checks are the model's path checks (`Flock.Merkle`)
-
-For the unsalted SHA-512 scheme (`MerkleScheme.sha512`), a passed `merkleCheck` is the model's `Merkle.Verifies` at
-every query, with the model's hash `H512` (SHA-512 on byte lists, into 64-byte digests) and encodings `enc512` (a row is
-its words' 16-byte encodings, a digest its bytes).
--/
+/-! For the unsalted SHA-512 scheme, a passed `merkleCheck` is the model's `Merkle.Verifies` at every query. -/
 
 @[expose] public section
 
@@ -24,14 +18,10 @@ open Flock FlockLevel3 Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## SHA-512 digests -/
-
 theorem sha512_size (msg : ByteArray) : (Sha512.hash msg).size = 64 := by
   unfold Sha512.hash
   simp only [Id.run]
   exact Array.size_ofFn
-
-/-! ## The word encoding is injective -/
 
 theorem u64_of_bytes (x y : UInt64) (h : ∀ i < 8, (x >>> (8 * i).toUInt64).toUInt8 = (y >>> (8 * i).toUInt64).toUInt8) :
     x = y := by
@@ -115,8 +105,6 @@ theorem rowBytes_data (row : Array F128) : (MerkleScheme.rowBytes row).data.toLi
   rw [this]
   rfl
 
-/-! ## The model's hash and encodings -/
-
 /-- A 64-byte digest. -/
 abbrev Dig := {b : ByteArray // b.size = 64}
 
@@ -148,7 +136,6 @@ def leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 where
   pair c _ c' _ := (enc512.col c, enc512.col c')
   pair_spec _ _ _ _ hc h := ⟨fun e => hc (enc512.col_inj e), h⟩
 
-/-- **The executable's unsalted leaf is the model's plain leaf**, under any salt. -/
 theorem leafPlain_leaf (id : String) (row : Array F128) (salt : ByteArray) (y : List UInt8) :
     (leafPlain.leaf row.toList y).1 = (MerkleScheme.sha512 id).leaf row salt := by
   show Sha512.hash ⟨(colBytes row.toList).toArray⟩ = Sha512.hash (MerkleScheme.rowBytes row)
@@ -158,7 +145,6 @@ theorem H512_append (a b : Dig) : (H512 (enc512.dig a ++ enc512.dig b)).1 = Sha5
   simp only [H512, enc512]
   congr 1
 
-/-- **One step up the tree** is the scheme's node hash. -/
 theorem walk_val (msId : String) : ∀ (sibs : List Dig) (idx : ℕ) (acc : Dig),
     (Merkle.walk H512 enc512 idx acc sibs).1 = climb (MerkleScheme.sha512 msId) acc.1 idx (sibs.map (·.1))
   | [], _, _ => rfl
@@ -176,8 +162,6 @@ theorem climb_size (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (ac
       simp only [climb]
       exact climb_size msId rest (idx / 2) _ (by split_ifs <;> exact sha512_size _)
 
-/-- **A passed Merkle check is the model's path check** (`Flock.Merkle`), for the unsalted SHA-512 scheme: every query's row has
-the lane count, and its path verifies against the cap. -/
 theorem merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheck (MerkleScheme.sha512 msId) cap c d pos rows sibs salts lanes = .ok ()) (j : ℕ) (hj : j < pos.size) :
@@ -225,8 +209,6 @@ theorem merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : ℕ}
     exact climb_size msId _ _ _ (sha512_size _)
   exact (toDig_val h64).symm
 
-/-! ## The proof's openings pass the model's path checks -/
-
 /-- A cap of digests, entry by index. -/
 def capDig (cap : Array ByteArray) : Cap Dig := fun i => toDig (cap.getD i ByteArray.empty)
 
@@ -236,9 +218,6 @@ def openRow (p : LigeritoProof) (sch : Flock.Schedule) (ℓ j : ℕ) : List 𝔽
     (sibsOf (openAt p (sch.levels.size - 1) ℓ).2.1 ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap)
       j).map toDig)
 
-/-- **The proof's openings pass the model's path checks** (`Flock.Merkle`): for the unsalted SHA-512 scheme, a rep whose requests
-passed the executable's Merkle checks (`ReqOK`) and whose caps are the proof's is `OpensOK` at openings that are the
-proof's rows and siblings. -/
 theorem opensOK_of (msId : String) (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (cap : Array ByteArray) (p : LigeritoProof) (r : ℕ) (pend : PendL 𝔽 Dig) (o : Opens 𝔽 Dig)
     (hcaps : pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.recursiveCaps[j]!))

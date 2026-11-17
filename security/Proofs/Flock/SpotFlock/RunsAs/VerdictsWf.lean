@@ -3,16 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Spot.OneStageZk
 
-/-!
-# The verdicts the per-member form's run returns are JSON objects
-
-`Spot.OneStageZk.membersRun` returns a run whose verdicts (`Run.out`) are pushed one a session by `push`, each
-`verdictJson`'s: a pair whose value is built by `Json.mkObj`. So every verdict of an accepted `membersRun` is a JSON
-object over a well-formed map (`OutWf`, `membersRun_wf`), which a reading of a verdict's keys after other keys are set
-needs (`Std.TreeMap.Raw.getElem?_insert`).
-
-The walk is `membersRun`, `runMembers`, `stepMember`, `runFrom`, `step`, `push`, `verdictJson`, each keeping `OutWf`.
--/
+/-! The verdicts an accepted `Spot.OneStageZk.membersRun` returns are JSON objects over well-formed maps
+(`membersRun_wf`). -/
 
 @[expose] public section
 
@@ -20,7 +12,6 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
-/-- Every verdict's value is a JSON object over a well-formed map. -/
 def OutWf (out : Array (String × Json)) : Prop :=
   ∀ x ∈ out, ∃ m : Std.TreeMap.Raw String Json compare, x.2 = .obj m ∧ m.WF
 
@@ -48,7 +39,6 @@ theorem OutWf.push {out : Array (String × Json)} (h : OutWf out) {x : String ×
   · exact h y hy
   · exact hx
 
-/-- A session's verdict, as `verdictJson` writes it, is an object `Json.mkObj` builds. -/
 theorem verdictJson_wf (rd : Spot.OneStageZk.Reads) (programSha : Option String) (s : Spot.OneStageZk.RunFiles)
     (st : Spot.OneStageZk.SetUp) (ok : Bool) (why : String) (units : Array Nat) :
     ∃ m : Std.TreeMap.Raw String Json compare,
@@ -135,7 +125,6 @@ theorem runMembers_wf {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot
   rw [← Array.foldlM_toList] at h₁
   exact foldlMembers_wf _ _ _ h₁ OutWf.empty
 
-/-- **The verdicts of an accepted `membersRun` are JSON objects**, each over a well-formed map. -/
 theorem membersRun_wf {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.Member}
     {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence} {sts : Array Spot.OneStageZk.StatementFiles}
     {bs : Core.Blobs} {r : Spot.OneStageZk.Run} (h : Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) :

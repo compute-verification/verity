@@ -10,26 +10,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# V*'s Ligerito residuals are zero only when Ligerito's final check passes
-
-V*'s Ligerito (`ligerito`, rec_algebra.py:637–721) computes over F the K values the verifier's (`Flock.ligerito`,
-Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word `⟨c0, c1⟩` (`kv`), a round polynomial
-`(a0, a1, a2)` the verifier's `Poly` (`polyOf`).
-
-* Each update of the running sum and the round polynomial is the verifier's: a challenge's (`kv_challenge`,
-  Ligerito.lean:120–122), an OOD sample's (`kv_ood`, `polyOf_addScaled`, Ligerito.lean:131–134) and a level's queries'
-  (`kv_query`, Ligerito.lean:196–197).
-* A level's consistency sum `e = Σ_l eq_K(fold)[l]·cons[l]` is the verifier's
-  `e = Σ_j eq(α)[j]·Σ_l eq_K(fold)[l]·row_j[l]` (`Refine.consE`, Ligerito.lean:151–159) when each `cons[l]` is
-  `Σ_j eq(α)[j]·row_j[l]` (`kv_e`).
-* `ligerito_checks`: when V*'s two final-check residuals (`c0`, `c1`) are zero, the final check
-  (Ligerito.lean:235–273, `Refine.finalProg`) holds on V*'s final state: the shape checks, and `lhsE yr ext res = s`,
-  with `res` the verifier's residual weights (`Refine.resE`) at V*'s challenges and contexts.
-* `ligerito_of_residuals` is the stage at a rep.
-* `finalProg_of` is `Refine.finalProg_ok`'s converse: on a state that meets the final check's conditions, the verifier's
-  final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
--/
+/-! V*'s Ligerito residuals are zero only when Ligerito's final check passes (`ligerito_checks`,
+`ligerito_of_residuals`). -/
 
 @[expose] public section
 
@@ -37,10 +19,6 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-! ## A record's rounds of some coins -/
-
-/-- A record with no round of no coins, which `RoundCoins.ofRounds` reads as recorded: it skips a round of no coins
-(RecAlgebra.lean, `RoundCoins.ofRounds`), and a record whose rounds have `run`'s sizes has none (`verifierRows_schedule`). -/
 def NoEmpty (rounds : Array (Array F128)) : Prop := ∀ r ∈ rounds, r.size ≠ 0
 
 theorem filter_noEmpty {rounds : Array (Array F128)} (h : NoEmpty rounds) : rounds.filter (·.size ≠ 0) = rounds :=
@@ -59,12 +37,8 @@ theorem ofRounds_filter (rounds : Array (Array F128)) :
   unfold RoundCoins.ofRounds
   rw [filter_noEmpty (noEmpty_filter rounds)]
 
-/-! ## K values as the verifier's words -/
-
-/-- A K value over F as the verifier's word `c0 + c1·u`. -/
 def kv (x : KV F128) : F256 := ⟨x.1, x.2⟩
 
-/-- A round polynomial over F as the verifier's. -/
 def polyOf (q : KV F128 × KV F128 × KV F128) : Poly := ⟨kv q.1, kv q.2.1, kv q.2.2⟩
 
 theorem gOf_inj {a b : F256} (h : gOf a = gOf b) : a = b := h
@@ -99,39 +73,28 @@ theorem kv_foldl_kadd : ∀ (l : List (KV F128)) (acc : KV F128),
   | a :: l, acc => by
     rw [List.foldl_cons, kv_foldl_kadd l, List.map_cons, List.foldl_cons, kv_kadd]
 
-/-! ## The updates of the running sum and the round polynomial -/
-
-/-- A challenge's running sum (Ligerito.lean:120): `q(r) = a0 + a1·r + a2·r²`. -/
 theorem kv_challenge (a0 a1 a2 : KV F128) (r : F256) :
     kv (kadd (kadd a0 (kc r a1)) (kc (r * r) a2)) = (polyOf (a0, a1, a2)).eval r := by
   simp only [kv_kadd, kv_kc, polyOf, Poly.eval]
   (apply gOf_inj; simp only [gOf_add, gOf_mul]; ring)
 
-/-- A message's round polynomial (`Poly.ofMsg`). -/
 theorem polyOf_ofMsg (mm : KV F128 × KV F128) (s : KV F128) :
     polyOf (ofMsg mm s) = Poly.ofMsg (kv mm.1, kv mm.2) (kv s) := rfl
 
-/-- A batched round polynomial (`Poly.addScaled`, Ligerito.lean:134, 197). -/
 theorem polyOf_addScaled (q p : KV F128 × KV F128 × KV F128) (b : F128) :
     polyOf (kadd q.1 (fk b p.1), kadd q.2.1 (fk b p.2.1), kadd q.2.2 (fk b p.2.2)) =
       (polyOf q).addScaled (polyOf p) b := by
   simp only [polyOf, kv_kadd, kv_fk, Poly.addScaled]
 
-/-- An OOD sample's running sum (Ligerito.lean:134, 182): `s + y·β`. -/
 theorem kv_ood (s : KV F128) (b y : F128) : kv (kadd s (kofF (Val.sm b y))) = kv s + (F256.ofF y).smul b := by
   rw [kv_kadd, kv_kofF]
   show kv s + F256.ofF (b * y) = kv s + ⟨y * b, 0 * b⟩
   rw [f128_zero_mul, f128_mul_comm b y]
   rfl
 
-/-- A level's queries' running sum (Ligerito.lean:197, 233): `s + e·β`. -/
 theorem kv_query (s e : KV F128) (b : F128) : kv (kadd s (fk b e)) = kv s + (kv e).smul b := by
   rw [kv_kadd, kv_fk]
 
-/-! ## A level's consistency sum -/
-
-/-- The verifier's consistency sum on lane `l`: `Σ_j eq(α)[j]·row_j[l]`, the value the decoded messages' `cons`
-must hold. -/
 def consAt (rows : Array (Array F128)) (q : Nat) (alpha : Array F128) (l : Nat) : F128 :=
   rangeSum q fun j => (eqTable alpha)[j]! * (rows[j]!)[l]!
 
@@ -146,8 +109,6 @@ theorem fOf_rangeSum (n : Nat) (f : Nat → F128) : fOf (rangeSum n f) = ∑ j �
     rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, fOf_add, ih, Finset.sum_range_succ,
       add_assoc]
 
-/-- **A level's consistency sum.** V*'s `e` (`query`, rec_algebra.py:666–673), on consistency sums `cons[l]` that are
-the verifier's `Σ_j eq(α)[j]·row_j[l]` over the level's `N = 2^|fold|` lanes, is the verifier's `e`. -/
 theorem kv_e (rows : Array (Array F128)) (q : Nat) (alpha : Array F128) (fold : Array F256) (N : Nat)
     (hN : (eqTableK fold).size = N) (hrows : ∀ j < q, rows[j]!.size = N) (cs : Nat → F128)
     (hcs : ∀ l < N, cs l = consAt rows q alpha l) :
@@ -186,8 +147,6 @@ theorem kv_e (rows : Array (Array F128)) (q : Nat) (alpha : Array F128) (fold : 
   rw [gOf_foldl_row, gOf_zero, zero_add, hrows j hj]
   exact (Finset.sum_mul _ _ _).symm
 
-/-! ## The final weights -/
-
 theorem except_bind_ok {A B : Type} {x : Except String A} {f : A → Except String B} {r : B}
     (h : (x >>= f) = .ok r) : ∃ a, x = .ok a ∧ f a = .ok r := by
   cases x with
@@ -217,9 +176,6 @@ theorem arr_range_foldl {β : Type} (f : β → Nat → β) (init : β) (n : Nat
     Array.foldl f init (Array.range n) = (List.range' 0 n).foldl f init := by
   rw [← Array.foldl_toList, Array.toList_range, List.range_eq_range']
 
-/-- **The final weights.** `finalWeights` (rec_algebra.py:395–455) passes the final check's shape checks
-(Ligerito.lean:237, 242, 249, 259) and is the verifier's residual weights `resE` (Ligerito.lean:236–270) on any
-verifier state with its OOD and consistency contexts. -/
 theorem finalWeights_ok {sch : Schedule} {ext : Nat} {initCh : Array F256} {levels : Array (Array F256)}
     {oods : Array OodCtx} {conss : Array ConsCtx} {sws : Array Switched} {res : Array F256}
     (h : finalWeights sch ext initCh levels oods conss sws = .ok res) :
@@ -271,13 +227,10 @@ theorem finalWeights_ok {sch : Schedule} {ext : Nat} {initCh : Array F256} {leve
   rw [hres, hres₁, resE, ho, hc]
   rfl
 
-/-! ## The final check -/
-
 theorem getD_zero (a : Array F128) (i : Nat) : a.getD i Val.zero = a[i]! := by
   rw [Array.getD_eq_getD_getElem?, getElem!_def]
   cases a[i]? <;> rfl
 
-/-- The final check's left-hand side (rec_algebra.py:720–721) is the verifier's (`lhsE`, Ligerito.lean:272). -/
 theorem kv_lhs (yr : Array F128) (ext : Nat) (res : Array F256) (hres : res.size = 2 ^ ext) :
     kv (kaddAll ((Array.range res.size).toList.map fun j =>
         kc res[j]! (yr.getD (2 * j) Val.zero, yr.getD (2 * j + 1) Val.zero))) = lhsE yr ext res := by
@@ -287,8 +240,6 @@ theorem kv_lhs (yr : Array F128) (ext : Nat) (res : Array F256) (hres : res.size
   simp only [Function.comp, kv_kc, getD_zero]
   rfl
 
-/-- What the verifier's final check (Ligerito.lean:235–273; `Refine.finalProg_ok`'s conclusion) asks of a final
-state, on V*'s challenges `initCh`, `levels`, `ext` and its running sum and contexts `st`, read in K. -/
 structure FinalOK (sch : Schedule) (sws : Array Switched) (yr : Array F128) (initCh : Array F256)
     (levels : Array (Array F256)) (ext : Nat) (st : LSt F128) : Prop where
   orig_size : (origE initCh levels).size + ext = sch.n
@@ -298,8 +249,6 @@ structure FinalOK (sch : Schedule) (sws : Array Switched) (yr : Array F128) (ini
   yr_size : yr.size = 2 ^ (ext + 1)
   check : ∀ vst : LState, vst.oods = st.oods → vst.conss = st.conss →
     lhsE yr ext (resE (basis sws) sch.n initCh levels ext vst) = kv st.s
-
-/-! ## The verifier's final check passes -/
 
 theorem lbind_of {α β : Type} {x : Flock.LM α} {f : α → Flock.LM β} {st st₁ : LState} {t t₁ : Transcript}
     {a : α} (hx : x st t = .ok ((a, st₁), t₁)) : (x >>= f) st t = f a st₁ t₁ := by
@@ -313,7 +262,6 @@ theorem lbind_of {α β : Type} {x : Flock.LM α} {f : α → Flock.LM β} {st s
 theorem lget_bind_eq {β : Type} {f : LState → Flock.LM β} {st : LState} {t : Transcript} :
     (get >>= f) st t = f st st t := rfl
 
-/-- A loop whose every step yields a function of the step, touching neither state, runs as that fold. -/
 theorem forIn_yield_of {α σ : Type} (body : α → σ → Flock.LM (ForInStep σ)) (g : σ → α → σ)
     (P : α → Prop) (hb : ∀ a s st tr, P a → body a s st tr = .ok ((.yield (g s a), st), tr)) :
     ∀ (l : List α) (s : σ) (st : LState) (tr : Transcript), (∀ a ∈ l, P a) →
@@ -329,8 +277,6 @@ theorem lbind_forIn {α σ β : Type} {body : α → σ → Flock.LM (ForInStep 
     (forIn l s body >>= f) st tr = f (l.foldl g s) st tr :=
   lbind_of (forIn_yield_of body g P hb l s st tr hP)
 
-/-- **The verifier's final check passes** (`Refine.finalProg_ok`'s converse): on a state that meets its shape checks,
-its value check `lhs = s` and its leftover-list check (Ligerito.lean:274), `finalProg` succeeds and changes nothing. -/
 theorem finalProg_of {p : LigeritoProof} {basisAt : Array F256 → Nat → Array F256} {n : Nat} {initCh : Array F256}
     {levels : Array (Array F256)} {ext : Nat} {st : LState} {tr : Transcript}
     (h1 : (origE initCh levels).size + ext = n) (h2 : (basisAt (origE initCh levels) ext).size = 2 ^ ext)
@@ -370,9 +316,6 @@ theorem finalProg_of {p : LigeritoProof} {basisAt : Array F256 → Nat → Array
   rw [ite_eq_right (by simp [hlhs]), ite_eq_right (by simp [e1, e2, e3, e4])]
   rfl
 
-/-- **`FinalOK` is the verifier's final check.** On a verifier state with V*'s OOD and consistency contexts and V*'s
-running sum read in K, and with no proof list left over, `finalProg` passes at V*'s challenges, for a proof whose
-final `y_r` is V*'s. -/
 theorem finalProg_of_finalOK {sch : Schedule} {sws : Array Switched} {yr : Array F128} {initCh : Array F256}
     {levels : Array (Array F256)} {ext : Nat} {st : LSt F128} (hf : FinalOK sch sws yr initCh levels ext st)
     {p : LigeritoProof} (hyr : p.finalProof.yr = yr) {vst : LState} {tr : Transcript} (ho : vst.oods = st.oods)
@@ -383,9 +326,6 @@ theorem finalProg_of_finalOK {sch : Schedule} {sws : Array Switched} {yr : Array
   finalProg_of hf.orig_size hf.basis_size (ho ▸ hf.ood_dim) (hc ▸ hf.cons_dim)
     (by rw [hyr, hf.check vst ho hc, hs]) hleft
 
-/-- **Ligerito's final check.** When `ligerito` over F returns residuals all zero, its run up to the final check
-(`ligeritoRun`) ends in a state on which the verifier's final check passes (`FinalOK`), having read every message
-and OOD value (Ligerito.lean:227, 274), and the final weights it returns are the verifier's. -/
 theorem ligerito_checks {sch : Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched} {k k' : Nat}
     {src : RoundCoins} {lgr : Array F128} {lg : LgPts}
     (h : ligerito sch M tIn sws k src = .ok ((lgr, lg), k')) (hz : ∀ x ∈ lgr, x = 0) :
@@ -440,12 +380,6 @@ theorem ligerito_checks {sch : Schedule} {M : Messages F128} {tIn : F128} {sws :
   · rw [← hres vst ho hc, ← kv_lhs M.yr ext res hsz]
     exact congrArg₂ F256.mk e1 e2
 
-/-! ## Ligerito at a rep -/
-
-/-- **Ligerito at a rep.** When `GfResiduals`' residuals at w, on the S `structureOf` builds and the v `verifierRows`
-gives at the rep's coins, are all zero, Ligerito's run from the `T` w holds ends in a state on which the verifier's
-final check passes, on the messages w holds (`decoded`), the ring switches' switched claims and the challenges and
-contexts at the rep's coins (`info.lg`). -/
 theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}

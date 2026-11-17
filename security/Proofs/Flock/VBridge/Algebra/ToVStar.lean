@@ -19,19 +19,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import VCVio.Prelude.Core
 
-/-!
-# E's `GfResiduals` read as V*'s
-
-E's stages conclude about `Algebra.residuals S w v`, over `Array`s (`Algebra.GfS`, `termValue`, `resValue`). V*'s unit
-computes `resVal (gfS S) (termVal w v)` over V*'s S (`VStar.GfS`, lists) and the ports' elements as functions
-(`OfVStar.laid_innerUnit`). `GfS.toV` reads E's S as V*'s, term for term.
-
-* `bit_eq_bitOf`: `F128.bit`, which `termValue` reads a `wt` term's bit with, is `bitOf` below bit 128. Above it
-  `F128.bit` wraps its shift, so the terms here have their `wt` bits below 128 (`BitsOk`, which `VStar.checkS` checks).
-* `termValue_toV`, `opValue_toV`, `resValue_toV`: the values agree at `el w`, `el v` (an element past the port's end
-  is 0, as `w[i]!` reads it).
-* `residuals_toV`: when `Algebra.residuals S w v = .ok rs`, the ports have S's sizes and `rs[r]` is V*'s residual `r`.
--/
+/-! E's `GfResiduals` read as V*'s (`residuals_toV`), at `wt` bits below 128 because `F128.bit` wraps its shift above
+them. -/
 
 @[expose] public section
 
@@ -41,7 +30,6 @@ open FlockVBridge
 
 open Flock
 
-/-- E's term read as V*'s. -/
 def Term.toV : Term → VStar.Term
   | .w i => .w i
   | .v j => .v j
@@ -49,19 +37,15 @@ def Term.toV : Term → VStar.Term
 
 def Res.toV (r : Res) : VStar.Res := ⟨r.mul.toList, r.add.toList.map Term.toV⟩
 
-/-- E's S read as V*'s. -/
 def GfS.toV (S : GfS) : VStar.GfS :=
   ⟨S.nw, S.nv, S.ops.toList.map (·.toList.map Term.toV), S.res.toList.map Res.toV⟩
 
-/-- A `wt` term's bit is below 128 (`VStar.checkTerm`). -/
 def Term.BitOk : Term → Prop
   | .wt _ u => u < 128
   | _ => True
 
-/-- Every term of S has its `wt` bit below 128. -/
 def GfS.BitsOk (S : GfS) : Prop := (∀ o ∈ S.ops, ∀ t ∈ o, t.BitOk) ∧ ∀ r ∈ S.res, ∀ t ∈ r.add, t.BitOk
 
-/-- A port's element `i`, 0 past its end. -/
 def el (w : Array F128) (i : ℕ) : F128 := w.getD i 0
 
 theorem el_ge {w : Array F128} {i : ℕ} (h : w.size ≤ i) : el w i = 0 := by
@@ -83,7 +67,6 @@ theorem shift_bit (x : UInt64) {i : ℕ} (hi : i < 64) : ((x >>> i.toUInt64) &&&
   simp only [← UInt64.toNat_inj, h, UInt64.toNat_one, Nat.testBit]
   rcases Nat.mod_two_eq_zero_or_one (x.toNat >>> i) with h2 | h2 <;> simp [h2]
 
-/-- **`F128.bit` is `bitOf` below bit 128.** -/
 theorem bit_eq_bitOf (a : F128) {u : ℕ} (hu : u < 128) : a.bit u = bitOf a u := by
   unfold F128.bit bitOf FlockLevel3.w128
   rw [Nat.testBit_two_pow_mul_add _ a.lo.toNat_lt]
@@ -144,8 +127,6 @@ theorem resValue_toV (S : GfS) (w v : Array F128) (hS : ∀ o ∈ S.ops, ∀ t �
   funext x ab
   rw [opValue_toV S w v hS, opValue_toV S w v hS]
 
-/-- **E's residuals are V*'s**: when `Algebra.residuals S w v = .ok rs`, the ports have S's sizes and each `rs[r]` is
-V*'s residual `r` (`resVal`) at `el w`, `el v`. -/
 theorem residuals_toV {S : GfS} {w v rs : Array F128} (hS : S.BitsOk) (h : residuals S w v = .ok rs) :
     w.size = S.nw ∧ v.size = S.nv ∧ ∃ hn : rs.size = S.toV.res.length, ∀ r (hr : r < rs.size),
       rs[r] = resVal (OfVStar.gfS S.toV) (termVal (el w) (el v)) (OfVStar.res (S.toV.res[r]'(hn ▸ hr))) := by

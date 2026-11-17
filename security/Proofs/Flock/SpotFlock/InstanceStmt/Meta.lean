@@ -37,13 +37,8 @@ import all Init.Data.String.Decode
 import all Init.Data.String.Termination
 import all Init.Data.String.Extra
 
-/-! # The two-instance statement's META line, and its circuit's class
-
-META (`metaJ`) is a plain JSON object, so its line prints as it parses (`parse_meta`), ends in `}` and holds no
-newline. The circuit's class (`HmRow.classOf`, SHA-512 of the file with META's bindings removed) is `classOfB ls lh`
-at any layouts of the fixed nets (`classOf_eq`), a SHA-512 output (`classOfB_hash`): the file's first two newlines
-end its head and META's line (`findByte_head`, `findByte_meta`), and META without its bindings is canonical JSON.
--/
+/-! The two-instance statement's META line parses as it prints, and its circuit's class is `classOfB ls lh`
+(`parse_meta`, `classOf_eq`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets
@@ -57,8 +52,6 @@ set_option maxHeartbeats 20000000 -- the `kernel_rfl` steps below evaluate META'
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
-
-/-! ## META -/
 
 theorem metaJ_obj : metaJ = .obj ⟨⟨objT metaJ⟩⟩ := by kernel_rfl
 theorem plain_metaJ : plain metaJ = true := by
@@ -86,9 +79,6 @@ theorem noNl_meta : NoNl metaText := by
   rw [String.toList_ofList]
   exact noNl metaJ plain_metaJ
 
-/-! ## The circuit's class -/
-
-/-- The file's sections after META. -/
 def secs (ls lh : HmNets.Laid) : List String :=
   secLs "unit" "copy16" FlockDeploy.Concrete.unitLaid ++ secLs VStar.SHA_NET VStar.SHA_NET ls ++
     secLs VStar.HM_NET VStar.HM_NET lh
@@ -104,7 +94,6 @@ theorem bytes_cons (a : String) (L : List String) :
   rw [joinNl_cons, String.toByteArray_append, String.toByteArray_append, ByteArray.data_append, ByteArray.data_append,
     Array.toList_append, Array.toList_append, nl_bytes, List.append_assoc, List.singleton_append]
 
-/-- The file's bytes: the head's, a newline, META's line, a newline, then the sections'. -/
 theorem bytesOf_list (ls lh : HmNets.Laid) : (bytesOf ls lh).data.toList =
     ("flock-circuit " ++ "copy16").toByteArray.data.toList ++
       10 :: (("META " ++ metaText).toByteArray.data.toList ++ 10 :: (joinNl (secs ls lh)).toByteArray.data.toList) := by
@@ -136,7 +125,6 @@ theorem classOf_hash (ls lh : HmNets.Laid) :
   simp only [findByte_head ls lh, h2]
   exact bind_canon_ok (by kernel_rfl)
 
-/-- **The circuit's class** is `classOfB ls lh`, at any layouts of the fixed nets. -/
 theorem classOf_eq (ls lh : HmNets.Laid) :
     HmRow.classOf (bytesOf ls lh) "flock-circuit copy16" metaJ = .ok (classOfB ls lh) := by
   obtain ⟨m, hm⟩ := classOf_hash ls lh

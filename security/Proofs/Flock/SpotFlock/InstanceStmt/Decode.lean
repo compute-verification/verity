@@ -54,18 +54,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.WF
 
-/-! # The statement's program decoded: `Program.decode progBytes`
-
-`decode_prog` walks `Program.decode` on the program's bytes to `progX`: the definitions `T_v1`, a primitive of one
-16-bit output, and the root `Root[Two_v1]_v1`, a batch of two of its members returning both. The decoder's tables are
-`Std.HashMap`s and `Std.HashSet`s keyed by `String.hash`, which the kernel does not evaluate, so each lookup is read off
-the inserts that built its table (`hm_get_insert`, `hs_contains_insert`, `hm_get_foldl`, `hm_contains_foldl`), and its
-state is a `StateT` stepped by its monad's equations (`st_bind` and its siblings). Each well-founded function it calls
-is a fact at the statement's own values (`Ty.ofJson`, `Ty.leaves`, `Ty.beq`, `String.splitOn`, `Widths.bodyBad`) or
-its fuelled twin (`domainError_fuel`, `canon_fuel`). The program's SHA-512 is of `bareText`, its canonical text without
-`annotations`, a literal as `progHex` is (`canon_bare`). `descParse_X` is the template queries' reading of the same
-bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_hex`).
--/
+/-! The statement's program decoded: `Program.decode` on the program's bytes is `progX` (`decode_prog`). -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -79,8 +68,6 @@ namespace SpotFlock.InstanceStmt.Decode
 open Flock Flock.Program
 open Lean (Json)
 open Properties.Spot.SecurityProofs (canon_fuel canonFuel qsort_fuel)
-
-/-! ## The decoder's tables -/
 
 theorem hm_get_insert {β : Type} (m : Std.HashMap String β) (k a : String) (v : β) :
     (m.insert k v)[a]? = if k == a then some v else m[a]? := by
@@ -124,8 +111,6 @@ theorem hm_contains_foldl {β : Type} (arr : Array (String × β)) (a : String) 
     (arr.foldl (fun m (k, v) => m.insert k v) ({} : Std.HashMap String β)).contains a =
       arr.toList.any (·.1 == a) := by
   rw [← Array.foldl_toList, hm_contains_foldl_from, Std.HashMap.contains_empty, Bool.or_false]
-
-/-! ## The decoder's state and loops -/
 
 theorem st_bind {σ ε α β : Type} (x : StateT σ (Except ε) α) (f : α → StateT σ (Except ε) β) (s : σ) :
     (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
@@ -196,8 +181,6 @@ theorem ds_index (d i b w) : Flock.Program.DecState.index (Flock.Program.DecStat
 theorem ds_busy (d i b w) : Flock.Program.DecState.busy (Flock.Program.DecState.mk d i b w) = b := rfl
 theorem ds_walked (d i b w) : Flock.Program.DecState.walked (Flock.Program.DecState.mk d i b w) = w := rfl
 
-/-! ## The program's types and names -/
-
 theorem ofJson_V : Ty.ofJson (ja [js "Value", jn 16]) = .ok (.value 16) := by
   rw [Ty.ofJson.eq_def]; rfl
 theorem ofJson_A : Ty.ofJson (ja [js "Array", jn 2, ja [js "Value", jn 16]]) = .ok (.array 2 (.value 16)) := by
@@ -235,8 +218,6 @@ theorem recordFunctionIds_plain (fid : String) (h : fid.toList.contains '{' = fa
     rw [String.contains_char_eq]; simpa using h
   simp [recordFunctionIds, recordPairs, this]
 
-/-! ## The root's widths -/
-
 theorem rangeWidths_V (lo hi : Nat) :
     Widths.rangeWidths (.value 16) lo hi = if lo == 0 && 0 < hi then [16] else [] := by
   rw [Widths.rangeWidths]
@@ -247,8 +228,6 @@ theorem homo_A : Widths.homo (.array 2 (.value 16)) = some 16 := by
   simp only [leaves_V, rangeWidths_V]
   decide
 
-/-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
-`0 … 1` as one part, reads no leaf at another width. -/
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     (hn : B.nodes.size = 1) (ha : (B.nodes[0]!).args.size = 0)
     (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
@@ -279,11 +258,6 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
       Bool.true_eq_false, EStateM.run_bind]
     rfl
 
-/-! ## The canonical JSON domain, with fuel
-
-`domainError` is well founded; `domainErrorFuel f` is it unfolded `f` times, `domainError` itself past that, so the two
-agree at every fuel (`domainError_fuel`). -/
-
 def domainErrorFuel : Nat → Json → String → Option String
   | 0, j, path => Program.domainError j path
   | _ + 1, .null, _ => none
@@ -312,14 +286,11 @@ theorem domainError_fuel :
     | arr a => rw [Program.domainError]; simp only [domainErrorFuel, domainError_fuel f]
     | obj kvs => rw [Program.domainError]; simp only [domainErrorFuel, domainError_fuel f]
 
-/-! ## The program's canonical text and the walk -/
-
-/-- The program without `annotations`, as `Program.decode` writes it before hashing. -/
 def bareJ : Json := match progJ with
   | .obj top => Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   | _ => .null
 
-/-- `bareJ`'s canonical text: a literal, as `progHex` is, so that what reads the program's SHA-512 reads no `canon`. -/
+/-- A literal, so that what reads the program's SHA-512 reads no `canon`. -/
 def bareText : String :=
   "{\"callees\":[\"T_v1\"],\"definitions\":{\"Root[Two_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[\
     ],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,2]}\
@@ -332,8 +303,7 @@ theorem canon_bareJ : canon bareJ = .ok bareText := by
   rw [canon_fuel 12]; kernel_rfl'
 theorem canon_bare (j : Json) (h : j = bareJ) : canon j = .ok bareText := by subst h; exact canon_bareJ
 
-/-- `paramsOf`'s duplicate-name check on no parameters finds none: the kernel doesn't reduce a `Std.HashSet`'s size, so
-the walk, whose two definitions have no parameters, takes this step as a rule. -/
+/-- The kernel doesn't reduce a `Std.HashSet`'s size, so the walk takes this step as a rule. -/
 theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → β → Std.HashSet α) :
     ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
   simp

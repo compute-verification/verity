@@ -4,19 +4,8 @@ public import Definitions.Flock.Game.Tape
 public import Definitions.Flock.Game
 public import Proofs.Flock.Soundness.Game
 
-/-!
-# Sampling a strategy's coins ahead
-
-The tapes of `Definitions.Flock.Game.Tape`, sampled uniformly, have uniform and independent coins, so sampling the tape
-first and then reading the play off it gives every event the probability it has when each coin is flipped as the play
-reaches it (`prob_bind_tape`). For games one after another (`seqG`), an event of game `k`'s output has the probability,
-over `seqG`'s coins, that it has over the tape of the games before it and game `k`'s own coins, played with the strategy
-left there (`prob_seqG`). A strategy may read every coin it has seen, so this is how a bound for one game played alone
-reaches that game played after others.
-
-The averages this needs: over pairs (`avg_prod_iter`, and `avg_fst` of a function of the first), over independent
-coordinates at one of them (`avg_pi_eval`), and over a coin with, for every value of it, the rest (`avg_prod_pi`).
--/
+/-! Sampling a strategy's coins ahead on a tape gives every event the probability it has when each coin is flipped as
+the play reaches it (`prob_bind_tape`, `prob_seqG`). -/
 
 @[expose] public section
 
@@ -26,9 +15,6 @@ open scoped ENNReal
 
 variable {α β γ : Type}
 
-/-! ## Averages over tapes -/
-
-/-- `Strategy.ofMap` undoes `Strategy.map`. -/
 theorem Strategy.ofMap_map (f : α → β) :
     ∀ (g : Game α) (s : Strategy g), Strategy.ofMap f g (Strategy.map f g s) = s
   | .ret _, _ => rfl
@@ -40,7 +26,6 @@ theorem Strategy.ofMap_map (f : α → β) :
 theorem avg_congr_fintype {C : Type} (i₁ i₂ : Fintype C) (f : C → ℝ≥0∞) : @avg C i₁ f = @avg C i₂ f := by
   rw [Subsingleton.elim i₁ i₂]
 
-/-- An average over pairs is the average over the first of the averages over the second. -/
 theorem avg_prod_iter {A B : Type} [Fintype A] [Fintype B] (F : A × B → ℝ≥0∞) :
     avg F = avg fun a => avg fun b => F (a, b) := by
   unfold avg
@@ -51,13 +36,11 @@ theorem avg_prod_iter {A B : Type} [Fintype A] [Fintype B] (F : A × B → ℝ�
   refine Finset.sum_congr rfl fun b _ => ?_
   rw [mul_assoc]
 
-/-- An average over pairs of a function of the first is that function's average. -/
 theorem avg_fst {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (f : A → ℝ≥0∞) :
     avg (fun x : A × B => f x.1) = avg f := by
   rw [avg_prod_iter]
   exact congrArg avg (funext fun a => avg_const (f a))
 
-/-- An average over independent coordinates of a function of one of them is that function's average. -/
 theorem avg_pi_eval {ι : Type} [Fintype ι] [DecidableEq ι] {X : ι → Type} [∀ i, Fintype (X i)]
     [∀ i, Nonempty (X i)] (i : ι) (h : X i → ℝ≥0∞) : avg (fun T : (j : ι) → X j => h (T i)) = avg h := by
   let f : (j : ι) → X j → ℝ≥0∞ := fun j x => if hj : j = i then h (cast (congrArg X hj) x) else 1
@@ -74,8 +57,6 @@ theorem avg_pi_eval {ι : Type} [Fintype ι] [DecidableEq ι] {X : ι → Type} 
     _ = ∏ j, avg (f j) := avg_pi_prod f
     _ = avg h := h2
 
-/-- **A coin and, for every value of it, the rest**: averaging a function of the coin and the rest at its value is
-averaging over the coin the average over the rest at it. -/
 theorem avg_prod_pi {C : Type} [Fintype C] [DecidableEq C] {X : C → Type} [∀ c, Fintype (X c)]
     [∀ c, Nonempty (X c)] (h : (c : C) → X c → ℝ≥0∞) :
     avg (fun x : C × ((c : C) → X c) => h x.1 (x.2 x.1)) = avg fun c => avg (h c) := by
@@ -86,8 +67,6 @@ section Tape
 
 variable (f : α → Game β) (T : (a : α) → Strategy (f a) → Type)
 
-/-- **Sampling the tape first**: when each continuation's event has the probability of an average `V` over its tape, the
-bind's has the average over the whole tape of `V` where the tape lands. -/
 theorem prob_bind_tape (p : β → Prop) (hT : ∀ a s, Fintype (T a s)) (hN : ∀ a s, Nonempty (T a s))
     (V : (a : α) → (s : Strategy (f a)) → T a s → ℝ≥0∞)
     (hV : ∀ a s, prob p (f a) s = @avg _ (hT a s) (V a s)) :
@@ -123,8 +102,6 @@ theorem prob_const_ret (Q : Prop) (g : Game α) (s : Strategy g) (a : γ) :
   · simp only [hQ]
     exact (prob_false g s).trans (prob_false (Game.ret a) PUnit.unit).symm
 
-/-- **An event of game `k`'s output in `seqG`** has the probability, over the tape of the games before it, that it has
-in game `k` played alone with the strategy left there (`seqStrat`). -/
 theorem prob_seqG (g : β → Game α) (F : Option α → Prop) :
     ∀ (l : List β) (k : ℕ) (h : k < l.length) (s : Strategy (seqG g l)),
       prob (fun out => F out[k]?) (seqG g l) s =

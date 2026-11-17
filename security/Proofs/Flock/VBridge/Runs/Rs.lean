@@ -21,23 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Lincheck
 
-/-!
-# Ring switching's checks at a rep, from E
-
-`rs_of_residuals` gives `Refine.prog_of_checks`' ring-switching hypotheses at a rep from E's
-`ringSwitch_of_residuals`, when the rep's coins are its stream's (`d.rounds` the stream's rounds' coins) and the proof
-carries the messages w holds (`decoded`):
-
-* the claims ring switching reads (Verify.lean:49) are `claimsF`, V*'s claims at the rep's values, on the zerocheck's
-  and the lincheck's points `verifierRows` returns, the lincheck's `r'` the coin of its stream round;
-* the ring switches and claims have the shapes `prog_of_checks` takes, and pass the verifier's value check
-  (Opening.lean:78);
-* ring switching's rounds issued the coins `verifierRows` read: claim `k`'s `r''_k`, then the batching coins `γ`
-  (Opening.lean:79, 85), from `ringSwitch_spec` and `RoundCoins.ofRounds`. The rounds' coin counts and the bytes they answer
-  are hypotheses, facts about the record V* holds;
-* the batched value `T` (Opening.lean:86) is the one w holds, and the switched claims (Opening.lean:87) are
-  `verifierRows`', the two Ligerito reads.
--/
+/-! Ring switching's checks at a rep, from E (`rs_of_residuals`). -/
 
 @[expose] public section
 
@@ -45,8 +29,6 @@ namespace FlockVBridge.Runs
 
 open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 
-/-- `RoundCoins.ofRounds` on a record's coins, none of its rounds empty, reads round `k`'s, when it has `n`
-(RecAlgebra.lean:40–46). -/
 theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEmpty (rs.map (·.coins)))
     (h : (RoundCoins.ofRounds (rs.map (·.coins))).round k n = .ok c) : k < rs.size ∧ (rs[k]!).coins = c ∧ c.size = n := by
   by_cases hk : k < rs.size
@@ -78,18 +60,6 @@ theorem pair_append_get {P : Claim → Prop} {a b : Claim} {extras : Array Claim
     rw [Array.getElem_append_right (by simp)]
     simpa using e
 
-/-- **Ring switching's checks at a rep** (Verify.lean:49, Opening.lean:66–88). When E's preconditions hold at the
-rep's values `d` (`ringSwitch_of_residuals`), the rep's coins are its stream's (`t.rounds`, from round 0), and the
-proof carries the messages w holds (V*'s `v_C` for `final_c`, w's `z_partial` and ring switches), then at the
-zerocheck's and the lincheck's points `verifierRows` returns, `r''_k` and `γ` its ring switching's coins, and the
-claims `claimsF`:
-* the claims are the verifier's (`abcClaims` at the zerocheck's and the lincheck's outputs, the lincheck's `r'` its
-  stream round's coin) followed by the extras;
-* there is one ring switch per claim, each of 128 words, and each claim has 64 skip weights and `m − 6` coordinates
-  (the extras' shapes are a hypothesis);
-* each claim passes the value check on its ring switch;
-* the ring-switching rounds from `k₂` issued `r''_k` and `γ`, answering the bytes framed before them (hypotheses);
-* the batched sum is the `T` w holds, and the switched claims are `verifierRows`'. -/
 theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : Flock.RecAlgebra.GfS} {res : Array F128}
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
