@@ -25,7 +25,7 @@ theorem of its name in lower camel case, and audited with the proofs: no record 
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 

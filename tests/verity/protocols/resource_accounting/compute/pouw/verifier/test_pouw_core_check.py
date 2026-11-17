@@ -375,7 +375,7 @@ def test_every_opening_mutation_hits_its_refusal():
 
 
 def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
-    """A certified pass of PoUW execution phase `p` (two certifier windows per PoUW execution phase) under a stream and a prover: its
+    """A certified pass of PoUW execution phase `p` (two attester windows per PoUW execution phase) under a stream and a prover: its
     manifest, the execution phase's context, and the verifier's reveal, record, stream and prover."""
     roots, work = {2: hashlib.sha512(b"salt-bind weights").digest()}, Workload((Matmul(5, Shape(16, 128, 4), 2),))
     reveal, sid, prover = (hashlib.sha512(b"salt-bind " + x).digest() for x in (b"reveal", b"stream", b"prover"))
@@ -391,7 +391,7 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
     """At the opening of record. A certified execution phase's pass passes `pass_epoch` under the network attester's reveal,
     and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
     row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
-    its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
+    its public row formed under a salt the prover chose, which it can form before any attester salt exists, is refused
     at its public row under the certified salt (and opens only under its own, which no verifier holds); with no salt, or
     in an execution phase the context doesn't certify, the opening refuses before it reads a row."""
     raw, ctx, reveal, committed, sid, prover = _certified_pass(1)
