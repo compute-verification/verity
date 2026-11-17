@@ -39,9 +39,10 @@ also gets an archive of the commit that runs, ``STATE/tree.tar`` (its files unde
 (``tree``) beside the commit (``program``) and each party's process reads as ``VERITY_PROGRAM`` and ``VERITY_TREE``.
 
 A party the table starts first (its ``STARTS``, `Start`: the bindings it writes, by subprotocol, its ``serve`` and
-``stop``, and the seconds `verity run` waits, ``within``) starts before every other party here, in a process of its own
-(``start CONFIG STATE PARTY MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every
-binding it writes it isn't started, since it runs where they say, and giving only some is refused (``binding``).
+``stop``, the seconds `verity run` waits, ``within``, and the ``(subprotocol, key)`` of those a party run elsewhere
+needn't give, ``optional``) starts before every other party here, in a process of its own (``start CONFIG STATE PARTY
+MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every binding it writes but the
+optional ones it isn't started, since it runs where they say, and giving only some of those is refused (``binding``).
 `verity run` waits for what it writes, ``STATE/public/<party>/bindings.json`` (written whole, by a rename: a table per
 subprotocol of strings and integers), and adds it to the run's bindings before any party that reads them starts; one
 that ends first, writes other keys or writes none within ``within`` seconds is refused by name (``bindings``), and the
@@ -146,6 +147,7 @@ class Start:
     serve: Callable[[Mapping[str, Any], Path], None]
     stop: Callable[[Mapping[str, Any], Path], None]
     within: int = 600
+    optional: frozenset[tuple[str, str]] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -300,7 +302,7 @@ def dry(cfg: Mapping[str, Any], reg: Registry, chosen: Sequence[str], bound: Map
 def starting(reg: Registry, chosen: Sequence[str], bound: Mapping[str, Any]) -> list[str]:
     out = []
     for p in (p for p in chosen if p in reg.starts):
-        keys = [(c, k) for c, ks in reg.starts[p].writes.items() for k in ks]
+        keys = [(c, k) for c, ks in reg.starts[p].writes.items() for k in ks if (c, k) not in reg.starts[p].optional]
         given = [f"{p}.{c}.{k}" for c, k in keys if k in bound.get(p, {}).get(c, {})]
         if given and len(given) < len(keys):
             raise Refused("binding", f"--bindings gives {', '.join(given)} of what {p} writes, not all of it: give "

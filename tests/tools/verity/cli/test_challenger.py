@@ -7,6 +7,7 @@ import ast
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -166,4 +167,15 @@ def test_a_dry_run_counts_what_the_challenger_writes_as_bound(capsys):
     assert plan[T.CHALLENGER]["writes"] == {"sampled-proofs": ["loopback", "main-file"],
                                             "pearl-plus": ["gate", "peer", "lane", "key-sha512", "main-file"]}
     dry = json.loads(next(x for x in out if x.startswith("DRY ")).split(" ", 1)[1])
-    assert dry["unbound"] == []
+    assert not [k for k in dry["unbound"] if k.startswith(f"{T.CHALLENGER}.")]
+
+
+def test_the_auditors_own_gate_runs_the_challenger_where_it_says_and_half_of_it_is_refused(tmp_path, capsys):
+    auditors = tmp_path / "auditors.toml"
+    auditors.write_text(f'[challenger.pearl-plus]\ngate = "gate-command"\npeer = "peer-1"\nkey-sha512 = "{KEY}"\n'
+                        '[challenger.sampled-proofs]\ngate = "gate-command"\n')
+    assert R.run_main([str(CONFIG), "--dry-run", "--bindings", str(auditors)], REG) == 0
+    assert R.starting(REG, [T.CHALLENGER], tomllib.loads(auditors.read_text())) == []
+    capsys.readouterr()
+    with pytest.raises(Refused, match="challenger.pearl-plus.gate of what challenger writes, not all of it"):
+        R.starting(REG, [T.CHALLENGER], {T.CHALLENGER: {"pearl-plus": {"gate": "gate-command"}}})
