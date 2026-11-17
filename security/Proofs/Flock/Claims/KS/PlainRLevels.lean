@@ -34,14 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The level columns an accepted run of `VR rd` opens
-
-At the level columns `plainRawLevelColsRV rd` (`plainRawLevelCols` at the run `runOfRV rd` reads):
-
-* `plainRawLevelColsRV_top`: an accepted run has none at or past its schedule's last level (`plainRawLevelCols_topK`'s
-  proof): the run's shape is table 0's, whose schedule is the statement's `fast100` one. So `levelTopAt_R`.
--/
+/-! An accepted run of `VR rd` has no level columns at or past its schedule's last level. -/
 
 @[expose] public section
 
@@ -51,7 +44,6 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`runOfRV rd`'s run at an accepted run is table 0's of the statement's setup**, at its `m`. -/
 theorem runOfRV_m {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (hs : setupOf false x = some (s, spec, sts))
@@ -76,8 +68,6 @@ theorem runOfRV_m {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
     have e : st' = st := Option.some.inj (hst'.symm.trans hst)
     rw [hm, e]
 
-/-- **An accepted run of `VR rd` has no level columns at or past its schedule's last level**
-(`plainRawLevelCols_topK`'s proof, at `runOfRV_m`). -/
 theorem plainRawLevelColsRV_top {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω}
     {x : Claims.Msg} {ω : Ω} {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
@@ -104,7 +94,6 @@ theorem plainRawLevelColsRV_top {rd : Claims.Msg → Option FinalP} {Ω : Type} 
       | none => []) = []
     split <;> simp [htop]
 
-/-- **`LevelTopAt` at `VR rd` and its level columns.** -/
 theorem levelTopAt_R (rd : Claims.Msg → Option FinalP) : LevelTopAt (VR rd) (fun _ => plainRawLevelColsRV rd) :=
   fun _ _ _ _ h _ _ _ _ _ hs hst hsch r _ hℓ => plainRawLevelColsRV_top h hs hst hsch r hℓ
 

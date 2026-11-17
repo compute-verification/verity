@@ -41,20 +41,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Which positions an accepted plain rep opens at a later level
-
-An accepted plain run opens, at table 0's rep `r` and level `ℓ ≥ 1`, exactly the positions sampled from that level's
-query coins, and those coins are a deployed coin with a count the statement fixes. So "the run opens `q` there" is a
-function of the run's coins alone, which is what a cap position's `opens` reads (`Claims.Recursion.Caps`).
-
-* `plainQRound`, `plainQN`: the deployed coin of rep `r`'s level-`ℓ` query round, `r · R + J + 1` for `R` the table's
-  `repRounds` and `J` the stream round `plainLevelRound`, and its count, `plainRepNs`' entry `J`.
-* `plain_levelCols_queried`: at an accepted plain run, a level-`ℓ` column at `q` exists iff `q` is among the positions
-  that coin samples. The columns are those positions zipped with the proof's rows (`plainLevels_verifyWithM`), the rows
-  as many as the positions (`merkleCheck_rows`), the positions `q` of the level (`positions_size`), and the stream
-  round's coins the deployed coin's first `n` (`custody_ok`, `streams_ns_plain`).
--/
+/-! An accepted plain rep opens a later-level position exactly where that level's query coin samples it, a function of the run's coins alone. -/
 
 @[expose] public section
 
@@ -73,7 +60,6 @@ def plainQN (spec : SessionSpec) (st : Stmt) (sch : Flock.Schedule) (ℓ : ℕ) 
   (plainRepNs spec st)[plainLevelRound st.m st.c.kLog sch.k0 (2 + spec.points * st.regions.size)
     (sch.levels.size - 1) ℓ]!
 
-/-- A later level's query round is a round of the rep. -/
 theorem plainLevelRound_lt {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} (hsch : fast100 st.m = some sch)
     {ℓ : ℕ} (hℓ : ℓ < sch.levels.size) :
     plainLevelRound st.m st.c.kLog sch.k0 (2 + spec.points * st.regions.size) (sch.levels.size - 1) ℓ <
@@ -83,8 +69,6 @@ theorem plainLevelRound_lt {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedul
   dsimp only
   split <;> omega
 
-/-- **Every sampled position within the level's queries has its row among the columns**: the converse of
-`mem_zkRepCols`. -/
 theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (Array F128)} {j : ℕ}
     (hj : j < (positions lv coins).size) (hr : j < rows.size) (hq : j < lv.q) :
     ((positions lv coins)[j], rows[j].toList.map FlockLevel3.GF128.of) ∈ Claims.Flock.zkRepCols lv coins rows := by
@@ -95,9 +79,6 @@ theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (
   refine List.mem_map.2 ⟨_, List.getElem_mem hlen, ?_⟩
   simp [List.getElem_zip]
 
-/-- **An accepted plain rep opens a later-level position iff its query coin samples it.** At an accepted plain run, at
-table 0's rep `r < 2` and level `1 ≤ ℓ` of the table's `fast100` schedule, some level-`ℓ` column is at `q` iff `q` is
-among the level's positions at the first `plainQN` elements of the run's coin `plainQRound`. -/
 theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
@@ -231,7 +212,6 @@ theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.
     have hlq := positions_size _ hseam ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ))
     exact ⟨_, hjq ▸ mem_zkRepCols_of hj (by rw [hrows]; exact hj) (by rw [← hlq]; exact hj)⟩
 
-/-- `plain_levelCols_queriedK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}

@@ -37,24 +37,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The reader's premise at a `nextJ` step, from the step's reader's columns
-
-`plainVerdictAtJK_of_nextJ` takes the reader's premise at the step's own parsed session (`TxNoOffAtJK` at
-`⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), which reads the session the element-level decoder makes of the value. The
-run's reader reads the step itself: `runOf` and `cols` take the last message's record text and `liveOf`'s streams there,
-and `nextJ`'s verdict reads the coin-substituted value, so its reader reads `liveOfJ` at that value:
-
-* `runOfJ`, `colsJ`: `runOf` and `cols` (plain) at a `nextJ` decision, with `liveOfJ` at the substituted value for
-  `liveOf` at the record.
-* `colsJ_plain`: where the verdict accepts the substituted value, the reader's table-0 columns are `plainRepColsOf` at
-  `TxNoOffAtJK`'s shape on `liveOfJ`'s first two rep streams and the proof files (`cols_plain` at a parsed value). The
-  link carries the first coin's points (`liveOfJ_points`), `spec.points` of them, so the extra claims number
-  `2 · |regions|`.
-* `txNoOffAtJK_of_colsJ`: on an accepting step at SHA-512 whose statement carries the sample `d`, a reader that looks up
-  no column off `C` gives `TxNoOffAtJK`: the decoder's rep streams have `liveOfJ`'s coins (`decodeJWithK_live`).
-* `plainVerdictAtJK_of_nextJ_cols`: `plainVerdictAtJK_of_nextJ` with that premise for the reader's.
--/
+/-! The reader's premise at a `nextJ` step, from the step's reader's columns. -/
 
 @[expose] public section
 
@@ -64,9 +47,6 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **What the column reader takes of a `nextJ` decision's table `j`** (`runOf` at a parsed value): the table's `m`,
-`kLog`, claim count and Merkle widths at the link points `liveOfJ` reads at the substituted value, and its two reps'
-rounds there and proof files. None where the step does not decide. -/
 def runOfJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) (j : ℕ) :
     Option Claims.Flock.ZkRun :=
   match actJ rd x as cs with
@@ -81,7 +61,6 @@ def runOfJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claim
                     (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
   | _ => none
 
-/-- **The opened level-0 columns of a `nextJ` decision's table `j`** (`cols false` at a parsed value). -/
 def colsJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) (j : ℕ) :
     List (ℕ × List 𝔽) :=
   match runOfJ rd x as cs j with
@@ -98,11 +77,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A `nextJ` step's reader looks up table 0's columns at `TxNoOffAtJK`'s shape**: where the step decides at
-`(spec, sts)` with first table `st` and two link points, `liveOfJ` reads the substituted value and the verdict accepts
-it with the proof files, the reader's table-0 columns are `plainRepColsOf` at `shapeOf` with `2 · |regions|` extra
-claims, on `liveOfJ`'s first two rep streams and the proof files, below level 0's `2^d` (`cols_plain` at a parsed
-value). -/
 theorem colsJ_plain {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalJ} {lv : Live} {st : Stmt} {sch : Schedule}
@@ -143,11 +117,6 @@ theorem colsJ_plain {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : L
   simp only [Claims.Flock.plainRunCols, Claims.Flock.ZkRun.plainShape, Claims.Flock.plainLevel0, hsched,
     FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
-/-- **The step's reader gives the reader's premise at its parsed session**: on an accepting `nextJ` step at SHA-512
-whose statement carries the sample `d`, if the step's reader looks up no column off `C` at table 0 (`colsJ … 0`), the
-deployed plain reader looks up none in the step's own parsed session at the setup at `d` (`TxNoOffAtJK id`). The
-decoder's table-0 rep streams have `liveOfJ`'s coins at the substituted value (`decodeJWithK_live`), and those are the
-reader's columns (`colsJ_plain`). -/
 theorem txNoOffAtJK_of_colsJ {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json} {N : ℕ} (C : Fin N → List 𝔽)
@@ -185,9 +154,6 @@ theorem txNoOffAtJK_of_colsJ {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg
     ← getD_empty, ← getD_empty, ← hcols]
   exact hno
 
-/-- **An accepting `nextJ` step gives the verdict at the sample, at its reader's columns**: `plainVerdictAtJK_of_nextJ`
-with the step's reader looking up no column off `C` at table 0 (`colsJ … 0`) for the premise at its parsed session
-(`txNoOffAtJK_of_colsJ`). -/
 theorem plainVerdictAtJK_of_nextJ_cols (mPts : ℕ) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json}

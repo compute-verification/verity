@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.DecodeDeploy
 public import Proofs.Flock.Soundness.Discharge.HiddenDec
 
-/-!
-# The deployed plain decoders at hidden outputs
-
-`DecodeSC` and `DecodeDeploy` where the statement hides its outputs (`hiddenOutputs = true`), at the hidden tables
-`HiddenExec.tablesAtH` and their openings `HiddenDec.opnAtH`:
-
-* `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_acceptsI`;
-  `accepts_opens₀L` holds at hidden outputs too.
-* `plain_setupHiddenT`, `plain_setupHidden`: a plain statement in scope with hidden outputs sets its one table up at its
-  sample under setupHidden, with `HiddenDec.TagsOkH`'s tags at any leaf tag and at `hm96-sha512/v1` leaves.
-
-None of them reads which net returns the outputs: `InScope`'s general instance form (hidden outputs and `wiresAcyclic`)
-may have tail stages, which the verifier evaluates and the table's statement (`stmtOf` of setupHidden's) carries, and
-the decoders read only the table's committed rows.
-* `tableAtH_plainTab`: the hidden table of a sample that sets up `st` is `plainTab` at `st`, its statement read off any
-  layout (`Integrate.model_eq`).
-* `plain_hdecH`: so at the sample `d` and no sampled proof block, `decodesTable_wrP_scH` is the decoders' fact `PlainLiveAccAt`
-  asks, at `plainTab`.
--/
+/-! The deployed plain decoders where the statement hides its outputs, which none of them reads which net returns. -/
 
 @[expose] public section
 
@@ -34,9 +16,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrP` for accepting with no opening off `C` without a self-clash, at
-hidden outputs**: `decodesTable_wrP_sc` at the hidden tables and their openings `opnAtH`, wherever the outputs are
-returned (`tableAtH_of_acceptsI`). -/
 theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -161,8 +140,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A statement whose form is not templated is on flat tags**, once its session commits a circuit: a templated
-session's is `HmOut.parseTmpl`'s, which carries its template, and the check parses that circuit (`Read.circ`). -/
 theorem isTmpl_of_form {r : Readable.Read} {c : Circuit} (hh : r.tags.hiddenOutputs = true)
     (hc : HmOut.parseCommit r.tags r.I.circuitFile r.I.tables = .ok c) (htm : r.form.templated = false) :
     r.tags.isTmpl = false := by
@@ -175,10 +152,6 @@ theorem isTmpl_of_form {r : Readable.Read} {c : Circuit} (hh : r.tags.hiddenOutp
     obtain ⟨tu, c₀, -, -, -, rfl⟩ := TmplValue.parseTmpl_cases hc
     simp [Readable.Read.form, hcirc] at htm
 
-/-- **A plain statement in scope with hidden outputs sets up its one table at its sample, under any leaf tag**:
-`plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
-groups, any tail stages the verifier evaluates, whichever net returns the outputs), with `TagsOkH`'s tags at the tag
-`merkleLeaf` names. -/
 theorem plain_setupHiddenT {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -228,10 +201,7 @@ theorem plain_setupHiddenT {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
 
-/-- **A plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets up its one table at its sample**:
-`plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
-groups, any tail stages the verifier evaluates, whichever net returns the outputs). The scope also admits plain SHA-512
-leaves here, which `TagsOkH` does not: `plain_setupHiddenT` at `hm96-sha512/v1`. -/
+/-- The scope also admits plain SHA-512 leaves here, which `TagsOkH` does not. -/
 theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -244,8 +214,6 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
       st.m ≤ 35 :=
   plain_setupHiddenT hs hin hset h hh hl hd
 
-/-- **The hidden table of a sample that sets up `st` is `plainTab` at `st`**: its statement `stmtOf st` is the one any
-layout reads (`Integrate.model_eq`), and the schedule is `fast100`'s at `st.m`. -/
 theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.tags.isTmpl = false) {n : ℕ}
     (dj : Finset (Fin n) → Json)
     {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : HiddenExec.SampleSetupH I spec.mPts S₀ (dj S₀))
@@ -273,8 +241,6 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.
   exact hS'.symm
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **The deployed plain decoders are right at `plainTab` at hidden outputs and `hm96-sha512/v1` leaves**: `plain_hdec`
-with `decodesTable_wrP_scH` and the hidden openings `HiddenDec.opnAtH`. -/
 theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])

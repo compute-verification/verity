@@ -34,17 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The simulated strategy after `Commit` leads with rep 0, from the live prover's schedule
-
-`simAt`, the simulated strategy after `Commit` at one table, is at each link point the simulation's strategy
-(`simRJ`) with its dead branches answered by empty openings, read at the table's one batch position (`simAt_heq`). So
-`lead_simRJ` makes it lead with rep 0 for `n` coins wherever the live strategy submits its next `n` rounds on rep 0
-and the rest on rep 1:
-
-* `leadsAfter_simAt`: `LeadsAfter` at `simAt`, from `SchedL` at every link point;
-* `leadsAfter_plainSimAt`: so at `plainSimAt`, from `SchedL` at the plain simulator's live strategy (`plainLive`).
--/
+/-! The simulated strategy after `Commit` leads with rep 0 wherever the live prover submits its next rounds on rep 0 (`SchedL`). -/
 
 @[expose] public section
 
@@ -67,7 +57,6 @@ theorem coin_k_eq {C : Type} {iF : Fintype C} {iN : Nonempty C} {k k' : C → Ga
   cases e
   rfl
 
-/-- A strategy cast along an equation of coin games, at a coin. -/
 theorem cast_coin_heq {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C → Game β}
     (eg : @Game.coin β C iF iN k = @Game.coin β C iF' iN k') (σ : Strategy (@Game.coin β C iF iN k)) (c : C) :
     HEq (cast (congrArg Strategy eg) σ c) (σ c) := by
@@ -75,7 +64,6 @@ theorem cast_coin_heq {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : 
   obtain rfl := coin_k_eq eg
   rfl
 
-/-- Equal strategies of equal games sending a message then sampling a coin agree after the message, at a coin. -/
 theorem heq_snd_coin {M C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : M → C → Game β}
     (e : Game.send M (fun m => @Game.coin β C iF iN (k m)) = Game.send M (fun m => @Game.coin β C iF' iN (k' m)))
     {s : Strategy (Game.send M fun m => @Game.coin β C iF iN (k m))}
@@ -88,8 +76,6 @@ theorem heq_snd_coin {M C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' :
 
 end Casts
 
-/-- The salted session's simulated strategy is the session simulation's strategy, carried along
-`sessionBL_eq_modelSession`. -/
 theorem simSessG_heq {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (ts : List (TabSpec mPts)) (ok : Model.OutCL 𝔽 D Sl → Prop)
@@ -120,8 +106,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inh
   (hdec : ∀ j, DecodesTable (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) pL
     opn dec one fin capOf (fun j => repsOf (D := D) A ([t].get j)) j)
 
-/-- **`simAt` at the link points `pts`** is the session simulation's strategy there, its dead branches answered with
-empty openings. -/
 theorem simAt_heq (Pr : Strategy (liveSession dg [t].length mPts N)) (pts : Fin 2 → Fin mPts → 𝔽) :
     HEq (simAt A Hc E Lf t ok pL opn dg dec one fin capOf N hdec Pr.1 Pr rfl pts)
       (((Sim.mapDead (answerWith (nulOp (D := D) (Sl := Sl)))
@@ -139,8 +123,6 @@ theorem simAt_heq (Pr : Strategy (liveSession dg [t].length mPts N)) (pts : Fin 
     (simSessG_heq A Hc E Lf [t] ok pL opn dg dec one fin capOf N hdec Pr).symm pts
   exact h₁.trans (h₂.trans h₃.symm)
 
-/-- **The simulated strategy after `Commit` leads with rep 0 for `n` coins** at every link point where the live
-strategy submits its next `n` rounds on rep 0 and the rest on rep 1 (`SchedL`), when rep 0 sends no final message. -/
 theorem leadsAfter_simAt (hfin : ∀ proofs, fin ⟨0, Nat.one_pos⟩ 0 proofs = []) {n : ℕ} (rootB₀ : Array ByteArray)
     (Pr : Strategy (liveSession dg [t].length mPts N)) (hP : Pr.1 = rootB₀)
     (hS : ∀ pts, SchedL dg Pr.1 pts N (fun _ _ => []) n (Pr.2 pts)) :
@@ -161,24 +143,18 @@ theorem leadsAfter_simAt (hfin : ∀ proofs, fin ⟨0, Nat.one_pos⟩ 0 proofs =
 
 end Gen
 
-/-! ## At the plain simulator -/
-
-/-- The plain simulator's live strategy. -/
 noncomputable abbrev plainLive (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
     Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
   liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
     (ω, u)
 
-/-- The plain simulator's live strategy. -/
 noncomputable abbrev plainLiveK (keep : Bool → Bool) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
     Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
   liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
     (ω, u)
 
-/-- **`plainSimAt` leads with rep 0 for `n` coins** where the plain simulator's live strategy submits its next `n`
-rounds on rep 0 and the rest on rep 1. -/
 theorem leadsAfter_plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)

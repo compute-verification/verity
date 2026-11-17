@@ -40,45 +40,7 @@ import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.KS.Deploy
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# One wait's bound from a fixed table's bound
-
-The old theorems' extraction step (`Extract.joint_acc_le`) is stated over a game; a verifier's runs at one tape are one
-(`runGame`: one coin node, the round coins), so it applies at the deployed verifier itself, with no simulation:
-
-* **The run's distribution** (`expect_runGame`, `expectN_runGame`): `k` independent runs at one tape are `expectN` of `runGame`;
-  so `accPr` and `accFail` are its `expect` and `expectN` (`accPr_eq`, `accFail_eq`), and one wait's left side,
-  `ε · Q/ε^k`, is the product form's `ε · expectAcc(¬G)` (`oneWait_lhs_eq`).
-* **The table** (`opθ`, `firstTable_opθ`): at the `N x` positions of a word, an accepted run's opening is its first
-  opened column of table 0 there (`lookCol`), a rejected run's none; on accepted reruns the extractor's table
-  (`firstTable`, `0` where no rerun opened a position) is the zero-filled word `fill` reads at table 0
-  (`fill_eq_lookCol`, `extTab`).
-* **The three obligations** at the verifier, for a predicate `Ok` on a table's columns:
-  * `TableBoundθ`: at every statement and prover, escapes that fit the weight with one more fork event, such that at
-    every tape and every table at the word's positions whose columns `Ok` admits and that does not extract
-    (`GoodTable`: no trace that reads as a witness of table 0's statement agrees with it on `(1 − θ)·len` positions;
-    where the statement has one table, a table that does extract extracts the statement, `extracts_of_good`), a run
-    accepts with
-    probability at most `ε_table + escapes(ω)` beyond that of accepting and opening a position off the table. This is
-    the old theorems' fixed-table bound from accepted runs (`session_sound_of_table_acc`: `Pr[Acc ∧ T uncommitted] ≤
-    ε_c⁻ + Pr[Acc ∧ off T]`) at the deployed verifier.
-  * `ColsOk`: an accepted run opens only columns `Ok` admits.
-  * `ConflictTied`: two accepted runs at one tape that open one position of the word to two columns collide among the
-    verifier's calls.
-* **One wait** (`oneWait_of_tableBound`): `joint_acc_le` at `runGame`, with the conflict term an escape at round `0`
-  (two independent runs, `forkCoins_zero`) of weight `k` (`Escapes.addFork`), gives `OneWait` when the word is no
-  longer than `N₀`, `Ok` admits `0` and every statement some run accepts has one table.
-* **Unopened positions** (`orZero`): `0` is a position no rerun opened, and agrees with no codeword column at the
-  untrimmed records (`instZeroListCol`, the empty column), while the old fixed-table bound speaks of tables of
-  full-width columns. So at those records the tables `TableBoundθ` needs are those of `orZero Ok`. The records the
-  claims read trim their columns, where `0` is the trimmed zero column, and there the bound over full-width tables is
-  enough (`Trim`).
-
-At the deployed records (`plain_oneWait_of_tableBound`, `zk_oneWait_of_tableBound`) the word is table 0's level-0
-codeword (`wordLen`), no longer than `N₀` (`wordLen_le_N₀`), and `Ok` is a column of the code's width (`wide`): KS at
-both instances asks the three obligations and one table at every statement some run accepts (`plain_KS_of_tableBound`,
-`zk_KS_of_tableBound`; the plain scope admits one, `plain_hone`, and the masked scope several).
--/
+/-! One wait's bound from a fixed table's bound (`TableBoundθ`, `ColsOk`, `ConflictTied`), at the verifier's runs at one tape read as a game. -/
 
 @[expose] public section
 
@@ -86,21 +48,16 @@ namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## A verifier's runs as a game -/
-
 section RunGame
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- **A run's distribution as a game**: one coin node, the `n` round coins. -/
 def runGame (n : ℕ) : Game (Fin n → Coin) := .coin (Fin n → Coin) .ret
 
-/-- The game's one strategy. -/
 def runS (n : ℕ) : Strategy (runGame (Coin := Coin) n) := fun _ => PUnit.unit
 
 theorem expect_runGame (n : ℕ) (f : (Fin n → Coin) → ℝ) : expect f (runGame n) (runS n) = Ex f := rfl
 
-/-- **`k` independent runs** are `expectN` of `runGame`, first run first. -/
 theorem expectN_runGame (n : ℕ) : ∀ (k : ℕ) (F : List (Fin n → Coin) → ℝ),
     expectN (runGame n) (runS n) k F = Ex fun σ : Fin k → Fin n → Coin => F ((List.finRange k).map σ)
   | 0, F => by
@@ -128,12 +85,10 @@ section SamplingDesigns
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- A run at tape `ω` accepts. -/
 def Acc (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (V.k x) → Coin) : Prop :=
   (run H P V x ω r).out = .acc
 
-/-- The views of runs at tape `ω`. -/
 def seenOf (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (bs : List (Fin (V.k x) → Coin)) : List Seen :=
   bs.map fun r => (run H P V x ω r).seen
@@ -143,7 +98,6 @@ theorem accPr_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover �
   rw [expect_runGame]
   exact Claims.Bridge.Pr_eq_Ex _
 
-/-- **`k` accepted runs that fail `G`**, on the run's distribution. -/
 theorem accFail_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k : ℕ)
     (G : List Seen → Prop) :
     accFail H V P x ω k G = expectN (runGame (V.k x)) (runS _) k fun bs =>
@@ -165,7 +119,6 @@ theorem accFail_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover
   by_cases h1 : ∀ i, (run H P V x ω (σ i)).out = .acc <;>
     by_cases h2 : G ((List.finRange k).map fun i => (run H P V x ω (σ i)).seen) <;> simp [Acc, h1, h2]
 
-/-- **One wait's left side is the product form's**: `ε · Q/ε^k = ε · expectAcc(¬G)` on the run's distribution. -/
 theorem oneWait_lhs_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k : ℕ)
     (G : List Seen → Prop) :
     accPr H V P x ω * (accFail H V P x ω k G / accPr H V P x ω ^ k) =
@@ -177,23 +130,18 @@ theorem oneWait_lhs_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Pr
 
 end SamplingDesigns
 
-/-! ## The table the accepted reruns fill -/
-
 section Table
 
 variable {Col T : Type} [DecidableEq Col]
 
-/-- The column a list of openings opens at `q`: its first there. -/
 def lookCol (os : List (ℕ × Col)) (q : ℕ) : Option Col := (os.find? fun p => decide (p.1 = q)).map Prod.snd
 
 omit [DecidableEq Col] in
-/-- **The zero-filled word is the first opened column**, `0` where none is. -/
 theorem fill_eq_lookCol [Zero Col] (n : ℕ) (os : List (ℕ × Col)) (i : Fin n) :
     fill n os i = (lookCol os i.val).getD 0 := by
   unfold fill lookCol
   congr 3
 
-/-- **A table read at a position**: its column there, `0` past it. -/
 def extTab [Zero Col] {n : ℕ} (C : Fin n → Col) (q : ℕ) : Col := if h : q < n then C ⟨q, h⟩ else 0
 
 omit [DecidableEq Col] in
@@ -204,7 +152,6 @@ theorem lookCol_append (os os' : List (ℕ × Col)) (q : ℕ) :
   cases os.find? fun p => decide (p.1 = q) <;> rfl
 
 omit [DecidableEq Col] in
-/-- A column the joined openings open at `q` is one list's. -/
 theorem lookCol_flatMap_some {β : Type} (cs : β → List (ℕ × Col)) (q : ℕ) (u : Col) :
     ∀ bs : List β, lookCol (bs.flatMap cs) q = some u → ∃ b ∈ bs, lookCol (cs b) q = some u
   | [], h => by simp [lookCol] at h
@@ -220,8 +167,6 @@ theorem lookCol_flatMap_some {β : Type} (cs : β → List (ℕ × Col)) (q : �
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Zero Col]
 
 open Classical in
-/-- **An accepted run's openings** at the word's positions, its first table-0 column at each; none on a rejected
-run. -/
 noncomputable def opθ (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : Fin (N x)) : Option Col :=
   if (run H P D.V x ω r).out = .acc then lookCol (D.cols (run H P D.V x ω r).seen 0) p.val else none
@@ -236,7 +181,6 @@ theorem findSome?_lookCol {β : Type} (f : β → Option Col) (cs : β → List 
     cases lookCol (cs b) q <;> rfl
 
 omit [DecidableEq Col] [Fintype Coin] [Nonempty Coin] in
-/-- **On accepted reruns the extractor's table is the zero-filled word.** -/
 theorem firstTable_opθ (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (ω : Ω) (bs : List (Fin (D.V.k x) → Coin)) (hacc : ∀ b ∈ bs, Acc H D.V P x ω b) (p : Fin (N x)) :
     firstTable (opθ H D N P x ω) (fun _ => 0) bs p =
@@ -247,8 +191,6 @@ theorem firstTable_opθ (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → �
       unfold opθ
       simp only [show (run H P D.V x ω b).out = .acc from hacc b hb, ↓reduceIte]]
 
-/-- **A table at the word's positions extracts**: a trace no longer than the word, that read alone is a witness of
-table 0's own statement, agrees with it on at least `(1 − θ)·len` positions. -/
 def GoodTable (D : Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (C : Fin (N x) → Col) : Prop :=
   ∃ (M : T) (t : Stmt), D.table x 0 = some t ∧ RelS t (D.read [M]) ∧ D.len M ≤ N x ∧
     (1 - D.θ M) * D.len M ≤ ((Finset.univ : Finset (Fin (D.len M))).filter fun i => D.enc M i.val = extTab C i.val).card
@@ -265,7 +207,6 @@ theorem extractsAt_of_good (D : Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (
   exact ⟨M, t, ht, hrel, hag.trans_eq (by rw [e])⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- At a statement of one table, a table-0 word that extracts makes the statement's extraction event. -/
 theorem extracts_of_good (D : Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (vs : List Seen) {s : Stmt}
     (hs : D.parse x = some s) (h1 : s.tables = 1)
     (h : GoodTable D N x fun p => (lookCol (vs.flatMap fun v => D.cols v 0) p.val).getD 0) : Extracts D x vs :=
@@ -275,13 +216,10 @@ theorem extracts_of_good (D : Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (vs
 
 end Table
 
-/-! ## Escapes with the conflict fork -/
-
 section Fork
 
 variable {Ω Coin : Type} [Inhabited Coin] {H : Msg → Msg} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
 
-/-- **Escapes with one more fork event**: `e`'s, and `ev` at round `j₀` with weight `c`. -/
 def _root_.Claims.Escapes.addFork (e : Escapes H V P x) (c : ℝ) (hc : 0 ≤ c) (j₀ : Fin (V.k x))
     (ev : Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (tied : ∀ ω r r', ev ω r r' →
@@ -298,8 +236,6 @@ def _root_.Claims.Escapes.addFork (e : Escapes H V P x) (c : ℝ) (hc : 0 ≤ c)
   tied i := by cases i; exacts [tied, e.tied _]
   tied₁ := e.tied₁
 
-/-- **The escapes fit `C` with one more fork event** of weight `c` at round `0`: at most `mult` events at one round
-counting it, `mult · (c + Σ_i c_i) ≤ 2C`, and `Σ_l β_l ≤ k(x)`. -/
 def _root_.Claims.Escapes.FitsFork (e : Escapes H V P x) (C c : ℝ) : Prop :=
   ∃ mult : ℕ, (∀ r : Fin (V.k x), (Finset.univ.filter fun i => e.j i = r).card + (if r.val = 0 then 1 else 0) ≤ mult) ∧
     mult * (c + ∑ i, e.c i) ≤ 2 * C ∧ ∑ l, e.β l ≤ V.k x
@@ -355,18 +291,10 @@ theorem _root_.Claims.Escapes.fits_addFork (e : Escapes H V P x) (C c : ℝ) (hc
 
 end Fork
 
-/-! ## One wait, from the table's bound -/
-
 section OneWait
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The fixed-table bound**, the old theorems' fixed-table bound from accepted runs
-(`session_sound_of_table_acc`: `Pr[Acc ∧ T uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ off T]`) at the deployed verifier: at every
-statement and prover, escapes that fit the weight with one more fork event of weight `k`, such that at every tape and
-every table at the word's positions whose columns `Ok` admits and which does not extract, a run accepts with
-probability at most `ε_table + escapes(ω)` beyond that of accepting and opening a position of the word off the
-table. -/
 def TableBoundθ (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
     e.FitsFork (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (C : Fin (N x) → Col), (∀ p, Ok x (C p)) →
@@ -375,13 +303,10 @@ def TableBoundθ (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
 
-/-- **An accepted run opens only columns `Ok` admits** at the word's positions. -/
 def ColsOk (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (q : ℕ) (u : Col),
     (run H P D.V x ω r).out = .acc → q < N x → lookCol (D.cols (run H P D.V x ω r).seen 0) q = some u → Ok x u
 
-/-- **Two accepted runs at one tape open each position of the word to one column**, or the verifier's calls in the two
-runs collide. -/
 def ConflictTied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r r' : Fin (D.V.k x) → Coin) (q : ℕ) (u v : Col),
     (run H P D.V x ω r).out = .acc → (run H P D.V x ω r').out = .acc → q < N x →
@@ -389,10 +314,6 @@ def ConflictTied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) : P
     lookCol (D.cols (run H P D.V x ω r').seen 0) q = some v →
     u ≠ v → TiedColl H ((run H P D.V x ω r).vLog ++ (run H P D.V x ω r').vLog)
 
-/-- **One wait's bound at a tape, from the joint bound at any positions**: where `op` reads a run's openings at the
-positions `Pos`, at most `N₀` of them, `k ≥ 1`, and at every list of accepted reruns that does not extract a run accepts
-with probability at most `ε_table + escapes(ω)` beyond that of accepting off the table they fill, the escapes with the
-conflict at round `0` added at weight `k` bound one wait at `ω`. -/
 theorem oneWait_le_of_joint (H : Msg → Msg) (D : Deploy Coin Col T) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) {Pos : Type} [Fintype Pos] (op : Ω → (Fin (D.V.k x) → Coin) → Pos → Option Col)
     (hN : (Fintype.card Pos : ℝ) ≤ D.N₀ x) (hεt : 0 ≤ D.εtable x) (e₀ : Escapes H D.V P x) (j₀ : Fin (D.V.k x))
@@ -452,9 +373,6 @@ theorem oneWait_le_of_joint (H : Msg → Msg) (D : Deploy Coin Col T) {Ω : Type
     exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hN hε.le) (by positivity)
   linarith
 
-/-- **Flock's one-wait bound, from the table's bound**: when the word is no longer than `N₀`, `ε_table ≥ 0`, the
-verifier takes a round, `k ≥ 1` and the statement has one table wherever it accepts some run, and `Ok` admits `0` and
-every column an accepted run opens. -/
 theorem oneWait_of_tableBound (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
     (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
@@ -515,7 +433,6 @@ theorem oneWait_of_tableBound (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg
     obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
     exact ⟨ha, p, u, hu, fun h => h2 (by rw [hu, h])⟩
 
-/-- **`Ok`, or a position no rerun opened** (`0`). -/
 def orZero (Ok : Msg → Col → Prop) : Msg → Col → Prop := fun x u => u = 0 ∨ Ok x u
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
@@ -527,21 +444,17 @@ end OneWait
 
 end Claims.Flock
 
-/-! ## At the deployed records -/
-
 namespace FlockDeploy.KS
 
 open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The word's length**: table 0's level-0 codeword length `2^d`; `0` where the statement does not set up. -/
 def wordLen (zk : Bool) (x : Claims.Msg) : ℕ :=
   match (tables zk x).head? with
   | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
-/-- **The zero column**: table 0's level-0 witness lanes, each `0`. -/
 noncomputable def zeroCol (zk : Bool) (x : Claims.Msg) : List 𝔽 :=
   match (tables zk x).head? with
   | some (_, st) =>
@@ -593,8 +506,6 @@ theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) 
     1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   Gen.k_one_zk (S := S₀) (rel := rel) (x := x)
 
-/-- **A column of the code's width**: as long as the zero column, table 0's level-0 lanes (under `--zk` with the extra
-lanes). -/
 def wide (zk : Bool) (x : Claims.Msg) (u : List 𝔽) : Prop := u.length = (zeroCol zk x).length
 
 theorem wide_ne_zero (zk : Bool) (x : Claims.Msg) (u : List 𝔽) (hN : 0 < wordLen zk x) (h : wide zk x u) :
@@ -610,8 +521,6 @@ theorem wide_ne_zero (zk : Bool) (x : Claims.Msg) (u : List 𝔽) (hN : 0 < word
     simp only [List.length_replicate] at h
     exact absurd h.symm (pow_ne_zero _ two_ne_zero)
 
-/-- **The deployed plain verifier: one wait's bound from the table's bound**, at SHA-512, where the statement has
-one table. -/
 theorem plain_oneWait_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
@@ -623,8 +532,6 @@ theorem plain_oneWait_of_tableBound (rel : Readable.Parsed → Readable.Relation
     (fun x => εtable_nonneg false x) (V_k_pos false) (k_one_plain rel) hone _ (fun _ => .inl rfl)
     (Claims.Flock.colsOk_orZero _ _ _ _ hok) hconf htab
 
-/-- **The deployed masked (`--zk`) verifier: one wait's bound from the table's bound**, at SHA-512, where the
-statement has one table. -/
 theorem zk_oneWait_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)
@@ -636,7 +543,6 @@ theorem zk_oneWait_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk rel) hone _ (fun _ => .inl rfl)
     (Claims.Flock.colsOk_orZero _ _ _ _ hok) hconf htab
 
-/-- **The deployed plain verifier: KS from the table's bound**, at SHA-512, where the statement has one table. -/
 theorem plain_KS_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
@@ -648,8 +554,6 @@ theorem plain_KS_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (fun x => (hone x).imp_left fun ⟨_, hs, h1⟩ => splits_of_one (deployPlain rel) rfl rfl hs h1)
     (plain_oneWait_of_tableBound rel hone hok hconf htab)
 
-/-- **The deployed masked (`--zk`) verifier: KS from the table's bound**, at SHA-512, where the statement has one
-table. -/
 theorem zk_KS_of_tableBound (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)

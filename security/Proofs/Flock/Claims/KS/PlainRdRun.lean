@@ -4,24 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainRawL
 public import Proofs.Flock.Claims.KS.PlainCapsDep
 public import Proofs.Flock.Claims.Recursion.PlainK
 
-/-!
-# The plain table bound at one tape, each slot at the run's own level columns
-
-`plain_accPr_le_rdL` bounds a plain run's acceptance by `ε_table`, the one-run event's probability, one read-set term
-per fork slot and the chance of opening off the table, at read sets `rdD` holding every decoded live opening and
-tables `w` that read the coins before the slot's fork round. Here its two simulator premises are discharged, so the
-read sets need only hold what the run itself opens:
-
-* `plainRawLevelCols_top`: an accepted run has no level columns at or past its schedule's last level.
-* `plainRel_of`: a decoded live opening at a cap slot, where the outputs record the deployed reps' later entries, is
-  a row of the run's own level columns there, at an accepted run (`plain_liveRow`, `opRL_eq_some`).
-* `plain_accPr_le_rdRun`: `plain_accPr_le_rdL` at any leaf with the slot alignment from the live schedule
-  (`plainLive_schedL`, `leadsAfter_simAt`, `slotRSL_lead`) and the read sets' premise from `plainRel_of`.
-* `plain_accPr_le_rdAll`: at every statement some run accepts, its one table's schedule, and the bound at every
-  prover, tape and table off which the model statement isn't committed: the public, hm96 and plain-leaf cases
-  (`plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterEntriesHUAt`), each slot's term at the run's own
-  level columns.
--/
+/-! The plain table bound at one tape with each fork slot's term at the run's own level columns. -/
 
 @[expose] public section
 
@@ -35,8 +18,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepted plain run has no level columns at or past its schedule's last level**: its reader's shape is table
-0's, whose schedule is the statement's `fast100` one. -/
 theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
@@ -66,7 +47,6 @@ theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pr
     simp only [plainRawLevelCols, hro]
     split <;> simp [htop]
 
-/-- `plainRawLevelCols_topK` at the deployed plain verifier (`keep := id`). -/
 theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
@@ -75,10 +55,6 @@ theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg
     plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ = [] :=
   plainRawLevelCols_topK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (hs := hs) (hst := hst) (hsch := hsch) (r := r) (ℓ := ℓ) (hℓ := hℓ)
 
-/-- **A decoded live opening at a cap slot is a row of the run's own level columns**: where the decoded outputs
-record the deployed reps' later entries (`hE`), an output the concrete simulator's live outcome returns that opens
-rep `r`'s level-`ℓ + 1` position `q` at its recorded `ℓ`-th cap to `v` is one where `P`'s run accepts, and `v` is a
-row the run's level-`ℓ + 1` columns of rep `r` hold at `q` (`plain_liveRow`). -/
 theorem plainRel_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -116,11 +92,6 @@ theorem plainRel_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
     (by omega) y.1 y.2.1 (List.mem_map_of_mem hy)
 
 open Classical in
-/-- **A plain run accepts with probability at most `ε_table`, its one-run event's, each slot's read-set term and
-that of opening off the table, at read sets holding the run's own level columns**, at any leaf `Lf`, its decoders
-`hdec` and openings `opn` whose outputs record the deployed reps' later entries (`hE`): `plain_accPr_le_rdL`, the
-simulated strategy meeting each slot at its fork round (`plainLive_schedL`, `leadsAfter_simAt`, `slotRSL_lead`) and
-each decoded opening a row of the run's columns (`plainRel_of`). -/
 theorem plain_accPr_le_rdRun {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -187,14 +158,6 @@ theorem plain_accPr_le_rdRun {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pars
       exact hrd r ℓ _ hacc q e he
 
 open Classical in
-/-- **At every statement some run accepts, the plain bound at the run's own level columns**: the statement's setup,
-its one table `st`, that table's `fast100` schedule `sch` and its model schedule, the statement's tables and the
-model schedule as `Accounting.fast100`'s, and at every prover, tape and table
-of full-width columns that is not good, `plain_accPr_le_rdRun` at read sets holding the run's own level columns and
-tables reading the coins before each slot's fork round: at `leaf512` where the outputs are public or hidden under
-hm96 leaves (`plain_hdecAt`, `plain_hdecHAt`; `plain_laterEntriesAt`, `plain_laterEntriesHAt`; the live self-clash's
-clash `plainSimClashAt_of_later`), at `leafPlain` under plain SHA-512 leaves (`plain_hdecHUAt`,
-`plain_laterEntriesHUAt`, `plainSimClashHU`). -/
 theorem plain_accPr_le_rdAll {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     ∃ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (m k0 : ℕ)
       (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ),

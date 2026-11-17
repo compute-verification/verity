@@ -4,25 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainLeafFork
 public import Proofs.Flock.Claims.KS.PlainOff
 public import Proofs.Flock.Claims.KS.OffSim
 
-/-!
-# The plain slot's off mass, on the deployed coins
-
-`slotOffRSL_le_offC` (`PlainOff`) bounds the plain slot `(r, ℓ + 1)`'s raw term at a strategy that reaches the slot's
-node after `j` coins by the session's plurality off mass after `j` coins at the recorded cap (`opCapL`). Route (c)
-carries that mass to the deployed coins as one run's, never as a fork:
-
-* `Claims.Bridge.liveOp_some`, `Claims.Bridge.retOK_det`: a related live opening is a related model outcome's, and a
-  live outcome's decoded model outcome is one (`playsT_det`).
-* `offC_afterAt`, `offC_simSessG`, `offC_simAt_le`: against the simulated strategy after `Commit`, the off mass after
-  `j` coins at `opCapL` is at most the live session's at the decoded outcome's openings (`Claims.Bridge.Sim.offC_le`;
-  the dead branches' empty openings open nothing, `opRL_nul`), as `forkC_simAt_le` is for the fork.
-* `plainΦ_prefix`: the simulator's first `j` coins read only the first `j` live coins (`histKey`).
-* `plainOffAtU`, `plainOffAtU_le_live`: the slot's term at the concrete simulator at tape `u`, at `leafPlain`, is at
-  most the chance over the live coins of opening off a table that reads the first `j` of them
-  (`Claims.Bridge.Live.offC_liveStrat_le`).
-* `plainOffU_le`: averaged over the tape, at most the chance over the deployed coins of opening off a table that reads
-  their first `j`, at any deployed openings `opD` that every decoded opening is (`Pr_plainΦ`).
--/
+/-! The plain slot's off mass, carried to the deployed coins as one run's mass, never as a fork. -/
 
 @[expose] public section
 
@@ -31,15 +13,12 @@ namespace Claims.Bridge
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Tables
 
 open Classical in
-/-- An opening of the related model outcome is one of a model outcome the live outcome is related to. -/
 theorem liveOp_some {β α Pt V : Type} {R : β → α → Prop} {op : α → Pt → Option V} {b : β} {p : Pt} {v : V}
     (h : liveOp R op b p = some v) : ∃ a, R b a ∧ op a p = some v := by
   unfold liveOp at h
   split_ifs at h with he
   exact ⟨_, Classical.choose_spec he, h⟩
 
-/-- **A live outcome decodes to one model outcome**: the reps' runs on the decoded tapes end at one result each
-(`PlainSample.playsT_det`). -/
 theorem retOK_det {P OutT Cp Op : Type} {J mPts : ℕ} {out : Fin J → Cp → P × P → Op → OutT}
     {pL : LiveOutJ J mPts → Prop} {opn : Array ByteArray → Fin J → Op} {dec : Fin J → ℕ → ByteArray → List Game.Msg}
     {one : Fin J → ℕ → Bool} {fin : Fin J → Fin 2 → Array ByteArray → List Game.Msg}
@@ -63,8 +42,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSound
 open Claims.Bridge.Live
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## Through the simulation -/
 
 section Sim
 
@@ -106,9 +83,6 @@ theorem bind_none_fun {α β : Type} (o : Option α) : (o.bind fun _ => (none : 
   cases o <;> rfl
 
 open Classical in
-/-- **The off mass after `j` coins at the recorded cap, against the simulated strategy after `Commit`,** is at most
-the live session's after `j` coins at the decoded outcome's openings (`Claims.Bridge.liveOp`): the decoded outcome is
-one (`retOK_det`), and the dead branches open nothing (`opRL_nul`). -/
 theorem offC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (t : TabSpec mPts) (ok : Model.OutCL 𝔽 D Sl → Prop)
@@ -149,15 +123,11 @@ theorem offC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Non
 
 end Sim
 
-/-! ## At the concrete simulator -/
-
 section Plain
 
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- **The simulator's first `j` coins read only the first `j` live coins**: coordinate `i` of `fnAt` reads the live
-coins at rounds `i' ≤ i` only (`histKey`). -/
 theorem plainΦ_prefix {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : plainN x + 2 = (V false).k x)
     (u : plainTape x) {j : ℕ} {r r' : Fin (plainN x + 2) → LCoin 65536}
     (h : ∀ i : Fin (plainN x + 2), i.val < j → r i = r' i) :
@@ -174,8 +144,6 @@ theorem plainΦ_prefix {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : p
   dsimp only
   rw [hk, h (Fin.cast hL.symm i) (by simp only [Fin.val_cast]; exact hi)]
 
-/-- **The plain slot `(r, ℓ + 1)`'s raw term at the concrete simulator at tape `u`, at `leafPlain`**: the per-position
-off mass at the slot's node at the plurality chooser, `session_sound_of_table_accL_nodeOff`'s slot term. -/
 noncomputable def plainOffAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -196,9 +164,6 @@ noncomputable def plainOffAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (
       hk0 hm PT_LOCAL spec.mPts [] [] T (capOfRoot (plainRoot P x ω)[0]!))
     (plainSimAtU L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The slot's term at tape `u` is at most the chance over the live coins of opening off a table that reads their
-first `j`**, where the simulated strategy reaches the slot's node after `j` coins (`PlainSlotQU`): through the
-recorded cap (`slotOffRSL_le_offC`), the simulation (`offC_simAt_le`) and the live coins (`offC_liveStrat_le`). -/
 theorem plainOffAtU_le_live {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -235,10 +200,6 @@ theorem plainOffAtU_le_live {spec : SessionSpec} {st : Stmt} (L : Layout st) (m 
         (ω, u) _ j W hW))
 
 open Classical in
-/-- **The slot's term averaged over the tape is at most the chance over the deployed coins of opening off a table
-that reads their first `j`**, at deployed openings `opD` that every decoded live opening is: the competitor at the
-live coins is the table at the simulator's coins, which reads only the first `j` live coins (`plainΦ_prefix`), and
-the simulator's coins are uniform (`Pr_plainΦ`). -/
 theorem plainOffU_le {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)

@@ -35,25 +35,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundRoute
 
-/-!
-# The deployed reader's columns as the bound record reads them
-
-`RecDeploy.bdDeployed` takes the element-level columns `colsE` as a parameter, read off a view (`Claims.Seen`): the
-messages and answers, with neither the statement nor the last coin. `FlockDeploy.colsRV rd` is `colsR`'s reader on a
-view. The statement is the last message's (`rd`), the coins are read back from the answers (`RecDeploy.outCoin`,
-`default` at the decision), and the run is `runOfR`'s at what `decR` decides on there (`runOfDecR`). `decR` reads the
-coins only at `cs.head?` and `cs.tail.dropLast`, which the answers keep, and the statement only through its setup,
-which an accepting decision's checks fix to the last message's (`checksAtJ_ok`). So:
-
-* `colsRV_eq`: on a view whose messages are `ms` and whose answers read back to `cs` but for its last coin, where
-  `nextR rd` accepts `ms` at `cs` after `V false`'s rounds, `colsRV rd` is `colsR rd x ms cs`.
-* `bdR`: `bdDeployed` at `nextE := nextR rd` and `colsE := colsRV rd`.
-* `deployCols_runR`: on a run `IVStar` of `bdR` accepts at SHA-512, at any prover, `nextR rd` accepts the opened
-  messages at the run's coins, and the deployed columns of the run (`Bound.deploy`'s, of the run's view opened) are
-  `colsR` there (`Bound.accFacts`).
-* `plainVerdictAtJK_of_runIVR`: there `nextR` decides, and `plainVerdictAtJK id` holds at its live outcome wherever
-  the deployed columns of the run look up no column off `C` at table 0 (`plainVerdictAtJK_of_nextR_cols`).
--/
+/-! The deployed reader's columns on a view (`colsRV`), as the bound record `RecDeploy.bdDeployed` reads them. -/
 
 @[expose] public section
 
@@ -103,7 +85,6 @@ theorem runOfR_of_actR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
   rw [h]
   rfl
 
-/-- A decision's statement is its last message's (`rd`). -/
 theorem decR_rd {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) : ∃ fl, (as.getLast?).bind rd = some fl ∧ d.f.stmt = fl.stmt := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
@@ -121,14 +102,12 @@ theorem decR_rd {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List 
   obtain rfl := Option.some.inj h
   exact (beq_iff_eq.1 hst).symm
 
-/-- `decR` reads the coins only at the first and between the first and the last. -/
 theorem decR_congr_coins (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg)
     {cs cs' : List Coin} (h1 : cs.head? = cs'.head?) (h2 : cs.tail.dropLast = cs'.tail.dropLast) :
     decR rd x as cs = decR rd x as cs' := by
   unfold decR
   rw [h1, h2]
 
-/-- **`decR` doesn't read the last coin**, after two rounds. -/
 theorem decR_dropLast (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) {cs : List Coin}
     (h : 2 ≤ cs.length) (c : Coin) : decR rd x as (cs.dropLast ++ [c]) = decR rd x as cs := by
   rcases cs with _ | ⟨a, _ | ⟨b, t⟩⟩
@@ -147,10 +126,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The reader on a view is `colsR` at the view's messages and the run's coins**: where `nextR rd` accepts the
-messages `ms` at the coins `cs` after `V false`'s rounds, at SHA-512, a view whose messages are `ms` and whose answers
-show `cs` but for the last coin has `colsR rd x ms cs` for its `colsRV rd`. The decision's checks fix its statement to
-`x` (`checksAtJ_ok`), and `decR` doesn't read the last coin (`decR_dropLast`). -/
 theorem colsRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
     {v : Claims.Seen} (hm : v.msgs.map Prod.fst = ms)
     (hcs : (v.msgs.map Prod.snd).map outCoin = cs.dropLast ++ [default]) (hk : cs.length = (FlockDeploy.V false).k x)
@@ -169,18 +144,12 @@ theorem colsRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : Lis
     rw [colsR_colsOf, runOfR_of_actR hact, hm, hcs, hfl]
     simp only [hx, decR_dropLast rd x ms h2, actR_decide hact]
 
-/-- **The deployment at the deployed reader**: `bdDeployed` with the element-level steps `nextR rd` and the columns
-`colsRV rd`. -/
 noncomputable abbrev bdR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
     (rowIn : Claims.Msg → Claims.Msg) (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) ×
       Claims.Msg)) (w : Claims.Msg → ℝ) : Claims.Recursion.Bound Coin (List 𝔽) Claims.Flock.PlainTrace :=
   RecDeploy.bdDeployed rel (nextR rd) (colsRV rd) wE join rowIn final w
 
-/-- **An accepted run of the deployment reads `colsR` at its opened messages and coins**: on a run `IVStar` of `bdR`
-accepts at SHA-512, at any prover, `final` reads the run's last message as `(os, last)`, `nextR rd` accepts the opened
-messages at the run's coins, and the deployed columns of the run, `colsRV rd` at its view opened, are `colsR rd` there
-(`Bound.accFacts`, `colsRV_eq`). -/
 theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
     (rowIn : Claims.Msg → Claims.Msg)
@@ -233,10 +202,6 @@ theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · simp only [Claims.Recursion.Bound.ansAt, hDk, show ¬ (n + 1 < (FlockDeploy.V false).k x) by omega, ↓reduceIte,
         hacc0]
 
-/-- **An accepted run of the deployment gives the verdict at the sample, at its deployed columns**: on a run `IVStar` of
-`bdR` accepts at SHA-512, at any prover, `nextR rd` decides on the opened messages at the run's coins, and wherever the
-decided statement carries the sample `d` and the deployed columns of the run look up no column off `C` at table 0,
-`plainVerdictAtJK id` holds at the decision's live outcome (`deployCols_runR`, `plainVerdictAtJK_of_nextR_cols`). -/
 theorem plainVerdictAtJK_of_runIVR (mPts : ℕ) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
     (rowIn : Claims.Msg → Claims.Msg)

@@ -6,15 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Off the table without a self-clash, with each slot's term raw
-
-`session_sound_of_table_accL_sc` bounds each rep cap's slot term by `Lock.leafE_off_le`'s root, which needs the
-plurality chooser `plurSL`. Before that step, the bound holds at any chooser, with each slot's term the raw mass of runs
-that open a position off the table chosen there (`session_sound_of_table_accL_raw`). At `plurSL` that mass is at most
-the per-position off mass at the slot's node (`Lock.nodeOff`), which is at most the mass off any other table there
-(`Lock.nodeOff_le_of_plurality`): `session_sound_of_table_accL_nodeOff`.
--/
+/-! `session_sound_of_table_accL_sc` at any chooser with each slot's term raw, and at `plurSL` with each slot's off mass at its node. -/
 
 @[expose] public section
 
@@ -23,10 +15,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session, with each slot's term raw**, at any chooser:
-`Acc` with `T` uncommitted has probability at most `tableError`, plus the self-clash, plus `Acc` without a self-clash
-off `T` at level 0, plus, per rep and level, the mass of runs that open a position off the table chosen at the rep's
-cap. -/
 theorem session_sound_of_table_accL_raw {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] {D Sl : Type} (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
@@ -117,9 +105,6 @@ theorem session_sound_of_table_accL_raw {F K : Type} [Field F] [Fintype F] [Deci
   linarith
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session, with each slot's off mass at its node**: at
-`plurSL`, each slot's raw term is at most the per-position off mass at the rep cap's node (`Lock.nodeOff`), over the
-prefixes; that is at most the mass off any other table there (`Lock.nodeOff_le_of_plurality`, `plurS_pluralityL`). -/
 theorem session_sound_of_table_accL_nodeOff {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]
     [Fintype K] [DecidableEq K] {D Sl : Type} (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)

@@ -35,29 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# A slot's coin count past a game the strategy plays to its end first
-
-A batch puts a position's lockstep beside the same games on both sides (`rightSame`, `batchLock`). Where the strategy
-plays the game in front to its end first, after exactly `n` coins, or plays a part of the run whose every reached
-outcome is `Dead` (`First`), a slot of the lockstep met after `j` coins once that game has ended is met after `n + j`:
-
-* `First`: the strategy plays the first game of `interleave h g'` to its end before the second;
-* `NoSlot.map`, `noSlot_rightSame_ret`: relabelling keeps no table node of the slot, and the same game beside a
-  finished lockstep has none;
-* `SlotAt.rightSame_first`: so a slot met after `j` coins once `h` has ended is met after `n + j` coins;
-* `PreFirst`, `SlotAt.batchLock_first`: in a batch, the games in front of a position played to their ends first, in
-  order, after `n` coins in all, put a slot of that position's lockstep met after `j` coins once they have ended at
-  `n + j` coins.
--/
+/-! A slot's coin count past a game the strategy plays to its end first. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Game.Lock
 
-/-- **The strategy plays `h` to its end first**: at every choice of `interleave h g'` it advances `h`, which ends after
-exactly `n` coins with `Q` at its outcome and the strategy after it (`done`), unless `g'` has ended (`last`), except
-below a part of the run every reached outcome of which is `Dead` (`dead`). -/
 inductive First {γ β : Type} (Dead : γ × β → Prop)
     (Q : (c : γ) → (g' : Game β) → Strategy (interleave (.ret c) g') → Prop) :
     ℕ → (h : Game γ) → (g' : Game β) → Strategy (interleave h g') → Prop
@@ -88,7 +71,6 @@ theorem NoSlot.map {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} 
   unfold Lock.map
   exact hL.bind fun i a b hr => .ret (h i a b hr)
 
-/-- **The same game beside a finished lockstep has no table node.** -/
 theorem noSlot_rightSame_ret {slot : ℕ} {i : I} {a : α} {b : β} (hr : R i a b) :
     ∀ h : Game γ, NoSlot slot (rightSame h (Lock.ret (T := T) (D := D) (get := get) hr))
   | .ret _ => NoSlot.map _ _ _ (.ret hr)
@@ -98,8 +80,6 @@ theorem noSlot_rightSame_ret {slot : ℕ} {i : I} {a : α} {b : β} (hr : R i a 
 variable {plur : Chooser T D (γ × β)} {slot : ℕ} {Φ : D → γ × β → γ × β → ℝ} {Dead : γ × β → Prop}
   {Q : (c : γ) → (g' : Game β) → Strategy (interleave (.ret c) g') → Prop}
 
-/-- **A slot met after `j` coins once `h` has ended is met after `n + j` coins** by a strategy playing `h` to its end
-first, after `n` coins. -/
 theorem SlotAt.rightSame_first (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b b' = 0) {j n : ℕ} {h : Game γ}
     {g' : Game β} {σ : Strategy (interleave h g')} (hS : First Dead Q n h g' σ) :
     ∀ {i : I} {g : Game α} (L : Lock T D get R i g g'),
@@ -159,9 +139,6 @@ theorem SlotAt.rightSame_first (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b 
 
 end First
 
-/-- **The strategy plays the games in front of position `pre.length` to their ends, in order**, after `n` coins in
-all, each by `First`; `Q cs σ'` holds at their outcomes `cs` and the strategy `σ'` on the rest of the batch after them,
-and `Dead` reads the whole batch's outcomes. -/
 def PreFirst {ζ : Type} (g : Game ζ) (post : List (Game ζ)) :
     (pre : List (Game ζ)) → (List ζ → Prop) → (List ζ → Strategy (batch (g :: post)) → Prop) → ℕ →
       Strategy (batch (pre ++ g :: post)) → Prop
@@ -178,9 +155,6 @@ section Batch
 
 variable {T D I ζ : Type} {get : I → ℕ → Option (T × D)} {R : I → ζ → ζ → Prop}
 
-/-- **A slot of position `pre.length`'s lockstep met after `j` coins once the games in front have ended is met after
-`n + j` coins** by a strategy playing them to their ends first, in order, after `n` coins (`PreFirst`), where it is met
-after `j` at every chooser and every `Φ` that vanishes on two `Dead` outcomes. -/
 theorem SlotAt.batchLock_first (d : ζ) {i : I} {g g' : Game ζ} (L : Lock T D get R i g g') (post : List (Game ζ))
     {slot j : ℕ} :
     ∀ (pre : List (Game ζ)) {plur : Chooser T D (List ζ)} {Φ : D → List ζ → List ζ → ℝ} {Dead : List ζ → Prop}

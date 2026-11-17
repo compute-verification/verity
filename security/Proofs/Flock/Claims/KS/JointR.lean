@@ -36,35 +36,16 @@ import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.Prob
 
-/-!
-# One wait's bound from every table's bound, the escapes counted per round
-
-Escapes that fit a weight counted per round (`Escapes.FitsR`) fit it as `Escapes.Fits` asks once their fork events are
-merged by round (`Escapes.mergeR`: at each round one event, that some event there holds, of weight the round's count
-times its events' total weight): the merged escapes have one event per round (`Escapes.FitsR.fits_mergeR`), and by
-Cauchy–Schwarz their term is at least the escapes' (`Escapes.term_le_mergeR`). So `OneWait` follows from every table's
-bound with the escapes counted per round (`Claims.Flock.TableBoundJR`, `Claims.Flock.oneWait_of_tableBoundJR`): the
-conflict fork at round `0` gives escapes fitting per round (`Escapes.fitsR_addFork`), and their merge fits `OneWait`'s
-weight. At tables with unopened positions it follows from `ExtendJ` (`Claims.Flock.tableBoundJR_of_extend`). The
-bound is also stated at an error for each table (`Claims.Flock.TableBoundEachR`, of which `TableBoundJR` is the instance
-at the tables' errors summed; `Claims.Flock.tableBoundEachR_of_eachAccAtR`, `Claims.Flock.tableBoundEachR_of_extend`).
-The deployed masked verifier is KS from every table's bound counted per round (`FlockDeploy.KS.zk_KS_of_tableBoundJR`),
-so from the live sessions' bound off the table on a witness lane where some run accepts and `ExtendJ`
-(`FlockDeploy.KS.zk_KS_of_liveAccWJ`).
--/
+/-! One wait's bound from every table's bound with the escapes counted per round (`TableBoundJR`), merged by round into `Escapes.Fits`. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-! ## Fork events merged by round -/
-
 section Merge
 
 variable {Ω Coin : Type} [Inhabited Coin] {H : Msg → Msg} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
 
-/-- **The escapes' fork events merged by round**: at each round one event, that some event at the round holds, of
-weight the round's count of events times their total weight. -/
 def Escapes.mergeR (e : Escapes H V P x) : Escapes H V P x where
   I := Fin (V.k x)
   c r := ((Finset.univ.filter fun i => e.j i = r).card : ℝ) * ∑ i ∈ Finset.univ.filter (fun i => e.j i = r), e.c i
@@ -80,7 +61,6 @@ def Escapes.mergeR (e : Escapes H V P x) : Escapes H V P x where
     exact e.tied i ω s s' h
   tied₁ := e.tied₁
 
-/-- **Merged by round, escapes that fit `C` per round fit it** with one event per round. -/
 theorem Escapes.FitsR.fits_mergeR {e : Escapes H V P x} {C : ℝ} (h : e.FitsR C) : e.mergeR.Fits C := by
   refine ⟨1, fun r => ?_, ?_, h.2⟩
   · show (Finset.univ.filter fun r' : Fin (V.k x) => r' = r).card ≤ 1
@@ -96,8 +76,6 @@ theorem Escapes.FitsR.fits_mergeR {e : Escapes H V P x} {C : ℝ} (h : e.FitsR C
     rw [Finset.mul_sum]
     exact Finset.sum_congr rfl fun i hi => by rw [(Finset.mem_filter.1 hi).2]
 
-/-- **Merging by round only raises the escapes' term**: at each round, by Cauchy–Schwarz,
-`Σ_i √(c_i·Pr[ev_i]) ≤ √(n·Σ_i c_i·Pr[∃ i, ev_i])` over its `n` events. -/
 theorem Escapes.term_le_mergeR [Fintype Coin] (e : Escapes H V P x) (ω : Ω) : e.term ω ≤ e.mergeR.term ω := by
   unfold Escapes.term
   refine add_le_add ?_ le_rfl
@@ -131,13 +109,10 @@ namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## One wait, from every table's bound counted per round -/
-
 section Tables
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundJ` with the escapes counted per round** (`Escapes.FitsForkR`). -/
 def TableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
     e.FitsForkR (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (j : ℕ), j < nTab D x → ∀ C : Fin (N x j) → Col,
@@ -153,10 +128,6 @@ theorem tableBoundJR_of_accAtR {H : Msg → Msg} {D : Deploy Coin Col T} {N : Ms
   obtain ⟨e, -, hf, hb⟩ := h x Ω P
   exact ⟨e, hf, hb⟩
 
-/-- **`TableBoundJR` at an error for each table** (`ε x j` for `D.εtable x`): at a table `j` and a word at its
-positions that is not `GoodTableAt`, a run accepts with probability at most `ε x j + escapes(ω)` beyond that of
-accepting and opening a position of table `j`'s word off the word. `TableBoundJR` is its instance at the tables'
-errors summed. -/
 def TableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (ε : Msg → ℕ → ℝ) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
@@ -167,7 +138,6 @@ def TableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ �
           ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
 
 omit [Nonempty Coin] in
-/-- **`TableBoundEachR` from the bound at each statement on accepted first runs** (`TableBoundEachAccAtR`). -/
 theorem tableBoundEachR_of_eachAccAtR {H : Msg → Msg} {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ}
     {Ok : Msg → ℕ → Col → Prop} {ε : Msg → ℕ → ℝ} (h : ∀ x, TableBoundEachAccAtR H D N Ok (ε x) x) :
     TableBoundEachR H D N Ok ε := by
@@ -175,8 +145,6 @@ theorem tableBoundEachR_of_eachAccAtR {H : Msg → Msg} {D : Deploy Coin Col T} 
   obtain ⟨e, -, hf, hb⟩ := h x Ω P
   exact ⟨e, hf, hb⟩
 
-/-- **Flock's one-wait bound, from every table's bound counted per round**: `oneWait_of_tableBoundJ`, the escapes
-with the conflict fork merged by round (`Escapes.mergeR`). -/
 theorem oneWait_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (hN : ∀ x, ((∑ j : Fin (nTab D x), N x j : ℕ) : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hVk : ∀ x, 0 < D.V.k x) (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
@@ -197,8 +165,6 @@ theorem oneWait_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : M
   linarith
 
 omit [Nonempty Coin] in
-/-- **Each table's bound at its error, counted per round, at tables with unopened positions**:
-`tableBoundJ_of_extend` at an error for each table. -/
 theorem tableBoundEachR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (ε : Msg → ℕ → ℝ) (hne : ∀ x j u, 0 < N x j → Ok x j u → u ≠ 0)
     (hok : ColsOkJ H D N Ok) (hext : ExtendJ D N Ok) (htab : TableBoundEachR H D N Ok ε) :
@@ -215,8 +181,6 @@ theorem tableBoundEachR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N :
   · rwa [← hkeep p h0]
 
 omit [Nonempty Coin] in
-/-- **Every table's bound counted per round at tables with unopened positions**: `tableBoundEachR_of_extend` at the
-tables' errors summed. -/
 theorem tableBoundJR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (hne : ∀ x j u, 0 < N x j → Ok x j u → u ≠ 0) (hok : ColsOkJ H D N Ok)
     (hext : ExtendJ D N Ok) (htab : TableBoundJR H D N Ok) : TableBoundJR H D N (orZeroJ Ok) :=
@@ -234,8 +198,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed masked (`--zk`) verifier: one wait's bound**, at SHA-512, from every table's bound counted per
-round (`oneWait_of_tableBoundJR`). -/
 theorem zk_oneWait_of_tableBoundJR
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true))) :
@@ -245,8 +207,6 @@ theorem zk_oneWait_of_tableBoundJR
     (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
     (zk_conflictTiedJ _) htab
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
-`zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
 theorem zk_KS_of_tableBoundJR
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true))) :
@@ -255,8 +215,6 @@ theorem zk_KS_of_tableBoundJR
 
 end Gen
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
-`zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
 theorem zk_KS_of_tableBoundJR
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true))) :
@@ -267,8 +225,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
-tables and `ExtendJ`. -/
 theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
     (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
@@ -277,17 +233,12 @@ theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
 
 end Gen
 
-/-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
-tables and `ExtendJ`. -/
 theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
     (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
     Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (Claims.Flock.orZeroJ (wideJ true)) :=
   Gen.zk_tableBoundJR_of_extend (S := S₀) (rel := rel) (hext := hext) (htab := htab)
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
-sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at
-full-width columns. -/
 theorem zk_KS_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
@@ -299,18 +250,12 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed masked verifier: one wait's bound**, at SHA-512 at the deployed relation, at every number of tables,
-from the live sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and
-`ExtendJ` at full-width columns. -/
 theorem zk_oneWait_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
   zk_oneWait_of_tableBoundJR (zk_tableBoundJR_of_extend Readable.relation hext
     (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x))
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
-sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at
-full-width columns. -/
 theorem zk_KS_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=

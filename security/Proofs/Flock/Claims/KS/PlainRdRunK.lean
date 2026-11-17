@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainRdRun
 public import Proofs.Flock.Claims.KS.PlainLeafKSK
 
-/-!
-# The plain table bound at one tape at `VK keep`, each slot at the run's own level columns
-
-`PlainCapsDep`'s `plain_liveRow` (its `mem_rdAtK` is `PlainCapsDep`'s own), `PlainRawL`'s `plainOffL_le_rd` and `plain_accPr_le_rdL`, and
-`PlainRdRun`'s `plainRel_of`, `plain_accPr_le_rdRun` and `plain_accPr_le_rdAll`, over the verifier `VK keep`: the
-simulator at `plainSimK keep` and the verdict at the sample `plainVerdictAtK keep`.
--/
+/-! `PlainCapsDep`'s, `PlainRawL`'s and `PlainRdRun`'s bounds at `VK keep`. -/
 
 @[expose] public section
 
@@ -25,7 +19,6 @@ open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody 
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- `plain_liveRow` at `VK keep`. -/
 theorem plain_liveRowK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -97,7 +90,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoun
 open Lean (Json)
 
 open Classical in
-/-- `plainOffL_le_rd` at `VK keep`. -/
 theorem plainOffL_le_rdK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -189,7 +181,6 @@ theorem plainOffL_le_rdK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {sp
   exact congrArg some hd
 
 open Classical in
-/-- `plain_accPr_le_rdL` at `VK keep`. -/
 theorem plain_accPr_le_rdLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -293,7 +284,6 @@ open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody 
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- `plainRel_of` at `VK keep`. -/
 theorem plainRel_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -331,7 +321,6 @@ theorem plainRel_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.S
     (by omega) y.1 y.2.1 (List.mem_map_of_mem hy)
 
 open Classical in
-/-- `plain_accPr_le_rdRun` at `VK keep`. -/
 theorem plain_accPr_le_rdRunK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -398,7 +387,6 @@ theorem plain_accPr_le_rdRunK (keep : Bool → Bool) {x : Claims.Msg} {s : Claim
       exact hrd r ℓ _ hacc q e he
 
 open Classical in
-/-- `plain_accPr_le_rdAll` at `VK keep`. -/
 theorem plain_accPr_le_rdAllK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (m k0 : ℕ)
       (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ),

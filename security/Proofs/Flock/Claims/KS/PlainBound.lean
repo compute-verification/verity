@@ -38,30 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The plain table bound from salted sessions after `Commit`
-
-`TableBoundθAt` at the deployed plain record, at a statement whose setup has one table, from a mixture of the old
-salted sessions after `Commit` at table 0's model statement (`plain_tableBoundθAt_of_sessions`). The escapes are the
-old ones (`Flock.oldEsc`) at the plain fork rounds (`plainJ`), so they fit the weight (`oldEsc_fitsFork_plainJ`). At
-a tape `ω` and a table `C`, `ε_ω` is at most the deployed runs' probability of accepting with every opened column on
-`C`, plus that of accepting with one off `C`, which the bound keeps. The first is at most a mixture's mean probability
-of accepting after `Commit` with no level-0 opening off `C` unless it self-clashes. At a table the model does not
-commit to, that is at most each strategy's `ε_c⁻` (`session_sound_of_table_accL_sc`, whose term off `C` without a
-self-clash is then empty), and the mean `ε_c⁻` is at most `ε_table` and the escapes' term (`mean_epsSL_le`). That
-bound at one tape and table is `plain_le_sessions`, and at any escapes whose term bounds the mean `ε_c⁻` it is
-`plain_le_sessionsE`, which the slack's escapes reuse (`KS.ForkSlack`). What is left are the hypotheses on the
-deployed prover:
-
-* at each `ω` and `C`, a mixture bounds the deployed runs that accept on `C` (the transport of `Deploy.V false`'s runs
-  to the live session's, with the decoder taking openings on `C` to openings on `C` or to a self-clash);
-* its mean `Adv` and self-clash are at most the escapes' events (the escapes);
-* a table that does not extract is not committed to table 0's model statement, at every table `Ok` allows.
-
-With the mixture the simulated strategies after `Commit` of live strategies whose roots agree (`simAt`), the first
-is the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting
-with no opening off `C` unless it self-clashes (`plain_tableBoundθAt_of_live`).
--/
+/-! The plain table bound at a statement of one table from a mixture of salted sessions after `Commit`, its hypotheses on the deployed prover left open. -/
 
 @[expose] public section
 
@@ -77,11 +54,6 @@ theorem tables_head_one {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : 
   rfl
 
 open Classical in
-/-- **The plain bound at one tape and table, from salted sessions after `Commit`, at any escapes and any verifier of `Coin`s**: at a statement
-`st`, a tape `ω` and a table `C` the model does not commit to, when a mixture `σ` of salted sessions after a `Commit`
-of cap `cap₀` bounds the deployed runs accepting on `C` by its acceptance with no opening off `C` unless it
-self-clashes, and the mixture's mean `ε_c⁻` is at most `ε_table` and the term of escapes `e`, `ε_ω` is at most
-`ε_table`, `e`'s term and the deployed runs' probability of accepting with a column off `C`. -/
 theorem plain_le_sessionsEV (Vr : Claims.Verifier Coin) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -177,8 +149,6 @@ theorem plain_le_sessionsEV (Vr : Claims.Verifier Coin) {x : Claims.Msg} {spec :
   exact key
 
 open Classical in
-/-- **The plain bound at one tape and table, from salted sessions after `Commit`, at any escapes**: `plain_le_sessionsEV` at
-`V false`. -/
 theorem plain_le_sessionsE {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -209,11 +179,6 @@ theorem plain_le_sessionsE {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L 
   plain_le_sessionsEV (V false) L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay P e ω C hT τ cap₀ σ hacc hmean
 
 open Classical in
-/-- **The plain bound at one tape and table, from salted sessions after `Commit`**: where the setup has the one table
-`st`, at a tape `ω` and a table `C` the model does not commit to, when a mixture `σ` of salted sessions after a
-`Commit` of cap `cap₀` bounds the deployed runs accepting on `C` by its acceptance with no opening off `C` unless it
-self-clashes, and the events `ev`, `ev₁` bound its `Adv` and self-clash, `ε_ω` is at most `ε_table`, the old escapes'
-term and the deployed runs' probability of accepting with a column off `C`. -/
 theorem plain_le_sessions {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -261,11 +226,6 @@ theorem plain_le_sessions {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h :
       cap₀ σ sha512 (V false) P (plainJ (tables_head_one h) hsch) ev ev₁ tied tied₁ ω hadv hsc)
 
 open Classical in
-/-- **The plain table bound at a statement, from salted sessions after `Commit`**: where the setup has the one table
-`st`, when every prover has escapes at the plain fork rounds such that, at each tape and each table `C` `Ok` allows, a
-mixture `σ` of salted sessions after a `Commit` of cap `cap₀` bounds the deployed runs accepting on `C` by its
-acceptance with no opening off `C` unless it self-clashes, and the escapes' events bound its `Adv` and self-clash; and
-no table `Ok` allows that does not extract is committed to table 0's model statement. -/
 theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -316,7 +276,6 @@ theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Rel
   exact plain_le_sessions h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay P ev ev₁ tied tied₁ ω C (hnc C hok hg) τ
     cap₀ σ hacc hadv hsc
 
-/-- Table 0's model spec at a plain statement of one table. -/
 def plainTab {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -324,11 +283,6 @@ def plainTab {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀
   ⟨L.model (Refine.regionsOf st), m, k0, l₀, l₁, rest, ext, hsch, hm, ptLocal, hlay⟩
 
 open Classical Discharge.Tables in
-/-- **The plain table bound at a statement, from live sessions**: `plain_tableBoundθAt_of_sessions` with the mixture
-the simulated strategies after `Commit` (`simAt`) of live strategies `σL` whose roots agree. At each tape and table
-`C` `Ok` allows, what is left is that the live verdict `pL` bounds the deployed runs accepting on `C`, that the decoder
-is right for the verdict accepting with no opening off `C` unless it self-clashes, and that the escapes' events bound
-the simulated strategies' `Adv` and self-clash. -/
 theorem plain_tableBoundθAt_of_live (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)

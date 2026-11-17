@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainSampleK
 
-/-!
-# The live self-clash at level 0, at `wrPDK keep`
-
-`PlainClash0`'s draw-layer lemmas at `AcceptsAtDK keep` and what `wrPDK keep` writes: `clash₀_wrK_of`,
-`clash₀_wrKH_of`, `plain_clash₀AtK_of` and `plain_clash₀HAtK_of` at `wrPDK keep`, which records its outcome
-(`recordsLiveAtDK_wrPDK`).
-
-* `clash₀_wrPDK`, `clash₀_wrPDHK`: `clash₀_wrPD` and `clash₀_wrPDH` at `wrPDK keep`.
-* `plain_clash₀AtK`, `plain_clash₀HAtK`: `plain_clash₀At` and `plain_clash₀HAt` there.
-
-The run-level half (`rawCols_plain`, `plainClashQ₀`, `plainClashQ_or`) reads `P`'s run at the verifier, and is not
-restated here.
--/
+/-! `PlainClash0`'s draw-layer lemmas at `wrPDK keep`; the run-level half is `PlainClashRunK`'s. -/
 
 @[expose] public section
 
@@ -59,8 +47,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL Integrate in
-/-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**: `clash₀_wrK_of` at what
-`wrPDK keep` writes for `o` (`clash₀_wrPD`). -/
 theorem clash₀_wrPDK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -80,8 +66,6 @@ theorem clash₀_wrPDK (keep : Bool → Bool)
   clash₀_wrK_of keep ht hc ho dj x₀ hT hS R o (recordsLiveAtDK_wrPDK keep I (dj S) o) hacc pend' hp hcl
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
-`clash₀_wrKH_of` at what `wrPDK keep` writes for `o` (`clash₀_wrPDH`). -/
 theorem clash₀_wrPDHK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -111,8 +95,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `plain_clash₀AtK_of` at what
-`wrPDK keep` writes for `o` (`plain_clash₀At`). -/
 theorem plain_clash₀AtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -132,8 +114,6 @@ theorem plain_clash₀AtK (keep : Bool → Bool)
   plain_clash₀AtK_of keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o (recordsLiveAtDK_wrPDK keep _ d o)
     hacc pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
-`plain_clash₀HAtK_of` at what `wrPDK keep` writes for `o` (`plain_clash₀HAt`). -/
 theorem plain_clash₀HAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

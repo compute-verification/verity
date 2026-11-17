@@ -39,20 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# The shipped Merkle check logs every node of its paths
-
-`hm96-sha512/v1`'s Merkle check over `OC` (`merkleCheckWith (hm96With Hashes.oc)`), run against `sha512` within `L`,
-passed the compiled check, and every SHA-512 input of each opening is a message of `L` (`merkleCheck_logs`): the
-row's digest input, the salt digest's, the leaf's, and each node's two children on the climb (`opensIns`). Two
-accepted openings of one position against one cap with different rows collide (`Flock.opens_binding`), and the
-colliding pair's inputs are inputs of the two openings (`opensPair_mem`), so the two logs hold a SHA-512 collision
-(`tiedColl_of_opens`).
-
-The same for plain SHA-512 leaves (`flock-leaf/sha512-unsalted`, `MerkleScheme.sha512`), whose leaf's one input is the
-row's encoding (`opensInsP`, `merkleCheck_logsP`, `tiedColl_of_opensP`); `opensInsOf` and `merkleCheck_logsOf` take
-either scheme.
--/
+/-! The shipped Merkle check logs every SHA-512 input of its openings, so two accepted openings of one position with different rows put a collision in the two logs. -/
 
 @[expose] public section
 
@@ -63,27 +50,21 @@ open Flock
 /- `opensPair`'s branch decides an equality of two leaves; unfolding SHA-512 there evaluates it on symbolic input. -/
 attribute [local irreducible] Sha512.hash
 
-/-- The SHA-512 inputs of a climb under `hm96-sha512/v1`: each node's two children, leaf side first. -/
 def climbIns : ByteArray → ℕ → List ByteArray → List ByteArray
   | _, _, [] => []
   | acc, idx, s :: rest =>
     (if idx % 2 = 0 then acc ++ s else s ++ acc) ::
       climbIns (Sha512.hash (if idx % 2 = 0 then acc ++ s else s ++ acc)) (idx / 2) rest
 
-/-- The SHA-512 inputs of a leaf under `hm96-sha512/v1`: the row's encoding, the salt's, and the leaf's
-(`leaf_prefix ‖ b ‖ c`, in `Hm96.leafPair`'s form). -/
 def leafIns (row : Array F128) (salt : ByteArray) : List ByteArray :=
   [MerkleScheme.rowBytes row, Hm96.Default512.saltPrefix ++ salt,
     Hm96.Default512.leafPrefix ++ (Hm96.xor64 (Sha512.hash (MerkleScheme.rowBytes row)) (Hm96.Default512.mask salt) ++
       Sha512.hash (Hm96.Default512.saltPrefix ++ salt))]
 
-/-- **The SHA-512 inputs of an opening** under `hm96-sha512/v1`: its leaf's, then its climb's. -/
 def opensIns (row : Array F128) (salt : ByteArray) (pos : ℕ) (sibs : List ByteArray) : List ByteArray :=
   leafIns row salt ++ climbIns (MerkleScheme.hm96Sha512.leaf row salt) pos sibs
 
 theorem opsWith_hm96 (hs : Hashes Claims.OCV) : MerkleScheme.hm96Sha512.opsWith hs = MerkleOps.hm96With hs := rfl
-
-/-! ## Runs of the Merkle check's steps -/
 
 theorem Runs.throw {H : Claims.Msg → Claims.Msg} {α : Type} {e : String} {a : α} {L : List Claims.Msg}
     (h : Runs H (throw e : Claims.OCV α) a L) : False := by
@@ -194,8 +175,6 @@ theorem Runs.findM?_none {α : Type} {p : α → Claims.OCV Bool} {L : List Clai
       · exact hb
       · exact Runs.findM?_none h a ha
 
-/-- **The shipped `hm96-sha512/v1` Merkle check logs every opening**: run against `sha512` within `L`, the compiled
-check passed, and every SHA-512 input of query `j`'s opening is a message of `L`. -/
 theorem merkleCheck_logs {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
     {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
     (h : Runs sha512 (merkleCheckWith (MerkleOps.hm96With Claims.Hashes.oc) MerkleScheme.hm96Sha512 cap c d positions
@@ -228,8 +207,6 @@ theorem merkleCheck_logs {cap : Array ByteArray} {c d : ℕ} {positions : Array 
     cases o with
     | false => cases hno
     | true => exact (Runs.opensW ho).2 b hb
-
-/-! ## Two openings of one position, collided -/
 
 theorem climbPair_mem : ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx : ℕ),
     (climbPair MerkleScheme.hm96Sha512 s1 s2 a b idx).Collides MerkleScheme.hm96Sha512 →
@@ -294,7 +271,6 @@ theorem climbPair_mem : ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx : �
   | [], _, a, b, _, h => (h.2.2.2.2.1 rfl).elim
   | _ :: _, [], a, b, _, h => (h.2.2.2.2.1 rfl).elim
 
-/-- A leaf pair's inputs are its two leaves' inputs. -/
 theorem leafPair_mem (r1 r2 : Array F128) (y1 y2 : ByteArray) :
     (MerklePair.leaf r1 r2 y1 y2).hm96Inputs.1 ∈ leafIns r1 y1 ∧
       (MerklePair.leaf r1 r2 y1 y2).hm96Inputs.2 ∈ leafIns r2 y2 := by
@@ -309,7 +285,6 @@ theorem leafPair_mem (r1 r2 : Array F128) (y1 y2 : ByteArray) :
     · exact ⟨List.Mem.tail _ (List.Mem.tail _ (List.Mem.head _)),
         List.Mem.tail _ (List.Mem.tail _ (List.Mem.head _))⟩
 
-/-- **The colliding pair's inputs are the openings' inputs.** -/
 theorem opensPair_mem (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List ByteArray) (r2 : Array F128)
     (y2 : ByteArray) (s2 : List ByteArray)
     (h : (opensPair MerkleScheme.hm96Sha512 pos r1 y1 s1 r2 y2 s2).Collides MerkleScheme.hm96Sha512) :
@@ -330,7 +305,6 @@ theorem opensPair_mem (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List 
 theorem toMsg_injective : Function.Injective Claims.toMsg := fun a b h => by
   rw [← Claims.ofMsg_toMsg a, ← Claims.ofMsg_toMsg b, h]
 
-/-- **Two accepted openings of one position against one cap, with different rows, collide in the two logs.** -/
 theorem tiedColl_of_opens {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
     {s1 s2 : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
     (hw1 : ∀ x ∈ s1, x.size = MerkleScheme.hm96Sha512.digestLen)
@@ -349,16 +323,11 @@ theorem tiedColl_of_opens {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 :
     Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _)))
   rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, heq]
 
-/-! ## Plain SHA-512 leaves -/
-
-/-- The SHA-512 inputs of a leaf under `flock-leaf/sha512-unsalted`: the row's encoding. -/
 def leafInsP (row : Array F128) : List ByteArray := [MerkleScheme.rowBytes row]
 
-/-- **The SHA-512 inputs of an opening** under `flock-leaf/sha512-unsalted`: its leaf's, then its climb's. -/
 def opensInsP (row : Array F128) (salt : ByteArray) (pos : ℕ) (sibs : List ByteArray) : List ByteArray :=
   leafInsP row ++ climbIns ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf row salt) pos sibs
 
-/-- The SHA-512 inputs of an opening under either scheme the verifier admits for its tables. -/
 def opensInsOf (ms : MerkleScheme) : Array F128 → ByteArray → ℕ → List ByteArray → List ByteArray :=
   if ms.id = "hm96-sha512/v1" then opensIns else opensInsP
 
@@ -373,7 +342,6 @@ theorem opensInsOf_plain : opensInsOf (MerkleScheme.sha512 "flock-leaf/sha512-un
 theorem opsWith_plain (hs : Hashes Claims.OCV) :
     (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").opsWith hs = MerkleOps.sha512With hs := rfl
 
-/-- The two schemes climb alike: both nodes are `SHA-512(l ‖ r)`. -/
 theorem climbWith_sha512 :
     climbWith (MerkleOps.sha512With Claims.Hashes.oc) = climbWith (MerkleOps.hm96With Claims.Hashes.oc) := by
   funext acc idx sibs
@@ -423,8 +391,6 @@ theorem Runs.opensWP {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array 
       · exact hlt b hb
   · cases Runs.pure h
 
-/-- **The shipped plain-leaves Merkle check logs every opening**: run against `sha512` within `L`, the compiled check
-passed, and every SHA-512 input of query `j`'s opening is a message of `L`. -/
 theorem merkleCheck_logsP {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
     {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
     (h : Runs sha512 (merkleCheckWith (MerkleOps.sha512With Claims.Hashes.oc)
@@ -462,7 +428,6 @@ theorem merkleCheck_logsP {cap : Array ByteArray} {c d : ℕ} {positions : Array
     | false => cases hno
     | true => exact (Runs.opensWP ho).2 b hb
 
-/-- **The shipped Merkle check of either admitted scheme logs every opening.** -/
 theorem merkleCheck_logsOf {ms : MerkleScheme}
     (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
@@ -550,7 +515,6 @@ theorem climbPair_memP : ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx : �
   | [], _, a, b, _, h => (h.2.2.2.2.1 rfl).elim
   | _ :: _, [], a, b, _, h => (h.2.2.2.2.1 rfl).elim
 
-/-- **The colliding pair's inputs are the openings' inputs**, under plain SHA-512 leaves. -/
 theorem opensPair_memP (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List ByteArray) (r2 : Array F128)
     (y2 : ByteArray) (s2 : List ByteArray)
     (h : (opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2).Collides
@@ -573,8 +537,6 @@ theorem opensPair_memP (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List
     obtain ⟨h1, h2⟩ := climbPair_memP s1 s2 _ _ pos h
     exact ⟨List.mem_append_right _ h1, List.mem_append_right _ h2⟩
 
-/-- **Two accepted plain-leaves openings of one position against one cap, with different rows, collide in the two
-logs.** -/
 theorem tiedColl_of_opensP {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
     {s1 s2 : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
     (hw1 : ∀ x ∈ s1, x.size = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").digestLen)

@@ -45,21 +45,7 @@ import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The cap an accepted plain rep absorbs, from the messages before its round
-
-`CapChunk` splits a rep's frames at its `ℓ`-th recursive cap, in round `preLig + capRound k0 (ℓ + 1)` of its stream.
-Here that round is a deployed message: at an accepted plain run, rep `r` of table 0 retained in round `j` of its stream
-the bytes of its frames' `j`-th chunk (`rep_rounds`, at the oracle answering within the run's log and the table's named
-Merkle scheme), and custody makes those bytes `P`'s message `r · R + j + 1`, `R` the table's `repRounds`
-(`custody_ok`). So two accepted runs whose coins agree before the plain fork round have one message there
-(`depMsg_congr`), and their rep-`r` proofs one flattened `ℓ`-th recursive cap (`capFr_eq_of_chunk`).
-
-* `plain_acc_mids`: an accepted plain run decides on `P`'s messages along its coins.
-* `plain_capChunk`: an accepted plain rep's frames, chunk by chunk, are `P`'s round messages.
-* `plain_capPrefix`: two accepted plain runs sharing the coins before `forkRound` absorb one cap there.
-* `plain_levelTie`: so two different rows they open at one level-`(ℓ + 1)` position tie a collision among their calls.
--/
+/-! Two accepted plain runs sharing the coins before the plain fork round absorb one recursive cap there, so two rows they open at a later level tie a collision. -/
 
 @[expose] public section
 
@@ -79,7 +65,6 @@ theorem forall₂_getElem?_some {α β : Type} {R : α → β → Prop} :
     simp only [List.getElem?_cons_succ] at h ⊢
     exact forall₂_getElem?_some hl h
 
-/-- The first two arrays' entries in a flattening, by array and position. -/
 theorem flat_two_getElem? {α : Type} (a : Array (Array α)) (h2 : 2 ≤ a.size) {r j : ℕ} (hr : r < 2)
     (hj : j < (a[r]'(by omega)).size) :
     (a.toList.flatMap (·.toList))[r * (a[0]'(by omega)).size + j]? = (a[r]'(by omega))[j]? := by
@@ -93,9 +78,6 @@ theorem flat_two_getElem? {α : Type} (a : Array (Array α)) (h2 : 2 ≤ a.size)
       simp [List.getElem?_append_right, List.getElem?_append_left (show j < a₁.toList.length by simpa using hj)]
     · omega
 
-/-- **An accepted plain run decides on `P`'s messages along its coins**: it decides at the statement's setup, on its
-last message read as a final message, with the custody checks passing and the shipped verdict accepting within its
-verifier log, and its round messages are `P`'s messages `1` to `plainN x` after their tags, each with its coin. -/
 theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
@@ -125,7 +107,6 @@ theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
     List.zip_map']
   rfl
 
-/-- `plain_acc_midsK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (V false) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
@@ -136,12 +117,6 @@ theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
         (fun k => ((depMsg sha512 P x ω (Claims.coinSeq c) (k + 1)).tail, Claims.coinSeq c (k + 1))) :=
   plain_acc_midsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h)
 
-/-- **An accepted plain rep's frames are `P`'s round messages, chunk by chunk.** At an accepted plain run, rep `r < 2`
-of table 0, its proof file decoded at the table's `fast100` schedule and `|regions| · points` extra claims, has frames
-(at some batched value `T`) whose `j`-th chunk is, for every round `j` of the rep's `repRounds`, the bytes of `P`'s
-message `r · repRounds + j + 1` after its tag: the verdict accepts the rep (`verifyWithMK_tables`), at the shipped
-oracle (`sub`) and the table's named scheme, so its stream's rounds retained its chunks (`rep_rounds`), and the
-stream's rounds are the live ones (`decodeWithK_live`), which custody makes the round messages (`custody_ok`). -/
 theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -233,7 +208,6 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   rw [hbytes j hj] at e
   simpa using e.symm
 
-/-- `plain_capChunkK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -246,13 +220,6 @@ theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
         (depMsg sha512 P x ω (Claims.coinSeq c) (r * repRounds false spec st + j + 1)).tail :=
   plain_capChunkK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (f := f) (p := p) (r := r) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (hf := hf) (hp := hp)
 
-/-- **Two accepted plain runs sharing the coins before the plain fork round absorb one cap there.** At two accepted
-plain runs of `P` at one tape whose coins agree before `forkRound spec st k0 r ℓ`, rep `r < 2` of table 0's proof
-files, decoded at the table's `fast100` schedule and `|regions| · points` extra claims, have one flattened `ℓ`-th
-recursive cap, for each `ℓ + 1` below the schedule's levels: its round's chunk is `P`'s message there in both runs
-(`plain_capChunk`), the same message (`depMsg_congr`), and two frame lists with one header list (`repFrames_hds`) split
-at their `ℓ`-th caps after as many closing squeezes (`repFrames_capSplit`) whose rounds there have the same bytes split
-at one cap (`capFr_eq_of_chunk`). -/
 theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -300,7 +267,6 @@ theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
     exact hc ⟨i, hk⟩ hi'
   · simp only [Claims.coinSeq, hk, ↓reduceDIte]
 
-/-- `plain_capPrefixK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -315,11 +281,6 @@ theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
       p₂.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty :=
   plain_capPrefixK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c₁ := c₁) (c₂ := c₂) (h₁ := h₁) (h₂ := h₂) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (r := r) (ℓ := ℓ) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (hℓ := hℓ) (hc := hc) (f₁ := f₁) (f₂ := f₂) (p₁ := p₁) (p₂ := p₂) (hf₁ := hf₁) (hf₂ := hf₂) (hp₁ := hp₁) (hp₂ := hp₂)
 
-/-- **Two accepted plain runs sharing the coins before the plain fork round, opening one later-level position to two
-rows, tie a collision among their verifier calls**: each row is an `Opening` of the position in its run's log against
-the run's rep-`r` flattened `ℓ`-th recursive cap (`plain_levelOpening` at level `ℓ + 1`), the two caps are one
-(`plain_capPrefix`), and two openings of one position against one root to different rows tie a collision
-(`tiedColl_of_openings`). -/
 theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -348,7 +309,6 @@ theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   rw [hcap] at hop₁
   exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
 
-/-- `plain_levelTieK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}

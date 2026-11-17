@@ -38,22 +38,7 @@ import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# Two runs forked after a number of coins, through a simulation
-
-`forkC F j g s` runs `s` in `g` to its `j`-th coin and then continues it twice independently, `F` read on the two
-outcomes, in expectation; a run that ends first is its own pair. It is the game-side sampling design of two runs sharing their
-first `j` coins.
-
-* `forkC_send`, `forkC_nonneg`, `forkC_le_expect`, `forkC_eqRec`: it follows the strategy at a send, is nonnegative,
-  is at most the expectation of a bound on its first argument, and survives a cast.
-* `Sim.expect_le`, `Sim.expect₂_le`, `Sim.forkC_le`: through a simulation (`Refine.Sim`) whose returns relate the live
-  and model outcomes by `R` and whose dead branches reach no outcome in `Q`, an expectation, a two-run expectation and
-  a fork after `j` coins of a model function at most an indicator of `Q` are at most the live ones of a function that
-  bounds it on related outcomes: the simulation matches the coins one to one.
-* `NoCoin`, `Fresh`, `forkX_fresh`, `fresh_sessionK`, `forkX_sessionK`: on a game whose every coin answers its own
-  send (`Fresh`), as the live session's do, `B`'s fork at round `j` (`forkX`) is the fork after `j` coins.
--/
+/-! Two runs forked after a number of coins (`forkC`), through a simulation and as `B`'s fork. -/
 
 @[expose] public section
 
@@ -61,14 +46,11 @@ namespace FlockSoundness.Game
 
 variable {α : Type}
 
-/-- One step of `forkC`: follow the strategy to the next coin, then `next` at each of its values. -/
 noncomputable def forkStep (F : α → α → ℝ) (next : (g : Game α) → Strategy g → ℝ) : (g : Game α) → Strategy g → ℝ
   | .ret a, _ => F a a
   | .send _ k, s => forkStep F next (k s.1) s.2
   | @Game.coin _ C iF _ k, s => (∑ c : C, next (k c) (s c)) / (@Fintype.card C iF)
 
-/-- **Two runs forked after `j` coins**: one run to its `j`-th coin, then two independent continuations, `F` read on
-their two outcomes, in expectation. A run that ends before is its own pair. -/
 noncomputable def forkC (F : α → α → ℝ) : ℕ → (g : Game α) → Strategy g → ℝ
   | 0 => expect₂ F
   | j + 1 => forkStep F (forkC F j)
@@ -94,7 +76,6 @@ theorem forkC_nonneg {F : α → α → ℝ} (hF : ∀ a a', 0 ≤ F a a') :
   | j + 1, @Game.coin _ C _ _ k, s =>
       div_nonneg (Finset.sum_nonneg fun c _ => forkC_nonneg hF j (k c) (s c)) (Nat.cast_nonneg _)
 
-/-- A fork is at most the expectation of a bound on its first run. -/
 theorem forkC_le_expect {F : α → α → ℝ} {f : α → ℝ} (hF : ∀ a a', F a a' ≤ f a) :
     ∀ (j : ℕ) (g : Game α) (s : Strategy g), forkC F j g s ≤ expect f g s
   | 0, g, s => expect_mono (fun a => (expect_mono (hF a) g s).trans_eq (expect_const (f a) g s)) g s
@@ -123,8 +104,6 @@ section Transfer
 
 variable {β α : Type} {pL : β → Prop} {pg : α → Prop}
 
-/-- **An expectation through a simulation**: a model function at most a nonnegative live one on related outcomes,
-and nonpositive on the dead branches, has its expectation against the simulated strategy at most the live one. -/
 theorem Sim.expect_le {R : β → α → Prop} {D : (g : Game α) → Strategy g → Prop} {f : α → ℝ} {f' : β → ℝ}
     (hR : ∀ b a, R b a → f a ≤ f' b) (hf' : ∀ b, 0 ≤ f' b) (hD : ∀ g σ, D g σ → expect f g σ ≤ 0) :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g), Sim.All R D d → ∀ s : Strategy L,
@@ -147,8 +126,6 @@ theorem expect_le_zero_of_prob {Q : α → Prop} {f : α → ℝ} (hf : ∀ a, f
   exact (expect_mono hf g σ).trans e.symm.le
 
 open Classical in
-/-- **Two independent runs through a simulation**: a model function at most an indicator of `Q` in each argument and
-at most a nonnegative live one on related outcomes, where the dead branches reach no outcome in `Q`. -/
 theorem Sim.expect₂_le {R : β → α → Prop} {Q : α → Prop} {F : α → α → ℝ} {G : β → β → ℝ}
     (hFQ : ∀ a a', F a a' ≤ ind Q a) (hFQ' : ∀ a a', F a a' ≤ ind Q a') (hG : ∀ b b', 0 ≤ G b b')
     (hRG : ∀ b a b' a', R b a → R b' a' → F a a' ≤ G b b') {L : Game β} {g : Game α} (d : Sim pL pg L g)
@@ -163,8 +140,6 @@ theorem Sim.expect₂_le {R : β → α → Prop} {Q : α → Prop} {F : α → 
       (expect_const _ g _)) hσ'
 
 open Classical in
-/-- **A fork after `j` coins through a simulation**: as `Sim.expect₂_le`, since the simulation matches the model's
-coins with the live ones one to one. -/
 theorem Sim.forkC_le {R : β → α → Prop} {Q : α → Prop} {F : α → α → ℝ} {G : β → β → ℝ}
     (hFQ : ∀ a a', F a a' ≤ ind Q a) (hFQ' : ∀ a a', F a a' ≤ ind Q a') (hG : ∀ b b', 0 ≤ G b b')
     (hRG : ∀ b a b' a', R b a → R b' a' → F a a' ≤ G b b') :
@@ -190,20 +165,15 @@ theorem Sim.forkC_le {R : β → α → Prop} {Q : α → Prop} {F : α → α �
 
 end Transfer
 
-/-! ## `B`'s fork is the fork after as many coins -/
-
 section Fresh
 
 variable {β : Type}
 
-/-- A game with no coin. -/
 def NoCoin : Game β → Prop
   | .ret _ => True
   | .send _ k => ∀ m, NoCoin (k m)
   | @Game.coin _ _ _ _ _ => False
 
-/-- **Every coin answers its own send**: from a position with no round open (`true`), the game sends before each coin;
-right after a send (`false`), it samples that send's coin or samples none again. -/
 def Fresh : Bool → Game β → Prop
   | _, .ret _ => True
   | true, .send _ k => ∀ m, Fresh false (k m)
@@ -253,9 +223,6 @@ theorem forkX_noCoin (F : β → β → ℝ) : ∀ (g : Game β) (I : Iface Coin
       exact Ex_const _
   | @Game.coin _ _ _ _ _, _, _, h, _, _ => by unfold NoCoin at h; exact h.elim
 
-/-- **`B`'s fork is the fork after as many coins** where every coin answers its own send: at a position with no
-round open, round `j`'s fork is the fork after `j` coins; right after a send, the pending coin averaged, after `j + 1`.
--/
 theorem forkX_fresh (F : β → β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I),
     (Fresh true g → ∀ (j : ℕ) (p : Option Coin), forkX F j g I s p = forkC F j g (toStrat g I s)) ∧
     (Fresh false g → ∀ j : ℕ, Ex (fun u : Coin => forkX F j g I s (some u)) = forkC F (j + 1) g (toStrat g I s))
@@ -311,7 +278,6 @@ theorem fresh_sessionK (dg : ByteArray → ByteArray) (J mPts N : ℕ) : Fresh t
   simp only [sessionK, Fresh]
   exact fun _ pts => fresh_roundsK dg _ pts N _
 
-/-- **`B`'s fork at the live session is the fork after as many coins**. -/
 theorem forkX_sessionK {nMax J mPts : ℕ} (w : Wire nMax J mPts) (dg : ByteArray → ByteArray) (N : ℕ)
     (F : LiveOutJ J mPts → LiveOutJ J mPts → ℝ) (j : ℕ)
     (s : RStrat (LCoin nMax) (sessionK dg J mPts N) (sessionIf w dg N)) :

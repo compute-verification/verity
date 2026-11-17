@@ -46,28 +46,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The plain verdict at the statement's sample, at `VK keep`
-
-`PlainSample`'s verdict at every `keep`, the facts about `PlainSampleKDefs`' definitions: verity-verify-proof's acceptance is
-`verifyWithMK keep` at SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round
-is the live outcome's up to its digest (`Round.erase`), since at `keep := fun _ => true` the decoder drops S12's
-comparison of a retained round's bytes with its recorded digest (`decodeWithK_live`). Every reader of the rounds here
-reads their coin counts, coins and bytes only (`plainRepColsOf` reads the coins), so nothing below reads a round's
-digest.
-
-* `AcceptsAtDK`, `RecordsLiveAtDK`, `TxNoOffAtK`, `wrPDK` (`PlainSampleKDefs`): at `keep := id` acceptance and the
-  reader's premise are `PlainSample`'s
-  (`acceptsAtD_iff_acceptsAtDK_id`, `txNoOffAt_iff_txNoOffAtK_id`), and a record of the outcome there is one here
-  (`recordsLiveAtDK_id_of`); the element-level acceptance holds wherever the shipped one does
-  (`acceptsAtDK_true_of_acceptsAtD`).
-* `recordsLiveAtDK_of_checks`, `acceptsAtDK_of_decide`: an accepting decision of `VK keep` at SHA-512 is accepted at the
-  setup at its statement's sample and records its live outcome there up to the rounds' digests.
-* `cols_plainK`: `cols_plain` with the verdict read through `keep`.
-* `plainVerdictAtK_of_run`: `plainVerdictAtK` (`plainVerdictAt` at `wrPDK`), which every accepting run of `VK keep`
-  with no column off `C` has at its live outcome, on every draw-carrying record. At `keep := id` the run is one of
-  `V false` (`VK_id`), and at `keep := fun _ => true` one of `VE` (`VK_true`).
--/
+/-! `PlainSample`'s verdict at every `keep`, where a recorded round is the live outcome's up to its digest, which nothing here reads. -/
 
 @[expose] public section
 
@@ -85,8 +64,6 @@ theorem named_of_setupAtD {I : Exec.Inputs} {dr : Option Json} {spec : SessionSp
     (h : setupAtD I dr = .ok (spec, sts)) : ∀ s ∈ sts.map _root_.Flock.Setup.ofCircuit, s.merkle.Named :=
   With.named_ofCircuit (With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _ _ h)
 
-/-- **`AcceptsAtDK id` is `AcceptsAtD`**: on every session the setup at a sample sets up, `verify` is
-`verifyWith Sha512.hash`. -/
 theorem acceptsAtD_iff_acceptsAtDK_id (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) :
     AcceptsAtD I dr t ↔ AcceptsAtDK id I dr t := by
   unfold AcceptsAtD AcceptsAtDK
@@ -94,14 +71,11 @@ theorem acceptsAtD_iff_acceptsAtDK_id (I : Exec.Inputs) (dr : Option Json) (t : 
   rw [verify_eq_verifyWith _ _ _ _ (named_of_setupAtD hs)]
   exact Iff.rfl
 
-/-- **The element-level acceptance at a sample holds wherever `AcceptsAtD` does** (`verifyWithE_of_verifyWith`). -/
 theorem acceptsAtDK_true_of_acceptsAtD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (h : AcceptsAtD I dr t) : AcceptsAtDK (fun _ => true) I dr t := by
   obtain ⟨spec, sts, hs, hv⟩ := (acceptsAtD_iff_acceptsAtDK_id I dr t).1 h
   exact ⟨spec, sts, hs, verifyWithE_of_verifyWith _ _ _ _ _ hv⟩
 
-/-- **A record of the outcome at `d` is one at `keep := id`**: `RecordsLiveAtD`'s rounds are the outcome's, so they
-are up to their digests. -/
 theorem recordsLiveAtDK_id_of {I : Exec.Inputs} {d : Json} {J mPts : ℕ} {o : Tables.LiveOutJ J mPts}
     {t : Exec.Transcript} (h : RecordsLiveAtD I d o t) : RecordsLiveAtDK id I d o t := by
   intro hA
@@ -118,7 +92,6 @@ theorem txNoOffAt_iff_txNoOffAtK_id (I : Exec.Inputs) (d : Json) {N : ℕ} (C : 
   unfold TxNoOffAt TxNoOffAtK
   simp only [decodeWithK_id_std]
 
-/-- **The verdict refuses a session without proof files, at every `keep`** (`verify_nil_plain`'s proof). -/
 theorem verifyWithMK_nil (keep : Bool → Bool) (hs : Hashes _root_.Flock.V) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) : verifyWithMK keep hs spec tabs record #[] ≠ .ok () := by
   intro h
@@ -145,7 +118,6 @@ theorem not_acceptsAtDK_nil (keep : Bool → Bool) (I : Exec.Inputs) (dr : Optio
   rintro ⟨spec, sts, -, h⟩
   exact verifyWithMK_nil keep _ _ _ _ h
 
-/-- **`wrPDK` records the live session at the setup at `d`, up to the rounds' digests.** -/
 theorem recordsLiveAtDK_wrPDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts : ℕ}
     (o : Tables.LiveOutJ J mPts) : RecordsLiveAtDK keep I d o (wrPDK keep I d o) := by
   unfold wrPDK
@@ -154,8 +126,6 @@ theorem recordsLiveAtDK_wrPDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h (not_acceptsAtDK_nil _ _ _ _)
 
-/-- **`verifyWithMK keep` accepts what `wrPDK` writes** wherever it accepts some transcript at the setup at `d` that
-records the outcome there. -/
 theorem acceptsAtDK_wrPDK {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {J mPts : ℕ} {o : Tables.LiveOutJ J mPts}
     {t : Exec.Transcript} (hA : AcceptsAtDK keep I (some d) t) (hR : RecordsLiveAtDK keep I d o t) :
     AcceptsAtDK keep I (some d) (wrPDK keep I d o) := by
@@ -171,10 +141,6 @@ theorem forall₂_map_congr {α β γ : Type} {R : α → β → Prop} {f : α �
     rw [List.map_cons, List.map_cons, H _ _ (by simp) hab,
       forall₂_map_congr hl fun a b hb h => H a b (List.mem_cons_of_mem _ hb) h]
 
-/-- **Custody gives `RecordsLiveAtDK`**: where the custody checks pass on a plain statement that sets up at its sample
-`d` with no `--public-inputs`, the last message's record and proof files are a record of the run's live outcome
-(`viewOf`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOf`'s in coin count, coins and bytes
-(`decodeWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
 theorem recordsLiveAtDK_of_checks (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
@@ -210,9 +176,6 @@ theorem recordsLiveAtDK_of_checks (keep : Bool → Bool) {s : Ins} {spec : Sessi
     subst hn hcn hb hbytes
     rfl
 
-/-- **An accepting decision of `VK keep` at SHA-512**: the statement sets up at `(spec, sts)`, plain and without
-`--public-inputs`, `verifyWithMK keep` at SHA-512 accepts the record and proof files there, and the custody checks
-pass (`nextK_decide` at the setup `act` read). -/
 theorem decideK_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act false x as cs = .decide s spec sts link c₁ mids f)
@@ -226,9 +189,6 @@ theorem decideK_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
   exact ⟨hv, hc, hs, readOf_zk (x := x) (by simp [readOf, hins]), publicInputs_none_of_checks hc⟩
 
-/-- **An accepting decision of `VK keep` at SHA-512 is accepted through `keep` at the setup at its statement's sample**,
-on a record of its live outcome there up to the rounds' digests, whatever sample the record carries
-(`acceptsAtD_of_decide` at every `keep`). -/
 theorem acceptsAtDK_of_decide (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
@@ -250,7 +210,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`cols_plain` with the verdict read through `keep`** (`rep_plainK`, `queryRound_plainK`). -/
 theorem cols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {lv : Live} {st : Stmt} {sch : Schedule} (hf : lastFinal seen = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -292,12 +251,6 @@ theorem coins_getElem?_of_erase {xs ys : List Round} (h : xs.map Round.erase = y
   have e := congrArg (fun l : List Round => l[j]?.map (fun rd : Round => rd.coins)) h
   simpa only [List.getElem?_map, Option.map_map, Function.comp_def, Round.erase_coins] using e
 
-/-- **The deployed event gives the verdict at the sample, at every `keep`**: an accepting run of `VK keep` at SHA-512
-decides on its messages and coins, and at its statement's sample `d`, if the run's reader looks up no column off `C` at
-table 0, `plainVerdictAtK keep` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root, whatever
-sample its record carries (`plainVerdictAt_of_run` at `nextK keep`): `verifyWithMK keep` accepts the last message at the
-setup at `d` (`acceptsAtDK_of_decide`), so it accepts what `wrPDK` writes, whose rep streams' coins are the run's
-(`coins_getElem?_of_erase`), and those are the reader's columns (`cols_plainK`). -/
 theorem plainVerdictAtK_of_run (keep : Bool → Bool) (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {r : Fin ((VK keep).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc) :

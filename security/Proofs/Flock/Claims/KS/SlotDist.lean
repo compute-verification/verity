@@ -38,19 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# A slot's distance in coins, independent of the strategy
-
-`SlotAt` asks of one strategy that it reach a slot's table node after a number of coins. Where every path of a lockstep
-meets that node after the same number of coins, or never meets it, the alignment holds against every strategy:
-
-* `NoSlot slot L`: `L` has no table node of `slot`; `forkE_noSlot`: the fork there is `0`, so `SlotAt` holds by `nul`
-  (`SlotAt.of_noSlot`). `noSlot_of_get_none`: an index that never holds the slot has no such node; `noSlot_same`: the
-  same game on both sides has no table node; `NoSlot.mono`, `NoSlot.bind`: weakening and sequencing keep it.
-* `Dist slot j L`: every path of `L` meets the node after exactly `j` coins, or meets no such node; `SlotAt.of_dist`:
-  then `SlotAt` holds at `j` against every strategy. `Dist.mono`, `Dist.bind`: weakening keeps it, and a lockstep
-  with no such node and an exact shape (`Exact`) in front adds the shape's coins (`coinsK`).
--/
+/-! A slot's distance in coins where every path of a lockstep meets it after one count, which aligns the fork against every strategy. -/
 
 @[expose] public section
 
@@ -58,7 +46,6 @@ namespace FlockSoundness.Game.Lock
 
 open FlockSoundness.Discharge.Exec
 
-/-- **No table node of `slot`** in `L`. -/
 inductive NoSlot {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop} (slot : ℕ) :
     {i : I} → {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Prop
   | ret {i : I} {a : α} {b : β} (h : R i a b) : NoSlot slot (Lock.ret h)
@@ -73,7 +60,6 @@ inductive NoSlot {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R :
       {L : (t : T) → (d : D) → Lock T D get R (upd t d) (k t) (k' d)} (hne : s ≠ slot) :
       (∀ t d, NoSlot slot (L t d)) → NoSlot slot (Lock.table s upd hf hs hk L)
 
-/-- **With no table node of `slot`, the fork there is `0`.** -/
 theorem forkE_noSlot {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) {i : I} {g : Game α} {g' : Game β}
     {L : Lock T D get R i g g'} (h : NoSlot slot L) (σ' : Strategy g') : forkE plur slot Φ L σ' = 0 := by
@@ -88,7 +74,6 @@ theorem SlotAt.of_noSlot {T D I α β : Type} {get : I → ℕ → Option (T × 
     {L : Lock T D get R i g g'} (h : NoSlot slot L) (σ' : Strategy g') : SlotAt plur slot Φ j L σ' :=
   .nul (forkE_noSlot plur slot Φ h σ')
 
-/-- **An index that never holds `slot` has no table node of it.** -/
 theorem noSlot_of_get_none {T D I α β : Type} [Nonempty T] [Nonempty D] {get : I → ℕ → Option (T × D)}
     {R : I → α → β → Prop} {slot : ℕ} (hg : ∀ i, get i slot = none) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'), NoSlot slot L
@@ -104,7 +89,6 @@ theorem noSlot_of_get_none {T D I α β : Type} [Nonempty T] [Nonempty D] {get :
           cases this)
         fun t d => noSlot_of_get_none hg (L t d)
 
-/-- **The same game on both sides has no table node.** -/
 theorem noSlot_same {T D I α : Type} {get : I → ℕ → Option (T × D)} {slot : ℕ} {i : I} :
     ∀ g : Game α, NoSlot slot (Lock.same (T := T) (D := D) (get := get) (i := i) g)
   | .ret _ => .ret _
@@ -125,7 +109,6 @@ theorem NoSlot.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {
   | send M _ ih => exact .send M ih
   | table s hne _ ih => exact .table s hne ih
 
-/-- **Sequencing keeps no table node of `slot`.** -/
 theorem NoSlot.bind {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂} {slot : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), NoSlot slot (h i a b hr))
@@ -137,7 +120,6 @@ theorem NoSlot.bind {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option
   | send M _ ih => exact .send M ih
   | table s hne _ ih => exact .table s hne ih
 
-/-- **Every path meets `slot`'s table node after exactly `j` coins**, or meets no such node. -/
 inductive Dist {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop} (slot : ℕ) :
     ℕ → {i : I} → {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Prop
   | coin {j : ℕ} {i : I} (C : Type) [Fintype C] [Nonempty C] {k : C → Game α} {k' : C → Game β}
@@ -159,7 +141,6 @@ inductive Dist {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I
   | noSlot {j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} :
       NoSlot slot L → Dist slot j L
 
-/-- **A distance aligns the fork against every strategy.** -/
 theorem SlotAt.of_dist {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {plur : Chooser T D β} {slot : ℕ} {Φ : D → β → β → ℝ} {j : ℕ} {i : I} {g : Game α} {g' : Game β}
     {L : Lock T D get R i g g'} (h : Dist slot j L) (σ' : Strategy g') : SlotAt plur slot Φ j L σ' := by
@@ -180,7 +161,6 @@ theorem Dist.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R 
   | here => exact .here
   | noSlot h0 => exact .noSlot (h0.mono h)
 
-/-- The number of coins in a shape. -/
 def coinsK : List Kind → ℕ
   | [] => 0
   | .msg _ :: σ => coinsK σ
@@ -191,7 +171,6 @@ theorem coinsK_append : ∀ σ τ : List Kind, coinsK (σ ++ τ) = coinsK σ + c
   | .msg _ :: σ, τ => by simp only [List.cons_append, coinsK]; exact coinsK_append σ τ
   | .coin _ :: σ, τ => by simp only [List.cons_append, coinsK]; rw [coinsK_append σ τ]; omega
 
-/-- **A distance after an exact shape with no table node of the slot** adds the shape's coins. -/
 theorem Dist.bind {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂} {slot j : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), Dist slot j (h i a b hr))

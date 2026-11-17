@@ -41,24 +41,7 @@ import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# Conflicts tied to collisions at the deployed reader `VR rd`
-
-`ConflictTied` at the plain record at `VR rd` (`plainR_conflictTied`), at SHA-512, by `plainE_conflictTied`'s proof
-at `nextR`'s decision, which runs the verdict at the record's parsed value (`verifyJWithM`) on the read proofs' files:
-
-* `VR rd` answers each round with its coin's bytes (`answersCoin_VR`), so an accepted run's answers show its coins
-  but for the last (`run_outCoin_VR`), and the reader on the run's view is `colsR` at its messages and coins
-  (`colsRV_run`).
-* An accepted run decides within its own verifier log (`accR_decide`): the verdict at the substituted value accepts
-  with SHA-512 answered only within that log (`decisionSF_runs`, `verdictJ_within`). Its query round places the
-  reader's columns among level 0's Merkle openings (`plainQueryRound_verifyJWithMK`), the decoded session's `root_B`
-  is `liveOfJ`'s (`decodeJWithK_live`), and custody ties it to the link `linkR` reads off the run's first message, so
-  each opening climbs to that link's `root_B` (`plainR_opening`).
-* Two accepted runs at one tape read one first message, so one link: different columns at one position collide in
-  their joined logs (`plainR_conflictTied`), which discharges `plainR_KSFlockLin`'s first premise
-  (`plainR_KSFlockLin_of_table`).
--/
+/-! `ConflictTied` at the plain record at the deployed reader `VR rd`, at SHA-512. -/
 
 @[expose] public section
 
@@ -74,9 +57,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The answers of a run of `VR rd` -/
-
-/-- A coin `nextR` answers is the plain verifier's. -/
 theorem act_of_actR_coin {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {c : Coin} (h : actR rd x as cs = .coin c) : act false x as cs = .coin c := by
   unfold actR at h
@@ -86,7 +66,6 @@ theorem act_of_actR_coin {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {a
     exact hc'
   · split at h <;> cases h
 
-/-- **`VR rd` answers each round with its coin's bytes** (`answersCoin_VK`'s proof, at `nextR rd`). -/
 theorem answersCoin_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) :
     Claims.Bridge.AnswersCoin H (VR rd) x Coin.bytes := by
   intro as cs c m h
@@ -101,8 +80,6 @@ theorem answersCoin_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → C
     rw [nextR_decide ha] at h
     exact absurd h (Claims.Bridge.outOf_ne_msg _ _ _)
 
-/-- **An accepted run's answers show its coins but the last**, wherever the verifier answers each round with its
-coin's bytes (`stepWith_dep`'s induction): the last answer is the decision, which shows `default`. -/
 theorem stepWith_outCoin {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
     (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
     ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
@@ -146,15 +123,12 @@ theorem stepWith_outCoin {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims
       intro h
       simp at h
 
-/-- **An accepted run of `VR rd` shows its coins but the last** (`stepWith_outCoin`, `answersCoin_VR`). -/
 theorem run_outCoin_VR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (r : Fin ((VR rd).k x) → Coin) (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map RecDeploy.outCoin =
       ((List.range (Claims.run sha512 P (VR rd) x ω r).msgs.length).map (Claims.coinSeq r)).dropLast ++ [default] :=
   stepWith_outCoin sha512 P (VR rd) x ω (Claims.coinSeq r) (answersCoin_VR rd sha512 x) _ [] [] _ rfl rfl h
 
-/-- **The reader on an accepted run's view is `colsR` at its messages and coins** (`colsRV_eq`): the run's answers
-show its coins but the last (`run_outCoin_VR`), and it decides at its last round (`accLast_VR`). -/
 theorem colsRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
@@ -169,9 +143,6 @@ theorem colsRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.P
     simp only [List.length_map, List.length_range]
     exact hk
 
-/-! ## An accepted run of `VR rd`, within its own log -/
-
-/-- **An accepted run of `VR rd` decides, within its own verifier log** (`accK_decide`'s proof, at `nextR rd`). -/
 theorem accR_decide {rd : Claims.Msg → Option FinalP} {H : Claims.Msg → Claims.Msg} {Ω : Type}
     {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin}
     (h : (Claims.run H P (VR rd) x ω r).out = .acc) :
@@ -196,9 +167,6 @@ theorem accR_decide {rd : Claims.Msg → Option FinalP} {H : Claims.Msg → Clai
     · rw [nextR_decide hact, outOf_log]
       exact hp
 
-/-- **A `nextR` decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the verdict at the
-substituted value `jAt sha512` and the read proofs' files, within `L` (`decisionK_runs`'s proof, through the files'
-digests, which the oracle answers as `dgOf` at SHA-512). -/
 theorem decisionSF_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
     {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decisionSF s x link c₁ mids f) () L) :
@@ -221,14 +189,11 @@ theorem decisionSF_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} 
   obtain ⟨⟨⟩, h1, -⟩ := Runs.bind h
   exact h1
 
-/-- **The verdict at a parsed value within `L` is that verdict with SHA-512 answered only within `L`.** -/
 theorem verdictJ_within {spec : SessionSpec} {tabs : Array Setup} {j : Json} {proofs : Array ByteArray}
     {L : List Claims.Msg} (h : Runs sha512 (verifyJWithM Claims.Hashes.oc spec tabs j proofs) () L) :
     verifyJWithMK id (hashesIn L) spec tabs j proofs = .ok () :=
   (With.verifyJWithM_sim (within L) (within_hashes L) spec tabs j proofs) () h
 
-/-- **`checksAtJ` pins the tables' Merkle scheme** (`checks_leaf` at a parsed value): every table the statement sets
-up commits under `hm96Sha512`, or, plain, under unsalted SHA-512 leaves. -/
 theorem checksAtJ_leaf {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json} {sts : Array Flock.Stmt}
     (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) (hs : s.setup = .ok (spec, sts)) :
@@ -253,10 +218,6 @@ theorem checksAtJ_leaf {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : L
     · exact Or.inl hm
     · exact Or.inr ⟨hz, hm⟩
 
-/-! ## The query round, at the parsed value -/
-
-/-- **Level 0's query round in a session `verifyJWithMK keep` accepts**, under any oracle and whatever `keep`
-(`plainQueryRound_verifyWithMK` at the record's parsed value). -/
 theorem plainQueryRound_verifyJWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec)
     (tabs : Array Setup) (j : Json) (proofs : Array ByteArray)
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
@@ -294,10 +255,6 @@ theorem plainQueryRound_verifyJWithMK (keep : Bool → Bool) (hs : Hashes Flock.
     · exact h1
   exact plainRepColsOf_verifyRepWith hs spec tabs[i] (schs[i]'hi') sess i r _ c hsch hfi hkl hr
 
-/-! ## An accepted run's openings, and `ConflictTied` -/
-
-/-- **What the reader takes of a `nextR` decision's table 0** (`runOf_eqJ` at `runOfR`): read off the decision's
-setup, its live session at `jAt sha512` and the read proofs' files. -/
 theorem runOfR_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {rr : Claims.Flock.ZkRun}
@@ -321,10 +278,6 @@ theorem runOfR_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
   | error e => rw [he] at hext; cases hext
   | ok v => rw [he] at hext; cases hext; rfl
 
-/-- **An accepted run of `VR rd` opens a column only as a Merkle opening** of table 0's level 0 in its own log
-(`plainK_opening_raw`'s proof, at `nextR`'s verdict at the parsed value): a column `u` the run's reader opens at `q`
-is an opened row whose opening under table 0's scheme against `root_B[0]` of the link `linkR` reads off the tape's
-first message passed, every SHA-512 input of it in the run's verifier log. -/
 theorem plainR_opening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) q = some u) :
@@ -435,9 +388,6 @@ theorem plainR_opening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Clai
   · rw [← hjq]
     exact hlog j hj
 
-/-- **`ConflictTied` at the plain record at `VR rd`**: two accepted runs of the deployed reader at one tape that open
-different columns at one position collide in their joined verifier logs, at SHA-512. Both read the link off the
-tape's one first message (`plainR_opening`), so both openings climb to one `root_B`. -/
 theorem plainR_conflictTied (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP) :
     Claims.Flock.ConflictTied sha512 (deployPlainR rel rd) (wordLen false) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
@@ -457,8 +407,6 @@ theorem plainR_conflictTied (rel : Readable.Parsed → Readable.Relation) (rd : 
   cases hl'
   exact tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e])
 
-/-- **`KSFlockLin` at the plain record at `VR rd`, from the table bound alone**: `plainR_KSFlockLin` with its
-conflicts tied to collisions (`plainR_conflictTied`). -/
 theorem plainR_KSFlockLin_of_table (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP)
     (htab : Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR rel rd) (wordLen false) (wide false) CpDep) :
     Claims.Recursion.KSFlockLin sha512 (deployPlainTrimR rel rd) CpDep :=

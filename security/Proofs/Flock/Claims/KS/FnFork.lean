@@ -40,30 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The fork's coin coupling at coins that are uniform functions of the live history
-
-A simulator whose deployed coin `j` takes its first `n j` entries from the live coin and the rest from a uniform
-function `f j` on its tape, read at a key of the live coins (`fnC`, `fnAt`), has coins of uniform distribution; its fork, which
-flips the live coins again past round `t`, is the deployed fork until the redrawn live coin agrees with the first
-branch's on the entries the key reads. That is identical-until-bad (Bellare–Rogaway), used multiplicatively: on the
-bad event the simulated fork at round `t` is the simulated fork at `t + 1`.
-
-* `PrefixKey`: the key at round `j` reads, and tells apart, the live coins' revealed entries through round `j`;
-  `histKey`, the revealed history itself, is one (`prefixKey_histKey`).
-* `fnC_coupling`: for every pair event `E`, the simulated fork at round `t` (`simF`) is at most the deployed fork there
-  (`depF`) and `δ_t` times the simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on their first
-  `n t` entries (`δAt`, which is `|X|^{-min (n t) M}`, `δAt_eq`), and past the last round it is the one-run event
-  `E s s`.
-  - On agreement at `t`, the forks at `t` and `t + 1` are the same coins (`fnC_fork_succ`), and agreement is
-    independent of the rest with chance `δ_t` whatever the first coin (`Pr_agree`, `Pr_and_agree`).
-  - Otherwise the keys differ from round `t` on and agree before it, so the tape's values at the two keys are
-    independent and uniform (`Pr_evalAt₂`), and the pair is the deployed fork's, `Pr_mergeC` (`Pr_disagree_le`).
-* `fnAt_coupling`: the same at `fnAt`, the live coins indexed by `Fin L`, `L = K`, in the shape of
-  `Claims.Flock.ForkCoinCoupling` at `simForkPr`, with the deployed fork written by `Claims.forkCoins`.
-
-`mergeC`, `fnC` and `fnAt` are `Claims.Bridge.Live`'s, verbatim, here so that this file needs only `Prob`.
--/
+/-! The fork's coin coupling where the simulator's coins are uniform functions of the live history, identical until bad and used multiplicatively. -/
 
 @[expose] public section
 
@@ -71,12 +48,9 @@ namespace Claims.Flock.FnFork
 
 open Claims
 
-/-! ## Uniform averages -/
-
 section Prob
 
 open Classical in
-/-- The indicator of an event. -/
 noncomputable def ind {α : Type} (p : α → Prop) (a : α) : ℝ := if p a then 1 else 0
 
 open Classical in
@@ -114,7 +88,6 @@ theorem Pr_prod {α β : Type} [Fintype α] [Fintype β] (P : α → β → Prop
   simp only [Pr_eq_Ex]
   rfl
 
-/-- `Pr[p] = Pr[p ∧ q] + Pr[p ∧ ¬q]`. -/
 theorem Pr_split {α : Type} [Fintype α] (p q : α → Prop) :
     Pr p = Pr (fun a => p a ∧ q a) + Pr (fun a => p a ∧ ¬ q a) := by
   rw [Pr_eq_Ex, Pr_eq_Ex, Pr_eq_Ex, ← Ex_add]
@@ -125,17 +98,14 @@ theorem Pr_split {α : Type} [Fintype α] (p q : α → Prop) :
 
 end Prob
 
-/-! ## Coins from a tape and live coins -/
-
 section Coins
 
 variable {K M : ℕ} {X D : Type}
 
-/-- **Coordinate `j`'s first `n j` entries from `r`, the rest from `u`** (`Claims.Bridge.Live.mergeC`). -/
+/-- A copy of `Claims.Bridge.Live.mergeC`, so that this file needs only `Prob`. -/
 def mergeC (n : Fin K → ℕ) (u r : Fin K → Fin M → X) : Fin K → Fin M → X :=
   fun j i => if i.val < n j then r j i else u j i
 
-/-- Swapping coordinate `j`'s first `n j` entries between two coin vectors. -/
 def swapC (X : Type) (n : Fin K → ℕ) :
     (Fin K → Fin M → X) × (Fin K → Fin M → X) ≃ (Fin K → Fin M → X) × (Fin K → Fin M → X) where
   toFun p := (mergeC n p.1 p.2, mergeC n p.2 p.1)
@@ -147,21 +117,17 @@ def swapC (X : Type) (n : Fin K → ℕ) :
     refine Prod.ext (funext fun j => funext fun i => ?_) (funext fun j => funext fun i => ?_) <;>
       simp only [mergeC] <;> split_ifs <;> rfl
 
-/-- **The merged coins are uniform**, as an average. -/
 theorem Ex_mergeC [Fintype X] [Nonempty X] (n : Fin K → ℕ) (g : (Fin K → Fin M → X) → ℝ) :
     Ex (fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) => g (mergeC n p.1 p.2)) = Ex g := by
   refine (Ex_equiv (swapC X n) (fun q => g q.1)).trans ?_
   rw [Ex_prod]
   exact congrArg Ex (funext fun a => Ex_const (g a))
 
-/-- **The merged coins are uniform**: `Pr_{u, r}[E (mergeC n u r)] = Pr[E]`. -/
 theorem Pr_mergeC [Fintype X] [Nonempty X] (n : Fin K → ℕ) (E : (Fin K → Fin M → X) → Prop) :
     Pr (fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E (mergeC n p.1 p.2)) = Pr E := by
   rw [Pr_eq_Ex, Pr_eq_Ex]
   exact Ex_mergeC n (ind E)
 
-/-- **Independent uniform functions at fixed points are uniform**, on domains that may vary with the coordinate:
-`Pr_f[G (j ↦ f j (d j))] = Pr[G]`. -/
 theorem Pr_evalAtDep {Dj : Fin K → Type} [∀ j, Fintype (Dj j)] [∀ j, DecidableEq (Dj j)] {Y : Type} [Fintype Y]
     [Nonempty Y] (d : (j : Fin K) → Dj j) (G : (Fin K → Y) → Prop) :
     Pr (fun f : (j : Fin K) → Dj j → Y => G fun j => f j (d j)) = Pr G := by
@@ -170,14 +136,10 @@ theorem Pr_evalAtDep {Dj : Fin K → Type} [∀ j, Fintype (Dj j)] [∀ j, Decid
   rw [Pr_eq_Ex, Ex_prod, Pr_eq_Ex]
   exact congrArg Ex (funext fun a => Ex_const (ind G a))
 
-/-- **Independent uniform functions at fixed points are uniform**: `Pr_f[G (j ↦ f j (d j))] = Pr[G]`. -/
 theorem Pr_evalAt {Y : Type} [Fintype D] [DecidableEq D] [Fintype Y] [Nonempty Y] (d : Fin K → D)
     (G : (Fin K → Y) → Prop) : Pr (fun f : Fin K → D → Y => G fun j => f j (d j)) = Pr G :=
   Pr_evalAtDep (Dj := fun _ => D) d G
 
-/-- **Independent uniform functions at two different points each are two independent uniform vectors**:
-`Pr_f[G (j ↦ f j (a j)) (j ↦ f j (b j))] = Pr_{u, u'}[G u u']` where `a j ≠ b j` for every `j`: the values at `a`
-are uniform and independent of the rest (`funSplitAt`), and the rest at `b` is uniform (`Pr_evalAtDep`). -/
 theorem Pr_evalAt₂ {Y : Type} [Fintype D] [DecidableEq D] [Fintype Y] [Nonempty Y] (a b : Fin K → D)
     (hab : ∀ j, b j ≠ a j) (G : (Fin K → Y) → (Fin K → Y) → Prop) :
     Pr (fun f : Fin K → D → Y => G (fun j => f j (a j)) (fun j => f j (b j))) =
@@ -191,12 +153,11 @@ theorem Pr_evalAt₂ {Y : Type} [Fintype D] [DecidableEq D] [Fintype Y] [Nonempt
   exact congrArg Ex (funext fun u =>
     Pr_evalAtDep (Dj := fun j => {z // z ≠ a j}) (fun j => ⟨b j, hab j⟩) (G u))
 
-/-- **Coordinate `j`'s first `n j` entries from `r`, the rest from `f j` at `key j r`** (`Claims.Bridge.Live.fnC`). -/
+/-- A copy of `Claims.Bridge.Live.fnC`. -/
 def fnC (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D) (f : Fin K → D → Fin M → X)
     (r : Fin K → Fin M → X) : Fin K → Fin M → X :=
   mergeC n (fun j => f j (key j r)) r
 
-/-- **Those coins are uniform**: `Pr_{f, r}[E (fnC n key f r)] = Pr[E]` at uniform functions `f`, whatever the keys. -/
 theorem Pr_fnC [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (n : Fin K → ℕ)
     (key : Fin K → (Fin K → Fin M → X) → D) (E : (Fin K → Fin M → X) → Prop) :
     Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) => E (fnC n key p.1 p.2)) = Pr E := by
@@ -213,29 +174,22 @@ theorem Pr_fnC [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (n : Fin K �
         Pr_equiv (Equiv.prodComm _ _) fun p => E (mergeC n p.1 p.2)
     _ = Pr E := Pr_mergeC n E
 
-/-- `fnC` with the coins `r` indexed by `Fin L`, where `L = K` (`Claims.Bridge.Live.fnAt`). -/
+/-- A copy of `Claims.Bridge.Live.fnAt`. -/
 def fnAt {L : ℕ} (h : L = K) (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
     (f : Fin K → D → Fin M → X) (r : Fin L → Fin M → X) : Fin K → Fin M → X :=
   fnC n key f fun j => r (Fin.cast h.symm j)
 
-/-- **The fork at round `t`**: the first `t` coordinates from `r`, the rest from `r'`; at `t < K` it is
-`Claims.forkCoins ⟨t, _⟩ r r'`. -/
 def forkN {Y : Type} {K : ℕ} (t : ℕ) (r r' : Fin K → Y) : Fin K → Y := fun i => if i.val < t then r i else r' i
 
-/-- **Two coins agree on their first `k` entries.** -/
 def AgreeAt (k : ℕ) (a b : Fin M → X) : Prop := ∀ m : Fin M, m.val < k → a m = b m
 
-/-- **The chance that two coins agree on their first `k` entries.** -/
 noncomputable def δAt (X : Type) [Fintype X] (M k : ℕ) : ℝ :=
   Pr fun p : (Fin M → X) × (Fin M → X) => AgreeAt k p.1 p.2
 
-/-- **A key that reads the revealed history**: the key at round `j` depends on the coins only through their first
-`n i` entries at the rounds `i ≤ j` (`read`), and tells two such histories apart (`sep`). -/
 structure PrefixKey (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D) : Prop where
   read : ∀ j r r', (∀ i, i ≤ j → AgreeAt (n i) (r i) (r' i)) → key j r = key j r'
   sep : ∀ j r r', key j r = key j r' → ∀ i, i ≤ j → AgreeAt (n i) (r i) (r' i)
 
-/-- **The revealed history through round `j`**: the first `n i` entries of the coins at rounds `i ≤ j`. -/
 def histKey (n : Fin K → ℕ) (j : Fin K) (r : Fin K → Fin M → X) : Fin K → Fin M → Option X :=
   fun i m => if i ≤ j ∧ m.val < n i then some (r i m) else none
 
@@ -252,13 +206,10 @@ theorem prefixKey_histKey (n : Fin K → ℕ) : PrefixKey n (histKey (M := M) (X
 
 end Coins
 
-/-! ## The coupling -/
-
 section Coupling
 
 variable {K M : ℕ} {X D : Type}
 
-/-- **The agreement at one coordinate has the same chance whatever the first coin.** -/
 theorem Pr_agree [Fintype X] [DecidableEq X] [Nonempty X] (k : ℕ) (c : Fin M → X) :
     Pr (fun b : Fin M → X => AgreeAt k c b) = δAt X M k := by
   have hswap : ∀ c c' : Fin M → X, Pr (AgreeAt k c) = Pr (AgreeAt k c') := by
@@ -281,8 +232,6 @@ theorem prod_range_ite (c : ℝ) (k : ℕ) :
     · rw [ite_eq_left h, mul_one, show N + 1 - min k (N + 1) = N - min k N by omega]
     · rw [ite_eq_right h, ← pow_succ, show N + 1 - min k (N + 1) = N - min k N + 1 by omega]
 
-/-- **The agreement's chance in closed form**: two uniform coins agree on their first `k` entries with chance
-`|X|^{-min k M}`. -/
 theorem δAt_eq [Fintype X] [DecidableEq X] [Nonempty X] (k : ℕ) :
     δAt X M k = (Fintype.card X : ℝ)⁻¹ ^ min k M := by
   classical
@@ -312,8 +261,6 @@ theorem δAt_eq [Fintype X] [DecidableEq X] [Nonempty X] (k : ℕ) :
       rw [← pow_add, Nat.sub_add_cancel (min_le_right k M)],
     div_mul_cancel_left₀ (pow_ne_zero _ hX.ne'), inv_pow]
 
-/-- **On agreement at round `t`, the forks at `t` and `t + 1` are the same coins**: they differ only at round `t`,
-where the key reads only the agreeing entries and the merge takes only those from the live coin. -/
 theorem fnC_fork_succ {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (f : Fin K → D → Fin M → X) (r r'' : Fin K → Fin M → X) (t : Fin K) (hag : AgreeAt (n t) (r t) (r'' t)) :
     fnC n key f (forkN t.val r r'') = fnC n key f (forkN (t.val + 1) r r'') := by
@@ -337,15 +284,12 @@ theorem fnC_fork_succ {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → 
   · exact hA j m hm
   · rfl
 
-/-- The merge of two forks is the fork of the two merges. -/
 theorem mergeC_forkN (n : Fin K → ℕ) (t : ℕ) (u u' r r'' : Fin K → Fin M → X) :
     mergeC n (forkN t u u') (forkN t r r'') = forkN t (mergeC n u r) (mergeC n u' r'') := by
   funext i m
   unfold mergeC forkN
   by_cases h1 : i.val < t <;> by_cases h2 : m.val < n i <;> simp [h1, h2]
 
-/-- **The fork's coins at round `t`, from the tape at two keys**: before round `t` the fork's keys are the first
-branch's, from round `t` on they are `b`'s. -/
 theorem fnC_forkN_eq {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (f : Fin K → D → Fin M → X) (r r'' : Fin K → Fin M → X) (t : ℕ) (b : Fin K → D)
     (hb : ∀ i : Fin K, t ≤ i.val → b i = key i (forkN t r r'')) :
@@ -366,9 +310,6 @@ theorem fnC_forkN_eq {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X
 
 variable [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D]
 
-/-- **Off agreement, the simulated fork over the tape is the deployed fork's sampling design at the live coins**: the keys differ
-at every round from `t` on (`sep`), so the tape's values at the two keys are independent and uniform
-(`Pr_evalAt₂`, with any other point before round `t`), and the second branch's coins are the fork of the two merges. -/
 theorem Pr_disagree {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (hk : PrefixKey n key) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K)
     (r r'' : Fin K → Fin M → X) (hne : ¬ AgreeAt (n t) (r t) (r'' t)) :
@@ -407,26 +348,20 @@ theorem Pr_disagree {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X)
   exact Pr_evalAt₂ (fun i => key i r) b hab
     (fun u u' => E (mergeC n u r) (forkN t.val (mergeC n u r) (mergeC n u' r'')))
 
-/-- **The simulated fork at round `t`**: the two branches' coins at the tape `f`, the live coins `r` and the live
-fork at `t` of `r` and `r''`. -/
 noncomputable def simF (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : ℕ) : ℝ :=
   Pr fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
     E (fnC n key p.1 p.2.1) (fnC n key p.1 (forkN t p.2.1 p.2.2))
 
-/-- **The deployed fork at round `t`.** -/
 noncomputable def depF (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : ℕ) : ℝ :=
   Pr fun s : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E s.1 (forkN t s.1 s.2)
 
-/-- `((r, r''), (u, u')) ↦ ((u, r), (u', r''))`. -/
 def shuffle (α : Type) : (α × α) × (α × α) ≃ (α × α) × (α × α) where
   toFun q := ((q.2.1, q.1.1), (q.2.2, q.1.2))
   invFun q := ((q.1.2, q.2.2), (q.1.1, q.2.1))
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **The deployed fork at the merges of uniform coins is the deployed fork**: averaged over the live coins, the
-fork of the merges of uniform coins with them has the deployed fork's probability (`Pr_mergeC`, `Ex_mergeC`). -/
 theorem Ex_fork_merge (n : Fin K → ℕ) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : ℕ) :
     (Ex fun rr : (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
       Pr fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
@@ -447,9 +382,6 @@ theorem Ex_fork_merge (n : Fin K → ℕ) (E : (Fin K → Fin M → X) → (Fin 
   rw [congrArg Ex (funext hin), Ex_mergeC n fun s => Pr fun s' : Fin K → Fin M → X => E s (forkN t s s')]
   exact (Pr_prod (α := Fin K → Fin M → X) (β := Fin K → Fin M → X) fun s s' => E s (forkN t s s')).symm
 
-/-- **Off agreement the simulated fork is at most the deployed one**: at each pair of live coins that disagree at
-round `t`, the tape's chance is the deployed fork's at those coins (`Pr_disagree`), whose average is the deployed
-fork's (`Ex_fork_merge`). -/
 theorem Pr_disagree_le {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (hk : PrefixKey n key) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K) :
     Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
@@ -472,7 +404,6 @@ theorem Pr_disagree_le {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M →
   · rw [Pr_congr fun f => and_iff_left hag]
     exact (Pr_disagree hk E t rr.1 rr.2 hag).le
 
-/-- **Round `t`'s coin from the rest and its own**: `(funSplitAt t _).symm (b, rest)`. -/
 def glue (t : Fin K) (rest : {i // i ≠ t} → Fin M → X) (b : Fin M → X) : Fin K → Fin M → X :=
   (Equiv.funSplitAt t (Fin M → X)).symm (b, rest)
 
@@ -481,7 +412,6 @@ theorem glue_at (t : Fin K) (rest : {i // i ≠ t} → Fin M → X) (b : Fin M �
   simp [glue]
 
 omit [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] in
-/-- The fork at `t + 1` does not read the second coins' round `t`. -/
 theorem forkN_succ_glue (t : Fin K) (r : Fin K → Fin M → X) (rest : {i // i ≠ t} → Fin M → X) (b b' : Fin M → X) :
     forkN (t.val + 1) r (glue t rest b) = forkN (t.val + 1) r (glue t rest b') := by
   funext i
@@ -491,7 +421,6 @@ theorem forkN_succ_glue (t : Fin K) (r : Fin K → Fin M → X) (rest : {i // i 
   · have hi : i ≠ t := fun e => h (by rw [e]; omega)
     simp [glue, hi]
 
-/-- The tape, the first coins, the second coins but round `t`'s, and round `t`'s: `(a, rest, b) ↦ (a.1, a.2, glue)`. -/
 def splitΨ (t : Fin K) :
     ((Fin K → D → Fin M → X) × (Fin K → Fin M → X)) × ({i // i ≠ t} → Fin M → X) × (Fin M → X) ≃
       (Fin K → D → Fin M → X) × (Fin K → Fin M → X) × (Fin K → Fin M → X) :=
@@ -503,9 +432,6 @@ theorem splitΨ_apply (t : Fin K)
     (q : ((Fin K → D → Fin M → X) × (Fin K → Fin M → X)) × ({i // i ≠ t} → Fin M → X) × (Fin M → X)) :
     splitΨ t q = (q.1.1, q.1.2, glue t q.2.1 q.2.2) := rfl
 
-/-- **On agreement the simulated fork is `δ_t` times the next one**: there the fork at `t` is the fork at `t + 1`
-(`fnC_fork_succ`), which does not read the redrawn coin at round `t` (`forkN_succ_glue`), and agreement reads only
-that coin and the first branch's, with chance `δ_t` whatever the latter (`Pr_agree`, `Pr_indep`). -/
 theorem Pr_and_agree [DecidableEq X] {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (hk : PrefixKey n key) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K) :
     Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
@@ -555,8 +481,6 @@ theorem Pr_and_agree [DecidableEq X] {n : Fin K → ℕ} {key : Fin K → (Fin K
     _ = δAt X M (n t) * simF n key E (t.val + 1) := by
         rw [Ex_mul_const, hsucc, mul_comm]
 
-/-- **The coupling's step**: the simulated fork at round `t` is at most the deployed fork there and `δ_t` times the
-simulated fork at `t + 1`. -/
 theorem simF_step [DecidableEq X] {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K) :
@@ -568,8 +492,6 @@ theorem simF_step [DecidableEq X] {n : Fin K → ℕ}
     Pr_and_agree hk E t]
   linarith [Pr_disagree_le hk E t]
 
-/-- **Past the last round the simulated fork is one run**: the fork at `K` is the first branch, of uniform distribution
-(`Pr_fnC`). -/
 theorem simF_last {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) :
     simF n key E K = Pr fun s : Fin K → Fin M → X => E s s := by
@@ -580,8 +502,6 @@ theorem simF_last {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) �
   simp only [hK]
   exact (Pr_drop fun f r => E (fnC n key f r) (fnC n key f r)).trans (Pr_fnC n key fun s => E s s)
 
-/-- **The fork's coin coupling at `fnC`**: at a key that reads the revealed history, the simulated forks are at most
-the deployed fork at each round and `δ_t` times the next simulated fork, and past the last round are the one run. -/
 theorem fnC_coupling [DecidableEq X] {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) :
@@ -590,7 +510,6 @@ theorem fnC_coupling [DecidableEq X] {n : Fin K → ℕ}
   ⟨simF_step hk E, simF_last E⟩
 
 omit [Nonempty X] [Fintype D] [DecidableEq D] in
-/-- **The chances by round**: `δ_t` at the rounds `t < K`, and `0` past them. -/
 noncomputable def δN (X : Type) [Fintype X] (M : ℕ) (n : Fin K → ℕ) (t : ℕ) : ℝ :=
   if ht : t < K then δAt X M (n ⟨t, ht⟩) else 0
 
@@ -601,12 +520,6 @@ theorem δN_nonneg (n : Fin K → ℕ) (t : ℕ) : 0 ≤ δN X M n t := by
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **The fork's coin coupling at `fnAt`, in `ForkCoinCoupling`'s shape**: with the live coins indexed by `Fin L`,
-`L = K`, the simulated forks `simForkPr`-style at the live fork `forkN` are at most the deployed fork
-`Claims.forkCoins ⟨t, _⟩` at each round `t < K` and `δN X M n t` times the next, and past the last round at most any
-event `O` the diagonal implies. At `E := pairEv sha512 V P x ω` and `O := oneEv sha512 V P x ω` (whose diagonal step
-is `TiedColl (l ++ l) → TiedColl l`), the two clauses are `ForkCoinCoupling sha512 V P x (δN X M n) sim ω` once
-`forkPrAt` is unfolded at `t < V.k x` and at `V.k x`. -/
 theorem fnAt_coupling [DecidableEq X] {L : ℕ} (h : L = K) {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (O : (Fin K → Fin M → X) → Prop)

@@ -37,32 +37,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
-/-!
-# A fork at a table node, aligned with a fork after a number of coins
-
-`Lock.forkE` forks two runs at the table node of `slot`; `forkC F j` forks them after `j` coins. Where the strategy
-reaches that node after exactly `j` coins on every path, or forks to nothing on the paths that don't (`SlotAt`), and
-`Φ` at the node's cap is at most `F` on the outcomes the leaves below relate (`hΦ`), the first is at most the second:
-
-* `expect_le_of_get`, `expect₂_le_of_get`: below a node whose index holds a slot's entry, an expectation, and one over
-  two runs, are monotone in a bound on the outcomes the leaves relate at that entry, since every table node below has
-  a fresh slot and keeps the entry;
-* `SlotAt`, `forkE_le_forkC`: the alignment, and the bound it gives;
-* `Aligned.mono_self`, `forkE_mapL`, `SlotAt.mono`, `SlotAt.mapL`: weakening the leaf relation and relabelling the
-  oracle side keep the fork and the alignment;
-* `plurMap`, `forkE_map`, `SlotAt.map`, `SlotAt.leftSame_ret`, `SlotAt.batchLock_one`: relabelling both sides keeps
-  them at the chooser read through the relabelling, so the alignment passes up through a batch of one position;
-* `answerWith_send`, `expect_answerWith`, `expect₂_answerWith`, `forkE_answerWith`: against a strategy answering every
-  message of one type with `nul` (a dead branch's), the fork is `0` at any chooser where `Φ` is `0` at every two
-  outcomes reached with those messages `nul`, so such a branch meets `SlotAt` by `nul`.
--/
+/-! A fork at a table node (`Lock.forkE`) is at most the fork after the coins on which the strategy reaches that node (`forkC`). -/
 
 @[expose] public section
 
 namespace FlockSoundness.Game.Lock
 
-/-- **Below an entry, a bound on the related outcomes bounds the expectation**: where `i` holds `td` at `slot`, so does
-every leaf below (each table node's slot is fresh, so not `slot`), and `f ≤ f'` on the outcomes related there. -/
 theorem expect_le_of_get {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) (td : T × D) {f f' : β → ℝ}
     (h : ∀ i a b, R i a b → get i slot = some td → f b ≤ f' b) :
@@ -78,7 +58,6 @@ theorem expect_le_of_get {T D I α β : Type} {get : I → ℕ → Option (T × 
       have hs : slot ≠ s := fun e => by rw [← e, hi] at hf; exact Option.some_ne_none _ hf
       exact expect_le_of_get plur slot td h (L (plur s σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2 (by rw [hk _ _ slot hs, hi])
 
-/-- **Below an entry, a bound on the related pairs bounds the expectation over two runs.** -/
 theorem expect₂_le_of_get {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) (td : T × D) {F F' : β → β → ℝ}
     (h : ∀ i₁ a₁ b₁ i₂ a₂ b₂, R i₁ a₁ b₁ → R i₂ a₂ b₂ → get i₁ slot = some td → get i₂ slot = some td →
@@ -90,8 +69,6 @@ theorem expect₂_le_of_get {T D I α β : Type} {get : I → ℕ → Option (T 
   exact expect_le_of_get (get := get) (R := R) plur slot td
     (fun i₂ a₂ b₂ h₂ hi₂ => h i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hi₁ hi₂) L σ' hi
 
-/-- **The strategy reaches `slot`'s table node after exactly `j` coins** through `L`: each path ends, or passes sends
-and other table nodes and meets that node with no coin left, or is a subtree whose fork there is `0`. -/
 inductive SlotAt {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) :
     ℕ → {i : I} → {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Strategy g' → Prop
@@ -118,8 +95,6 @@ inductive SlotAt {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R :
   | nul {j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} {σ' : Strategy g'} :
       forkE plur slot Φ L σ' = 0 → SlotAt plur slot Φ j L σ'
 
-/-- **A fork at the slot's node is at most the fork after `j` coins** where the strategy reaches the node after `j`
-coins (`SlotAt`) and `Φ` at the node's cap is at most `F` on the pairs the leaves relate below it. -/
 theorem forkE_le_forkC {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β → ℝ} {F : β → β → ℝ} (hF : ∀ b b', 0 ≤ F b b')
     (hΦ : ∀ t d i₁ a₁ b₁ i₂ a₂ b₂, R i₁ a₁ b₁ → R i₂ a₂ b₂ → get i₁ slot = some (t, d) →
@@ -145,7 +120,6 @@ theorem forkE_le_forkC {T D I α β : Type} {get : I → ℕ → Option (T × D)
         (L (plur slot σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2 (hs _ _)
   | nul h0 => rw [h0]; exact forkC_nonneg hF _ _ _
 
-/-- **A lockstep is aligned with its weakening.** -/
 theorem Aligned.mono_self {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R R' : I → α → β → Prop}
     (h : ∀ i a b, R i a b → R' i a b) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'), Aligned (Lock.mono h L) L
@@ -154,7 +128,6 @@ theorem Aligned.mono_self {T D I α β : Type} {get : I → ℕ → Option (T ×
   | _, _, _, .send M L => .send M fun m => Aligned.mono_self h (L m)
   | _, _, _, .table slot _ _ _ _ L => .table slot fun t d => Aligned.mono_self h (L t d)
 
-/-- **Relabelling the oracle side keeps the fork.** -/
 theorem forkE_mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β → Prop} (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) (f : α → α₂)
     (h : ∀ i a b, R i a b → R₂ i (f a) b) :
@@ -173,7 +146,6 @@ theorem forkE_mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T × 
       · rfl
       · exact forkE_mapL plur slot Φ f h _ σ'.2
 
-/-- **The slot is reached after `j` coins through a weakened lockstep** where it is through the lockstep. -/
 theorem SlotAt.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R R' : I → α → β → Prop}
     {plur : Chooser T D β} {slot : ℕ} {Φ : D → β → β → ℝ} (h : ∀ i a b, R i a b → R' i a b) {j : ℕ} {i : I}
     {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} {σ' : Strategy g'} (hs : SlotAt plur slot Φ j L σ') :
@@ -186,7 +158,6 @@ theorem SlotAt.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {
   | here σ' => exact .here σ'
   | nul h0 => exact .nul ((forkE_congr _ _ _ (Aligned.mono_self h _) _).trans h0)
 
-/-- **The slot is reached after `j` coins through a relabelled lockstep** where it is through the lockstep. -/
 theorem SlotAt.mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β → Prop} {plur : Chooser T D β} {slot : ℕ} {Φ : D → β → β → ℝ} (f : α → α₂)
     (h : ∀ i a b, R i a b → R₂ i (f a) b) {j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'}
@@ -199,18 +170,15 @@ theorem SlotAt.mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T ×
   | here σ' => exact .here σ'
   | nul h0 => exact .nul ((forkE_mapL _ _ _ f h _ _).trans h0)
 
-/-- **A chooser read through a relabelling**: choose for `g` what `plur` chooses for `g.map f'`. -/
 def plurMap {T D β β₂ : Type} (f' : β → β₂) (plur : Chooser T D β₂) : Chooser T D β :=
   fun s d g σ' => plur s d (g.map f') (Strategy.map f' g σ')
 
-/-- **Relabelling the outcomes relabels an expectation over two runs.** -/
 theorem expect₂_map {β β₂ : Type} (F : β₂ → β₂ → ℝ) (f' : β → β₂) (g : Game β) (σ' : Strategy g) :
     expect₂ F (g.map f') (Strategy.map f' g σ') = expect₂ (fun b b' => F (f' b) (f' b')) g σ' := by
   unfold expect₂
   rw [expect_map]
   simp only [expect_map]
 
-/-- **Relabelling both sides keeps the fork**, read at the relabelled chooser and `Φ`. -/
 theorem forkE_map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} (plur : Chooser T D β₂) (slot : ℕ) (Φ : D → β₂ → β₂ → ℝ) (f : α → α₂)
     (f' : β → β₂) (h : ∀ i a b, R i a b → R₂ i (f a) (f' b)) :
@@ -230,8 +198,6 @@ theorem forkE_map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option (
       · exact expect₂_map _ f' _ σ'.2
       · exact forkE_map plur slot Φ f f' h _ σ'.2
 
-/-- **The slot is reached after `j` coins through a lockstep relabelled on both sides** where it is through the
-lockstep, at the relabelled chooser and `Φ`. -/
 theorem SlotAt.map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {plur : Chooser T D β₂} {slot : ℕ} {Φ : D → β₂ → β₂ → ℝ} (f : α → α₂)
     (f' : β → β₂) (h : ∀ i a b, R i a b → R₂ i (f a) (f' b)) {j : ℕ} {i : I} {g : Game α} {g' : Game β}
@@ -246,7 +212,6 @@ theorem SlotAt.map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option 
   | here σ' => exact .here _
   | nul h0 => exact .nul ((forkE_map _ _ _ f f' h _ _).trans h0)
 
-/-- **Reading a strategy of `g.map f'` back on `g` and relabelling it again gives it back.** -/
 theorem Strategy.map_ofMap {β β₂ : Type} (f' : β → β₂) :
     ∀ (g : Game β) (σ' : Strategy (g.map f')), Strategy.map f' g (Strategy.ofMap f' g σ') = σ'
   | .ret _, _ => rfl
@@ -257,13 +222,11 @@ theorem Strategy.map_ofMap {β β₂ : Type} (f' : β → β₂) :
       rfl
   | @Game.coin _ _ _ _ k, σ' => funext fun c => Strategy.map_ofMap f' (k c) (σ' c)
 
-/-- **Interleaving with a finished game** pairs every outcome with its value. -/
 theorem interleave_ret {α γ : Type} (c : γ) : ∀ g : Game α, interleave g (.ret c) = g.map (·, c)
   | .ret _ => rfl
   | .send _ _ => rfl
   | @Game.coin _ _ _ _ _ => rfl
 
-/-- **The slot is reached through `leftSame L (.ret c)`** where it is through `L`, read through the pairing with `c`. -/
 theorem SlotAt.leftSame_ret {T D I α β γ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {plur : Chooser T D (β × γ)} {slot : ℕ} {Φ : D → β × γ → β × γ → ℝ} {j : ℕ} {i : I} {g : Game α}
     {g' : Game β} (c : γ) (L : Lock T D get R i g g') (σ' : Strategy (interleave g' (.ret c)))
@@ -275,8 +238,6 @@ theorem SlotAt.leftSame_ret {T D I α β γ : Type} {get : I → ℕ → Option 
   rw [Strategy.map_ofMap] at key
   cases L <;> exact key
 
-/-- **The slot is reached through a batch of one position** where it is through that position's lockstep, read
-through the batch's outcome list. -/
 theorem SlotAt.batchLock_one {T D I ζ : Type} {get : I → ℕ → Option (T × D)} {R : I → ζ → ζ → Prop}
     {plur : Chooser T D (List ζ)} {slot : ℕ} {Φ : D → List ζ → List ζ → ℝ} {j : ℕ} {i : I} {g g' : Game ζ}
     (d : ζ) (L : Lock T D get R i g g') (σ' : Strategy (batch [g']))
@@ -290,8 +251,6 @@ theorem SlotAt.batchLock_one {T D I ζ : Type} {get : I → ℕ → Option (T ×
     (SlotAt.leftSame_ret [] L _ hs)
   exact Strategy.map_ofMap (fun x : ζ × List ζ => x.1 :: x.2) (g'.interleave (.ret [])) σ' ▸ key
 
-/-- `answerWith nul` at a message node sends a message every equation of types takes to `nul`, and plays
-`answerWith nul` below it. -/
 theorem answerWith_send {β Op M : Type} (nul : Op) {k : M → Game β} (hg : AllInh (.send M k))
     (σ : Strategy (.send M k)) : ∃ (m : M) (τ : Strategy (k m)), (∀ e : Op = M, m = cast e nul) ∧
       Claims.Bridge.answerWith nul (.send M k) σ = ⟨m, Claims.Bridge.answerWith nul (k m) τ⟩ := by
@@ -301,8 +260,6 @@ theorem answerWith_send {β Op M : Type} (nul : Op) {k : M → Game β} (hg : Al
   · refine ⟨σ.1, σ.2, fun e => absurd ⟨e, (hg.send_k _).strategy⟩ hc, ?_⟩
     rw [Claims.Bridge.answerWith, dite_eq_right_of_eq_false (eq_false hc)]
 
-/-- **Against `answerWith nul` an expectation is `0`** where its function is `0` at every outcome reached with every
-message of `nul`'s type `nul` (`Claims.Bridge.OutN`). -/
 theorem expect_answerWith {α Op : Type} (nul : Op) {f : α → ℝ} :
     ∀ {g : Game α}, AllInh g → (∀ a, Claims.Bridge.OutN nul g a → f a = 0) → ∀ σ : Strategy g,
       expect f g (Claims.Bridge.answerWith nul g σ) = 0
@@ -321,8 +278,6 @@ theorem expect₂_answerWith {α Op : Type} (nul : Op) {F : α → α → ℝ} {
     expect₂ F g (Claims.Bridge.answerWith nul g σ) = 0 :=
   expect_answerWith nul hg (fun a ha => expect_answerWith nul hg (fun a' ha' => h a a' ha ha') σ) σ
 
-/-- **Against `answerWith nul` the fork is `0`**, at any chooser, where `Φ` is `0` at every two outcomes reached with
-every message of `nul`'s type `nul`. -/
 theorem forkE_answerWith {T D I α β Op : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β → ℝ} (nul : Op) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'), AllInh g' →
