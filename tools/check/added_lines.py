@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """`added_lines.py BASE HEAD [--json]`: name what a change's added lines put into the tree of a retired term (a name
-`GLOSSARY.md`'s table of older names retires), a Linear issue id or a run id.  The tree's existing sites stay: only a file the
+`tests/lint/retired_terms.md`'s table of older names retires), a Linear issue id or a run id.  The tree's existing sites stay: only a file the
 change makes hold more sites of a kind fails.
 
 The change is its merge base with BASE to HEAD.  Each file it adds, modifies or renames (`git diff -M`, renames found
 whatever their number) is counted in its old version, at its old path, and in its new one, by the repository lints as BASE
-has them, loaded from `git show BASE:PATH` with BASE's `GLOSSARY.md` beside them, so a change to a lint or to the glossary
+has them, loaded from `git show BASE:PATH` with BASE's table of older names beside them, so a change to a lint or to the table
 can't relax its own judge:
 
     retired term   `tests/lint/test_repo_retired_terms.py`'s `sites`: what it reads (code, Lean, config, Markdown)
@@ -42,7 +42,8 @@ from pathlib import Path
 
 RETIRED = "tests/lint/test_repo_retired_terms.py"
 LANE_TEXT = "tests/lint/test_repo_lane_text.py"
-GLOSSARY = "GLOSSARY.md"
+#: the table of older names the retired-terms lint reads from its tree, and where a base older than the table held it
+TERMS = ("tests/lint/retired_terms.md", "GLOSSARY.md")
 #: each kind: its name, the lint that finds it, and the lint's kind of site (none: every site the lint finds)
 KINDS = (("retired term", RETIRED, None), ("issue id", LANE_TEXT, "linear"), ("run id", LANE_TEXT, "run"))
 #: path prefixes no kind reads
@@ -74,12 +75,19 @@ def commit(rev: str) -> str:
 
 
 def lints(base: str, scratch: Path) -> dict[str, types.ModuleType]:
-    """BASE's lints by path, each loaded from its bytes at BASE under ``scratch``, with BASE's glossary at ``scratch``'s root,
-    which the retired-terms lint reads as its tree's."""
-    try:
-        (scratch / GLOSSARY).write_text(git("show", f"{base}:{GLOSSARY}"), errors="surrogateescape")
-    except CantJudge:
-        raise CantJudge(f"{base[:12]} has no {GLOSSARY}, whose table of older names says what is retired") from None
+    """BASE's lints by path, each loaded from its bytes at BASE under ``scratch``, with BASE's table of older names at its
+    path under ``scratch``, which the retired-terms lint reads as its tree's."""
+    held = 0
+    for path in TERMS:
+        try:
+            text = git("show", f"{base}:{path}")
+        except CantJudge:
+            continue
+        (scratch / path).parent.mkdir(parents=True, exist_ok=True)
+        (scratch / path).write_text(text, errors="surrogateescape")
+        held += 1
+    if not held:
+        raise CantJudge(f"{base[:12]} has no {TERMS[0]}, whose table of older names says what is retired")
     out = {}
     for path in dict.fromkeys(p for _, p, _ in KINDS):
         try:

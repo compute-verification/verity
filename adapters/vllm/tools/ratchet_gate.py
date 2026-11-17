@@ -20,7 +20,7 @@ counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow wh
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
 (comments, docstrings, Lean comments and Markdown, the integration's too) to a count per file of its
 lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
-per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
+per file of the terms ``tests/lint/retired_terms.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``tests/adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``tests/adapters/vllm/tests/lint/ruff_vllm.toml``
@@ -123,7 +123,7 @@ the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
-to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
+to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the table gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/check/move_check.py`` certifies.
@@ -224,7 +224,7 @@ REPO_LINT = "tests/lint"
 REPO_RUFF_LINT = "repo_ruff"
 REPO_RUFF_CONFIG = "ruff.toml"
 #: the retired-terms lint's term source, which it reads from the tree it runs in: the base's lint reads the base's
-TERMS = "GLOSSARY.md"
+TERMS = "tests/lint/retired_terms.md"
 #: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others, and its list
 REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
 REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
@@ -235,7 +235,7 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
            ("repo_lane_text", "sites", "lane-text site"),                   # S5: what is true now
-           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (GLOSSARY.md)
+           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (tests/lint/retired_terms.md)
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
@@ -301,7 +301,7 @@ LINES = re.compile(r"\d+(?:,\d+)*")
 #: the count a violation states against its allowance, whole: ``2 found, 0 allowed``, or the suffix
 #: ``  (2 found, 1 allowed)`` that `_ratchet.new_violations` writes after a key's lines only while the key has an allowance
 COUNT = re.compile(r"\s*\(?\b(\d+) found, \d+ allowed\b\)?")
-#: the advice after a retired term's site (``'X' is retired; say Y (GLOSSARY.md)``), which rewording its Glossary row changes
+#: the advice after a retired term's site (``'X' is retired; say Y (tests/lint/retired_terms.md)``), which rewording its row changes
 ADVICE = re.compile(r"(?<=' is retired); say .*")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
@@ -918,7 +918,7 @@ def counted_paths(slug: str) -> tuple[str, str]:
 @functools.cache
 def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleType | None:
     """The repository's counted lint ``slug`` as ``rev`` has it, loaded (it imports only the standard library) without
-    running a test, or None when ``rev`` has none; one that reads its terms (``glossary_text``) reads ``rev``'s ``TERMS``."""
+    running a test, or None when ``rev`` has none; one that reads its terms (``table_text``) reads ``rev``'s ``TERMS``."""
     module, _ = counted_paths(slug)
     try:
         source = git("show", f"{rev}:{module}")
@@ -937,12 +937,12 @@ def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleT
                            f"change's {noun}s") from e
     if missing := [n for n in ("LEFT_OUT", "FIX", "parse", sites) if not hasattr(lint, n)]:
         raise GitError(f"{module} at {rev[:12]} has no {', '.join(missing)}, so the gate can't count the change's {noun}s")
-    if hasattr(lint, "glossary_text"):
+    if hasattr(lint, "table_text"):
         try:
             terms = git("show", f"{rev}:{TERMS}")
         except GitError:
             return lint
-        lint.glossary_text = lambda: terms
+        lint.table_text = lambda: terms
     return lint
 
 
