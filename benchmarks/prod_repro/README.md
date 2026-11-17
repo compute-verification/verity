@@ -252,7 +252,7 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
   rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point (`price`, which the serving
   cost's door calls too) is that layer, plus the measured prefill term where prefill was not priced, plus the job's
   measured `prod-trace` over `prod`, under `benchmarks/serving-cost-priced` with the member model, card, then arm
-  (`…-priced`), `mark` `modeled`. It names the job's run as the run that tests it, and each measured term in its
+  (`glm-5.3-h200-prod-record`), `mark` `modeled`. It names the job's run as the run that tests it, and each measured term in its
   inputs. The reader writes it to `priced.json` alone; `verity bench serving_cost price` stores it, and nothing puts a
   priced point on the measured line `vllm/prod-serving-cost-glm53`.
 - **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.

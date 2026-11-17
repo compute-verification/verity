@@ -134,7 +134,7 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     assert c["lo"] <= c["mid"] <= c["hi"]
     assert ly["measured"]["value"] == 0.02 and ly["measured"]["run"] == "r-ab"
     assert p["name"] == Q.PRICED != Q.METRIC and p["mark"] == "modeled" and p["tested_by"] == "r-ab"
-    assert p["member"] == "glm-5.3-h200x8-prod-record-over-prod-priced"
+    assert p["member"] == "glm-5.3-h200-prod-record"
     assert p["value"] == pytest.approx(100 * (c["mid"] + 0.006))
     assert p["ci95"] == pytest.approx([100 * (c["lo"] - 0.01), 100 * (c["hi"] + 0.02)])
     assert p["inputs"][0].startswith("modeled: ")

@@ -36,7 +36,6 @@ METRIC = "vllm/prod-serving-cost-glm53"
 PRICED = "benchmarks/serving-cost-priced"
 OURS = ("prod-record", "prod-record-bisect")
 UNIT = "percent of stock's serving time"
-INSTRUMENT = "priced"
 #: the indexer's top-k calls a decode step: 21 of GLM-5.3's 78 layers, and the MTP layer once a step
 CALLS = 22
 #: the indexer's k: a row of at most K keys is not rewritten
@@ -429,7 +428,7 @@ def point(priced: dict, below: dict, tested_by: str, units_from: str, member: st
 
 
 def price(out: Path, u: dict, *, tested_by: str, units_from: str, ours: Sequence[str] = OURS,
-          reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3", card: str = "h200x8",
+          reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3", card: str = "h200",
           pu: dict | None = None, name: str = PRICED) -> dict:
     """Each served arm of ``ours`` priced over ``reference`` (`layer`, with its measured and step-adjusted layers
     beside it), and the first one's point under ``name`` over ``stock`` (`point`) with its ``member``; where none
@@ -445,7 +444,7 @@ def price(out: Path, u: dict, *, tested_by: str, units_from: str, ours: Sequence
     if not layers:
         raise SystemExit(f"{out}: none of {', '.join(ours)} was served")
     first = layers[0]
-    member = f"{model}-{card}-{first['ours']}-over-{stock}-{INSTRUMENT}"
+    member = f"{model}-{card}-{first['ours']}"
     below = measured(out, reference, stock)
     why = ("no lifetime pair was priced" if not first["cost"] else
            "the counters hold no failed rows, so only the pass's base is priced" if not first["failed_priced"] else
@@ -513,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ours", nargs="+", default=list(OURS))
     ap.add_argument("--tested-by")
     ap.add_argument("--model", default="glm-5.3")
-    ap.add_argument("--card", default="h200x8")
+    ap.add_argument("--card", default="h200")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     rep = json.loads((a.out / "prod_repro.json").read_text()) if (a.out / "prod_repro.json").is_file() else {}
