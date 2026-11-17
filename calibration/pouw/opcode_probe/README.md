@@ -1,7 +1,7 @@
 # opcode_probe: an instruction's rate as a price row, gated first
 
 How fast can an sm_120 GPU run one kind of instruction? PoUW's ε for a card is computed from the ACCEL model's census
-of that card ([`machine_model/`](../../../benchmarks/machine_model/README.md)), which prices each class of instruction. A probe here
+of that card ([`machine_model/`](../../machine_model/README.md)), which prices each class of instruction. A probe here
 times one instruction class in one loop and writes its price row in that census's form.
 
 A rate is only as good as the loop it timed, so nothing is timed before the SASS gate

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/networks.schema.json",
+  "$id": "calibration/census/schemas/networks.schema.json",
   "title": "Census network profiles for t = compute + rounds x RTT + bytes / bandwidth",
   "type": "array",
   "items": {
