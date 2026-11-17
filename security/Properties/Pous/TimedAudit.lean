@@ -6,7 +6,7 @@ public import Properties.Pous
 /-!
 # The timed audit's property, stated against the Lean code
 
-What `PousVerifier.TimedAudit.verdict` (package `pous_verifier`, `memory_challenger.verdict` driving `protocol.TimedAudit`)
+What `PousCheck.TimedAudit.verdict` (package `pous_check`, `memory_challenger.verdict` driving `protocol.TimedAudit`)
 accepts, stated over its three inputs, `READY.json`, `LEAVES.bin` and the audit document, and over the store `C*` whose
 leaves (`leaves`, as setup publishes them: `PublishesRoot`) have the document's root.
 
