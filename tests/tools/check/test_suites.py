@@ -2468,6 +2468,31 @@ def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_
             S.discover()
 
 
+def test_a_suite_books_one_worker_at_its_worker_gb_and_each_other_at_its_typical_worker_gb(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    vllm = S.Suite("vllm", "v", (), (), parallel=True, worker_gb=13, typical_worker_gb=7)
+    flat = S.Suite("flat", "f", (), (), parallel=True, worker_gb=13)
+    assert [S.workers_gb(vllm, n) for n in (0, 1, 8)] == [0.0, 13.0, 62.0] and S.workers_gb(flat, 8) == 104.0
+    assert S.wide_workers(vllm, 20, 62.0) == 8 and S.wide_workers(flat, 20, 62.0) == 4
+    assert S.wide_workers(vllm, 20, 12.0) == 1, "one worker however little it has"
+    lanes = S.wide_lanes([vllm, flat], [800.0, 400.0], 20, 100.0)
+    assert [(x.procs, x.gb) for x in lanes] == [(7, 55.0), (3, 39.0)], "each further worker takes what it books of the GB left"
+    held = S.Suite("held", "h", (), (), parallel=True, worker_gb=13, typical_worker_gb=7, workers=8)
+    light = S.Suite("light", "l", (), (), parallel=True)
+    assert S.wide_lanes([light, held], [900.0, 100.0], 40, 124.0)[0] == S.Lane([held], 8, 62.0), "half the GB holds 8"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "worker_gb = 13\ntypical_worker_gb = 7\n")
+    _git(tmp_path, "init", "-q")
+    assert [(s.worker_gb, s.typical_worker_gb) for s in S.discover()] == [(13.0, 7.0)]
+    for bad in ("worker_gb = 13\ntypical_worker_gb = 14\n", "typical_worker_gb = 7\n", "worker_gb = 13\ntypical_worker_gb = 0\n",
+                'worker_gb = 13\ntypical_worker_gb = "7"\n'):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="typical_worker_gb"):
+            S.discover()
+
+
 def _line_end(S, lanes, cost) -> float:
     """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
     ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""

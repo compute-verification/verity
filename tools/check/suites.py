@@ -184,9 +184,10 @@ the run's own timeout.
 
 `--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
 half of it beside parallel suites (`serial_slots`), and the parallel suites' lanes split the rest (`wide_gb`, `wide_lanes`; a
-lane held to a suite's `workers` takes that many at its `worker_gb`), each
+lane held to a suite's `workers` takes what that many book), each
 suite with as many xdist workers as its lane's share holds at its `[tool.verity.tests] worker_gb`, what one of them may reach,
-else at `TEST_PROCESS_GB`; one that overlaps another of its lane waits for its workers' GB.
+else at `TEST_PROCESS_GB`, and each past the first at its `typical_worker_gb` where it declares one, the peak its workers
+reach but for its heaviest tests (`workers_gb`); one that overlaps another of its lane waits for its workers' GB.
 """
 from __future__ import annotations
 
@@ -405,12 +406,14 @@ class Suite:
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
-    worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
+    worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded);
+    #                              each past the first books [tool.verity.tests] typical_worker_gb where declared (`workers_gb`)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
     inner: tuple[str, ...] = ()   # the suites under its test paths, which its pytest ignores (the root's included)
     parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
     timeout_workers: int = 0     # [tool.verity.tests] timeout_workers: the xdist workers its timeout_s holds for (`bound`; 0: any)
     workers: int = 0             # [tool.verity.tests] workers: the xdist workers it runs on at least, where they fit (`held_workers`)
+    typical_worker_gb: float = 0.0
 
 
 def _pyproject(path: str) -> dict:
@@ -573,9 +576,14 @@ def discover() -> list[Suite]:
         if "workers" in tests and (type(least) is not int or least < 2 or tests.get("parallel") is not True):
             raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] workers = {least!r}: the xdist workers a parallel suite "
                              "runs on at least is an integer of at least 2, beside parallel = true")
+        typical = tests.get("typical_worker_gb", 0)
+        if "typical_worker_gb" in tests and (type(typical) not in (int, float) or not 0 < typical <= tests.get("worker_gb", 0)):
+            raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] typical_worker_gb = {typical!r}: what each xdist worker "
+                             "past the first may reach is a positive number of GB, at most its worker_gb, beside worker_gb")
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
-                            float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held, workers=least))
+                            float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held, workers=least,
+                            typical_worker_gb=float(typical)))
     named = Counter(s.name for s in suites)
     if clash := sorted(n for n, k in named.items() if k > 1):
         raise ValueError(f"two suites have each of the names {', '.join(clash)}: a suite at `tests/X` takes the name `X` gave it "
@@ -2519,15 +2527,27 @@ def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
 
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
-    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
-    at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
+    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer (`workers_gb`), at its
+    `worker_gb`, else at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
     if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // worker_gb(s))))
+    return max(1, min(n, fitting(s, mem_gb)))
 
 
 def worker_gb(s: Suite) -> float:
     return s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB
+
+
+def more_gb(s: Suite) -> float:
+    return s.typical_worker_gb if s.typical_worker_gb > 0 else worker_gb(s)
+
+
+def workers_gb(s: Suite, n: int) -> float:
+    return 0.0 if n < 1 else worker_gb(s) + (n - 1) * more_gb(s)
+
+
+def fitting(s: Suite, gb: float) -> int:
+    return 0 if gb < worker_gb(s) else 1 + int((gb - worker_gb(s)) // more_gb(s))
 
 
 def wide_gb(mem_gb: float | None, serial: int) -> float | None:
@@ -2552,7 +2572,7 @@ def held_workers(s: Suite, procs: int, gb: float | None) -> int:
     none declared)."""
     if not s.workers:
         return 0
-    return min(s.workers, procs // 2, *([] if gb is None else [int(gb / 2 // worker_gb(s))]))
+    return min(s.workers, procs // 2, *([] if gb is None else [fitting(s, gb / 2)]))
 
 
 def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
@@ -2566,7 +2586,7 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
         n = held_workers(s, procs, gb)
         [lane] = [x for x in lanes if s in x.suites]
         if len(wide) > 1 and n > wide_workers(s, lane.procs, lane.gb):
-            g = None if gb is None else n * worker_gb(s)
+            g = None if gb is None else workers_gb(s, n)
             return [Lane([s], n, g), *wide_lanes(wide[:i] + wide[i + 1:], seconds[:i] + seconds[i + 1:], procs - n,
                                                  None if gb is None else gb - g)]
     return lanes
@@ -2574,8 +2594,8 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
 
 def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
     """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
-    None when that isn't known): each in a lane of its own on one worker, then each further process, with its `worker_gb` of
-    ``gb``, to the suite with the most seconds a worker whose next worker still fits, so that they end about together on whole
+    None when that isn't known): each in a lane of its own on one worker, then each further process, with what it books of
+    ``gb`` (`more_gb`), to the suite with the most seconds a worker whose next worker still fits, so that they end about together on whole
     workers whichever of the two bounds them. One lane for fewer than two suites, fewer processes than suites, too little ``gb``
     for one worker of each at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run on
     what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of its
@@ -2585,13 +2605,13 @@ def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb:
     n = [1] * len(wide)
     left = None if gb is None else gb - sum(map(worker_gb, wide))
     for _ in range(procs - len(wide)):
-        fits = [j for j, s in enumerate(wide) if left is None or worker_gb(s) <= left]
+        fits = [j for j, s in enumerate(wide) if left is None or more_gb(s) <= left]
         if not fits:
             break
         j = max(fits, key=lambda j: seconds[j] / n[j])
         n[j] += 1
-        left = None if left is None else left - worker_gb(wide[j])
-    return [Lane([s], k, None if gb is None else k * worker_gb(s)) for s, k in zip(wide, n)]
+        left = None if left is None else left - more_gb(wide[j])
+    return [Lane([s], k, None if gb is None else workers_gb(s, k)) for s, k in zip(wide, n)]
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:
@@ -2958,7 +2978,7 @@ def main(argv: list[str] | None = None) -> int:
     def start(s: Suite, paths: list[str]) -> Result:
         lane, mem = lanes[lane_of[s]], memory[lane_of[s]]
         n = wide_workers(s, lane.procs, lane.gb) if s in wide else 1
-        gb = min(int(lane.gb), math.ceil(n * worker_gb(s))) if mem else 0
+        gb = min(int(lane.gb), math.ceil(workers_gb(s, n))) if mem else 0
         with procs[lane_of[s]].take(turns[s], n), (mem.take(turns[s], gb) if mem else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
