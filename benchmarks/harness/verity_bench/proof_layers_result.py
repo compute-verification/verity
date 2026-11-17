@@ -49,6 +49,9 @@ NOT_AN_AUDIT = "a measurement, not an audit"
 #: what a ``ran with:`` line may say a benchmark result's coins and parameters were, each only where its output says so outright
 COINS = ("deployed challenger", "local challenger", "in-process")
 PARAMETERS = ("deployed", "development")
+#: recursion_e2e's ``params.tree_from`` as one of `COINS`: the host's own generator, or a challenger started beside the
+#: inner step; a challenger's device at HOST:PORT is not stated, since nothing in the record says whose device it is
+TREE_COINS = {"test-os": "in-process", "local": "local challenger"}
 #: a comma that ends a clause of recursion_e2e's ``inputs``, not one inside a Definition's braces
 CLAUSE = re.compile(r",(?![^{]*\})")
 
