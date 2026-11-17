@@ -542,7 +542,7 @@ class PublicKey(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class LmsKey:
-    """A certifier's LMS public key, ``I ‖ T[1]``, under one parameter set."""
+    """A network attester's LMS public key, ``I ‖ T[1]``, under one parameter set."""
 
     params: lms.Params
     public: bytes
@@ -560,7 +560,7 @@ class LmsKey:
 
 
 class LmsSigner:
-    """A certifier's LMS key and its leaf state (`lms.LeafState` at `state`), held from the first signature on, so a second
+    """A network attester's LMS key and its leaf state (`lms.LeafState` at `state`), held from the first signature on, so a second
     signer on the same state is refused. ``floor`` is the next leaf known unused, such as 1 + the last q published. One
     signer may be shared across threads (an `Issuer` on the proxy's loop, its reveal endpoint off it): it signs one
     message at a time."""

@@ -228,7 +228,7 @@ the measured ones and names the arms that were not served whole.
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
-  certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
+  network attester's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
   it, so nothing derives the count yet. A serve with
   no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.

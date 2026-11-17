@@ -148,7 +148,7 @@ def counted_share(p: dict, tier: str) -> float:
 
 
 def intake(p: dict) -> float:
-    """lambda_in under network certification, bits/s: side channels, certified timing and the declared novel intake."""
+    """lambda_in under network attestation, bits/s: side channels, certified timing and the declared novel intake."""
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"]
 
 

@@ -38,7 +38,7 @@ an engine of another limit than the two loads', so its number waits for no row (
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the certifier's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
+| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
@@ -84,7 +84,7 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
-then the certifier's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
+then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read from their pinned

@@ -36,5 +36,6 @@ mkdir -p /tmp/base && for f in check.py lean_changed.py lean_audit.py reserve.py
 research run --on NODE --pool research --as lean --project verity --mem-gb "$(python3 tools/verity/lean/lean_changed.py --ask security/Proofs)" --timeout 8h --source . --cwd clone $(for f in /tmp/base/base-*; do printf -- '--send %s ' "$f"; done) -- bash -lc 'python3 benchmarks/lean_records/guard.py --rounds 3 --first-lemma 0 --base "$RESEARCH_RUN_DIR/inputs" --out "$OUT"'
 ~~~
 
-It writes `$OUT/guard.json` (each arm, the summary and the verdict) and per arm its log and memory series. The tests
+It writes `$OUT/guard.json` (each arm, the summary and the verdict) and per arm its log and memory series, and prints
+the summary's numbers and the verdict in its last line, `lean_records: ...`. The tests
 (`tests/`) hold the log reading and the verdict to fixtures.
