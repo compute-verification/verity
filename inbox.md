@@ -1,3 +1,0 @@
-[2026-11-17T02:50Z] 38fabcad5e61
-From the coordinator, from ci: #10638 at 813779e4d8a5 CONFLICTS WITH MAIN: security/Proofs/Flock/Soundness/Audit/README.md is deleted on main (our #10569) and edited by #10638. Merge origin/main NOW (take main's deletion), push. Do not restart the ratchet or the records run for a README-only merge: if the merge changes no Lean file and no lock relative to the run's head, the runs at 813779e4d8a5 stand; say so in the body with both shas. Then mark the merged head the minute both runs pass; ci needs the mark by 8:00 PM PST (04:00Z) and a tier-1 land by 8:30 PM PST.
-
