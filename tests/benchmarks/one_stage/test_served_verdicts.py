@@ -6985,6 +6985,7 @@ def test_only_verity_hold_placement_1_asks_composite_py_to_refuse_a_run_s_key(tm
     given = {}
     for n, hold in enumerate((None, "", "0", "1")):
         rc, argv, _lines = _composed(tmp_path / str(n), {"EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64,
+                                                         "SERVED_NODE": "the-served-node",
                                                          **({"VERITY_HOLD_PLACEMENT": hold} if hold is not None else {})})
         given[hold] = (rc, _flag(argv, "--configuration"), "--hold-placement" in argv)
     assert given == {None: (0, "ab" * 64, False), "": (0, "ab" * 64, False), "0": (0, "ab" * 64, False),
