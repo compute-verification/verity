@@ -113,7 +113,11 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     runner = REPO / "benchmarks" / "overhead" / "run.py"
     metrics = runpy.run_path(str(runner))["METRICS"]
     assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
-                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L"}
+                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
+                       "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C",
+                       "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L"}
+    h200 = {n: metrics[n] for n in metrics if n.endswith("-h200")}
+    words = {w: model for model, w in R.MEMBER_MODEL.items()}
 
     def table(within: Path | None = None) -> str:
         if within is None:
@@ -134,11 +138,15 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     assert printed == table() and printed.endswith(f"\n## {SMALL}\n\nNo labelled run times {SMALL} "
                                                    "(`run_of_record=overhead`): it has no γ.\n")
     got = result(before)
-    assert [(m["name"], m.get("member")) for m in got["measurements"]] == [(n, w) for n in metrics for w in (None, MEMBER)]
-    for m, point in zip(got["measurements"], [p for p in O.POINTS for _ in (0, 1)]):
+    assert [(m["name"], m.get("member")) for m in got["measurements"]] == [
+        *((n, w) for n in h200 for w in (None, MEMBER)),
+        *((n, w) for n in metrics if n not in h200 for w in ("llama-3.1-70b-h100", "llama-3.2-1b-h100"))]
+    for m in got["measurements"]:
+        _, card, point = metrics[m["name"]].split("/")
         assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
-        on = f" on {SMALL}" if m.get("member") else ""
-        assert m["why"] == f"no γ of record: no labelled run times pearl-plus at h200's {point}{on} (`run_of_record=overhead`)"
+        on = f" on {words[m['member'].rsplit('-', 1)[0]]}" if m.get("member") else ""
+        assert m["why"] == (f"no γ of record: no labelled run times pearl-plus at {card}'s {point}{on} "
+                            "(`run_of_record=overhead`)")
     assert got["validation"]["status"] == "failed" and got["validation"]["evidence"] == [R.TABLE]
     assert got["validation"]["detail"].startswith("0 of 2 metrics have a γ of record")
 
@@ -150,7 +158,9 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     rows = {r["point"]: r for r in kept["rows"]}
     assert got["workload_fingerprint"]["runs"] == [run] and got["measurement_files"] == [R.TABLE]
     own = [m for m in got["measurements"] if "member" not in m]
-    assert [m["value"] for m in got["measurements"] if "member" in m] == [None, None]
+    assert [m["value"] for m in got["measurements"] if "member" in m] == [None] * 6
+    assert R.measurements(kept, h200) == [m for m in R.measurements(kept, metrics) if m["name"] in h200]
+    assert "h100" not in printed and "H100" not in printed
     for m, point in zip(own, O.POINTS):
         g = rows[point]["gamma"]
         assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
@@ -263,8 +273,15 @@ def test_the_h100_s_door_sweeps_times_and_records_on_its_own_node_with_the_h200_
     seventy = timed(tmp_path, s, old, "pearl-plus", "r20261104-030000-0002")
     run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", card="h100")
     assert R.record_run(s.store, seventy) == [] and R.record_run(s.store, run) == []
-    rows = {(r["card"], r["point"]): r for r in R.build(s.store, local_only=True)["rows"]}
+    table = R.build(s.store, local_only=True)
+    rows = {(r["card"], r["point"]): r for r in table["rows"]}
     for point in O.POINTS:
         assert rows["h100", point]["of_record"] and rows["h100", point]["run"] == run
         assert rows["h100", point]["note"] == f"{O.WITHOUT_Y}; {h100.note}"
         assert rows["h200", point]["note"] == O.WITHOUT_Y
+    seven, small = R.measurements(table, {"benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C"})
+    assert (seven["member"], seven["value"]) == ("llama-3.1-70b-h100", rows["h100", "C"]["gamma"]["gamma"])
+    assert seven["extra"]["note"] == rows["h100", "C"]["note"]
+    assert (small["member"], small["value"]) == ("llama-3.2-1b-h100", None)
+    own, member = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
+    assert "member" not in own and own["value"] == rows["h200", "C"]["gamma"]["gamma"] and member["value"] is None

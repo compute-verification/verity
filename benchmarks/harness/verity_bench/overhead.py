@@ -112,8 +112,9 @@ MODELS = {
     "llama3.1-70b": {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)},
     "llama3.2-1b": {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)},
 }
-#: the kernel points' model, whose γ is each metric's own reading; every other model's is a member of it
-KERNEL_MODEL = "llama3.1-70b"
+#: the kernel points' model and card, whose γ is each metric's own reading; every other model's, and every model's on
+#: another card, is a member of it
+KERNEL_MODEL, KERNEL_CARD = "llama3.1-70b", "h200"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
 LEFT_OUT = {"llama3.1-70b": ("the LM head",), "llama3.2-1b": ("the LM head",)}
 #: the note of a figure from a run whose arm committed no y (`y_note`): where the served call commits y, the γ leaves y's tree
