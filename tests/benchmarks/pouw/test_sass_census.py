@@ -16,7 +16,7 @@ import diff_menu
 import sass_count
 import sass_semantics
 
-POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
+POUW = (Path(__file__).resolve().parents[3] / "calibration" / "pouw")
 SC = POUW / "sass_census"
 FIX = Path(__file__).resolve().parent / "fixtures" / "sass_census_sample.sass"
 
