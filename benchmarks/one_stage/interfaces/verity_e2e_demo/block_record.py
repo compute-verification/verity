@@ -15,7 +15,9 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the subprotocol's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. A per-member sample that missed a member has no integrity bound
+  (``value`` null) and holds at no δ: its ``why`` gives each sampled member's bound over that member's own proof blocks,
+  beside ``members`` (sampled, registered). The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
@@ -68,9 +70,10 @@ NAMES_TERMS = ("bandwidth",)
 NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
-#: the protocols each product's Lean checks name in their answers (`onsite check`; `remote check`, and `remote-v1 check`,
-#: remote's composite of record, whose work subprotocol is Pearl+'s), and `Core.Verdict`'s names
-CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v0", "verity/remote/v1")}
+#: the protocols each product's Lean checks name in their answers (`onsite check`; `remote-v1 check`, remote's composite
+#: of record, whose work subprotocol is Pearl+'s; `remote check`, v0, is development and never of record), and
+#: `Core.Verdict`'s names
+CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v1",)}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
@@ -96,6 +99,11 @@ def integrity_bound(n: int, kd: int, delta: Fraction, strata: Sequence[Mapping[s
         raise ValueError(f"the strata hold {design.population} units and sample {design.k} of them, not the {kd} of {n} "
                          f"beside them")
     return design.count_bound(delta)
+
+
+def member_bounds(by_member: Sequence[Mapping[str, Any]], delta: Fraction) -> list[str]:
+    return [f"at most {integrity_bound(m['of'], m['drawn'], delta)} incorrect of member {m['member']}'s {m['of']} "
+            f"proof block{'' if m['of'] == 1 else 's'} at δ {delta}" for m in by_member]
 
 
 def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
@@ -140,6 +148,10 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if subprotocol == "integrity":
+        members = row.get("members") or {}
+        if members.get("sampled", 0) < members.get("registered", 0):
+            return ({"symbol": "integrity bound", "value": None, "unit": "wrong units", **_sample(a),
+                     "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
         return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
                 frac(row["delta"]), "delta")
     if subprotocol == "pouw":
@@ -165,7 +177,12 @@ def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) ->
     """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if subprotocol == "integrity":
+        if subprotocol == "integrity" and "members" in quantity:
+            m = quantity["members"]
+            out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
+                           f"no bound over the workload's {quantity['of']} proof blocks holds; "
+                           f"{'; '.join(member_bounds(quantity['by_member'], d))}"}
+        elif subprotocol == "integrity":
             b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
@@ -315,6 +332,9 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[key] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        m = lg["quantity"].get("members") or {}
+        if (lg["quantity"]["value"] is None) != (name == "integrity" and m.get("sampled", 0) < m.get("registered", 0)):
+            bad[key] = "its quantity's value is null exactly when it is integrity's and its sample missed a member"
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"

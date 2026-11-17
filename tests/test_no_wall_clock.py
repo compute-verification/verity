@@ -49,8 +49,6 @@ ALLOWED: dict[str, str] = {
         "a GPU timing script (not collected) that measures int8_exact decode TPOT, batched against the reference; no test reads it",
     "tests/adapters/vllm/tests/protocols/h1_zy_gpu.py::wall":
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
-    "tests/adapters/vllm/tests/protocols/local_gate.py::_now":
-        "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
     "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
     "tests/adapters/vllm/tests/protocols/pous_gpu.py":

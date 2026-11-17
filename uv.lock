@@ -24,7 +24,7 @@ members = [
     "cluster",
     "cluster-tests",
     "core-identity",
-    "memory-challenger-lean",
+    "memory-attester-lean",
     "pous-check",
     "research",
     "research-tests",
@@ -54,8 +54,6 @@ members = [
     "verity-flock-tests",
     "verity-graph",
     "verity-graph-tests",
-    "verity-landq",
-    "verity-landq-tests",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-machine-model-tests",
@@ -1057,7 +1055,7 @@ wheels = [
 ]
 
 [[package]]
-name = "memory-challenger-lean"
+name = "memory-attester-lean"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean" }
 dependencies = [
@@ -2324,6 +2322,7 @@ dev = [
     { name = "cluster" },
     { name = "editables" },
     { name = "jsonschema" },
+    { name = "mypy" },
     { name = "numpy" },
     { name = "pytest" },
     { name = "pytest-xdist" },
@@ -2342,9 +2341,6 @@ dev = [
     { name = "verity-proof-throughput" },
     { name = "verity-vllm" },
 ]
-mypy = [
-    { name = "mypy" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -2358,6 +2354,7 @@ dev = [
     { name = "cluster", editable = "infra/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
+    { name = "mypy", specifier = "==1.20.2" },
     { name = "numpy" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
@@ -2376,7 +2373,6 @@ dev = [
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
-mypy = [{ name = "mypy", specifier = "==1.20.2" }]
 
 [[package]]
 name = "verity-bench"
@@ -2509,6 +2505,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-bench" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -2519,6 +2516,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
+    { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
@@ -2691,22 +2689,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
-
-[[package]]
-name = "verity-landq"
-version = "0.0.0"
-source = { editable = "tools/verity/landq" }
-
-[[package]]
-name = "verity-landq-tests"
-version = "0.0.0"
-source = { virtual = "tests/tools/verity/landq" }
-dependencies = [
-    { name = "verity-landq" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-landq", editable = "tools/verity/landq" }]
 
 [[package]]
 name = "verity-lean-audit"

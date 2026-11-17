@@ -31,9 +31,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
-  the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
+  the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in network certification's `prover/` but for `compile_slice_zk.py` here, proves its
+- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/` but for `compile_slice_zk.py` here, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
@@ -41,7 +41,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
-  certification must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
+  attestation must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
   and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
   `prover/block_certifier.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
@@ -96,8 +96,8 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounti
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
-id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`adapters/vllm/tools/served_run/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly, with the
+flags `served_session.py`'s `HAND_START` lists), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network attester run's certified I/O to a 0600 file in the kept fetch's
@@ -392,7 +392,7 @@ guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`)
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
-**The keys a record releases** (network certification's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
+**The keys a record releases** (network attestation's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
 find a private value copied into the record; they can't find a value the witness never held as bytes (a count, a length,
 a time). So the guard reads each JSON file bound for `out/` by key as well (`--keys`, which `chain_record.sh` passes): a
 file holds only keys its list in `released_keys.json` declares public by name, each with its kind, which is one of the

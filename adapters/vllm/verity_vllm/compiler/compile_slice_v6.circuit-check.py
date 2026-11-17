@@ -14,7 +14,11 @@ def _network_compile_slice_v6_roots() -> list[Any]:
     PoolVerdict: the wiring their own checks can't reach is the opened row into the stream's initial values and the
     finals into the close. The pool window is past the default whole-lowering budget; its parts are each lowered."""
     from verity_vllm.compiler import compile_slice_v4 as V4
-    from verity_vllm.compiler.compile_slice_v6 import compile_slice_block, pool_unit, statics
+    from verity_vllm.compiler.compile_slice_v6 import (
+        compile_slice_block,
+        pool_unit,
+        statics,
+    )
 
     engine = {**V4.DEMO_ENGINE, "max_model_len": 8, "num_gpu_blocks": 3}
     st = statics(2, 1, 1, engine, 1, Q=1, D=2, P=3, K=1, CTW=4, CU=1, DA=1, NS=2, NM=1, NRB=1, NRK=1)

@@ -699,15 +699,15 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     allow = base or tip
     dirs = [d for ds in driver._shards(rec) for d in ds]
     if check:
-        judged = _gate(driver, rec)
+        view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
+        judged = _gate(driver, rec, view)
         if not lost and any(unread_suites(d) & {*judged} for d in dirs):
             return Verdict(PENDING)
-        view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
         passes = shard_passed(view, driver._allowed_steps(allow, dirs))
         missed = [s for s in judged if s not in passes]
     else:
-        off = driver._policy(tip).off_gate
-        judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
+        off, ran = driver._policy(tip).off_gate, _ran(rec, shard_steps([dirs], [True]))
+        judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS or s in ran) and s not in off]
         missed = driver._unrun(ids, judged, allow)
     if not missed:
         return _keep(rec, Verdict(PASS), judged)
@@ -744,10 +744,19 @@ def _gated(driver: Landing, rec: dict) -> set[str]:
     return {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
 
 
-def _gate(driver: Landing, rec: dict) -> list[str]:
-    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, and the preflights."""
-    gate = _gated(driver, rec)
-    return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
+def _gate(driver: Landing, rec: dict, view: list[dict[str, str | None]] | None = None) -> list[str]:
+    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, the preflights, and
+    those its launch skipped by name that a shard of ``view`` ran all the same (`_ran`)."""
+    gate, ran = _gated(driver, rec), _ran(rec, view)
+    return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT or s in ran)]
+
+
+def _ran(rec: dict, view: list[dict[str, str | None]] | None) -> set[str]:
+    """The steps ``rec``'s launch skipped by name (``skip``) that a shard of ``view`` (`shard_steps`') holds neither skipped nor
+    stopped: check.py decides from the candidate's own tree whether lean-agreement runs, whatever the launch asked, and a step
+    it ran counts as one the launch sent does."""
+    skip = set(rec.get("skip") or ())
+    return {s for v in view or () for s, x in v.items() if s in skip and x not in ("skipped", "stopped")}
 
 
 def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
@@ -767,6 +776,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     tip, base = rec["tip"], rec.get("base")
     allow, dirs = base or tip, driver.evidence(driver.repo, said)
     allowed = driver._allowed_steps(allow, dirs)
+    gate = _gate(driver, rec, shard_steps([[d] for d in dirs], [True] * len(dirs)))
     keys: dict[str, str] = {}
     got: dict[str, list[Read]] = {}
     at: list[float] = []
@@ -774,7 +784,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
         if implicated(d) is None and killed(d):
             continue                                     # a kill, as `judge` reads it at the end: infra, never an early red
         ended, unread = {st.get("step"): st for st in step_records(d)}, unread_suites(d)
-        for s in _gate(driver, rec):
+        for s in gate:
             if (st := ended.get(s)) is not None:
                 if (st.get("status") != "failed" or not_run(st) or s in allowed or s in unread
                         or isinstance(rc := st.get("rc"), int) and (rc < 0 or rc in KILLED_RC)):
@@ -793,7 +803,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     if not got:
         return Verdict(PENDING)
     v = Verdict(FAIL, tuple(_failure(s, keys[s], key(driver.repo, base, s) if base else None, got[s])
-                            for s in _gate(driver, rec) if s in got))
+                            for s in gate if s in got))
     first = [t for t in (*at, (rec.get("early") or {}).get("at")) if t is not None]
     rec["early"] = {**_doc(v), "at": min(first, default=driver.now())}
     return v
@@ -815,7 +825,7 @@ def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
     if not all(shards):
         return Verdict(PENDING)
     view = shard_steps(shards, [any(states.get(r, (None, None))[1] == 0 for r in g) for g in groups])
-    judged = _gate(driver, rec)
+    judged = _gate(driver, rec, view)
     passes = shard_passed(view, driver._allowed_steps(rec.get("base") or rec["tip"], dirs))
     if view is None or any(s not in passes for s in judged):
         return Verdict(PENDING)

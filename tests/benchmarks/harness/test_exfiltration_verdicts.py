@@ -22,8 +22,8 @@ from verity_bench import exfiltration as E
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "8c0ac638eab787f4959a4316f351920b6d69b046025cfed4b4092496a313200c",
-               "json": "e970eff30a36a4206f974a14ee579bbee904029c7bf766c7d9f849718d9ae766"}
+NO_VERDICTS = {"text": "0daf3bbbfcce3a3a28d54b762384f33d35f30586012a5ed0e9f9bb23c97c1ad4",
+               "json": "94412a9c27cf341d6c45c78575cb39ae23ffe4ff6eccfa4eece613a12104d2d6"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -64,7 +64,7 @@ def digests(doc: dict) -> dict:
 def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
     """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
     pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
-    read, the design as the design before its stop block and the network attester's figure in the headline the
+    read, the design as the design before its stop block and the network attester's part the
     `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
@@ -75,9 +75,9 @@ def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_pat
     year = doc["periods"][-1]
     assert {p["output_count"]["mark"] for p in doc["periods"]} == {"assumed"}
     assert [i for i in doc["inputs"] if i["input"] == "output_count"] == [] and year["output_count"]["at_zero_in"] == []
-    assert (doc["certifier"]["stop"]["runs"], doc["certifier"]["stop"]["why"]) == ([], list(term().NO_RECORDS.why))
+    assert (doc["attester"]["stop"]["runs"], doc["attester"]["stop"]["why"]) == ([], list(term().NO_RECORDS.why))
     assert year["together"]["design"] == year["together"][E.OUTPUT_COUNT]
-    assert doc["certifier"]["rows"][0]["row"] == "scan" and doc["certifier"]["rows"][0]["term"]["2"]["GB"] == pytest.approx(
+    assert doc["attester"]["rows"][0]["row"] == "scan" and doc["attester"]["rows"][0]["term"]["2"]["GB"] == pytest.approx(
         term().document(term().inputs(response_ids=E.RESPONSE_IDS))["value"])
 
 
@@ -107,7 +107,7 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     assert [sorted(v.keys() & set(E.CLASS_FIELDS)) for v in stop["verdicts"] if v["control"]] == [[], []]
     # the reader read the class's four verdicts and holds no execution phase: the schedule was not handed. No row is
     # named, so no input is the output count's and nothing of a monitoring period moves
-    answer = doc["certifier"]["stop"]
+    answer = doc["attester"]["stop"]
     assert (answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (0, False, [HOLDER], [])
     assert len(answer["verdicts"]) == 4 and answer["why"][0].endswith(reader().NO_SCHEDULE)
     assert answer["why"][2].endswith("class 0: charged its whole schedule on each of its 4 rows: the schedule was not handed")
@@ -132,7 +132,7 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     alone = E.build(store=with_verdicts(tmp_path / "alone", complete()).store, root=REPO)
     assert (alone["stop_class"]["complete"], alone["stop_class"]["mark"]) == (True, E.RUN_NOT_PROVED)
     assert alone["inputs"] == base["inputs"] and alone["periods"] == base["periods"]
-    assert alone["certifier"]["stop"] == base["certifier"]["stop"] | {"runs": [HOLDER], "why": [
+    assert alone["attester"]["stop"] == base["attester"]["stop"] | {"runs": [HOLDER], "why": [
         *term().NO_RECORDS.why,
         (f"{HOLDER} is not read: it holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, "
         "`out/*-controls.jsonl`, `out/serve-registrations.jsonl`")]}
@@ -167,7 +167,7 @@ def test_proved_by_on_every_piece_makes_it_measured(tmp_path, listed):
     assert (stop["complete"], stop["mark"], stop["said"]) == (True, "measured", (
         f"{ON} (measured: proved by `Made.Up.stop_record`, `Made.Up.response_tie`, `Made.Up.request_tie` and "
         "`Made.Up.second_stage`)"))
-    answer = doc["certifier"]["stop"]
+    answer = doc["attester"]["stop"]
     assert (answer["held_phases"], len(answer["verdicts"])) == (0, 4) and answer["why"][0].endswith(reader().NO_SCHEDULE)
     assert (doc["inputs"], doc["periods"]) == (base["inputs"], base["periods"])
     measured = sum(i["mark"] == "measured" for i in base["inputs"])
@@ -367,7 +367,7 @@ def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path
     assert doc["stop_class"]["complete"] and {x["target"]: x["why"] for x in doc["refused"]} == {
         again: f"superseded by {HOLDER}"}
     assert f"- {again} (`{E.VERDICTS}`): superseded by {HOLDER}" in E.render(doc)
-    answer = doc["certifier"]["stop"]
+    answer = doc["attester"]["stop"]
     assert handed == [([HOLDER, again], [again])] == [(answer["runs"], answer["superseded"])]
     assert answer["runs"] == sorted([*doc["stop_class"]["runs"], *(x["target"] for x in doc["refused"])])
     assert (f"on the runs that carry `{E.VERDICTS}` ({HOLDER}, {again}, of which superseded: {again}). ") in E.render(doc)
@@ -381,4 +381,4 @@ def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path
     assert doc["stop_class"]["runs"] == [] and not doc["stop_class"]["complete"]
     assert f"(`{E.VERDICTS}`, no run read): not complete: no verdict on the stop record; " in E.render(doc)
     # a run this command reads no verdict from is handed to the reader all the same: it carries the record
-    assert handed[1:] == [([HOLDER], [])] == [(doc["certifier"]["stop"]["runs"], doc["certifier"]["stop"]["superseded"])]
+    assert handed[1:] == [([HOLDER], [])] == [(doc["attester"]["stop"]["runs"], doc["attester"]["stop"]["superseded"])]

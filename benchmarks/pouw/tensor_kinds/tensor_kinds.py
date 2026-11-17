@@ -34,7 +34,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-#: what ../opcode_probe/sm89/census.py reads, and the command
 __all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main"]
 
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
@@ -439,7 +438,29 @@ def search_report(out: Path) -> tuple[str, list[str]]:
     return "\n".join(lines) + "\n", fails
 
 
+METRIC = "compute-research/eight-bit-mma-issue-cost"
+
+
+def record(out: Path, summary: dict, fails: list[str]) -> None:
+    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result."""
+    from verity_bench import kit
+
+    w = kit.writer(out)
+    detail = "; ".join(fails) if fails else f"every gate held over {len(summary)} forms"
+    w.validation("failed" if fails else "passed", "tensor_kinds.analyze", detail)
+    if fails:
+        return
+    s = summary.get(REF) or {}
+    a = s.get("a")
+    w.measurement(METRIC, a, "issue cycles a MMA", mark="measured",
+                  why=None if a is not None else f"the run timed no mixed point of {REF}",
+                  extra={"form": REF, "a_per_slot": s.get("a_per_slot"), "slots": s.get("slots")})
+
+
 def main(argv: list[str]) -> int:
+    """`--record` beside OUT_DIR also writes the run's result (`record`)."""
+    if rec := "--record" in argv:
+        argv = [x for x in argv if x != "--record"]
     if argv[1] == "refit":
         args = argv[2:]
         cut = args.index("--search") if "--search" in args else len(args)
@@ -462,6 +483,8 @@ def main(argv: list[str]) -> int:
     print(md)
     for x in fails:
         print("GATE", x)
+    if rec:
+        record(out, summary, fails)
     return 3 if fails else 0
 
 

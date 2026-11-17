@@ -342,7 +342,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({
         "previous": tie, "registered": [], "population": 1,
         "law": SV.selection_sampling_design(SV.SamplingDesign(rule), 1, (1,)), "stand_in": True}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "sampling_design": rule, "stand_in": True}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "audit": {"accepted": True},
+                                                     "sampling_design": rule, "stand_in": True}))
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:

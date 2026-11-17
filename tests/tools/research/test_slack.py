@@ -266,14 +266,12 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
         slack.load_registry(registry)
 
 
-def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
+def test_every_handle_names_exactly_one_holder(registry):
     """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
-    handover's outgoing id goes in `lineage`.  A handle no agent has taken yet has no `holder` key."""
+    handle no agent has taken yet has no `holder` key."""
     reg = json.loads(REAL_REGISTRY.read_text())
     many = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"] or "") for h in reg["handles"] if "holder" in h}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
-    with pytest.raises(slack.SlackError, match="lineage"):
-        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
 
 
 @pytest.mark.parametrize("holder", [
@@ -288,14 +286,13 @@ def test_a_holder_is_one_agent_id_with_no_prose(registry, holder):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": ok}, *reg["handles"][1:]]}, "r")
 
 
-@pytest.mark.parametrize("key", ["charter", "remit"])
-def test_a_charter_or_remit_never_cites_an_agents_store(registry, key):
+def test_a_remit_never_cites_an_agents_store(registry):
     """An agent's store is its scratch (AGENTS.md "Where writing goes"): nobody else can open it."""
     reg = json.loads(REAL_REGISTRY.read_text())
     store = "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)"
-    with pytest.raises(slack.SlackError, match=rf"@infra's {key} cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
-        slack.check_registry({**reg, "handles": [{**reg["handles"][0], key: store}, *reg["handles"][1:]]}, "r")
-    assert not any(slack.STORE_PATH in h[k] for h in reg["handles"] for k in ("charter", "remit"))
+    with pytest.raises(slack.SlackError, match=r"@infra's remit cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "remit": store}, *reg["handles"][1:]]}, "r")
+    assert not any(slack.STORE_PATH in h["remit"] for h in reg["handles"])
 
 
 def test_a_handles_examples_are_a_few_one_line_questions(registry):
@@ -355,6 +352,9 @@ def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
     assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
+    rc, out, _ = run(capsys, "owners", "tests/verity/circuits/ops/test_tc.py", "tests/infra/slack-events/test_app.py",
+                     "tests/tools/research/test_slack.py", "tests/tools/research/test_cli.py", "tests/test_boundaries.py")
+    assert [line.split()[0] for line in out.splitlines()] == ["@circuits", "@comms", "@comms", "@infra", "@top"]
 
 
 def test_registry_refuses_a_path_two_handles_own(registry, capsys):
@@ -1372,7 +1372,6 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     for argv, says in ((["--user", "U0NOBODY"], "no Slack user U0NOBODY in the workspace"),
                        (["--user", LUKE, "--email", "luke@example.org"], "--user U... (their Slack id) or --email E"),
                        ([], "--user U... (their Slack id) or --email E"), (["--user", "luke"], "is not a Slack user id"),
-                       (["--user", LUKE, "--cursor-bot", "cursor"], "is not a Slack user id"),
                        (["--user", LUKE, "--start-here", "example.org/start"], "is not an http(s) link")):
         rc, _, err = run(capsys, "chat", "open", "luke-two", *argv)
         assert rc == 2 and says in err, (argv, err)
@@ -2066,19 +2065,14 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
-def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
-    """A page that decided something no option names: `otherwise` records it with the note and `page`, never as the
-    lane's own provisional decision."""
+def test_resolve_records_a_decision_outside_the_cards_options_as_daniels(route, registry, capsys):
+    """A decision no option names: `otherwise` records it with the note, never as the lane's own provisional decision."""
     route.resolve = True
-    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
-    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
-                                  {"choice": "otherwise", "note": "both, in order", "page": True})
-    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--on-page")
-    assert route.requests[-1][2] == {"choice": "a", "page": True}
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order")
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "otherwise", "note": "both, in order"})
     sent = len(route.requests)
     for extra, why in ((["--note", " "], "needs --note"), (["--note", "x" * 1001], "1 to 1000"),
-                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note"),
-                       (["--note", "both", "--on-page", "--provisional"], "one or the other")):
+                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note")):
         rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", *extra)
         assert rc == 2 and why in err, (extra, err)
     assert len(route.requests) == sent
@@ -3687,7 +3681,7 @@ def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registr
 
 
 class FakeLinearIssues:
-    """Linear's GraphQL API as `traffic --latency` reads it: an issue's creation, state history and comments, by identifier."""
+    """Linear's GraphQL API as `traffic` reads it: an issue's state and comments, by identifier."""
 
     def __init__(self, issues: dict[str, dict]):
         self.issues, self.asked = issues, []
@@ -3704,101 +3698,7 @@ def iso(t: float) -> str:
     return datetime.fromtimestamp(t, timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def issue(created: float, moves=(), comments=()) -> dict:
-    """An issue filed at `created`, moved `(at, from, to)` and commented on `(at, who)`; `who` is a handle (the app's
-    `createAsUser`) or `~name`, a person."""
-    return {"createdAt": iso(created),
-            "history": {"nodes": [{"createdAt": iso(at), "fromState": {"type": a}, "toState": {"type": b}} for at, a, b in moves]
-                        + [{"createdAt": iso(created), "fromState": None, "toState": None}]},
-            "comments": {"nodes": [{"createdAt": iso(at), "user": {"name": who[1:]} if who.startswith("~") else None,
-                                    "botActor": None if who.startswith("~") else {"userDisplayName": who}} for at, who in comments]}}
-
-
 T0 = 1700050000.0
-
-
-def ask_at(fake, box: str, dt: float, author: str, text: str, **kw) -> dict:
-    """A top-level post at T0 + dt seconds, and its doorbell in the inbox `box`, as `send` would ring it."""
-    m = fake.add(COORD, text=text, username=author, bot_id=BOT, ts=f"{T0 + dt:.6f}", **kw)
-    fake.add(COORD, text=slack.doorbell(author, m["ts"], m["ts"], text), username="router", bot_id=BOT, thread_ts=box,
-             ts=f"{T0 + dt + 0.5:.6f}")
-    return m
-
-
-def reply_at(fake, root: dict, dt: float, author: str, text: str) -> dict:
-    root["reply_count"] = root.get("reply_count", 0) + 1
-    return fake.add(COORD, text=text, username=author, bot_id=BOT, thread_ts=root["ts"], ts=f"{float(root['ts']) + dt:.6f}")
-
-
-def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, registry, routes_dirs, capsys, monkeypatch):
-    """An ask's first answer is the earliest of the addressed lane's reply in its thread and its Linear issue leaving Backlog or
-    getting a comment from anyone but the asker; someone else's reply, the asker's own comment, a state the issue was filed
-    in, and anything after --now are no answer."""
-    from research import linear
-    circuits, proofs = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
-    add_route(routes_dirs[0], "old-circuits", circuits, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
-    now = T0 + 86400
-    slack_ask = ask_at(fake, circuits, 0, "infra", "@circuits can the cut take 2^20 rows?")
-    reply_at(fake, slack_ask, 60, "proofs", "not mine, but probably")                       # another lane's reply
-    fake.add(COORD, text="yes", username="circuits", bot_id="BOTHERAPP", thread_ts=slack_ask["ts"], ts=f"{T0 + 120:.6f}")  # not ours
-    reply_at(fake, slack_ask, 600, "circuits", "yes, from PR 12")                           # 10 min
-    linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
-    linear_ask = ask_at(fake, proofs, 100, "infra", linked)
-    reply_at(fake, linear_ask, 1200, "proofs", "2^-80, see the issue")                     # 20 min: Linear was first
-    filed_started = ask_at(fake, proofs, 200, "lean", linked.replace("PRF-1", "PRF-2"))   # filed straight into In Progress
-    later = ask_at(fake, proofs, 300, "lean", linked.replace("PRF-1", "PRF-3"))           # answered after --now
-    lost = ask_at(fake, proofs, 400, "lean", linked.replace("PRF-1", "PRF-404"))          # Linear can't read it
-    settled = ask_at(fake, proofs, 450, "infra", linked.replace("PRF-1", "PRF-5"))         # filed already Done
-    eyes = ask_at(fake, circuits, 500, "infra", "@circuits a second look at the lowering?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
-    both = ask_at(fake, circuits, 550, "infra", "@circuits @proofs who owns the cut?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
-    for box, dt in ((proofs, 551), (circuits, 552)):                                          # `deliver` rang circuits again
-        fake.add(COORD, text=slack.doorbell("infra", both["ts"], both["ts"], both["text"]), username="router", bot_id=BOT,
-                 thread_ts=box, ts=f"{T0 + dt:.6f}")
-    renamed = ask_at(fake, circuits, 600, "infra", "@old-circuits the old lowering?")
-    reply_at(fake, renamed, 180, "old-circuits", "answered before the rename")                  # 3 min
-    fresh = ask_at(fake, circuits, 86000, "infra", "@circuits one more")                        # unanswered, but not stale
-    ask_at(fake, circuits, 700, "infra", f"{slack.ANNOUNCE} from @infra to @circuits: node 2 reboots")   # announcements aren't asks
-    ask_at(fake, circuits, 800, "infra", "@circuits fyi: the census moved (quiet)")
-    r = reply_at(fake, slack_ask, 900, "infra", "@proofs and 2^21?")                          # a reply's doorbell: no new ask
-    fake.add(COORD, text=slack.doorbell("infra", slack_ask["ts"], r["ts"], r["text"]), username="router", bot_id=BOT,
-             thread_ts=proofs, ts=f"{T0 + 901:.6f}")
-    ask_at(fake, circuits, -10, "infra", "@circuits before the window")
-    t = float(linear_ask["ts"])
-    fake_linear = FakeLinearIssues({
-        "PRF-1": issue(t - 1, moves=[(t + 300, "backlog", "started"), (t + 2000, "started", "completed")],
-                       comments=[(t + 30, "infra"), (t + 600, "~Daniel")]),                  # the asker's comment isn't an answer
-        "PRF-2": issue(t + 99, moves=[(t + 99, "backlog", "started")], comments=[(t + 99 + 1800, "proofs")]),
-        "PRF-3": issue(t + 199, moves=[(now + 60, "backlog", "started")], comments=[(now + 30, "proofs")]),
-        "PRF-5": issue(t + 349, moves=[(t + 349, "backlog", "completed")]),
-    })
-    monkeypatch.setattr(linear, "_http", fake_linear)
-    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
-    rep = json.loads(out)
-    by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
-    assert (by["circuits", renamed["ts"]]["minutes"], by["circuits", renamed["ts"]]["answer_by"]) == (3.0, "old-circuits")
-    assert [by["proofs", x["ts"]]["answer_by"] for x in (linear_ask, filed_started)] == [None, "proofs"]   # the app moved it
-    assert rc == 0 and len(rep["asks"]) == 11 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404", "PRF-5"]
-    assert (by["proofs", settled["ts"]]["first"], by["proofs", settled["ts"]]["minutes"]) == ("linear-filed", None)   # untimed
-    assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
-    assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)
-    assert (by["proofs", filed_started["ts"]]["first"], by["proofs", filed_started["ts"]]["minutes"]) == ("linear-comment", 30.0)
-    assert by["proofs", later["ts"]]["first"] is None and by["proofs", lost["ts"]]["first"] is None
-    assert rep["linear_errors"] == ["PRF-404: Linear: Entity not found: Issue"]
-    assert by["circuits", eyes["ts"]]["first"] == "reaction" and by["circuits", eyes["ts"]]["minutes"] is None   # untimed
-    assert by["circuits", both["ts"]]["first"] is None and by["proofs", both["ts"]]["first"] is None   # whose 👀? unknown
-    assert by["circuits", fresh["ts"]]["age_minutes"] == round((now - float(fresh["ts"])) / 60, 1)
-    assert rep["lanes"] == [
-        {"lane": "circuits", "asks": 5, "answered": 3, "slack": 2, "linear": 0, "notion": 0, "untimed": 1, "median_min": 3.0,
-         "p90_min": 10.0, "unanswered": 2, "stale": 1},
-        {"lane": "proofs", "asks": 6, "answered": 3, "slack": 0, "linear": 2, "notion": 0, "untimed": 1, "median_min": 5.0,
-         "p90_min": 30.0, "unanswered": 3, "stale": 3}]
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
-    lines = out.splitlines()
-    assert rc == 0 and lines[0].startswith("ask latency over the last 24 h")
-    assert lines[2].split() == ["@circuits", "5", "3", "2", "0", "0", "1", "3.0", "10.0", "2", "1"]
-    assert lines[3].split() == ["@proofs", "6", "3", "0", "2", "0", "1", "5.0", "30.0", "3", "3"]
-    assert lines[4] == "  linear: 1 issue(s) unread, counted from Slack alone: PRF-404: Linear: Entity not found: Issue"
 
 
 PAGE_A, PAGE_B, PAGE_C, PAGE_D = ("0123456789abcdef" * 2, "fedcba9876543210" * 2, "00112233445566778899aabbccddeeff",
@@ -3884,47 +3784,6 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     assert {backlog["ts"], moved["ts"], lost["ts"]} <= {x["ts"] for x in rep["unchecked"]}
 
 
-def test_traffic_latency_times_ask_daniel_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
-                                                                                                            notion, capsys, monkeypatch):
-    """An #ask-daniel card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
-    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask answers it even while
-    its issue sits in Backlog.  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
-    from research import linear
-    proofs = inbox(fake, routes_dirs, "proofs")
-    now = T0 + 86400
-    linked = ask_at(fake, proofs, 0, "infra", "@proofs the cut's error?\nLinear: <https://linear.app/x/issue/PRF-5|PRF-5>")
-    reply_at(fake, linked, 60, "proofs", "on it")
-    alert = ask_at(fake, proofs, 30, "vy-monitors", "@proofs n2's disk is at 91%")       # no lane: not an ask
-    approved = card_at(fake, 100, "lean", url=URL_A)
-    waiting = card_at(fake, 200, "lean", url=URL_B)
-    late = card_at(fake, 300, "lean", mention_url=URL_C)
-    notion.pages = {PAGE_A: notion_page("Approved", T0 + 100 + 2700), PAGE_B: notion_page("Waiting on Daniel", T0 + 300),
-                    PAGE_C: notion_page("Decided otherwise", now + 60)}
-    monkeypatch.setattr(linear, "_http", FakeLinearIssues({"PRF-5": issue(T0 - 1, comments=[(T0 + 30, "infra")])}))
-    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
-    rep = json.loads(out)
-    by = {a["ts"]: a for a in rep["asks"]}
-    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first", "minutes")] == ["proofs", "linear", "PRF-5", "slack-reply", 1.0]
-    assert alert["ts"] not in by
-    assert {k: by[approved["ts"]][k] for k in ("lane", "by", "record", "ref", "state", "first", "minutes")} == \
-        {"lane": "daniel", "by": "lean", "record": "notion", "ref": URL_A, "state": "Approved", "first": "notion-status", "minutes": 45.0}
-    assert (by[waiting["ts"]]["first"], by[waiting["ts"]]["state"]) == (None, "Waiting on Daniel")
-    assert (by[late["ts"]]["first"], by[late["ts"]]["state"]) == (None, "Decided otherwise")
-    assert next(x for x in rep["lanes"] if x["lane"] == "daniel") == {
-        "lane": "daniel", "asks": 3, "answered": 1, "slack": 0, "linear": 0, "notion": 1, "untimed": 0, "median_min": 45.0,
-        "p90_min": 45.0, "unanswered": 2, "stale": 2}
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
-    lines = out.splitlines()
-    assert rc == 0 and lines[1].split()[:6] == ["lane", "asks", "answered", "slack", "linear", "notion"]
-    assert lines[2].split() == ["@daniel", "3", "1", "0", "0", "1", "0", "45.0", "45.0", "2", "2"]
-    assert lines[3].split() == ["@proofs", "1", "1", "1", "0", "0", "0", "1.0", "1.0", "0", "0"]
-    monkeypatch.delenv("NOTION_API_KEY")
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
-    assert rc == 0 and out.splitlines()[2].split()[:3] == ["@daniel", "3", "0"]
-    assert re.search(r"\n  notion: 3 page\(s\) unread, counted unanswered: https://\S+: no \$NOTION_API_KEY \(", out)
-
-
 def test_nearest_rank_takes_the_ceiling_rank_and_nothing_of_nothing():
     assert slack.nearest_rank([], 0.5) is None
     assert slack.nearest_rank([3.0], 0.9) == 3.0
@@ -3976,7 +3835,7 @@ def stale_checkout(tmp_path, registry) -> tuple[Path, Callable[[Callable[[dict],
 
 
 def new_handle(name: str) -> Callable[[dict], None]:
-    return lambda reg: reg["handles"].append({"handle": name, "remit": f"the {name} slice", "charter": "x", "owns": []})
+    return lambda reg: reg["handles"].append({"handle": name, "remit": f"the {name} slice", "owns": []})
 
 
 def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(registry, tmp_path, monkeypatch):
@@ -4226,8 +4085,6 @@ def test_a_doorbell_shaped_reply_the_router_didnt_post_does_not_stop_a_doorbell(
     post = fake.add(COORD, text="@circuits is node 2 free?", username="infra", bot_id=BOT)
     for who in ({"user": "USTRANGER"}, {"username": "infra", "bot_id": BOT}, {"username": "router", "bot_id": "BOTHERAPP"}):
         fake.add(COORD, text=f"from infra, thread {post['ts']}: @circuits is node 2 free?", thread_ts=box, **who)
-    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "1e6", "--now", "1700100000", "--json")
-    assert rc == 0 and json.loads(out)["asks"] == []
     assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     assert sum(m.get("username") == "router" and m.get("bot_id") == BOT for m in bells(fake, box)) == 1
 

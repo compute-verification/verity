@@ -104,6 +104,20 @@ def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one()
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
 
 
+@pytest.mark.parametrize("value, members, clean", [
+    (None, None, False), (None, {"sampled": 2, "registered": 2}, False), (1, {"sampled": 1, "registered": 2}, False),
+    (None, {"sampled": 1, "registered": 2}, True),
+])
+def test_an_integrity_bound_is_null_exactly_when_its_sample_missed_a_member(value, members, clean) -> None:
+    rec = _load("block-record-r2-period0")
+    lg = rec["legs"]["integrity"]
+    lg["quantity"]["value"] = value
+    if members is not None:
+        lg["quantity"] |= {"members": members, "by_member": [{"member": "m0", "of": 1, "drawn": 1}]}
+    lg["at"] = R.at_deltas("integrity", lg["quantity"], Fraction(lg["error"]))
+    assert ("subprotocol:integrity" not in R.check(rec)) is clean
+
+
 def test_a_flipped_subprotocol_verdict_is_refused() -> None:
     rec = copy.deepcopy(_load("block-record-r2-period0"))
     rec["legs"]["pouw"]["answer"]["verdict"] = "reject"
@@ -235,7 +249,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
     assert (c["verdict"], c["answer"], c["product"], c["missing"], c["dropped"]) == (
         "undecided", None, "remote", [], ["bandwidth", "certifier", "pous", "wipe"])
     assert c["legs"] == {"integrity": "accept", "pouw": "accept"} and sorted(c["joint_horizon"]["terms"]) == ["integrity", "pouw"]
-    remote = {**ONSITE, "protocol": "verity/remote/v0"}
+    remote = {**ONSITE, "protocol": "verity/remote/v1"}
     decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote, product="remote")
     jsonschema.Draft202012Validator(SCHEMA).validate(decided)
     assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
@@ -246,6 +260,9 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
         "reject", "verity/remote/v1")
     with pytest.raises(ValueError, match="not an answer of the remote check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, product="remote")
+    with pytest.raises(ValueError, match="not an answer of the remote check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer={**ONSITE, "protocol": "verity/remote/v0"},
+                      product="remote")
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote)
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
@@ -273,7 +290,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
 
 
 def test_a_subprotocol_carries_its_answers_placement_and_no_other_profile() -> None:
-    """The certifier's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
+    """The network attester's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
     record still fits its schema and checks clean; a subprotocol whose profile names no placement carries no profile."""
     report, wipe = _accepting_report()
     placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}

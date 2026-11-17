@@ -1,8 +1,6 @@
-"""The receipt spot checks (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment`): the meet-in-the-middle check
-opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
-witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; each new check
-on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes; and census/v1 counts the segment dots
-on bits as unserved `tc:int8` steps."""
+"""The receipt spot checks (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment`): each check on bits
+is its word view, 1 on an honest instance and 0 once one receipt bit changes; none takes a prefix word as witness; and
+census/v1 counts the segment dots on bits as unserved `tc:int8` steps."""
 from __future__ import annotations
 
 import random
@@ -19,7 +17,6 @@ from verity.circuits.types import Array, Value
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import segment as SG
 
 M32 = SG.M32
-KS, S = 4, 2
 
 
 def _bits(t, v):
@@ -72,87 +69,6 @@ def _honest_v3(rnd, ks, s, fold, dither):
         leaf[pos] = SG.fold_final(fold, state)
         rc.append(leaf)
     return dict(a=a, asel=asel, u=u, b=b, bsel=bsel, f=f, st=st, rc=rc, rsel=_rsel(pos), pos=pos, T=T, ap=ap, bp=bp)
-
-
-def _rotl(x, r: int):
-    return ((x << np.uint64(r)) | (x >> np.uint64(32 - r))) & np.uint64(M32)
-
-
-def _contrib(y: int, z: int, t: int, w):
-    """A chain's share y' ^ rotl(z', 16) of the window word after absorbing the candidate words ``w`` at position t."""
-    u = (np.uint64(y) ^ w ^ np.uint64(SG.KK[t])) & np.uint64(M32)
-    y2 = (u * np.uint64(SG.KA[t]) + np.uint64(z)) & np.uint64(M32)
-    return y2 ^ _rotl((_rotl(u, SG.ROT[t]) + y2) & np.uint64(M32), 16)
-
-
-def _mitm(st: list[int], p: list[list[int]], target: int, rng) -> list[list[int]]:
-    """LEDGER's opening: p's last set with chain 0's and chain 4's last words (entries 24 and 28) solved, over 2^18
-    candidates each, so that duo's fold of p from st ends at ``target``."""
-    state = list(st)
-    for ps in p[:-1]:
-        state = SG.fold_absorb("duo", state, ps)
-    y, z = state[:8], state[8:]
-    pre = {}
-    for t in range(8):
-        h = 4 * (t % 2)
-        for e in range(4):
-            if (t, e) in ((6, 0), (7, 0)):
-                pre[h + e] = (y[h + e], z[h + e])
-            d = 0 if 4 * t + e in (24, 28) else p[-1][4 * t + e]
-            u = y[h + e] ^ d ^ SG.KK[t]
-            y[h + e] = (u * SG.KA[t] + z[h + e]) & M32
-            z[h + e] = (SG.rotl(u, SG.ROT[t]) + y[h + e]) & M32
-    rest = 0
-    for c in range(8):
-        if c not in (0, 4):
-            rest ^= y[c] ^ SG.rotl(z[c], 16)
-    w0 = rng.integers(0, 1 << 32, 1 << 18, dtype=np.uint64)
-    w4 = rng.integers(0, 1 << 32, 1 << 18, dtype=np.uint64)
-    _, i0, i4 = np.intersect1d(_contrib(*pre[0], 6, w0), _contrib(*pre[4], 7, w4) ^ np.uint64(rest ^ target),
-                               return_indices=True)
-    assert len(i0), "no meeting point at 2^18 a side (about e^-16)"
-    last = list(p[-1])
-    last[24], last[28] = int(w0[i0[0]]), int(w4[i4[0]])
-    return [*p[:-1], last]
-
-
-def _attack():
-    """A thread's call at KS = 4, S = 2 whose window-1 receipt word the cheater replaces by a random one, and v2's
-    opening of it at segment 2 (window 1, position 0): p_0 free, p_1 its honest step from p_0, p_2 met in the middle."""
-    rnd, rng = random.Random(20261017), np.random.default_rng(1723)
-    h = _honest_v3(rnd, KS, S, "duo", False)
-    target = rnd.getrandbits(32)
-    forged = [list(h["rc"][0]), list(h["rc"][1])]
-    forged[1][h["pos"]] = target
-    p0 = [rnd.getrandbits(32) for _ in range(32)]
-    p1 = [SG.seg_dot(p0[q], h["ap"][2][SG.row_slot(q)], h["bp"][2][SG.col_slot(q)]) for q in range(32)]
-    p = _mitm(h["st"][1], [p0, p1, [rnd.getrandbits(32) for _ in range(32)]], target, rng)
-    jsel = _onehot(SG.jsel_bits(S), 0)
-    v2 = [h["a"][2], h["asel"], h["u"], h["b"][2], h["bsel"][:8], h["f"][2], p, h["st"][1], forged[1], h["rsel"], jsel, 0]
-    h["rsel_bits"] = _onehot(SG.RW, h["pos"])
-    v3 = [h["a"], h["asel"], h["u"], h["b"], h["bsel"], h["f"], h["st"], forged, h["rsel"]]
-    return h, target, v2, v3
-
-
-def test_mitm_opens_v2_and_v3_refuses_it():
-    """v2's word view accepts the cheater's random window word with the forged prefix sets; v3, on the same committed
-    leaves, coin and receipts, refuses it, and accepts the honest receipts."""
-    h, target, v2, v3 = _attack()
-    assert target != h["rc"][1][h["pos"]]
-    assert SG.win_check(*v2[:9], h["rsel_bits"], *v2[10:]) == 1
-    assert SG.seg_check3(*v3) == 0
-    assert SG.seg_check3(*v3[:7], h["rc"], h["rsel"]) == 1
-
-
-@pytest.mark.slow
-def test_mitm_on_bits():
-    """The same on the Definitions themselves: `PouwSegCheck_v2{2, duo}` evaluates the opening to 1, and
-    `PouwSegCheck_v3{4, 2, duo}` evaluates the forged receipts to 0 and the honest ones to 1."""
-    h, _, v2, v3 = _attack()
-    assert _on_bits(bind(SG.PouwSegCheck, S=S, FOLD="duo"), v2) == 1
-    d3 = bind(SG.PouwSegCheckV3, KS=KS, S=S, FOLD="duo")
-    assert _on_bits(d3, v3) == 0
-    assert _on_bits(d3, [*v3[:7], h["rc"], h["rsel"]]) == 1
 
 
 def _call(rnd, ks, fold, out, nl=None):
@@ -209,8 +125,8 @@ CASES = {
                         lambda r: _call(r, 2, "duo", "chains"), lambda a: SG.call_check(*a)),
     "call-fx1-state": (lambda: bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
                        lambda r: _call(r, 2, "fx1", "state"), lambda a: SG.call_check(*a, fold="fx1", out="state")),
-    "warp-li": (lambda: bind(SG.PouwWarpCheck, KS=2, NL=2), lambda r: _call(r, 2, "li", "cp", nl=2),
-                lambda a: SG.warp_check(*a)),
+    "warp2-li": (lambda: bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="li"), lambda r: _call(r, 2, "li", "cp", nl=2),
+                 lambda a: SG.warp_check(*a, fold="li")),
     "warp2-duo": (lambda: bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="duo"), lambda r: _call(r, 2, "duo", "cp", nl=2),
                   lambda a: SG.warp_check(*a, fold="duo")),
     "warp2-fx1": (lambda: bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="fx1"), lambda r: _call(r, 2, "fx1", "cp", nl=2),
@@ -302,9 +218,9 @@ def test_segment_dots_are_unserved_int8_tensor_core_steps():
 
 
 def test_call_words_take_no_witness():
-    """Every port of the new checks is committed, the coin's or the sample's: none carries a prefix word."""
+    """Every port of the spot checks is committed, the coin's or the sample's: none carries a prefix word."""
     committed, coin, sample = {"a", "b", "x", "w", "rc"}, {"u", "f", "c", "z", "st"}, {"asel", "bsel", "xsel", "wsel", "rsel"}
     for d in (bind(SG.PouwSegCheckV3, KS=2, S=1, FOLD="duo"), bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
-              bind(SG.PouwWarpCheck, KS=2, NL=1), bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="duo")):
+              bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="li"), bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="duo")):
         names = {n for n, _ in d.signature()[0]}
         assert names <= committed | coin | sample, (d.id, names - committed - coin - sample)
