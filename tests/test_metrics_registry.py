@@ -2,10 +2,13 @@
 (`benchmarks/README.md`'s "Metrics"): every metric once across all those files, with an id no other row has, under its
 owner's prefix, an owner the handle registry knows and whose `owns` there covers the declaring file, the dashboard's
 words (a headline `title`, a short `unit` and a one-sentence `axis`), a direction, an `every` in minutes, hours or days,
-and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. A
-whole-tree invariant, since it reads the handle registry and the benchmarks and loops the commands run."""
+and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. Each
+row's `version` says what changed above 1, its unit is pinned to its version (`PINS`), the kit's `VERSIONS` is the rows
+above 1, and no row carries a version key until the site's reader takes them. A whole-tree invariant, since it reads the
+handle registry and the benchmarks and loops the commands run."""
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -22,9 +25,14 @@ RETIRED = "benchmarks/metrics.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 REQUIRED = frozenset({"id", "title", "owner", "unit", "axis", "better", "command", "every"})
 OPTIONAL = frozenset({"floor", "goal", "tags", "version", "changed", "was"})
-#: each row's version and unit as last pinned, which the kit stamps a measurement's version from
-PINS = "benchmarks/harness/verity_bench/metric_versions.json"
+#: each row's version and unit as last pinned, so a unit changes only with its version
+PINS = "tests/metric_pins.json"
 PIN = "uv run python tests/test_metrics_registry.py --pin"
+VERSIONS_AT = "benchmarks/harness/verity_bench/kit_report.py"
+VERSION_KEYS = ("version", "changed", "was")
+#: whether the site's reader (infra's) takes `VERSION_KEYS`: the site refuses a metric with a key its reader doesn't
+#: take, so until it does no row may carry one; set True once it takes them
+SITE_TAKES_VERSIONS = False
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
@@ -387,7 +395,7 @@ def test_a_unit_changes_only_with_its_version() -> None:
 def test_every_row_is_pinned_at_its_version_and_unit() -> None:
     rows = _metrics(_files())[0]
     stale = _unpinned(rows, _read_pins())
-    assert not stale, f"{PINS} is not the rows' versions and units, which the kit stamps: run {PIN}\n" + "\n".join(stale)
+    assert not stale, f"{PINS} is not the rows' versions and units: run {PIN}\n" + "\n".join(stale)
 
 
 def test_no_pin_outlives_its_row() -> None:
@@ -444,6 +452,53 @@ def test_a_former_id_names_no_row_and_is_listed_once() -> None:
         "  f: vllm/new: was names vllm/old, which is another row's id: a former id names no row"]
     assert _formers([("f", row), ("g", {"id": "vllm/two", "was": ["vllm/old"]})]) == [
         "  g: vllm/two: was names vllm/old, which vllm/new names too: one row takes a former id"]
+
+
+def _kit_versions() -> dict[str, int]:
+    tree = ast.parse((ROOT / VERSIONS_AT).read_text(encoding="utf-8"))
+    return next(ast.literal_eval(s.value) for s in tree.body if isinstance(s, ast.AnnAssign) and s.value is not None
+                and isinstance(s.target, ast.Name) and s.target.id == "VERSIONS")
+
+
+def _versions_off(rows: list[tuple[str, dict]], versions: dict[str, int]) -> list[str]:
+    tree = {str(m.get("id")): m.get("version", 1) for _, m in rows}
+    out = [f"  add the line {i!r}: {v}," for i, v in tree.items() if v != 1 and versions.get(i) != v]
+    return out + [f"  delete the line {i!r}: {v}, (its row's version is {tree.get(i, 'gone')})"
+                  for i, v in sorted(versions.items()) if tree.get(i) != v or v == 1]
+
+
+def test_the_kits_versions_are_the_rows_above_version_one() -> None:
+    off = _versions_off(_metrics(_files())[0], _kit_versions())
+    assert not off, f"{VERSIONS_AT}'s VERSIONS, which the kit stamps each measurement's version from, holds exactly the " \
+                    "rows whose version is above 1:\n" + "\n".join(off)
+
+
+def test_versions_hold_a_raised_row_and_nothing_else() -> None:
+    row, raised = {"id": "vllm/x"}, {"id": "vllm/y", "version": 2}
+    assert _versions_off([("f", row), ("g", raised)], {"vllm/y": 2}) == []
+    assert _versions_off([("f", row), ("g", raised)], {}) == ["  add the line 'vllm/y': 2,"]
+    assert _versions_off([("f", row), ("g", raised)], {"vllm/y": 2, "vllm/x": 1, "vllm/gone": 3}) == [
+        "  delete the line 'vllm/gone': 3, (its row's version is gone)",
+        "  delete the line 'vllm/x': 1, (its row's version is 1)"]
+    assert _versions_off([("g", {**raised, "version": 3})], {"vllm/y": 2}) == [
+        "  add the line 'vllm/y': 3,", "  delete the line 'vllm/y': 2, (its row's version is 3)"]
+
+
+def _site_refused(rows: list[tuple[str, dict]], takes: bool = SITE_TAKES_VERSIONS) -> list[str]:
+    return [] if takes else [f"  {f}: {m.get('id')}: {k}" for f, m in rows for k in VERSION_KEYS if k in m]
+
+
+def test_no_row_carries_a_version_key_until_the_site_takes_them() -> None:
+    held = _site_refused(_metrics(_files())[0])
+    assert not held, ("the site refuses a metric with a key its reader doesn't take, and its reader (infra's) doesn't "
+                      "take version, changed or was yet: drop them from these rows; once it takes them, set "
+                      "SITE_TAKES_VERSIONS = True in tests/test_metrics_registry.py:\n" + "\n".join(held))
+
+
+def test_the_site_check_holds_each_version_key_until_flipped() -> None:
+    rows = [("f", {"id": "vllm/x", "version": 2, "changed": "A new clock.", "was": ["vllm/old"]}), ("g", {"id": "vllm/y"})]
+    assert _site_refused(rows, takes=False) == ["  f: vllm/x: version", "  f: vllm/x: changed", "  f: vllm/x: was"]
+    assert _site_refused(rows, takes=True) == []
 
 
 def pin() -> int:
