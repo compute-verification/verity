@@ -6,43 +6,7 @@ import Proofs.Flock.Masked
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Two
 
-/-!
-# The two-stage compiler at the deployed sampled record
-
-`SamplingDeploy.compiledTwo F c iroots two rs cap`: the deployed sampled verifier over Flock at its units' `N₀`
-(`SamplingDeploy.compiledAt`, each unit's `Code.unitN₀`) with the two-stage design it evaluates on a statement (`two`),
-the replay blocks its first stage samples at a run's coins (`rs`) and a public cap on an accepted run's replay
-sample's proof blocks (`cap`), as a compiled two-stage verifier (`Claims.SamplingGeneric.CompiledTwo`). Its sample,
-second stage, sessions, reveal, interior roots and commitment are `compiledAt`'s. Its waits' counts are the two stages'
-own: the outer wait's union is over the statement's footprint bits (`n_out = M`, `Code.footOf`) and the inner wait's
-over the replay sample's proof blocks (`n_in = cap`), rather than `compiledAt`'s `n_PU` bits each.
-
-The contract's clauses that read only the sampled verifier's code are named Props of `Code`'s functions:
-
-* `Code.ReplaySamples` (`replaySamples`): on a statement in scope, the replay sample misses a set `T` of replay blocks
-  with probability at most the first stage's `P_a(T)`;
-* `Code.SecondSamples` (`secondSamples`): on a statement in scope, at a run's coins, fresh second-stage coins check no
-  proof block of a set `B` among the units' first `n_PU` with probability at most the sampled replay blocks' escapes;
-* `Code.ReplayCap` (`unions`' inner count): on a statement in scope, at coins `r` of which some second-stage fork is
-  accepted, the replay sample has at most `cap` proof blocks;
-* `Code.RefusesTwo` (`refuses`): an accepted run's statement parses, and its partition and two-stage design evaluate
-  and are in the two-stage scope;
-* `Code.InteriorFixed` and `Code.SampleFixed` (`interior`, `fixed`), as at one stage.
-
-`SessionOpensTwo` (`opens`, `Claims.Sampling.OpensTwo`) is `SessionOpens` read at a replay block: a checked unit's
-Flock witness makes its proof block correct on its replay block's values, under the interior roots the run shows for
-that replay block.
-
-* `sessionsTwo_compiled`: the contract from those, with the sessions' runs and their numbers at each unit's `N₀`
-  (`fixed_ofDeployAt`, `runs_ofDeployAt`).
-* `ksTwo_compiled`: `CompiledTwo.KS` from Flock's KS at `F` and its decoder's list bound, the commitment's binding and
-  the contract (`compilerKSTwo` over `flockArgKS`).
-* `ksTwo_masked`: at Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
-  (`MaskedKS`, `listWithin_deployZk`, `commit_binds`), as `ks_masked`.
-* `compiledTwoOne`, `sessionsTwo_one`, `ksTwo_one`: one session a run. At a code whose session doesn't read the unit,
-  every slot of a sample has one key (`skey = 0`, `n_sess = 1`), so the extractor runs Flock's once a run, and
-  `compiledTwo`'s contract gives the contract and KS there.
--/
+/-! The two-stage compiler at the deployed sampled record, its waits' counts the two stages' own. -/
 
 @[expose] public section
 
@@ -51,16 +15,14 @@ namespace SamplingDeploy
 open Claims
 open Claims.Sampling (AuditStatement InScopeTwo forkOn cell escCell footBits sampleBlocks)
 
-/-! ## The sampled verifier's two-stage code facts -/
-
-/-- **Replay samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- A fact about the sampled verifier's code that no Lean verifier discharges. -/
 def Code.ReplaySamples (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
       Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => ∀ ρ ∈ rs x r, ρ ∉ T) ≤ d.replay.Pa d.part T
 
-/-- **Second samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- A fact about the sampled verifier's code that no Lean verifier discharges. -/
 def Code.SecondSamples (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
@@ -111,8 +73,6 @@ noncomputable abbrev compiledTwo :
     Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock F) :=
   { toCompiled := { compiledAt F c iroots with nOut := c.footOf two, nIn := cap }, two := two, replaySample := rs }
 
-/-- **The two-stage contract at the deployed record**: the code's facts, with the sessions' runs, their numbers at
-each unit's `N₀` and openings at a replay block. -/
 theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplaySamples two rs) (hsd : c.SecondSamples two rs)
     (hcap : c.ReplayCap H two rs cap) (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRunsTo H (deployOf F c))
@@ -139,8 +99,6 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplaySamples two rs) (h
     ((List.length_take_le _ _).trans_eq
       (Claims.SamplingGeneric.ofDeployAt_nSess (deployOf F c) iroots c.unitN₀ x).symm))
 
-/-- **The two-stage compiler at the deployed record**: `CompiledTwo.KS` from Flock's KS at `F` and its deployed
-decoder's list bound, the commitment's binding and the two-stage contract (`compilerKSTwo`, `flockArgKS`). -/
 theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
     (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H)
     (hrd : c.ReplaySamples two rs) (hsd : c.SecondSamples two rs) (hcap : c.ReplayCap H two rs cap)
@@ -152,14 +110,10 @@ theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
   Claims.SamplingGeneric.compilerKSTwo FlockDeploy.Coin _ _ H (Claims.SamplingGeneric.flockArgKS H F hKS hlist) hB
     (sessionsTwo_compiled F c iroots two rs cap H hrd hsd hcap hr hi hf hruns hnum hopens)
 
-/-- **The deployed two-stage verifier with one session a run**: `compiledTwo` with one key for every slot of a sample,
-so its extractor runs Flock's once a run (`n_sess = 1`). -/
 noncomputable abbrev compiledTwoOne :
     Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock F) :=
   { compiledTwo F c iroots two rs cap with skey := fun _ _ _ => 0, nSess := fun _ => 1 }
 
-/-- **The contract with one session a run**: at a code whose session doesn't read the unit, `compiledTwo`'s contract
-is `compiledTwoOne`'s, every slot showing the run's one session (`shared`) and a sample holding one key (`keys`). -/
 theorem sessionsTwo_one (H : Msg → Msg) (hS : (compiledTwo F c iroots two rs cap).Sessions H)
     (hone : ∀ x u u' v, c.session x u v = c.session x u' v) : (compiledTwoOne F c iroots two rs cap).Sessions H where
   replaySamples := hS.replaySamples
@@ -177,10 +131,6 @@ theorem sessionsTwo_one (H : Msg → Msg) (hS : (compiledTwo F c iroots two rs c
 
 end CompiledTwo
 
-/-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512**:
-`ksTwo_compiled` at `deployZk`, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
-`commit_binds` and the inner numbers at each unit's `N₀` by `innerNumbersAt_deploy`. It takes the sampled verifier's
-two-stage code facts and its sessions' runs, scope (`SessionsIn`) and openings at a replay block. -/
 theorem ksTwo_masked (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
     (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) (cap : Msg → ℕ)
@@ -195,9 +145,6 @@ theorem ksTwo_masked (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
     _root_.Flock.SecurityProofs.MaskedKS (Claims.Sampling.listWithin_deployZk _) (commit_binds c _) hrd hsd hcap hr hi
     hf hruns (innerNumbersAt_deploy _ c hnum) hopens
 
-/-- **The deployed two-stage verifier with one session a run is knowledge sound at SHA-512**, at Flock's masked record
-and a code whose session doesn't read the unit: `compilerKSTwo` at `sessionsTwo_one`, with Flock's KS, the list bound
-and binding as in `ksTwo_masked`. -/
 theorem ksTwo_one (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
     (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) (cap : Msg → ℕ)

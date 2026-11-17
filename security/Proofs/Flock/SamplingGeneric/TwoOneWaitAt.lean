@@ -4,27 +4,7 @@ public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassAt
 public import Proofs.Flock.SamplingGeneric.TwoOneWait
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The two-stage first-hit bound by class of gates, with the finders run on the one-wait extraction
-
-`eventTwoX_le_cls_at_budget` bounds the event of `KSRegTwoX` by `κ_s + √(k·γ_s·Pr[B])` and the binding finders'
-cost over `2^256`, the cost that of the proof system's extraction, `e_s = 1 + m′·k` runs' worth of reruns a
-session: an extractor of `m′` waits, each for `k` accepted reruns.
-
-Here the finders run the extraction of the one-wait proof system (`CompiledTwo.oneWait`), which pays one wait a
-session, and the event is the one at that extraction's committed traces:
-
-* `eventTwoX_oneWait_le_of_off`: `eventTwo_oneWait_le_of_off` at the boundary trace read at the statement, with one
-  run's own disagreement at `B_conf,X`'s first run.
-* `εclsOneWait`, `eventTwoX_oneWait_le_cls_at_budget`: **the bound at a budget `T` a run**,
-  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256`, the two costs the one-wait compiled
-  verifier's. Against `εclsAt` it pays `2·κ_s + √(k·γ_s·Pr[B])` more and twice the cost term, at a cost that is
-  one wait's, `e_s ≤ 1 + k`, where `εclsAt`'s is `m′` waits'.
-
-The premises are `eventTwoX_le_cls_at_budget`'s, read at the one-wait compiled verifier (its extractions open a class
-whole or not at all, the linear expected-time bound at its `B_conf,X` and its two by-class finders at every `K`), and
-`Arg.OneWaitFinds` beside the proof system's knowledge soundness. No statement of the definitions tree changes.
--/
+/-! The two-stage first-hit bound by class of gates, with the finders run on the one-wait extraction at a budget a run. -/
 
 @[expose] public section
 
@@ -37,11 +17,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The event at the one-wait extraction's traces from bounds on its two off-trace terms**:
-`eventTwo_oneWait_le_of_off` at the boundary trace read at the statement, with one run's own disagreement at
-`B_conf,X`'s first run. An accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with
-probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(Pr[B_conf,X] + b_B + b_N)`, the three binding terms the
-one-wait compiled verifier's. -/
 theorem eventTwoX_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -67,19 +42,6 @@ noncomputable def εclsOneWait (H : Msg → Msg) (L : CompiledTwo Coin A) (x : M
     2 * (2 * L.oneWait.toCompiled.runCost x T Ns + 4 * L.oneWait.toCompiled.firstHitCost x T Ns Ks Km) /
       2 ^ (256 : ℝ)
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at a budget `T` a run.** On a statement in
-scope, where a reveal for proof block `u` opens only gates of `needs u`, the one-wait compiled verifier's extractions
-open a class of gates whole or not at all under the statement's roots (`hallX`) and under a replay block's interior
-roots (`hallI`), every run calls `H` at most `T` times, both parties' calls counted (`hT`), the opening checks call
-`H` at most `openCalls` times a slot (`hopen`), `N_s`, `K_s` and `K_m` are `eventTwoX_le_cls_at_budget`'s, and the
-one-wait compiled verifier's `B_conf,X` and its two by-class finders at every `K` meet the linear expected-time
-bound, an accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most
-`εclsOneWait`:
-
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256`,
-
-the costs those of an extraction that pays one wait a session. The proof system's part is its knowledge soundness
-(`hA`) and that what its extractor finds its one wait finds at half the rate (`hF`, `Arg.OneWaitFinds`). -/
 theorem eventTwoX_oneWait_le_cls_at_budget {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)

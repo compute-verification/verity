@@ -17,32 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 
-/-!
-# `flock-witness`'s checks are the recursive audit's predicates
-
-`Flock.Witness` evaluates, on recorded files, the predicates `RecursiveAudit`'s and `PublicAudit`'s events and premises
-state. Each check passing is the model's predicate holding, at `toExec I`, the model's inputs of the witness's:
-
-* `acceptsZKR_ok`: `ZkReg.AcceptsZKR`, the verifier's verdict on one of V*'s sessions;
-* `acceptsZKV_ok`: `Recursion.AcceptsZKV`, that verdict and `RecVStar.checkStmt` as V*'s statement `j`;
-* `verifiesVStar_ok`: the event's `VerifiesVStar`, from `acceptsZKV_ok` and `scopeZR_ok` at every session;
-* `scopeZR_ok`, `scopeZ_ok`: `FailClosed.ScopeZR`, the event's statement check and `Typable`'s, and `FailClosed.ScopeZ`,
-  the check without the registered reads, which the fail-closed `--zk` headlines read (`FailClosed/Composed.lean`);
-* `tagsOkZHJ_ok`, `tagsOk_ok`: `ZkHidden.TagsOkZHJ`, `ZkOuterR.hTags`, and `DecodeZL.TagsOk`, the public-output one-table
-  tags;
-* `scopeOk_ok`: the session's circuit as `ZkOuterR` parses it, and `Layout.scopeOk` of it, `VStmt.hscope`;
-* `fullSample_ok`: the record's sample is the full `subset` sample of every unit of the population, `RecordCustody`'s;
-* `acceptsStmt_ok`, `acceptsPublic_ok`: `Recursion.AcceptsStmt`, and `AcceptsPublic` at the verifier's own partition
-  object and program;
-* `shapeOf_eq`, `outerStatementsAt_ok`: the printed inner shape is `innerAt`, and `outer_parts` is `outerStatementsAt`;
-* `acceptsDescription_ok`: `Recursion.AcceptsDescription`, at each of the verifier's own registered reads;
-* `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, for every `zr`
-  (`_hr := hr_inv_exp zr`).
-
-On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
-verifier's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
-the gate is witnessed under today's identity.
--/
+/-! `flock-witness`'s checks on recorded files are the recursive audit's predicates at the witness's inputs. -/
 
 @[expose] public section
 
@@ -51,8 +26,6 @@ namespace FlockSoundness.Discharge.Recursion.Witness
 open Flock
 open FlockSoundness.Discharge
 
-/-- The model's inputs of the witness's (`Exec.Inputs`): no work, stratified or closure inputs, and the coins `--zk`
-sets, which `ZkExec.zkInputs` sets again. -/
 def toExec (I : Flock.Witness.Inputs) : Exec.Inputs where
   tags := I.tags
   circuitFile := I.circuitFile
@@ -75,7 +48,6 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
 theorem setupOf_eq (I : Flock.Witness.Inputs) (r : String) :
     Flock.Witness.setupOf I r = Exec.setupOf (ZkExec.zkInputs (toExec I)) r := rfl
 
-/-- **The witness's verdict is the verifier's** (`ZkReg.AcceptsZKR`). -/
 theorem acceptsZKR_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.Port} {r : String} {p : Array ByteArray}
     (h : Flock.Witness.acceptsZKRAt (Flock.Witness.setupOf I r) own r p = .ok ()) :
     ZkReg.AcceptsZKR (toExec I) own ⟨r, p⟩ := by
@@ -86,8 +58,6 @@ theorem acceptsZKR_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.P
   obtain ⟨_, h3, h4⟩ := bind_ok h
   exact ⟨spec, sts, (setupOf_eq I r).symm.trans h1, h2, h2', h3, h4⟩
 
-/-- **The witness's V* check is `AcceptsZKV`**: the verdict, then `RecVStar.checkStmt` on each statement the session
-sets up, at the inner shape `i`, as V*'s statement `j` under the bindings `f` and the shared rows `rows`. -/
 theorem acceptsZKV_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.Port} {r : String} {p : Array ByteArray}
     {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (h₁ : Flock.Witness.acceptsZKRAt (Flock.Witness.setupOf I r) own r p = .ok ())
@@ -98,18 +68,12 @@ theorem acceptsZKV_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.P
   obtain ⟨⟨spec, sts⟩, hs, h₂⟩ := bind_ok h₂
   exact ⟨spec, sts, (setupOf_eq I r).symm.trans hs, h₂⟩
 
-/-- **The witness's statement check with the registered reads is `ScopeZR`**: the event's statement check, and
-`Typable`'s. -/
 theorem scopeZR_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.scope I true = .ok ()) :
     FailClosed.ScopeZR (toExec I) := h
 
-/-- **The witness's statement check without them is `ScopeZ`**, the fail-closed `--zk` headlines'. -/
 theorem scopeZ_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.scope I false = .ok ()) :
     FailClosed.ScopeZ (toExec I) := h
 
-/-- **The witness's per-session checks are the event's `VerifiesVStar`**, at an outcome whose session `j` ran on the
-witness's inputs `Iw j`, with the record `r j` and proof files `p j`: `accepts_zkv` and the statement check with the
-registered reads pass at every `j`. -/
 theorem verifiesVStar_ok {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'} {o : Reg₂ × VRec Vs Reg' dg N} (Iw : Fin S → Flock.Witness.Inputs)
@@ -127,7 +91,6 @@ theorem verifiesVStar_ok {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {
   · rw [hI j]
     exact scopeZR_ok (h₃ j)
 
-/-- **The witness's hidden-output tags check is `TagsOkZHJ`**, `ZkOuterR.hTags`. -/
 theorem tagsOkZHJ_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOkZHJ I = .ok ()) :
     ZkHidden.TagsOkZHJ (toExec I) := by
   unfold Flock.Witness.tagsOkZHJ at h
@@ -136,7 +99,6 @@ theorem tagsOkZHJ_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOkZHJ I =
   · rw [if_neg hc] at h
     simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The witness's public-output tags check is `TagsOk`.** -/
 theorem tagsOk_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOk I = .ok ()) : DecodeZL.TagsOk (toExec I) := by
   unfold Flock.Witness.tagsOk at h
   by_cases hc : I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" ∧
@@ -145,7 +107,6 @@ theorem tagsOk_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOk I = .ok (
   · rw [if_neg hc] at h
     simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The witness's circuit is the session's as `ZkOuterR` parses it, and `Layout.scopeOk` accepts it.** -/
 theorem scopeOk_ok {I : Flock.Witness.Inputs} {c : Flock.Circuit} (h : Flock.Witness.scopeOk I = .ok c) :
     Flock.HmRow.parse (ZkExec.zkTags (toExec I)) (toExec I).circuitFile (toExec I).tables = .ok c ∧
       Layout.scopeOk c = true := by
@@ -160,8 +121,6 @@ theorem scopeOk_ok {I : Flock.Witness.Inputs} {c : Flock.Circuit} (h : Flock.Wit
   · rw [if_neg hs] at h
     simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The witness's sample check**: the record's sample decodes to the full `subset n` sample over `[0, n)`, every unit and
-no closure. -/
 theorem fullSample_ok {n : ℕ} {r : String} (h : Flock.Witness.fullSample n r = .ok ()) :
     ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitSample.ofJson d = .ok D ∧ D.samplingDesign = .subset n ∧ D.population = n ∧
       D.units = Array.range n ∧ D.closure = #[] := by
@@ -195,8 +154,6 @@ theorem one_ok {sts : Array Flock.Stmt} {st : Flock.Stmt} (h : Flock.Witness.one
     exact Array.ext' (by simp [hx])
   · cases h
 
-/-- The witness's inner check sets `st` up from its files, partition object `p` and program `g`, and `Zk.schedule`
-accepts its `m`. -/
 theorem acceptsStmt_setup {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) :
     (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := p)
@@ -210,28 +167,23 @@ theorem acceptsStmt_setup {cf pf : ByteArray} {p : Option Lean.Json} {g : Option
   have h2' : Flock.Witness.one sts = .ok st' := h2
   exact ⟨⟨spec, by rw [h1, one_ok h2']⟩, q, h3⟩
 
-/-- **The witness's inner check is `AcceptsStmt`.** -/
 theorem acceptsStmt_ok {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) : AcceptsStmt st := by
   obtain ⟨⟨spec, hs⟩, hq⟩ := acceptsStmt_setup h
   exact ⟨⟨cf, pf, p, g, spec, hs⟩, hq⟩
 
-/-- **The witness's inner check at the verifier's own partition object and program is `AcceptsPublic`.** -/
 theorem acceptsPublic_ok {cf pf : ByteArray} {obj : Lean.Json} {prog : ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf (some obj) (some prog) = .ok st) :
     Flock.Guarantees.AcceptsPublic obj prog st := by
   obtain ⟨⟨spec, hs⟩, hq⟩ := acceptsStmt_setup h
   exact ⟨⟨cf, pf, spec, hs⟩, hq⟩
 
-/-- The witness's printed inner shape is the verifier's (`innerAt`). -/
 theorem shapeOf_eq (spec : Flock.SessionSpec) (st : Flock.Stmt) :
     Flock.Witness.shapeOf spec st = Recursion.innerAt spec st := rfl
 
 theorem outerPartsOf_eq (m kLog claims : ℕ) :
     Flock.Witness.outerPartsOf m kLog claims = Flock.Guarantees.outerParts m kLog claims := rfl
 
-/-- **The witness's `outer_parts` is `outerStatementsAt`**: at an accepted inner statement, V*'s outer statements are
-`outerParts` at its `m`, `k_log` and claims, two of the protocol's and two a region. -/
 theorem outerStatementsAt_ok {st : Flock.Stmt} (h : AcceptsStmt st) :
     Flock.Guarantees.outerStatementsAt st = Flock.Witness.outerPartsOf st.m st.c.kLog (2 + 2 * st.regions.size) := by
   have hl := execClassAt_regs_length st
@@ -241,18 +193,12 @@ theorem outerStatementsAt_ok {st : Flock.Stmt} (h : AcceptsStmt st) :
   rw [hl, execClassAt_of_accepts h]
   rfl
 
-/-- **The witness's description check is `AcceptsDescription` at each of the verifier's own registered reads.** -/
 theorem acceptsDescription_ok {st : Flock.Stmt} {own : Array Flock.Registered.Port}
     (h : Flock.Witness.acceptsDescription st own = .ok ()) : ∀ rt ∈ own, AcceptsDescription rt st := by
   unfold Flock.Witness.acceptsDescription at h
   obtain ⟨_, h1, _⟩ := bind_ok h
   exact fun rt hrt => ⟨own, hrt, h1⟩
 
-/-- **`PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e`**, for every `zr` the prover supplies: its type is
-`_hr`'s there, so `_hr := hr_inv_exp zr`. At every session `j`, reference setup `y₀`, sample `S'`, registration `R'` and
-table `i` of the hidden-output plan `ZkHidden.planZHJ`, `Zk.schedule` caps level 0's `logLen` at 23 at every `m` it
-accepts (`ZkHidden.hr_planZHJ_23`). The witness's `accepts_zkr` lines print each recorded session's level 0, whose
-`logLen` is under the cap. -/
 theorem hr_inv_exp {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {A B C D : Type*}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') :
     ∀ R ω t R₂ j S₀ (d₀ : Lean.Json)

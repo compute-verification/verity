@@ -12,34 +12,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.FinRepRows
 
-/-!
-# The loop's finish at a rep's inner rounds on the worker's own histories, in parts
-
-`LeanRelease.finOf_finalC_own` and `LeanRelease.finOf_tau_own` read the rounds the loop's finish hands a rep's frame
-(`Loop.finOf`) at a history `LiveInnerOwn` reads at rep `2j + r`'s inner round `e` (`Loop.InnerHist`), at the release
-`withInner` on those rounds (`Loop.relIn`). Each part is named here, none a premise of a guarantee:
-
-* **`Loop.innerHist_fin`**: there the loop's table and request for rep stream `2j + r` return; the table's pad layout
-  and the round's configuration are table `j`'s (`Masked.layE`) and the configuration's pads the tape's; and where the
-  finish's live inner proof (`finInner`) returns at the request with `final_c = a` (`askOf`) and at no other `final_c`,
-  `finOf` is its rounds. The history's next round is the stream's round `nSched + e`, past its scheduled rounds
-  (`innerAt_slot`).
-* **`Loop.innerReq_own`**: the request's values below `zp 64` but `final_c`'s are `vs`'s (`vsWord`), and its pads the
-  tape's. The history's rounds of the rep's PIOP are the frame's releases of the worker's rounds (`OwnHist`), the
-  switched session's PIOP bodies where `LiveSchedOwn` holds, which carry `vs`'s values under the pads.
-* **`Loop.innerReq_coins`**: the request's coins of the rep's rounds before the history's next are the opened coins from
-  the rep's first round (`Masked.repBase`).
-* **`Loop.finInner_fc`**: where `finInner` returns, its `final_c'` is the request's `final_c` under its pad
-  (`Loop.repCons_rets`, over `Loop.Rets`: what a run that returns returns).
-* **`Loop.finInner_accepts_own`**: `finInner` returns at the request with `final_c = a` only at `vs`'s `final_c`: its
-  `zerocheck c_eval` constraint holds on the pads (`consWhy`), which at the request's round-1c values and the opened
-  coins' zerocheck point fixes `a` (`Loop.FinalCFixed`).
-* **`Loop.finInner_inner`**: where `finInner` returns, its `repCons` returns answered by `asksPad`, `consWhy` passes,
-  and its result is the proof's `final_c` and the inner proof's `τ` commitment.
-* **`Loop.finInner_tau_own`**: at the inner proof's round 2, its `τ` commitment is `vs`'s (`Loop.vsTau`), where the rows
-  hold (`Loop.RowsOK`): `repCons` at the session's cut (`Finish.repCons_cut`) has the switched view's rows as its
-  constraints (`Masked.repConsC_rows`), and the inner proof commits to `InZ.tau` over them (`Loop.innerP_pad_tau`).
--/
+/-! The loop's finish at a rep's inner rounds on the worker's own histories, in parts, none a premise of a guarantee. -/
 
 @[expose] public section
 
@@ -51,21 +24,15 @@ open _root_.Flock.ZkServer.Frame (INNER_ROUNDS)
 open _root_.Flock.ZkServer.Finish (Tab RepIn Asks)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **The session loop's release at its finish's inner rounds**: `withInner` on `finOf` at `L₁`'s frame samples, with the
-loop's own link and `Finish` (`ofLoopLink`). -/
 noncomputable abbrev relIn (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray)) : LeanRelease Flock.Wit Tp :=
   LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src real
 
-/-- **A history `LiveInnerOwn` reads at rep `2j + r`'s inner round `e`**, at the release `L`: after `Hello` `(m₀, ρ₀)`
-and `0 < ops.length < refK x` openings, live, whose openings pass, no coin refused, the release's own run
-(`ZkServer.OwnHist`), at which the worker sends a message, whose next round is an inner proof's (`InnerAt`), rep
-`2j + r`'s round `innerOff e`. -/
 def InnerHist (L : LeanRelease Flock.Wit Tp) (wk : L.toSrv.Worker)
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray)) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
     (t : finS.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (j : Fin (Masked.jOf x)) (r : Fin 2)
@@ -85,8 +52,6 @@ theorem v_bind_ok {α β : Type} {x : V α} {f : α → V β} {b : β} (h : x >>
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **A rep's inner rounds are its last**: at a `Live` statement, rep stream `k` has at least the inner proof's rounds,
-and its scheduled ones (`nSched`) end at its inner round 0 (`Masked.repSlot … (Masked.innerOff 0)`). -/
 theorem repSlot_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < spec.repStreams.size) :
     INNER_ROUNDS ≤ (roundsOf spec (Masked.stsOf x)).getD k 0 ∧
@@ -124,8 +89,6 @@ theorem repSlot_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {sp
   have hI : INNER_ROUNDS = 4 := rfl
   refine ⟨by omega, by omega⟩
 
-/-- **Rep stream `k`'s first round is past the link**: its first rep round (`streamAt`) is one before its first session
-round (`Masked.repBase`). -/
 theorem streamAt_repBase {x : Msg} {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < spec.repStreams.size) :
     streamAt (roundsOf spec (Masked.stsOf x)) k + 1 = Masked.repBase x k := by
@@ -134,8 +97,6 @@ theorem streamAt_repBase {x : Msg} {s0 : FlockDeploy.Ins} {spec : SessionSpec}
   rw [take_map_range _ (by omega)]
   omega
 
-/-- **A rep's PIOP rounds are among its scheduled ones**: at a `Live` statement, rep stream `2j + r`'s PIOP rounds
-(`piopNR`) number at most its scheduled rounds (`nSched`). -/
 theorem piopNR_le_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (j : Fin (Masked.jOf x)) (r : Fin 2) :
     piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog ≤ nSched spec (Masked.stsOf x) (2 * j.val + r.val) := by
@@ -173,7 +134,6 @@ theorem piopNR_le_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {
   generalize spec.points * (Masked.stAt x j).regions.size = P
   omega
 
-/-- **The loop's coin count at a rep's PIOP round `jj`** is the PIOP's (`piopN`). -/
 theorem loopNr_piop_at {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (j : Fin (Masked.jOf x)) (r : Fin 2) {jj : ℕ}
     (hjj : jj < piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog) :
@@ -200,9 +160,6 @@ theorem loopNr_piop_at {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {sp
     List.getElem?_append_left (by rw [hpL]; omega), hpl]
   exact piopN_list (by omega) hk6 (by unfold piopNR; omega)
 
-/-- **A rep's PIOP rounds are scheduled**: after decoded coins `cs` reaching rep stream `2j + r`'s PIOP round `jj`, the
-loop schedules a round there (`schedOf`): the inner proof's rounds sit past the rep's scheduled ones (`innerAt_slot`),
-among which are the PIOP's (`piopNR_le_nSched`). -/
 theorem sched_piop {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : Masked.Live x) (hSv : Serves x)
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     (hRT : Count.RealTabs (Masked.stsOf x) real) (j : Fin (Masked.jOf x)) (r : Fin 2) {cs : List FlockDeploy.Coin}
@@ -239,8 +196,7 @@ theorem sched_piop {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : M
     omega
   · exact ⟨b, rfl⟩
 
-/-- **The outer coins after the rep's first round are not `1`** where no refusal shows by the rep's third round: the
-outer coins' round is the rep's second (`outerSlot_eq`). -/
+/-- Where no refusal shows by the rep's third round. -/
 theorem outer_ne_one_two {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hnr : ¬ Masked.Refused x c (Masked.repBase x (2 * j.val + r.val) + 2)) :
@@ -257,7 +213,6 @@ theorem outer_ne_one_two {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {s0 :
     rw [e, Masked.outerSlot_eq hsx]
     exact h1
 
-/-- **The loop's words are the opened coins** below the round's count, on a history of at most `refK x` openings. -/
 theorem words_slot_le {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length ≤ refK x) {p e : ℕ} (hp : p < ops.length)
     (he : e < loopNr x p) (hc : e < 65536) :
     (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) p)[e]! = Masked.slotAt (finCoins x ops) p e := by
@@ -268,7 +223,6 @@ theorem words_slot_le {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length ≤ r
   rw [List.take_length] at h
   exact h
 
-/-- The values a rep's frame took number `zp 64` (`valsOf`). -/
 theorem valsOf_size (c : _root_.Flock.ZkServer.Frame.Cfg) (M : Array F128) (fc : F128) :
     (valsOf c M fc).size = c.lay.zp 64 := by
   have h1 : ∀ (v : Array F128) (i : ℕ) (a : F128), (v.set! i a).size = v.size := fun v i a => by simp
@@ -277,11 +231,7 @@ theorem valsOf_size (c : _root_.Flock.ZkServer.Frame.Cfg) (M : Array F128) (fc :
   rw [h1, ← Array.foldl_toList, foldl_set_size _ (fun v e => by cases e; exact h1 _ _ _), Array.size_replicate]
 
 set_option maxHeartbeats 1000000 in
-/-- **The switched session's PIOP rounds of rep stream `2j + r`, at one binding**: where the coins show no refusal by the
-rep's first round, level 0's cap and the pads root the session commits are under `2^64` bytes, and at each PIOP round
-`jj` the coins show no refusal by, the session sends the PIOP's body `jj` at the switched source's masked values, table
-`j`'s digest, that cap and that root (`Masked.runCut_piopBody`, `enc_finS_of`; level 0's cap is `2^cap` digests,
-`commit0Cut_cap_lt`, and the pads root a digest, `padsTreeCut_root_go`). -/
+/-- Where the coins show no refusal by the rep's first round, at each PIOP round they show no refusal by. -/
 theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2)
@@ -346,7 +296,6 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
       ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val)).go l = (.ok ic, l) := fun l => by
     rw [FlockComplete.CutEq.padsTreeCut_quiet _ _ _ l, hic0]
-  -- the bounds
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
   have hst' : Masked.stAt x j = (Masked.stsOf x)[j.val] :=
     hstj.symm.trans (getElem!_pos (Masked.stsOf x) j.val hj)
@@ -382,7 +331,6 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
   rw [enc_finS_of C (by omega) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hrc.1), ← hsrc, hrc.2, hcj] <;> rfl
 
-/-- The first `n` openings' coins are the padded coins' first `n`, at most `K` openings. -/
 theorem map_take_pad (S : RefSession) {K n : ℕ} (ops : List (Msg × Msg)) (hK : ops.length ≤ K)
     (hn : n ≤ ops.length) :
     (ops.take n).map (fun p => S.decOf p.2) = (List.ofFn (S.pad (K := K) (ops.map fun p => S.decOf p.2))).take n := by
@@ -396,12 +344,7 @@ theorem map_take_pad (S : RefSession) {K n : ℕ} (ops : List (Msg × Msg)) (hK 
         rw [List.take_take, Nat.min_eq_left hn]
 
 set_option maxHeartbeats 1000000 in
-/-- **A scheduled round of the worker's own history is the switched session's at the opened coins**: on a live history
-of fewer than `refK x` openings whose openings pass, the release's own run (`ZkServer.OwnHist`), where `LiveSchedOwn`
-holds and `vs` is causal at the coins `SwOk` admits, message `n + 1` (`1 ≤ n`), whose round the loop schedules
-(`schedOf`), is the switched session's round `n` at the opened coins, without its leading domain frame: `LiveSchedOwn`
-at the history's prefix, whose coins agree with the opened ones below the round and which `SwOk` admits, as it does the
-opened coins, since the live history shows no refusal (`swOk_take_of_live`, `swOk_of_live`, `swMsgAt_take_on`). -/
+/-- The live history shows no refusal, so `SwOk` admits its prefix as it does the opened coins. -/
 theorem msg_liveSchedOwn (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
@@ -477,11 +420,6 @@ variable (L₁ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
 
-/-- **The finish at a rep's inner round**: at a history `InnerHist` holds at with `e < 4`, on the loop's own tables at a
-statement in the masked scope with a witness that the loop serves, the loop's table and request for rep stream `2j + r`
-return; the table's pad layout and the round's configuration are table `j`'s, the configuration's pads the tape's
-(`Loop.RepSrc`); and where `finInner` on them returns at `final_c = a` after the stream's `nSched + e` rounds of coins,
-and at no other `final_c`, `finOf` is its round 0 and round 2. -/
 theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -517,7 +455,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     exact realTabs_of src x w (ν, t) hxs
   obtain ⟨-, -, -, -, -, -, -, hi0, -, -⟩ := innerAt_slot hx hSv hxs hq
     (by rw [List.length_map]; exact hlt) hloc hRT hrk hrs hle
-  -- the history's rep is the stream's, `2j + r`
   have hrep' : (relIn L₁ src real).rep x (ops.length + 1) = k := by
     have e : (relIn L₁ src real).rep x (ops.length + 1) = (CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1 := by
       show Loop.repOf x (ops.length + 1) = _
@@ -531,7 +468,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
   obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hxs
   have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
   have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
-  -- the round is the stream's `nSched + e`
   obtain ⟨-, hbase⟩ := repSlot_nSched hx hxs hkk
   have hstream := streamAt_repBase hxs hkk
   unfold streamAt at hstream
@@ -546,7 +482,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
   obtain ⟨hqs, -⟩ := hinv
   have hoff := Masked.repSlot_innerOff hxs j r e
   have hie : i = nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e := by omega
-  -- the table's layout is table `j`'s
   obtain ⟨g, d, l, -, htr⟩ := hRT _ tr hi hrk
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have hst' : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hjs
@@ -560,7 +495,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
   have hLayT : _root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0 = Masked.layE x j := by
     rw [htst, htsch]
     rfl
-  -- the rep's frame starts, so the request returns
   have hlast : (relIn L₁ src real).last x = refK x + 1 := LeanRelease.loop_last loopNr Masked.dataE _ x
   have hkd : (relIn L₁ src real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
     LeanRelease.kindAt_masked_of _ (by rw [List.length_cons]; omega) (by rw [hlast, List.length_cons]; omega)
@@ -577,7 +511,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     unfold repInOf
     simp only [hst0]
     exact ⟨_, rfl⟩
-  -- the configuration's layout and pads are the tape's
   have hst := hst0
   rw [hk2] at hst
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src
@@ -594,7 +527,6 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     rw [hrep]
     exact hlay
   refine ⟨s0, spec, Masked.stsOf x, tr, hi, q₀, hxs, hrk, hq₀, hLayT, hLay, hHc, ?_⟩
-  -- `finOf` is `finInner` at the `final_c` it accepts
   intro a fc' tc hfi huniq
   have hok : (finInner tr ((2 * j.val + r.val) % 2) (domOf spec (2 * j.val + r.val))
       (nSched spec (Masked.stsOf x) (2 * j.val + r.val))
@@ -613,13 +545,7 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     exact (hn ⟨a, hok⟩).elim
 
 set_option maxHeartbeats 4000000 in
-/-- **The loop's request at a rep's inner round, on the worker's own history**: at a history `InnerHist` holds at, where
-`LiveSchedOwn` holds and `vs` is causal at `SwOk`, the request for rep stream `2j + r` (`repInOf`) has `zp 64` values,
-`vs`'s below it but at `final_c`'s pad (`vsWord`, at the coins the openings open), and the tape's pads. The history's
-rounds of the rep's PIOP are scheduled (`sched_piop`) and show no refusal (`LeanRelease.unrefused_prefix`), so they are
-the switched session's PIOP bodies at one binding (`msg_liveSchedOwn`, `enc_piop_all`); the loop's frame takes back the
-masked values they carry (`maskedOf_piop`), `vs`'s under the tape's pads (`swSrcE_masked_vsWord`), and the request's
-pads are the tape's (`Masked.pads_frame_eq`). -/
+/-- The history's rounds of the rep's PIOP show no refusal (`LeanRelease.unrefused_prefix`). -/
 theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -654,7 +580,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
   obtain ⟨-, -, hspec, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
   have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
   have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
-  -- the history's next round is past the rep's scheduled ones, among which are its PIOP's
   obtain ⟨-, hbase⟩ := repSlot_nSched hx hs hkk
   have hNS := piopNR_le_nSched hx hs j r
   rw [Masked.repSlot_innerOff hs j r e, ← hbase] at hslot
@@ -688,7 +613,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
         src) src) real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hlt.le hl hrf
       (N := Masked.repBase x (2 * j.val + r.val) + jj) (by omega) (q := 2 * j.val + r.val) (by omega)
       (Nat.le_add_right _ _) (by rw [hRk]; omega)
-  -- the history's PIOP rounds are the switched session's bodies at one binding
   obtain ⟨cp, rt, hcp, hrt, hbodyE⟩ := enc_piop_all vs w hx hs ν t (finCoins x ops) j r (hunref 0 (by omega))
   have hd := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hs) hkk).2.1
   rw [hk2, hmod] at hd
@@ -711,7 +635,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
         ((m₀, ρ₀) :: ops)[Masked.repBase x (2 * j.val + r.val) + jj + 1]'(by simp only [List.length_cons]; omega) :=
       rfl
     rw [hge, hm] <;> rfl
-  -- the loop's coin counts there
   have hNR : ∀ jj < piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog,
       loopNr x (Masked.repBase x (2 * j.val + r.val) + jj) = piopN (Masked.stAt x j).m jj :=
     fun _ hjj' => loopNr_piop_at hx hs j r hjj'
@@ -724,7 +647,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     rw [List.take_length, hNR jj (by omega)] at hs'
     rw [hs']
     exact Nat.min_eq_left (by unfold piopN _root_.Flock.ZkServer.Frames.COIN_MAX; split_ifs <;> omega)
-  -- the zerocheck's outer coins are not `1`
   have hout : ∀ e' < (Masked.stAt x j).m - 13,
       ((wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (Masked.repBase x (2 * j.val + r.val) + 1))[e']! +
         1).isZero = false := by
@@ -734,7 +656,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     rw [words_slot_le hlt.le (p := Masked.repBase x (2 * j.val + r.val) + 1) (e := e') (by omega)
       (by rw [h1']; exact he') (by omega)]
     exact isZero_add_one (outer_ne_one_two hs j r (hunref 2 (by omega)) e' he')
-  -- the rounds the loop released
   have hrs : ∀ jj < piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog,
       (seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val))[jj]? =
         some (ByteArray.mk (FlockSoundness.Refine.encs (piopFr (Masked.stAt x j).m (Masked.stAt x j).c.kLog
@@ -751,7 +672,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     dsimp only
     rw [List.tail_cons, show streamAt (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val) + jj + 1 =
       Masked.repBase x (2 * j.val + r.val) + jj by unfold streamAt; omega, hbody jj hjj', hNR jj hjj']
-  -- the request's layout is table `j`'s
   unfold repInOf at hq
   obtain ⟨⟨lay, msk⟩, hds, hq'⟩ := v_bind_ok hq
   obtain ⟨sch', tp', hsch', hlay⟩ := start_lay hds
@@ -765,7 +685,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
   have hlayE : lay = Masked.layE x j := hlay
   subst hlayE
   have hnL : (Masked.layE x j).nLc = (Masked.stAt x j).c.kLog - 6 := rfl
-  -- the request's pads are the tape's
   have hqd : q₀.draws = _root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j)
       (L₁.draws (ν, t) (2 * j.val + r.val)) := by
     cases hq'
@@ -785,7 +704,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     rw [hlayR] <;> rfl
   have hP := Masked.pads_frame_eq (relIn L₁ src real) (ν, t) (Masked.UE.tapeZk t) Loop.frepOf x t j r q₀ hq₀d hlayR
     hzS hpads
-  -- the masked values the loop's frame took, and the request's values
   have hdg : (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest.size < 2 ^ 64 := by
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
@@ -811,10 +729,6 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     swSrcE_masked_vsWord vs x w ν (finCoins x ops) t j r hiE, hPh, add_pad_pad]
   rfl
 
-/-- **The request's coins** at a history `InnerHist` holds at: it holds a round of coins for each of rep stream
-`2j + r`'s rounds, and its rounds before the history's next, `nSched + e` of them, hold the loop's count of coins
-(`loopNr`, at most `COIN_MAX`), below which they are the opened coins from the rep's first round (`Masked.repBase`). As
-`finRepCoins` at a `Finish`, below the history's length. -/
 theorem innerReq_coins (x : Msg) (w : Flock.Wit)
     (wk : (relIn L₁ src real).toSrv.Worker) {ν : finS.Nonce} {t : finS.Tape} {κ : (relIn L₁ src real).toSrv.Chk}
     {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)} {j : Fin (Masked.jOf x)} {r : Fin 2} {e : ℕ} (he : e < 4)
@@ -885,8 +799,6 @@ theorem innerReq_coins (x : Msg) (w : Flock.Wit)
   show ((ops.map fun (p : Msg × Msg) => CoinLayer.rd p.2).getD (Masked.repBase x k + k') default).at i = _
   rw [List.getD_eq_getElem _ _ (by simpa using hQ), List.getElem_map]
 
-/-- **The request's extra claims**: one per link point and region of rep stream `2j + r`'s table, the link points the
-`Commit`'s coin carries (`repInOf`, `sizesOk`). -/
 theorem innerReq_xs {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {ops : List (Msg × Msg)} (hpos : 0 < ops.length)
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     (j : Fin (Masked.jOf x)) (r : Fin 2) {m₀ ρ₀ : Msg} {dr : ByteArray} {hi : Array ByteArray} {q₀ : RepIn}
@@ -922,8 +834,6 @@ theorem innerReq_xs {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {ops : List 
     rw [hls, hl0, Nat.min_eq_left hpc, hmp, Nat.mul_div_cancel _ hmp0]
   rw [hqx, Count.extras_size, Count.linkPoints_size, hpts, Nat.mul_comm, Masked.stsOf_half x j r]
 
-/-- **`finInner` returns the request's `final_c` under its pad**: the masked `final_c` its round 0 absorbs is
-`repCons`'s zerocheck proof's, the PIOP's masked value at `final_c`'s pad. -/
 theorem finInner_fc {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn} {fc' : F128} {tc : ByteArray}
     (h : finInner t rep dom n q = .ok (fc', tc)) :
     fc' = q.vals[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).fc]! +
@@ -945,9 +855,6 @@ theorem ok_of_isOk {α : Type} {v : V α} (h : v.isOk = true) : ∃ a, v = .ok a
   | error e => cases h
   | ok a => exact ⟨a, rfl⟩
 
-/-- **Where `finInner` returns**, its `repCons`, answered by the request's coins and then ones (`asksPad`) from round `0`
-and a transcript with no rounds, returns the proof `p` and the constraints `cons` at the transcript `tF` and round `kF`,
-where `consWhy` does not refuse them. -/
 theorem finInner_parts {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn} {res : F128 × ByteArray}
     (h : finInner t rep dom n q = .ok res) :
     ∃ (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (p : _root_.Flock.Proof) (zl : _root_.Flock.Zk.Level0Msgs)
@@ -978,8 +885,6 @@ theorem finInner_parts {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
     try dsimp only at h4
     cases h4
 
-/-- **`consWhy` passes** only where the rep took the request's rounds and its `zerocheck c_eval` constraints vanish on
-the pads. -/
 theorem consWhy_none {n k : ℕ} {cons : Array (String × _root_.Flock.Zk.Lin)} {h : Array F128}
     (hw : _root_.Flock.ZkServer.Finish.consWhy n k cons h = none) :
     k = n ∧ ∀ q ∈ cons, q.1 = "zerocheck c_eval" → _root_.Flock.ZkServer.Finish.linAt q.2 h = 0 := by
@@ -995,10 +900,6 @@ theorem consWhy_none {n k : ℕ} {cons : Array (String × _root_.Flock.Zk.Lin)} 
         simpa using hf
       exact _root_.Flock.ZkServer.Finish.failingOn_eq_empty_iff.1 he q (Array.mem_filter.2 ⟨hq, by simp [hname]⟩)
 
-/-- **Where `finInner` returns, its inner proof**: its `repCons`, answered by `asksPad` from round `0` and a transcript
-with no rounds, returns the proof `p` and the constraints `cons` at the transcript `tF` and the request's round `n` (where
-`consWhy` passes), and the inner proof on them returns from there; `finInner` returns `p`'s `final_c` and the inner
-proof's `τ` commitment. -/
 theorem finInner_inner {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn} {res : F128 × ByteArray}
     (h : finInner t rep dom n q = .ok res) :
     ∃ (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (p : _root_.Flock.Proof) (zl : _root_.Flock.Zk.Level0Msgs)
@@ -1056,11 +957,6 @@ theorem eq_of_add_eq_zero' {d f : F128} (h : d + f = 0) : f = d := by
   rw [FlockLevel3.of_add, ← FlockLevel3.GF128.zero_eq, zero_add]
 
 set_option maxHeartbeats 1000000 in
-/-- **The finish accepts the request only at `vs`'s `final_c`**: at a history `InnerHist` holds at, on the worker's own
-values (`innerReq_own`), where `finInner` returns at the request with `final_c = a`, its `zerocheck c_eval` constraint
-holds on the pads (`consWhy`): `a` is the c_eval of the request's round-1c values at the replay's zerocheck point, the
-opened coins' (`zcE`), which is `vs`'s `final_c` where no outer coin is `1` (`Loop.FinalCFixed`,
-`outer_ne_one_ofLoopLink`). -/
 theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -1105,7 +1001,6 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   obtain ⟨hkF, hzero⟩ := consWhy_none hcw
   obtain ⟨rs, rp, tq, suf, hrs, hkrs, hrcoins, hrp, hcons, hr1c, hfc⟩ := repCons_parts hrun
   rw [hlayT] at hrp hr1c hfc
-  -- the replay's `zerocheck c_eval` constraint vanishes on the pads
   have hzc := (FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck tr.st (Masked.layE x j) p ic.root hm
     hrp).1
   have hsz3 := FlockSoundness.Discharge.ZkExec.replay_cons_size tr.st (Masked.layE x j) p ic.root hrp
@@ -1115,7 +1010,6 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have hL := hzero _ hmem (by rw [hzc])
   rw [hzc] at hL
   try dsimp only at hL
-  -- there it is `Σ λ_i(z)·r1c_i + final_c` at the request's values, each masked value less its pad
   have hMk : FlockSoundness.Discharge.Composed.ZerocheckMasked.Masks (Masked.layE x j)
       (_root_.Flock.ZkServer.Finish.padsOf Q.draws).h
       ⟨(Array.range 64).map fun i =>
@@ -1134,7 +1028,6 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   rw [_root_.Flock.ZkServer.Finish.linAt_eq,
     FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval _ _ _ _ 0 hMk] at hL
   have hfin := eq_of_add_eq_zero' hL
-  -- the request's values: `a` at `final_c`, `vs`'s at round 1c
   have hfcz : (Masked.layE x j).fc < (Masked.layE x j).zp 64 := by
     unfold _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
@@ -1153,7 +1046,6 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     show (q₀.vals.set! (Masked.layE x j).fc a)[(Masked.layE x j).r1c i]! = _
     rw [Array.getElem!_set!_ne q₀.vals (Masked.layE x j).fc ((Masked.layE x j).r1c i) a (by omega)]
     exact hvals _ (by omega) (by omega)
-  -- the replay's zerocheck point is the opened coins'
   have h2rs : 2 < rs.length := by omega
   obtain ⟨hsz2, hsl2⟩ := hcoins 2 (by omega)
   have hpos2 : 0 < (q₀.coins[2]!).size := by
@@ -1188,12 +1080,6 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     _ = vsWord vs x w ν c t j r (Masked.layE x j).fc := (hC ν c t j hout r).symm
 
 set_option maxHeartbeats 1000000 in
-/-- **The finish's `τ` commitment at a rep's inner round 2**: at a history `InnerHist` holds at with `e = 2`, where the
-rows hold (`Loop.RowsOK`), where `finInner` returns at the request, its `τ` commitment is `vs`'s (`Loop.vsTau`): it
-accepts only at `vs`'s `final_c` (`finInner_accepts_own`), and its inner proof commits to `InZ.tau` over its constraints
-at the coins of the inner proof's rounds 0 and 1, the stream's, which where the request's values are `vs`'s and its pads
-the tape's are the switched view's first rows (`Finish.repCons_cut`, `Masked.repConsC_rows`, `innerP_pad_tau`,
-`Masked.swTau_of_rows`). -/
 theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -1227,7 +1113,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
   have hm25 : 25 ≤ (Masked.stAt x j).m := (htabs j.val hjs).1
   have hm35 : (Masked.stAt x j).m ≤ 35 := (htabs j.val hjs).2.1
-  -- the table is table `j`'s, at its `--zk` schedule, with the tape's packed table
   have hRT : Count.RealTabs (Masked.stsOf x) (real x w (ν, t)) := by
     subst hreal
     exact realTabs_of src x w (ν, t) hs
@@ -1259,7 +1144,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     rw [← hreal]
     exact hr
   obtain ⟨-, -, -, hg⟩ := hSrc.1.realOf ν t j r hR1
-  -- the request at `a`: `a` is `vs`'s `final_c`, its other values `vs`'s, its pads the tape's, its coins the opened ones
   have ha := finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hr hq
     hLayT a (by rw [hok]; rfl)
   obtain ⟨hvsz, hvals, hP⟩ :=
@@ -1289,7 +1173,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     exact hP
   have hPQ : (_root_.Flock.ZkServer.Finish.padsOf Q.draws).toC = Masked.innerPadsE x t j r :=
     hPd.trans (congrArg (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val) (Masked.innerLayE_layE x j)).symm
-  -- as many extra claims as the statement's regions at each link point, below `2^64`
   have hxb : (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size + 2 < 2 ^ 64 := by
     have hreg := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hs) hkk).2.2.1
     have hq' := hq
@@ -1317,7 +1200,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
     rw [hQx]
     exact lt_of_le_of_lt (Nat.add_le_add_right hxle 2) hreg
-  -- the request's coins below the history's length are the opened coins from the rep's base
   have hpc : ∀ k < nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2,
       padCoin Q.coins k = fun i => (q₀.coins[k]!)[i]! := by
     intro k hk
@@ -1337,7 +1219,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     rw [hQsz] at hk
     rw [hQk k hk] at hi ⊢
     exact (hcoins k hk).2 i hi
-  -- the rep's run, as the session's rounds from the rep's base cut at the history's length
   have hrunOf := repCons_ofPad Q.coins tr.st hms tr.sch tr.tPad _ _ tr.g tr.cm0 _ _ ic Q.vals tr.extra tr.lanePad _ _
     hrun (by omega)
   have hcut := _root_.Flock.ZkServer.Finish.repCons_cut Q.coins (Masked.repBase x (2 * j.val + r.val)) ops.length
@@ -1346,7 +1227,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     (Array.replicate (Masked.repBase x (2 * j.val + r.val)) default) (by simp)
   have hgo := go_of_fst hcut.1
   rw [hmod, htsch] at hgo
-  -- its constraints are the worker's view's first rows, where the rows hold (no outer coin `1`)
   have hnr := LeanRelease.innerAt_unrefused L₁ src real (finOf real L₁.draws) x w hx hSv
     (fun ρ s0' spec' sts' h => by rw [hreal]; exact realTabs_of src x w ρ h) wk ν t κ m₀ ρ₀ ops v h0 hlt hl hrf hv hI
   have hout := LeanRelease.outer_ne_one_ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws))
@@ -1375,7 +1255,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     · rw [hQv, Array.getElem!_set!_ne q₀.vals (Masked.layE x j).fc k a (Ne.symm hkf)]
       exact (hvals k hk' hkf).symm
   have h7 : cons.size = 7 := hsw.1
-  -- the inner proof's `τ` at the coins of its rounds 0 and 1, the stream's
   obtain ⟨hs1, hs2, hipt⟩ := innerP_pad_tau Q.coins _ _ ic _ cons (by rw [h7]; norm_num) hin
   have hsz0 : (q₀.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val)]!).size = 1 :=
     hs1 _ (hQget (nSched spec (Masked.stsOf x) (2 * j.val + r.val)) (by omega))
@@ -1401,7 +1280,6 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
       (by rw [hsz1]; exact hi)
     rw [← Nat.add_assoc] at e
     exact e.symm
-  -- at the table's layout and the tape's pads, that `τ` is the worker's view's, `vs`'s commitment
   have hLI : _root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0 = Masked.innerLayE x j :=
     hLayT.trans (Masked.innerLayE_layE x j).symm
   have hsalt : (_root_.Flock.ZkServer.Finish.padsOf Q.draws).tauSalt = (Masked.innerPadsE x t j r).tauSalt :=

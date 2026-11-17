@@ -5,23 +5,7 @@ public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoCap
 
-/-!
-# The two-stage extractor's costs and the two-stage KS read at a time budget
-
-The two-stage extractor is `Compiled.E` at the two-stage verifier's own `Compiled`, so at its own waits' counts `k_out`
-and `k_in`, and the two-stage contract gives the facts its cost reads (`CompiledTwo.Sessions.toCostContract`: the
-sessions' runs on their fixed rounds, and the sample's slots, at most `n_PU` holding at most `n_sess` keys). So
-`Compiled.efficient_of` bounds its reruns and own calls (`compilerEfficientTwo`), which come to `Compiled.work`, and
-`KS` at the footprint gives `KSAt` there, each hash term at a budget on one run's whole SHA-512 work
-(`CompiledTwo.ksAt_of_ks`): `CompilerKSTwo` and `CompilerEfficientTwo` give `CompilerKSAtTwo` (`compilerKSAtTwo_of`).
-
-Read at the per-window cap (`Design.Two.card_incorrectBlocks_lt`), `KSAt` bounds what one accepted run hides
-(`CompiledTwo.KSAt.incorrectBlocks_le`): at a first stage that catches each replay block at rate `r₁` and a second stage
-that samples each cell at rate `r₂`, a run is accepted while the extracted boundary trace marks at least `K` replay
-blocks incorrect at every interior with probability at most `KSAt`'s bound at every `δ ≥ (1 − r₁·r₂)^K`. The same
-bound holds at the replay blocks wrong at their boundary, a count of the boundary trace alone
-(`CompiledTwo.KSAt.incorrectAtBoundary_le`).
--/
+/-! The two-stage extractor's costs, and the two-stage KS read at a time budget. -/
 
 @[expose] public section
 
@@ -32,23 +16,15 @@ namespace CompiledTwo
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Nonempty Coin] in
-/-- **The two-stage contract gives the facts the extractor's cost reads**: its `fixed`, `runs`, `slots` and `keys`. -/
 theorem Sessions.toCostContract {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) :
     L.toCompiled.CostContract H :=
   { toRunsFixed := ⟨hS.fixed, hS.runs⟩, slots := hS.slots, keys := hS.keys }
 
-/-- **`KSAt` from `KS`**, at an extractor whose expected reruns `runs` and own SHA-512 calls `own` come to at most
-`work`. -/
 theorem ksAt_of_ks {H : Msg → Msg} {L : CompiledTwo Coin A} (hks : L.KS H) {runs : Msg → ℝ} {own : Msg → ℕ}
     (hruns : ExtractRunsExpLe H L.E runs) (hown : Sampling.ExtractOwnLe H L.E own)
     (hw : ∀ x, runs x + own x ≤ L.work x) : L.KSAt H :=
   ⟨fun δ hδ => Sampling.KSAt_of_KSLinOn L.work (hks δ hδ), Sampling.BextAtCostLe_of hruns hown hw⟩
 
-/-- **What one accepted run hides, at a time budget**: at a first stage that catches each replay block at rate `r₁`
-and a second stage that samples each cell at rate `r₂`, the run is accepted while the extractor returns no boundary
-trace, or one whose footprint marks at least `K` replay blocks incorrect at every interior, with probability at most
-`KSAt`'s bound at `δ`, for every `δ ≥ (1 − r₁·r₂)^K`: a footprint in `M̄_δ` marks fewer
-(`Design.Two.card_incorrectBlocks_lt`). -/
 theorem KSAt.incorrectBlocks_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hks : L.KSAt H) {x : Msg} (hx : L.Scope x)
     {s : Sampling.AuditStatement} {Pt : Sampling.Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) {r₁ r₂ δ : ℝ} {K : ℕ} (h₁ : d.FirstRate r₁)
@@ -76,9 +52,6 @@ theorem KSAt.incorrectBlocks_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hks 
     rw [Finset.prod_const]
     exact h₁ S hS
 
-/-- **What one accepted run hides, counted at the boundary**: `KSAt.incorrectBlocks_le` at the replay blocks the extracted
-boundary trace marks wrong at their boundary (`Sampling.incorrectAtBoundary`), which every interior marks incorrect
-(`Sampling.incorrectAtBoundary_subset`). -/
 theorem KSAt.incorrectAtBoundary_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hks : L.KSAt H) {x : Msg} (hx : L.Scope x)
     {s : Sampling.AuditStatement} {Pt : Sampling.Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) {r₁ r₂ δ : ℝ} {K : ℕ} (h₁ : d.FirstRate r₁)
@@ -100,8 +73,6 @@ theorem compilerEfficientTwo : CompilerEfficientTwo := by
   intro Coin _ _ _ A L H hS hopen
   exact Compiled.efficient_of hS.toCostContract hopen
 
-/-- **The two-stage KS read at a time budget**, from `CompilerKSTwo` and `CompilerEfficientTwo`'s expected reruns and
-own calls, which come to `work`. -/
 theorem compilerKSAtTwo_of (hks : CompilerKSTwo) (heff : CompilerEfficientTwo) : CompilerKSAtTwo := by
   intro Coin _ _ _ A L H hA hB hS hopen
   obtain ⟨-, hr, ho⟩ := heff Coin A L H hS hopen

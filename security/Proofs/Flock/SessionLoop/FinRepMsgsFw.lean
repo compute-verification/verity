@@ -43,21 +43,7 @@ import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# `FinRepMsgs` with no rows
-
-`FinRepRows` consumes `Loop.FinRepMsgs`: at table `j`'s rep `r`'s run, below `zp 64` the workers' clear values are the
-request's. Here it holds outright, reading no table's rows:
-
-* the cut session's own rep at stream `2j + r` returns, and so does every earlier one (`Loop.repCut_views_ret`,
-  `Loop.prevCut_views`), so below `zp 64` the views' masked values are the request's plus its pads
-  (`Loop.swSrcE_hmk_ret`);
-* the views' masked values are the workers' clear values plus the tape's pads, whether or not the rows hold
-  (`Masked.swSrcE_masked_pad_any`);
-* the request's pads are the tape's (**`Loop.finRepPads_tape`**, `Masked.pads_frame_eq`), so the pads cancel.
-
-**`Loop.finRepMsgs_ret`** states it.
--/
+/-! `FinRepMsgs` outright, reading no table's rows. -/
 
 @[expose] public section
 
@@ -68,7 +54,7 @@ open FlockSoundness.Discharge
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -76,9 +62,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The request's pads are the tape's**: where the frame samples the tape's pads (`RepSrc`), at table `j`'s rep `r`'s
-request, its pads are the tape's pads of table `j`'s rep `r` at the table's layout (`Masked.pads_frame_eq`, at the
-layout the frame starts at, `lay_ofLoopLink`). -/
 theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {h : List (Msg × Msg)}
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     (j : Fin (Masked.jOf x)) (r : Fin 2) {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
@@ -124,12 +107,6 @@ theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : f
     j r q hq' hlay0 hzs hpads
 
 set_option maxHeartbeats 4000000 in
-/-- **`FinRepMsgs` with no rows**: in the masked scope, with a witness, at a statement the loop serves whose level 0
-and pads the source samples from the tape (`Level0Src`, `RepSrc`), below `zp 64` the workers' clear values at table `j`'s
-rep `r`'s run are the request's. The cut session's reps at streams up to `2j + r` return (`prevCut_views`,
-`repCut_views_ret`), so the views' masked values there are the request's plus its pads (`swSrcE_hmk_ret`, at the views'
-commitments and pads commitment, `cmsCut_ok`, `icCut_ok`, and `finPiop`'s sizes); they are the workers' clear values
-plus the tape's pads at any values (`swSrcE_masked_pad_any`), and the two pads are one (`finRepPads_tape`). -/
 theorem finRepMsgs_ret (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -153,7 +130,6 @@ theorem finRepMsgs_ret (vs : finS.SwVals)
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
   obtain ⟨schs, hs, hschZ⟩ := Masked.schedsPZk_live hx
   have hsj : schs[j.val]! = ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := hschZ j
-  -- the views' commitments and pads commitments, as the switched cut's
   obtain ⟨schsV, hsV, cmsV, hcmsV, -, hpads⟩ :=
     finCommits_of vs L₀ src (realOf src) wk x w hsc hR hS0 ν t κ m₀ ρ₀ ops hF s0 spec hsx
   have e0 : schsV = schs := Except.ok.inj (hsV.symm.trans hs)
@@ -187,7 +163,6 @@ theorem finRepMsgs_ret (vs : finS.SwVals)
       exact e') hl hcap hroot
     (fun _ hex₁ ic₁ _ l₁ hl₁ =>
       repCut_views_ret L₀ src wk x w hsc hR hServe hF hsx hs hk hex₁ _root_.Flock.Sha512.hash _ ic₁ _ hl₁)
-  -- the table's layout, and the request's pads as the tape's
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hs hk hRep
   rw [hk2] at htb hsb
   have hst : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htb.symm.trans (Masked.tabsOf_stAt x j)

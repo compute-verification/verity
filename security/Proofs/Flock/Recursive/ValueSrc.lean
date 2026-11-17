@@ -16,26 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The value tie's extractor and its finder, as the guarantee reads them
-
-`valueColl` (the value tie's extractor: `FlockC3.RegLevels.value_tie`, `C3/RegLevels/ValueTie.lean`) and the finder
-that plays the recursive audit once and outputs its pair (`valueFinder`, `Recursive/ValueFinder.lean`), here so that
-`RecursiveAuditC3At` can read `valueFinder` without importing the value tie's proofs, which import it:
-
-* `up`, `lev`, `sibIdx`, `sib`, `sibsFrom`, `sibsV`: `FV3.root`'s tree over the verifier's leaves and a leaf's siblings
-  in it; `openPairV`: the opening's extractor against it; `leavesV`: the leaves `checkValue` builds over its rows;
-  `valueColl`: the extractor;
-* `VRead`, `ValueSrc`: a read of V*'s sessions, and the verifier's rows and salts at each; `valueAt`, `ValueColl`,
-  `valuePick`, `valueFinder`: `valueColl` at a read, some registered read where it collides, and the finder;
-* `stackedCoefRows`, `stackedDirsRows`, `stackedLevels`, `openingVRows`, `valueRows`, `valueSrcC3`: the source
-  `RecursiveAuditC3At` reads, the rows check 5 registers itself (their ties: `Recursive/ValueSource.lean`);
-* `openRows`, `residualRows`, `sparseRows` (with `innerLevels`, `openCoef`, `openDirs`, `residualGroups`,
-  `residualRowsOf`, `sparseRange`, `sparseRowsOf`), `innerRows`, `loadRows`, `valueRowsAll`, `valueSrcAll`: `valueSrcC3`
-  with the rows check 5 registers at the units it checks against the inner session (`src t`, `RecCoins.check`'s
-  `files`): `coef` and `dirs` at `rec-open`, `v` at `rec-residuals` and `rec-sparse` (their ties:
-  `Recursive/ValueInner.lean`).
--/
+/-! The value tie's extractor and its finder, apart from the value tie's proofs so that `RecursiveAuditC3At` can read them. -/
 
 @[expose] public section
 
@@ -59,7 +40,6 @@ def lev (dom : ByteArray) (leaves : Array ByteArray) : ℕ → Array ByteArray
 /-- The index of node `j`'s sibling. -/
 def sibIdx (j : ℕ) : ℕ := if j % 2 = 0 then j + 1 else j - 1
 
-/-- The sibling at level `d` on leaf `i`'s path. -/
 def sib (dom : ByteArray) (leaves : Array ByteArray) (i d : ℕ) : ByteArray := (lev dom leaves d)[sibIdx (i / 2 ^ d)]!
 
 /-- Leaf `i`'s siblings from level `d`, whose nodes are `a`, up `k` levels, each level computed once. -/
@@ -71,8 +51,6 @@ def sibsFrom (dom : ByteArray) (i : ℕ) : ℕ → ℕ → Array ByteArray → L
 def sibsV (dom : ByteArray) (leaves : Array ByteArray) (i : ℕ) : List ByteArray :=
   sibsFrom dom i (log2ceil leaves.size) 0 (lev dom leaves 0)
 
-/-- **The opening's extractor against the verifier's tree**: for payloads `x` and `y` climbing at `pos` through the
-sibling lists `s` and `t`, their frame-v3 leaves' frames if those leaves are one, else the climb's pair. -/
 def openPairV (dom : ByteArray) (pos : ℕ) (x : ByteArray) (s : List ByteArray) (y : ByteArray) (t : List ByteArray) :
     ByteArray × ByteArray :=
   let lx := Registered.leafIn dom pos x
@@ -80,16 +58,11 @@ def openPairV (dom : ByteArray) (pos : ℕ) (x : ByteArray) (s : List ByteArray)
   if Sha512.hash lx = Sha512.hash ly then (lx, ly)
   else Registered.climbPair dom (Sha512.hash lx) (Sha512.hash ly) pos 0 s t
 
-/-- The leaves `checkValue` builds over `rows` under `salt`. -/
 def leavesV (dom : ByteArray) (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) : Array ByteArray :=
   (Array.range rows.size).map fun i =>
     Registered.rowLeaf dom i (Hm96.Default512.treeLeaf (RecCoins.commitRow rows[i]! (salt i)))
 
-/-- **The value tie's extractor** at row `i` of the verifier's `rows`, registered under `reg` with the salts `salt`,
-against a registrant's opening of the row bytes `r` under the salt `y` through `path`: nothing where `r` is the
-verifier's row's bytes (`rowInV`); else hm96's pair (`hm96Pair`: the leaf preimage, `commitRow`'s salt digest or its
-row digest) where the two hm96 leaves are one; else the opening's pair (`openPairV`) up the registrant's path and the
-verifier's tree. Each pair holds both preimages. -/
+/-- Each pair it outputs holds both preimages; nothing where `r` is the verifier's row's bytes. -/
 def valueColl (reg : Registered.Port) (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) (i : ℕ) (r y : List UInt8)
     (path : ByteArray) : Option (List UInt8 × List UInt8) :=
   if r = rowInV rows[i]! then none
@@ -108,16 +81,11 @@ open Game Audit Refine StrictCR
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **A read of V*'s sessions**: the session `j`, the unit `u` and the row port `q`, read at `.inl (u, q)`. -/
 abbrev VRead (Vs : Fin S → VStmt) : Type := (j : Fin S) × Fin (Vs j).nv × Fin (Vs j).c.ports.size
 
-/-- **The verifier's rows of the values it registers itself**: at each history `(R, ω, t)`, registration `R₂` and read
-`(j, u, q)`, the rows and their salts `RecCoins.checkValue` holds the port to, or none. -/
 abbrev ValueSrc (L : SamplingDesign n) (Reg Cm Reg₂ : Type) (I : Inner) (Vs : Fin S → VStmt) : Type :=
   Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → VRead Vs → Option (Array (Array ℕ) × (ℕ → ByteArray))
 
-/-- **`valueColl` at a read**: at the read `x = (j, u, q)`, against the verifier's rows and salts there, the registrant's
-row bytes (`encPortH` of its value), salt and path; nothing where the source has no rows. -/
 noncomputable def valueAt (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (R : Reg) (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) (x : VRead Vs) :
     Pair :=
@@ -129,41 +97,32 @@ noncomputable def valueAt (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ 
         (FlockVBridge.Decode.regVal (zs R ω t R₂ x.1) (.inl x.2)))
       ((zs R ω t R₂ x.1).rd.ws (.inl x.2)) ((zs R ω t R₂ x.1).rd.wpath (.inl x.2))
 
-/-- **A registrant's row is off a value the verifier registers itself, by a collision**: at the history `(R, ω, t)`
-and registration `R₂`, some registered read of some session at which `valueAt` is a collision of SHA-512. -/
 def ValueColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (R : Reg) (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
   ∃ x : VRead Vs, (zs R ω t R₂ x.1).rd.isRead (.inl x.2) ∧ IsColl Refine.H512 (valueAt zs vsrc R ω t R₂ x)
 
 open Classical in
-/-- **`valueFinder`'s output at an outcome**: `valueAt` at a read where `ValueColl`'s test passes, if there is one. -/
 noncomputable def valuePick (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) {β : Type} (o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × β)) : Pair :=
   if h : ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1 then valueAt zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1 h.choose
   else none
 
-/-- **The value finder**: one run of the recursive audit against the prover `σ`, output `valueColl`'s pair at a
-registered read of the outcome's history and registration where it collides (`ValueColl`), else nothing. -/
 noncomputable def valueFinder (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
   oneRun _ σ (valuePick zs vsrc)
 
-/-- Level `l`'s `coef` rows at R's opening `o`: opening `j`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
 def stackedCoefRows (o : Flock.RecCoins.RegisteredOpening) (l LANES : ℕ) : Array (Array ℕ) :=
   (Array.range (o.sh.sched.levels[l]!).q).map fun j =>
     Flock.RecCoins.words (Flock.RecCoins.coefAt (o.kappa[l]!) LANES (Flock.eqTable (o.lg.conss[l]!).alpha)[j]!)
 
-/-- Level `l`'s `dirs` rows at R's opening `o`: opening `j`'s position's low `H` bits. -/
 def stackedDirsRows (o : Flock.RecCoins.RegisteredOpening) (l H : ℕ) : Array (Array ℕ) :=
   (Array.range (o.sh.sched.levels[l]!).q).map fun j => Flock.RecCoins.dirsRow (o.lg.conss[l]!).pos[j]! H
 
-/-- The levels of R's schedule with `LANES` lanes and `H` siblings below their cap. -/
 def stackedLevels (o : Flock.RecCoins.RegisteredOpening) (LANES H : ℕ) : List ℕ :=
   (List.range o.sh.sched.levels.size).filter fun l =>
     2 ^ (o.sh.sched.levels[l]!).lanes == LANES && (o.sh.sched.levels[l]!).d - (o.sh.sched.levels[l]!).cap == H
 
-/-- Part `j`'s `v` row of R's opening `o`. -/
 def openingVRows (o : Flock.RecCoins.RegisteredOpening) (j : ℕ) : Option (Array (Array ℕ)) :=
   match (do Flock.RecResiduals.groups (← Flock.RecOpening.structureOf o.sh) (Flock.RecOpening.portSizes o.sh)) with
   | .ok gs => match gs[j]? with
@@ -171,7 +130,6 @@ def openingVRows (o : Flock.RecCoins.RegisteredOpening) (j : ℕ) : Option (Arra
     | none => none
   | .error _ => none
 
-/-- **The rows and value check 5 registers at port `port` of circuit `c`**, at its candidate-3 inputs `c3`. -/
 def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) : Option (Array (Array ℕ) × String) :=
   match c3 with
   | none => none
@@ -187,7 +145,6 @@ def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String
         else none
       | none, none => none
 
-/-- **The verifier's rows as a value source**, at its candidate-3 inputs `c3 t` at each history. -/
 def valueSrcC3 (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
   fun _ _ t _ x =>
     match valueRows (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
@@ -248,11 +205,9 @@ def residualRows (inn : Flock.RecCoins.Inner) (j : ℕ) : Option (Array (Array �
         | .ok rows => some rows
         | .error _ => none
 
-/-- The inner circuit's unit range, as `checkSparse` reads it at unit `unit`. -/
 def sparseRange (inn : Flock.RecCoins.Inner) (unit : String) : Flock.V Flock.Range :=
   inn.unitRange.mapError (s!"rec-coins: {unit}: " ++ ·)
 
-/-- Each rep's RecSparse `v` (`sparseV`) at its inner points and sparse coins, padded to the port's words. -/
 def sparseRowsOf (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : String) (sh : Flock.RecSparse.Shape)
     (ash : Flock.Shape) (extras : Array Flock.Claim) (rng : Flock.Range) : Flock.V (Array (Array ℕ)) :=
   #[0, 1].mapM fun r => do
@@ -264,7 +219,6 @@ def sparseRowsOf (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : S
           (← Flock.RecCoins.layoutFactors sh i.lc.fold.rhoIn i.lc.rIn rng)).mapError (s!"rec-coins: {unit}: rep {r}: " ++ ·)
     pure (Flock.RecCoins.padTo (Flock.RecCoins.words v) (Flock.RecSparse.portWords (Flock.RecSparse.nv sh)))
 
-/-- `rec-sparse`'s `v` rows at the inner session `inn` and candidate 3's inputs `c3`. -/
 def sparseRows (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : String) (sh : Flock.RecSparse.Shape) :
     Option (Array (Array ℕ)) :=
   match inn.algebra, sparseRange inn unit with
@@ -273,8 +227,6 @@ def sparseRows (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : Str
     | .error _ => none
   | _, _ => none
 
-/-- The rows and value check 5 registers at port `port` of a unit it checks against the inner session `inn`: a part's
-`v`, and its `out`, the zero rows (`checkZero`). -/
 def innerRows (inn : Flock.RecCoins.Inner) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) :
     Option (Array (Array ℕ) × String) :=
   match Flock.RecSparse.params c.unit.name, Flock.RecOpen.params c.unit.name, Flock.RecResiduals.params c.unit.name with
@@ -292,7 +244,6 @@ def innerRows (inn : Flock.RecCoins.Inner) (c3 : Option Flock.RecCoins.C3) (c : 
     else none
   | none, none, none => none
 
-/-- `innerRows` at the inner session `src` loads. -/
 def loadRows (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) :
     Option (Array (Array ℕ) × String) :=
   match src with
@@ -301,16 +252,12 @@ def loadRows (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoins.C3
     | .error _ => none
     | .ok inn => innerRows inn c3 c port
 
-/-- **The rows and value check 5 registers at port `port` of circuit `c`**, at its inner session `src` and candidate-3
-inputs `c3`. -/
 def valueRowsAll (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit)
     (port : String) : Option (Array (Array ℕ) × String) :=
   match Flock.RecCoins.stackedParams c.unit.name, Flock.RecOpening.params c.unit.name with
   | none, none => loadRows src c3 c port
   | _, _ => valueRows c3 c port
 
-/-- **The verifier's rows as a value source**, at its inner session `src t` and candidate-3 inputs `c3 t`, under the
-salts check 5 holds them to: a zero value's `zeroSalt`, every other value's `verifierSalt`. -/
 def valueSrcAll (src : List (Cm × I.Coin) → Option Flock.RecCoins.Source)
     (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
   fun _ _ t _ x =>

@@ -24,28 +24,7 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# Proof of (ii) at the ZK server and V*'s code
-
-`Flock.SecurityProofs.RecursiveZkServerPrivate : Flock.Guarantees.RecursiveZkServerPrivate` is
-`RecursiveCircuitPrivateLeaves`' argument at the commit strings the ZK server sends, where that one is at their leaves,
-with the inner coins live: message `i` reads the commit strings before it, so T1 is taken over adaptive leaves.
-
-* `ZkView.commitString_split`: the executable's commit string of `x` at a salt's bytes is `commitBytes (x ⊕ M·y, c(y))`
-  (`leafSplit` before its leaf hash). `ZkServerZK.zkServerStrings_os`: so the strings the ZK server sends at the
-  operating system's bytes `b` are `commitBytes` of `zkServerPairs` at the salts `saltOfBytes b`, one message at a time.
-* `ZkServerZK.zkServerPairs_adaptive`: the ZK server's commit strings are T1's adaptive leaves (`ZK.adaptiveLeaves`).
-* `ZkServerZK.recursiveZK_enc`: `recursiveZK_le` with the auditor reading the commitments through any encoding `H` of
-  their two halves (`encAt`, `encIdeal`), at any hm96 hiding bound `δ`, T1 over the adaptive leaves
-  (`ZK.ideal_leaves_adaptive`); `ZkServerZK.private_enc`: `RecursiveCircuitPrivate`'s two ways there, with the
-  registration's hiding.
-* `ZkServerZK.fwRealPr_eq`: the ZK server's real view is that at `H = commitBytes`, by `ZkServerSends` at the OS's
-  bytes, taken to salts (`ZkView.saltsEquiv`).
-* `RecursiveZkServerPrivate`: `private_enc` at `commitBytes`, V*'s sessions' zero knowledge
-  (`OuterZK.vstar_outer_zk` at `proverExe`, its tables passing `CoinedOK` by `SessionsCoined`) and the
-  registration's hiding (`regLeaves_hides`), each at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). The
-  simulated view is `private_enc`'s by definition.
--/
+/-! Proof of (ii) at the ZK server and V*'s code: `RecursiveCircuitPrivateLeaves`' argument at the commit strings the ZK server sends, T1 over adaptive leaves. -/
 
 @[expose] public section
 
@@ -53,8 +32,6 @@ namespace FlockSoundness.Discharge.ZkView
 
 open Flock Hm
 
-/-- **The executable's commit string splits** (`leafSplit` before its leaf hash): `Default512.commitString x` at a
-salt's bytes is `commitBytes (x ⊕ M·y, c(y))`. -/
 theorem commitString_split (x : ByteArray) (y : Salt) :
     Hm96.Default512.commitString x (saltBytes y) = Flock.Guarantees.commitBytes (bitsOf x + My y, saltHash y) := by
   rw [Hm96.Default512.commitString, Flock.Guarantees.commitBytes, saltHash]
@@ -112,8 +89,6 @@ theorem zkServerStrings_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray
       (Flock.Sha512.hash (m i fun j => Flock.Guarantees.zkServerStrings m ys (Fin.castLE i.isLt.le j))) (ys i) := by
   rw [Flock.Guarantees.zkServerStrings]
 
-/-- **The ZK server's commit strings are T1's adaptive leaves** (`ZK.adaptiveLeaves` at `H = id`): string `i` is
-`x_i(the strings before it) + M·y_i` beside `c(y_i)`, with `x_i` the SHA-512 of message `i` at those strings. -/
 theorem zkServerPairs_adaptive {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (y : Fin nh → ZkView.Salt) :
     Flock.Guarantees.zkServerPairs m y = ZK.adaptiveLeaves (id : ZkView.Bits × ByteArray → ZkView.Bits × ByteArray)
@@ -121,8 +96,6 @@ theorem zkServerPairs_adaptive {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteA
       (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) :=
   rfl
 
-/-- **The ZK server's commit strings at salts' bytes split**, one message at a time (`ZkView.commitString_split`, each
-message reading the strings before it): at the bytes of the salts `y` they are `commitBytes` of `zkServerPairs`. -/
 theorem zkServerStrings_salts {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (y : Fin nh → ZkView.Salt) :
     Flock.Guarantees.zkServerStrings m (fun i => ZkView.saltBytes (y i)) =
@@ -143,14 +116,10 @@ theorem zkServerStrings_salts {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteAr
         e).trans ?_)
     exact (ZkView.commitString_split _ _).trans (congrArg Flock.Guarantees.commitBytes (zkServerPairs_eq m y i).symm)
 
-/-- The ZK server's commitments to `m` under the salts `y`, the inner coins live (`zkServerPairs`), through an encoding
-`H` of their two halves. -/
 def encAt {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (m : (i : Fin n) → (Fin i → ByteArray) → ByteArray)
     (y : Fin n → ZkView.Salt) : Fin n → D :=
   fun i => H (Flock.Guarantees.zkServerPairs m y i)
 
-/-- **The ZK server's commit strings at the OS's salt bytes**: at the 192 bytes `b i` the operating system gives each
-salt, they are `commitBytes` of the commitments' halves at the salts `saltOfBytes (b i)`. -/
 theorem zkServerStrings_os {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (b : Fin nh → Fin 192 → Fin 256) :
     Flock.Guarantees.zkServerStrings m (fun i => FlockSoundness.Audit.SamplingDesign.streamOf (b i)) =
@@ -158,14 +127,10 @@ theorem zkServerStrings_os {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray
   (congrArg (Flock.Guarantees.zkServerStrings m) (funext fun i => (ZkView.saltBytes_saltOfBytes (b i)).symm)).trans
     (zkServerStrings_salts m fun i => ZkView.saltOfBytes (b i))
 
-/-- Ideal commitments through `H`. -/
 def encIdeal {D : Type} (H : ZkView.Bits × ByteArray → D) {n : ℕ} (u : Fin n → ZkView.Bits × ZkView.Salt) :
     Fin n → D :=
   fun i => H (OuterZK.idealStrs u i)
 
-/-- **`recursiveZK_le` through any encoding of the commitments**, at any hm96 hiding bound `δ`: the outer session's
-simulator at the commitments (`hOuter`), then T1 once per commitment over the adaptive leaves
-(`ZK.ideal_leaves_adaptive`: message `i` reads the commit strings before it). -/
 theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
     [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (H : ZkView.Bits × ByteArray → D) (nh : ℕ)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -182,7 +147,6 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
       ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
           E (w.1.1, encIdeal H w.1.2, sim w.1.1 (encIdeal H w.1.2) w.2))
         + εo + nh * δ := by
-  -- the outer session, simulated at the commitments
   have h1 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
           view w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.1.1.2 w.1.2 w.2)) ≤
@@ -206,8 +170,6 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
           congrArg (· + εo) (ZK.prCoin_prod_split fun (ωy : (Ωa × Ωp) × (Fin nh → ZkView.Salt)) (s : Ωs) =>
             E (ωy.1.1, encAt H (msgs ωy.1.1 ωy.1.2) ωy.2,
               sim ωy.1.1 (encAt H (msgs ωy.1.1 ωy.1.2) ωy.2) s)).symm
-  -- T1 once per commitment: the simulated session reads the salts only through the commitments, each message the
-  -- commit strings before it
   have h2 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2, sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2)) ≤
       prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
@@ -224,7 +186,6 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
     refine congrArg prCoin (funext fun x => ?_)
     exact congrArg (fun l => E (x.1.1.1, (fun i => H (l i)), sim x.1.1.1 (fun i => H (l i)) x.1.2))
       (zkServerPairs_adaptive (msgs x.1.1.1 x.1.1.2) x.2)
-  -- the developer's randomness is no longer read
   have h3 : prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
         E (w.1.1.1, encIdeal H w.2, sim w.1.1.1 (encIdeal H w.2) w.1.2)) =
       prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
@@ -242,7 +203,6 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
   refine h1.trans ((add_le_add h2 (le_refl εo)).trans (le_of_eq ?_))
   rw [h3, add_right_comm]
 
-/-- The real view's probability of `E` at the registration's salts `r`, the commitments through `H`. -/
 noncomputable def realAt {D Prog Wit Rr Rv Ωa Ωp Ωo V : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωo]
     (H : ZkView.Bits × ByteArray → D) (reg : Prog → Rr → Rv) (nh : ℕ)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -252,17 +212,12 @@ noncomputable def realAt {D Prog Wit Rr Rv Ωa Ωp Ωo V : Type} [Fintype Ωa] [
     E (reg P r, z.1.1.1, encAt H (msgs P w r z.1.1.1 z.1.1.2) z.1.2,
       view P w r z.1.1.1 (encAt H (msgs P w r z.1.1.1 z.1.1.2) z.1.2) z.1.1.2 z.1.2 z.2)
 
-/-- The simulated view's probability of `E` at the registration's view `v`: ideal commitments through `H`, and the
-outer session's simulator. -/
 noncomputable def idealAt {D Out Rv Ωa Ωs V : Type} [Fintype Ωa] [Fintype Ωs] (H : ZkView.Bits × ByteArray → D)
     (nh : ℕ) (sim : Out → Rv → Ωa → (Fin nh → D) → Ωs → V) (o : Out) (E : Rv × Ωa × (Fin nh → D) × V → Prop)
     (v : Rv) : ℝ≥0∞ :=
   prCoin fun z : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
     E (v, z.1.1, encIdeal H z.1.2, sim o v z.1.1 (encIdeal H z.1.2) z.2)
 
-/-- **`RecursiveCircuitPrivate` through any encoding of the commitments**, at any hm96 hiding bound `δ`: at each
-registration salt, `recursiveZK_enc` (and on the event's complement, the other way), then the registration's hiding as
-a test with values in `[0, 1]` (`Hides.avg_le`). -/
 theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa]
     [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
     (H : ZkView.Bits × ByteArray → D) (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : PrivateCircuit.Hides reg ε)
@@ -304,10 +259,6 @@ theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr]
       _ = avg (realAt H reg nh msgs view P w E) + (ε + εo + nh * δ) := by
           rw [avg_add, avg_const]; ring
 
-/-- **The ZK server's real view is the commit strings' view**: under `ZkServerSends`, what the ZK server sends at the
-OS's bytes `b` is the schedule's transcript filled with `commitBytes` of the commitments at the salts `saltOfBytes b`
-(`zkServerStrings_os`), and the bytes are uniform exactly when those salts are (`ZkView.saltsEquiv`). V*'s
-sessions read the commitments' leaves, `Default512.treeLeaf` of their commit strings. -/
 theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp] {nr nh : ℕ}
     (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
@@ -348,7 +299,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **(ii) at the ZK server and V*'s code.** -/
 theorem RecursiveZkServerPrivate : Flock.Guarantees.RecursiveZkServerPrivate := by
   intro Out Prog Wit Rv Ωa Ωp Pub _ _ _ _ s nr rows pub honest nh reqs msgs T V pubS stopped p₀ o P w hF hpub hC
     hH hw E

@@ -6,41 +6,7 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.Claims.Sampling.Wait
 
-/-!
-# The first-hit bound over a monitoring period, the prover's calls charged once
-
-`eventTwoX_oneWait_le_cls_exp` and `Compiled.eventX_le_cls_exp` bound one execution phase's event, an accepted run
-sampling a proof block of the committed trace's incorrect set, with the prover's SHA-512 calls as an average over its
-tape and the phase's coins. Here a monitoring period is `n` execution phases, and the event is that **some** phase of
-it has that event. Its probability is at most the phases' bounds summed, and since the part of a phase's bound that
-counts calls is linear in the phase's expected calls, that part is paid once, at the period's expected total:
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T·(1 + e·N_s) + n·c) + 4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·n·c))/2^256`
-
-with `T` at least the expected number of calls of all `n` phases together, both parties' counted. A prover that
-spends its calls in the phases where the earlier phases' coins fell its way is charged what it spends on average over
-the period, not its largest spending in every phase. The opening checks' own calls `c` and the two terms that count
-no call of the prover's stay one a phase.
-
-* `phasesSplit`: **a period's sample space, as one of its phases reads it.** The period's sample space is
-  an adversary's tape and every phase's coins. Phase `i`'s prover reads the tape and the other phases' coins as its
-  own tape, and phase `i`'s coins are uniform and independent of that. The theorems below take any sample space with
-  such a splitting at each phase (`φ`); this is the one where every phase's coins are independent.
-* `Pr_phases_le`, `Ex_phases_sum`: an event of some phase has at most the phases' probabilities
-  summed, and the average of a sum over the phases is the phases' averages summed.
-* `sum_hash_le`: the phases' parts that count calls, summed, are at most that part at the summed expected calls and
-  at `n` times the opening checks' own.
-* `pr_phases_once_le`: **the period's step**, for phases whose bounds have that shape.
-* `CompiledTwo.phases_oneWait_le_once`: the period's bound at two stages with one wait, each phase under
-  `eventTwoX_oneWait_le_cls_exp`'s premises. `Compiled.phases_eventX_le_once`: the same at one stage, each
-  phase under `Compiled.eventX_le_cls_exp`'s premises, with `κ_s + √(k·γ_s·Pr[B_i])` a phase and `2·… + 2·…` over
-  `2^256`.
-
-Each phase's statement is fixed before the period. The sample's three counts are bounded at every sample, by one
-bound for all phases, as are the sessions' expected reruns `e` and the opening checks' calls `c`. No statement of the
-definitions tree changes.
--/
+/-! The first-hit bound over a monitoring period, the prover's calls charged once at the period's expected total. -/
 
 @[expose] public section
 
@@ -49,17 +15,11 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScopeTwo)
 
-/-! ## A period's sample space -/
-
-/-- **A period's sample space, split at phase `i`**: an adversary's tape `Θ` and every phase's coins, as the pair of
-phase `i`'s prover's tape (the adversary's tape and the other phases' coins) and phase `i`'s own coins. -/
 def phasesSplit (Θ : Type) {n : ℕ} (C : Fin n → Type) (i : Fin n) :
     Θ × ((j : Fin n) → C j) ≃ (Θ × ((j : {j : Fin n // j ≠ i}) → C j)) × C i :=
   ((Equiv.refl Θ).prodCongr (Equiv.piSplitAt i C)).trans
     ⟨fun p => ((p.1, p.2.2), p.2.1), fun q => (q.1.1, (q.2, q.1.2)), fun _ => rfl, fun _ => rfl⟩
 
-/-- **Some phase's event has at most the phases' probabilities summed**, each phase's over its prover's tape and its
-own coins. -/
 theorem Pr_phases_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (E : ∀ i, Ω i × C i → Prop) :
     Pr (fun σ : S => ∃ i, E i (φ i σ)) ≤ ∑ i, Pr (E i) := by
@@ -71,19 +31,12 @@ theorem Pr_phases_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [�
     Finset.sum_congr rfl fun i _ => Claims.Sampling.Pr_equiv (φ i) (E i)
   exact h1.le.trans (h.trans h2.le)
 
-/-- **The average of a sum over the phases is the phases' averages summed**, each phase's over its prover's tape and
-its own coins. -/
 theorem Ex_phases_sum {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (f : ∀ i, Ω i × C i → ℝ) :
     Ex (fun σ : S => ∑ i, f i (φ i σ)) = ∑ i, Ex (f i) :=
   (Claims.Sampling.Ex_finsum (Finset.univ : Finset (Fin n)) fun i (σ : S) => f i (φ i σ)).trans
     (Finset.sum_congr rfl fun i _ => Claims.Sampling.Ex_equiv (φ i) (f i))
 
-/-! ## The phases' parts that count calls, summed -/
-
-/-- **The phases' parts that count calls, summed.** Phase `i` pays `a` times `T_i·(1 + e_i·N_s) + c_i` and `f` times
-`T_i·(1 + e_i·N_s + K_s + e_i·K_m) + (1 + K_s)·c_i`. With `e_i ≤ e`, `c_i ≤ c` and `Σ_i T_i ≤ T`, the phases together
-pay at most the same expression at `T`, at `e` and at `n·c`. -/
 theorem sum_hash_le {n : ℕ} (Tq es c : Fin n → ℝ) {a f T e cc Ns Ks Km : ℝ} (ha : 0 ≤ a) (hf : 0 ≤ f)
     (hT0 : ∀ i, 0 ≤ Tq i) (he0 : 0 ≤ e) (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks) (hKm0 : 0 ≤ Km) (he : ∀ i, es i ≤ e)
     (hc : ∀ i, c i ≤ cc) (hT : ∑ i, Tq i ≤ T) :
@@ -117,12 +70,6 @@ theorem sum_hash_le {n : ℕ} (Tq es c : Fin n → ℝ) {a f T e cc Ns Ks Km : �
     ring
   exact ((Finset.sum_le_sum fun i _ => hterm i).trans (hsplit.le.trans (add_le_add hmul le_rfl))).trans hring.le
 
-/-- **The period's step.** A period's sample space split at each of its `n` phases (`φ`), phase `i` with an event
-`E i` and a nonnegative count of calls over its prover's tape and its own coins. Where phase `i`'s event has
-probability at most `b_i` plus, over `2^256`, `a` times `T_i·(1 + e_i·N_s) + c_i` and `f` times
-`T_i·(1 + e_i·N_s + K_s + e_i·K_m) + (1 + K_s)·c_i`, with `T_i` the phase's expected calls, and the period's calls
-average at most `T` in total, some phase has its event with probability at most `Σ_i b_i` plus the same expression
-at `T`, at `e ≥ e_i` and at `n·c`, `c ≥ c_i`. -/
 theorem pr_phases_once_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (E : ∀ i, Ω i × C i → Prop) (calls : ∀ i, Ω i × C i → ℝ)
     (b es c : Fin n → ℝ) {a f T e cc Ns Ks Km : ℝ} (ha : 0 ≤ a) (hf : 0 ≤ f) (hcalls : ∀ i q, 0 ≤ calls i q)
@@ -149,14 +96,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 namespace Compiled
 
-/-- **The one-stage event over a monitoring period, the prover's calls charged once.** A period of `n` phases, phase
-`i` at its statement `x i` in scope and its prover `P i`, whose tape and the phase's coins split the period's sample
-space (`φ`). Each phase is under `eventX_le_cls_exp`'s premises, with the sample's three counts at most `N_s`, `K_s`
-and `K_m` at every sample of every phase, the sessions' expected reruns at most `e` and the opening checks' calls at
-most `c` at every phase. Where the period's phases call `H` at most `T` times on average in total, both parties'
-calls counted, some phase's accepted run samples a proof block of its `FregX` with probability at most
-
-`Σ_i (κ_s + √(k·γ_s·Pr[B_i])) + (2·(T·(1 + e·N_s) + n·c) + 2·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·n·c))/2^256`. -/
 theorem phases_eventX_le_once {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) {n : ℕ} {x : Fin n → Msg}
     {s : Fin n → AuditStatement} {Pt : Fin n → Partition} (hs : ∀ i, L.parse (x i) = some (s i))
@@ -198,19 +137,6 @@ end Compiled
 
 namespace CompiledTwo
 
-/-- **The event at the one-wait extraction's traces over a monitoring period, the prover's calls charged once.** A
-period of `n` phases, phase `i` at its statement `x i` in the two-stage scope and its prover `P i`, whose tape and
-the phase's coins split the period's sample space (`φ`). Each phase is under `eventTwoX_oneWait_le_cls_exp`'s
-premises, with the sample's three counts at most `N_s`, `K_s` and `K_m` at every sample of every phase, the one-wait
-compiled verifier's expected reruns a session at most `e` and the opening checks' calls at most `c` at every phase.
-Where the period's phases call `H` at most `T` times on average in total, both parties' calls counted, some phase's
-accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T·(1 + e·N_s) + n·c) + 4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·n·c))/2^256`:
-
-a phase's expression at the period's expected calls and at `n` times the opening checks' own, with the two terms
-that count no call of the prover's once a phase. -/
 theorem phases_oneWait_le_once {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {n : ℕ}
     {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Sampling.Design.Two}

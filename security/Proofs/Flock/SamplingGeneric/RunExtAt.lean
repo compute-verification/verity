@@ -10,21 +10,7 @@ import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.SamplingGeneric.Assemble
 
-/-!
-# A run's extractions at one gate
-
-`runExt` extracts every session of a run's sample. A finder that waits for one gate needs only the sessions that can
-open it. Where a reveal for proof block `u` opens only gates of `needs u`, those are the sessions with a proof block
-that needs the gate:
-
-* `runExtAt`: `runExt` at the slots whose session has a proof block that needs gate `g`, and no other.
-* `mem_runExtAt`: an opening `runExt` keeps at a gate is kept by `runExtAt` at that gate.
-* `callsBy`, `callsBy_le`: a run's calls with only those sessions extracted, at most its calls with every session
-  extracted.
-* `collBy`, `collBy_collision`, `collBy_isSome`, `collBy_of_conflictAt`: the first collision among the calls of one
-  run's extractions and of another run's extractions at one gate. Two openings the two runs' extractions keep, under
-  one roots at that gate, of different values, give one (`CommitmentScheme.Binds`).
--/
+/-! A run's extractions at one gate: only the sessions with a proof block that needs it. -/
 
 @[expose] public section
 
@@ -33,7 +19,6 @@ namespace Claims.SamplingGeneric
 open Claims
 open Claims.Sampling (AuditStatement ownLog flatMapRP)
 
-/-- A rerun program over a list calls `H`, its reruns included, as often as its parts do. -/
 theorem flatMapRP_hashes {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ l : List β, ((flatMapRP f l).eval H run).2.1 = (l.map fun b => ((f b).eval H run).2.1).sum
   | [] => rfl
@@ -42,7 +27,6 @@ theorem flatMapRP_hashes {R β γ : Type} (H : Msg → Msg) (run : R → Transcr
     rw [RP.eval_bind_hashes, RP.eval_bind_hashes, flatMapRP_hashes H run f bs]
     simp [RP.eval]
 
-/-- Over the part of a list a filter keeps, a rerun program calls `H` at most as often as over the list. -/
 theorem flatMapRP_hashes_filter_le {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ))
     (keep : β → Bool) (l : List β) :
     ((flatMapRP f (l.filter keep)).eval H run).2.1 ≤ ((flatMapRP f l).eval H run).2.1 := by
@@ -72,7 +56,6 @@ noncomputable def runExtAt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) 
     (((List.finRange (L.nPU x)).zip (L.checked x r)).filter fun iu =>
       decide (∃ u ∈ L.sessBlocks x (L.checked x r) iu.1, g ∈ needs u))
 
-/-- What a run's extractions at a gate keep passes its opening check, with the check's calls their own. -/
 theorem passes_runExtAt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (s : AuditStatement) (needs : ℕ → Finset ℕ) (g : ℕ)
     (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) :
@@ -83,8 +66,6 @@ theorem passes_runExtAt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg)
     · exact L.passes_sessExt H x run' s _ _ _ _ _
     · exact Sampling.Passes.ret_nil H run' L.commit
 
-/-- **An opening a run's extractions keep is kept by its extractions at the opening's gate**, where a reveal that
-holds it, for a proof block `u`, puts its gate in `needs u`. -/
 theorem mem_runExtAt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x)
     {q : List Msg × Sampling.Opening Bool} (hpos : ∀ u w, q ∈ L.reveal s u v w → q.2.pos ∈ needs u)
@@ -114,7 +95,6 @@ noncomputable def callsBy (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P
   (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length +
     ((L.runExtAt x s needs g r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.1
 
-/-- A run's calls at one gate are at most its calls with every session of its sample extracted. -/
 theorem callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (needs : ℕ → Finset ℕ) (g : ℕ) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     L.callsBy H P x s needs g ω r c ≤
@@ -132,15 +112,12 @@ noncomputable def collBy (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P 
   findColl (ownLog H (run H P L.V x a.1) (L.runExt x s a.2.1 (run H P L.V x a.1 a.2.1).seen a.2.2) ++
     ownLog H (run H P L.V x a'.1) (L.runExtAt x s needs g a'.2.1 (run H P L.V x a'.1 a'.2.1).seen a'.2.2))
 
-/-- What `collBy` outputs is a collision of `H`. -/
 theorem collBy_collision (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : ℕ)
     {u v : Msg} (h : L.collBy H P x s needs a a' g = some (u, v)) : Collision H u v :=
   findColl_spec H _
     (fun p hp => (List.mem_append.1 hp).elim (Sampling.ownLog_valid H _ _ p) (Sampling.ownLog_valid H _ _ p)) u v h
 
-/-- **Two openings two runs' extractions keep, under one roots at one gate, of different values, give `collBy` a
-pair** at that gate, where a reveal that holds the second, for a proof block `u`, puts its gate in `needs u`. -/
 theorem collBy_isSome {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     (s : AuditStatement) {Ω : Type} (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) {q q' : List Msg × Sampling.Opening Bool}
@@ -158,9 +135,6 @@ theorem collBy_isSome {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.
   exact Sampling.findColl_isSome _ (Sampling.disagree_collision hbind h2 h3 ho ho'
     (fun e he => List.mem_append_left _ (hl e he)) (fun e he => List.mem_append_right _ (hl' e he)))
 
-/-- **Two runs, each at its own tape, whose extractions open a gate two ways under the statement's roots give
-`collBy` a pair at that gate**, where a reveal for a proof block `u` opens, under the statement's roots, only gates
-of `needs u`. -/
 theorem collBy_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ needs u)

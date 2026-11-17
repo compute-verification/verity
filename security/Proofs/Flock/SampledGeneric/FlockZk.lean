@@ -3,27 +3,7 @@ module
 public import Proofs.Flock.SampledGeneric.Zk
 public import Proofs.Flock.Claims.ZK.SessionLean
 
-/-!
-# The sampled audit's zero knowledge at Flock's ZK server
-
-Flock's ZK server (`Claims.ZKServer.Flock.zk_server_lean_loop`) releases the session's transcript, scheduled, within a
-factor `2` of `leaky1`'s, the simulator that guesses whether the session stops: one bit a session. Its bound is one-sided,
-`Pr_real[E] ≤ 2·(Pr_sim[E] + ε + 4t·3^t·Pr[Fork])`, and its error reads the witness and the verifier through `Fork`, the
-real game's collision finder. `Zk.ZK` asks for more: the two views `ε_zk(x)`-close both ways, at an `ε_zk` of the
-statement alone. So the server is a `Zk` (`FlockZk.server`), but what it meets is the one-sided form at the factor `2`
-(`ZKBelow`), and the audit's zero knowledge at Flock is `GenericSampledZK`'s argument in that form:
-
-* `Below`, `ZKBelow`: one experiment `a`-below another at `ε` on every event; zero knowledge with a leak at the factor `a`,
-  at an error that may read the statement, the witness and the verifier. `ZKBelow.of_ZK`: `Zk.ZK` is its case `a = 1`.
-* `Below.coin`, `Below.trans_close`, `audit_below`: the two hybrids of `GenericSampledZK` in that form: the audit's view is `a`-below the
-  audit's simulator (`auditSim`) at `a·ε_hide` plus the server's error averaged over the prover's commitment coins.
-* `FlockZk.server`: the ZK server as a `Zk`: the honest view is the scheduled transcript of the deferred server
-  (`ZkServer.proverD`) against a verifier of the protocol's rounds (`FlockZk.Verifier`), the simulator's is `leaky1`'s.
-* `FlockZk.server_below`, `FlockZk.server_zkBelow`: `zk_server_lean_loop` in `Exp`'s terms, at the relation `LiveRel`, the
-  statement's relation together with the live path's premises at the statement.
-* `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it or as
-  one that gives it.
--/
+/-! The sampled audit's zero knowledge at Flock's ZK server, in the one-sided form at the factor `2` the server meets. -/
 
 @[expose] public section
 
@@ -32,28 +12,20 @@ namespace FlockSoundness.SampledGeneric
 open Game
 open scoped ENNReal
 
-/-! ## One-sided closeness at a factor -/
-
-/-- **`e` is `a`-below `f` at `ε`**: on every event, `e`'s probability is at most `a` times `f`'s plus `ε`. `Close` at
-`ε` is `1`-below at `ε` both ways. -/
 def Below {V : Type} (e f : Exp V) (a ε : ℝ≥0∞) : Prop :=
   ∀ E : V → Prop, e.pr E ≤ a * f.pr E + ε
 
-/-- **Zero knowledge with a leak, at the factor `a`**: for every statement and witness in the relation and every
-verifier, the honest prover's view is `a`-below the simulator's at `ε x w v`, which may read the witness and the verifier
-(a collision finder's success built from them). -/
+/-- The error may read the witness and the verifier (a collision finder's success built from them). -/
 def ZKBelow {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (a : ℝ≥0∞)
     (ε : Stmt → Wit → VS → ℝ≥0∞) : Prop :=
   ∀ x w, Rel x w → ∀ v, Below (Zs.real x w v) (Zs.sim x v) a (ε x w v)
 
-/-- `Zk.ZK` at `ε_zk` is `ZKBelow` at the factor `1` and the error `ε_zk(x)`. -/
 theorem ZKBelow.of_ZK {Stmt Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
     {εzk : Stmt → ℝ≥0∞} (h : Zs.ZK Rel εzk) : ZKBelow Zs Rel 1 fun x _ _ => εzk x := by
   intro x w hR v E
   rw [one_mul]
   exact (h x w hR v E).1
 
-/-- **The proof system on other statements**: `Z` at the statement `g x`. -/
 def zkComap {Stmt Stmt' Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (g : Stmt' → Stmt) : Zk Stmt' Wit VS View :=
   ⟨fun x => Zs.real (g x), fun x => Zs.sim (g x)⟩
 
@@ -67,9 +39,6 @@ theorem avg_const_mul {C : Type} [Fintype C] (x : ℝ≥0∞) (f : C → ℝ≥0
   simp only [avg, Finset.mul_sum]
   exact Finset.sum_congr rfl fun _ _ => by ring
 
-/-- **One-sided closeness under a uniform coin**: if each coin's experiment is `α`-below the other's at `ε r`, so is
-the experiment that flips the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
-form). -/
 theorem Below.coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
     {α : ℝ≥0∞} (ε : Rnd → ℝ≥0∞) (h : ∀ r, Below (a r) (b r) α (ε r)) :
     Below ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩
@@ -82,20 +51,12 @@ theorem Below.coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → 
   rw [key a, key b, ← avg_const_mul, ← avg_add]
   exact avg_mono fun r => h r fun v => E (f r v)
 
-/-- **`a`-below, then `ε'`-close**: `a`-below at `ε`, then the second experiment `ε'`-close to a third, is `a`-below the
-third at `a·ε' + ε`. -/
 theorem Below.trans_close {V : Type} {e f g : Exp V} {a ε ε' : ℝ≥0∞} (h₁ : Below e f a ε) (h₂ : Close f g ε') :
     Below e g a (a * ε' + ε) := fun E =>
   calc e.pr E ≤ a * f.pr E + ε := h₁ E
     _ ≤ a * (g.pr E + ε') + ε := by gcongr; exact (h₂ E).1
     _ = a * g.pr E + (a * ε' + ε) := by rw [mul_add, add_assoc]
 
-/-- **The sampled audit's zero knowledge with a leak**, `GenericSampledZK`'s two hybrids at the factor `a`: if the proof
-system is zero knowledge with a leak at the factor `a` and the error `ε` (`ZKBelow`), and the commitment is
-`ε_hide`-hiding, then against every verifier `v`, which samples after seeing the commitment, the audit's view at any trace
-`Xt` whose openings are witnesses of every sample's statement is `a`-below the simulator's at any fixed trace `X₀`
-(`auditSim`), at `a·ε_hide` plus `ε` averaged over the prover's commitment coins. The middle hybrid is `auditSim` at
-`Xt` (`Below.coin`), then `Hiding` moves it to `X₀` (`auditSim_eq_andThen`). -/
 theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
     (Zs : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop) (a εh : ℝ≥0∞)
     (ε : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (samp : VS → Com → Finset (Fin n))
@@ -113,8 +74,6 @@ theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Non
     exact hH _ Xt X₀ (auditSimAfter Zs samp v)
   exact h1.trans_close h2
 
-/-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view sampled from uniform
-coins is the claims' `Pr` of it. -/
 theorem pr_uniform {C V : Type} [Fintype C] [Nonempty C] (f : C → V) (E : V → Prop) :
     Exp.pr (⟨.coin C fun c => .ret (f c), fun _ => PUnit.unit⟩ : Exp V) E =
       ENNReal.ofReal (Claims.Pr fun c => E (f c)) := by
@@ -122,8 +81,6 @@ theorem pr_uniform {C V : Type} [Fintype C] [Nonempty C] (f : C → V) (E : V �
   rfl
 
 end FlockSoundness.SampledGeneric
-
-/-! ## Flock's ZK server -/
 
 namespace FlockSoundness.SampledGeneric.FlockZk
 
@@ -133,68 +90,50 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The relation a parsed statement names, as the masked deployment reads it. -/
 abbrev Parser : Type := _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation
 
-/-- The hash the server's runs call: SHA-512 on messages. -/
 abbrev sha : Claims.Msg → Claims.Msg := Claims.ZKMal.CoinOpen.shaH
 
-/-- The ZK server's session at the tables `T`: the coin layer's, at the coin counts the session loop requests. -/
 abbrev Sess (T : Claims.ZKMal.CoinLayer.TableData) : Claims.ZKMal.RefSession :=
   Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr T
 
-/-- The server's tape: the session's nonce and the rest of the reference prover's tape. -/
 abbrev Tape (T : Claims.ZKMal.CoinLayer.TableData) : Type := (Sess T).refP.Nonce × (Sess T).refP.Rand
 
-/-- The release at the server's tape. -/
 abbrev Release (T : Claims.ZKMal.CoinLayer.TableData) : Type := Claims.ZKServer.LeanRelease Claims.Flock.Wit (Tape T)
 
-/-- The transport's frame state at each statement and coins (`zk_server_lean_loop`'s `pc`). -/
 abbrev PC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
   Claims.Msg → List (Sess T).Coin → _root_.Flock.ZkServer.Frame.Masker
 
-/-- The transport's checked frame state (`zk_server_lean_loop`'s `fc`). -/
 abbrev FC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
   Claims.Msg → List (Sess T).Coin → Except String _root_.Flock.ZkServer.Frame.Masker
 
-/-- The session with the release's stops, which the server's simulator and its error read. -/
 abbrev Stops (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T) :
     Claims.ZKMal.RefSession :=
   (Sess T).withStops (Claims.ZKServer.LeanRelease.rfOf (Sess T) L pc fc Claims.ZKServer.Loop.readCoins) L.stop
 
-/-- The server's rounds at `x`: the masked verifier's and the `Hello`. -/
 noncomputable abbrev rounds (rel : Parser) : Claims.Msg → ℕ := fun x => (FlockDeploy.deployZk rel).V.k x + 1
 
-/-- **A verifier of the server's rounds**: a malicious verifier `V*` and its tape `θ`, whose round count at every
-statement is the deployed masked verifier's plus the `Hello` (`zk_server_lean_loop`'s `hk`, at every statement). -/
 structure Verifier (rel : Parser) (Θ : Type) where
   Vs : Claims.VStar Θ
   θ : Θ
   hk : ∀ x, Vs.k x = rounds rel x
 
-/-- **The server's simulator**: `leaky1` of the session's estimating Goldreich–Kahan simulator, at the threshold `t`
-and the cap `t·3^t`; it guesses whether the session stops. -/
 noncomputable abbrev sim (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T)
     (t : ℕ) : Claims.Simulator :=
   Claims.ZKServer.leaky1
     (((Stops T L pc fc).refP.withSim fun x _ c => (Stops T L pc fc).coinModel x c).simulatorE t (t * 3 ^ t))
     (rounds rel) L.toSrv.stop
 
-/-- The honest view: the deferred server's transcript with the worker `wk` (`ZkServer.proverD`) against `v`'s `V*`,
-scheduled, at the server's tape and check coins `ω`. -/
 noncomputable def realView (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
     {Θ : Type} (x : Claims.Msg) (w : Claims.Flock.Wit) (v : Verifier rel Θ) (ω : Tape T × L.toSrv.Chk) :
     List ((Claims.Msg × Claims.Out) × ℕ) :=
   L.toSrv.timed x (Claims.runStar sha (L.toSrv.proverD L.fillOf (rounds rel) wk w) v.Vs x ω v.θ).msgs
 
-/-- The simulator's view: `sim`'s transcript against `v`'s `V*` at its coins `c`, scheduled the same way. -/
 noncomputable def simView (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T)
     (fc : FC T) (t : ℕ) {Θ : Type} (x : Claims.Msg) (v : Verifier rel Θ) (c : (sim rel T L pc fc t).C x) :
     List ((Claims.Msg × Claims.Out) × ℕ) :=
   L.toSrv.timed x ((sim rel T L pc fc t).out sha v.Vs v.θ x c)
 
-/-- **The ZK server as a `Zk`**, at the worker `wk`: the honest view over the server's tape and check coins
-(`realView`), the simulator's over its coins (`simView`). -/
 noncomputable def server (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) :
     Zk Claims.Msg Claims.Flock.Wit (Verifier rel Θ) (List ((Claims.Msg × Claims.Out) × ℕ)) where
@@ -215,9 +154,6 @@ theorem server_sim_pr (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L :
       ENNReal.ofReal (Claims.Pr fun c => E (simView rel T L pc fc t x v c)) :=
   pr_uniform _ E
 
-/-- **The server's error** at `(x, w)` against `v`: `2·(8·N·δ₁ + 8t·N·δ₁ + 2·3^{-t} + 4t·3^t·Pr[Fork])`, with `N` the
-session's leaves at `x` and `Fork` the real game's collision finder, two runs of the switched prover at `w` against `v`'s
-`V*` on one nonce: `zk_server_lean_loop`'s bound less `2·Pr_sim`. -/
 noncomputable def err (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T)
     (pc : PC T) (fc : FC T) (t : ℕ) (δ₁ : ℝ≥0∞) {Θ : Type} (x : Claims.Msg) (w : Claims.Flock.Wit)
     (v : Verifier rel Θ) : ℝ≥0∞ :=
@@ -225,10 +161,6 @@ noncomputable def err (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs 
       8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
     4 * t * 3 ^ t * (Claims.Fork sha (((Stops T L pc fc).swP vs).prover w) v.Vs v.θ x).Pr sha)
 
-/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
-states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
-worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -237,17 +169,10 @@ abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : R
     Claims.ZKServer.LeanRelease.LiveRoundEq (Sess T) vs L sha wk x w ∧
     Claims.ZKServer.LeanRelease.FillRoundEq (Sess T) vs L sha wk x w
 
-/-- **The relation the server is zero knowledge at**: the statement's (`Claims.Flock.R` at the masked deployment's
-parser) with the live path's premises at the statement (`Live`). -/
 abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T)
     (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.Flock.R (FlockDeploy.deployZk rel).parse x w ∧ Live T vs L wk pc fc x w
 
-/-- **`zk_server_lean_loop` in `Exp`'s terms**: at a statement in the relation with its live path's premises
-(`LiveRel`), the honest view is `2`-below the simulator's at the server's error, against every verifier of the server's
-rounds. The tables' side (`hS`, `hV`, `hD`, `hc`, `hsc`, `hT`), hm96's hiding (`hT1`, `hδ₁`) and the release at the
-session loop (`hL`) are the theorem's premises or give them: `SwCausal` gives `SwCausalOn` at every coin vector
-(`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in (`stopsOk_true`). -/
 theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
@@ -269,8 +194,6 @@ theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs :
   gcongr
   exact ENNReal.ofReal_add_le
 
-/-- **The ZK server is zero knowledge with a one-bit leak** (`ZKBelow` at the factor `2`) at the relation `LiveRel` and
-the server's error, under `zk_server_lean_loop`'s premises that don't read the statement. -/
 theorem server_zkBelow (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
@@ -282,14 +205,6 @@ theorem server_zkBelow (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs
       (fun x w v => err rel T vs L pc fc t δ₁ x w v) :=
   fun x w hR v => server_below rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk pc fc Θ x w hR v
 
-/-- **The sampled audit's zero knowledge at Flock's ZK server.** The audit commits to the trace `Xt` with the commitment
-`H` (`ε_hide`-hiding), the verifier `v` samples after seeing the commitment (`samp`), and the ZK server proves the
-sample's statement `stmtOf (c, S)` from the trace's openings (`wit`). If every such statement is in the masked
-deployment's relation (`hR`) and meets the live path's premises there (`hPr`, `hLk`, `hF`, `hE`, `hEf`), the audit's
-view is `2`-below the simulator's at any fixed trace `X₀` (`auditSim`, at the server's simulator), at `2·ε_hide` plus
-the server's error averaged over the prover's commitment coins:
-$$\Pr_{\rm audit}[E]\le 2\Pr_{\rm sim}[E]+2\varepsilon_{\rm hide}+\mathbb E_r[\mathrm{err}(x_r,w_r,v)].$$
-Every other premise is `zk_server_lean_loop`'s or gives it, as at `server_below`. -/
 theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)

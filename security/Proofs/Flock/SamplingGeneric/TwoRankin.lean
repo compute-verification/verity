@@ -4,44 +4,7 @@ public import Definitions.Claims.SamplingTwoRankin
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 
-/-!
-# Rankin's bound on the two-stage count
-
-`AdmissibleTwoRankin`, `AdmissibleTwoRankinPatterns` and `AdmissibleTwoRankinServed`
-(`Definitions.Claims.SamplingTwoRankin`): at a first stage below independent catches at rates `q_ρ`, the admissible
-sets' count, their patterns' count and the served-output cap's sum are at most `δ^{−θ}` times a product over the
-replay blocks.
-
-* `stratumOf_lt`, `replayOf_lt`, `mem_blocksIn`, `blocksIn_disjoint`, `biUnion_inter_blocksIn`: a proof block of `Pt`
-  lies in replay block `ρ`'s proof blocks (`blocksIn`) exactly when its replay block is `ρ`; distinct replay blocks'
-  are disjoint, and in scope they cover every proof block, so a set `T` of proof blocks is the union of its pieces
-  `T ∩ blocksIn ρ`.
-* `bitsOf_eq_sum`, `esc_inter_blocksIn`, `passes_inter_blocksIn`: `b(T)` is the sum of its pieces', and replay block
-  `ρ`'s escape at `T`'s counts reads only `T`'s piece in `ρ`.
-* `Design.Two.passes_nonneg`, `Pa_le_passes`: at rates `q_ρ ≤ 1` each factor is nonnegative, and `P̄_a` is at most
-  their product (`Design.Two.Pa_le_prod`).
-* `one_le_rankin`: **Rankin's step**, `1[δ < P] ≤ (P/δ)^θ` at `θ ≥ 0`.
-* `weight_le_rankin`, `admissibleTwo_rankin_weight`: **Rankin's bound at a weight that factors**. An admissible `T`
-  whose weight is at most `∏_ρ w_ρ(T ∩ blocksIn ρ)` weighs at most `δ^{−θ}·∏_ρ w_ρ(T ∩ blocksIn ρ)·passes^θ`;
-  `T ↦ (T ∩ blocksIn ρ)_ρ` is injective on the admissible sets, into the product of the replay blocks' powersets, over
-  which the sum of the product is the product of the sums (`Finset.prod_univ_sum`).
-* `admissibleTwo_rankin`: **`AdmissibleTwoRankin`**, at `w_ρ(U) = 2^{b(U)}`.
-* `blocksTo_inter`, `lightOf_eq_of_inter`, `lightBits_le_sum_inter`: a request's read of a set's piece is its read's
-  piece, `(T ∩ ρ)_r = T_r ∩ ρ`. The pieces' classes fix a set's class: a piece of class `some none` makes the set's
-  `some none` (`lightOf_some_none_of_inter`), and with none every piece is recorded (`eq_of_lightOf_eq`) and the set is
-  their union. A class costs at most its pieces' classes, `min(b(U), n) ≤ Σ_ρ min(b(U ∩ ρ), n)` (`min_sum_le_sum_min`).
-* `admissibleTwo_rankin_patterns`: **`AdmissibleTwoRankinPatterns`**, a request reading in any number of replay
-  blocks. Each pattern goes to the patterns of the pieces of one admissible set that has it. The pieces' patterns fix
-  the pattern, so that map is injective, and a pattern weighs at most `δ^{−θ}` times the product of its pieces' weights
-  and their groups' largest `passes^θ`.
-* `sum_min_inter_le`, `servedMin_le_sum`: with distinct requests reading disjoint proof blocks, the served-output cap's
-  exponent at `T` is at most `Σ_ρ min(b(T ∩ ρ), S_ρ)`: split each `b(T_r)` over the replay blocks, and in each, the
-  requests' pieces are disjoint subsets of `T ∩ ρ` and their served bits at most `S_ρ`.
-* `admissibleTwo_rankin_served`: **`AdmissibleTwoRankinServed`**, at `w_ρ(U) = 2^{min(b(U), S_ρ)}`.
-* `bernoulli_Pa_le`: a Bernoulli first stage `bernoulli:NUM/DEN` on a statement in scope misses each set `T` of replay
-  blocks with probability `(1 − NUM/DEN)^{|T|}`, so it meets the rates' hypothesis at `q_ρ = NUM/DEN ≤ 1`. The deployed
-  first stage meets it at `Q/N` and `1` (`Design.Two.subsetInputs_Pa_le`).
--/
+/-! Rankin's bound on the two-stage count: the admissible sets, their patterns and the served-output cap at most `δ^{−θ}` times a product over the replay blocks. -/
 
 @[expose] public section
 
@@ -59,12 +22,10 @@ theorem stratumIdx_lt : ∀ (ns : List ℕ) {v : ℕ}, v < ns.sum → stratumIdx
       simp only [List.length_cons]
       omega
 
-/-- Every proof block's stratum is one of `Pt`'s strata. -/
 theorem stratumOf_lt {P : Partition} {v : ℕ} (hv : v < P.blocks.length) : P.stratumOf v < P.strata.length := by
   have h := stratumIdx_lt (P.strata.map List.length) (v := v) (by rw [← List.length_flatten]; exact hv)
   simpa [Partition.stratumOf] using h
 
-/-- A proof block's replay block is one of the replay partition's blocks. -/
 theorem replayOf_lt {Pt Pρ : Partition} {v ρ : ℕ} (h : replayOf Pt Pρ v = some ρ) : ρ < Pρ.blocks.length := by
   unfold replayOf at h
   exact List.mem_range.1 (List.mem_of_find?_eq_some h)
@@ -83,7 +44,6 @@ theorem blocksIn_disjoint {Pt Pρ : Partition} {ρ ρ' : ℕ} (h : ρ ≠ ρ') :
     Disjoint (blocksIn Pt Pρ ρ) (blocksIn Pt Pρ ρ') :=
   disjoint_left.2 fun _ hv hv' => h (Option.some.inj ((mem_blocksIn.1 hv).2.symm.trans (mem_blocksIn.1 hv').2))
 
-/-- **The pieces cover**: in scope, a set of proof blocks is the union of its pieces in the replay blocks. -/
 theorem biUnion_inter_blocksIn {Pt Pρ : Partition} (hcov : ∀ v < Pt.blocks.length, (replayOf Pt Pρ v).isSome)
     {T : Finset ℕ} (hT : T ⊆ range Pt.blocks.length) :
     (univ : Finset (Fin Pρ.blocks.length)).biUnion (fun i => T ∩ blocksIn Pt Pρ i) = T := by
@@ -132,20 +92,16 @@ theorem Design.Two.passes_le_one (d : Design.Two) (Pt : Partition) {q : ℝ} (hq
   have h1 := d.esc_le_one Pt fp ρ
   nlinarith [mul_nonneg hq (sub_nonneg.2 h1)]
 
-/-- `P̄_a` is at most the product of the replay blocks' factors `1 − q_ρ·(1 − e_ρ)`. -/
 theorem Pa_le_passes (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (q : ℕ → ℝ)
     (hq : ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) :
     d.Pa Pt fp ≤ ∏ ρ ∈ range d.part.blocks.length, d.passes Pt (q ρ) fp ρ :=
   (d.Pa_le_prod Pt fp q hq).trans_eq (prod_congr rfl fun ρ _ => by unfold Design.Two.passes; ring)
 
-/-- **Rankin's step**: `1[δ < P] ≤ (P/δ)^θ` at `θ ≥ 0`. -/
 theorem one_le_rankin {δ θ P : ℝ} (hδ : 0 < δ) (hθ : 0 ≤ θ) (h : δ < P) : 1 ≤ δ ^ (-θ) * P ^ θ := by
   have h1 : 0 < δ ^ θ := Real.rpow_pos_of_pos hδ θ
   rw [Real.rpow_neg hδ.le, inv_mul_eq_div, le_div_iff₀ h1, one_mul]
   exact Real.rpow_le_rpow hδ.le h.le hθ
 
-/-- An admissible set's weight, at most the product of its pieces' weights `w_ρ(U)`, is at most `δ^{−θ}` times its
-pieces' terms `w_ρ(U)·passes(U)^θ`. -/
 theorem weight_le_rankin {Pt : Partition} {d : Design.Two} {q : ℕ → ℝ} {δ θ : ℝ}
     (hq : ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) (hq1 : ∀ ρ, q ρ ≤ 1)
     (hδ : 0 < δ) (hθ : 0 ≤ θ) {w : ℕ → Finset ℕ → ℝ} (hw : ∀ ρ U, 0 ≤ w ρ U) {x : ℝ} {T : Finset ℕ}
@@ -170,9 +126,6 @@ theorem weight_le_rankin {Pt : Partition} {d : Design.Two} {q : ℕ → ℝ} {δ
         mul_le_mul_of_nonneg_left (one_le_rankin hδ hθ hP) h0
     _ = _ := by ring
 
-/-- **Rankin's bound at a weight that factors over the replay blocks**: at rates `q_ρ ≤ 1` the first stage meets, a
-weight `W` on the admissible sets at most the product `∏_ρ w_ρ(T ∩ blocksIn ρ)` of nonnegative weights of their pieces
-sums to at most `δ^{−θ} ∏_ρ Σ_{U ⊆ ρ} w_ρ(U)·passes(U)^θ`. -/
 theorem admissibleTwo_rankin_weight {Pt : Partition} {d : Design.Two} {q : ℕ → ℝ} {δ θ : ℝ}
     (hcov : ∀ v < Pt.blocks.length, (replayOf Pt d.part v).isSome)
     (hq : ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) (hq1 : ∀ ρ, q ρ ≤ 1)
@@ -239,7 +192,6 @@ theorem blocksTo_mono {C : Prog} {Pt : Partition} {R : Type} (req : Fin C.outs.l
   unfold blocksTo at hv ⊢
   exact mem_filter.2 ⟨h (mem_filter.1 hv).1, (mem_filter.1 hv).2⟩
 
-/-- **A request's read of a piece is its read's piece**: `(T ∩ B)_r = T_r ∩ B`. -/
 theorem blocksTo_inter {C : Prog} {Pt : Partition} {R : Type} (req : Fin C.outs.length → R) (T B : Finset ℕ) (r : R) :
     blocksTo C Pt req (T ∩ B) r = blocksTo C Pt req T r ∩ B := by
   ext v
@@ -255,7 +207,6 @@ theorem blocksTo_inter {C : Prog} {Pt : Partition} {R : Type} (req : Fin C.outs.
 theorem lightOf_empty (s : AuditStatement) (Pt : Partition) (n : ℕ) : lightOf s Pt n ∅ = none := by
   simp [lightOf]
 
-/-- A class is `some none` exactly at a nonempty set committing at least `n` bits. -/
 theorem lightOf_eq_some_none_iff {s : AuditStatement} {Pt : Partition} {n : ℕ} {U : Finset ℕ} :
     lightOf s Pt n U = some none ↔ U ≠ ∅ ∧ n ≤ bitsOf s Pt U := by
   unfold lightOf
@@ -264,7 +215,6 @@ theorem lightOf_eq_some_none_iff {s : AuditStatement} {Pt : Partition} {n : ℕ}
   · simp [h₁, h₂]
   · simp [h₁, h₂]
 
-/-- A set with a piece of class `some none` has class `some none`: `b` is a sum over the set. -/
 theorem lightOf_some_none_of_inter {s : AuditStatement} {Pt : Partition} {n : ℕ} {U B : Finset ℕ}
     (h : lightOf s Pt n (U ∩ B) = some none) : lightOf s Pt n U = some none := by
   rw [lightOf_eq_some_none_iff] at h ⊢
@@ -272,8 +222,6 @@ theorem lightOf_some_none_of_inter {s : AuditStatement} {Pt : Partition} {n : �
   unfold bitsOf
   exact sum_le_sum_of_subset inter_subset_left
 
-/-- Two sets of one class other than `some none` are equal: `none` is the empty set's, and `some (some U)` records
-`U`. -/
 theorem eq_of_lightOf_eq {s : AuditStatement} {Pt : Partition} {n : ℕ} {U U' : Finset ℕ}
     (h : lightOf s Pt n U = lightOf s Pt n U') (hl : lightOf s Pt n U ≠ some none) : U = U' := by
   match hc : lightOf s Pt n U with
@@ -281,9 +229,6 @@ theorem eq_of_lightOf_eq {s : AuditStatement} {Pt : Partition} {n : ℕ} {U U' :
   | some none => exact absurd hc hl
   | some (some V) => exact (lightOf_eq_some_some hc).trans (lightOf_eq_some_some (h.symm.trans hc)).symm
 
-/-- **The pieces' classes fix the class**: in scope, two sets of proof blocks whose pieces in every replay block have
-the same class have the same class. A piece of class `some none` makes both sets' class `some none`; with none, the
-pieces are equal, and a set is the union of its pieces. -/
 theorem lightOf_eq_of_inter {s : AuditStatement} {Pt Pρ : Partition}
     (hcov : ∀ v < Pt.blocks.length, (replayOf Pt Pρ v).isSome) (n : ℕ) {U U' : Finset ℕ}
     (hU : U ⊆ range Pt.blocks.length) (hU' : U' ⊆ range Pt.blocks.length)
@@ -309,7 +254,6 @@ theorem min_sum_le_sum_min {ι : Type*} (I : Finset ι) (a : ι → ℕ) (c : �
     rw [sum_insert hj, sum_insert hj]
     omega
 
-/-- **A class costs at most its pieces' classes**: in scope, `min(b(U), n) ≤ Σ_ρ min(b(U ∩ ρ), n)`. -/
 theorem lightBits_le_sum_inter (s : AuditStatement) {Pt Pρ : Partition}
     (hcov : ∀ v < Pt.blocks.length, (replayOf Pt Pρ v).isSome) (n : ℕ) {U : Finset ℕ}
     (hU : U ⊆ range Pt.blocks.length) :
@@ -403,9 +347,6 @@ theorem admissibleTwo_rankin_patterns : AdmissibleTwoRankinPatterns := by
         rw [← prod_univ_sum, ← Fin.prod_univ_eq_prod_range]
         rfl
 
-/-- **A replay block's served bits**: when distinct requests read disjoint proof blocks, the requests' terms
-`min(b(T_r ∩ ρ), |r|)` sum to at most `min(b(T ∩ ρ), S)`, at a cap `S` on the served bits of the requests that read in
-`ρ`. -/
 theorem sum_min_inter_le {s : AuditStatement} {Pt Pρ : Partition} {R : Type} [Fintype R] [DecidableEq R]
     {req : Fin s.prog.outs.length → R}
     (hdisj : ∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (range Pt.blocks.length) r)
@@ -442,9 +383,6 @@ theorem sum_min_inter_le {s : AuditStatement} {Pt Pρ : Partition} {R : Type} [F
         exact sum_le_sum_of_subset (biUnion_subset.2 fun r _ =>
           inter_subset_inter (blocksTo_subset _ _ _ _ _) subset_rfl)
 
-/-- **The served-output cap's exponent factors over the replay blocks**: in scope, when distinct requests read
-disjoint proof blocks and `S_ρ` bounds the served bits of the requests that read in replay block `ρ`, the exponent
-`min(b(T), Σ_{r : T_r ≠ ∅} min(b(T_r), |r|))` is at most `Σ_ρ min(b(T ∩ ρ), S_ρ)`. -/
 theorem servedMin_le_sum {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) {R : Type}
     [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {S : ℕ → ℕ}
     (hdisj : ∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (range Pt.blocks.length) r)
@@ -480,9 +418,6 @@ theorem admissibleTwo_rankin_served : AdmissibleTwoRankinServed := by
   rw [prod_pow_eq_pow_sum]
   exact pow_le_pow_right₀ one_le_two (servedMin_le_sum hs hdisj hS (mem_powerset.1 (mem_filter.1 hT).1))
 
-/-- **A Bernoulli first stage meets the rates' hypothesis**: on a statement in scope whose first stage is
-`bernoulli:NUM/DEN`, the first stage misses each set `T` of replay blocks with probability `∏_{ρ∈T} (1 − NUM/DEN)`, and
-the rate is at most `1`. -/
 theorem bernoulli_Pa_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) {num den : ℕ}
     (hb : d.replay.rules = [.bernoulli num den]) :
     (∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ _ρ ∈ T, (1 - (num : ℝ) / den)) ∧

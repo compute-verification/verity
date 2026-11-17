@@ -17,19 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.PartS
 
-/-!
-# The verifier's rows at the inner session's units
-
-`valueSrcAll` at `rec-open`, `rec-residuals` and `rec-sparse` (`openRows`, `residualRows`, `sparseRows`, defined beside
-`valueSrcC3` in `Recursive/ValueSrc.lean`):
-
-* `open_of_check`, `residuals_of_check`, `sparse_of_check`: an accepted unit's `checkValue`s are at those rows, which
-  are `valueRowsAll`'s (`valueRowsAll_load`, `innerRows_coef`, `innerRows_dirs`, `innerRows_v`, `innerRows_sparse`), so
-  `valueSrcAll_eq` gives `value_tie_coll`'s `hsrc`;
-* `residualsBoth_of_check`, `sparse_of_check`: a part's `checkZero` at its `out`, at the zero rows `innerRows_out` and
-  `innerRows_sparseOut` give, under `zeroSalt` (`valueSrcAll_zero`, `value_tie_collR`'s `hsrc`; `zeroRows_get`);
-* `openCheck_of_check`, `residualsCheck_of_check`, `sparseCheck_of_check`: `RecCoins.check` runs those checks there.
--/
+/-! The verifier's rows at the inner session's `rec-open`, `rec-residuals` and `rec-sparse` units. -/
 
 @[expose] public section
 
@@ -75,7 +63,6 @@ theorem valueRowsAll_load {f : Flock.RecCoins.Source} {inn : Flock.RecCoins.Inne
     valueRowsAll (some f) c3 c port = innerRows inn c3 c port := by
   simp only [valueRowsAll, loadRows, hso, hop, hl]
 
-/-- **What an accepted `rec-open` unit checked**: its `coef` and `dirs` at `openRows`' rows. -/
 theorem open_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ} (h : Flock.RecCoins.checkOpen inn c pub own LANES H = .ok ()) :
     ∃ cr dr, openRows inn LANES H = some (cr, dr) ∧
@@ -97,8 +84,6 @@ theorem open_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub : Fl
       hdv⟩
   · cases h
 
-/-- **What an accepted `rec-residuals` unit checked**: its `v` at `residualRows`' rows, and its `out` at the zero rows
-(`checkZero` at `rec-residuals-zero`). -/
 theorem residualsBoth_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {m k cl j : ℕ}
     (h : Flock.RecCoins.checkResiduals inn c pub own m k cl j = .ok ()) :
@@ -125,7 +110,6 @@ theorem residualsBoth_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} 
       · cases h
     · cases h
 
-/-- **What an accepted `rec-residuals` unit checked of its `v`**: at `residualRows`' rows. -/
 theorem residuals_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {m k cl j : ℕ}
     (h : Flock.RecCoins.checkResiduals inn c pub own m k cl j = .ok ()) :
@@ -134,8 +118,6 @@ theorem residuals_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub
   let ⟨rows, what, hr, hcv, _⟩ := residualsBoth_of_check h
   ⟨rows, what, hr, hcv⟩
 
-/-- **What an accepted `rec-sparse` unit checked**: its `v` at `sparseRows`' rows, and its `out` at the zero rows
-(`checkZero` at `rec-sparse-zero`). -/
 theorem sparse_of_check {inn : Flock.RecCoins.Inner} {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {sh : Flock.RecSparse.Shape}
     (h : Flock.RecCoins.checkSparse inn c3 c pub own sh = .ok ()) :
@@ -207,9 +189,6 @@ theorem zeroRows_get (n w u k : ℕ) : ((Flock.RecCoins.zeroRows n w)[u]!)[k]! =
   · simp only [getElem!_neg (Array.replicate n (Array.replicate w 0)) u (by simpa using hu)] at h
     exact absurd h (Nat.not_lt_zero _)
 
-/-- **A source loaded from the inner-session files has a decodable record**: `Inner.load` reaches
-`Record.decode` only after setting up the statement, checking its shape and schedule and taking the spec at the
-record's sample (`Files.sampledSpec`). -/
 theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : Flock.RecCoins.Inner}
     (h : Flock.RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec sess, Flock.Record.decode spec f.record = .ok sess := by
@@ -226,7 +205,6 @@ theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : 
     | (cases h; done)
     | exact ⟨_, _, by assumption⟩
 
-/-- **Check 5 at a `rec-open` unit runs `checkOpen`** at the inner session and its parameters. -/
 theorem openCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}
     {c3 : Option Flock.RecCoins.C3} {LANES H : ℕ} (h : Flock.RecCoins.check st (some own) (some f) c3 = .ok ())
     (hso : Flock.RecCoins.stackedParams st.c.unit.name = none) (hop : Flock.RecOpening.params st.c.unit.name = none)
@@ -238,7 +216,6 @@ theorem openCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port}
     simp [hso, hop, hsp, ho]
   exact FlockVBridge.PartS.bind_ok h'
 
-/-- **Check 5 at a `rec-residuals` unit runs `checkResiduals`** at the inner session and its parameters. -/
 theorem residualsCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}
     {c3 : Option Flock.RecCoins.C3} {m k cl j : ℕ} (h : Flock.RecCoins.check st (some own) (some f) c3 = .ok ())
     (hso : Flock.RecCoins.stackedParams st.c.unit.name = none) (hop : Flock.RecOpening.params st.c.unit.name = none)
@@ -251,7 +228,6 @@ theorem residualsCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.
     simp [hso, hop, hsp, ho, hres]
   exact FlockVBridge.PartS.bind_ok h'
 
-/-- **Check 5 at a `rec-sparse` unit runs `checkSparse`** at the inner session, candidate 3's inputs and its shape. -/
 theorem sparseCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}
     {c3 : Flock.RecCoins.C3} {sh : Flock.RecSparse.Shape} (h : Flock.RecCoins.check st (some own) (some f) (some c3) = .ok ())
     (hso : Flock.RecCoins.stackedParams st.c.unit.name = none) (hop : Flock.RecOpening.params st.c.unit.name = none)

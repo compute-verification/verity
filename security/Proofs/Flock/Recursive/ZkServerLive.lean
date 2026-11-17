@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.ZkServerRun
 
-/-!
-# `flock-zk-server live` is the ZK server's run
-
-`flock-zk-server live` (`Flock.ZkServer.liveWith`) is a live session's send check: `rec_live --lean` relays each request
-to it, and the challenger's live-coin part receives only what it sends. Its loop takes each request with the fresh salts read for it
-(`liveStep`), keeps the salts a request didn't sample for the next, and stops at the first refusal; `liveRun` is that loop.
-
-* `run_live`: a live session that doesn't stop sends what `Flock.ZkServer.run` sends on its requests at the salts it
-  read, in order, and finishes where `run` does.
-* `run_append`: a run that finishes is the same run at more salts after its own.
-
-`Flock.SecurityProofs.liveSends` puts them together with `ZkServerSends`. The proof is one frame lemma, `stepOf_grow`:
-a request that returns at a state returns at it with more salts after its own and more messages before its own,
-sampling and sending the same (`Grow`).
--/
+/-! `flock-zk-server live` sends what the ZK server's `run` sends on the requests it took. -/
 
 @[expose] public section
 
@@ -24,18 +10,13 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerLive
 
 open Flock Flock.ZkServer ZkServerRun
 
-/-- The state `u` with the salts `r` after its own and the messages `acc` before its own. -/
 abbrev Ext (r : List ByteArray) (acc : Array Sent) (u : State) : State :=
   { u with salts := u.salts ++ r, sent := acc ++ u.sent }
-
-/-! ## A request at more salts after and more messages before -/
 
 section Grow
 
 variable (r : List ByteArray) (acc : Array Sent)
 
-/-- **`m'` grows `m`**: where `m` returns at a state, `m'` returns at that state extended by `r` and `acc`, with a result
-`Q` relates to `m`'s. -/
 def Grow {α α' : Type} (m : Fw α) (m' : Fw α') (Q : α → α' → Prop) : Prop :=
   ∀ u a t, m.run u = .ok (a, t) → ∃ a', m'.run (Ext r acc u) = .ok (a', Ext r acc t) ∧ Q a a'
 
@@ -82,7 +63,6 @@ theorem Grow.ite {α α' : Type} {Q : α → α' → Prop} {c c' : Prop} [Decida
   · rw [ite_eq_left h, ite_eq_left (hc.mp h)]; exact ha h
   · rw [ite_eq_right h, ite_eq_right (mt hc.mpr h)]; exact hb h
 
-/-- A `do` block's `if` with a join point `b` after it: `b` is shown once, and the branch `a` may use it. -/
 theorem Grow.ite_jp {α α' : Type} {Q : α → α' → Prop} {c c' : Prop} [Decidable c] [Decidable c'] {a b : Fw α}
     {a' b' : Fw α'} (hc : c ↔ c') (hb : Grow r acc b b' Q) (ha : c → Grow r acc b b' Q → Grow r acc a a' Q) :
     Grow r acc (if c then a else b) (if c' then a' else b') Q :=
@@ -111,7 +91,6 @@ theorem Grow.send (m : Sent) : Grow r acc (ZkServer.send m) (ZkServer.send m) fu
       { u with salts := u.salts ++ r, sent := acc ++ u.sent.push m }
     rw [Array.push_append]
 
-/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
 theorem Grow.lift {α : Type} {x : V α} : Grow r acc (liftM x : Fw α) (liftM x) Eq := by
   intro u a t hm
   cases x with
@@ -120,7 +99,6 @@ theorem Grow.lift {α : Type} {x : V α} : Grow r acc (liftM x : Fw α) (liftM x
     cases hm
     exact ⟨_, rfl, rfl⟩
 
-/-- **Salting a row**: at more salts after, the same salt is sampled, so the same commit string. -/
 theorem Grow.salted (row : Array Nat) : Grow r acc (ZkServer.salted row) (ZkServer.salted row) Eq := by
   intro u a t hm
   rw [run_salted] at hm
@@ -149,9 +127,6 @@ theorem Grow.mapM {α β : Type} (f : α → Fw β) (hf : ∀ a, Grow r acc (f a
 theorem Grow.saltedTop (top : ByteArray) : Grow r acc (ZkServer.saltedTop top) (ZkServer.saltedTop top) Eq :=
   Grow.mapM _ Grow.salted (topRows top)
 
-/-! ## `step` at more salts after and more messages before -/
-
-/-- What a request returns: nothing. -/
 abbrev Done : Unit → Unit → Prop := fun _ _ => True
 
 theorem step_ping (s : Schedule) : Grow r acc (step s .ping) (step s .ping) Done := by
@@ -332,8 +307,6 @@ theorem step_grow (s : Schedule) (req : Req) : Grow r acc (step s req) (step s r
   | commit rootF roots publics => exact step_commit s rootF roots publics
   | prime => exact step_prime s
 
-/-- **A request grows**: one that returns at a state returns at it with more salts after its own and more messages
-before its own, sampling and sending the same. -/
 theorem stepOf_grow (s : Schedule) (b : ByteArray) : Grow r acc (stepOf s b) (stepOf s b) Done := by
   unfold stepOf
   refine Grow.bind Grow.lift fun req req' h => ?_
@@ -341,8 +314,6 @@ theorem stepOf_grow (s : Schedule) (b : ByteArray) : Grow r acc (stepOf s b) (st
   exact step_grow s req
 
 end Grow
-
-/-! ## `run` at more salts -/
 
 theorem body_stopped (s : Schedule) (b : ByteArray) (st : State) : body s b (st, true) = .yield (st, true) := rfl
 
@@ -363,7 +334,6 @@ theorem forIn_stopped (s : Schedule) : ∀ (reqs : List ByteArray) (st : State),
     rw [List.forIn_cons, body_stopped]
     exact forIn_stopped s l st
 
-/-- **A loop that doesn't stop grows**: from its state extended by `r` and `acc`, it runs to its own end extended. -/
 theorem loop_grow (s : Schedule) (r : List ByteArray) : ∀ (reqs : List ByteArray) (st : State) (acc : Array Sent),
     (Id.run (forIn reqs (st, false) (body s))).2 = false →
     Id.run (forIn reqs (Ext r acc st, false) (body s)) = (Ext r acc (Id.run (forIn reqs (st, false) (body s))).1, false)
@@ -379,7 +349,6 @@ theorem loop_grow (s : Schedule) (r : List ByteArray) : ∀ (reqs : List ByteArr
       rw [body_ok hm, body_ok hm']
       exact loop_grow s r l t acc h
 
-/-- **A finished run samples nothing past its salts**: at the salts `ys` then any `zs`, it is the run at `ys`. -/
 theorem run_append (s : Schedule) (reqs ys zs : List ByteArray) (h : (run s reqs ys).2 = true) :
     run s reqs (ys ++ zs) = run s reqs ys := by
   rw [run_eq] at h
@@ -396,10 +365,6 @@ theorem run_append (s : Schedule) (reqs ys zs : List ByteArray) (h : (run s reqs
   rw [e, hs]
   simp only [Array.empty_append]
 
-/-! ## The live loop -/
-
-/-- **A live session's loop** (`liveWith`'s): from the state `st`, each request with the fresh salts read for it, through
-`liveStep`, stopping at the first refusal: what it sent, in order, and the state it ends at, or the refusal. -/
 def liveRun (s : Schedule) : State → List (ByteArray × List ByteArray) → Except String (List Sent × State)
   | st, [] => .ok ([], st)
   | st, (b, fresh) :: rest =>
@@ -449,8 +414,6 @@ theorem liveRun_sent : ∀ {s : Schedule} {st : State} {L : List (ByteArray × L
     obtain ⟨_, -, -, rfl⟩ := liveStep_ok h1
     exact liveRun_sent rfl h2
 
-/-- `run`'s loop at the salts a live session read, from the live loop's state with the salts read after it and the
-messages it sent before it: it ends at the live loop's end, with the messages it sent after them. -/
 theorem loop_live (s : Schedule) : ∀ (L : List (ByteArray × List ByteArray)) (st : State) (acc : Array Sent)
     (sent : List Sent) (t : State), st.sent = #[] → liveRun s st L = .ok (sent, t) →
     Id.run (forIn (L.map (·.1)) (Ext (L.flatMap (·.2)) acc st, false) (body s)) =
@@ -472,8 +435,6 @@ theorem loop_live (s : Schedule) : ∀ (L : List (ByteArray × List ByteArray)) 
     refine (loop_live s rest { t₁ with sent := #[] } (acc ++ t₁.sent) more t rfl h2).trans ?_
     rw [← List.append_toArray, Array.toArray_toList, Array.append_assoc]
 
-/-- **`flock-zk-server live` is the ZK server's run**: a live session that doesn't stop, its requests each with the fresh
-salts read for it, sends what `run` sends on its requests at those salts in order, and finishes where `run` does. -/
 theorem run_live (s : Schedule) (L : List (ByteArray × List ByteArray)) (sent : List Sent) (t : State)
     (h : liveRun s { salts := [] } L = .ok (sent, t)) :
     run s (L.map (·.1)) (L.flatMap (·.2)) = (sent.toArray, t.finished) := by

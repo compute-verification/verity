@@ -2,13 +2,7 @@ module
 
 public import Definitions.Claims.SamplingTwo
 
-/-!
-# A checked unit's openings at its replay block
-
-`Claims.SamplingGeneric.SessionOpensTwo`, the two-stage compiler's `opens` clause at the sampled record
-(`Claims.Sampling.Deploy`). It reads only the definitions tree, so a deployment's proof of it reads none of the
-compiler's proofs; `SamplingGeneric.TwoDeployed` feeds it to the two-stage contract (`sessionsTwo_compiled`).
--/
+/-! `SessionOpensTwo`, the two-stage compiler's `opens` clause at the sampled record, apart so that a deployment's proof of it reads none of the compiler's proofs. -/
 
 @[expose] public section
 

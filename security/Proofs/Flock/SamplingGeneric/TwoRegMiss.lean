@@ -9,30 +9,7 @@ import Proofs.Flock.SamplingGeneric.Reg
 import Proofs.Flock.SamplingGeneric.Two
 import Proofs.Flock.SamplingGeneric.TwoReg
 
-/-!
-# The two-stage committed form: the miss, the threshold form and the headline
-
-At a tape `ω` the committed incorrect set is fixed before the second stage's coins (`CompiledTwo.FregTwo_forkOn`). So at
-a run's first-stage coins the second stage misses it with probability at most the product of the sampled replay blocks'
-escapes at the committed boundary trace's footprint (`secondSamples`), each at most its escape at a best interior
-(`exists_best_interiorsAt`); over the first stage's coins that product's expectation is at most `P̄_a` there
-(`replaySamples`, `Ex_esc_le`): `CompiledTwo.pr_missTwo_le_Pa`. Then:
-
-* **`CompilerMissTwo` is proved** (`compilerMissTwo`): at rates `r₁` and `r₂`, `P̄_a ≤ (1 − r₁·r₂)^m` at the footprint's
-  `m` marked replay blocks (`Design.Two.Pa_le_pow`), which include every replay block wrong at the boundary
-  (`incorrectAtBoundaryAt_subset`).
-* **The threshold form from the event** (`CompiledTwo.ksRegTwo_of_event`): a run that accepts with no interiors putting
-  the footprint in `M̄_δ` either samples a proof block of the committed incorrect set, which the event bounds, or
-  misses it, with probability at most `δ` at each tape. At the event's bound (`CompiledTwo.eventTwo_le`),
-  **`CompilerKSRegTwo` is proved** (`compilerKSRegTwo`).
-* **`CompilerHeadlineTwo` is proved** (`compilerHeadlineTwo`): as the threshold form, at a bound on `P̄_a` at every
-  interior.
-
-The miss, the threshold form and the headline are proved at any boundary values (`CompiledTwo.pr_missTwo_le_Pa`,
-`CompiledTwo.pr_missTwo_le_pow`, `CompiledTwo.threshold_of_event`, `CompiledTwo.headline_of_event`): the sampling designs read
-a set of proof blocks and no trace. The three above are those at the committed boundary trace
-(`CompiledTwo.FregTwo_eq`), and `SamplingGeneric/TwoRegX.lean` takes them at the boundary trace read at the statement.
--/
+/-! The two-stage committed form's miss, threshold form and headline, at any boundary values. -/
 
 @[expose] public section
 
@@ -41,8 +18,6 @@ namespace Claims.Sampling
 open Finset
 
 open Classical in
-/-- **A best interior** of replay block `ρ` at boundary values `val`: one at which `ρ` escapes the second stage at
-least as often as at any other. Its escape reads only its incorrect proof blocks, one of finitely many sets. -/
 theorem exists_best_interiorAt (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
     {ρ : ℕ} (hρ : ρ < d.part.blocks.length) :
     ∃ ι : ℕ → Bool, ∀ ι' : ℕ → Bool,
@@ -66,13 +41,11 @@ theorem exists_best_interiorAt (s : AuditStatement) (Pt : Partition) (d : Design
   rw [hf, hf, hι]
   exact hmax _ (hA ι')
 
-/-- A replay block's escape reads only its own interior. -/
 theorem esc_footprintAt_congr (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
     {ι ι' : ℕ → ℕ → Bool} {ρ : ℕ} (h : ι ρ = ι' ρ) :
     d.esc Pt (footprintAt s Pt d.part val ι) ρ = d.esc Pt (footprintAt s Pt d.part val ι') ρ := by
   simp only [Design.Two.esc, footprintAt, h]
 
-/-- **Best interiors** at boundary values `val`: one per replay block, each a best one (`exists_best_interiorAt`). -/
 theorem exists_best_interiorsAt (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool) :
     ∃ ι : ℕ → ℕ → Bool, ∀ ρ < d.part.blocks.length, ∀ ι' : ℕ → ℕ → Bool,
       d.esc Pt (footprintAt s Pt d.part val ι') ρ ≤ d.esc Pt (footprintAt s Pt d.part val ι) ρ := by
@@ -87,8 +60,6 @@ theorem exists_best_interiorsAt (s : AuditStatement) (Pt : Partition) (d : Desig
   exact hb ρ hρ (ι' ρ)
 
 open Classical in
-/-- **The replay blocks wrong at the boundary are marked at every interior**: each holds an incorrect proof block at
-every interior, so the footprint at any interiors marks it. -/
 theorem incorrectAtBoundaryAt_subset (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
     (ι : ℕ → ℕ → Bool) : incorrectAtBoundaryAt s Pt d.part val ⊆ d.incorrectBlocks Pt (footprintAt s Pt d.part val ι) := by
   intro ρ hρ
@@ -108,9 +79,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The second stage at a run's coins**, at boundary values `val`: fresh second-stage coins sample no proof block
-incorrect at `val` and the committed interiors with probability at most the product, over the replay blocks the run's
-coins sample, of their escapes at `val`'s footprint at interiors best for each. -/
 theorem pr_missTwo_fork_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
@@ -132,9 +100,6 @@ theorem pr_missTwo_fork_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
   show _ = escCell _ _ (Claims.Sampling.incorrectInAt s Pt d.part val ρ t (L.iregVal H P x ω r ρ)).card
   rw [inter_cell_incorrectAllAt s Pt d.part _ _ hρl (mem_range.1 ht)]
 
-/-- **The miss at best interiors**, at boundary values `val`: on a statement in scope, the run's sample holds no proof
-block incorrect at `val` and the committed interiors with probability at most the design's `P̄_a` at `val`'s footprint
-at interiors best for each replay block. -/
 theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
@@ -148,9 +113,6 @@ theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sess
   exact (Ex_mono fun r => pr_missTwo_fork_le H L hS hs hPt hd hin P ω val ι hι r).trans
     (Claims.Sampling.Ex_esc_le d Pt _ (L.replaySample x) (hS.replaySamples x s Pt d hs hPt hd hin))
 
-/-- **The miss bound, at boundary values `val`**: on the contract, at rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, the miss
-at best interiors (`pr_missTwo_le_Pa`) is at most `(1 − r₁·r₂)` to the footprint's marked replay blocks
-(`Design.Two.Pa_le_pow`), which include those wrong at the boundary (`incorrectAtBoundaryAt_subset`). -/
 theorem pr_missTwo_le_pow (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {r₁ r₂ : ℝ} (hr₁ : 0 ≤ r₁)
     (hr₁' : r₁ ≤ 1) (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hx : L.Scope x) (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
@@ -172,19 +134,12 @@ theorem pr_missTwo_le_pow (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Ses
     _ ≤ (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part val).card :=
         pow_le_pow_of_le_one hx0 hx1 (card_le_card (incorrectAtBoundaryAt_subset s Pt d _ ι))
 
-/-- **The miss bound**: `pr_missTwo_le_pow` at the committed boundary trace, whose incorrect proof blocks over the
-grid are the committed incorrect set (`FregTwo_eq`). -/
 theorem missTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {r₁ r₂ : ℝ} (hr₁ : 0 ≤ r₁)
     (hr₁' : r₁ ≤ 1) (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1) : L.MissTwo H r₁ r₂ := by
   intro x s Pt d hx hs hPt hd h1 h2 Ω P ω
   simp only [FregTwo_eq H L P hs hPt hd]
   exact pr_missTwo_le_pow H L hS hr₁ hr₁' hr₂ hr₂' hx hs hPt hd h1 h2 P ω (L.regVal H P x ω)
 
-/-- **The threshold form from the event, at boundary values `val`**, one a tape: on the contract, if the run accepts
-with a sampled proof block incorrect at its tape's `val` and the committed interiors with probability at most `ε`, it
-accepts with no interiors putting `val`'s footprint in `M̄_δ` with probability at most `δ + ε`. Such a run either
-samples such a proof block, which the event bounds, or misses them all; at each tape the footprint at best interiors
-is not in `M̄_δ`, so the miss is at most `δ` (`pr_missTwo_le_Pa`). -/
 theorem threshold_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
@@ -221,8 +176,6 @@ theorem threshold_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
           ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part (val ω) (L.iregVal H P x ω r)) => hM hr.1).trans_eq
         Pr_false).trans hδ
 
-/-- **The threshold form from the event**: on the contract, the event's bound gives `KSRegTwo`
-(`threshold_of_event` at the committed boundary trace). -/
 theorem ksRegTwo_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H)
     (hev : ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
       Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
@@ -234,9 +187,6 @@ theorem ksRegTwo_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Ses
   simp only [FregTwo_eq H L P hs hPt hd] at h
   exact threshold_of_event H L hS hs hPt hd (L.inScopeTwo_of hx hs hPt hd) P (L.regVal H P x) h hδ
 
-/-- **The headline from the event, at boundary values `val`**, one a tape: on the contract, a run accepts either with a
-sampled proof block incorrect at its tape's `val` and the committed interiors, which the event bounds by `ε`, or
-missing them all, which at each tape `P̄_a` at `val`'s footprint at best interiors bounds (`pr_missTwo_le_Pa`). -/
 theorem headline_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
@@ -260,8 +210,6 @@ theorem headline_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Ses
     obtain ⟨ι, hι⟩ := exists_best_interiorsAt s Pt d (val ω)
     exact (pr_missTwo_le_Pa H L hS hs hPt hd hin P ω (val ω) ι hι).trans (hpb ω ι)
 
-/-- **The headline from the committed form**: on the contract and `KSRegTwo`, `headline_of_event` at the committed
-boundary trace and `KSRegTwo`'s event. -/
 theorem headlineTwo_of (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) (hks : L.KSRegTwo H) :
     L.HeadlineTwo H := by
   intro x s Pt d hx hs hPt hd Ω _ _ P pb hpb
