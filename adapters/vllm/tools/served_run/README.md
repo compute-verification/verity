@@ -62,9 +62,10 @@ defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `r
 `run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
 `stratified-rate:1/2097152`.
 
-`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which only
-a composite computed off the served node, on an auditor device, is; 2 pending; 1 a rejection, a refused composite or a
-failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which with
+neither `VERITY_HOLD_PLACEMENT=1` nor `COMPOSE_OFF_NODE=1` set is the composite computed on the served node, and under
+either only a composite computed off the served node, on an auditor device; 2 pending; 1 a rejection, a refused
+composite or a failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
 `pending: composed off this node` (or, under a deferral, audited and composed off it), and with `PREFLIGHT_ONLY=1`
 exits 0 when the preflight passed.
 
