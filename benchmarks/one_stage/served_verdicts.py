@@ -276,8 +276,8 @@ ATTESTER_USER = re.compile(r"user-[0-9]+")
 #: and not the window of record (a tied run's fixed load, which the network attester does not carry)
 FRONT_WINDOW = "front-window"
 FRONT_GROUP = ("the network attester's verdict is over its front's group, a window of its own, and not over the tied "
-               "load's requests: it stands as its own protocol's verdict, its case left out of the composite, and no "
-               "certificate of it reaches the block record")
+               "load's requests: it stands as its own protocol's verdict, onsite's composite takes its case not covering "
+               "the tied load and is not established, and no certificate of it reaches the block record")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
 #: what `pieces` leaves beside a piece it ran: the node it ran on, its exit and its limit

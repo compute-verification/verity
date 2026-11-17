@@ -361,3 +361,29 @@ def test_onsite_cites_no_listed_guarantee(tmp_path):
     assert record["ran"]["cites"] is None and record["ran"]["lock"] is None
     assert "NOT_ESTABLISHED the product cites no listed guarantee" in \
         (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+
+
+def test_under_front_group_onsite_composes_the_fronts_case_and_says_it_does_not_cover_the_tied_load(tmp_path):
+    """The front's case is composed as it is (onsite's Lean holds it to no tie), and its NOT_COVERED and NOT_ESTABLISHED
+    lines come before the verdict, whatever Lean answers; without the flag neither is said."""
+    exe = lean(tmp_path, {"verdict": "accept"}, 0)
+    assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path), "--exe", exe, "--front-group"]) == 0
+    record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert C.NETWORK in [c["id"] for c in record["cases"]] and record["missing"] == []
+    assert record["not_covered"] == {C.NETWORK: C.FRONT_GROUP}
+    said = [f"NOT_COVERED {C.NETWORK} {C.FRONT_GROUP}", f"NOT_ESTABLISHED {C.FRONT_UNTIED}"]
+    verdict = next(n for n, ln in enumerate(lines) if ln.startswith("VERDICT "))
+    assert lines[verdict - 2:verdict] == said
+    assert C.main(["onsite", *onsite_cases(tmp_path / "plain"), *outs(tmp_path, "2"), "--exe", exe]) == 0
+    assert "not_covered" not in json.loads((tmp_path / "public2" / "composite.json").read_bytes())
+    assert not any(ln.startswith("NOT_COVERED") or C.FRONT_UNTIED in ln
+                   for ln in (tmp_path / "public2" / "verdicts.txt").read_text().splitlines())
+
+
+def test_under_front_group_a_composite_without_the_fronts_case_names_it_missing_and_nothing_else(tmp_path):
+    assert C.main(["onsite", *onsite_cases(tmp_path, without=C.NETWORK), *outs(tmp_path), "--front-group"]) == 0
+    record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert record["missing"] == [C.NETWORK] and "not_covered" not in record
+    assert f"NOT_ESTABLISHED missing {C.NETWORK}" in lines and not any(ln.startswith("NOT_COVERED") for ln in lines)

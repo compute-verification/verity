@@ -44,7 +44,9 @@ established``, its Lean answer's accept beside it (``answer``), and its bound co
 where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`) or `scan-state-pinned` doesn't
 (`STATE_UNPINNED`), with no bound. Where `scan-state-pinned` doesn't hold, so is the composite of record's accepted
 verdict, and where the registered-files condition doesn't, so is the accepted verdict of remote's composite and of the
-composite of record where it reads remote's SPOT case, SPOT's among them. A verdict withheld on two counts names both
+composite of record where it reads remote's SPOT case, SPOT's among them; so is the composite of record's where its
+composite.json names a case not covering the tied load (``not_covered``, the network attester's front's, `FRONT_APART`).
+A verdict withheld on two counts names both
 (``open``). SPOT's ``credit`` (`CREDIT`) names the drawn members it credits, those
 whose --registered file the audit completed at the window's committed roots and whose Lean verdict accepted it
 reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
@@ -768,6 +770,9 @@ STATE_UNPINNED = (f"{SCAN_STATE_PINNED} doesn't hold (``checked``): the run does
                   "reads of the scan's state at the root and domain its window's activations entry commits, the one the "
                   "period ties to the scan's state, so a Lean accept (``answer``) establishes no verdict of the network "
                   "certifier or of the composite of record, and the record states no bound")
+#: what withholds the composite of record's accept where its composite.json names a case under ``not_covered``
+#: (`composite.py --front-group`): that case is over other requests than the tied load's, and nothing ties the two
+FRONT_APART = "front-group"
 #: why a premise a guarantee states is open where no run's check was read
 NOT_CHECKED = "no run's inputs were checked"
 #: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
@@ -1980,6 +1985,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                  for k, p in (("sampled proofs", composite), ("remote", REMOTE), ("onsite", composite))
                  if not files["holds"] and p in files["read_by"]]
     withheld += [("onsite", SCAN_STATE_PINNED, STATE_UNPINNED)] * (not state["holds"])
+    apart = (found[composite][1].get("not_covered") or {}) if composite in found else {}
+    withheld += [("onsite", FRONT_APART, f"{i}'s case is {why}") for i, why in apart.items()]
     for k, name, why in withheld:
         if v[k]["verdict"] == "accept":
             v[k] = v[k] | {"verdict": NOT_ESTABLISHED, "answer": "accept", "open": [name], "why": why}

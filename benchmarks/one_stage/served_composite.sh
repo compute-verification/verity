@@ -26,9 +26,10 @@
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
 # COMPONENTS), but for ONSITE_SKIP's, which `onsite_cases` sets to those of a PoUS or wipe case that is not its piece's
-# with its Lean's answer, for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R, and
-# for the network attester's case where SERVE_DIR/private/front-window says it is over its front's group and not the
-# window of record's requests (onsite's Lean holds it to no tie, so it would accept it); each within
+# with its Lean's answer, and for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R;
+# where SERVE_DIR/private/front-window says the network attester's case is over its front's group and not the window
+# of record's requests, onsite's runs with --front-group, whose NOT_COVERED and NOT_ESTABLISHED lines say so (onsite's
+# Lean holds that case to no tie, so its accept alone would read as covering the tied load); each within
 # COMPOSITE_TIMEOUT (default 60m) and COMPOSITE_MEM_GB GiB (default 170): a systemd user scope's MemoryMax, else
 # prlimit's address-space limit, and on a host with neither it is not run. A case's evidence and params, and an
 # answer's query, digests and profile, are witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
@@ -166,12 +167,15 @@ for f in sorted(root.rglob("case.json")):
         protocol = json.loads((d / "answer.json").read_text())["protocol"]
     except (ValueError, KeyError, TypeError):
         continue
-    if protocol in ids and not (protocol == "verity/certifier/v0" and (root / "front-window").is_file()):
+    if protocol in ids:
         print(d)
 EOF
 )
+  front=()
+  [ "$x" = onsite ] && [ -f "$D/private/front-window" ] && front=(--front-group)
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" ${front[@]+"${front[@]}"} \
+    > "$P/$x.log" 2>&1
   r=$?
   grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in

@@ -2,7 +2,7 @@
 `remote-v1 check`).
 
     composite.py onsite|remote|remote-v1 --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
-                 [--development WHY]
+                 [--development WHY] [--front-group]
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
@@ -44,6 +44,11 @@ naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming wha
 ``--development WHY`` labels a composite that claims no record (one composed on the served node, which the prover
 controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
 line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
+
+``--front-group`` says the network attester's case is over its front's own group of requests, not the tied load's
+(`served_verdicts.FRONT_WINDOW`): the case is composed as it is, since onsite's Lean holds it to no tie and its own
+verdict stands, and where it is among the cases a ``NOT_COVERED`` line and a ``NOT_ESTABLISHED`` line say so before the
+verdict, and ``composite.json`` names it under ``not_covered``.
 """
 from __future__ import annotations
 
@@ -95,6 +100,11 @@ VERDICTS = ("accept", "reject", "undecided")
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_./ -]{0,63}")
 VALUE = re.compile(r"[0-9A-Fa-f]{16}")
 SAMPLED = "verity/sampled-proofs/v1"
+NETWORK = "verity/certifier/v0"
+#: The network attester's case under `--front-group`: what its verdict is over, and why the composite is not established
+FRONT_GROUP = ("over the network attester's front's own group of requests, a window of its own, and not the tied load's: "
+               "it says nothing of what the tied load's responses released")
+FRONT_UNTIED = f"{NETWORK} is over the front's own group, and no tie holds it to the tied load's requests"
 
 
 class Parser(argparse.ArgumentParser):
@@ -254,12 +264,13 @@ def unestablished(p: dict[str, Any]) -> str | None:
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
                   verdict: dict[str, str] | None, development: str | None = None,
-                  ran: dict[str, Any] | None = None) -> dict[str, Any]:
+                  ran: dict[str, Any] | None = None, apart: dict[str, str] | None = None) -> dict[str, Any]:
     """What ``--public-out`` may hold: no evidence, no params bodies, no answer bodies and no case's commitment, only the
-    digest its answer names; with ``ran``, what ran the check (`provenance`)."""
+    digest its answer names; with ``ran``, what ran the check (`provenance`); with ``apart``, each case composed over
+    other requests than the tied load's, by id, with what it is over (``not_covered``)."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
             "exceptions": exceptions(product), **({"development": development} if development else {}),
-            **({"ran": ran} if ran is not None else {}),
+            **({"ran": ran} if ran is not None else {}), **({"not_covered": apart} if apart else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["named"]} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -309,6 +320,8 @@ def run(a: argparse.Namespace) -> int:
     lines = [f"DEVELOPMENT {a.development}"] if a.development else []
     lines += [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
+    apart = {NETWORK: FRONT_GROUP} if a.front_group and any(p["id"] == NETWORK for p in found) else {}
+    lines += [f"NOT_COVERED {NETWORK} {FRONT_GROUP}", f"NOT_ESTABLISHED {FRONT_UNTIED}"] if apart else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
            *blobs]
     rc, verdict, ran = 0, None, None
@@ -329,7 +342,7 @@ def run(a: argparse.Namespace) -> int:
             lines.append(f"UNCITED {why}")
             rc = UNCITED
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development, ran))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development, ran, apart))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
@@ -357,6 +370,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitment digests and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
+    ap.add_argument("--front-group", action="store_true",
+                    help=f"{NETWORK}'s case is over the network attester's front's own group: it is composed, and its "
+                         "NOT_COVERED and NOT_ESTABLISHED lines say so")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))
