@@ -328,6 +328,10 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-record-bisect": Arm("prod", "prod-record with the canonical top-k's every failed row bisected by one program "
+                              "(VERITY_DSA_TOPK=canonical-bisect): what its refinement saves, read apart",
+                              plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
+                              general=TOPK, published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
@@ -343,7 +347,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
     "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
-    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
+    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.attester,
@@ -419,6 +423,10 @@ class Model:
     published: tuple[str, ...] = ()
     published_context: int | str | None = None
     published_tokenizer: dict = field(default_factory=dict)
+    #: where it is a stand-in, served from vLLM's random weights, the adapter's cut of the model's config
+    #: (`verity_vllm.engine.profiles.stand_in`: ``layers``, ``experts``, ``heads``); its checkpoint is a directory
+    #: `standin` writes, and its runs write no measurement (`write_result`)
+    stand_in: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
@@ -430,6 +438,12 @@ class Model:
         total = round(sum(p.points for p in self.target_parts), 2)
         if self.target_parts and total != self.target:
             raise ValueError(f"{self.served}: the target's parts sum to {total}, and the target is {self.target}")
+
+    @property
+    def ref(self) -> str:
+        """What a record names the model by: its repository at its revision, and a stand-in's cut beside it."""
+        cut = ", ".join(f"{v} {k}" for k, v in self.stand_in.items())
+        return f"{self.repo}@{self.revision}" + (f" stand-in ({cut}, random weights)" if cut else "")
 
     def checkpoint(self) -> Path:
         hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
@@ -466,15 +480,18 @@ MODELS = {
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
-    # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
-    # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
-    # the network attester in front.
+    # requests at once, but for the canonical top-k's, which is measured (`total_cost.TOPK_SHARE`): a run measures a
+    # part where one of its arms turns on that part's changes alone (`cost_report`'s `measured`). It has no part for
+    # prefix caching off, the served ids or the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=10.25, target_basis="modeled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
-                       Part("the tie order", 0.25, ("the canonical top-k",)),
+                       Part("the canonical top-k", 8.37, ("the canonical top-k",),
+                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
+                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
@@ -497,7 +514,34 @@ MODELS = {
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
                    published_context=262144, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"}),
+    # glm53's recipe on one card: the stand-in's cut keeps the hidden size, the vocabulary, the indexer, the cache layout,
+    # the MTP layer and the FP8 blocks, and a rank's attention heads at tensor parallel 8; README.md says what of its
+    # points transfers to glm53
+    "glm53-standin": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3-stand-in",
+                           ("--tensor-parallel-size", "1", "--load-format", "dummy"), (2.0, 0.08),
+                           check="GreedySelect_v1{V=154880,N=7744}",
+                           published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
+                                      "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
+                                      "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
+                           published_context=262144, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"},
+                           stand_in={"layers": 7, "experts": 16, "heads": 8}),
 }
+
+
+def standin(model: Model, tokenizer_from: Path, out: Path) -> int:
+    """Writes a stand-in's checkpoint directory ``out``: its config, the adapter's cut of the model's (`Model.stand_in`),
+    and the tokenizer files of the model's checkpoint ``tokenizer_from``; never a weight."""
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm.engine.profiles.stand_in import stand_in
+
+    try:
+        cfg = stand_in(out, tokenizer_from=tokenizer_from, **model.stand_in)
+    except (FileNotFoundError, ValueError) as e:
+        raise SystemExit(f"standin: {e}") from None
+    print(f"[serve-tax] {model.served}: {cfg['num_hidden_layers']} layers, {cfg['n_routed_experts']} experts, "
+          f"{cfg['num_attention_heads']} heads, the tokenizer of {tokenizer_from}, in {out}", flush=True)
+    return 0
 
 
 def corpus():
@@ -1756,7 +1800,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     if no_nvml:
         print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
-            "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
+            "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "lifetime": a.lifetime, "left_out": a.leave_out,
@@ -2062,7 +2106,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         shutil.rmtree(out / ".site", ignore_errors=True)
         raise
     rec = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "side": SERVER, "model_id": a.model_id,
-           "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
+           "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
            "front_argv": front[1:], "plugin": list(arm.plugin), "general": entry_points(arm),
            "settings": value_settings(env), "tick": tick, "lifetime": a.lifetime,
            "cells": cells, "stop_at": a.stop_at, "commit": source_commit(), "versions": versions(),
@@ -2159,7 +2203,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     cert.mkdir(parents=True, exist_ok=True)
     env = tree_env()
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "side": CLIENT,
-            "model_id": a.model_id, "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint),
+            "model_id": a.model_id, "model": model.ref, "checkpoint": str(checkpoint),
             "plugin": list(arm.plugin), "client": a.client, "reps": a.reps, "lifetime": a.lifetime,
             "left_out": a.leave_out, "seed": a.seed, "sampled": None, "seeded": False,
             "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()}, "pass_prompts": sizes,
@@ -3466,7 +3510,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
                        "arm": c["arm"], "within": within(c),
                        **job(c["load"])} for c in per],
             "commitment": commitment(ours), "certifier": ours.get("certifier"), "arms": rows, "no_arm": list(NO_ARM),
-            "prefix_row": model.prefix_row, "checkpoint": f"{model.repo}@{model.revision}"}
+            "prefix_row": model.prefix_row, "checkpoint": model.ref}
 
 
 def _c(c: dict | None) -> str:
@@ -3819,6 +3863,8 @@ def write_result(r: dict, out: Path) -> None:
     model = next(m for m in MODELS.values() if m.served == r["model"])
     ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
                                                     "member": member(model, r["arm"], r["reference"])})
+    if model.stand_in:
+        measurements = []
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 
@@ -4075,6 +4121,10 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--reps", type=int, required=True)
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
     c.add_argument("--model-id", required=True, choices=sorted(MODELS))
+    c = sub.add_parser("standin", help="a stand-in's checkpoint directory: its cut config and the model's tokenizer")
+    c.add_argument("--model-id", required=True, choices=sorted(n for n, m in MODELS.items() if m.stand_in))
+    c.add_argument("--tokenizer-from", required=True, help="the model's checkpoint, whose tokenizer files are copied")
+    c.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "edges":
         windows = edge_windows(a.arm, a.load, a.rep)
@@ -4094,6 +4144,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "checkpoint":
         print(MODELS[a.model_id].checkpoint())
         return 0
+    if a.cmd == "standin":
+        return standin(MODELS[a.model_id], Path(a.tokenizer_from), Path(a.out))
     if a.cmd == "plan":
         ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
         n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
