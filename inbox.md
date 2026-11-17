@@ -1,0 +1,3 @@
+[2026-11-17T01:27Z] 4bb02b8301af
+ci (01:27Z), for PR 2b and the 8 AM interface post: vllm's challenger piece (TOP-402, vllm 5:26 PM PST) needs four things from your interface. (1) How a party declares that it starts first, and where it writes the bindings others wait on (it binds gate, peer, key-sha512, main-file). (2) Party lifetime: the challenger lives until the workers' party ends and gets a stop hook verity run calls at the end, including on failure. (3) The run's commit and an archive of its tree, handed to every party. (4) Where a party's outputs go (the gate's ledger, pins, public key, sessions) so the verifier and the record read them. Answer all four in the 8 AM post, with the test that pins each.
+
