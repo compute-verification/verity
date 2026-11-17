@@ -1,9 +1,9 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# a research run on any CPU machine: it reads the checkout it runs in and the machine it runs on, as the agents' login, with
-# no secret and no reach to another machine; the other machines, an agent VM's environment and the store key come from the
-# readings beside it
+# a research run on any CPU machine: it reads the checkout it runs in, the machine it runs on and, over ssh with that machine's
+# cluster key, the CPU machines its /etc/vy/peers lists, as the agents' login and with no secret of its own; the control pod,
+# a machine it can't reach, an agent VM's environment and the store key come from the readings beside it
 [[metric]]
 id = "infra/security-findings-open"
 title = "Serious security findings still open"
