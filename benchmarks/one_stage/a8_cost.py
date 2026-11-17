@@ -1,5 +1,5 @@
 """A8's cost points as observations of the one cost model (`verity.protocols.proofs.spot.prover.costfit`, fitted from
-benchmarks/sampling_plan/inputs.json, which holds these), and the times each session measured.
+calibration/sampling_plan/inputs.json, which holds these), and the times each session measured.
 
     python benchmarks/one_stage/a8_cost.py RUN [RUN ...] [--json]
 

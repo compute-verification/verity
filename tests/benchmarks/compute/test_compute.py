@@ -23,7 +23,7 @@ import pytest
 import run as C
 
 HERE = Path(__file__).resolve().parent
-CARD_FILES = HERE.parents[2] / "hardware/cards"
+CARD_FILES = HERE.parents[2] / "calibration/hardware/cards"
 RUN = "r20000101-000000-aaaa"
 COMMIT = "c" * 40
 RECORD = HERE / "fixtures" / "record"
