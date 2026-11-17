@@ -272,8 +272,8 @@ fails on its base too. Under `--gate verdict` a plain candidate lands on its mem
 `main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
 candidates back to the whole check until `main` is green; a candidate is plain when each member has a land verdict of its
 own, is no move and touches nothing drive.toml's `verdict_excludes` names, nor any entry of its `lowrisk_excludes` that
-`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the landing code
-itself) keeps the whole check before landing. A failure the candidate's base shares blames none of its PRs;
+`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the Lean check) keeps
+the whole check before landing. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
 those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
