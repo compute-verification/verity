@@ -62,9 +62,9 @@ onsite, its id the line's ``product``), or for one of onsite's smaller sets, und
 composite takes it, unless the table's line says who combined its verdict (``combined_by``, printed beside it), printed
 as a line and written to ``STATE/record/verdicts.jsonl``:
 
-    VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE}, "components": {NAME: accept|reject|undecided|error|absent},
-             "configuration": HASH, "product": ID, "program": COMMIT, "reason": R, "registration": DIGEST, "run": RUN,
-             "simulated": [...], "verdict": V}
+    VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE},
+             "components": {NAME: accept|reject|undecided|error|absent}, "configuration": HASH, "product": ID,
+             "program": COMMIT, "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
 ``configuration`` is the file's hash and ``program`` the commit that ran, the running tree's (`run.json` holds both).
 ``coins_on`` gives each listed subprotocol with a channel that carries coins the machine its coins were flipped on: its
