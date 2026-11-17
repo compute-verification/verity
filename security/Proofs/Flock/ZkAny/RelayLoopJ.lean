@@ -6,46 +6,7 @@ public import Proofs.Flock.ZkAny.RelayTook
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.ZK.FrameZK
 
-/-!
-# The relay's invariant at the deployed loop, kept at the control slots and the `Hello`
-
-`LoopP`'s invariant `J` of the loop's frames and the session, against the model's run, is `LoopJ`:
-
-* `StreamAt`: what the loop holds of a rep stream's frame at the model's history, on the session's entry and the
-  table's level 0. Where the next round is the stream's, past its first, the frame keeps `SameInv` there, on the
-  session's link, the table's statement and the table its level 0 gives, at the rep's salts in the loop's frames once
-  its opening has begun. Where the next round is the next stream's first, the frame holds the history's words for
-  each of the stream's rounds (`roundPlace_switch1`'s `hco`). `streamAt_stay`: it is kept where the rep's salts stay.
-  `find?_of_saltsAt`, `saltsAt_of_find?`: the rep's salts are the loop's salts' entry for it.
-* `RepJ`: a rep's frame, the session's entry and the rep's table's level 0 bound for the session, with `StreamAt` on
-  them at the model's history so far.
-* `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
-  round before the model's next. `seenAt_nil`: none before the model's first round.
-* `BuiltAt`: every level 0 bound to the session the one the loop drew for its table, `Level0.ofSamples` on what the
-  host and the operating system handed it for the table's rep 0 (`LoopModel.src`). `builtAt_stays`: kept where the
-  session's tables' level 0 stay. `build_of_ofSamples`, `cap_of_sampled`: such a level 0 is a `build`, so its table's
-  commitment's cap is its root. `builtAt_commit`: past the session's `Commit`, where the loop drew those level 0s.
-* `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
-  run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
-  (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; `BuiltAt` past the
-  `Commit`; the session's entry the setup's once its `Hello` left (`SessOn`); its `Hello` and coins at the setup's
-  link points (`LinksOk`); past the `Commit`, at a level 0 bound to it, its entry linked to the history's link
-  coins (`LinkOn`); and, while the model's run has a message there, what the loop took of the coins so far against
-  the model's release (`LoopModel.TookAt`).
-* `repJ_stays`: updates that keep the rep's frame and what the session's rounds read of it (`Stays`) keep `RepJ`, the
-  model's history as it was.
-* `answer_head`, `start_byte`, `answer_hello_start`, `sendHello_hello`, `stepK_hello_start`: past the `Hello` the
-  session's coin tree is the one the auditor's answer, which is coins, begins under the setup's `Hello` at the
-  request's nonce.
-  `coins_open`, `stepK_coin_open`: past a `Commit` or a frame round it is the one its tree opens
-  the auditor's coins to as the schedule's next opening.
-* **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
-  **`loopKept_hello`**: and at the `Hello`, whose round the model's run passes, where the model's coin check reads
-  the setup's `Hello` at the relay's nonce. `liveBefore_one`: past the `Hello` every earlier round passed.
-  **`loopKept_commit`**: and at the `Commit`, where the worker's link is the ZK server's own, below the `Finish`, the
-  loop's level 0s for the session being those `Session.level0` drew (`LoopRead`), the model's requests the loop's and
-  its frame taking the coins after the `Hello`.
--/
+/-! The relay's invariant `LoopJ` at the deployed loop, kept at the control slots, the `Hello` and the `Commit` (`loopKept_ctl_all`, `loopKept_hello`, `loopKept_commit`). -/
 
 @[expose] public section
 
@@ -56,13 +17,6 @@ open _root_.Flock (SessionSpec Stmt F128)
 
 variable {wideLeaf : Bool}
 
-/-- **What the loop holds of rep stream `k`'s frame** `p` (table `k / 2`'s rep `k % 2`) at the model `M`'s history
-`h`, on the session's entry `rel`, the table's name `name` and its level 0 `l0`, in the loop's frames `R`, the next
-round being at `h.length - 2` of the setup's rounds (`roundsOf`). Where that round is stream `k`'s, past its first,
-the frame keeps `SameInv` there, on the session's link `c`, the table's statement and the table its level 0 gives,
-whose commitment's cap is the level-0 root, at salts `hi` that are the rep's in `R` once its opening has begun
-(`saltsAt`), which it has not where its coins are as many as its algebraic phase's rounds. Where it is stream
-`k + 1`'s first, the frame holds the history's words for each of stream `k`'s rounds. -/
 def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt) (k : Nat)
     (h : List (Claims.Msg × Claims.Msg)) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
     (l0 : _root_.Flock.ZkServer.Level0.Level0) (p : _root_.Flock.ZkServer.Frames.Rep)
@@ -86,7 +40,6 @@ def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Arra
       Loop.wordsAt M.x (h.tail.map fun e => ZKMal.CoinLayer.rd e.2)
         (h.length - 2 - (Loop.roundsOf spec sts).getD k 0 + j + 1))
 
-/-- **The rep's salts are an entry of the loop's salts.** -/
 theorem find?_of_saltsAt {R : _root_.Flock.ZkServer.Frames.Sessions} {root : ByteArray} {r : Nat}
     {hi : Array ByteArray} (h : saltsAt R root r = some hi) :
     ∃ r0 q0, R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi) := by
@@ -99,7 +52,6 @@ theorem find?_of_saltsAt {R : _root_.Flock.ZkServer.Frames.Sessions} {root : Byt
     subst h'
     first | exact ⟨r0, q0, rfl⟩ | exact ⟨r0, q0, hf⟩
 
-/-- **An entry of the loop's salts is the rep's salts.** -/
 theorem saltsAt_of_find? {R : _root_.Flock.ZkServer.Frames.Sessions} {root : ByteArray} {r : Nat}
     {r0 : ByteArray} {q0 : Nat} {hi : Array ByteArray}
     (h : R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi)) : saltsAt R root r = some hi := by
@@ -107,7 +59,6 @@ theorem saltsAt_of_find? {R : _root_.Flock.ZkServer.Frames.Sessions} {root : Byt
   rw [h]
   rfl
 
-/-- **`StreamAt` is kept where the rep's salts stay**: of the loop's frames it reads only them. -/
 theorem streamAt_stay {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
     {h : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : _root_.Flock.ZkServer.Frames.Rep} {sid : Nat}
@@ -119,9 +70,6 @@ theorem streamAt_stay {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {s
   rw [saltsAt_stay hs (k % 2) (by rw [hsa hlt]; rfl)]
   exact hsa hlt
 
-/-- **Table `i`'s rep `r` in the loop at `σ`**, against the model's run `M`: its frame, the session's entry, the table's
-name and its level 0 bound for the session, with `StreamAt` at rep stream `2 * i + r` on them at the model's history
-so far, in the loop's frames. -/
 def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (i r : Nat)
     (σ : LoopAt) : Prop :=
   ∃ (p : _root_.Flock.ZkServer.Frames.Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
@@ -130,21 +78,15 @@ def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (st
       _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 ∧
       StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p σ.R
 
-/-- **The model's next round** at its history `h`: its rep stream and its index in the stream, among the setup's
-rounds (`roundsOf`). -/
 def nextAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) : Nat × Nat :=
   ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)
 
-/-- **The rep streams `seen` are those with a round before the model's next**, at its history `h`: a rep stream seen
-is before the next round's stream or is that stream past its first round, and that stream past its first round is
-seen. -/
 def SeenAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) (seen : List String) : Prop :=
   ∀ i r s, (i, r, s) ∈ spec.repStreams.toList →
     (seen.contains s = true → 2 * i + r < (nextAt spec sts h).1 ∨
       (2 * i + r = (nextAt spec sts h).1 ∧ 0 < (nextAt spec sts h).2)) ∧
     (2 * i + r = (nextAt spec sts h).1 → 0 < (nextAt spec sts h).2 → seen.contains s = true)
 
-/-- Before the model's first round no rep stream is seen. -/
 theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg × Claims.Msg)}
     (hl : h.length ≤ 2) : SeenAt spec sts h [] := by
   intro i r s _
@@ -153,23 +95,18 @@ theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg
   rw [show h.length - 2 = 0 by omega, Loop.locate_zero] at h0
   exact absurd h0 (Nat.lt_irrefl 0)
 
-/-- **Every level 0 the slots `L0` bind to session `sid` is the one the loop drew for its table**, against the model's
-run `M`: bound for the table `name`, it is `Level0.ofSamples` at table `j`'s statement's `m` on what the host and the
-operating system handed the loop for rep stream `2j` (`LoopModel.src`), `name` being table `j`'s. -/
 def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt)
     (L0 : _root_.Flock.ZkServer.Level0.Slots) (sid : Nat) : Prop :=
   ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0 →
     ∃ j g d hi, spec.tables[j]? = some name ∧ M.src (2 * j) = .ok (g, d, hi) ∧
       _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
 
-/-- `BuiltAt` is kept where the session's tables' level 0 stay (`Stays`). -/
 theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat}
     {σ σ' : LoopAt} (hs : Stays sid σ σ') (h : BuiltAt M spec sts σ.L0 sid) : BuiltAt M spec sts σ'.L0 sid := by
   intro name l0 hl
   rw [hs.1 name] at hl
   exact h name l0 hl
 
-/-- **A level 0 `Level0.ofSamples` gives is a `Level0.build`.** -/
 theorem build_of_ofSamples {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
     (h : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l) :
     ∃ lv tPad extra pads salts, l = _root_.Flock.ZkServer.Level0.build wideLeaf m lv tPad g extra pads salts := by
@@ -184,8 +121,6 @@ theorem build_of_ofSamples {m : Nat} {g : Array F128} {d : ByteArray} {l : _root
     injection h with h
     exact ⟨_, _, _, _, _, h.symm⟩
 
-/-- **The table of a level 0 `Level0.ofSamples` gave has its commitment's cap at the level 0's root**:
-`Finish.tabOfLevel0` commits it as `commitOf` does, and a `build`'s cap is its root (`cap_root_build`). -/
 theorem cap_of_sampled {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
     {st : _root_.Flock.Setup} {t : _root_.Flock.ZkServer.Finish.Tab}
     (hl : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l)
@@ -213,11 +148,6 @@ theorem cap_of_sampled {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Fl
   rw [hcm]
   exact cap_root_build hb
 
-/-- **Past the session's `Commit` each level 0 bound to it is the one the loop drew for its table**: where the loop drew
-`ls` for the session (`SampleInv`: none bound to it yet, and the level 0s sampled for it `ls`'s), table `j`'s being
-`Level0.ofSamples` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
-the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one sampled for the table the
-`Commit` binds as `name`, the setup's table of that name (`commit_inv`). -/
 theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt}
     {R : _root_.Flock.ZkServer.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.ZkServer.Level0.Level0}
     {f : ByteArray} (hd : SampleInv sid ls R)
@@ -265,16 +195,6 @@ theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {
       obtain ⟨g, d, hi, hsrc, hod⟩ := hdr s₀.table hj
       exact ⟨s₀.table, g, d, hi, by rw [htk]; exact hname, hsrc, by rw [hl, hl0]; exact hod⟩
 
-/-- **The relay's invariant at the deployed loop**, against the model's run `M`, at the session `st`, the streams whose
-rounds came being `seen`, the loop at `σ`: the session stopped in the loop's frames exactly where its `Hello` left and
-an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; `RepJ` at each rep
-stream seen; the session's plan the setup's once its `Hello` left; the streams seen those with a round before the
-model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
-every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); once its `Hello` left the
-session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); past
-the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`); once
-its `Hello` left the setup's sizes within its frames' (`Session.sizesOk`); and, while the model's run has a message
-there, what the loop took of the coins so far against the model's release (`LoopModel.TookAt`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
@@ -290,8 +210,6 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   sizes : st.sent = true → _root_.Flock.ZkServer.Session.sizesOk spec sts = true
   took : σ.c < M.τ.length → M.TookAt st σ.c
 
-/-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
-(`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
 theorem repJ_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {i r : Nat} {σ σ' : LoopAt} (hk : Kept sid i r σ.R σ'.R) (hs : Stays sid σ σ') (hc : σ'.c = σ.c)
     (h : RepJ M sid spec sts i r σ) : RepJ M sid spec sts i r σ' := by
@@ -306,7 +224,6 @@ theorem repJ_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessio
   · rw [hc]
     exact streamAt_stay (hs.2 name l0 hl0) hA
 
-/-- **`Hello`'s answer, where it checks, is `Resp::Coins`' frame**, so its first byte is the coins' tag. -/
 theorem answer_head {l : List UInt8} {p : ByteArray × List UInt8}
     (h : _root_.Flock.ZkServer.Coins.answer l = .ok p) : l.head? = some 2 := by
   unfold _root_.Flock.ZkServer.Coins.answer at h
@@ -317,7 +234,6 @@ theorem answer_head {l : List UInt8} {p : ByteArray × List UInt8}
     have e := congrArg List.head? hb.2
     simpa [List.head?_take, _root_.Flock.ZkServer.Coins.frame] using e
 
-/-- **The auditor's answer that begins the session's coin tree is coins.** -/
 theorem start_byte {h : _root_.Flock.ZkServer.Coins.Hello} {a : ByteArray} {C : _root_.Flock.ZkServer.Coins.Release}
     (hs : _root_.Flock.ZkServer.Coins.Release.start h a.data.toList = .ok C) : byte? a 0 = some 2 := by
   have hh : a.data.toList.head? = some 2 := by
@@ -333,8 +249,6 @@ theorem start_byte {h : _root_.Flock.ZkServer.Coins.Hello} {a : ByteArray} {C : 
     cases hh
     rfl
 
-/-- **Past `Hello`'s answer, where the session goes on, its coin tree is the one the answer begins** under the
-session's `Hello`. -/
 theorem answer_hello_start {S : State} {r id : ByteArray} (h : S.stop = none)
     (hn : (S.answer .hello r id).1.stop = none) :
     ∃ hh C, S.hello = some hh ∧ _root_.Flock.ZkServer.Coins.Release.start hh r.data.toList = .ok C ∧
@@ -352,8 +266,6 @@ theorem answer_hello_start {S : State} {r id : ByteArray} (h : S.stop = none)
     · intro _
       exact ⟨hh, C, rfl, hs, rfl⟩
 
-/-- **The `Hello` that leaves at the setup `spec`, `sts`** leaves the session reading the setup's `Hello` at its
-nonce. -/
 theorem sendHello_hello {S S' : State} {spec : SessionSpec} {sts : Array Stmt} {n o : ByteArray}
     (he : S.sendHello (.ok (spec, sts)) n = .ok (S', o)) : S'.hello = helloOf spec sts n := by
   unfold State.sendHello at he
@@ -369,8 +281,6 @@ theorem sendHello_hello {S S' : State} {spec : SessionSpec} {sts : Array Stmt} {
   · rw [hst] at he
     cases he
 
-/-- **Past the `Hello`, where the session goes on, its coin tree is the one the auditor's answer begins** under the
-setup's `Hello` at the request's nonce. -/
 theorem stepK_hello_start {st : State} {pl : Placed} {e : Env} {spec : SessionSpec} {sts : Array Stmt}
     (h : st.stop = none) (he : e.setup = .ok (spec, sts))
     (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
@@ -398,8 +308,6 @@ theorem stepK_hello_start {st : State} {pl : Placed} {e : Env} {spec : SessionSp
   · rw [stepK_refused (by decide) (by decide) (by decide) hr] at hn
     exact absurd hn (Option.isSome_iff_ne_none.mp (request_stop h hr))
 
-/-- **Coins the session goes on past are opened by its coin tree** as the schedule's next opening (`reqAt`), and the
-session after holds the tree after it. -/
 theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.ZkServer.Coins.Release} (h : st.stop = none)
     (hs : st.session = some C) (hn : (st.coins r).1.stop = none) :
     ∃ C' c, C.open (reqAt st.plan C.hello.links C.opened.length).1 (reqAt st.plan C.hello.links C.opened.length).2
@@ -415,8 +323,6 @@ theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.ZkServer.Coins
   · intro _
     exact ⟨C', c, rfl, rfl⟩
 
-/-- **Past a `Commit` or a frame round, where the session goes on, its coin tree is the one its tree before opens the
-auditor's coins to** as the schedule's next opening (`reqAt`). -/
 theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.ZkServer.Session.Kind} {e : Env}
     {C : _root_.Flock.ZkServer.Coins.Release} (h : st.stop = none) (hk : k = .commit ∨ ∃ s n, k = .round s n)
     (hC : st.session = some C)
@@ -454,9 +360,6 @@ theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.ZkServer.Se
     rw [stepK_refused h9 h5 h6 hr] at hn
     exact absurd hn (Option.isSome_iff_ne_none.mp (request_stop h hr))
 
-/-- **`LoopJ` is kept at a slot that reads no model message**: where the loop's reading of it brings only updates that
-keep every rep's frame, the session's stop and what its rounds read of it, and takes no model message; such a slot
-keeps the session's coin tree (`stepK_ctl_session`), so what the loop took stays. -/
 theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {k : _root_.Flock.ZkServer.Session.Kind} (hm : isModel k = false)
     (hs : ∀ seen, seenAfter seen k = seen)
@@ -485,8 +388,6 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     rw [hcc] at h ⊢
     exact LoopModel.TookAt.congr (stepK_ctl_session hF.live hsl hm hgo) (hJ.took h)
 
-/-- **`LoopJ` is kept at every slot that reads no model message**: each such slot's reading is only the updates between
-the session's requests, keeping what its rounds read of it. -/
 theorem loopKept_ctl_all {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} : ∀ k, isModel k = false → LoopKept M sid spec sts nonce (LoopJ M sid spec sts) k := by
   intro k hm
@@ -502,8 +403,6 @@ theorem loopKept_ctl_all {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
   | round _ _ => cases hm
   | finish => cases hm
 
-/-- **Where the session goes on past its `Hello`, the setup's sizes are within its frames'**: the `Hello` left, which
-`State.sendHello` lets only at a setup passing `Session.sizesOk` (`Loop.sizesOk_of_sendHello`). -/
 theorem stepK_hello_sizes {st : State} {pl : Placed} {e : Env} {spec : SessionSpec} {sts : Array Stmt}
     (he : e.setup = .ok (spec, sts))
     (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
@@ -542,10 +441,6 @@ theorem stepK_hello_sizes {st : State} {pl : Placed} {e : Env} {spec : SessionSp
     rw [Option.isSome_iff_ne_none] at hst
     exact absurd (Option.isNone_iff_eq_none.mp hgo) hst
 
-/-- **`LoopJ` is kept at the `Hello`**: before it no stream was seen and the session had not stopped; past it the
-session has sent its `Hello`, the model's `Hello` round passed, and the updates between keep the session's stop; and,
-where the model's release reads the setup's `Hello` at the nonce (`hchk`), the session's coin tree is the one the
-model's first answer begins (`LoopModel.TookAt.hello`). -/
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} (hchk : ∀ hl, helloOf spec sts nonce = some hl → M.L.helloChk M.x M.ρ = .ok hl) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
@@ -581,7 +476,6 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     rw [hm]
     exact hst
 
-/-- **Past the `Hello` every earlier round passed**, below the `Finish`: the `Hello` passes (`toSrv_pass_own`). -/
 theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : W) (ρ : Rr)
     (κ : L.toSrv.Chk) (h : List (Claims.Msg × Claims.Msg)) (hl : h.length = 1) (hlt : 0 < L.last x) :
     L.toSrv.liveBefore wk x w ρ κ h = true := by
@@ -596,14 +490,6 @@ theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker
   · rw [List.take_zero, List.length_nil]
     exact hlt
 
-/-- **`LoopJ` is kept at the `Commit`**: the session's slots took only the model's `Hello` before it, so no stream was
-seen; the updates between keep the session's stop; and every round before the model's next passed, before the link
-and after it, where the worker's link is the ZK server's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
-and past it, at a level 0 bound to the session, the session's entry is linked to the history's link coins
-(`linkOn_commit`): that level 0 is a table's (`BuiltAt`), so the setup has a rep stream, whose sizes (`LoopJ.sizes`)
-put the setup's link points within `Frames.COIN_MAX` words; and, where the model's release requests the loop's
-openings (`hreq`) and frames its first answer (`hf1`), the session's coin tree past it is the one its tree before
-opens the model's answer to at the schedule's first opening (`LoopModel.TookAt.succ`). -/
 theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
     (hlast : 1 < M.L.last M.x)

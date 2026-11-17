@@ -1,9 +1,3 @@
-/-
-Level 3, L3-M (`Flock.Merkle`, `verity/protocols/proofs/flock/prover/agreement/README.md` stage 1b): Merkle binding. Two openings the verifier accepts for one position of one
-cap, with different rows, give an explicit collision of the scheme's hash: two different digest-width node inputs, or two
-different rows, with one digest. Parametric in the scheme; for each scheme the verifier knows, such a collision is a SHA-256
-or SHA-512 collision (`MerkleScheme.collision_hash`). No random oracle.
--/
 module
 
 public import Flock.Merkle
@@ -14,7 +8,6 @@ public import Proofs.Flock.Verifier.Hash
 
 namespace Flock
 
-/-- A scheme's digests have its width: every node and leaf it computes is `digestLen` bytes. -/
 def MerkleScheme.Sized (ms : MerkleScheme) : Prop :=
   (∀ l r, (ms.node l r).size = ms.digestLen) ∧ ∀ row y, (ms.leaf row y).size = ms.digestLen
 
@@ -36,15 +29,8 @@ theorem MerkleScheme.all_sized : ∀ ms ∈ MerkleScheme.all, ms.Sized := by
   · exact MerkleScheme.sha512_sized _
   · exact MerkleScheme.hm96Sha512_sized
 
-/-! ### The extractor: two accepted openings give an explicit colliding pair
+/-! Level 3 Merkle binding: two openings the verifier accepts for one position of one cap with different rows give an explicit colliding pair of the scheme's hash (`merkle_binding`), a reduction, not the proposition that a collision exists, which counting proves outright. -/
 
-A fixed hash with 32- or 64-byte digests has collisions by counting, so a proposition "a collision exists" is provable
-outright and says nothing about the verifier. What the verifier's checks give is a reduction: computable functions from two
-accepted openings to an explicit pair of inputs (`climbPair`, `opensPair`, `merklePair`, then `MerklePair.shaInputs` /
-`MerklePair.hm96Inputs` for the hash's own inputs), and theorems that the pair collides. The propositions follow as
-corollaries (`merkle_binding_collision`, `MerkleScheme.collision_hash`). -/
-
-/-- Two hash inputs an extractor names: two pairs of children of one node, or two rows (with their salts) of one leaf. -/
 inductive MerklePair where
   | node (a b a' b' : ByteArray)
   | leaf (r r' : Array F128) (y y' : ByteArray)
@@ -55,22 +41,16 @@ def MerklePair.render : MerklePair → String
   | .node a b a' b' => s!"node {hexOf a} {hexOf b} | {hexOf a'} {hexOf b'}"
   | .leaf r r' y y' => s!"leaf {hexOf (MerkleScheme.rowBytes r)} {hexOf y} | {hexOf (MerkleScheme.rowBytes r')} {hexOf y'}"
 
-/-- The pair collides under `ms`: two different pairs of digest-width children with one node, or two different rows with
-one leaf under their salts.
-- The children must have the digest's width. A node hashes `l ‖ r` without length framing, so one byte string split two
-  ways would otherwise be a collision of nothing. The verifier only ever hashes digest-width children: its siblings are
-  checked to be `digestLen` bytes, and its running digests are hash outputs.
-- The rows must differ. The salts are the prover's (`opened_salts`), and an unsalted scheme's leaf ignores its salt. -/
+/-- The children must have the digest's width: a node hashes `l ‖ r` without length framing, so one byte string split
+two ways would otherwise collide. The rows must differ: the salts are the prover's, and an unsalted scheme's leaf
+ignores its salt. -/
 def MerklePair.Collides (ms : MerkleScheme) : MerklePair → Prop
   | .node a b a' b' => a.size = ms.digestLen ∧ b.size = ms.digestLen ∧ a'.size = ms.digestLen ∧ b'.size = ms.digestLen ∧
       (a, b) ≠ (a', b') ∧ ms.node a b = ms.node a' b'
   | .leaf r r' y y' => r ≠ r' ∧ ms.leaf r y = ms.leaf r' y'
 
-/-- A collision of a Merkle scheme's hash, as a proposition: some pair collides. -/
 def MerkleScheme.HasCollision (ms : MerkleScheme) : Prop := ∃ p : MerklePair, p.Collides ms
 
-/-- **The climb's extractor:** walking two paths up in step, the first node whose two parents are one while its children
-differ. -/
 def climbPair (ms : MerkleScheme) : List ByteArray → List ByteArray → ByteArray → ByteArray → Nat → MerklePair
   | s :: rest, t :: rest2, a, b, idx =>
     if idx % 2 = 0 then
@@ -79,8 +59,6 @@ def climbPair (ms : MerkleScheme) : List ByteArray → List ByteArray → ByteAr
       if ms.node s a = ms.node t b then .node s a t b else climbPair ms rest rest2 (ms.node s a) (ms.node t b) (idx / 2)
   | _, _, a, b, _ => .node a b a b
 
-/-- `climbPair`'s output collides: climbing from two different digests to one digest along paths of one length, every digest
-and sibling of the scheme's width. -/
 theorem climb_binding (ms : MerkleScheme) (hs : ms.Sized) :
     ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat), s1.length = s2.length →
       (∀ x ∈ s1, x.size = ms.digestLen) → (∀ x ∈ s2, x.size = ms.digestLen) → a.size = ms.digestLen →
@@ -118,13 +96,10 @@ theorem climb_binding (ms : MerkleScheme) (hs : ms.Sized) :
         · simp only [climbPair, hp, he, ↓reduceIte]
           exact ih rest2 _ _ (idx / 2) hl' hr1 hr2 (hs.1 _ _) (hs.1 _ _) he h'
 
-/-- **The opening's extractor:** the two rows if their leaves are one, else the climb's pair. -/
 def opensPair (ms : MerkleScheme) (pos : Nat) (r1 : Array F128) (y1 : ByteArray) (s1 : List ByteArray) (r2 : Array F128)
     (y2 : ByteArray) (s2 : List ByteArray) : MerklePair :=
   if ms.leaf r1 y1 = ms.leaf r2 y2 then .leaf r1 r2 y1 y2 else climbPair ms s1 s2 (ms.leaf r1 y1) (ms.leaf r2 y2) pos
 
-/-- `opensPair`'s output collides: two accepted openings of one position against one cap, with different rows and siblings
-of the digest's width. -/
 theorem opens_binding (ms : MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d lanes pos : Nat)
     (r1 r2 : Array F128) (y1 y2 : ByteArray) (s1 s2 : List ByteArray) (hw1 : ∀ x ∈ s1, x.size = ms.digestLen)
     (hw2 : ∀ x ∈ s2, x.size = ms.digestLen) (h1 : opens ms cap c d lanes pos r1 y1 s1 = true)
@@ -137,7 +112,6 @@ theorem opens_binding (ms : MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray
   · simp only [opensPair, hl, ↓reduceIte]
     exact climb_binding ms hs s1 s2 _ _ pos (by rw [h1.1.1.2, h2.1.1.2]) hw1 hw2 (hs.2 _ _) (hs.2 _ _) hl heq
 
-/-- An accepted Merkle check opens every query. -/
 theorem merkleCheck_opens (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)
     (rows : Array (Array F128)) (siblings salts : Array ByteArray) (lanes : Nat)
     (h : merkleCheck ms cap c d positions rows siblings salts lanes = .ok ()) (j : Nat) (hj : j < positions.size) :
@@ -153,7 +127,6 @@ theorem merkleCheck_opens (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat
         have := List.find?_eq_none.mp hn j (List.mem_range.mpr hj)
         simpa using this
 
-/-- An accepted Merkle check's siblings all have the digest's width. -/
 theorem merkleCheck_sibs (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)
     (rows : Array (Array F128)) (siblings salts : Array ByteArray) (lanes : Nat)
     (h : merkleCheck ms cap c d positions rows siblings salts lanes = .ok ()) (j : Nat) :
@@ -170,15 +143,11 @@ theorem merkleCheck_sibs (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat)
       simp only [Bool.or_eq_true, not_or, Array.any_eq_true, not_exists, bne_iff_ne, ne_eq, Decidable.not_not] at hw
       exact hw.2 _ (by omega)
 
-/-- **The Merkle check's extractor:** query `j`'s two openings, as `opensPair` reads them. -/
 def merklePair (ms : MerkleScheme) (c d : Nat) (positions : Array Nat) (rows1 rows2 : Array (Array F128))
     (sib1 sib2 salt1 salt2 : Array ByteArray) (j : Nat) : MerklePair :=
   opensPair ms positions[j]! rows1[j]! (salt1.getD j ByteArray.empty) (sibsOf sib1 (d - c) j) rows2[j]!
     (salt2.getD j ByteArray.empty) (sibsOf sib2 (d - c) j)
 
-/-- **Merkle binding (L3-M).** Two Merkle checks the verifier accepts against one cap at the same positions, whose opened
-rows differ at query `j`: `merklePair` computes a colliding pair of the scheme's hash from them, for a scheme whose digests
-have its width (`MerkleScheme.all_sized`: every scheme the verifier knows). -/
 theorem merkle_binding (ms : MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)
     (rows1 rows2 : Array (Array F128)) (sib1 sib2 salt1 salt2 : Array ByteArray) (lanes : Nat)
     (h1 : merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = .ok ())
@@ -191,7 +160,7 @@ theorem merkle_binding (ms : MerkleScheme) (hs : ms.Sized) (cap : Array ByteArra
     (merkleCheck_opens ms cap c d positions rows1 sib1 salt1 lanes h1 j hj)
     (merkleCheck_opens ms cap c d positions rows2 sib2 salt2 lanes h2 j hj) hr
 
-/-- The proposition `merkle_binding` implies (satisfiable by counting on its own; `merkle_binding` is the reduction). -/
+/-- Satisfiable by counting on its own; `merkle_binding` is the reduction. -/
 theorem merkle_binding_collision (ms : MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d : Nat)
     (positions : Array Nat) (rows1 rows2 : Array (Array F128)) (sib1 sib2 salt1 salt2 : Array ByteArray) (lanes : Nat)
     (h1 : merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = .ok ())
@@ -199,9 +168,6 @@ theorem merkle_binding_collision (ms : MerkleScheme) (hs : ms.Sized) (cap : Arra
     (j : Nat) (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) : ms.HasCollision :=
   ⟨_, merkle_binding ms hs cap c d positions rows1 rows2 sib1 sib2 salt1 salt2 lanes h1 h2 j hj hr⟩
 
-/-! ### From a colliding pair to the hash's own inputs, for each scheme the verifier knows -/
-
-/-- Two different pairs of `w`-byte children are two different concatenations. -/
 theorem append_ne_of_pair_ne {a b a' b' : ByteArray} {w : Nat} (ha : a.size = w) (ha' : a'.size = w)
     (hne : (a, b) ≠ (a', b')) : a ++ b ≠ a' ++ b' := by
   intro h
@@ -209,7 +175,6 @@ theorem append_ne_of_pair_ne {a b a' b' : ByteArray} {w : Nat} (ha : a.size = w)
   subst h1
   exact hne (by rw [(ByteArray.append_right_inj _).mp h])
 
-/-- **An unsalted scheme's inputs:** a node's two concatenated children, or a leaf's two row encodings. -/
 def MerklePair.shaInputs : MerklePair → ByteArray × ByteArray
   | .node a b a' b' => (a ++ b, a' ++ b')
   | .leaf r r' _ _ => (MerkleScheme.rowBytes r, MerkleScheme.rowBytes r')
@@ -226,8 +191,6 @@ theorem MerklePair.sha512_inputs (id : String) (p : MerklePair) (h : p.Collides 
   | node a b a' b' => exact ⟨append_ne_of_pair_ne h.1 h.2.2.1 h.2.2.2.2.1, h.2.2.2.2.2⟩
   | leaf r r' y y' => exact ⟨fun hh => h.1 (rowBytes_inj hh), h.2⟩
 
-/-- **`hm96-sha512/v1`'s inputs:** a node's two concatenated children; for a leaf, the two row encodings when their row
-hashes are one, else `Hm96.leafPair`'s (the outer inputs, or the salt digest's). -/
 def MerklePair.hm96Inputs : MerklePair → ByteArray × ByteArray
   | .node a b a' b' => (a ++ b, a' ++ b')
   | .leaf r r' y y' =>
@@ -261,8 +224,6 @@ theorem MerkleScheme.hm96Sha512_collision (h : MerkleScheme.hm96Sha512.HasCollis
   let ⟨p, hp⟩ := h
   ⟨_, _, (p.hm96_inputs hp).1, (p.hm96_inputs hp).2⟩
 
-/-- A collision of any scheme the verifier knows is a SHA-256 or SHA-512 collision (the corollary of the extractors
-`MerklePair.shaInputs` and `MerklePair.hm96Inputs`). -/
 theorem MerkleScheme.collision_hash : ∀ ms ∈ MerkleScheme.all, ms.HasCollision → Sha256.HasCollision ∨ Sha512.HasCollision := by
   intro ms h hc
   simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at h

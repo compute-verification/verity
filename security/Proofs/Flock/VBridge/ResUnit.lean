@@ -20,26 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.VBridge.PartS
 
-/-!
-# The verifier's `rec-residuals/…` unit
-
-`RecResiduals.check` accepts a `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` unit only if it is the net the verifier
-builds itself (`RecResiduals.unitLaid S ns nv`) for part `j` of the shape's algebra (`RecResiduals.part`). That net is
-`InnerRepCheck{S}`'s build over the verifier's `S` with row ports of `ns` elements and a `v` of `nv`, but it does not go
-through `VStar.innerUnit`: its ports need no names, and its S no `checkS`. This file states the unit's theorems at that
-net, at the bridge's `residualForms` (`gfsOf S`), which needs no range hypothesis.
-
-* The ports. `partRep ns nv`: a rep with those ports, so that `InCols`, `rowCol` and `vBase` read the part's columns.
-  `unitNet'_run`: the verifier's build is `partRun` (the bridge's `residualForms` on the row ports' first bits and `v`'s),
-  then zero forms up to 128 words.
-* The theorems. `laid_part`: whenever the laid-out net's rows hold at `v`, if the input columns hold `w` on the row ports
-  and `vv` on `v`'s (`InCols`), the output columns hold each of S's residuals at `w`, `vv`, 128 bits each, then zeros
-  (`PartCols`, in the form `PartS.res_partS` reads). `unit_part`: the same of a copy in a unit of any partition.
-  `check_part`, `check_part_holo`: what `check` accepted, at a plain and at a holo statement. `decode_resUnit`,
-  `decode_check`, `decode_check_holo`: `decode_innerUnit`, `decode_part` at the verifier's unit.
-* The size. `part_small`: the verifier's part has at most 16 residuals, as `laid_part` asks: `groups` adds a residual to
-  a part only where `8 (size + 1) ≤ 128` (`groups_small`), and `partS` keeps its group's residuals.
--/
+/-! The verifier's `rec-residuals/…` unit, the net it builds for a part of the shape's algebra without going through `VStar.innerUnit`, computes its residuals (`laid_part`, `decode_check`). -/
 
 @[expose] public section
 
@@ -48,24 +29,18 @@ namespace FlockVBridge.OfVStar
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 
-/-! ## The part's ports -/
-
-/-- A rep whose ports are a part's: row ports of `ns` elements, a `v` of `nv`. Only its ports, `nw` and `nv` are read. -/
+/-- Only its ports, `nw` and `nv` are read. -/
 def partRep (ns : List ℕ) (nv : ℕ) : VStar.RepS := ⟨⟨ns.sum, nv, [], []⟩, ns.map ("", ·)⟩
 
-/-- The part's input ports, one 16-bit port per word. -/
 def partIn (ns : List ℕ) (nv : ℕ) : Array ℕ := Array.replicate ((RecResiduals.portWords ns nv).foldl (· + ·) 0) 16
 
-/-- The verifier's build on its input bits: the bridge's `residualForms` on `w` and `v`. -/
 def partRun (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) : List Lin × St :=
   (FlockVBridge.residualForms (gfsOf S) (rowForms (partRep ns nv).ports 0)
     (vars (vBase (partRep ns nv)) (128 * nv))).run ⟨innerIn (partRep ns nv), []⟩
 
-/-- Its outputs: the residuals' forms, then zero forms up to 128 words. -/
 def partOuts (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) : List Lin :=
   (partRun S ns nv).1 ++ List.replicate (16 * RecResiduals.RES_OUT_WORDS - (partRun S ns nv).1.length) Lin.zero
 
-/-- Where its output columns start. -/
 def partBase (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) : ℕ :=
   outStart (partRun S ns nv).2 (partIn ns nv) (Array.replicate RecResiduals.RES_OUT_WORDS 16)
 
@@ -104,7 +79,6 @@ theorem run_input_bind' {β : Type} (n : ℕ) (f : List Lin → M β) :
     (input n >>= f).run St.empty = (f (vars 0 n)).run ⟨n, []⟩ :=
   run_input_bind n f
 
-/-- The verifier's `w`: each row port's slice cut to its first `128 n` bits. -/
 theorem flatMap_ns (f : ℕ × List Lin → List Lin) (hf : ∀ n b, f (n, b) = b.take (128 * n)) :
     ∀ (ns : List ℕ) (k : ℕ) (rest : List (List Lin)),
       (ns.zip (varSlices k (ns.map VStar.portWordsOf) ++ rest)).flatMap f = rowForms (ns.map ("", ·)) k
@@ -113,7 +87,6 @@ theorem flatMap_ns (f : ℕ × List Lin → List Lin) (hf : ∀ n b, f (n, b) = 
     simp only [List.map_cons, varSlices, List.cons_append, List.zip_cons_cons, List.flatMap_cons, hf, rowForms,
       take_vars _ _ _ (le_portWords n), flatMap_ns f hf ns]
 
-/-- The verifier's `v`: the slice after the row ports', cut to its first `128 nv` bits. -/
 theorem vPart_ns (ns : List ℕ) (nv : ℕ) :
     (((varSlices 0 (ns.map VStar.portWordsOf) ++
       varSlices (0 + 16 * (ns.map VStar.portWordsOf).sum) [VStar.portWordsOf nv]).drop ns.length).headD []).take
@@ -122,8 +95,6 @@ theorem vPart_ns (ns : List ℕ) (nv : ℕ) :
   simp only [varSlices, List.headD_cons, Nat.zero_add]
   exact take_vars _ _ _ (le_portWords _)
 
-/-- **The verifier's `rec-residuals` build is the bridge's `residualForms` on its ports**: its state and outputs are
-`partRun`'s, then zero forms up to 128 words. -/
 theorem unitNet'_run (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) :
     (RecResiduals.unitNet' S ns nv).run St.empty = (partOuts S ns nv, (partRun S ns nv).2) := by
   have hi : innerIn (partRep ns nv) =
@@ -149,19 +120,11 @@ theorem res_gfsOf (S : Flock.RecOpen.GfS) {r : ℕ} (hr : r < S.res.length) (hr'
     (gfsOf S).res[r] = resOf S.res[r] := by
   simp [gfsOf]
 
-/-! ## The laid-out unit -/
-
-/-- The columns from `base` hold each residual of the verifier's part `S` at `w`, `vv`, 128 bits each, then zeros to
-128 words. -/
 def PartCols (S : Flock.RecOpen.GfS) (w vv : ℕ → F128) (v : ℕ → Bool) (base : ℕ) : Prop :=
   (∀ r (hr : r < S.res.length), ∀ k < 128,
     v (base + (128 * r + k)) = bitOf (resVal (gfsOf S) (termVal w vv) (resOf S.res[r])) k) ∧
     ∀ j, 128 * S.res.length ≤ j → j < 16 * RecResiduals.RES_OUT_WORDS → v (base + j) = false
 
-/-- **The verifier's laid-out `rec-residuals` unit computes its residuals**: whenever its rows hold at `v`, if its input
-columns hold `w`'s bits on the row ports and `vv`'s on `v`'s (`InCols`), `w` and `vv` zero past the row ports' elements
-and `nv`, its output columns from `partBase` hold each of S's residuals (`resVal`), then zeros (`PartCols`). At an S of
-at most 16 residuals, which the verifier's grouping keeps. -/
 theorem laid_part (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (hres : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS)
     (v : ℕ → Bool) (h : LaidRows (RecResiduals.unitLaid S ns nv) (inRowsOf (partIn ns nv)) v) (w vv : ℕ → F128)
     (hw0 : ∀ e, ns.sum ≤ e → w e = 0) (hv0 : ∀ e, nv ≤ e → vv e = 0) (hin : InCols (partRep ns nv) w vv v) :
@@ -237,9 +200,6 @@ theorem inWords_unitLaid {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {nam
   simp only [RecResiduals.unitLaid, layout_inGroups]
   simp [inRowsOf, partIn]
 
-/-- **What `RecResiduals.check` accepted**: a unit named `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` at a shape the
-verifier accepts is the net the verifier builds for part `j` of that shape's algebra, holo as the statement's META says
-(`holoOf`). -/
 theorem check_part_at {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo) :
@@ -267,7 +227,6 @@ theorem check_part_at {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m
             exact ⟨S, ns, nv, hpart, by rw [hcg]; exact hg⟩
           · cases h
 
-/-- `shape?`'s shape is plain. -/
 theorem shape?_holo {m k cl : ℕ} {sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh) :
     sh.holo = false := by
   unfold RecResiduals.shape? at hsh
@@ -279,7 +238,6 @@ theorem shape?_holo {m k cl : ℕ} {sh : Flock.Shape} (hsh : RecResiduals.shape?
     obtain ⟨-, rfl⟩ := hsh
     rfl
 
-/-- **`check_part_at` on a plain statement**: META says no `holo`, so the unit is the plain part's net. -/
 theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok false) :
@@ -295,8 +253,6 @@ theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k 
   rw [e] at hpart
   exact ⟨S, ns, nv, hpart, hn⟩
 
-/-- **`check_part_at` on a holo statement**: META says `holo: true`, so the unit is the holo part's net, the hidden
-units' residuals. -/
 theorem check_part_holo {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok true) :
@@ -311,8 +267,6 @@ def NetsDiffer (m k cl j : ℕ) (sh : Flock.Shape) : Prop :=
     netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok g →
     netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S' ns' nv') = .ok g' → g ≠ g'
 
-/-- **A holo statement on a plain part refuses**: where part `j`'s plain and holo nets differ, `check` fails on a unit
-that is the plain net under META `holo: true`. -/
 theorem check_refuses_holo_on_plain {c : Flock.Circuit} {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok true) (hd : NetsDiffer m k cl j sh)
@@ -322,8 +276,6 @@ theorem check_refuses_holo_on_plain {c : Flock.Circuit} {m k cl j : ℕ}
   obtain ⟨S', ns', nv', hpart', hn'⟩ := check_part_at h hp hsh hh
   exact hd S ns nv S' ns' nv' _ _ hpart hpart' hn hn' rfl
 
-/-- **A plain statement on a holo part refuses**: where part `j`'s plain and holo nets differ, `check` fails on a unit
-that is the holo net under META without `holo` (or `holo: false`). -/
 theorem check_refuses_plain_on_holo {c : Flock.Circuit} {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok false) (hd : NetsDiffer m k cl j sh)
@@ -334,10 +286,6 @@ theorem check_refuses_plain_on_holo {c : Flock.Circuit} {m k cl j : ℕ}
   obtain ⟨S', ns', nv', hpart', hn'⟩ := check_part h hp hsh hh
   exact hd S' ns' nv' S ns nv _ _ hpart' hpart hn' hn rfl
 
-/-! ## The part's residuals fit -/
-
-/-- **Every part `groups` returns has at most 16 residuals**: a residual joins a part, or starts one, only where `fit`
-keeps `8 (size + 1) ≤ 128`. -/
 theorem groups_small {S : Flock.RecAlgebra.GfS} {sizes : Array ℕ} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (h : RecResiduals.groups S sizes = .ok gs) : ∀ g ∈ gs, 8 * g.1.size ≤ RecResiduals.RES_OUT_WORDS := by
   unfold RecResiduals.groups at h
@@ -371,8 +319,6 @@ theorem groups_small {S : Flock.RecAlgebra.GfS} {sizes : Array ℕ} {gs : Array 
         · simp [RecResiduals.RES_OUT_WORDS]
       · cases hy
 
-/-- **The verifier's part has at most 16 residuals** (`groups_small`): `partS` gives it one residual for each of its
-group's (`PartS.res_partS`). -/
 theorem part_small {sh : Flock.Shape} {j : ℕ} {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (h : RecResiduals.part sh j = .ok (S, ns, nv)) : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS := by
   unfold RecResiduals.part at h
@@ -396,10 +342,6 @@ section Unit
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **A copy of the verifier's laid-out `rec-residuals` unit, in a unit of any partition, computes its residuals**
-(`laid_part`). Let the verifier build `net` from `RecResiduals.unitLaid S ns nv` (`netOf`), and let unit `u` be an
-instance of `k` stacked copies of the net's rows, the transcript `tr` carrying 1 at the stack's constant. Then at copy
-`j`'s column values (`copyVal`), `laid_part` holds. -/
 theorem unit_part {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : tr (I.wire ((Rows.ofNet hB).stack k).one) = true)
@@ -423,11 +365,6 @@ open FlockVBridge.Decode
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **The verifier's `rec-residuals` unit computes its residuals in a layer agreeing with the registrant** (`unit_part`
-at `fill`). Let the verifier build `c`'s unit net from `RecResiduals.unitLaid S ns nv` (`netOf`), and let the layer
-`bits` agree with the registrant (`RegAgree`) and carry 1 on unit `u`'s constant gate. If copy `j`'s input columns are
-registered bits of `w` on the row ports and of `vv` on `v`'s port (`RegBit`), `w`, `vv` zero past the row ports'
-elements and `nv`, the copy's output columns in `bits` hold each of S's residuals (`PartCols`). -/
 theorem decode_resUnit {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (hres : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS)
@@ -448,13 +385,6 @@ theorem decode_resUnit {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegA
   · exact (copyVal_fill zo hA _ hj (by omega)).symm.trans (hr r hr' k hk)
   · exact (copyVal_fill zo hA _ hj (by omega)).symm.trans (hz x hx1 hx2)
 
-/-- **A part the verifier pinned computes its residuals at the whole ports, in a layer agreeing with the registrant**
-(`decode_part` at the verifier's unit). Let `RecResiduals.check` accept `c`, its unit named for part `p` at a shape
-`sh` the verifier accepts, part `p` being `S` with row ports of `ns` elements and a `v` of `nv`. When copy `j` of unit
-`u`'s row ports are registered bits of the whole message elements `w` at the part's indices `wI`, and its `v` port
-registered bits of the verifier's coefficients (`vOf`) at `V`, its output columns in `bits` hold the part's residuals at
-part ports `w'`, `v'` that read `w` at `wI` and `vOf` at `V`: `PartS.res_partS`' `hw` and `hv` at `wI = wIdx sizes P`.
-The part has at most 16 residuals (`part_small`). -/
 theorem decode_check {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
@@ -474,8 +404,6 @@ theorem decode_check {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
   exact ⟨sub wI w, sub V (vOf sh rounds extras comb), sub_lt wI w, sub_lt V _,
     decode_resUnit zo hA u hj hone S ns nv (part_small hpart) hn hu _ _ (sub_ge w hwI) (sub_ge _ hV) hw hv⟩
 
-/-- **`decode_check` on a holo statement** (`check_part_holo`): META says `holo: true`, and `sh` is the holo form of
-the shape the verifier accepts, whose part `p` is the hidden units' `S`. -/
 theorem decode_check_holo {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))

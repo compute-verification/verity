@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelaySame
 
-/-!
-# A rep 1 stream's first round, at the model's state
-
-At rep 1's first round the loop readies its frame after rep 0's algebraic-phase coins, which the model's start of rep 1
-(`Loop.freshOf`) takes too, there as the history's words for rep 0's rounds:
-
-* `roundPlace_prior`: at rep 1's first round, on its frame's run on no requests (`RepRun [] []`), the frame
-  `roundPlace` readies has the found frame's configuration and is its run on the coins of rep 0's frame for the rep's
-  algebraic phase (`repRun_first1`).
-* **`roundPlace_switch1`**: so where rep 0's frame holds the history's words for rep 0's rounds and the rep's
-  algebraic phase has as many scheduled rounds as the placeholder's, the frame `roundPlace` readies is its run on
-  rep 0's algebraic-phase words, at the model's state for a rep 1 stream's first round (`repRun_prior_fresh`).
--/
+/-! At a rep 1 stream's first round the readied frame is at the model's state (`roundPlace_switch1`). -/
 
 @[expose] public section
 
@@ -25,9 +13,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place)
 
 set_option maxHeartbeats 1000000 in
-/-- **At rep 1's first round the readied frame is its run on rep 0's algebraic-phase coins**: on its frame's run on
-no requests, the found frame with its algebraic phase's scheduled rounds (`withAlg`) takes the coins of rep 0's frame
-for them, at the found frame's configuration. -/
 theorem roundPlace_prior {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p0 p' q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 1 = some (j, p))
@@ -54,11 +39,6 @@ theorem roundPlace_prior {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots
          have e := (placeOf_run' (by assumption)).1
          exact e.trans (withAlg_run hw).1, repRun_first1 hR hw (by assumption) (by assumption)⟩)
 
-/-- **At rep 1's first round the readied frame is at the model's state**: on its frame's run on no requests, where
-rep 0's frame holds the history's words for rep 0's `n0` rounds, the found frame's configuration is of one layout with
-the placeholder's and the rep's algebraic phase has as many scheduled rounds as the placeholder's, the frame
-`roundPlace` readies is its run on rep 0's algebraic-phase words, at the model's state for a rep 1 stream's first
-round (`Loop.freshOf`). -/
 theorem roundPlace_switch1 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p0 p' q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 1 = some (j, p))

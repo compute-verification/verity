@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLive
 
-/-!
-# A frame round's coin count and configuration are the model's
-
-The model's release at the loop's own frames (`LeanRelease.ofLoop`) reads at each frame round the coin count the loop
-hands `Frames.round` and the rep's configuration as the loop started its frame. Here the loop's are the model's:
-
-* **`loopNr_round`**: a round the relay's coin check passes (`coinsOf`) asks the loop's count at its opening
-  (`Loop.loopNr`), where the relay's schedule is the setup's; `ofLoop_coins_round`: so the model's coin count at the
-  round after a history one longer than the openings is the round's.
-* `roundPlace_cfg`, `roundStep_cfg`: the frame `roundPlace` readies has the configuration of the frame it found, and so
-  has the frame the round puts back, and its coins' put (`Loop.coinsOf`, by definition): a rep's frame keeps its
-  start's configuration.
-* **`ofLoop_cfg`**: the model's configuration at a round of rep stream `k` is `Cfg.ofSamples` at the stream's start
-  (`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
-  `Frames.startRep` starts the rep's frame.
--/
+/-! A frame round's coin count and configuration are the model's (`ofLoop_coins_round`, `ofLoop_cfg`). -/
 
 @[expose] public section
 
@@ -28,9 +13,6 @@ open _root_.Flock.ZkServer.Session (State planOf reqAt)
 open _root_.Flock.ZkServer.Frame (Cfg Draws)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **A round's coin count is the loop's at its opening**: a round of `n` coins of `stream` that the relay's coin check
-passes (`coinsOf`), where the relay's schedule is the setup's (`State.sendHello`'s `planOf`), is at an opening `j ≥ 1`
-of the session's, and `n` is the loop's count there (`Loop.loopNr`). -/
 theorem loopNr_round {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) {S : State} (hp : S.plan = planOf spec sts)
     {stream : String} {n : Nat} (hc : coinsOf S (.round stream n) = none) :
@@ -46,9 +28,6 @@ theorem loopNr_round {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts :
   rw [if_neg h0]
   exact congrArg Prod.snd e
 
-/-- **The model's coin count at a round the relay's coin check passes is the round's**: at the loop's own frames, the
-round after a history one longer than the session's openings (the `Hello`, then one message an opening) takes the
-round's `n` coins. -/
 theorem ofLoop_coins_round (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -70,8 +49,6 @@ theorem placeOf_cfg' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 :
   (placeOf_run (pl := v.1) (n := v.2.1) h).1
 
 set_option maxHeartbeats 1000000 in
-/-- **The frame `roundPlace` readies has the configuration of the frame it found**: `withAlg`, rep 0's
-algebraic-phase coins at rep 1's first round and `placeOf` keep it. -/
 theorem roundPlace_cfg {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String} (hf : R.find sid i r = some (j, p))
@@ -95,7 +72,6 @@ theorem roundPlace_cfg {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} 
          | (have e2 := (withAlg_run (by assumption)).1
             exact e1.trans e2))
 
-/-- **The frame a round puts back has the configuration of the frame `roundPlace` readied.** -/
 theorem roundStep_cfg {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
@@ -109,9 +85,6 @@ theorem roundStep_cfg {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
   subst hput
   rfl
 
-/-- **The model's configuration at a round of rep stream `k`** (`Loop.repOf`) is `Cfg.ofSamples` at the stream's start
-(`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
-`Frames.startRep` starts the rep's frame. -/
 theorem ofLoop_cfg (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))

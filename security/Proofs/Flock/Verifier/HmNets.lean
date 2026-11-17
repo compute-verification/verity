@@ -2,13 +2,7 @@ module
 
 public import Flock.HmNets
 
-/-!
-Level 3: where `Flock.HmNets.layout` puts a built circuit's rows. Input bit `i`'s row is `[i]` in A and B; the `k`-th AND
-in creation order is row `inRows + k`, its forms' columns (`cols`); output `j` is row `start + j`, its form's columns in A
-and the constant in B (`layout_rows`). A committed bit's column is `col`: an input bit its own, the bit after the inputs
-committed `k`-th `inRows + k` (`col_input`, `col_and`). `shaLaid_eq` and `hmLaid_eq` are the two nets' layouts as
-`layout` of the builder's run, stated without running it.
--/
+/-! Level 3: where `Flock.HmNets.layout` puts a built circuit's rows (`layout_rows`). -/
 
 @[expose] public section
 
@@ -21,7 +15,6 @@ theorem le_nextPow2 (n : Nat) : n ≤ nextPow2 n := by
   · have := Nat.lt_log2_self (n := n - 1)
     omega
 
-/-- A group of `groupWords n` words holds `n` bits. -/
 theorem le_groupWords (n : Nat) : n ≤ groupWords n * WORD := by
   have := le_nextPow2 (max 1 ((n + WORD - 1) / WORD))
   unfold groupWords
@@ -47,10 +40,6 @@ theorem getD_append_right {α : Type} {xs ys : Array α} {i : Nat} {d : α} (h :
     (xs ++ ys).getD i d = ys.getD (i - xs.size) d := by
   simp [Array.getD_eq_getD_getElem?, Array.getElem?_append, Nat.not_lt.mpr h]
 
-/-- **The layout's rows** (`ir_lower.layout`): with `nIn` input bits in a group of `inRows` rows and an output group of
-`span` rows starting at `start` (the first multiple of `span` past the ANDs), input bit `i`'s row is `[i]` in A and B, the
-`k`-th AND's (creation order: `st.rows` reversed) is row `inRows + k` with its forms' columns, output `j`'s is row
-`start + j`, its form's columns in A and the constant in B, and the constant is the column after the output group. -/
 theorem layout_rows (st : St) (inBits outBits : Array Nat) (outs : Array Lin) :
     let l := layout st inBits outBits outs
     let nIn := inBits.foldl (· + ·) 0
@@ -108,7 +97,6 @@ theorem layout_rows (st : St) (inBits outBits : Array Nat) (outs : Array Lin) :
 theorem col_input {nIn inRows v : Var} (h : v < nIn) : col nIn inRows v = v := by
   simp [col, h]
 
-/-- The bit committed `k`-th after the `nIn` input bits is column `inRows + k`, the `k`-th AND's row. -/
 theorem col_and (nIn inRows k : Nat) : col nIn inRows (nIn + k) = inRows + k := by
   have h : ¬ nIn + k < nIn := by omega
   simp only [col, h, ite_false]

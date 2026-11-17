@@ -26,39 +26,12 @@ import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 set_option Elab.async false
 
-/-!
-# Each unit of a session's table, placed and lowered
-
-`accepted_check`: at a statement the verifier parsed whose statement check passes (`Read.check`, the first half of its
-scope refusal), with hidden outputs, each table `j` has an accepted statement of its own (`HiddenExec.AcceptedH`),
-fixed by the statement alone, whose block R1CS every witness of the deployed relation satisfies with table `j`'s share
-of its hidden values (`Readable.zOf`). It is `InnerRows.rows_commit_check`'s setup: each table's `Stmt.setupHidden`
-run, its rows' fit, its layout, and `relS_relation`. `bit_block_zOf` reads that share's bits as `InnerRows.bitAt`, so
-`unitRows_check`: each template instance's rows (`AcceptedH.rows`: the unit net's rows stacked `units_per_vu` times)
-hold at table `j`'s bits, in every block, in the columns the statement places them (`AcceptedH.col`).
-
-**A unit of the circuit's program** (`Placed.keyProg c hU n`, whose lowering is a member's program). Where the accepted
-statement's circuit unrolls to `c`, `unitPlace` places unit `u` at template instance `g` of block `o`: its rows are the
-statement's (`rows_keyProg`, W6 by definition), its instance the program's own (`Const.Prog.instC`), and its inputs on
-one gate carry one value, since they have one source key (`aliased_keyProg`, as `SitesH.aliased_keyProg`). So at every
-witness the table's statement accepts, the values the unit's block decodes satisfy each of its gates
-(`UnitPlace.apply_decode`, with `UnitPlace.correct`'s premises), and Bridge's lowering computes them at each wire's
-position from committed values that carry them where the unit reads from outside (`runIn_unitPlace`).
-
-**What `Embeds` asks of the unit** (`SpotFlock.Format`): values that hold the unit's gates and carry the constants the
-lowering fixes wherever the unit reads them, on which its lowered gates are correct (`Bridge.correct_unitGates_of`).
-A placed unit's decoded values hold its gates (`UnitPlace.apply_decode`) and carry those constants (`decode_consts`):
-the one gate is read only on its constant column, the zero gate only on inputs with no source key, and no other gate
-the constants fix.
--/
+/-! Each table of a checked, hidden-output statement has an accepted statement whose template instances' rows hold at the witness's bits, and a placed unit's decoded values hold its gates and carry the lowering's constants. -/
 
 namespace SpotFlock
 
 open FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
 
-/-- **Each table of a parsed, checked, hidden-output statement has an accepted statement its share satisfies**: table
-`j` has an accepted statement `a` on `p.sts[j]`, whose circuit is the one the scope check parses (`Read.circ`), and
-whose block R1CS `T` every witness of the deployed relation satisfies with table `j`'s share of its hidden values. -/
 theorem accepted_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true)
     {j : ℕ} (hj : j < p.sts.size) :
     ∃ (T : Model.Statement) (a : HiddenExec.AcceptedH T), a.st = p.sts[j] ∧ T.kLog = p.sts[j].c.kLog ∧
@@ -129,8 +102,6 @@ theorem accepted_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
   obtain ⟨_, hsat⟩ := hsatAll w hR
   exact hsat
 
-/-- **The model's bit at a block's column is the witness's** (`InnerRows.bitAt`): table `j`'s share of the hidden values
-(`Readable.zOf`), at block `o` and column `y`, wherever the statement's blocks are table `j`'s. -/
 theorem bit_block_zOf {T : Model.Statement} (p : Parsed) (w : Claims.Flock.Wit) (j : ℕ)
     (hk : T.kLog = p.sts[j]!.c.kLog) (o : Fin (2 ^ T.nbl)) (y : Fin (2 ^ T.kLog)) :
     FlockSoundness.bit (T.block (zOf p.sts.size w j T.m) o y) = Flock.InnerRows.bitAt p w j o y := by
@@ -139,10 +110,6 @@ theorem bit_block_zOf {T : Model.Statement} (p : Parsed) (w : Claims.Flock.Wit) 
   unfold Flock.InnerRows.bitAt
   rw [congrArg (fun k => o.val * 2 ^ k + y.val) hk]
 
-/-- **Each template instance's rows hold at the session witness's bits**: at a statement the verifier parsed whose
-statement check passes, with hidden outputs, table `j` has an accepted statement `a` on `p.sts[j]`, and at every
-witness of the deployed relation, every template instance `g` and every block `o`, the template instance rows hold at
-table `j`'s bits of block `o` in the template instance's columns. -/
 theorem unitRows_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true)
     {j : ℕ} (hj : j < p.sts.size) :
     ∃ (T : Model.Statement) (a : HiddenExec.AcceptedH T), a.st = p.sts[j] ∧ T.kLog = p.sts[j].c.kLog ∧
@@ -154,10 +121,6 @@ theorem unitRows_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
   have hk' : T.kLog = p.sts[j]!.c.kLog := by rw [hk, getElem!_pos p.sts j hj]
   simpa only [bit_block_zOf p w j hk'] using (a.placement hg).sat.rowsSat (hsat w hR) o
 
-/-! ## A unit of the circuit's program, placed and lowered -/
-
-/-- **The decoded values satisfy each of the unit's gates**: at a witness the statement accepts, each gate of a placed
-unit holds its operation applied to the values the unit's block decodes. -/
 theorem _root_.FlockSoundness.UnitPlace.apply_decode {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n}
     {S : Model.Statement} {u : Fin n} (pl : UnitPlace P S u) {z : Model.Witness S.m} (hz : S.Satisfies z) (g : Fin C.N)
     (hg : P.unit g = some u) : pl.decode z g = (C.op g).apply (pl.decode z) := by
@@ -174,14 +137,10 @@ variable {c : _root_.Flock.Circuit} (hU : Built c.unit) {n : ℕ}
   {T : Model.Statement} (a : HiddenExec.AcceptedH T) (hparse : HmOut.unrolled a.st.c = c)
 
 include hparse in
-/-- **W6 at one accepted statement**: each unit's rows in the circuit's program are the statement's template instance
-rows. -/
 theorem rows_keyProg (u : Fin n) : (Placed.keyProg c hU n).rows u = a.rows :=
   (Placed.rows_circuitProg c hU n _ _ u).trans (a.rows_eqU hparse hU).symm
 
 include hparse in
-/-- **A unit's inputs on one gate have one source key**, so they are aliased in the accepted statement's layout at any
-template instance and block (`AcceptedH.aliased_of_key`, as `SitesH.aliased_keyProg`). -/
 theorem aliased_keyProg (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) :
     a.L.Aliased a.regs (rows_keyProg hU a hparse u ▸ Const.Prog.instC (Placed.keyProg c hU n) outs u)
       (Fin.cast a.nbl_eq.symm o) hg := by
@@ -197,8 +156,6 @@ theorem aliased_keyProg (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ 
     fun a' b hab => by rw [hparse]; exact hab
   exact Hidden.srcKey_eq_commit a.ht a.committed a.unitFacts.check (key _ _ hk)
 
-/-- **Unit `u` of the circuit's program, placed at template instance `g` of block `o`** of one accepted statement whose
-circuit unrolls to `c`. -/
 noncomputable def unitPlace (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) :
     UnitPlace ((Placed.keyProg c hU n).partition outs) T u where
   R := (Placed.keyProg c hU n).rows u
@@ -209,10 +166,6 @@ noncomputable def unitPlace (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (
   aliased := a.aliased_of_layout (rows_keyProg hU a hparse u) _ o hg (aliased_keyProg hU outs a hparse u hg o)
 
 include hparse in
-/-- **A placed unit carries the lowering's constants** (`Bridge.constsOf`): at a witness the statement accepts, the
-value its block decodes at each input the constants fix that the unit reads is that constant. The unit reads the
-constant's gate only on its constant column, which carries `1` (`UnitPlace.decode_one`), and the zero's only on inputs
-that read the zero, which carry `0` (`AcceptedH.zero_block`); no unit reads the other inputs the constants fix. -/
 theorem decode_consts (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {z : Model.Witness T.m}
     (hz : T.Satisfies z) (x : Fin (Discharge.Layout.keyN c hU n)) (b : Bool) (hk : Bridge.constsOf c hU n x = some b)
     (hr : ∃ g', ((Placed.keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)).unit g' = some u ∧
@@ -303,9 +256,6 @@ theorem decode_consts (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.
       exact pl.decode_one hz
     · exact absurd hw h1
 
-/-- **Bridge's lowering computes a placed unit's decoded values**: at a witness the statement accepts, on committed
-values that carry the decoded values wherever the unit's lowered gates read from outside it, running the unit's lowered
-gates gives each of its wires' decoded value at the wire's position. -/
 theorem runIn_unitPlace {κ : Fin ((Placed.keyProg c hU n).circuit outs).N → Option Bool} (u : Fin n) {g : ℕ}
     (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {z : Model.Witness T.m} (hz : T.Satisfies z) (ref : ℕ → Option Bool)
     (hread : ∀ p ∈ Bridge.unitGates ((Placed.keyProg c hU n).partition outs) u, ∀ x,

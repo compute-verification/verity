@@ -4,26 +4,7 @@ public import Proofs.Flock.ZkAny.RelayAlg
 public import Proofs.Flock.ZkAny.RelayPlace
 public import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# A rep's frame at its stream's first round, as `Frames.startRep` pushed it
-
-A rep's frame starts fresh (`FreshRep`), and until the rep's first round only updates that keep it come (`Kept`). At
-that round the loop schedules the rep's algebraic phase on it (`withAlg`), and from there the frame keeps its schedule
-so far (`Loop.RepInv`):
-
-* `frameAt_keptStep_cases`, `freshAt_kept`: an update that keeps a rep's frame leaves it as it was or is a start
-  pushing a fresh one, so a run of them keeps a rep's frame absent or fresh (`FreshAt`).
-* `fresh_found`, `fresh_repRun`, `fresh_alg`: so the frame a rep's first round finds is fresh, its run on no requests
-  (the switch lemmas' `RepRun [] []`), with no scheduled rounds yet (`withAlg_size`'s premise).
-* `tower_back`, `cap_root_build`: a level 0 `Level0.build` built has its root its commitment's cap, concatenated.
-* `withAlg_keep`, `repInv_withAlg`: `withAlg` sets only the scheduled rounds, so on a fresh frame, at a table whose
-  commitment's cap is the level-0 root, the frame it gives keeps its schedule so far.
-* `roundPlace_first_of`: at a stream's first round, the readied frame is `placeOf`'s on `withAlg`'s, after rep 0's
-  algebraic-phase coins at rep 1.
-* **`roundRun_repInv_first`**: so at a `RoundRun` of a stream's first round on a fresh frame, whose round releases and
-  whose coins the rep's frame took, the round is in the place the schedule so far gives the stream's first round
-  (unless that is the inner proof's own), and the frame the session's next round finds keeps its schedule so far.
--/
+/-! A rep's frame at its stream's first round, as `Frames.startRep` pushed it, keeps its schedule so far (`roundRun_repInv_first`). -/
 
 @[expose] public section
 
@@ -34,10 +15,8 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
-/-- **Session `sid`'s table `i`'s rep `r`'s frame is absent or fresh** in the loop's frames `R`. -/
 def FreshAt (R : Sessions) (sid i r : Nat) : Prop := ∀ p, frameAt R sid i r = some p → FreshRep p
 
-/-- **An update that keeps a rep's frame leaves it as it was, or is a start pushing a fresh frame.** -/
 theorem frameAt_keptStep_cases {sid i r : Nat} {R R' : Sessions} (h : KeptStep sid i r R R') :
     frameAt R' sid i r = frameAt R sid i r ∨ ∃ q, FreshRep q ∧ R' = startAt R q := by
   cases h with
@@ -78,7 +57,6 @@ theorem frameAt_keptStep_cases {sid i r : Nat} {R R' : Sessions} (h : KeptStep s
       have hb : (q.sid != sid') = true := by simp [hq, Ne.symm hne]
       simp [hb]
 
-/-- **An update that keeps a rep's frame keeps it absent or fresh.** -/
 theorem freshAt_keptStep {sid i r : Nat} {R R' : Sessions} (h : KeptStep sid i r R R') (hf : FreshAt R sid i r) :
     FreshAt R' sid i r := by
   intro p hp
@@ -108,34 +86,28 @@ theorem freshAt_keptStep {sid i r : Nat} {R R' : Sessions} (h : KeptStep sid i r
         rw [hp'] at hp
         exact hf p (hfd.trans hp)
 
-/-- **Updates that keep a rep's frame keep it absent or fresh.** -/
 theorem freshAt_kept {sid i r : Nat} {R R' : Sessions} (h : Kept sid i r R R') (hf : FreshAt R sid i r) :
     FreshAt R' sid i r := by
   induction h with
   | refl => exact hf
   | step _ hs ih => exact freshAt_keptStep hs ih
 
-/-- **The frame found where the rep's frame is absent or fresh is fresh.** -/
 theorem fresh_found {R : Sessions} {sid i r j : Nat} {p : Rep} (hF : FreshAt R sid i r)
     (hf : R.find sid i r = some (j, p)) : FreshRep p :=
   hF p (by rw [← find_frameAt, hf]; rfl)
 
-/-- **A fresh frame is its run on no requests.** -/
 theorem fresh_repRun {p : Rep} (h : FreshRep p) : RepRun [] [] p := repRun_start h.st h.coins
 
-/-- **A fresh frame has no scheduled rounds yet.** -/
 theorem fresh_alg {p : Rep} (h : FreshRep p) : p.alg.isEmpty = true := by
   rw [h.alg]
   rfl
 
-/-- **A Merkle tower's last layer is its top.** -/
 theorem tower_back (d : Nat) (lf : Nat → ByteArray) :
     ∀ k, (_root_.Flock.ZkServer.Level0.tower d lf k).2.back? = some (_root_.Flock.ZkServer.Level0.tower d lf k).1
   | 0 => rfl
   | k + 1 => by
     simp only [_root_.Flock.ZkServer.Level0.tower, Array.back?_push]
 
-/-- **A built level 0's root is its commitment's cap, concatenated.** -/
 theorem cap_root_build {l : _root_.Flock.ZkServer.Level0.Level0} {wide : Bool} {m tPad : Nat} {lv g extra pads salts}
     (h : l = _root_.Flock.ZkServer.Level0.build wide m lv tPad g extra pads salts) :
     _root_.Flock.ZkServer.Finish.flat (_root_.Flock.ZkServer.Finish.commitOf l).cap = l.root := by
@@ -144,7 +116,6 @@ theorem cap_root_build {l : _root_.Flock.ZkServer.Level0.Level0} {wide : Bool} {
   simp only [tower_back, Option.getD_some]
   rfl
 
-/-- **`withAlg` sets only the scheduled rounds**: the frame it gives has the given one's key, coins and opening. -/
 theorem withAlg_keep {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p q : Rep}
     (h : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok q) :
     q.table = p.table ∧ q.rep = p.rep ∧ q.coins = p.coins ∧ q.opening = p.opening ∧ q.opened = p.opened ∧
@@ -156,8 +127,6 @@ theorem withAlg_keep {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {n
     | (cases h; done)
     | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩)
 
-/-- **On a fresh frame `withAlg` gives a frame keeping its schedule so far**, at the table its level 0 gives the
-frame's table's statement, where that table's commitment's cap is the level-0 root. -/
 theorem repInv_withAlg {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p p' : Rep}
     {stm : Stmt} (hp : FreshRep p) (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p')
     (hst : s.sts[p.table]? = some stm) {t : _root_.Flock.ZkServer.Finish.Tab}
@@ -175,9 +144,6 @@ theorem repInv_withAlg {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} 
   exact ha
 
 set_option maxHeartbeats 1000000 in
-/-- **At a stream's first round the readied frame is `placeOf`'s on `withAlg`'s**: on the found frame at its first
-round, `withAlg`'s frame, after rep 0's algebraic-phase coins at rep 1 (its state then another), is placed by
-`placeOf`, in `placeOf`'s place unless that is the inner proof's own. -/
 theorem roundPlace_first_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p p' q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -200,12 +166,6 @@ theorem roundPlace_first_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Sl
        exact ⟨_, _, _, by assumption, by first | exact Or.inl rfl | exact Or.inr rfl | exact Or.inr (by assumption),
          by first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩⟩)
 
-/-- **A rep's frame after its stream's first round keeps its schedule so far**: at a `RoundRun` of the stream's first
-round on a fresh frame, whose round releases and whose coins the rep's frame took off the auditor's answer, at the
-table and extras the session gives it, and the salts the loop's salts give it where `withAlg` scheduled no rounds
-(`hsalt`, where `placeOf` reads them), where the table's commitment's cap is the level-0 root, the round is in the
-place the schedule so far gives the frame's first round, unless that is the inner proof's own, and the frame the
-session's next round finds keeps that schedule. -/
 theorem roundRun_repInv_first {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)

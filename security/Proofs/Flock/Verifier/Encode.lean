@@ -2,10 +2,7 @@ module
 
 public import Flock.Merkle
 
-/-!
-Level 3: the row encoding a Merkle leaf hashes is injective. `F128.toBytes` is `le64(lo) ‖ le64(hi)`, 16 bytes, and a row's
-bytes are its elements' encodings in order, so two different rows are two different byte strings.
--/
+/-! Level 3: the row encoding a Merkle leaf hashes is injective (`rowBytes_inj`). -/
 
 @[expose] public section
 
@@ -18,7 +15,6 @@ theorem UInt64.byte_toNat (x : UInt64) (k : Nat) (hk : k < 64) :
   simp [Nat.mod_eq_of_lt (show k < 2 ^ 64 by omega)]
   omega
 
-/-- A `UInt64` is its eight little-endian bytes. -/
 theorem UInt64.eq_of_bytes (x y : UInt64)
     (h : ∀ i, i < 8 → (x >>> (8 * i).toUInt64).toUInt8 = (y >>> (8 * i).toUInt64).toUInt8) : x = y := by
   have e := fun i (hi : i < 8) => congrArg UInt8.toNat (h i hi)
@@ -66,7 +62,6 @@ theorem rowBytes_size (L : List F128) : (L.foldl F128.pushBytes ByteArray.empty)
   | nil => simp
   | cons a L ih => rw [rowBytes_cons, ByteArray.size_append, ih, F128.toBytes_size]; simp [Nat.mul_succ]; omega
 
-/-- **The row encoding is injective:** two rows with one byte string are one row. -/
 theorem rowBytes_inj {r r' : Array F128} (h : MerkleScheme.rowBytes r = MerkleScheme.rowBytes r') : r = r' := by
   simp only [MerkleScheme.rowBytes, ← Array.foldl_toList] at h
   suffices ∀ L L' : List F128, L.foldl F128.pushBytes ByteArray.empty = L'.foldl F128.pushBytes ByteArray.empty → L = L' by

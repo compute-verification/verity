@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelaySession
 public import Proofs.Flock.ZkAny.RelayParams
 
-/-!
-# A round's frame keeps the session's stop, and its scheduled round is the model's
-
-Two of the Round slot's facts at a frame round, from the loop's code:
-
-* `prior_stopped`: rep 1's prior step at its first round (rep 0's algebraic-phase coins) adds only prior claims to the
-  masking state. **`roundPlace_stopped`**: so the frame `roundPlace` readies has stopped exactly where the frame it
-  found had, and (`roundPlace_live`) not in a session that has not stopped. **`stopped_step`**: `stopped_next` with
-  no premise on the readied frame: from a round that releases to the session's next request, the session's stop is
-  the round's put's on the frames the round read.
-* `placeAt_sched`: where the schedule so far places a round in the scheduled place, it holds that round there.
-  **`scheduled_place`**: the model's scheduled round at the loop's own frames (`LeanRelease.ofLoop`), after a history
-  whose located rep's own table and schedule so far on the history's coins place round `rr` at the located round, is
-  `rr`: the round `Loop.placeOf_sched` places at a frame keeping that schedule on those coins.
--/
+/-! A round's frame keeps the session's stop, and its scheduled round is the model's (`stopped_step`, `scheduled_place`). -/
 
 @[expose] public section
 
@@ -27,7 +13,6 @@ open _root_.Flock (V SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frame (Cfg)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **Rep 1's prior step keeps the masking state's stop**: it adds only prior claims. -/
 theorem prior_stopped (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (k : Nat) (b : ByteArray) :
     (_root_.Flock.ZkServer.Frame.step c st (.prior k b)).2.m.stopped = st.m.stopped := by
   simp only [_root_.Flock.ZkServer.Frame.step]
@@ -48,8 +33,6 @@ theorem placeOf_st' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : 
   (placeOf_run (pl := v.1) (n := v.2.1) h).2.1
 
 set_option maxHeartbeats 1000000 in
-/-- **The frame `roundPlace` readies has stopped exactly where the frame it found had**: `withAlg`, rep 0's
-algebraic-phase coins at rep 1's first round and `placeOf` keep the masking state's stop. -/
 theorem roundPlace_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String} (hf : R.find sid i r = some (j, p))
@@ -77,7 +60,6 @@ theorem roundPlace_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slo
                  exact ((congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) e1).trans e3).trans
                    (congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) e2))))
 
-/-- **In a session that has not stopped, the frame `roundPlace` readies has not stopped.** -/
 theorem roundPlace_live {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
@@ -92,8 +74,6 @@ theorem roundPlace_live {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
       rw [← find_frameAt, hf] <;> rfl
     exact stopped_frameAt hR hfa
 
-/-- **The session's stop from a round that releases to its next request** is the round's put's on the frames the
-round read (`stopped_next`, its readied frame's stop from `roundPlace_live`). -/
 theorem stopped_step {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
@@ -107,7 +87,6 @@ theorem stopped_step {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.ZkServer.L
     R₃.stopped sid = (R.put p₁).stopped sid :=
   stopped_next hfr hrp (roundPlace_live hrp) ho hput hK₀₁ hS₀₁ hK₁₂ hS₁₂ hcs hS₂₃
 
-/-- **Where the schedule so far places a round in the scheduled place, it holds that round there.** -/
 theorem placeAt_sched {sched : Array (ByteArray × Nat)} {k : Nat} {rr : ByteArray}
     (h : (Loop.placeAt sched k).1 = .sched rr) : ∃ n, sched[k]? = some (rr, n) := by
   unfold Loop.placeAt at h
@@ -116,9 +95,6 @@ theorem placeAt_sched {sched : Array (ByteArray × Nat)} {k : Nat} {rr : ByteArr
     exact ⟨_, by assumption⟩
   · cases h
 
-/-- **The model's scheduled round is the round the schedule places in the device's place**: at the loop's own frames,
-after a history whose located rep's own table is `(t, hi)` and whose schedule so far on the history's coins (`sched`)
-places round `rr` at the located round, the scheduled round is `rr`. -/
 theorem scheduled_place (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))

@@ -4,22 +4,7 @@ public import Proofs.Flock.ZkAny.RelayRelease
 public import Proofs.Flock.ZkAny.RelayFirst
 public import Proofs.Flock.Claims.ZK.LiveBefore
 
-/-!
-# A released frame round is the deferred model's message
-
-The deferred release stands in for the worker once a round of the session failed (`ZkServer.wkD`); the loop's frames
-stand in once the session stopped (`Frames.Sessions.stopped`). Where the session's stop is the model's, whether an
-earlier round failed (`ZkServer.liveBefore`), a frame round is one message in both:
-
-* **`roundStep_nextD`**: at a frame round below the `Finish` whose worker value is the device round the loop's frame
-  takes, where Rust's checks fail only device rounds the frame fails, what the loop's round releases is the deferred
-  release's message after `h`, after the stream's domain frame at its first round, and after its put the session's
-  stop is again the model's, one round on.
-* `roundStep_put_some`: a round at a place `roundPlace` readies puts a frame back. **`envOk_roundStep`**: so where what
-  the relay read for a round is the loop's round on its frames, whose release is a message's after the stream's domain
-  frame at its first round (as `roundStep_nextD` gives the deferred model's), and the loop's first round of the stream
-  and its domain frame are the schedule's and the setup's, what the relay read there is that message's (`EnvOk`).
--/
+/-! Where the session's stop is the model's, a released frame round is the deferred model's message (`roundStep_nextD`, `envOk_roundStep`). -/
 
 @[expose] public section
 
@@ -29,12 +14,6 @@ open _root_.Flock (SessionSpec)
 open _root_.Flock.ZkServer.Frame (Masker Place)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **A released frame round of the session is the deferred model's message, and keeps the session's stop the
-model's**: at a frame round below the `Finish` of the session's rep `(i, r)`, whose worker value is the device round `v`
-the loop's frame takes, where Rust's checks fail only device rounds the frame fails and the round's place, configuration
-and masking state are the model's (`roundStep_release`'s premises), and where the session has stopped exactly where an
-earlier round failed, what the round releases is the deferred release's message after `h`, after the stream's domain
-frame at its first round; after its put the session has stopped exactly where a round up to this one failed. -/
 theorem roundStep_nextD {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (wk : L.toSrv.Worker) (x : Msg) (w : W)
     (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
     (hn : h.length + 1 < n x) (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
@@ -58,7 +37,6 @@ theorem roundStep_nextD {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (
   · rw [hst']
     exact L.stop_frame_snoc wk x w ρ κ h hk hlt hv hcr hst e
 
-/-- **A round at a place `roundPlace` readies puts a frame back.** -/
 theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
@@ -68,10 +46,6 @@ theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slo
   obtain ⟨v, hv⟩ := roundStep_put hrp hres
   exact ⟨_, hv⟩
 
-/-- **What the relay read for a round is the message the loop's round releases**: where the relay's read of the round
-(`Env.round`) is the loop's round on its frames at a place `roundPlace` readies, whose release, wherever it puts a frame
-back, is the message `M`'s after the stream's domain frame at its first round (`roundStep_nextD`), and the loop's
-first round of the stream is the schedule's and its domain frame the setup's. -/
 theorem envOk_roundStep {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     {spec : SessionSpec} {seen : List String} {stream : String} {k : Nat} {e : Env} {M : Msg}

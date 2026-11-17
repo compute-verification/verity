@@ -4,46 +4,13 @@ public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.WiredAt
 public import Proofs.Flock.SpotFlock.ScopeDesc
 
-/-!
-# The code's wiring map rewires the members' programs
-
-`Prog.Rewires` (`SamplingGeneric.WiredScope`) is the one condition the wired program's scope and a proof block's
-values there ask of a map. This file proves it of the map the code's own wires give (`wireMap h`, `WireMap`), over
-the members' programs side by side (`bitsProgs h.ms`) and their proof blocks (`membersPart h.ms`), returning the gates
-the boundary record holds (`returned h`), through `Prog.Rewires.of_earlier`:
-
-* `bitsProg_input`, `bitsProg_row`: in a key program lowered, a source gate the constants leave free is an input
-  gate at its own index, and a row's position holds an AND gate. `exists_row_blockOf`: a unit's proof block holds a
-  row's position, where the unit has a row.
-* `gateMember ms i`: the member whose gates hold position `i`, counted as the members whose gates end at or before
-  it. It rises with the position (`lt_of_gateMember_lt`), and member `m`'s positions have it `m`
-  (`gateMember_base_add`).
-* `bitsProgs_input`, `bitsProgs_written`: in the members' programs, a member's source gate the constants leave free
-  is an input gate, and its gate on a returned output's bit is an AND gate the members' programs return.
-* `lt_length_blockOf_keyProg`: a gate of a unit's proof block is a gate of its member's program.
-* `gateMember_touches`: a proof block of the members holds a gate that is no input, and every gate it holds or reads
-  is one member's.
-* `mem_sourceBits`, `mem_writtenBits`: a source bit is a member's source gate the constants leave free, and a written
-  bit a member's gate on a returned output's bit.
-* `writersFirst h`: each wire's writer's part is before its reader's, decided, a part's place being the first
-  template of its name (`heldPos`). `writer_lt_of_wireUnit`: there, the template a unit's wire names is before the
-  unit's own.
-* `rewires_wireMap`: `(bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)`, where each member's
-  unit net is built (`Built`) with at most `2^32` rows, each of its units has a computed row, and each wire's
-  writer's part is before its reader's. It asks nothing of a member's size.
-
-The map may send two source bits of one unit to one gate: a unit that reads one output of its writer at two of its
-ports. `Prog.Rewires` does not exclude it; a proof block's values at the wired program are then the block's own where
-they agree at the two (`Prog.Rewires.exists_correct`).
--/
+/-! The code's wiring map rewires the members' programs (`rewires_wireMap`); it may send two source bits of one unit to one gate, which `Prog.Rewires` does not exclude. -/
 
 @[expose] public section
 
 namespace Flock.Bridge.Members
 
 open Claims.Sampling Properties.Spot
-
-/-! ## A key program's source gates and rows, lowered -/
 
 theorem lt_size_of_isSome_row? {kp : Spot.Bits.KeyProg} {g : ℕ} (h : (kp.row? g).isSome) : g < kp.size := by
   unfold Spot.Bits.KeyProg.row? at h
@@ -59,7 +26,6 @@ theorem row?_of_lt_inputs {kp : Spot.Bits.KeyProg} {g : ℕ} (hg : g < kp.inputs
   unfold Spot.Bits.KeyProg.row?
   exact ite_eq_left hg
 
-/-- **An input gate's position is its index**: a key program's inputs come first, one lowered gate each. -/
 theorem posOf_of_lt_inputs (kp : Spot.Bits.KeyProg) {g : ℕ} (hg : g < kp.inputs) : Spot.Bits.posOf kp g = g := by
   have hsz : g ≤ kp.size := by
     unfold Spot.Bits.KeyProg.size
@@ -70,7 +36,6 @@ theorem posOf_of_lt_inputs (kp : Spot.Bits.KeyProg) {g : ℕ} (hg : g < kp.input
   unfold Spot.Bits.posOf
   omega
 
-/-- **A source gate the constants leave free is an input gate of the lowered program**, at its own index. -/
 theorem bitsProg_input (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {g : ℕ} (hg : g < kp.inputs)
     (hκ : κ g = none) : (bitsProg kp κ).gates[g]? = some .input := by
   have hsz : g < kp.size := by
@@ -82,7 +47,6 @@ theorem bitsProg_input (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {g : 
   rw [posOf_of_lt_inputs kp hg, hl, gateSize_of_lt hg] at h
   exact h.trans rfl
 
-/-- **A row is lowered to an AND gate at its position.** -/
 theorem bitsProg_row (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {g : ℕ} (hg : (kp.row? g).isSome) :
     (bitsProg kp κ).gates[Spot.Bits.posOf kp g]? = some (.and [Spot.Bits.off kp g, Spot.Bits.off kp g + 1]) := by
   obtain ⟨⟨a, b⟩, hr⟩ := Option.isSome_iff_exists.1 hg
@@ -96,7 +60,6 @@ theorem bitsProg_row (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {g : �
   rw [hl, hs] at h
   exact h.trans rfl
 
-/-- The first row of unit `u` is unit `u`'s. -/
 theorem unitOf_first (kp : Spot.Bits.KeyProg) {u : ℕ} (hp : 0 < kp.perUnit)
     (hs : kp.inputs + u * kp.perUnit < kp.size) :
     Spot.Bits.unitOf kp (kp.inputs + u * kp.perUnit) = some u := by
@@ -110,7 +73,6 @@ theorem unitOf_first (kp : Spot.Bits.KeyProg) {u : ℕ} (hp : 0 < kp.perUnit)
   unfold Spot.Bits.unitOf
   rw [ite_eq_right hne, Nat.add_sub_cancel_left, Nat.mul_div_cancel _ hp]
 
-/-- A gate's position is among its unit's lowered gates. -/
 theorem bitsPosOf_mem_unitGates (kp : Spot.Bits.KeyProg) {g u : ℕ} (hg : g < kp.size)
     (hu : Spot.Bits.unitOf kp g = some u) : Spot.Bits.posOf kp g ∈ Spot.Bits.unitGates kp u := by
   have hpos : 0 < Spot.Bits.gateSize kp g := by
@@ -130,7 +92,6 @@ theorem bitsPosOf_mem_unitGates (kp : Spot.Bits.KeyProg) {g u : ℕ} (hg : g < k
   rw [ite_eq_left hb]
   exact hmem
 
-/-- **A unit's proof block holds a row's position**, where the unit has a row. -/
 theorem exists_row_blockOf (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {u : ℕ} (hp : 0 < kp.perUnit)
     (hs : kp.inputs + u * kp.perUnit < kp.size) :
     ∃ g, (kp.row? g).isSome ∧ Spot.Bits.posOf kp g ∈ Spot.Bits.blockOf kp κ u := by
@@ -138,7 +99,6 @@ theorem exists_row_blockOf (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {
   unfold Spot.Bits.blockOf
   exact List.mem_append_left _ (bitsPosOf_mem_unitGates kp hs (unitOf_first kp hp hs))
 
-/-- **The gate on a returned output's bit is one of the key program's outputs.** -/
 theorem outGate_mem_outs {c : _root_.Flock.Circuit} {n u k j t a : ℕ} (hu : u < n) (hk : k < c.upv)
     (hj : j < (c.leavesOut.getD k #[]).size) (ht : t < 16) (h : Spot.Bits.outGate c n u k j t = some a) :
     a ∈ (Spot.Bits.keyProg c n).outs := by
@@ -146,9 +106,6 @@ theorem outGate_mem_outs {c : _root_.Flock.Circuit} {n u k j t a : ℕ} (hu : u 
   simp only [List.mem_flatMap, List.mem_range, List.mem_filterMap]
   exact ⟨u, hu, k, hk, j, hj, t, ht, h⟩
 
-/-! ## A gate's member -/
-
-/-- **The member whose gates hold position `i`**: the number of members whose gates end at or before it. -/
 def gateMember (ms : Spot.Bits.Members) (i : ℕ) : ℕ :=
   (List.range ms.length).countP fun m => decide (Spot.Bits.base ms (m + 1) ≤ i)
 
@@ -174,7 +131,6 @@ theorem gateMember_mono {i j : ℕ} (hij : i ≤ j) : gateMember ms i ≤ gateMe
   unfold gateMember
   exact List.countP_mono_left fun _ _ hm => decide_eq_true (Nat.le_trans (of_decide_eq_true hm) hij)
 
-/-- **A member's gates are before every later member's.** -/
 theorem lt_of_gateMember_lt {i j : ℕ} (h : gateMember ms i < gateMember ms j) : i < j := by
   rcases Nat.lt_or_ge i j with hlt | hge
   · exact hlt
@@ -197,17 +153,12 @@ theorem gateMember_eq {t i : ℕ} (ht : t < ms.length) (h1 : Spot.Bits.base ms t
   unfold gateMember
   rw [hc, countP_lt_range (Nat.le_of_lt ht)]
 
-/-- **Member `m`'s positions are member `m`'s.** -/
 theorem gateMember_base_add {m p : ℕ} (hm : m < ms.length)
     (hp : p < (memberProg ms[m].1 ms[m].2.size).gates.length) :
     gateMember ms (Spot.Bits.base ms m + p) = m := by
   have hb := base_succ ms hm
   exact gateMember_eq ms hm (Nat.le_add_right _ _) (by omega)
 
-/-! ## A member's source gates and written gates, in the members' programs -/
-
-/-- **A member's source gate the constants leave free is an input gate of the members' programs**, and a position
-of the member's. -/
 theorem bitsProgs_input (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) {m g : ℕ} (hm : m < ms.length)
     (hg : g < (Spot.Bits.keyProg ms[m].1 ms[m].2.size).inputs)
     (hκ : Spot.Bits.consts ms[m].1 ms[m].2.size g = none) :
@@ -220,8 +171,6 @@ theorem bitsProgs_input (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topol
   rw [hin] at hq
   exact ⟨hq.trans rfl, hlt⟩
 
-/-- **A member's gate on a returned output's bit is an AND gate the members' programs return**, and a position of
-the member's. -/
 theorem bitsProgs_written (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) {m a : ℕ} (hm : m < ms.length)
     (ha : a ∈ (Spot.Bits.keyProg ms[m].1 ms[m].2.size).outs) :
     (∃ ws, (bitsProgs ms).gates[Spot.Bits.base ms m +
@@ -248,15 +197,10 @@ theorem bitsProgs_written (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Top
       Spot.Bits.off (Spot.Bits.keyProg ms[m].1 ms[m].2.size) a + 1].map (Spot.Bits.base ms m + ·), hq.trans rfl⟩,
     (hA.outs _ hlt).2 hout, hlt⟩
 
-/-! ## A proof block of the members -/
-
 section keyProg
 
 open FlockSoundness FlockSoundness.Discharge
 
-/-- **A gate of a unit's proof block is a gate of its member's program**, where the member's unit net is built
-(`Built`) with at most `2^32` rows: what `partitions_keyProg` says of a block's gates, with nothing asked of the
-program's size. -/
 theorem lt_length_blockOf_keyProg (c : _root_.Flock.Circuit) (n : ℕ) {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32)
     (u : Fin n) {p : ℕ} (hp : p ∈ Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u.val) :
     p < (memberProg c n).gates.length := by
@@ -267,9 +211,6 @@ theorem lt_length_blockOf_keyProg (c : _root_.Flock.Circuit) (n : ℕ) {hU : Bui
 
 end keyProg
 
-/-- **A proof block of the members holds a gate that is no input, and the gates it holds or reads are one
-member's**, where each member's unit net is built (`Built`) with at most `2^32` rows and each of its units has a
-computed row. Nothing is asked of a member's size. -/
 theorem gateMember_touches (hbuilt : ∀ ci ∈ ms, FlockSoundness.Built ci.1.unit)
     (hlog : ∀ ci ∈ ms, ci.1.unit.unitLog ≤ 32) (hrow : ∀ ci ∈ ms, 0 < ci.2.size → 0 < (bitsRows ci.1).nComp)
     {u : List ℕ} (hu : u ∈ (membersPart ms).blocks) :
@@ -333,9 +274,6 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy
 open Properties.Spot (bitsProgs membersPart memberProg)
 
-/-! ## Source bits and written bits -/
-
-/-- **A source bit is a member's source gate the constants leave free**, at the member's positions. -/
 theorem mem_sourceBits {ms : Spot.Bits.Members} {x t : ℕ} {r : Spot.Bits.RowPos}
     (hs : (x, t, r) ∈ sourceBits ms) :
     ∃ ht : t < ms.length, ∃ g, g < (Spot.Bits.keyProg ms[t].1 ms[t].2.size).inputs ∧
@@ -361,8 +299,6 @@ theorem mem_sourceBits {ms : Spot.Bits.Members} {x t : ℕ} {r : Spot.Bits.RowPo
     subst h2
     exact ⟨hm', g, List.mem_range.1 hg, hκ, h1.symm⟩
 
-/-- **A written bit is a member's gate on a returned output's bit**, one of its key program's outputs, at the
-member's positions. -/
 theorem mem_writtenBits {ms : Spot.Bits.Members} {y tw : ℕ} {r : Spot.Bits.RowPos}
     (hs : (y, tw, r) ∈ writtenBits ms) :
     ∃ ht : tw < ms.length, ∃ a, a ∈ (Spot.Bits.keyProg ms[tw].1 ms[tw].2.size).outs ∧
@@ -406,9 +342,6 @@ theorem mem_writtenBits {ms : Spot.Bits.Members} {y tw : ℕ} {r : Spot.Bits.Row
 
 variable (h : Held)
 
-/-! ## Each wire's writer's part is before its reader's -/
-
-/-- The first template of a name is at or before every template of that name. -/
 theorem heldWriter_le {name : String} {t : ℕ} (ht : t < h.ms.length) (hn : h.names.getD t "" = name) :
     ∃ t', heldWriter h name = some t' ∧ t' ≤ t := by
   unfold heldWriter
@@ -425,8 +358,6 @@ theorem heldWriter_le {name : String} {t : ℕ} (ht : t < h.ms.length) (hn : h.n
     rw [hn, beq_self_eq_true name] at hnot
     exact Bool.false_ne_true hnot
 
-/-- **Where each wire's writer's part is before its reader's, the template a unit's wire names is before the
-unit's own.** -/
 theorem writer_lt_of_wireUnit (hc : writersFirst h = true) {t : ℕ} (ht : t < h.ms.length) {port : String} {u : ℕ}
     {y : ℕ × String × ℕ} (hy : wireUnit h t port u = some y) : y.1 < t := by
   unfold wireUnit at hy
@@ -442,13 +373,6 @@ theorem writer_lt_of_wireUnit (hc : writersFirst h = true) {t : ℕ} (ht : t < h
   rw [htw, ht', Option.getD_some, Option.getD_some] at hlt
   exact Nat.lt_of_lt_of_le hlt hle
 
-/-! ## The wiring map rewires the members' programs -/
-
-/-- **The code's wiring map rewires the members' programs** (`Prog.Rewires`), returning the gates the boundary
-record holds, where each member's unit net is built (`Built`) with at most `2^32` rows, each of its units has a
-computed row, and each wire's writer's part is before its reader's (`writersFirst`): a gate the map moves is a
-source bit, an input gate; the gate it goes to is a written bit, an AND gate the members' programs return, of an
-earlier member; and a proof block's gates and reads are one member's. Nothing is asked of a member's size. -/
 theorem rewires_wireMap (hbuilt : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
     (hlog : ∀ ci ∈ h.ms, ci.1.unit.unitLog ≤ 32)
     (hrow : ∀ ci ∈ h.ms, 0 < ci.2.size → 0 < (Flock.Bridge.bitsRows ci.1).nComp)

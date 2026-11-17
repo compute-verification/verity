@@ -5,41 +5,7 @@ public import Definitions.Flock.ZK.AnyValues
 public import Proofs.Core.ValueSalts
 public import Proofs.Flock.ZkAny.Generic
 
-/-!
-# A sampled audit's view at any values
-
-An audit commits every proof block's values before any coin. The serving stack registers them with the ZK server's
-value service (`Verity.ValueSalts`), which derives their salts from its own key, and the loop admits the record the
-stack hands it. The sample is sampled after that from the verifier's live coins, and each sampled proof block's proof is
-one session through the ZK server. The auditor sees the admitted record, the sample, and the sampled sessions' releases
-with their outcomes (each verdict, and where each session stopped).
-
-`Flock.Guarantees.SampledAuditAny`: per outcome of the sampled sessions, on every event, that view is no likelier than a
-simulator's that reads none of the values: an ideal record of dummy values `v₀` (uniform session, salts, tags and record
-tag), the sample, and the sessions' simulator given the record, the sample and the outcome. The terms are
-
-* `m` times the simulator's probability plus the PRF gap of the key-derived salts, each averaged over the sample and the
-  sessions' simulator's coins, plus `δ`, how far an ideal record of the values is from one of `v₀` (the commitments'
-  hiding under uniform salts);
-* the forge term (`forgeAdvantage`);
-* and the sessions' error at the outcome, `ε s`.
-
-The sessions' premise is `PerOutcome` at every value of the registration's and the sample's randomness, with a simulator
-that reads only the record, the sample and the outcome. So the sessions' workers and values may be anything the stack
-chose, the record and the sample included: zero knowledge at any values, as the session loop has it. An unsampled proof
-block contributes only its commitment, in the record. A sampled incorrect one is a stopped session, its stop an
-outcome. The value service of record fixes `m` at 1 (`Verity.Guarantees.RegisteredLeakage`).
-
-`Flock.SecurityProofs.SampledAuditAny` proves it. At each key, sessions and sample, the sampled sessions' release is swapped for its
-simulator (`PerOutcome`), which reads only the admitted record and the sample. Exchanging the averages leaves, at each
-sample and each of the simulator's coins, the probability that the loop admits a record meeting one event on the record,
-which `Verity.SecurityProofs.RegisteredLeakage` bounds. The ideal record of the values is then within `δ` of
-the dummy's.
-
-* `FlockSoundness.ZK.prCoin_admits_perOutcome`: the swap, at any admission `adm` and record `ρ` of the registration's
-  randomness.
-* `FlockSoundness.ZK.avg_le_mul_add`: averaging a bound `a·(g + δ) + G`, the type empty or not.
--/
+/-! A sampled audit's view at any values is, per outcome of its sampled sessions and on every event, no likelier than a simulator's that reads none of the values (`Flock.Guarantees.SampledAuditAny`). -/
 
 @[expose] public section
 
@@ -48,11 +14,6 @@ namespace FlockSoundness.ZK
 open Verity Verity.Game
 open scoped ENNReal
 
-/-- **The sessions' release swapped for its simulator under an admitted record.** Where, at every value `p` of the
-registration's randomness and `χ` of the sample, the sessions' release is simulated per outcome by `Sim` given the record
-`ρ p` and `χ`, the probability that `p` is admitted and the audit shows the outcome `s` and an event on the record, the
-sample and the bytes is at most, averaged over the sample and the simulator's coins, the probability that `p` is admitted
-and its record meets that event with the simulator's bytes, plus `ε s`. -/
 theorem prCoin_admits_perOutcome {P X Ω Ωs St B Rec : Type} [Fintype P] [Fintype X] [Fintype Ω] [Fintype Ωs]
     (adm : P → Prop) (ρ : P → Rec) (out : P → X → Ω → St) (rel : P → X → Ω → B) (Sim : Rec → X → St → Ωs → B)
     (ε : St → ℝ≥0∞) (hS : ∀ p χ, PerOutcome (out p χ) (rel p χ) (Sim (ρ p) χ) ε) (s : St)
@@ -107,8 +68,6 @@ theorem prCoin_admits_perOutcome {P X Ω Ωs St B Rec : Type} [Fintype P] [Finty
     _ = avg (fun q : X × Ωs => prCoin fun p : P => adm p ∧ E (ρ p) q.1 (Sim (ρ p) q.1 s q.2)) + ε s := by
         rw [hswap]
 
-/-- **Averaging a bound `a·(g + δ) + G`**: the average of `f` is at most `a·(avg g + δ) + G` where each `f c` is at most
-`a·(g c + δ) + G`, the type empty or not. -/
 theorem avg_le_mul_add {C : Type} [Fintype C] {f g : C → ℝ≥0∞} (a δ G : ℝ≥0∞) (h : ∀ c, f c ≤ a * (g c + δ) + G) :
     avg f ≤ a * (avg g + δ) + G := by
   have hc : ∀ x : ℝ≥0∞, avg (fun _ : C => x) ≤ x := fun x => by
@@ -132,18 +91,9 @@ namespace Flock.SecurityProofs
 open Verity Verity.Game Verity.ValueSalts Verity.Assumptions FlockSoundness.ZK
 open scoped ENNReal
 
-/-- **A sampled audit's view at any values, per outcome of its sampled sessions.** For every value service `sv` with
-finite keys, sessions, salts, tags and record tags, registration number `n`, number `m` of sessions the stack commits
-before it registers, values `v`, dummy values `v₀`, stack `st` and key `k₀`; every finite sample space `X` sampled
-uniformly after the registration; and the sampled sessions' outcome `out` and released bytes `rel`, functions of the
-registration's randomness (the key and the `m` sessions), the sample and the sessions' own randomness:
-
-if the stack reads no key (`ZkServerOwnUser`), the sessions' release is simulated per outcome (`PerOutcome`) within
-`ε` at every key, sessions and sample by `Sim` given the admitted record, the sample and the outcome, and an ideal record
-of `v` is within `δ` of one of `v₀` on every event, then at every outcome `s` and event `E` on the record, the sample
-and the bytes, the probability that the loop admits the record and the audit shows `s` and `E` is at most `m` times (the
-average, over the sample and `Sim`'s coins, of `E` on an ideal record of `v₀` with `Sim`'s bytes plus the PRF gap
-there, plus `δ`), plus the probability that the stack, run at `k₀`, forges a record tag, plus `ε s`. -/
+/-- Where the stack reads no key and the sampled sessions are simulated per outcome given the admitted record and the
+sample, the view at each outcome `s` is at most `m` times a simulator's on dummy values `v₀` (plus the PRF gap and
+`δ`), plus the forge term and `ε s`; the value service of record fixes `m` at 1. -/
 def _root_.Flock.Guarantees.SampledAuditAny : Prop :=
   ∀ {K S Y V O T R X Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype X]
     [Fintype Ω] [Fintype Ωs] (sv : Service K S Y V O T R) (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K)

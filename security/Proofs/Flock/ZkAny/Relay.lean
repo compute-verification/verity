@@ -2,47 +2,7 @@ module
 
 public import Flock.ZkServer.Session
 
-/-!
-# The deployed relay's release is the schedule's
-
-`Flock.ZkServer.Session.relay` is the ZK server's session loop: it reads the worker's requests one at a time and decides
-what leaves for the auditor from the session's state, with `State.request`, `State.place`, `State.answer`,
-`State.sendHello` and `State.wire`. Here its loop body is `stepK`, which makes the same decisions with the same pure
-functions. What the loop reads from its sockets, its rep frames and the operating system at a request is gathered in an
-`Env`: the auditor's answer, a `Round`'s release by its rep's frame (`Frames.round`), a `Commit`'s roots
-(`Level0.commit`), the rep's frame's take of the coins (`Frames.coins`), `Frames.finish`, the loop's own proofs
-(`ownProofs`) and the hold's barrier. `out` runs `stepK` over the requests. `relay` is held to `stepK` by reading: each
-of `relay`'s branches is one of `stepK`'s, in the same order. The worker is any: its requests are any list, each one
-possibly chosen after reading the answers before it, and so are the answers.
-
-* `slot S P`: the one kind of request the session lets out next. In order: `Register`, `Hello`, the first rep stream's
-  `Open`, `Commit`, `Link`, each opening's `Round`, each later rep stream's `Open` once the rounds before it are past,
-  and `Finish` once every stream is open. `schedOut` is the loop where each request is the slot's.
-* `Reach`: what holds of the session at each request before a stop. The plan goes stream by stream in the rep
-  streams' order (`Grouped`, `grouped_planOf`), and the opens, the `Link` and the openings agree with it.
-  `reach_step` keeps it at every request that leaves.
-* `request_slot`: before a stop, a request `State.request` lets through is the slot's.
-* `out_stopped`: nothing leaves after a stop, where the hold's barrier refuses a stopped session (the deployed hold's
-  does: `Core.ZkServer.Decision.after` stops at the loop's refusal).
-* `out_sched`: at every list of requests, what leaves is what leaves at the schedule's slots, at the requests that
-  reach one (`pick`), a sublist of what the loop read. A request the session refuses sends nothing and stops it, and a
-  `Ping` or a `Proof` sends nothing.
-* `tmplOf s`: the schedule at the setup `s`, a function of the setup alone: `Register`, `Hello`, then `slotAt`'s slots
-  from the start (`tmplFrom`, at the rep streams `labelsOf` and the plan `planOf` the `Hello` sets, `sendHello_eq`),
-  each position (`Pos`: the opens, the openings answered, the `Link`) advanced by its slot's kind, up to `Finish`.
-* `pos_step`: each request that leaves and keeps the session going advances the position by its kind. An answer to a
-  coin request that is not coins stops the session (`State.noCoins`, `noCoins_stop`), so no slot comes twice.
-* `sched_prefix`, `relay_prefix`: the slots of a run are the schedule cut after one of them, and each control slot sent
-  its frame (`Framed`).
-* `relay_release_pre`, `relay_release_take`: where what left at each model slot (the `Hello`, each coin request and the
-  `Finish`) is the next of some frames `ms`, the last possibly cut where the release ended (`RelayPre`), what leaves for
-  the auditor is the control frames at their fixed places (`ctlOf s`: the `Register`'s, the `Link`'s and each `Open`'s,
-  functions of the setup) and `ms` at the model's, woven over the whole schedule (`weave`) and cut after the frames that
-  left (`relayLen`), then nothing. So the release is a function of how many frames left and `ms` alone, whatever the
-  worker sends and the auditor answers.
-
-Scope: the released bytes and their order, not their times. When each frame leaves is not modeled.
--/
+/-! The deployed relay's release is the schedule's (`out_sched`, `relay_release_take`): its released bytes and their order, not their times. -/
 
 @[expose] public section
 
@@ -185,7 +145,6 @@ def slot (S : State) (P : Placed) : Option Kind :=
       | some l => some (.openStream l.1)
       | none => if opened S = S.plan.size + 1 then some .finish else none
 
-/-- **What leaves at the schedule's places**: at each of `es` in turn, a request of the session's next place's kind. -/
 def schedOut (hold : Bool) : State → Placed → List Env → List ByteArray
   | _, _, [] => []
   | st, pl, e :: rest => match slot st pl with
@@ -194,14 +153,11 @@ def schedOut (hold : Bool) : State → Placed → List Env → List ByteArray
       let r := stepK hold st pl (some (tagOf k)) (.ok k) e
       r.sent ++ if r.go then schedOut hold r.st r.pl rest else []
 
-/-- The rep streams' names. -/
 def names (S : State) : List String := S.labels.toList.map (·.1)
 
-/-- **The schedule's openings go stream by stream**, in the rep streams' order. -/
 def Grouped (plan : Array (String × Nat)) (names : List String) : Prop :=
   ∀ (i j : Nat) (x y : String × Nat), i ≤ j → plan[i]? = some x → plan[j]? = some y → names.idxOf x.1 ≤ names.idxOf y.1
 
-/-- **What holds of the session at each request** the relay reads before a stop. -/
 structure Reach (S : State) (P : Placed) : Prop where
   reg : S.sent = true → P.register = true
   unsent : S.sent = false → S.labels = #[] ∧ S.session = none
@@ -230,7 +186,6 @@ theorem finish_stop {S S' : State} {o : ByteArray} (h : S.stop = none) (hf : S.f
     · simp
     · intro hf; cases hf; rfl
 
-/-- **A request refused before a stop stops the session.** -/
 theorem request_stop {S S' : State} {P : Placed} {k : Kind} {o : ByteArray} (h : S.stop = none)
     (hr : S.request P k = some (S', o)) : S'.stop.isSome := by
   revert hr
@@ -259,7 +214,6 @@ theorem request_stopped {S : State} {why : String} (P : Placed) (k : Kind) (h : 
     S.request P k = some (S, refused why) := by
   unfold State.request; rw [h]
 
-/-- **A refused `Finish` sends nothing**, where the hold refuses a stopped session's release. -/
 theorem finishOut_of_some {hold : Bool} {st S' : State} {pl : Placed} {e : Env} {o : ByteArray}
     (hb : ∀ why, (e.barrier (some why)).isSome) (hf : st.request pl .finish = some (S', o)) (hs : S'.stop.isSome) :
     finishOut hold st pl e = [] := by
@@ -285,7 +239,6 @@ theorem stepK_stopped {hold : Bool} {st : State} {pl : Placed} {b : Option UInt8
   · exact ⟨rfl, hs⟩
   rcases k <;> simp only [request_stopped _ _ hw] <;> exact ⟨trivial, hs⟩
 
-/-- **Nothing leaves after a stop.** -/
 theorem out_stopped (hold : Bool) : ∀ (st : State) (pl : Placed) (ins : List (ByteArray × Env)),
     st.stop.isSome → (∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) → out hold st pl ins = []
   | _, _, [], _, _ => rfl
@@ -303,7 +256,6 @@ theorem beq_finish (k : Kind) : (k == .finish) = true ↔ k = .finish := by
 theorem beq_commit (k : Kind) : (k == .commit) = true ↔ k = .commit := by
   cases k <;> first | exact ⟨fun _ => rfl, fun _ => rfl⟩ | exact ⟨fun h => (nomatch h), fun h => (nomatch h)⟩
 
-/-- `State.request`'s coin check: whether a request of kind `k` is the schedule's next opening. -/
 def coinsOf (S : State) (k : Kind) : Option (State × ByteArray) :=
   if k == .finish then S.finish else
     let opening : Option (String × Nat) := match k with
@@ -402,7 +354,6 @@ theorem idxOf_le : ∀ (l : List String) (i : Nat) (h : i < l.length), l.idxOf l
       simp only [List.getElem_cons_succ]
       omega
 
-/-- A stream among the first `n` rep streams is at an index below `n`. -/
 theorem idxOf_lt_of_any {S : State} {n : Nat} {s : String}
     (h : (S.labels.extract 0 n).any (·.1 == s) = true) : (names S).idxOf s < n := by
   obtain ⟨i, hi, hp⟩ := Array.any_eq_true.mp h
@@ -428,7 +379,6 @@ theorem sent_of_labels {S : State} {P : Placed} (hR : Reach S P) (hs : 0 < S.lab
 theorem opened_of {S : State} {C : Coins.Release} (hs : S.session = some C) : opened S = C.opened.length := by
   simp [opened, hs]
 
-/-- **A request that leaves is at the session's next place.** -/
 theorem request_slot {S : State} {P : Placed} {k : Kind} (hR : Reach S P) (h : S.stop = none)
     (hk : k ≠ .ping) (hk' : k ≠ .proof) (hr : S.request P k = none) : slot S P = some k := by
   obtain ⟨hc, hp⟩ := request_none h hr
@@ -534,8 +484,6 @@ theorem request_slot {S : State} {P : Placed} {k : Kind} (hR : Reach S P) (h : S
   | ping => exact absurd rfl hk
   | other => simp [State.place] at hp
 
-/-- **A request of a kind that carries its own frame**, at its place: its frame leaves, and the session goes on as the
-auditor's answer leaves it. -/
 theorem stepK_frame {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (hk1 : k ≠ .hello)
     (hk2 : k ≠ .finish) (hk3 : k ≠ .ping) (hk4 : k ≠ .proof) (hr : st.request pl k = none) :
     stepK hold st pl (some (tagOf k)) (.ok k) e = match frameOf st k e with
@@ -586,7 +534,6 @@ theorem open_ok {C C' : Coins.Release} {s : String} {n : Nat} {m c : List UInt8}
     · intro h; cases h
   · intro h; cases h
 
-/-- A coin's answer: the session stopped, or the next opening counted. -/
 theorem coins_cases {st : State} {r : ByteArray} {C : Coins.Release} (h : st.stop = none) (hs : st.session = some C) :
     ((st.coins r).1.stop.isSome) ∨ ∃ C', (st.coins r).1 = { st with session := some C' } ∧
       C'.opened.length = C.opened.length + 1 ∧ C'.hello = C.hello := by
@@ -608,7 +555,6 @@ theorem grouped_of_pairwise {plan : Array (String × Nat)} {names : List String}
   · exact List.pairwise_iff_getElem.mp h i j hi hj hlt
   · exact Nat.le_refl _
 
-/-- **The plan goes stream by stream**, in the rep streams' order, where their names are distinct. -/
 theorem grouped_planOf {spec : SessionSpec} {sts : Array Stmt}
     (hn : (spec.repStreams.toList.map (·.2.2)).Nodup) :
     Grouped (planOf spec sts) (spec.repStreams.toList.map (·.2.2)) := by
@@ -909,7 +855,6 @@ theorem reach_open {S : State} {P : Placed} {s : String} (hR : Reach S P) (hs : 
       rw [any_of_idxOf_lt hlt (Nat.le_of_lt hl)] at this
       cases this
 
-/-- **A coin's answer that the session counts keeps `Reach`.** -/
 theorem reach_coin {S : State} {P : Placed} {C' : Coins.Release} (hR : Reach S P) (hsent : S.sent = true)
     (hC' : C'.opened.length = opened S + 1) (hle : opened S ≤ S.plan.size) (hlink : 1 ≤ opened S → P.link = true)
     (hopens : 1 ≤ P.opens) (hidx : ∀ x, S.plan[opened S]? = some x → P.opens - 1 ≤ (names S).idxOf x.1) :
@@ -986,7 +931,6 @@ theorem stepK_hello {hold : Bool} {st : State} {pl : Placed} {e : Env} (hr : st.
 theorem stepK_finish {hold : Bool} {st : State} {pl : Placed} {e : Env} :
     stepK hold st pl (some (tagOf .finish)) (.ok .finish) e = ⟨finishOut hold st pl e, st, pl, false⟩ := rfl
 
-/-- **Each frame the schedule lets out keeps `Reach`**, or stops the session. -/
 theorem reach_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (hR : Reach st pl)
     (h : st.stop = none) (hs : slot st pl = some k) (hr : st.request pl k = none)
     (hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true) :
@@ -1091,7 +1035,6 @@ theorem reach_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env}
         simp only [show (byte? r 0 == some 2) = false by simp [h2], Bool.false_and, Bool.false_eq_true, ↓reduceIte]
         exact .inl (noCoins_stop _ _ _)
 
-/-- A request's first byte is its kind's tag. -/
 theorem byte_kind {f : ByteArray} {k : Kind} (h : kind f = .ok k) (hk : k ≠ .other) : byte? f 0 = some (tagOf k) := by
   revert h
   unfold kind
@@ -1142,9 +1085,6 @@ def pick (hold : Bool) : State → Placed → List (ByteArray × Env) → List E
               (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest
           else [e]
 
-/-- **The relay's release is the schedule's**: at every requests the worker sends, what leaves for the auditor is what
-leaves at the schedule's places, each request that reaches one (`pick`) at the one the session allows next, a sublist of
-what the relay read. -/
 theorem out_sched (hold : Bool) : ∀ (st : State) (pl : Placed) (ins : List (ByteArray × Env)),
     (st.stop.isSome ∨ (st.stop = none ∧ Reach st pl)) → (∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) →
     (pick hold st pl ins).Sublist (ins.map (·.2)) ∧ out hold st pl ins = schedOut hold st pl (pick hold st pl ins)
@@ -1254,7 +1194,6 @@ structure Pos where
   opened : Nat
   link : Bool
 
-/-- The position of a session and its placement. -/
 def posOf (S : State) (P : Placed) : Pos := ⟨P.opens, opened S, P.link⟩
 
 /-- **The slot at a position**, given the rep streams and the plan: `slot` after the `Hello`. -/
@@ -1296,7 +1235,6 @@ theorem slot_sent {S : State} {P : Placed} (hreg : P.register = true) (hsent : S
   simp only [slot, hreg, hsent, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **What leaves at each slot**, in order: the slot's kind and what left for it, up to the session's stop or end. -/
 def schedTrace (hold : Bool) : State → Placed → List Env → List (Kind × List ByteArray)
   | _, _, [] => []
   | st, pl, e :: rest => match slot st pl with
@@ -1320,7 +1258,6 @@ theorem schedOut_stopped (hold : Bool) : ∀ (st : State) (pl : Placed) (es : Li
       · exact schedOut_stopped hold _ _ rest h2 fun e he => hb e (List.mem_cons_of_mem _ he)
       · rfl
 
-/-- **What leaves at the schedule's places is what leaves at each slot, in order.** -/
 theorem schedOut_trace (hold : Bool) : ∀ (st : State) (pl : Placed) (es : List Env),
     (∀ e ∈ es, ∀ why, (e.barrier (some why)).isSome) →
     schedOut hold st pl es = (schedTrace hold st pl es).flatMap (·.2)
@@ -1339,12 +1276,9 @@ theorem schedOut_trace (hold : Bool) : ∀ (st : State) (pl : Placed) (es : List
         · simp only [ite_true, Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false, List.flatMap_nil]
           exact schedOut_stopped hold _ _ rest (by rw [hs]; rfl) hbr
 
-/-- **The slots left** at a position: the rep streams not yet open, the openings not yet answered, the `Link` if it
-hasn't left, and the `Finish`. -/
 def Pos.left (labels : Array (String × String)) (plan : Array (String × Nat)) (p : Pos) : Nat :=
   (labels.size - p.opens) + (plan.size + 1 - p.opened) + (if p.link then 0 else 1) + 1
 
-/-- **What a request after the `Hello` leaves of the session**: its rep streams, plan, sizes and Σ. -/
 structure Fixed (S S' : State) : Prop where
   labels : S'.labels = S.labels
   plan : S'.plan = S.plan
@@ -1367,8 +1301,6 @@ theorem posOf_session {S : State} {P : Placed} {C C' : Coins.Release} (hs : S.se
     posOf { S with session := some C' } P = { posOf S P with opened := opened S + 1 } := by
   simp only [posOf, opened, hs, Option.map_some, Option.getD_some, hlen]
 
-/-- **A request after the `Hello` that leaves and keeps the session going** advances its position by its kind: a coin
-request the auditor answered without coins stopped the session (`State.noCoins`). -/
 theorem pos_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (hR : Reach st pl)
     (h : st.stop = none) (hs : slot st pl = some k) (hk1 : k ≠ .hello) (hk2 : k ≠ .register)
     (hr : st.request pl k = none) (hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true)
@@ -1434,7 +1366,6 @@ theorem pos_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (
         exact absurd hst (Option.isSome_iff_ne_none.mp (noCoins_stop _ _ _))
   · exact absurd rfl hk1
 
-/-- The kinds the schedule has after the `Hello`. -/
 def schedKind : Kind → Bool
   | .openStream _ | .commit | .link | .round _ _ | .finish => true
   | _ => false
@@ -1465,7 +1396,6 @@ theorem lt_of_getElem? {α : Type} {a : Array α} {i : Nat} {x : α} (h : a[i]? 
   · exact hi
   · simp [Array.getElem?_eq_none hi] at h
 
-/-- **Each slot but the `Finish` takes one of the slots left.** -/
 theorem left_adv {L : Array (String × String)} {Pl : Array (String × Nat)} {p : Pos} {k : Kind}
     (h : slotAt L Pl p = some k) (hk : k ≠ .finish) : Pos.left L Pl (p.adv k) + 1 = Pos.left L Pl p := by
   obtain ⟨o, d, l⟩ := p
@@ -1531,7 +1461,6 @@ def ctlFrame (S : State) (k : Kind) : ByteArray :=
 theorem ctlFrame_fixed {S S' : State} (h : Fixed S S') (k : Kind) : ctlFrame S' k = ctlFrame S k := by
   simp only [ctlFrame, State.wire, h.labels, h.points, h.tables]
 
-/-- **What left at each control slot is its frame**, or nothing at the last slot. -/
 def Framed (ctl : Kind → ByteArray) : List (Kind × List ByteArray) → Prop
   | [] => True
   | (k, s) :: tl => (isModel k = false → s = [ctl k] ∨ (s = [] ∧ tl = [])) ∧ Framed ctl tl
@@ -1544,7 +1473,6 @@ theorem tagOf_ne {k : Kind} (hp : k ≠ .ping) (hq : k ≠ .proof) (hf : k ≠ .
     some (tagOf k) ≠ some 9 ∧ some (tagOf k) ≠ some 5 ∧ some (tagOf k) ≠ some 6 := by
   cases k <;> first | exact absurd rfl hp | exact absurd rfl hq | exact absurd rfl hf | simp [tagOf]
 
-/-- **At a control slot its frame leaves**, or nothing, and the session stops. -/
 theorem sent_ctl {hold : Bool} {st : State} {pl : Placed} {k : Kind} (e : Env) (h : st.stop = none)
     (hs : slot st pl = some k) (hk : isModel k = false) :
     (stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [ctlFrame st k] ∨
@@ -1573,8 +1501,6 @@ theorem sent_ctl {hold : Bool} {st : State} {pl : Placed} {k : Kind} (e : Env) (
     rw [stepK_refused h9 h5 h6 hr]
     exact .inr ⟨rfl, request_stop h hr⟩
 
-/-- **What leaves after the `Hello` is at the schedule's slots in order**, cut after one of them, and each control
-slot's frame is its own. -/
 theorem sched_prefix (hold : Bool) (L : Array (String × String)) (Pl : Array (String × Nat))
     (ctl : Kind → ByteArray) :
     ∀ (es : List Env) (f : Nat) (st : State) (pl : Placed), Reach st pl → st.stop = none → pl.register = true →
@@ -1655,7 +1581,6 @@ def helloAt (S : State) (spec : SessionSpec) (sts : Array Stmt) (n : ByteArray) 
            labels := labelsOf spec, tables := spec.tables.zip (sts.map (·.m)), sigma := spec.sigma,
            points := spec.points }
 
-/-- **The `Hello` that leaves is the setup's**, at the nonce, and so is the session after it. -/
 theorem sendHello_eq {S S' : State} {s : V (SessionSpec × Array Stmt)} {n o : ByteArray}
     (he : S.sendHello s n = .ok (S', o)) :
     ∃ spec sts, s = .ok (spec, sts) ∧ S' = helloAt S spec sts n ∧ o = ⟨(Hello.msg spec n).toArray⟩ := by
@@ -1703,9 +1628,6 @@ def ctlOf : V (SessionSpec × Array Stmt) → Kind → ByteArray
   | .ok (spec, sts) => ctlFrame (helloAt {} spec sts .empty)
   | .error _ => ctlFrame {}
 
-/-- **What leaves over the relay's session is at the schedule's slots in order**, from its start: the `Register`, the
-`Hello` and the slots after it at the setup the relay reads, cut after one of them, and each control slot's frame the
-setup's. -/
 theorem relay_prefix (hold : Bool) (s : V (SessionSpec × Array Stmt)) (es : List Env)
     (hs : ∀ e ∈ es, e.setup = s) :
     (schedTrace hold {} {} es).map (·.1) <+: tmplOf s ∧ Framed (ctlOf s) (schedTrace hold {} {} es) := by
@@ -1831,15 +1753,11 @@ def weave (ctl : Kind → ByteArray) : List Kind → List (List ByteArray) → L
   | [], _ => []
   | k :: ks, ms => if isModel k then ms.headD [] ++ weave ctl ks ms.tail else ctl k :: weave ctl ks ms
 
-/-- **What left at each model slot of the trace `tr` is the next of `ms`**, but at the trace's last slot, where it may
-be any prefix of it: where the session stopped or ended there, or at its `Finish`, where the auditor stopped taking its
-proofs or the hold kept them. -/
 def RelayPre : List (Kind × List ByteArray) → List (List ByteArray) → Prop
   | [], _ => True
   | (k, s) :: tl, ms =>
     if isModel k then (s = ms.headD [] ∧ RelayPre tl ms.tail) ∨ (s <+: ms.headD [] ∧ tl = []) else RelayPre tl ms
 
-/-- **A release over a cut of the slots is a prefix of the release over them all.** -/
 theorem weave_prefix (ctl : Kind → ByteArray) :
     ∀ (ks ks' : List Kind) (ms : List (List ByteArray)), ks <+: ks' → weave ctl ks ms <+: weave ctl ks' ms
   | [], _, _, _ => List.nil_prefix
@@ -1849,8 +1767,6 @@ theorem weave_prefix (ctl : Kind → ByteArray) :
     · exact (List.prefix_append_right_inj _).mpr (weave_prefix ctl ks (ks ++ t) _ ⟨t, rfl⟩)
     · exact List.cons_prefix_cons.mpr ⟨rfl, weave_prefix ctl ks (ks ++ t) ms ⟨t, rfl⟩⟩
 
-/-- **A trace whose control slots sent their frames and whose model slots sent `ms` is a prefix of its slots woven with
-`ms`.** -/
 theorem flatMap_pre (ctl : Kind → ByteArray) :
     ∀ (tr : List (Kind × List ByteArray)) (ms : List (List ByteArray)), Framed ctl tr → RelayPre tr ms →
       tr.flatMap (·.2) <+: weave ctl (tr.map (·.1)) ms
@@ -1869,16 +1785,9 @@ theorem flatMap_pre (ctl : Kind → ByteArray) :
       · exact (List.prefix_append_right_inj _).mpr (flatMap_pre ctl tl _ htl hp)
       · simpa using hs.trans (List.prefix_append _ _)
 
-/-- **What leaves at each slot of the relay's session**, from its start: the requests that reach a slot (`pick`), at
-the schedule's places. -/
 def relayTrace (hold : Bool) (ins : List (ByteArray × Env)) : List (Kind × List ByteArray) :=
   schedTrace hold {} {} (pick hold {} {} ins)
 
-/-- **The deployed relay's release is a prefix of the schedule's**: at every requests the worker sends and every answer
-of the auditor, at a setup `s` the relay reads, where what left at each model slot (the `Hello`, each coin request and
-the `Finish`) is the next of `ms`, the last possibly cut (`RelayPre`), what leaves for the auditor is a prefix of the
-session's control frames at their fixed places (`ctlOf s`: the `Register`, the `Link`, each `Open`) and `ms` at the
-model's, over the whole schedule `tmplOf s`; nothing leaves after it. -/
 theorem relay_release_pre (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
     (ms : List (List ByteArray)) (hs : ∀ p ∈ ins, p.2.setup = s)
     (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) (h : RelayPre (relayTrace hold ins) ms) :
@@ -1901,9 +1810,6 @@ theorem relay_release_pre (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins
 def relayLen (hold : Bool) (B : Nat) (ins : List (ByteArray × Env)) : Fin (B + 1) :=
   ⟨min (out hold {} {} ins).length B, by omega⟩
 
-/-- **The deployed relay's release is the schedule's, cut where it ended**: at `RelayPre`, the control frames and `ms`
-woven over the whole schedule, cut after the frames that left (`relayLen`, where the woven release is at most `B`
-long). -/
 theorem relay_release_take {hold : Bool} {s : V (SessionSpec × Array Stmt)} {ins : List (ByteArray × Env)}
     {ms : List (List ByteArray)} {B : Nat} (hB : (weave (ctlOf s) (tmplOf s) ms).length ≤ B)
     (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)

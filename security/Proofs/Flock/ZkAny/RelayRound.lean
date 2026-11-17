@@ -3,30 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayStay
 public import Proofs.Flock.Claims.ZK.FrameRep
 
-/-!
-# A rep's round in the loop's frames is at `placeOf`'s place
-
-At a rep's round, `Frames.roundPlace` reads the rep's frame, its session's entry (`sessAt`), its table's statement and
-name, its level 0 and, through `Frames.placeOf`, the loop's salts, and changes the frame only as `placeOf` does, after,
-at the stream's first round, `Frames.withAlg` and rep 1's `prior`:
-
-* `roundPlace_later`: past the stream's first round, where `placeOf` places the round in a scheduled round's place, or
-  fails it, the round's place is that, the frame `placeOf`'s, and the frame takes the device round exactly where the
-  session has not stopped (`Frames.Sessions.stopped`: no rep's frame of it stopped).
-* `roundPlace_own`: past the opening (`placeOf`'s `own`), once the loop's finish computed the inner proof's round `j`
-  for the rep, the round's place is round `j` the frame's own (`Frame.innerSched` on the rounds the finish computed,
-  `Sessions.innerOf`), and the frame takes the device round exactly where the session has not stopped. A round `j`
-  the finish has not computed has no place: the loop refuses it.
-* `roundPlace_first0`, `roundPlace_first1`: at the stream's first round, the place is `placeOf`'s on the frame with its
-  algebraic phase, at rep 1 after rep 0's algebraic-phase coins, and the frame takes the device round exactly where
-  the session has not stopped.
-* `roundStep_put`: the round puts back `roundPlace`'s frame at the frame's state after the round, with some values.
-* `round_coins`: where only updates that keep the rep's frame come between the round's read, its put and its coins'
-  read, the coins find that frame and `Frames.coinsStep` puts back `Loop.coinsOf` of it.
-* `placeOf_sched_alg`: `Loop.placeOf_sched` in the algebraic phase, which reads no salts.
-* `repInv_round_coins`: so where the rep keeps its schedule so far (`Loop.RepInv`) and its later round is at a
-  scheduled place, the rep after its coins keeps `RepInv`.
--/
+/-! A rep's round in the loop's frames is at `placeOf`'s place (`roundPlace_later`, `roundPlace_own`, `roundPlace_first0`, `roundPlace_first1`). -/
 
 @[expose] public section
 
@@ -35,8 +12,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock (Stmt F128)
 open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 
-/-- **A later round at a scheduled or failed place** is at `placeOf`'s place, on `placeOf`'s frame, and the frame
-takes the device round exactly where the session has not stopped. -/
 theorem roundPlace_later {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {pl : _root_.Flock.ZkServer.Frame.Place} {k : Nat} {q : Rep}
@@ -59,9 +34,6 @@ theorem roundPlace_later {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots
            ↓reduceIte]
          exact ⟨_, rfl, by simp⟩)
 
-/-- **A later round past the opening** is, once the loop's finish computed the inner proof's round `j` for the rep,
-at round `j` the frame's own, on the rounds the finish computed, and the frame takes the device round exactly where
-the session has not stopped. -/
 theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {k : Nat} {q : Rep}
@@ -85,8 +57,6 @@ theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} 
   refine ⟨_, rfl, ?_⟩
   cases hss : R.stopped sid <;> simp
 
-/-- **A round puts back `roundPlace`'s frame**, its frame state the frame's after the round in its place (the device's
-round, or none where `roundPlace` takes none), with some values. -/
 theorem roundStep_put {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String} {a : _root_.Flock.ZkServer.Frame.Reply} {st' : _root_.Flock.ZkServer.Frame.State}
@@ -99,10 +69,6 @@ theorem roundStep_put {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
   simp only [h, hs]
   cases a <;> exact ⟨_, rfl⟩
 
-/-- **A round's coins find the frame the round put back**: at a round at `roundPlace`'s place on the frame `q`, the
-frame the round puts back (`p₁`) is `q` at the frame's state after the round, with some values, and where only updates
-that keep the rep's frame come between the round's read (`R`), its put (on `R₁`) and the coins' read (`R₂`),
-`Frames.coinsStep` finds it and puts back `Loop.coinsOf` of it. -/
 theorem round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String} (hfr : (frameAt R sid i r).isSome)
@@ -130,9 +96,6 @@ theorem round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.
     cases h2
     exact Loop.coinsStep_ok R₂ sid i r cs hx hcs
 
-/-- **`Loop.placeOf_sched` in the algebraic phase**, where `placeOf` reads no salts: at the rep `p` keeping
-`Loop.RepInv` before its algebraic phase's coins are all in, `placeOf` places its next round at the algebraic phase's
-scheduled round, and the rep after that round's coins keeps `RepInv`. -/
 theorem placeOf_sched_alg (salts : Array (ByteArray × Nat × Array ByteArray))
     (l0 : _root_.Flock.ZkServer.Level0.Level0) (s : Release) (p : Rep) (dom : ByteArray)
     {t : _root_.Flock.ZkServer.Finish.Tab} {xs : Array (Array F128)} {hi : Array ByteArray}
@@ -149,11 +112,6 @@ theorem placeOf_sched_alg (salts : Array (ByteArray × Nat × Array ByteArray))
   · omega
   · omega
 
-/-- **A rep's later round and its coins keep its schedule so far**: where `placeOf` places the rep `p`'s round at a
-scheduled place of its schedule so far `sched` and the rep after the round's coins keeps `Loop.RepInv`
-(`Loop.placeOf_sched`, `placeOf_sched_alg`), the frame the round puts back (`p₁`) is the one its coins find, where only
-updates that keep the rep's frame come between the round's read (`R`), its put (on `R₁`) and the coins' read (`R₂`);
-`Frames.coinsStep` puts back `Loop.coinsOf` of it, and that keeps `RepInv`. -/
 theorem repInv_round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {t : _root_.Flock.ZkServer.Finish.Tab} {xs : Array (Array F128)}
@@ -181,9 +139,6 @@ theorem repInv_round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.ZkServer.
   obtain ⟨⟨v, rfl⟩, hc⟩ := round_coins hfr hrp hput h₀₁ h₁₂ hcs
   exact ⟨hc, hinv _ v cs st₂⟩
 
-/-- **A stream's first round at rep 0** is at `placeOf`'s place on the frame `withAlg` gives its algebraic phase, where
-the round opens with the stream's domain frame, and the frame takes the device round exactly where the session has not
-stopped. -/
 theorem roundPlace_first0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j : Nat}
     {dom content : ByteArray} {n : Nat} {p p' : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {pl : _root_.Flock.ZkServer.Frame.Place} {k : Nat} {q : Rep}
@@ -209,9 +164,6 @@ theorem roundPlace_first0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slot
            Bool.false_eq_true, ↓reduceIte]
          exact ⟨_, rfl, by simp⟩)
 
-/-- **A stream's first round at rep 1** is at `placeOf`'s place on the frame `withAlg` gives its algebraic phase, after
-rep 0's algebraic-phase coins (`Frame.step`'s `prior`), where the round opens with the stream's domain frame and rep 0's
-algebraic phase ended, and the frame takes the device round exactly where the session has not stopped. -/
 theorem roundPlace_first1 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p' p0 : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {st₁ : _root_.Flock.ZkServer.Frame.State}
