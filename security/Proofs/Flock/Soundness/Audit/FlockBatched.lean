@@ -10,36 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The Flock audit at the compiled layer, several tables per session
-
-The protocol's session (`Flock.Record`, `SessionBatch.lean`): the verifier plans the tables from the
-sample and the registration (`plan`), `Commit` sends every table's level-0 cap, one link-point sample
-serves all of them, and then they run concurrently; the session accepts when every table accepts
-(`batchedSession`). Each sampled proof block is read from one table of the plan (`tab S R u`), with its own
-decoder (`DecoderB`): two sampled proof blocks that share a wire hold it in their own columns.
-
-**The analysis** (`analysisB`) reads the extractor of the unit's table, over `Kr` reruns of
-everything after `Commit`:
-
-* `ks`: `Pr[the session accepts] · Pr[the unit's table extracts to no satisfying witness]`
-  (`failProbB`), the joint probability, since the fresh run and the reruns are independent
-  (`expect_mul_expectN`);
-* `link`: likewise with the link event on the extracted table (`LinkEvB`): it is committed, but
-  every close message packing a satisfying witness decodes, on the unit's committed wires, to values
-  other than the committed transcript's.
-
-`cover` is `one_le_fail_add_B'`: by **the lowering** (`LoweringSoundB`, named, per table), a
-committed table gives the link event for an incorrect proof block. `loweringSoundB_of_place` discharges it from
-each sampled proof block's place in its table (`UnitPlace`), with `C` the rows the verifier parses.
-
-**The discharge** (`flock_batched_knowledgeSound`): per sample, the unit's table's
-`ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_B'`, from `session_knowledge_sound`),
-bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgB`), with no
-named assumption; `ε_bind` stays named (`BindSound`).
-
-`flock_batched_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
--/
+/-! The Flock audit at the compiled layer, several tables per session. -/
 
 @[expose] public section
 
@@ -62,12 +33,9 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
 abbrev tabOf (S : Finset (Fin n)) (R : Reg) (u : Fin n) : TabSpec mPts := (plan S R).get (tab S R u)
 
 open Classical in
-/-- **The batched session on a sample**: the plan's tables in one session; it accepts when every
-table accepts. -/
 noncomputable def batchedSession (S : Finset (Fin n)) (R : Reg) : Game Bool :=
   (sessionB execArith H E (plan S R)).map fun outs => decide (acceptedB (plan S R) outs)
 
-/-- The strategy in the protocol's session inside a verdict strategy. -/
 noncomputable def batchStrat {S : Finset (Fin n)} {R : Reg} (τ : Strategy (batchedSession H E plan S R)) :
     Strategy (sessionB execArith H E (plan S R)) :=
   Strategy.ofMap _ _ τ
@@ -86,17 +54,13 @@ theorem prob_batchedSession (S : Finset (Fin n)) (R : Reg)
 abbrev DecoderB := (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
   Message 𝔽 (tabOf plan tab S R u).sch.k0 (tabOf plan tab S R u).sch.level₀.logCols → (Fin C.N → Bool)
 
-/-- **The lowering, compiled, per table** (named hypothesis): a message packing a witness that
-satisfies the statement of sampled proof block `u`'s table decodes to values on which `u` is correct. -/
+/-- Named hypothesis, per table. -/
 def LoweringSoundB (decode : DecoderB (C := C) (Reg := Reg) plan tab) : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOf plan tab S R u).S.Satisfies
     (witnessOf execArith (tabOf plan tab S R u).S.m (tabOf plan tab S R u).sch.k0
       (tabOf plan tab S R u).sch.level₀.logCols M) →
     P.Correct (decode S R u M) u
 
-/-- **The link event** on the table extracted for unit `u`'s table: it is committed, but every
-close message packing a satisfying witness decodes, on `u`'s committed wires, to values other than
-`X`'s. -/
 def LinkEvB (decode : DecoderB (C := C) (Reg := Reg) plan tab) (S : Finset (Fin n)) (R : Reg)
     (u : Fin n) (Xc : Fin C.N → Bool) (T : Oracle 𝔽) : Prop :=
   Committed execArith (tabOf plan tab S R u).S (tabOf plan tab S R u).sch T ∧
@@ -108,8 +72,6 @@ def LinkEvB (decode : DecoderB (C := C) (Reg := Reg) plan tab) (S : Finset (Fin 
           (tabOf plan tab S R u).sch.level₀.logCols M) →
       ∃ g ∈ P.io u, decode S R u M g ≠ Xc g
 
-/-- **The lowering from the sampled proof blocks' places** (`Lowering.lean`): if every sampled proof block has a place
-in its table, reading each unit from its block discharges `LoweringSoundB`. -/
 theorem loweringSoundB_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) :
     P.LoweringSoundB plan tab fun S R u M =>
       if h : u ∈ S then (place S R u h).decode
@@ -122,8 +84,7 @@ theorem loweringSoundB_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tab
 
 variable {L : SamplingDesign n}
 
-/-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
-`decode` reads each sampled proof block from its table's witness, `Kr` is the extractor's rerun count. -/
+/-- `X` is the committed transcript, which the link theorem defines; `Kr` is the extractor's rerun count. -/
 noncomputable def analysisB (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) (Kr : ℕ)
     (hlow : P.LoweringSoundB plan tab decode) : ExtractionAnalysis L Reg (batchedSession H E plan) where
@@ -146,13 +107,10 @@ noncomputable def analysisB (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     exact le_mul_of_one_le_right zero_le
       (one_le_fail_add_B' execArith H E (plan S R) (tab S R u) Kr (batchStrat H E plan τ) _ hG)
 
-/-- **The batched audit's knowledge term**, per prover: after each sample, the largest over the
-plan's tables of the table's bound in the session, averaged over the sample. -/
 noncomputable def ksAvgB (Kr : ℕ) (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) : ℝ≥0∞ :=
   avg fun ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksBoundB execArith H E (plan (L.draw ω) R) j Kr (batchStrat H E plan (τ ω)))
 
-/-- **`ε_ks` is discharged for sessions of several tables.** -/
 theorem flock_batched_knowledgeSound
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
@@ -165,7 +123,6 @@ theorem flock_batched_knowledgeSound
       ENNReal.ofReal (ksBoundB execArith H E (plan (L.draw ω) R) j Kr (batchStrat H E plan (τ ω))))
       (tab (L.draw ω) R u))
 
-/-- **The batched Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_count
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
@@ -179,7 +136,6 @@ theorem flock_batched_count
   extraction_audit_count (P.analysisB H E plan tab decode Xc Kr hlow)
     (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink K σ
 
-/-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_sampled
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}

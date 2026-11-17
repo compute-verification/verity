@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 
-/-!
-# Exfiltration: what a certified leak forces
-
-With every unit `b` bits wide, the bound `CertifiesLeak` certifies is `H + locBits n K` for a harm bound `H` and a count
-`K` with `miss (K + 1) < δ`. Call `b·J + locBits n J` the `J`-th rung.
-
-* `miss_le_of_certifies`: a sampling design certifying `ℓ` below the `J`-th rung has `miss J ≤ δ`. A set of at least `J` units
-  escaping with probability above `δ` forces `H ≥ b·J` and `K ≥ J`, so the certified bound is at least the rung.
-* `locBits_succ_le`, `locBits_succ_ge`: the rung's location term on `n` and on `r·n` units, the counting that
-  `RefinementRule` compares. `Σ_{j ≤ K+1} C(n, j) ≤ (K + 2)·C(n, K + 1)` when `2(K + 1) ≤ n`, and
-  `C(r·n, K + 1) ≥ r^(K+1)·C(n, K + 1)`.
--/
+/-! Exfiltration: what a certified leak forces. -/
 
 @[expose] public section
 
@@ -27,13 +16,11 @@ theorem sum_choose_pos (n K : ℕ) : 0 < ∑ j ∈ range (K + 1), n.choose j :=
   lt_of_lt_of_le (by simp) (Finset.single_le_sum (f := fun j => n.choose j) (fun _ _ => Nat.zero_le _)
     (Finset.mem_range.2 (Nat.succ_pos K)))
 
-/-- The location term grows with the count. -/
 theorem locBits_mono (n : ℕ) {K K' : ℕ} (h : K ≤ K') : locBits n K ≤ locBits n K' := by
   unfold locBits
   apply Real.logb_le_logb_of_le (by norm_num) (by exact_mod_cast sum_choose_pos n K)
   exact_mod_cast Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 (by omega))
 
-/-- **A certified leak below the `J`-th rung forces `miss J ≤ δ`.** -/
 theorem miss_le_of_certifies {n b J : ℕ} {L : SamplingDesign n} {δ ℓ : ℝ} (hδ : 0 ≤ δ)
     (hL : CertifiesLeak L (fun _ => b) δ ℓ) (hℓ : ℓ < (b : ℝ) * J + locBits n J) :
     (L.miss J).toReal ≤ δ := by
@@ -51,13 +38,11 @@ theorem miss_le_of_certifies {n b J : ℕ} {L : SamplingDesign n} {δ ℓ : ℝ}
   have h4 := locBits_mono n (hB.trans h2)
   linarith
 
-/-- `C(n, j) ≤ C(n, m)` for `j ≤ m ≤ n/2`. -/
 theorem choose_le_of_le_half {n j m : ℕ} (hjm : j ≤ m) (hm : m ≤ n / 2) : n.choose j ≤ n.choose m := by
   induction m, hjm using Nat.le_induction with
   | base => exact le_rfl
   | succ m _ ih => exact (ih (by omega)).trans (Nat.choose_le_succ_of_lt_half_left (by omega))
 
-/-- **The top rung's location term on `n` units**: `Σ_{j ≤ K+1} C(n, j) ≤ (K + 2)·C(n, K + 1)` when `2(K + 1) ≤ n`. -/
 theorem locBits_succ_le {n K : ℕ} (hn : 2 * (K + 1) ≤ n) :
     locBits n (K + 1) ≤ Real.logb 2 ((K : ℝ) + 2) + Real.logb 2 (n.choose (K + 1)) := by
   have hc : 0 < n.choose (K + 1) := Nat.choose_pos (by omega)
@@ -70,7 +55,6 @@ theorem locBits_succ_le {n K : ℕ} (hn : 2 * (K + 1) ≤ n) :
   apply Real.logb_le_logb_of_le (by norm_num) (by exact_mod_cast sum_choose_pos n (K + 1))
   exact_mod_cast hsum
 
-/-- `r^j·C(n, j) ≤ C(r·n, j)`: each factor `r·n − i` of `C(r·n, j)·j!` is at least `r·(n − i)`. -/
 theorem pow_mul_choose_le (n r : ℕ) (hr : 1 ≤ r) : ∀ j, r ^ j * n.choose j ≤ (r * n).choose j := by
   intro j
   induction j with
@@ -91,7 +75,6 @@ theorem pow_mul_choose_le (n r : ℕ) (hr : 1 ≤ r) : ∀ j, r ^ j * n.choose j
     · rw [Nat.choose_eq_zero_of_lt (by omega : n < j + 1), mul_zero]
       exact Nat.zero_le _
 
-/-- **The top rung's location term on `r·n` units**: `(K + 1)·log₂ r + log₂ C(n, K + 1) ≤ locBits (r·n) (K + 1)`. -/
 theorem locBits_succ_ge {n r K : ℕ} (hr : 1 ≤ r) (hK : K + 1 ≤ n) :
     ((K : ℝ) + 1) * Real.logb 2 r + Real.logb 2 (n.choose (K + 1)) ≤ locBits (r * n) (K + 1) := by
   have hc : (0 : ℝ) < n.choose (K + 1) := by exact_mod_cast Nat.choose_pos hK

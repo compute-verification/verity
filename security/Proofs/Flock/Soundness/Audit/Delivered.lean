@@ -9,13 +9,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Exfiltration, at most what is delivered
-
-`audit_exfiltration` (`Influence`) bounds what a prover recovers from an accepted one-stage audit by the influence set's
-count `2^H · ∑_{j ≤ K} C(n, j)`. An influence set is a set of values on the delivered wires `D`, so its count is at most
-`2^|D|` as well: `audit_exfiltration_delivered` charges the smaller of the two.
--/
+/-! Exfiltration, at most what is delivered. -/
 
 @[expose] public section
 
@@ -32,9 +26,6 @@ variable {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg �
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
   {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞} {D : Finset (Fin C.N)}
 
-/-- **Exfiltration, at most what is delivered**: `audit_exfiltration` with its first term at most `2^|D| / |M|` as
-well, since the influence set is a set of values on `D`. The bound to charge is the smaller of `H + log₂ ∑_{j ≤ k}
-C(n, j)` and `|D|` bits. -/
 theorem audit_exfiltration_delivered {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
     (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound εbind)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))

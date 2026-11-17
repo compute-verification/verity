@@ -49,18 +49,7 @@ import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The concrete statement is in the deployed `--zk` scope
-
-`concreteStmt_scope`: `Claims.Flock.Scope (deployZk relation) concreteStmt`, at the open guarantee that the verifier's two
-fixed nets build. By `Readable.scope_iff` that is the verifier's parse of the statement (`Read.parse`: its one table,
-`stW`, passes `Zk.shapeOk`) and its scope refusal (`Parsed.scope`) passing:
-
-* `check_rC`: `ProvedScope.check` at the session's tags `tz`, which have public outputs, so the circuit is `HmRow.parse`'s
-  (`parse_cW`) and the public file `HmRow.loadPublic`'s (`load_pubV`). The circuit has no template and no shared-row public
-  file, its wires feed neither the unit nor the outputs, and it passes `scopeOk`: the unit `copy16` reads its one leaf
-  group, returns the outputs, has `2^9` rows and reads only port bits, and its one row is a `sha512/row/v1` row;
-* `sizes_stW`: the table's `m` is `k_log + 3 = 25`, the least `--zk` takes.
--/
+/-! The concrete statement is in the deployed `--zk` scope, at the open guarantee that the verifier's two fixed nets build. -/
 
 @[expose] public section
 open Flock RecDeploy.VStarNets FlockVBridge.Names
@@ -94,13 +83,10 @@ theorem publicOf_cW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (
   rewrite [ProvedScope.publicOf, ite_eq_right (show ¬ (tz.hiddenOutputs = true) by rw [hidden_tz]; decide)]
   exact load_pubV ls lh H A B A' B' s1 s3 s4 hu1 hu2 hd
 
-/-- **The circuit and public file pass `check`'s circuit rules**: no shared-row public file, no template, wires that feed
-neither the unit nor the outputs, and `scopeOk`. -/
 theorem circuitRules_cW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String) :
     ProvedScope.circuitRules tz true 1 false (cW ls lh H A B A' B' s1) (pubV ls lh H A B A' B' s1 s3 s4) = .ok () := by
   kernel_rfl
 
-/-- **`verify`'s scope check passes the concrete statement** (`ProvedScope.check`, as `Read.check` calls it). -/
 theorem check_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
     (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
@@ -123,14 +109,12 @@ theorem check_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 
   dsimp only
   exact circuitRules_cW ls lh H A B A' B' s1 s3 s4
 
-/-- **The table's size is one `--zk` takes**: `m = 25`. -/
 theorem sizes_stW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
     (hello : ByteArray → Nat → String) :
     ProvedScope.sizesOk true
       ((#[stW ls lh H A B A' B' s1 s3 s4 s6 hello].map _root_.Flock.Setup.ofCircuit).map _root_.Flock.Setup.m) = .ok () := by
   kernel_rfl
 
-/-- A `--zk` read whose setup makes one table passing `Zk.shapeOk` has that table. -/
 theorem tablesOf_of {r : Read} {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} (hz : r.zk = true)
     (hs : r.setup = .ok (spec, #[st])) (hk : Zk.shapeOk st = .ok ()) : r.tablesOf = some #[st] := by
   unfold Read.tablesOf
@@ -139,7 +123,6 @@ theorem tablesOf_of {r : Read} {spec : _root_.Flock.SessionSpec} {st : _root_.Fl
   rewrite [ite_eq_left hz, forM_one, hk]
   rfl
 
-/-- A parsed statement whose scope check passes and whose tables' sizes `sizesOk` takes passes `Parsed.scope`. -/
 theorem scope_of {p : _root_.Flock.Readable.Parsed} (hc : p.check = .ok ())
     (hs : ProvedScope.sizesOk p.zk ((p.sts.map _root_.Flock.Setup.ofCircuit).map _root_.Flock.Setup.m) = .ok ()) :
     p.scope = .ok () := by
@@ -147,7 +130,6 @@ theorem scope_of {p : _root_.Flock.Readable.Parsed} (hc : p.check = .ok ())
   rewrite [hc]
   exact hs
 
-/-- **The verifier parses the concrete statement** to its one table, `stW`. -/
 theorem parse_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
     (hello : ByteArray → Nat → String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
@@ -168,7 +150,6 @@ theorem parse_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 
   rewrite [tablesOf_of (r := rC ls lh H) rfl hs (shapeOk_stW ls lh H A B A' B' s1 s3 s4 s6 hello)]
   rfl
 
-/-- **The parsed concrete statement passes `verify`'s scope refusal.** -/
 theorem scope_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
     (hello : ByteArray → Nat → String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
@@ -191,8 +172,6 @@ namespace FlockDeploy
 
 open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 
-/-- **The concrete statement is in the deployed `--zk` scope**, at the open guarantee that the verifier's two fixed nets
-build: the verifier parses it and its scope refusal passes (`Readable.scope_iff`). -/
 theorem concreteStmt_scope (hn : FixedNetsBuild) :
     Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) concreteStmt := by
   have hp := fixedNets_parse hn

@@ -54,13 +54,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Fold
 
-/-! # The concrete statement's files fit their length words
-
-`Raw.Fits` asks every length the statement's encoding writes to fit 8 bytes. The circuit file's (`circuit_size`) is
-bounded line by line: every line of the unit's and the two fixed nets' sections is under 2^20 bytes, the nets' at the
-open guarantee's `LinesFit`, and there are 503,051 lines. The public file's (`public_size`) is the header's text, whose
-length is the closed header's plus the digest's 128 hex characters (`hdr_len`), and the row after it.
--/
+/-! The concrete statement's files fit their length words (`Raw.Fits`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names

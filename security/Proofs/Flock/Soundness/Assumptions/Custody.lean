@@ -15,13 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The session's record custody without `--zk`
-
-`live-verifier` (the custody of `security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) as `verity-verify-proof verify` without `--zk` takes it:
-`RecordCustodyExec` at public outputs, `RecordCustodyExecH` at hidden ones. `--zk`'s are `Assumptions.Zk.RecordCustodyZK`
-and `RecordCustodyZKJ`.
--/
+/-! The session's record custody without `--zk`: `live-verifier` as `verity-verify-proof verify` without `--zk` takes it. -/
 
 @[expose] public section
 

@@ -7,13 +7,7 @@ public import Proofs.Flock.Soundness.Types.ProgramPlaces
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
 
-/-!
-# The executable-law and program-of-units e2e forms under `cr/sha-512` alone
-
-`Partition.flock_e2e_sampled_exec`, `flock_e2e_count_exec`, `UProg.flock_e2e_count`, `UProg.flock_e2e_sampled` and the four
-`UProg.flock_e2e_*_classes` forms, restated as in `CROnly/E2E.lean`: `LinkCRStrict` at budget `q` in place of `LinkCR`, and
-`strictRunCost t' q` in place of `t'`.
--/
+/-! The executable-law and program-of-units e2e forms under `cr/sha-512` alone. -/
 
 @[expose] public section
 
@@ -33,8 +27,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **`Partition.flock_e2e_sampled_exec` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem flock_e2e_sampled_exec
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -52,8 +44,6 @@ theorem flock_e2e_sampled_exec
   P.flock_e2e_sampled_exec H E plan tab St Ls hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict P H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`Partition.flock_e2e_count_exec` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (hS : SamplingDesign.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -83,8 +73,6 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
   {L : SamplingDesign p.n}
 
-/-- **`UProg.flock_e2e_count` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at
-`ε_bind = linkBoundE` at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_count
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
@@ -103,8 +91,6 @@ theorem uprog_e2e_count
   UProg.flock_e2e_count hone p H E plan tab hExec dp hConst vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_sampled` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at
-`ε_bind = linkBoundE` at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_sampled
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
@@ -123,8 +109,6 @@ theorem uprog_e2e_sampled
   UProg.flock_e2e_sampled hone p H E plan tab hExec dp hConst vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_count_classes` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_count_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)
@@ -147,8 +131,6 @@ theorem uprog_e2e_count_classes
   UProg.flock_e2e_count_classes hone p H E plan tab hExec cls slot blk hrd hcp vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_sampled_classes` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_sampled_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)
@@ -171,8 +153,6 @@ theorem uprog_e2e_sampled_classes
   UProg.flock_e2e_sampled_classes hone p H E plan tab hExec cls slot blk hrd hcp vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_count_classes_zero` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_count_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)
@@ -198,8 +178,6 @@ theorem uprog_e2e_count_classes_zero
   UProg.flock_e2e_count_classes_zero hone p H E plan tab hExec cls slot blk hrd hcp hzk hz1 hzr vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_sampled_classes_zero` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE`
-at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_sampled_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)

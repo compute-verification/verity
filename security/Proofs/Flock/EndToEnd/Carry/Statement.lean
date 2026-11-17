@@ -15,35 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The integrity audit over a monitoring period of blocks, with carried state (trusted)
-
-A block's carried state (the KV cache) crosses a wipe as committed values: each value is one hiding leaf, registered in
-the public file of every session that reads it, on both sides of every wipe it crosses (`CarriedLeaf`). `ServerBlocks`'
-statements read each session's values at its own plurality, so they say nothing of whether a session after a wipe reads
-the value the block before committed. Here a carried leaf's value is one value read in every session that shares the
-leaf: the plurality of its finder over all of them (`CarriedBlocks.Xm`), each session's incorrect proof blocks counted at that value
-there (`CarriedBlocks.incorrectSet`).
-
-* `IntegrityPooledCarried`: `IntegrityPooledBlocks` with carried leaves. The probability that every session is
-  accepted and the incorrect proof blocks over the monitoring period, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
-  at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ`, with each carried leaf's term
-  $$\delta_{carry,\ell} = \Big(\sum_{t \in \ell} \frac{\pi_{\ell,t}}{1 - \rho_t}\Big)
-    \Big(\frac{2 \sum_{t \in \ell} (\sum_{j < t} t'_j + t'_t (1 + k_t))}{2^{256}} + \frac{m_\ell}{e M_\ell}\Big),$$
-  `π_{ℓ,t}` the probability that session `t`'s sample reads the leaf and `m_ℓ` the number of sessions that share it: `m_ℓ`
-  times the binding error of the leaf's finder (`LinkCarry`).
-* `IntegrityBlockCarried`: `IntegrityBlock` with carried leaves, at `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,b`,
-  each leaf's term with only its sessions in block `b` weighed (`CarriedLeaf.carryOn`), so the blocks' terms sum to at
-  most `Σ_ℓ δ_carry,ℓ`: the per-block form the joint guarantee over blocks reads.
-
-The leaf's finder (`CarriedBlocks.mix`) picks one of the leaf's sessions uniformly, plays the monitoring period up to it with the
-prover's strategy, then that session's trial at the leaf, and so on `M` more times; each session's values embed in one
-type through their bytes (`CarriedLeaf.e`), and two readings of different bytes, from any two sessions, give a SHA-512
-collision (`hm96`). Its cost is the SHA-512 evaluations of the runs it plays: `t'_j` for each session `j` before the
-one it picked, and that session's trial's (`CarriedLeaf.costMix`). The named assumptions are `IntegrityPooledBlocks`',
-and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder, with that cost. The proofs are
-`Flock.SecurityProofs.IntegrityPooledCarried` and `IntegrityBlockCarried`.
--/
+/-! The integrity audit over a monitoring period of blocks, with carried state (trusted). -/
 
 @[expose] public section
 
@@ -315,26 +287,8 @@ def IntegrityPooledCarried : Prop :=
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry
 
-/-- **Sessions that prove every unit and share registered values, with no proof block incorrect.** In a monitoring period
-with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of which proves every one of its units
-(`kd = n`), the probability that every session of `I` is accepted and at least one proof block of `I` is incorrect,
-each carried leaf read at its one value in every session that shares it, is at most
-$$\sum_{t \in I} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,I},$$
-with no sampling term. Two sessions that share one registered value are the case where `I` is those two and the value
-is one carried leaf whose `sessions` are both. Its premises are `IntegrityPooledCarried`'s.
-
-What it does not say: anything of a session that samples (`kd < n`: that is `IntegrityPooledCarried`'s pooled bound);
-which value the shared leaf holds, only that both sessions are held to one value, the plurality of its finder over them
-(`CarriedBlocks.Xm`); anything of zero knowledge; or anything of sessions outside the monitoring-period game, where
-each session's statement is fixed before any session's coins.
-
-How it composes with `Verity.InProofs.Gives μ r ok K₀ ε` (`prPMF μ (accepts ∧ K₀ ≤ |failing ok|) ≤ ε`): its conclusion
-is `Gives` at `K₀ = 1` for the run whose `accepts` is every session of `I` accepted, whose proof blocks are the units of
-`I`'s sessions (`failing.card` the sum of their `incorrect`), and whose `ok` is each unit's circuit at its values, each
-carried leaf at its one value, at `ε` the bound above. A row's lemma takes that `Gives` and concludes its own check.
-
-Proved as `Flock.SecurityProofs.IntegrityAllProvedCarried`: `CarriedBlocks.integrity_on_units` at `q = 1` and
-`M = 1`, whose sampling term `(1 - q)^M` is then `0`; a session of `I` with no units has no proof block to be incorrect. -/
+/-- It says nothing of a session that samples (`kd < n`), of which value a shared leaf holds (only that its
+sessions are held to one), of zero knowledge, or of sessions outside the monitoring-period game. -/
 def IntegrityAllProvedCarried : Prop :=
   ∀ (S : CarriedBlocks) (I : Finset ℕ),
     (∀ t ∈ I, (S.W t).kd = (S.W t).n) →

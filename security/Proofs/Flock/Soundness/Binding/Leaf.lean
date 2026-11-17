@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Salted
 
-/-!
-# Leaf schemes with explicit collision extractors
-
-A commit string's leaf binds its value: two values with one leaf give a SHA-512 collision. `Merkle.Leaf` states this as a
-proposition; the link theorem's finder (`LinkFinder`) has to output the collision, so here each leaf scheme comes with the
-two colliding inputs, computed from the two openings (`ExplicitLeaf.pair`). The hash is the model's SHA-512 on byte lists,
-`Refine.H512`.
-
-* `ExplicitLeaf.hm96`: `hm96-sha512/row/v1`'s leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's key
-  (`Refine.K512`, `Hm96.Default512`), with `x = SHA-512(row)`, `b = x ⊕ M·y` and `c = SHA-512(salt_prefix ‖ y)` for the
-  row's bytes and the salt `y`. The extractor (`hm96Pair`) returns the outer inputs when they differ, else the salt
-  digest's inputs when the salts differ, else the two rows' bytes, whose digests then agree because the masks cancel. It
-  evaluates SHA-512 four times.
-* `ExplicitLeaf.plain`: the leaf `SHA-512(enc v)` of a value in the clear, such as a returned output word.
-
-`hm96_treeLeaf` ties `ExplicitLeaf.hm96`'s leaf to the executable's: it is `Hm96.Default512.treeLeaf` of the commit string
-`Hm96.Default512.commitString (Sha512.hash row) salt`, the leaf the verifier computes from a public `b ‖ c`.
--/
+/-! Leaf schemes with explicit collision extractors, which the link theorem's finder needs to output the collision. -/
 
 @[expose] public section
 
@@ -38,8 +21,6 @@ structure ExplicitLeaf (Val : Type) where
   pair_spec : ∀ v y v' y', v ≠ v' → leaf v y = leaf v' y' → Collides (pair v y v' y')
 
 variable {Val : Type}
-
-/-! ## hm96-sha512 -/
 
 /-- The digest's 64 bytes. -/
 abbrev digBytes (d : Dig) : List UInt8 := enc512.dig d
@@ -64,9 +45,6 @@ theorem commitString_split {r y r' y' : List UInt8} (h : commitString r y = comm
       digBytes (H512 (K512.saltPrefix ++ y)) = digBytes (H512 (K512.saltPrefix ++ y')) :=
   List.append_inj h (by simp only [xorBytes, List.length_zipWith, digBytes, hL512, K512.mask_len])
 
-/-- **hm96's extractor outputs a SHA-512 collision** whenever two different rows' bytes have one leaf, under any salts:
-equal leaves collide in the outer hash when `b ‖ c` differ, in the salt digest when the salts differ, and in the row hash
-when the salts agree, since then the masks agree, so the row digests do. -/
 theorem hm96Pair_spec (r y r' y' : List UInt8) (hr : r ≠ r') (h : H512 (hm96Input r y) = H512 (hm96Input r' y')) :
     Collides (hm96Pair r y r' y') := by
   unfold Collides hm96Pair
@@ -94,9 +72,6 @@ def ExplicitLeaf.plain (enc : Val → List UInt8) (hinj : Function.Injective enc
   pair v _ v' _ := (enc v, enc v')
   pair_spec _ _ _ _ hv h := ⟨fun e => hv (hinj e), h⟩
 
-/-- **hm96's leaf is the executable's**: for a row's bytes and a salt, the leaf is `Hm96.Default512.treeLeaf` of the
-commit string `Hm96.Default512.commitString (Sha512.hash row) salt`, the leaf `HmRow.checkPublic` computes from a
-public `b ‖ c`. -/
 theorem hm96_treeLeaf (enc : Val → List UInt8) (hinj : Function.Injective enc) (v : Val) (salt : ByteArray) :
     ((ExplicitLeaf.hm96 enc hinj).leaf v salt.data.toList).1 =
       Hm96.Default512.treeLeaf (Hm96.Default512.commitString (Sha512.hash ⟨(enc v).toArray⟩) salt) := by
