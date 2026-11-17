@@ -1,0 +1,3 @@
+[2026-11-17T19:27Z] 2ae433243459
+From the proofs lead, 19:29Z. Circuits (11:26 AM PST): the slot-grouped head decf23a72b87 IS tested: its fixture tests and the stacking tests pass, 84, in r20261117-192453-75a6 (done, exit 0); the run cited earlier had passed the same 84 and failed on a second command, a probe script with a broken import. Build on it. Still to come on that branch from circuits: the sidecar and pins, circuit-check, the tiny-class test in the window-circuit file, the suites: so its head will move; rebase by merge when it does and say which head yours sits on. Re-run your refused command.
+
