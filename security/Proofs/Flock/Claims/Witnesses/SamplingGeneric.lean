@@ -41,39 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Refutation witnesses: the generic sampled compiler's claims
-
-Each claim of the generic sampled compiler (`Definitions.Claims.SamplingGeneric`) fails at a toy instance, on the toy
-statement of `Witnesses.Sampling` (`toyStmt`, one input gate, returned, its partition `toyPart` one proof block `{0}`,
-in scope).
-
-* `toyA`: a proof system whose verifier accepts after one round and whose relation is empty, at errors `0`, so
-  `Claims.KS` fails at its extractor (`Witness.KS_fails`): `Arg.KS_fails`.
-* `sksL`: a compiled verifier over `toyA` that accepts after one round, samples nothing, has no sessions and whose
-  commitment opens nothing (`rejCm`), so every proof block is incorrect under any witness, and none is in the relation
-  at `δ = 0` or at the count `t = 1`. Its extractor and `B_conf` make no SHA-512 call of their own, so `B_ext` and
-  `B_conf` find nothing, `B` finds nothing, and `κ < 1/3` at `δ = 0`: `Compiled.KS_fails`, `Compiled.KSCount_fails`.
-  Its committed trace opens nothing, so its incorrect set is `{0}`, whose acceptance probability is `0`, while the
-  committed form's error is `0`: `Compiled.KSReg_fails`, at `δ = 0`. Its trace read at the statement opens nothing
-  either, and `BconfX` finds nothing: `Compiled.KSRegX_fails`, at `δ = 0`.
-
-The lock's `meets` witnesses of these claims are Flock's decoder bounds at its deployed records
-(`Claims.Flock.decoder_meets_plain`, `_zk`), the checkable antecedent `FlockKS` and `FlockKSReg` read at Flock, and
-`twoSessions_meets`: the contract `Compiled.Sessions` holds with two sampled sessions.
-
-* `twoA`: a proof system whose verifier accepts the one empty message, every witness in its relation, at errors `0`.
-* `twoL`: a compiled verifier over `twoA` that samples both proof blocks of a two-input statement (`twoStmt`, partition
-  `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
-  `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
-
-The network attester's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
-`NetTiming.Witness`'s:
-
-* `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block
-  `{0, 1}`, sampled `all`);
-* `certL`: `leakL` under `trueCm`.
--/
+/-! Refutation witnesses: each claim of the generic sampled compiler fails at a toy instance, and two sampled sessions meet its contract. -/
 
 @[expose] public section
 
@@ -84,8 +52,6 @@ open Claims.Sampling (AuditStatement forkOn slack)
 open Claims.Witness.Sampling (NoHash ownLog_noHash noHash_bind noHash_waitAccC noHash_flatMapRP rejCm toyProg toyStmt
   toyPart toyPart_blocks toy_boundary toy_Pa inScope_toy sksD sksD_noR sksD_noRCount sksD_outer sksD_missAt slack_pos
   slack_le_two)
-
-/-! ## The toy instances -/
 
 /-- The proof system whose verifier accepts after one round, whose relation is empty and whose extractor makes no wait,
 at errors `0`. -/
@@ -131,13 +97,10 @@ noncomputable def sksL (Coin : Type) : Compiled Coin (toyA Coin) where
   P _ := silentP
   δc _ _ := 0
 
-/-! ## A compiled verifier with no sessions makes no call of its own -/
-
 section NoSessions
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- At a compiled verifier with no sessions, a run's extractions make no call of their own. -/
 theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (x : Msg) (s : AuditStatement)
     (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) : NoHash (L.runExt x s r v c) := by
   unfold Compiled.runExt
@@ -147,8 +110,6 @@ theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = n
     trivial
   · trivial
 
-/-- At a compiled verifier with no sessions, the sampling extractor makes no call of its own: its waits rerun, and its
-extractions return nothing. -/
 theorem noHash_compiledE (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (x : Msg)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) : NoHash (L.E.ext x r₀ c) := by
   intro v₀
@@ -167,7 +128,6 @@ theorem noHash_compiledE (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v 
       exact noHash_flatMapRP _ (fun _ => noHash_runExt L hs _ _ _ _ _) _
     · trivial
 
-/-- At a compiled verifier with no sessions, `B_ext` finds nothing. -/
 theorem bext_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (hk : ∀ x, 0 < L.V.k x)
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     (Claims.Sampling.Bext H L.V L.E Ω P x).Pr H = 0 := by
@@ -178,13 +138,11 @@ theorem bext_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.sessi
     simp [ownLog_noHash _ _ _ (noHash_compiledE L hs _ _ _), findColl])]
   exact Pr_false
 
-/-- A finder that outputs nothing finds nothing. -/
 theorem finder_pr_none (H : Msg → Msg) (F : Finder) (h : ∀ s, F.out s = none) : F.Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by simp [h s])]
   exact Pr_false
 
-/-- At a compiled verifier with no sessions, `B_conf` finds nothing. -/
 theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.Bconf H L Ω P x).Pr H = 0 := by
   simp only [Compiled.Bconf]
@@ -194,7 +152,6 @@ theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.sess
   · exact finder_pr_none H _ fun q => by
       simp [ownLog_noHash _ _ _ (noHash_runExt L hs _ _ _ _ _), findColl]
 
-/-- At a compiled verifier with no sessions, `BconfX` finds nothing. -/
 theorem bconfX_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.BconfX H L Ω P x).Pr H = 0 := by
   simp only [Compiled.BconfX]
@@ -206,21 +163,16 @@ theorem bconfX_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.ses
 
 end NoSessions
 
-/-! ## `sksL`'s numbers -/
-
 section Numbers
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The proof block is correct only where its input's value is committed. -/
 theorem toy_correct_val (val : ℕ → Option Bool) (ι : ℕ → Bool) (h : toyProg.Correct (toyProg.refIn [0] val ι) [0]) :
     ∃ b, val 0 = some b := by
   obtain ⟨b, hb, _⟩ := (h 0 (List.mem_singleton.2 rfl)).2 toy_boundary
   have hr : toyProg.refIn [0] val ι 0 = val 0 := by simp [Claims.Sampling.Prog.refIn, toy_boundary]
   exact ⟨b, hr.symm.trans hb⟩
 
-/-- The proof block is correct at no values that agree, on the program's gates, with a trace that holds nothing at its
-input. -/
 theorem toy_incorrect_of {tr : ℕ → Option Bool} (htr : tr 0 = none) {b : List ℕ} (hb : toyPart.blocks[0]? = some b)
     {val : ℕ → Option Bool} {ι : ℕ → Bool} (hv : ∀ g < toyStmt.prog.gates.length, val g = tr g)
     (hc : toyStmt.prog.Correct (toyStmt.prog.refIn b val ι) b) : False := by
@@ -231,7 +183,6 @@ theorem toy_incorrect_of {tr : ℕ → Option Bool} (htr : tr 0 = none) {b : Lis
   rw [hv 0 Nat.one_pos, htr] at hc
   cases hc
 
-/-- A set that holds the proof block has acceptance probability `0`: it is outside `M_0`. -/
 theorem toy_notM {F : Finset ℕ} (h0 : 0 ∈ F) : F ∉ toyStmt.design.M toyPart 0 := by
   have hw : Claims.Sampling.window 0 1 F ≠ ∅ := by
     intro hw
@@ -301,13 +252,11 @@ theorem sksL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω
   simp only [Compiled.opensAt, hp]
   simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
-/-- `sksL`'s committed trace opens nothing. -/
 theorem sksL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (g : ℕ) :
     (sksL Coin).regVal H P x ω g = none := by
   simp [Compiled.regVal, sksL_opensAt, Pr_false]
 
 open Classical in
-/-- So its incorrect set holds the proof block. -/
 theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : 0 ∈ (sksL Coin).Freg H P x ω := by
   have hp : (sksL Coin).parse x = some toyStmt := rfl
   simp only [Compiled.Freg, hp]
@@ -317,25 +266,21 @@ theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
   change toyPart.blocks[0]? = some b at hb
   exact toy_incorrect_of (tr := (sksL Coin).regVal H P x ω) (sksL_regVal H P x ω 0) hb hv hc
 
-/-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
 theorem sksL_notM (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     (sksL Coin).Freg H P x ω ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 :=
   toy_notM (sksL_Freg H P x ω)
 
-/-- `sksL`'s committed form's error is `0`. -/
 theorem sksL_εreg (H : Msg → Msg) (x : Msg) : (sksL Coin).εreg H x silentP = 0 := by
   have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
   unfold Compiled.εreg
   rw [sksL_κs, hb, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
   simp
 
-/-- `sksL`'s trace read at the statement opens nothing. -/
 theorem sksL_regValX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) (g : ℕ) :
     (sksL Coin).regValX H P x g = none := by
   simp [Compiled.regValX, sksL_opensAt, Pr_false]
 
 open Classical in
-/-- So its incorrect set holds the proof block. -/
 theorem sksL_FregX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
     0 ∈ (sksL Coin).FregX H P x := by
   have hp : (sksL Coin).parse x = some toyStmt := rfl
@@ -346,12 +291,10 @@ theorem sksL_FregX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x
   change toyPart.blocks[0]? = some b at hb
   exact toy_incorrect_of (tr := (sksL Coin).regValX H P x) (sksL_regValX H P x 0) hb hv hc
 
-/-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
 theorem sksL_notMX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
     (sksL Coin).FregX H P x ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 :=
   toy_notM (sksL_FregX H P x)
 
-/-- `sksL`'s committed form's error at the trace read at the statement is `0`. -/
 theorem sksL_εregX (H : Msg → Msg) (x : Msg) : (sksL Coin).εregX H x silentP = 0 := by
   have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
   unfold Compiled.εregX
@@ -359,8 +302,6 @@ theorem sksL_εregX (H : Msg → Msg) (x : Msg) : (sksL Coin).εregX H x silentP
   simp
 
 end Numbers
-
-/-! ## The claims -/
 
 section Claims
 
@@ -416,8 +357,6 @@ theorem compiledKSRegX_fails (H : Msg → Msg) : ¬ (sksL Coin).KSRegX H := by
   norm_num at h2
 
 end Claims
-
-/-! ## Two sampled sessions meet the contract -/
 
 /-- Two input gates, both returned. -/
 def twoProg : Claims.Sampling.Prog := ⟨[.input, .input], [0, 1]⟩
@@ -494,20 +433,16 @@ section Two
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- A prover's history against `twoV` before round `u`: none before round `0`, its first message before round `1`. -/
 def twoHist (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : ℕ → List (Msg × Msg)
   | 0 => []
   | _ + 1 => [(((P.next x [] ω).eval H).1, [])]
 
-/-- Its message at round `u`. -/
 def twoMsg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) : Msg :=
   ((P.next x (twoHist H P x ω u) ω).eval H).1
 
-/-- Session `u`'s prover: the prover at its history before round `u`. -/
 def twoP (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) : Prover Unit :=
   ⟨fun _ _ _ => P.next x (twoHist H P x ω u) ω⟩
 
-/-- `twoV`'s decision on two messages. -/
 def twoOut (a b : Msg) : Out := if [a, b] = [[], []] then .acc else .rej
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -543,7 +478,6 @@ theorem twoL_partition {s : AuditStatement} {P : Claims.Sampling.Partition} (h :
 
 theorem twoPart_blocks : twoPart.blocks = [[0], [1]] := rfl
 
-/-- The toy is in the sampling scope. -/
 theorem inScope_two : Claims.Sampling.InScope twoPart twoStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
     ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_⟩
@@ -569,7 +503,6 @@ theorem two_Pa_nonneg (B : Finset ℕ) : 0 ≤ twoStmt.design.Pa twoPart B := by
   rw [two_Pa]
   split_ifs <;> norm_num
 
-/-- Block `u` is correct where its input's value is committed. -/
 theorem two_correct {u : ℕ} (hu : u < 2) (val : ℕ → Option Bool) (ι : ℕ → Bool) (hv : val u = some true) :
     twoProg.Correct (twoProg.refIn [u] val ι) [u] := by
   intro g hg
@@ -588,8 +521,6 @@ theorem two_correct {u : ℕ} (hu : u < 2) (val : ℕ → Option Bool) (ι : ℕ
   · rw [Claims.Sampling.Prog.runIn, hg]
     simpa [Claims.Sampling.BGate.val] using hr
 
-/-- `twoA` is knowledge sound at errors `0`: at an accepted run its extractor assembles the one witness, which is in
-the relation. -/
 theorem twoA_KS (H : Msg → Msg) : (twoA Coin).KS H := by
   intro x Ω _ _ P
   have hf : ∀ s : Ω × (Fin ((twoA Coin).V.k x) → Coin) × (twoA Coin).E.C x,
@@ -682,7 +613,6 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
     exact two_correct hu2 val ι hv
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The silent prover is accepted. -/
 theorem twoL_silent (H : Msg → Msg) (r : Fin ((twoL Coin).V.k []) → Coin) :
     (run H silentP (twoL Coin).V [] () r).out = .acc := by
   have h0 : twoMsg H silentP [] () 0 = [] := rfl
@@ -703,8 +633,6 @@ theorem twoSessions_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
       ∀ r, (twoL Coin).checked [] r = [0, 1] ∧ (run H silentP (twoL Coin).V [] () r).out = .acc :=
   ⟨twoA_KS H, trueCm_binds H, twoL_sessions H, twoL_scope [], fun r => ⟨rfl, twoL_silent H r⟩⟩
 
-/-! ## A statement whose program negates its input -/
-
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
 
@@ -723,8 +651,6 @@ noncomputable def certL (Coin : Type) : Compiled Coin (toyA Coin) :=
   { leakL Coin with commit := trueCm }
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

@@ -39,17 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.ParseStmt
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The readable scope is the verifier's scope check
-
-For every statement the verifier parses (`Parses`) and every relation part `rel`:
-
-* `inScope_iff`: `Claims.Flock.InScope zk (toReadable rel p)` holds exactly when `ProvedScope.check` passes and
-  `22 ≤ m`. The check reads no parameter of `m` and `k_log`; the setup gives `m ≤ 35`, `6 ≤ k_log ≤ min(m, 27)`, and under
-  `--zk` `25 ≤ m` (`table0`). Without `--zk`, `22 ≤ m` is `ProvedScope.sizesOk`'s, which `verify` runs on the tables
-  after the check (`Sizes`: `inScope_iff_scope`), not the setup's.
-* `inScope_iff_zk`: under `--zk`, exactly when `ProvedScope.check` passes.
--/
+/-! The readable scope is the verifier's scope check, with `22 ≤ m`. -/
 
 @[expose] public section
 
@@ -60,7 +50,6 @@ theorem tablesOf_of_parses {p : Parsed} (hp : Parses p) : p.toRead.tablesOf = so
   obtain ⟨sts, hs, he⟩ := Option.map_eq_some_iff.1 hp
   rw [hs, ← he]
 
-/-- What the verifier's parser returns, it parses. -/
 theorem parses_of_parse {r : Read} {p : Parsed} (h : r.parse = some p) : Parses p := by
   unfold Read.parse at h
   obtain ⟨sts, hs, rfl⟩ := Option.map_eq_some_iff.1 h
@@ -69,7 +58,6 @@ theorem parses_of_parse {r : Read} {p : Parsed} (h : r.parse = some p) : Parses 
   rw [hs]
   rfl
 
-/-- `InScope` reads the rules of `statementRules` off the form. -/
 theorem rules_of_inScope {rel : Parsed → Relation} {p : Parsed}
     (h : Claims.Flock.InScope p.zk (toReadable rel p)) :
     Rules p.tags p.zk p.I.count p.publicInputs.isSome := by
@@ -82,8 +70,6 @@ theorem sharedRowsOk_iff (t : Tags) (zk reg : Bool) :
       t.hiddenOutputs = true ∧ reg = true ∧ t.merkleLeaf = "hm96-sha512/v1" := by
   simp [ProvedScope.sharedRowsOk, and_assoc]
 
-/-- The wire condition and `scopeOk` (`scopeOkI` with hidden outputs) are the unit's form, or with hidden outputs the
-wires' order, and the unit's and the rows' conditions. -/
 theorem scope_iff_rows (hidden : Bool) (c : Circuit) :
     ((ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) ∧
         (if hidden then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true) ↔
@@ -120,10 +106,6 @@ theorem bitRows_unrolled (c : Circuit) : ProvedScope.bitRows (HmOut.unrolled c) 
   · split <;> rfl
   · rfl
 
-/-- **The check's form is the statement circuit's** (`HmOut.unrolled`, ASK-112 option A): on a flat circuit the wire
-condition and `scopeOk` (`scopeOkI` with hidden outputs), as `scope_iff_rows` reads them; on a templated one `scopeOkT`,
-which is the unrolled unit's form, its rows' and the templated statement's own: `--zk`, hidden outputs, at most one
-table, and a unit reading one input group and returning the outputs. -/
 theorem formOk_iff {t : Tags} {zk : Bool} {count : Nat} {cf : ByteArray} {tables : List (String × ByteArray)}
     {c : Circuit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c) :
     FormOk t zk count c ↔
@@ -157,7 +139,6 @@ theorem formOk_iff {t : Tags} {zk : Bool} {count : Nat} {cf : ByteArray} {tables
     · rintro ⟨-, hlog, -, hrows, hz, hn, hig1, hout⟩
       exact ⟨⟨⟨⟨⟨hz, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
 
-/-- **The readable scope is the verifier's scope check, and `22 ≤ m`**, for every statement the verifier parses. -/
 theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
     Claims.Flock.InScope p.zk (toReadable rel p) ↔ p.check = .ok () ∧ 22 ≤ (toReadable rel p).m := by
   rw [Read.check, check_ok_iff]
@@ -211,7 +192,6 @@ theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
     · simp only [hh, ↓reduceIte, Bool.or_eq_true] at hrows
       exact hrows.imp id fun h => ⟨rfl, h⟩
 
-/-- **Under `--zk`, the readable scope is the verifier's scope check**, for every statement the verifier parses. -/
 theorem inScope_iff_zk (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) (hz : p.zk = true) :
     Claims.Flock.InScope p.zk (toReadable rel p) ↔ p.check = .ok () := by
   rw [inScope_iff rel hp]

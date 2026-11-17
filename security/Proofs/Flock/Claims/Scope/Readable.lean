@@ -36,25 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The verifier's statement, read as `Claims.Flock.Stmt`
-
-What `verity-verify-proof verify` reads of a statement besides the session directory (`Read`), what its setup makes of it
-(`Read.parse`: `Stmt.setupTables`, and under `--zk` every table's `Zk.shapeOk`, as `Main.verifyCmd`'s `setupOf` runs
-them), and that statement in readable form (`toReadable`): `m` and `kLog` of the first table's statement, the
-relation's fields, and the `Form` the scope check reads, each field the value `ProvedScope.check` tests.
-
-* `Read`: the flags' values (`Exec.Inputs`, under `--zk` before `zkTags` and `zkCoins` replace `--statement`'s tags and
-  `--coins`), whether the verifier is the masked one, the record's sample, the verifier's own public input words
-  (`--public-inputs`) and whether it holds its own registered reads (`--registered`).
-* `Read.check`: `ProvedScope.check` as `verifyCmd` calls it; `Parsed.scope`: it, then `ProvedScope.sizesOk` on the
-  parsed tables' `m`, as `verifyCmd`'s verdict runs them.
-* `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
-  (`ProvedScope.circuitOf`, `ProvedScope.publicOf`), the unit's and the rows' on the statement circuit (`Read.stmt`).
-* `Parsed.only`: one table of a parsed statement, alone.
-* `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`), which `toReadable` takes as a function of the
-  parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
--/
+/-! The verifier's statement, read as `Claims.Flock.Stmt`. -/
 
 @[expose] public section
 
@@ -150,7 +132,6 @@ def Parsed.scope (p : Parsed) : Except String Unit := do
   p.check
   ProvedScope.sizesOk p.zk ((p.sts.map Setup.ofCircuit).map Setup.m)
 
-/-- The parsed statement is the parser's own. -/
 def Parses (p : Parsed) : Prop := p.toRead.parse = some p
 
 /-- **Table `j` alone**: the parsed statement with table `j`'s statement as its only table, the statement of its units

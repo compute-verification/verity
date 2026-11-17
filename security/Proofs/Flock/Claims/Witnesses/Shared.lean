@@ -3,38 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.NonVacuous
 public import Proofs.Flock.Claims.ZK.Interact
 
-/-!
-# Refutation witnesses: the shared claim forms
-
-Every claim definition carries a refutation witness: a theorem `<Claim>_fails` that exhibits a concrete toy instance at
-which the claim is false, so the definition constrains something. A claim whose definition no instance can refute is
-vacuous. This file holds the toys and the witnesses of `Definitions.Core.Interaction`'s shared forms; Flock's are
-`Witnesses.Flock`, the sampling compiler's `Witnesses.Sampling`, the ZK-recursion compiler's `Witnesses.Recursion`.
-
-The toys: `accV` accepts after one round and `rejV` rejects; `silentP` sends the empty message and calls nothing;
-`noneE` gives up at once and `onceE` reruns the judged run once and gives up; `noFinder` outputs nothing; `pairFinder`
-outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs are 64 bytes.
-
-* `KS_fails`, `KSLin_fails`, `Bits_fails`: at `accV`, `silentP` and a statement with no witness, every extractor fails
-  at `κ < 1` (at `λ > 0` for `Bits`), whatever `γ`: the run is accepted surely and `B` finds nothing.
-* `Complete_fails`: `rejV` fails at `δ_c < 1` wherever the scope and the relation meet. Its tapes are a nonempty
-  type, so the prover with no tape, which met its first form at every verifier and `δ_c = 0`, is refused by its type.
-* `ScopeMatches_fails`: an empty scope and a check that takes everything.
-* `ZKmalR_fails` (`ZKMal.not_zkmalR_collSim`): the colliding simulator, which met the form before `Fork`, fails it.
-  `ZKmalR_vacuous`: the form's honest prover is a parameter, so a prover that ignores its witness and calls nothing
-  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`). The
-  families' `ZK` read the masked record's own reference prover and simulator, so it meets theirs only at a record
-  whose own prover ignores its witness (`Flock.ZK_of_quiet_record`).
-  `SimCost_fails`: the colliding simulator's two calls exceed a bound of `1`.
-* `ExtractRunsLe_fails`, `ExtractRunsExpLe_fails`: `onceE` reruns once, above a bound of `0`.
-* `Nontrivial_fails`: a recorded run that `rejV` rejects.
-* `StrictBirthday_fails`, `ExpectedCR_fails`: `pairFinder` finds `constH`'s collision at no cost;
-  `StrictBirthday_holds`, `ExpectedCR_holds`: `noFinder` meets both, so they are satisfiable.
-* `Hm96Hiding_fails`: a constant mask hides nothing below `δ₁ = 1/2`; `Hm96Hiding_holds`: a uniform mask with a
-  constant salt hash hides at `δ₁ = 0`.
-
-`ERepCost` is a theorem at every record (`Claims.ERepCost` in `Proofs.Flock.Claims.ERepCost`), so it has no refutation.
--/
+/-! Refutation witnesses of `Definitions.Core.Interaction`'s shared claim forms, and their toys; `ERepCost` is a theorem at every record, so it has none. -/
 
 @[expose] public section
 
@@ -52,29 +21,24 @@ def rejV (Coin : Type) : Verifier Coin := ⟨fun _ => 1, fun _ _ _ => .ret .rej�
 /-- The prover that sends the empty message and calls nothing. -/
 def silentP : Prover Unit := ⟨fun _ _ _ => .ret []⟩
 
-/-- The extractor that gives up at once. -/
 def noneE {Coin W : Type} (V : Verifier Coin) : Extractor Coin W V where
   C _ := Unit
   ext _ _ _ := .ret none
 
-/-- The extractor that reruns the judged run once and gives up. -/
 def onceE {Coin W : Type} (V : Verifier Coin) : Extractor Coin W V where
   C _ := Unit
   ext _ r₀ _ := .rerun r₀ fun _ => .ret none
 
-/-- The finder that outputs nothing. -/
 def noFinder : Finder where
   S := Unit
   out _ := none
   cost _ := 0
 
-/-- `noFinder` at every prover and statement. -/
 def noFinders : FinderFamily := fun _ _ _ _ _ => noFinder
 
 /-- The constant hash, whose outputs are 64 bytes. -/
 def constH : Msg → Msg := fun _ => List.replicate 64 0
 
-/-- The finder that outputs `([0], [1])` at no cost. -/
 def pairFinder : Finder where
   S := Unit
   out _ := some ([0], [1])
@@ -116,7 +80,6 @@ theorem pairFinder_pr : pairFinder.Pr constH = 1 := by
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `B` finds nothing against `accV`, which calls nothing. -/
 theorem B_accV_pr {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (P : Prover Ω) (x : Msg)
     (hk : 0 < (accV Coin).k x) : (B H (accV Coin) P x hk).Pr H = 0 := by
   unfold Finder.Pr
@@ -134,7 +97,6 @@ theorem strictBirthday_B_accV {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg �
     (hk : 0 < (accV Coin).k x) : StrictBirthday H (B H (accV Coin) P x hk) := fun q _ => by
   rw [B_accV_pr]; positivity
 
-/-- At `accV`, on a statement with no witness, every extractor fails on every run. -/
 theorem prBad_accV {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (R : Rel W) (E : Extractor Coin W (accV Coin))
     (x : Msg) (P : Prover Ω) [Nonempty Ω] (hR : ∀ w, ¬ R x w) : PrBad H (accV Coin) R E x P = 1 := by
   have hb : ∀ s : Ω × (Fin ((accV Coin).k x) → Coin) × E.C x,
@@ -172,7 +134,6 @@ theorem KSLin_fails (H : Msg → Msg) (R : Rel W) (E : Extractor Coin W (accV Co
   linarith
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- `silentP` against `accV` makes no SHA-512 call. -/
 theorem calls_silentP_accV (H : Msg → Msg) (x : Msg) (ω : Unit) (r : Fin ((accV Coin).k x) → Coin) :
     (run H silentP (accV Coin) x ω r).pLog.length + (run H silentP (accV Coin) x ω r).vLog.length ≤ 1 := by
   rw [run_silentP_accV_pLog, run_accV_vLog]; simp
@@ -214,7 +175,6 @@ theorem ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     ¬ ZKmalR H (fun _ => 1) (fun _ : Unit => ZKMal.quietP N Ω []) (fun _ _ => True) (ZKMal.collSim u v) εzk γ :=
   ZKMal.not_zkmalR_collSim H _ _ u v εzk γ x () trivial one_pos hε
 
-/-- The simulator that runs the quiet prover against the verifier for `k x` rounds. -/
 def quietSim (k : Msg → ℕ) : Simulator where
   C _ := Unit
   prog x _ := ZKMal.spRun (fun _ => .ret []) (k x) []
@@ -308,7 +268,6 @@ theorem ExpectedCR_holds (H : Msg → Msg) : ExpectedCR H noFinder := by
   rw [noFinder_pr]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- At a constant mask, hm96's hiding needs `δ₁ ≥ 1/2`: the mask is `true` surely, a uniform bit half the time. -/
 theorem half_le_of_hm96Hiding_const {δ₁ : ℝ≥0∞} (h : Hm96Hiding (fun _ : Unit => true) (id : Unit → Unit) δ₁) :
     2⁻¹ ≤ δ₁ := by
   have h1 := h fun p => p.1 = true

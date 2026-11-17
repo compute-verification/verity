@@ -4,22 +4,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.Claims.CompleteFails
 public import Proofs.Flock.Claims.Deploy
 
-/-!
-# The sampled compiler's completeness says something
-
-`CompilerComplete` (`Definitions.Claims.SamplingGeneric`) is a guarantee that the lock's `claims.generic` names, held to
-its honest and nontrivial witnesses (the lock's `witnesses`), and `Compiled.Complete`, what it concludes, is a claim held
-to its `fails` and `meets` witnesses (the lock's `claims.witnesses`). Each builds its instance on the toys of
-`Witnesses.SamplingGeneric`.
-
-* `twoL` over `twoA` meets the completeness contract at `K = 2`, with two sampled sessions: each is the silent prover's
-  run of `sesV` on a statement `twoA` serves, the run accepts when both accept, and `twoA`'s silent prover is complete at
-  error `0`. The witness `twoWit` opens both inputs as `true`, so no proof block is faulty: `twoComplete_meets`, and at
-  SHA-512 `compilerComplete_honest`.
-* `rejL`: a compiled verifier over `twoA` that rejects every run, on `twoL`'s statement, partition and commitment, at
-  error `0`, so `twoWit` is in its honest relation and it is not complete: `compilerComplete_nontrivial`,
-  `Compiled.Complete_fails`.
--/
+/-! The sampled compiler's completeness says something: `twoL` meets its contract and `rejL` is not complete. -/
 
 @[expose] public section
 
@@ -35,7 +20,6 @@ def twoWit : Claims.Sampling.Wit := ⟨[⟨0, true, []⟩, ⟨1, true, []⟩]⟩
 theorem twoWit_val (H : Msg → Msg) {v : ℕ} (hv : v < 2) : twoWit.val H trueCm twoStmt v = some true := by
   interval_cases v <;> simp [Claims.Sampling.Wit.val, twoWit, Claims.Sampling.CommitmentScheme.Opens, trueCm, OC.eval]
 
-/-- Under `trueCm`, `twoWit` leaves no proof block of `twoPart` faulty. -/
 theorem two_rhon (H : Msg → Msg) (x : Msg) :
     Claims.Sampling.Rhon H trueCm (fun _ => some twoStmt) (fun _ => some twoPart) x twoWit := by
   refine ⟨twoStmt, twoPart, rfl, rfl, Finset.eq_empty_of_forall_notMem fun v hv => ?_⟩
@@ -76,7 +60,6 @@ section Complete
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `twoA`'s silent prover is complete at error `0`: `sesV` accepts its one empty message. -/
 theorem twoA_complete (H : Msg → Msg) :
     Claims.Complete H (twoA Coin).V (fun _ => silentP) (twoA Coin).R (fun _ => True) (fun _ => 0) := by
   intro _ x _ _ _ ω
@@ -163,8 +146,6 @@ theorem rejL_not_complete : ¬ (rejL Coin).Complete zeroHash := fun h =>
 end Complete
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

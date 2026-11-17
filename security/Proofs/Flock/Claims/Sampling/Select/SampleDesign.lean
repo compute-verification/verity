@@ -42,18 +42,7 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 import VCVio.Prelude.Core
 
-/-!
-# The sampling design from the deployed sample (`Claims.Sampling.SampleDesign`)
-
-* `Design.Pa_empty`: a well-formed design has `P_a(∅) = 1`.
-* `allSlots`, `sampleChecked`: every slot of a layout, and the deployed sample's checked slots, `Slots.select`'s or, where
-  it is refused (the run rejects), every slot.
-* `Partition.shape`: each class's strata sizes, in proof blocks; `P_a`, the slots and the design's well-formedness read
-  only it (`Design.Pa_of_shape`, `Partition.blocks_length_of_shape`, `Design.wellFormed_of_shape`).
-* `DrawSlots`: the deployed sample is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
-  from uniform bytes of the coins.
-* `sampleDesign_of_slots`: `SampleDesign` there, from `sampleMisses`.
--/
+/-! The sampling design (`Claims.Sampling.SampleDesign`) from the deployed sample. -/
 
 @[expose] public section
 
@@ -63,8 +52,6 @@ open Lean (Json)
 namespace Claims.Sampling
 
 open Claims Finset Properties.Spot Properties.Spot.SecurityProofs
-
-/-! ## `P_a(∅)` on a well-formed design -/
 
 theorem window_empty (o n : ℕ) : window o n ∅ = ∅ := by simp [window]
 
@@ -105,14 +92,9 @@ theorem classesPa_empty : ∀ (rs : List OneStage) (cs : List (List (List (List 
   | [], _ :: _, _, hl, _ => absurd hl (by simp)
   | _ :: _, [], _, hl, _ => absurd hl (by simp)
 
-/-- **A well-formed design accepts the empty set surely**: `P_a(∅) = 1`. -/
 theorem Design.Pa_empty (d : Design) (P : Partition) (h : d.WellFormed P) : d.Pa P ∅ = 1 :=
   classesPa_empty _ _ 0 h.1 h.2
 
-/-! ## A partition's shape -/
-
-/-- **A partition's shape**: each class's strata sizes, in proof blocks (`strataSizes`). The design and the sample read a
-partition only through it: its slots, `P_a` and the design's well-formedness. -/
 def Partition.shape (P : Partition) : List (List ℕ) := P.classes.map strataSizes
 
 theorem flatten_length_eq_sizes (c : List (List (List ℕ))) : c.flatten.length = (strataSizes c).sum := by
@@ -137,7 +119,6 @@ theorem classesPa_of_shape : ∀ (rs : List OneStage) (cs cs' : List (List (List
   | _ :: _, [], _ :: _, _, _, h => absurd h (by simp)
   | _ :: _, _ :: _, [], _, _, h => absurd h (by simp)
 
-/-- **`P_a` reads only the shape.** -/
 theorem Design.Pa_of_shape (d : Design) {P Q : Partition} (h : P.shape = Q.shape) (B : Finset ℕ) :
     d.Pa P B = d.Pa Q B :=
   classesPa_of_shape _ _ _ 0 B h
@@ -154,15 +135,12 @@ theorem forall_zip_of_shape : ∀ (rs : List OneStage) (cs cs' : List (List (Lis
   | _ :: _, [], _ :: _, h => absurd h (by simp)
   | _ :: _, _ :: _, [], h => absurd h (by simp)
 
-/-- **The design's well-formedness reads only the shape.** -/
 theorem Design.wellFormed_of_shape (d : Design) {P Q : Partition} (h : P.shape = Q.shape) :
     d.WellFormed P ↔ d.WellFormed Q := by
   have hl : P.classes.length = Q.classes.length := by
     simpa [Partition.shape] using congrArg List.length h
   unfold Design.WellFormed
   rw [hl, forall_zip_of_shape _ _ _ h]
-
-/-! ## The deployed sample's checked slots -/
 
 /-- Every slot of a layout, in order. -/
 def allSlots (l : Slots.SlotOrder) : Array ℕ := Array.range l.blocks.size
@@ -190,7 +168,6 @@ def sampleChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Opt
   | .ok (_, c) => c
   | .error _ => allSlots l
 
-/-- A slot of `c` is at an index below `n` when `c` has at most `n`. -/
 theorem index_of_mem {c : Array ℕ} {n : ℕ} (hc : c.size ≤ n) {u : ℕ} (hu : u ∈ c) :
     ∃ p : Fin n, c.toList[p.val]? = some u := by
   obtain ⟨p, hp⟩ := List.mem_iff_getElem?.1 (Array.mem_toList_iff.2 hu)
@@ -199,12 +176,6 @@ theorem index_of_mem {c : Array ℕ} {n : ℕ} (hc : c.size ≤ n) {u : ℕ} (hu
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- **The deployed sample is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
-program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
-`l` has the statement's partition's shape
-(`Partition.shape`: its strata's sizes in proof blocks, in their classes; the blocks' gates are the partition's) and
-whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the checked slots the sample's
-on them (`sampleChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
@@ -214,9 +185,6 @@ def DrawSlots (D : Deploy Coin Col T) : Prop :=
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
       ∀ c, D.checked x c = (sampleChecked rule d query table cm l (bytesOf (bytes c))).toList
 
-/-- **The sampling design from the deployed sample**: where the sample is `Slots.select`'s on uniform bytes (`DrawSlots`), its
-miss probability at fixed first-stage coins averages at most `P_a(B)` (`sampleMisses`); a refused sample checks every slot,
-so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
 theorem sampleDesign_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : SampleDesign D := by
   intro x s Pt hx hP hin B hB
   obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP

@@ -37,20 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 
-/-!
-# The deployed relation splits by table
-
-Each table of a session is its own statement with its own units: the verifier sets up one `Stmt` per table
-(`Stmt.setupTables`), and no hidden value of one table is read by another's blocks. In the readable relation
-(`relation`) table `c` reads only its own share of the hidden values (`zOf`, the bits `a·J + c`).
-
-* `tableWit J w j`: table `j`'s share of `w`'s hidden values, as a witness of its own.
-* `relS_congr`: `RelS` reads a witness only through its hidden values' `getD`.
-* `relS_only`: at a statement the verifier parses (untyped, without public input ports), `RelS` of the readable
-  statement holds exactly when, for every table `j`, `RelS` of table `j` alone (`Parsed.only`) holds at its share.
-  Every table fits the first table's blocks (`tables_fit`), so a table fits its own blocks exactly when it fits the
-  session's.
--/
+/-! The deployed relation splits by table. -/
 
 @[expose] public section
 
@@ -70,13 +57,11 @@ theorem tableWit_getD {J j : ℕ} (hj : j < J) (w : Claims.Flock.Wit) (a : ℕ) 
     rw [List.getD_eq_default _ _ (by simp only [tableWit, List.length_map, List.length_range]; omega),
       List.getD_eq_default _ _ (by omega)]
 
-/-- **Table `j`'s model witness is its share's**: as the one table of its own statement, at its share of `w`. -/
 theorem zOf_tableWit {J j : ℕ} (hj : j < J) (w : Claims.Flock.Wit) (m : ℕ) :
     zOf 1 (tableWit J w j) 0 m = zOf J w j m := by
   funext a
   simp only [zOf, Nat.mul_one, Nat.add_zero, tableWit_getD hj]
 
-/-- **`RelS` reads only the hidden values' `getD`.** -/
 theorem relS_congr (s : Claims.Flock.Stmt) {w w' : Claims.Flock.Wit}
     (h : ∀ i, w.hid.getD i false = w'.hid.getD i false) : Claims.Flock.RelS s w ↔ Claims.Flock.RelS s w' := by
   have hv : Claims.Flock.val s w = Claims.Flock.val s w' := by
@@ -85,8 +70,6 @@ theorem relS_congr (s : Claims.Flock.Stmt) {w w' : Claims.Flock.Wit}
   unfold Claims.Flock.RelS
   rw [hv]
 
-/-- **The relation splits by table**: at a statement the verifier parses (untyped, without public input ports), a
-witness satisfies the readable statement exactly when every table's share of it satisfies that table alone. -/
 theorem relS_only {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     (w : Claims.Flock.Wit) :
     Claims.Flock.RelS (toReadable relation p) w ↔

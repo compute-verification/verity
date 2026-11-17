@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.Claims.CompleteFails
 
-/-!
-# A compiled verifier whose statement has a partition and whose roots hold a bit
-
-The network attester's lemmas at a monitoring period with a placed window (`NetTiming.Witness`'s) are stated over
-this toy code:
-
-* `posCm`: a commitment whose roots hold one bit (`rootBit`): an opening of position 0 passes at that bit and one of
-  position 1 at its complement (`posOpens`), with no call, so it binds;
-* `posStmt b`: `notStmt` under roots that hold `b`, and `posX`, its bytes;
-* `posTops`: the openings of a statement's input and of its negation, at the bit its roots hold;
-* `posL`: a compiled verifier over `toyA` that rejects every run, parses every statement as a `posStmt`, gives it the
-  partition `notPart` and commits under `posCm`.
--/
+/-! A compiled verifier whose statement has a partition and whose roots hold a bit: the toy code the network attester's placed-window lemmas are stated over. -/
 
 @[expose] public section
 

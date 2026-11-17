@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.Sampling.Reference.Prover
 
-/-!
-# The sampled verifier's code
-
-`SamplingDeploy.Code`, the record of what a deployed sampled verifier fixes, with only its fields' types: the deployed
-record `SamplingDeploy.deployOf` (`Claims.Sampling.Deployed`) and each deployment's code (`SpotFlock.code`) read it
-without the proofs the deployed record is built on.
--/
+/-! The sampled verifier's code with only its fields' types, which the deployed record and each deployment's code read without the proofs the deployed record is built on. -/
 
 @[expose] public section
 
@@ -68,7 +62,6 @@ def units (c : Code) (x : Msg) : ℕ :=
   | some s => ((c.partition s).getD ⟨[]⟩).blocks.length
   | none => 0
 
-/-- The code with every unit's `N₀` its statement's (`unitN₀ x _ = innerN₀ x`), as a one-stage record reads it. -/
 def Code.atInnerN₀ (c : Code) : Code := { c with unitN₀ := fun x _ => c.innerN₀ x }
 
 end SamplingDeploy

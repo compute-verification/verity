@@ -38,34 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# The sampled reference prover
-
-The honest sampled prover the deployment runs (`refP PF`), on its tapes (one Flock tape per session statement), as a
-`Claims.Prover` against the sampled verifier, at a Flock reference prover `PF`: the masked record's
-(`FlockComplete.ZkTables.honestPR`, on `Tape`) or the plain record's (`FlockComplete.honestP`).
-
-The trace is committed before the run: the statement's roots, hm96 leaves under the verifier's registered
-frame-v3-sha512 path check (`SamplingDeploy.commit`, `pathCommit` at `hm96Leaf`), and the witness holds the openings.
-The prover waits for the selection coin, saying what the run's framing fixes, and in each session runs
-`PF` at the session's own history, on the Flock witness
-that encodes what it opens: at each position the session reads, the witness's first opening there that
-passes its own check under the roots (`revealOC`), with its own `H` calls. Its framing is the code's:
-
-* `step`: where the run is at a history, for the prover: a session at its own history under its statement
-  (`Step.session`), or a message the framing fixes outside the sessions (`Step.say`);
-* `reads`: the positions a session opens, by its statement;
-* `wit`: the Flock witness that encodes what a session reveals, by its statement.
-
-A session is named by its statement, so one session may prove several sampled proof blocks, its statement theirs.
-
-What it reveals opens and is the committed value `Wit.val` reads (`found_opens`, `found_val`), and covers every read
-position with a committed value (`found_covers`).
-
-`sessErrAt`: the largest of Flock's errors, capped at `1`, over the statements of the reference prover's sessions at
-`x`, at an honest witness and coins that check the session's unit; the record's completeness error is the sessions'
-count times it at the Flock record's `δc`.
--/
+/-! The honest sampled prover `refP PF` the deployment runs, at the masked record's (`FlockComplete.ZkTables.honestPR`) or the plain record's (`FlockComplete.honestP`) Flock reference prover. -/
 
 @[expose] public section
 
@@ -79,7 +52,6 @@ inductive Step where
   | session (xS : Msg) (hS : List (Msg × Msg))
   | say (m : Msg)
 
-/-- **The masked reference prover's tape**: a masked Flock tape per session statement. -/
 abbrev Tape := Msg → FlockComplete.TapeZk
 
 /-- **The opening revealed at `g`**: the first of `os` at `g` whose check under `roots` passes, each check its own `H`
@@ -96,7 +68,6 @@ def revealOC (Cm : CommitmentScheme Bool) (roots : List Msg) (w : Wit) : List �
   | g :: gs => ocBind (firstOC Cm roots g w.vals) fun o =>
       ocBind (revealOC Cm roots w gs) fun os => .ret (o.toList ++ os)
 
-/-- **What it reveals at the positions `gs`**, against `H`. -/
 def found (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : List Msg) (w : Wit) (gs : List ℕ) : List (Opening Bool) :=
   gs.flatMap fun g => (w.vals.find? fun o => o.pos == g && Cm.Opens H roots o).toList
 
@@ -122,8 +93,6 @@ noncomputable def sessErrAt {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) 
   ⨆ xS : {xS : Msg // ∃ w ω r u vS, R x w ∧ u ∈ checked x r ∧
       session x u (run H (P w) V x ω r).seen = some (xS, vS)}, min 1 (δ xS.1)
 
-/-! ## What it reveals -/
-
 theorem firstOC_eval (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : List Msg) (g : ℕ) :
     ∀ os : List (Opening Bool),
       ((firstOC Cm roots g os).eval H).1 = os.find? fun o => o.pos == g && Cm.Opens H roots o
@@ -148,7 +117,6 @@ theorem revealOC_eval (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : Li
   | g :: gs => by
     simp only [revealOC, ocBind_eval, OC.eval, firstOC_eval, revealOC_eval H Cm roots w gs, found, List.flatMap_cons]
 
-/-- **What it reveals opens** under the roots: the honest commitment's check passes. -/
 theorem found_opens {H : Msg → Msg} {Cm : CommitmentScheme Bool} {roots : List Msg} {w : Wit} {gs : List ℕ}
     {o : Opening Bool} (h : o ∈ found H Cm roots w gs) : Cm.Opens H roots o = true := by
   obtain ⟨g, -, hg⟩ := List.mem_flatMap.1 h
@@ -162,7 +130,6 @@ theorem found_opens {H : Msg → Msg} {Cm : CommitmentScheme Bool} {roots : List
   simp only [Bool.and_eq_true] at this
   exact this.2
 
-/-- **What it reveals is the committed value `Wit.val` reads** at its position. -/
 theorem found_val {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {gs : List ℕ} {o : Opening Bool}
     (h : o ∈ found H Cm s.roots w gs) : w.val H Cm s o.pos = some o.val := by
   obtain ⟨g, -, hg⟩ := List.mem_flatMap.1 h
@@ -177,7 +144,6 @@ theorem found_val {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditState
     rw [hpos.1, hf]
     rfl
 
-/-- **It covers every read position with a committed value.** -/
 theorem found_covers {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {gs : List ℕ} {g : ℕ} {b : Bool}
     (hg : g ∈ gs) (hb : w.val H Cm s g = some b) : ∃ o ∈ found H Cm s.roots w gs, o.pos = g := by
   unfold Wit.val at hb
@@ -189,10 +155,6 @@ theorem found_covers {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditSt
     simp only [Bool.and_eq_true, beq_iff_eq] at this
     exact this.1
 
-/-! ## Its messages -/
-
-/-- **In a session, its message is Flock's reference prover's** at the session's history, on the Flock witness of what
-it reveals. -/
 theorem refP_session (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
     (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option AuditStatement) (reads : AuditStatement → Msg → List ℕ)
     (Cm : CommitmentScheme Bool) (wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit)
@@ -202,7 +164,6 @@ theorem refP_session (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → P
       (((PF (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS (ω xS)).eval H).1 := by
   simp only [refP, hstep, hs, ocBind_eval, revealOC_eval]
 
-/-- **Outside the sessions, it says what the framing fixes.** -/
 theorem refP_say (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
     (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option AuditStatement) (reads : AuditStatement → Msg → List ℕ)
     (Cm : CommitmentScheme Bool) (wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit)

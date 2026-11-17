@@ -40,18 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The witnesses of the recursion's claims with the inner Flock's roots linear
-
-`KSFlockLin` fails at `Flock.ksD` with no cap position (`noCaps`): the silent prover is always accepted on a statement
-with no witness, every run records no verifier call, so `B` and `F0` find nothing, and `F0`'s tail `4·(k + 1)/(R+1)` is
-below `1/4` at `R = 16·(k + 1)` (`f0_tail_lt`), while `κ < 1/2`. `KSLin2` and `BitsLin2` fail at `KSBoundLin`'s toy
-records (`ksRAt` with `ksB`), where the outer witnesses record no call, so `B_I`, `Fdev` and `F0I` find nothing, the
-inner statement has no cap position, and `Fdev`'s tail `β₂/(M+1)` is below `1/4` at `M = ⌈4β₂⌉` (`tail_lt_quarter`);
-there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their `meets` witnesses are `Inner.KSAbort`'s and
-`KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
-samples' evaluations (`BinnerV`, `FdevV`) find nothing either (`sampleCalls_noCalls`).
--/
+/-! The witnesses of the recursion's claims with the inner Flock's roots linear. -/
 
 @[expose] public section
 
@@ -75,7 +64,6 @@ theorem flatMap_nil_fun {α β : Type} (l : List α) : l.flatMap (fun _ => ([] :
   List.flatMap_eq_nil_iff.2 fun _ _ => rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- A run that may abort records no verifier call where the run records none. -/
 theorem abortRun_vLog_nil {Ω A : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (hv : ∀ ω r, (run H P V x ω r).vLog = []) (ω : Ω)
     (d : (Fin (V.k x) → Coin) × A) : (abortRun H P V x keep ω d).vLog = [] := by
@@ -83,7 +71,6 @@ theorem abortRun_vLog_nil {Ω A : Type} (H : Msg → Msg) (P : Prover Ω) (V : V
   split_ifs
   exacts [hv _ _, rfl]
 
-/-- `B` at runs that may abort finds nothing where no run records a verifier call. -/
 theorem prBAbort_vLog_nil {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg)
     (P : Prover Ω) (V : Verifier Coin) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool)
     (hv : ∀ ω r, (run H P V x ω r).vLog = []) : PrBAbort H V P x keep = 0 := by
@@ -96,7 +83,6 @@ theorem prBAbort_vLog_nil {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [
       simp only [BAbort, abortRun_vLog_nil H P V x keep hv, List.nil_append, findColl, reduceCtorEq] at hs
   · rfl
 
-/-- `F0` finds nothing where no run records a verifier call. -/
 theorem prF0_vLog_nil {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg)
     (P : Prover Ω) (V : Verifier Coin) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (k R : ℕ)
     (hv : ∀ ω r, (run H P V x ω r).vLog = []) : PrF0 H V P x keep k R = 0 := by
@@ -107,7 +93,6 @@ theorem prF0_vLog_nil {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [None
     simp only [F0, abortRun_vLog_nil H P V x keep hv, getD_map_nil, flatMap_nil_fun, List.nil_append, findColl,
       ite_self, reduceCtorEq] at h
 
-/-- `F0I` finds nothing where the outer witnesses record no call. -/
 theorem f0I_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
@@ -132,8 +117,6 @@ theorem f0I_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursi
   rw [f0I_pr_noCalls H D hc I DO decO P x R]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- A sample's evaluations are none where the outer witnesses record no call and the compiled verifier stages no V\*
-statement. -/
 theorem sampleCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -142,7 +125,6 @@ theorem sampleCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.
   rw [hc, hs]
   rfl
 
-/-- `B_I` over the samples' evaluations finds nothing where there are none. -/
 theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -153,7 +135,6 @@ theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.D
   · rintro ⟨u, v, h, -⟩
     simp only [BinnerV, sampleCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
 
-/-- `Fdev` over the samples' evaluations finds nothing where there are none. -/
 theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -199,7 +180,6 @@ theorem fdevV_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recur
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `Fdev`'s tail at `M = ⌈4β⌉` is below `1/4`. -/
 theorem tail_lt_quarter (β : ℝ) : β * (1 / (((⌈4 * β⌉₊ : ℕ) : ℝ) + 1)) < 1 / 4 := by
   have hM : 4 * β ≤ ((⌈4 * β⌉₊ : ℕ) : ℝ) := Nat.le_ceil _
   have hp : (0 : ℝ) < ((⌈4 * β⌉₊ : ℕ) : ℝ) + 1 := by positivity
@@ -207,7 +187,6 @@ theorem tail_lt_quarter (β : ℝ) : β * (1 / (((⌈4 * β⌉₊ : ℕ) : ℝ) 
   linarith
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `F0`'s tail at `R = 16·(k + 1)` is below `1/4`. -/
 theorem f0_tail_lt (k : ℕ) : 4 * (((k : ℝ) + 1) / (((16 * (k + 1) : ℕ) : ℝ) + 1)) < 1 / 4 := by
   have hp : (0 : ℝ) < ((16 * (k + 1) : ℕ) : ℝ) + 1 := by positivity
   have hc : ((16 * (k + 1) : ℕ) : ℝ) = 16 * ((k : ℝ) + 1) := by push_cast; ring
@@ -250,8 +229,6 @@ theorem lt_sub_logb (c : ℝ) {y : ℝ} (hc : 103 ≤ c) (h0 : 0 ≤ y) (h : y <
   linarith
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- `λ₂ > 0` at `ksRV` over `ksB` with no cap position: `κ < 1/6` binds, against `log₂ 6 < 3`; the rest are above
-`155` (`γ = 0`, `k_I = 1`, `c_Be = 4`, `k = 32`, `N_I = 129`, `β₂ = 261`). -/
 theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
     0 < lamLin2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy decI) noCaps [] 0 0 := by
   have hx : xI (ksRV Coin (ksB Coin).IVStar) [] = [] := rfl
@@ -291,14 +268,10 @@ theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
 
 end Numbers
 
-/-! ## The claims -/
-
 section Claims
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- At `Flock.ksD` as the inner protocol, the silent prover never aborting is accepted on `[]`, where no witness is in
-the relation. -/
 theorem ksD_prBadAbort (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) :
     (Inner.ofFlock (Flock.ksD Coin) decode).PrBadAbort (A := Unit) H [] silentP (fun _ _ _ => true) = 1 := by
   unfold Inner.PrBadAbort

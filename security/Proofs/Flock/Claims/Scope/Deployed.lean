@@ -37,24 +37,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 
-/-!
-# The deployed relation at the deployed parser
-
-The deployed record's parser is `FlockDeploy.parse` (`parseOf` at the verifier's reading of the bytes,
-`FlockDeploy.readOf`), and `ScopeMatches` at both deployed records is `FlockDeploy.scopeMatches_zk` and
-`FlockDeploy.scopeMatches_plain` (`Matches`' `scopeMatches`). At the deployed relation (`relation`):
-
-* `relS_deployed`: `RelS` of an in-scope statement the deployed parser accepts is every table's `Layout.model` satisfied
-  (`Fit.relS_layout`; `InScope` gives the untyped form without public input ports it needs).
--/
+/-! The deployed relation at the deployed parser. -/
 
 @[expose] public section
 
 namespace Flock.Readable
 
-/-- **The deployed relation at the deployed parser**: a statement it parses is the readable form of a statement the
-verifier parses, and when that statement is in scope, `RelS` is every table's `Layout.model` at `regionsOf` satisfied by
-its share of the hidden values. -/
 theorem relS_deployed {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : FlockDeploy.parse zk relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
     ∃ p : Parsed, parseBytes (FlockDeploy.readOf zk) x = some p ∧ s = toReadable relation p ∧

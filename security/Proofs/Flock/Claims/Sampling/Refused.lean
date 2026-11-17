@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.Reg
 public import Proofs.Flock.Claims.Prob
 
-/-!
-# The refused second stage, in expectation (`RegTwo.ex_checked_le`)
-
-Where the second stage is refused (`Select.selectSecond` errors, as it does on the empty sample a refused first stage
-hands it), the checked proof blocks are every block below `N` (`RegTwo.checked_of_refused`). Where it accepts, they are
-the always-checked blocks and each proved unit's block, so a weight at most `M` sums over them to at most the
-always-checked blocks' weights plus `M` for each proved unit (`RegTwo.sum_checked_le`). A function of the checked blocks
-at most `B ≥ 0` wherever the second stage accepts then averages, over any finite space of coins, at most `B` plus the
-refusal's probability times its value at every block below `N` (`RegTwo.ex_checked_le`). With the blocks' needs as the
-weight and the second stage's count, that is `Σ_always |needs| + C·M + Pr[refused]·Σ_{u<N} |needs u|`
-(`RegTwo.ex_sum_checked_le`).
--/
+/-! The checked proof blocks where the second stage is refused, in expectation (`RegTwo.ex_checked_le`). -/
 
 @[expose] public section
 
@@ -29,8 +18,6 @@ theorem sum_filter_or_le (xs : List ℕ) (p q : ℕ → Bool) (w : ℕ → ℕ) 
   | cons a xs ih =>
     by_cases hp : p a <;> by_cases hq : q a <;> simp [hp, hq] <;> omega
 
-/-- An average is at most `B ≥ 0` plus an event's probability times `C`, where the function is at most `B` off the
-event and at most `C` on it. -/
 theorem Ex_le_add_pr_mul {Ω : Type} [Fintype Ω] [Nonempty Ω] (f : Ω → ℝ) (R : Ω → Prop) {B C : ℝ} (hB : 0 ≤ B)
     (hoff : ∀ ω, ¬ R ω → f ω ≤ B) (hon : ∀ ω, R ω → f ω ≤ C) : Ex f ≤ B + Pr R * C := by
   classical
@@ -49,7 +36,6 @@ theorem Ex_le_add_pr_mul {Ω : Type} [Fintype Ω] [Nonempty Ω] (f : Ω → ℝ)
     _ = B + C * Pr R := by rw [Ex_add (fun _ => B), Ex_const, hind]
     _ = B + Pr R * C := by ring
 
-/-- Where the second stage is refused, every proof block below `N` is checked. -/
 theorem RegTwo.checked_of_refused (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray)
     (h : Except.toBool (Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂) = false) :
     g.checked N src₁ src₂ = List.range N := by
@@ -60,8 +46,6 @@ theorem RegTwo.checked_of_refused (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteAr
     exact absurd h (by simp [Except.toBool])
   | error e => rfl
 
-/-- **The checked blocks where the second stage accepts**: a weight at most `M` sums over them to at most the
-always-checked blocks' weights below `N` plus `M` for each proved unit. -/
 theorem RegTwo.sum_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (w : ℕ → ℕ) (M : ℕ)
     (hM : ∀ u, w u ≤ M) :
@@ -99,9 +83,6 @@ theorem RegTwo.sum_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray)
         List.toFinset_card_le _
     _ = (Spot.Draw.proved draw).size := by rw [List.length_map, Array.length_toList]
 
-/-- **The refused second stage, in expectation**: over coins `ω` with first-stage bytes `src₁ ω` and second-stage
-bytes `src₂ ω`, a function `F` of the checked blocks at most `B ≥ 0` wherever the second stage accepts averages at most
-`B` plus the refusal's probability times `F` at every block below `N`. -/
 theorem RegTwo.ex_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo) (N : ℕ) (src₁ src₂ : Ω → ByteArray)
     (F : List ℕ → ℝ) {B : ℝ} (hB : 0 ≤ B)
     (hok : ∀ ω draw n, Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) = .ok (draw, n) →
@@ -116,9 +97,6 @@ theorem RegTwo.ex_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo)
       | error e => exact absurd (by rw [hs]; rfl) hR)
     (fun ω hR => le_of_eq (by rw [g.checked_of_refused N _ _ hR]))
 
-/-- **The checked blocks' weights, in expectation**: for a weight at most `M`, with the second stage proving at most `C`
-units wherever it accepts, the checked blocks' weights average at most the always-checked blocks' weights below `N`
-plus `C·M`, plus the refusal's probability times every block's weight below `N`. -/
 theorem RegTwo.ex_sum_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo) (N : ℕ)
     (src₁ src₂ : Ω → ByteArray) (w : ℕ → ℕ) (M C : ℕ) (hM : ∀ u, w u ≤ M)
     (hC : ∀ ω draw n, Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) = .ok (draw, n) →

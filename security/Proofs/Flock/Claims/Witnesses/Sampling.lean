@@ -42,33 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Refutation witnesses: the sampling compiler's claims
-
-Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
-`toyStmt`: one input gate, returned, sampled `all`, its partition `toyPart` one proof block `{0}`, in scope
-(`inScope_toy`).
-
-* `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
-  witness is in the relation at any `δ ≥ 0` or count `t ≤ 1` (`sksD_noR`, `sksD_noRCount`), and its miss at `t = 1` is
-  `0` (`sksD_missAt`). The compiled sampled verifier's `KS`, `KSCount` and `Bits` fail at its compiled record
-  (`Witnesses.SamplingGeneric`'s `sksL`), which reads these.
-* `compSD`: the verifier rejects after one round, and every opening passes (`accCm`), so the opening of the input
-  (`toyWit`) leaves no unit faulty. `Complete_fails`, `Nontrivial_fails`, `ZK_fails`
-  (`Sampling.ZKMal.not_samplingZK_collSim`, at `Sampling.ZKMal.quietZD`, its masked deployment whose reference prover
-  is quiet and whose simulator collides), `Binding_fails` (two openings of different values at one position pass
-  with no call), `Universal_fails` (its universal unit returns nothing).
-* `effSD`: nothing parses while the check takes everything. `ScopeMatches_fails`.
-* `ExtractOwnLe_fails`: an extractor that hashes once, at a bound of `0`.
-
-`FaultyBoundary` is a theorem (`Claims.Sampling.faultyBoundary`), so it has no refutation. `BitsLin` and the scoped
-`KSLinOn` are refuted through the compiled sampled verifier's `Bits` and `KS` failing at `sksL`
-(`Witnesses.Stated`).
-
-`ZK` reads the masked deployment's own reference prover and simulator, as `Complete` reads the deployment's
-(`Sampling.Deploy.P`), so it is not met at every masked deployment (`ZK_vacuous_refuted`, at `zkSD`, `compSD` with a
-masked inner Flock).
--/
+/-! Refutation witnesses: each of the sampling compiler's claims fails at a toy deployment, but `FaultyBoundary`, a theorem. -/
 
 @[expose] public section
 
@@ -76,9 +50,6 @@ namespace Claims.Witness.Sampling
 
 open Claims Claims.Sampling
 
-/-! ## Rerun programs with no call of their own -/
-
-/-- A rerun program that makes no SHA-512 call of its own. -/
 def NoHash {R α : Type} : RP R α → Prop
   | .ret _ => True
   | .hash _ _ => False
@@ -113,8 +84,6 @@ theorem noHash_flatMapRP {γ : Type} (f : β → RP R (List γ)) (hf : ∀ b, No
 
 end NoHash
 
-/-! ## The toy statement -/
-
 /-- A commitment whose every opening passes, with no call. -/
 def accCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
 
@@ -145,7 +114,6 @@ theorem toy_runIn (ref : ℕ → Option Bool) : toyProg.runIn ref [0] 0 = ref 0 
   rw [Prog.runIn]
   rfl
 
-/-- The unit is correct exactly when the input's value is opened. -/
 theorem toy_correct_iff (H : Msg → Msg) (Cm : CommitmentScheme Bool) (w : Wit) (ι : ℕ → Bool) :
     toyProg.Correct (toyProg.refIn [0] (w.val H Cm toyStmt) ι) [0] ↔ ∃ b, w.val H Cm toyStmt 0 = some b := by
   constructor
@@ -197,7 +165,6 @@ theorem rejCm_val (H : Msg → Msg) (w : Wit) : w.val H rejCm toyStmt 0 = none :
 theorem rejCm_faulty (H : Msg → Msg) (w : Wit) : faulty H rejCm toyStmt toyPart w = {0} := by
   rw [toy_faulty, rejCm_val]; rfl
 
-/-- The toy is in the sampling scope. -/
 theorem inScope_toy : InScope toyPart toyStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
     ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_⟩
@@ -209,10 +176,6 @@ theorem inScope_toy : InScope toyPart toyStmt := by
   · refine ⟨rfl, ?_⟩
     simp [toyStmt, toyPart, OneStage.WellFormed]
 
-/-! ## The toy deployments -/
-
-/-- The toy deployment of `KS`, `KSCount` and `Bits`: the verifier accepts, no opening passes, and no unit has a
-session. -/
 noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   V := accV Coin
   parse _ := some toyStmt
@@ -236,8 +199,6 @@ noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   P _ := silentP
   δc _ _ := 0
 
-/-- The toy deployment of `Complete`, `Nontrivial`, `ZK`, `Binding` and `Universal`: the verifier rejects, every
-opening passes, and the universal unit returns nothing. -/
 noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   V := rejV Coin
   parse _ := some toyStmt
@@ -261,11 +222,8 @@ noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   P _ := silentP
   δc _ _ := 0
 
-/-- The empty column, the zero of a word of field-element lists. -/
 local instance zeroCol : Zero (List Bool) := ⟨[]⟩
 
-/-- The toy deployment of `Efficient` and `ScopeMatches`: its sessions' decoder counts one step, nothing parses, and
-the check takes everything. -/
 def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   V := accV Coin
   parse _ := none
@@ -288,8 +246,6 @@ def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
-
-/-! ## `sksD`'s numbers -/
 
 section Numbers
 
@@ -365,8 +321,6 @@ theorem sksD_missAt (x : Msg) : missAt (sksD Coin) 1 x = 0 := by
 
 end Numbers
 
-/-! ## The claims -/
-
 section Claims
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
@@ -404,7 +358,6 @@ theorem ZK_fails (H : Msg → Msg) (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg)
   ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit (fun _ => rfl) rfl
     ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩ Nat.one_pos hε
 
-/-- `compSD` with a masked inner Flock (`ZKMal.toyD`, so one coin). -/
 noncomputable def zkSD : Deploy Unit Unit Unit := { compSD Unit with flock := ZKMal.toyD }
 
 /-- **The sampling `ZK` is not met at every masked deployment**, at `ε_zk = 0` and `γ = 0`. -/
@@ -422,7 +375,6 @@ theorem ScopeMatches_fails : ¬ Claims.Sampling.ScopeMatches (effSD Coin) := fun
 
 end Claims
 
-/-- The extractor that hashes the empty message once and gives up. -/
 def hashE {Coin W : Type} (V : Verifier Coin) : Extractor Coin W V where
   C _ := Unit
   ext _ _ _ := .hash [] fun _ => .ret none

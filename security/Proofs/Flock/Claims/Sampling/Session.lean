@@ -43,32 +43,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Cost
 
-/-!
-# The deployed sampled verifier at a checked unit's session
-
-The compiled sampled verifier's sessions (`SamplingGeneric.Compiled.Sessions`) hold at a frozen record `D`
-(`SamplingGeneric.sessions_ofDeploy`) given three facts about the deployed sampled verifier at a checked unit's session,
-each a hypothesis to discharge there:
-
-* `SampleFixed`: a checked unit's session is in the second stage, and the checked units don't read its coins.
-* `SessionRuns`: at a run that checks `u`, `u`'s session is a Flock run, on its own rounds (an order embedding of
-  Flock's), of a Flock prover fixed by the run's coins off them; the session decides the run; and the sampled verifier
-  makes the Flock verifier's `H` calls. The session's view needs only the coins before its first round.
-* `InnerNumbers`: the inner numbers (`innerWaits`, `innerCap`, `innerN₀`) are Flock's at every session's statement, and
-  its `ε_table` and weight at most the inner ones. `InnerNumbersAt D n₀` is the same with each unit's own `N₀`,
-  `n₀ x u`, for a two-stage record whose units' sessions set up tables of different shapes; at `n₀ x _ = innerN₀ x` it
-  is `InnerNumbers` (`innerNumbersAt_innerN₀`).
-
-The coin lemmas the compiled sessions' proof reads are here too: a set of rounds that resampling keeps averages the
-second stage's coins over the session's (`Ex_resample`), coins restricted along an order embedding are uniform
-(`Ex_comp_inj`, `Pr_restrict_pair`), and `B`'s collision probability is a logged collision's (`B_Pr_logColl`).
-
-A session may cover several checked units, as the one-stage audit's one session proves every sampled proof block:
-`SessionRunsSlots` asks `SessionRuns` only of the units at the slots whose sessions cover the rest (`SlotsCover`,
-`Sampling.KS`), and gives it (`sessionRuns_of_slots`); one session per unit is `SessionRuns` itself
-(`sessionRunsSlots_units_iff`). `InnerNumbers` at one session over every unit is one statement about it
-(`innerNumbers_one_iff`).
--/
+/-! The facts about the deployed sampled verifier at a checked unit's session that the compiled sampled verifier's sessions take as hypotheses, and the coin lemmas their proof reads. -/
 
 @[expose] public section
 
@@ -76,13 +51,10 @@ namespace Claims.Sampling
 
 open Claims Finset
 
-/-! ## Coins restricted along an injective map, and resampled on a set they determine -/
-
 section Coins
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- **Uniform coins restricted along an injective map are uniform.** -/
 theorem Ex_comp_inj {ι ι' : Type} [Fintype ι] [Fintype ι'] [DecidableEq ι] [DecidableEq ι'] (e : ι' → ι)
     (he : Function.Injective e) (h : (ι' → Coin) → ℝ) :
     Ex (fun c : ι → Coin => h fun i => c (e i)) = Ex h := by
@@ -105,8 +77,6 @@ omit [Fintype Coin] [Nonempty Coin] in
 theorem forkOn_empty {k : ℕ} (r d : Fin k → Coin) : forkOn ∅ r d = r :=
   funext fun t => by simp [forkOn]
 
-/-- **Resampling on a set the coins determine**: when resampling `d` on `S d` keeps `S d`, averaging over `d` and then
-over fresh coins on `S d` is averaging over `d`: swapping `d` and the fresh coins on `S d` is an involution. -/
 theorem Ex_resample {k : ℕ} (S : (Fin k → Coin) → Finset (Fin k)) (hS : ∀ d σ, S (forkOn (S d) d σ) = S d)
     (F : (Fin k → Coin) → ℝ) :
     Ex (fun d => Ex fun σ => F (forkOn (S d) d σ)) = Ex F := by
@@ -127,7 +97,6 @@ theorem Ex_resample {k : ℕ} (S : (Fin k → Coin) → Finset (Fin k)) (hS : �
   rw [← Ex_fst (β := Fin k → Coin) F, ← h2, h1]
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- Fresh coins on `J ⊆ I`, then `r` off `I`, are fresh on `J` of the coins fresh on `I`. -/
 theorem forkOn_sub {k : ℕ} {I J : Finset (Fin k)} (h : J ⊆ I) (r d σ : Fin k → Coin) :
     forkOn I r (forkOn J d σ) = forkOn J (forkOn I r d) σ :=
   funext fun t => by
@@ -136,8 +105,6 @@ theorem forkOn_sub {k : ℕ} {I J : Finset (Fin k)} (h : J ⊆ I) (r d σ : Fin 
     · simp [forkOn, hJ]
 
 end Coins
-
-/-! ## `B`'s collisions, as logged collisions -/
 
 theorem B_Pr_logColl {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) :
@@ -168,7 +135,6 @@ section Restrict
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- Two independent coin vectors restricted along an injective map. -/
 theorem Pr_restrict_pair {kS kF : ℕ} (emb : Fin kF → Fin kS) (hemb : Function.Injective emb)
     (Q : (Fin kF → Coin) → (Fin kF → Coin) → Prop) :
     Pr (fun s : (Fin kS → Coin) × (Fin kS → Coin) => Q (fun i => s.1 (emb i)) fun i => s.2 (emb i)) =
@@ -181,14 +147,10 @@ theorem Pr_restrict_pair {kS kF : ℕ} (emb : Fin kF → Fin kS) (hemb : Functio
 
 end Restrict
 
-/-! ## What the deployed sampled verifier is taken to do at a session -/
-
 section Session
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The sample precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
-coins on them keep the checked units. -/
 def SampleFixed (D : Deploy Coin Col T) : Prop :=
   ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     D.rounds x u ⊆ D.secondStage x ∧ ∀ d, D.checked x (forkOn (D.rounds x u) r d) = D.checked x r
@@ -209,15 +171,11 @@ def SessionRuns (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
         D.session x u (run H P D.V x ω r').seen = some (xS, (run H P' D.flock.V xS () fun i => r' (emb i)).seen) ∧
           ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
 
-/-- **The inner numbers are Flock's** at every session's statement: its `E^rep`'s waits, truncation and `N₀`, and its
-`ε_table` and weight at most the inner ones. -/
 def InnerNumbers (D : Deploy Coin Col T) : Prop :=
   ∀ x u v xS vS, D.session x u v = some (xS, vS) →
     D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
 
-/-- **The inner numbers are Flock's at each unit's `N₀`**: `InnerNumbers` with a session of unit `u` at `x` at `N₀ =
-n₀ x u`. -/
 def InnerNumbersAt (D : Deploy Coin Col T) (n₀ : Msg → ℕ → ℝ) : Prop :=
   ∀ x u v xS vS, D.session x u v = some (xS, vS) →
     D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = n₀ x u ∧
@@ -228,8 +186,6 @@ theorem innerNumbersAt_innerN₀ (D : Deploy Coin Col T) : InnerNumbersAt D (fun
   Iff.rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **`SampleFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
-checked units read only the coins off the second stage, fresh coins on a session keep them. -/
 theorem sampleFixed_of_first (D : Deploy Coin Col T)
     (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.secondStage x)
     (hfirst : ∀ x r r', (∀ t ∉ D.secondStage x, r t = r' t) → D.checked x r = D.checked x r') : SampleFixed D := by
@@ -238,11 +194,6 @@ theorem sampleFixed_of_first (D : Deploy Coin Col T)
   have hn : t ∉ D.rounds x u := fun hm => ht (hrounds x r u hu hm)
   simp [forkOn, hn]
 
-/-- **`SessionRuns` a session at a time**: at coins `r`, the unit checked at a slot below `S x` has its session a Flock
-run on its rounds, as `SessionRuns` says of every checked unit. Where the slots cover the checked units
-(`SlotsCover`), that is `SessionRuns` (`sessionRuns_of_slots`): one session over every checked unit, as the one-stage
-audit runs, is one obligation per run (`S = 1`), and one session per unit is `SessionRuns` itself (`S = nPU D`,
-`sessionRunsSlots_units_iff`). -/
 def SessionRunsSlots (H : Msg → Msg) (D : Deploy Coin Col T) (S : Msg → ℕ) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : ℕ) (u : ℕ),
     p < S x → (D.checked x r)[p]? = some u →
@@ -255,7 +206,6 @@ def SessionRunsSlots (H : Msg → Msg) (D : Deploy Coin Col T) (S : Msg → ℕ)
           ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-/-- **`SessionRuns` from its slot form**: each checked unit has a slot's rounds and session. -/
 theorem sessionRuns_of_slots {H : Msg → Msg} {D : Deploy Coin Col T} {S : Msg → ℕ} (hc : SlotsCover D S)
     (h : SessionRunsSlots H D S) : SessionRuns H D := by
   intro x Ω P ω r u hu
@@ -264,15 +214,13 @@ theorem sessionRuns_of_slots {H : Msg → Msg} {D : Deploy Coin Col T} {S : Msg 
   exact h x Ω P ω r p u' hp hu'
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-/-- **At one session per unit the slot form is `SessionRuns`.** -/
 theorem sessionRunsSlots_units_iff (H : Msg → Msg) (D : Deploy Coin Col T) :
     SessionRunsSlots H D (nPU D) ↔ SessionRuns H D :=
   ⟨sessionRuns_of_slots (slotsCover_units D), fun h x Ω P ω r p u hp hu => h x Ω P ω r u ⟨⟨p, hp⟩, hu⟩⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **`InnerNumbers` at one session over every unit**: one statement about the run's one session. `InnerNumbers` reads
-every session a unit has, whichever units share it, so several sessions at `x` must have Flock's numbers alike: the
-same tables' shapes give the same `N₀`. -/
+/-- `InnerNumbers` reads every session a unit has, whichever units share it, so several sessions at `x` must have Flock's
+numbers alike. -/
 theorem innerNumbers_one_iff (D : Deploy Coin Col T) (hs : ∀ x u u', D.session x u = D.session x u') :
     InnerNumbers D ↔ ∀ x v xS vS, D.session x 0 v = some (xS, vS) →
       D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧

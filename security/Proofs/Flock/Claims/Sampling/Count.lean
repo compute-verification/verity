@@ -40,27 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The deployed count bound, at the claims' strata samples
-
-`Spot.Bound.countBound strata δ` is what the sampled verifier publishes as the most incorrect proof blocks an accepted
-transcript holds except with probability `δ`: it multiplies the strata's factors `(n − j − k)/(n − j)` greedily, the
-largest available first, and stops before the product falls below `δ`. Here it is proved, as the code is, against the
-claims' `Design.miss` (`Definitions.Claims.Sampling`):
-
-* `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata sample over the partition's proof
-  blocks whose strata have the code's sizes and counts, every `0 < δ` (`countBound_strataPa`, through `strataPa_eq_V`
-  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design whose rules are strata samples
-  (`Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's, `OneStage.strata`), `strataOf_subset` the uniform
-  `k`-subset's one stratum.
-* `choose_div_eq_gr`: a stratum's escape `C(n − m, k)/C(n, k)` is the product of its first `m` factors, each in
-  `[0, 1]` and falling with `j` (`fac_anti`).
-* `V_le_of_sep`: an exchange: when a threshold `τ` separates the factors a choice of counts takes from those it
-  leaves, every choice of at least as many units escapes with probability at most the choice's own.
-* `next_some`, `next_none`: the code's `next` picks a stratum with room whose next factor is largest, or reports that
-  none has room; `countBound_good`: the loop keeps the greedy invariant, so whichever way it returns, every `K + 1`
-  incorrect proof blocks escape with probability at most a number below `δ`.
--/
+/-! The deployed count bound `Spot.Bound.countBound`, proved as the code computes it against the claims' `Design.miss` at strata samples. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -71,10 +51,6 @@ namespace Claims.Sampling.Count
 open Finset Spot.Bound
 open private next reduce atLeast from Spot.Bound
 
-/-! ## A stratum's factors -/
-
-/-- The `j`-th factor of a stratum of `n` units sampling `k`: the probability that its sample misses a further incorrect proof block
-given that it missed `j`, `(n − j − k)/(n − j)`. -/
 noncomputable def fac (n k j : ℕ) : ℝ := ((n - j - k : ℕ) : ℝ) / ((n - j : ℕ) : ℝ)
 
 theorem fac_nonneg (n k j : ℕ) : 0 ≤ fac n k j := by unfold fac; positivity
@@ -96,7 +72,6 @@ theorem fac_anti {n k j j' : ℕ} (h : j ≤ j') : fac n k j' ≤ fac n k j := b
     have : ((n - j' : ℕ) : ℝ) ≤ (n - j : ℕ) := by exact_mod_cast (by omega)
     nlinarith [(Nat.cast_nonneg k : (0 : ℝ) ≤ k)]
 
-/-- Past its `finite` incorrect proof blocks a stratum's sample cannot miss another. -/
 theorem fac_of_finite_le {s : Core.Stratum} {m : ℕ} (h : Stratum.finite s ≤ m) : fac s.size s.k m = 0 := by
   unfold Stratum.finite at h
   unfold fac
@@ -120,8 +95,6 @@ theorem fac_eq {n k j : ℕ} (hk : k ≤ n - j) (hp : 0 < n - j) : fac n k j = 1
   rw [Nat.cast_sub hk]
   field_simp
 
-/-- `next`'s comparison: between two strata with room, `k_s (n_t − m_t) < k_t (n_s − m_s)` exactly when `s`'s next
-factor is the larger. -/
 theorem lt_iff_fac {s t : Core.Stratum} {m mt : ℕ} (hs : m < Stratum.finite s) (ht : mt < Stratum.finite t) :
     s.k * (t.size - mt) < t.k * (s.size - m) ↔ fac t.size t.k mt < fac s.size s.k m := by
   obtain ⟨hks, hps⟩ := room_le hs
@@ -130,12 +103,10 @@ theorem lt_iff_fac {s t : Core.Stratum} {m mt : ℕ} (hs : m < Stratum.finite s)
     div_lt_div_iff₀ (by exact_mod_cast hps) (by exact_mod_cast hpt)]
   exact_mod_cast Iff.rfl
 
-/-- The product of a stratum's first `m` factors. -/
 noncomputable def gr (n k m : ℕ) : ℝ := ∏ j ∈ range m, fac n k j
 
 theorem gr_nonneg (n k m : ℕ) : 0 ≤ gr n k m := prod_nonneg fun j _ => fac_nonneg n k j
 
-/-- **A stratum's escape is the product of its factors**: `C(n − m, k)/C(n, k) = ∏_{j<m} (n − j − k)/(n − j)`. -/
 theorem choose_div_eq_gr {n k : ℕ} (hk : k ≤ n) : ∀ {m : ℕ}, m ≤ n → ((n - m).choose k : ℝ) / n.choose k = gr n k m
   | 0, _ => by
     have : (n.choose k : ℝ) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
@@ -152,17 +123,12 @@ theorem choose_div_eq_gr {n k : ℕ} (hk : k ≤ n) : ∀ {m : ℕ}, m ≤ n →
     rw [gr, prod_range_succ, ← gr, ← ih, fac, div_mul_div_comm, div_eq_div_iff hc (mul_ne_zero hc hp)]
     linear_combination (n.choose k : ℝ) * key
 
-/-! ## The exchange -/
-
 section Exchange
 
 variable (S : ℕ) (n k : ℕ → ℕ)
 
-/-- The escape of the counts `m`, stratum `i` holding `m i` incorrect proof blocks. -/
 noncomputable def V (m : ℕ → ℕ) : ℝ := ∏ i ∈ range S, gr (n i) (k i) (m i)
 
-/-- `τ` separates the factors the counts `m` take from those they leave: each stratum's later factors are at most
-`τ`, its taken ones at least. -/
 def Sep (m : ℕ → ℕ) (τ : ℝ) : Prop :=
   ∀ i < S, (∀ l, m i ≤ l → fac (n i) (k i) l ≤ τ) ∧ ∀ l < m i, τ ≤ fac (n i) (k i) l
 
@@ -184,8 +150,6 @@ theorem gr_sep {n k a b : ℕ} {τ : ℝ} (hτ0 : 0 ≤ τ) (hup : ∀ l, b ≤ 
     calc τ ^ (b - a) = ∏ _j ∈ Ico a b, τ := by rw [prod_const, Nat.card_Ico]
       _ ≤ ∏ j ∈ Ico a b, fac n k j := prod_le_prod₀ (fun _ _ => hτ0) fun j hj => hdn j (mem_Ico.1 hj).2
 
-/-- **The exchange**: when `τ ∈ [0, 1]` separates the factors `mg` takes from those it leaves, every choice `m` of at
-least as many incorrect proof blocks escapes with probability at most `mg`'s. -/
 theorem V_le_of_sep {mg : ℕ → ℕ} {τ : ℝ} (hsep : Sep S n k mg τ) (hτ0 : 0 ≤ τ) (hτ1 : τ ≤ 1) {m : ℕ → ℕ}
     (hsum : ∑ i ∈ range S, mg i ≤ ∑ i ∈ range S, m i) : V S n k m ≤ V S n k mg := by
   by_cases hup : ∃ i ∈ range S, mg i < m i
@@ -216,9 +180,6 @@ theorem V_le_of_sep {mg : ℕ → ℕ} {τ : ℝ} (hsep : Sep S n k mg τ) (hτ0
 
 end Exchange
 
-/-! ## The code's `next` and `reduce` -/
-
-/-- The loop's state at the counts `m`: each stratum with its incorrect proof blocks so far. -/
 def state (strata : Array Core.Stratum) (m : ℕ → ℕ) : Array (Core.Stratum × ℕ) :=
   Array.ofFn fun i : Fin strata.size => (strata[i], m i)
 
@@ -242,8 +203,6 @@ theorem foldl_inv {α β : Type*} (F : β → α → β) (I : List α → β →
   | nil => intro E b hb; simpa using hb
   | cons x l ih => intro E b hb; simpa using ih (E ++ [x]) (F b x) (h E b x hb)
 
-/-- What `next`'s fold keeps over the strata it has seen: none has room, or the one it holds has room and the largest
-next factor. -/
 def NextInv (E : List ((Core.Stratum × ℕ) × ℕ)) : Option (ℕ × Core.Stratum × ℕ) → Prop
   | none => ∀ e ∈ E, Stratum.finite e.1.1 ≤ e.1.2
   | some (i, s, m) => ((s, m), i) ∈ E ∧ m < Stratum.finite s ∧ ∀ e ∈ E, fac e.1.1.size e.1.1.k e.1.2 ≤ fac s.size s.k m
@@ -289,7 +248,6 @@ theorem next_inv (st : Array (Core.Stratum × ℕ)) : NextInv st.toList.zipIdx (
         subst he
         exact hle
 
-/-- **`next` reports no stratum with room** only when none has any. -/
 theorem next_none {strata : Array Core.Stratum} {m : ℕ → ℕ} (h : next (state strata m) = none) :
     ∀ i (hi : i < strata.size), Stratum.finite strata[i] ≤ m i := by
   have := next_inv (state strata m)
@@ -297,7 +255,6 @@ theorem next_none {strata : Array Core.Stratum} {m : ℕ → ℕ} (h : next (sta
   intro i hi
   exact this ((strata[i], m i), i) (mem_state.2 ⟨hi, rfl⟩)
 
-/-- **`next` picks a stratum with room whose next factor is the largest.** -/
 theorem next_some {strata : Array Core.Stratum} {m : ℕ → ℕ} {i : ℕ} {s : Core.Stratum} {m₀ : ℕ}
     (h : next (state strata m) = some (i, s, m₀)) :
     ∃ hi : i < strata.size, strata[i] = s ∧ m i = m₀ ∧ m₀ < Stratum.finite s ∧
@@ -309,7 +266,6 @@ theorem next_some {strata : Array Core.Stratum} {m : ℕ → ℕ} {i : ℕ} {s :
   simp only [Prod.mk.injEq] at he
   exact ⟨hi, he.1.symm, he.2.symm, hroom, fun j hj => hmax ((strata[j], m j), j) (mem_state.2 ⟨hj, rfl⟩)⟩
 
-/-- `reduce` keeps the ratio and a positive denominator. -/
 theorem reduce_spec {a d : ℕ} (hd : 0 < d) :
     0 < (reduce a d).2 ∧ ((reduce a d).1 : ℝ) / (reduce a d).2 = (a : ℝ) / d := by
   unfold reduce
@@ -326,8 +282,6 @@ theorem reduce_spec {a d : ℕ} (hd : 0 < d) :
     field_simp
 
 theorem atLeast_eq (a b : ℕ) (δ : Core.Ratio) : atLeast a b δ = decide (δ.num * b ≤ a * δ.den) := rfl
-
-/-! ## The loop -/
 
 theorem forIn_inv {β : Type} (f : ℕ → β → Id (ForInStep β)) (P : ℕ → β → Prop) (Q : β → Prop)
     (hf : ∀ K b, P K b → (∃ b', (f K b).run = .done b' ∧ Q b') ∨ ∃ b', (f K b).run = .yield b' ∧ P (K + 1) b') :
@@ -393,8 +347,6 @@ theorem state_modify (strata : Array Core.Stratum) (m : ℕ → ℕ) (i : ℕ) :
       simp
     · simp [Function.update_of_ne (Ne.symm hij)]
 
-/-- **The count bound holds the greedy invariant to its return**: with the strata's sizes `n` and counts `k`, every
-choice of `countBound + 1` or more incorrect proof blocks escapes with probability at most some `c < δ`. -/
 theorem countBound_good (strata : Array Core.Stratum) (n k : ℕ → ℕ)
     (hnk : ∀ i (h : i < strata.size), strata[i].size = n i ∧ strata[i].k = k i) (δ : Core.Ratio)
     (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
@@ -485,12 +437,8 @@ theorem countBound_good (strata : Array Core.Stratum) (n k : ℕ → ℕ)
       refine ⟨_, rfl, rfl, m', state_modify strata m i, hsum', hb, hratio, fun u hu j hj l hl =>
         ((hsep j hj).1 _ le_rfl).trans ((hsep u hu).2 l hl)⟩
 
-/-! ## At the claims' strata samples -/
-
-/-- The slot at which stratum `i` starts: the sizes of the strata before it. -/
 def strataOff (ss : List (ℕ × ℕ)) (i : ℕ) : ℕ := ((ss.take i).map Prod.fst).sum
 
-/-- `strataPa` as a product over its strata, stratum `i` reading `B` on its own window. -/
 theorem strataPa_eq_prod : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ),
     strataPa ss o B = ∏ i ∈ range ss.length, ((((ss.getD i (0, 0)).1 -
       (window (o + strataOff ss i) (ss.getD i (0, 0)).1 B).card).choose (ss.getD i (0, 0)).2 : ℝ) /
@@ -510,7 +458,6 @@ theorem card_window (o n : ℕ) (B : Finset ℕ) :
     have h' : a - o = b - o := h
     omega
 
-/-- The strata's windows count the members of `B` in `[o, o + Σ n_s)`. -/
 theorem sum_card_window : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ),
     ∑ i ∈ range ss.length, (window (o + strataOff ss i) (ss.getD i (0, 0)).1 B).card =
       (B.filter fun v => o ≤ v ∧ v < o + (ss.map Prod.fst).sum).card
@@ -536,8 +483,6 @@ theorem sum_card_window : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ
       omega
     · simp [hv]
 
-/-- **A strata sample's miss is the strata's product of factors**, stratum `i` holding the members of `B` in its
-window. -/
 theorem strataPa_eq_V (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1) (o : ℕ) (B : Finset ℕ) :
     strataPa ss o B = V ss.length (fun i => (ss.getD i (0, 0)).1) (fun i => (ss.getD i (0, 0)).2)
       (fun i => (window (o + strataOff ss i) (ss.getD i (0, 0)).1 B).card) := by
@@ -548,8 +493,6 @@ theorem strataPa_eq_V (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1) 
     exact List.getElem_mem _
   exact choose_div_eq_gr (hk _ hmem) ((card_le_card (window_subset _ _ B)).trans_eq (card_range _))
 
-/-- **The deployed count bound at a strata sample**: for strata with the code's sizes and counts, every set of
-`countBound strata δ + 1` or more slots escapes with probability at most some `c < δ`. -/
 theorem countBound_strataPa {ss : List (ℕ × ℕ)} (hk : ∀ p ∈ ss, p.2 ≤ p.1) (strata : Array Core.Stratum)
     (hlen : strata.size = ss.length)
     (hs : ∀ i (h₁ : i < strata.size) (h₂ : i < ss.length), strata[i].size = ss[i].1 ∧ strata[i].k = ss[i].2)
@@ -569,9 +512,6 @@ theorem countBound_strataPa {ss : List (ℕ × ℕ)} (hk : ∀ p ∈ ss, p.2 ≤
     filter_true_of_mem fun v hv => ⟨Nat.zero_le v, by have := mem_range.1 (hB hv); omega⟩]
   exact ht
 
-/-- **The deployed count bound is sound at the claims' design**: for a design that is a strata sample over the
-partition's proof blocks (`Design.Pa_eq_strataPa`), with the code's strata, `miss(countBound strata δ + 1) < δ`: an
-accepted transcript holds at most `countBound strata δ` incorrect proof blocks except with probability `δ`. -/
 theorem countBound_miss {d : Design} {P : Partition} {ss : List (ℕ × ℕ)}
     (hPa : ∀ B ⊆ range P.blocks.length, d.Pa P B = strataPa ss 0 B) (hN : (ss.map Prod.fst).sum = P.blocks.length)
     (hk : ∀ p ∈ ss, p.2 ≤ p.1) (strata : Array Core.Stratum) (hlen : strata.size = ss.length)
@@ -587,14 +527,11 @@ theorem countBound_miss {d : Design} {P : Partition} {ss : List (ℕ × ℕ)}
 theorem length_flatten_eq_sum (c : List (List (List ℕ))) : c.flatten.length = (strataSizes c).sum := by
   rw [List.length_flatten, strataSizes]
 
-/-- Each class's strata cover its proof blocks, under a well-formed design. -/
 theorem strata_cover {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : List (List (ℕ × ℕ))}
     (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) :
     ∀ p ∈ (d.rules.zip P.classes).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length := fun p hp => by
   rw [OneStage.strata_sum (hss p hp) (hw.2 p.1 (List.of_mem_zip hp).1), length_flatten_eq_sum]
 
-/-- **A design whose rules are strata samples is one strata sample** over the partition's proof blocks: the classes'
-strata in order. -/
 theorem Design.Pa_eq_strataPa {d : Design} {P : Partition} (hw : d.WellFormed P)
     {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
     (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2)
@@ -618,15 +555,12 @@ theorem sum_flatten_strata : ∀ (rs : List OneStage) (cs : List (List (List (Li
       sum_flatten_strata rs cs sss (by simpa using hl) (by simpa using hs) fun p hp => h p (by simp [hp]),
       List.flatten_cons, List.flatten_append, List.length_append]
 
-/-- The strata of a design that is one strata sample cover the partition's proof blocks. -/
 theorem sum_strata_eq_length {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : List (List (ℕ × ℕ))}
     (hs : sss.length = P.classes.length)
     (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) :
     (sss.flatten.map Prod.fst).sum = P.blocks.length :=
   sum_flatten_strata d.rules P.classes sss hw.1 hs (strata_cover hw hss)
 
-/-- **The deployed count bound is sound at every design that samples strata**: `miss(countBound strata δ + 1) < δ` for
-the classes' strata in order, given as the code's. -/
 theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P)
     {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
     (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2)
@@ -644,8 +578,6 @@ theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P
     exact ⟨_, List.getElem_mem hi', by simp⟩
   exact OneStage.strata_le (hss q hq) (hw.2 q.1 (List.of_mem_zip hq).1) p hp'
 
-/-- `Bound.strataOf` reads the uniform `k`-subset as one stratum of every unit, the strata `OneStage.strata` gives
-`subset`. -/
 theorem strataOf_subset (N k : ℕ) :
     Spot.Bound.strataOf N (.subset k) = some #[{ name := "unit", size := N, k }] := rfl
 

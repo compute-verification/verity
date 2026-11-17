@@ -13,15 +13,7 @@ import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Refutation witness: Flock's knowledge soundness at one table of a session
-
-`Claims.Flock.KSTable` fails at the toy record of `KS` (`ksD`: the verifier accepts after one round, no statement has a
-table, `m′ = 4` waits and `K = 1024` reruns), at tables whose words have length `1` (`ksN`) and whose errors are `0`:
-there `1 ≤ k_0 ≤ 2`, so `κ_0 ≤ 1/16 + 4/1024 + e^{−1/8} < 1`, while the silent prover is accepted surely and no
-extraction returns a witness of table `0`, which no statement has. `Claims.Flock.KSTable_fails` states it over the spec,
-quantifying over the record, the lengths and the errors it fails at.
--/
+/-! Refutation witness: Flock's knowledge soundness at one table of a session fails at the toy record of `KS`. -/
 
 @[expose] public section
 

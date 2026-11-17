@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 public import Proofs.Flock.SamplingGeneric.RegAt
 
-/-!
-# Refutation witnesses: the committed form read at a time budget
-
-`Compiled.KSRegAt` fails at `sksL` (`Witnesses.SamplingGeneric`), whose silent prover is accepted with its committed
-trace's incorrect set outside `M_0` (`sksL_notM`). At the budget `0`, `B_conf` declared there finds nothing, as `B_conf`
-does (`bconf_pr`, `Compiled.BconfAt_pr`), so `ExpectedCR` holds there (`sksL_expectedCR_bconfAt`), and its expected
-cost bound is `0`, `sksL` opening nothing, so the error read at the budget `0` is `0` (`sksL_εregAt`), below the silent
-prover's probability `1` (`compiledKSRegAt_fails`). So `CompilerKSRegAt`'s conclusion fails there
-(`compilerKSRegAt_nontrivial`); its premises are `CompilerKSAt`'s, which hold together at `twoL` (`compilerKS_honest`,
-`compilerBits_honest`). Read at the strict birthday bound the same: `StrictBirthday` holds at `B_conf` declared at the
-budget `0` (`sksL_strictBirthday_bconfAt`), whose cost bound on every coin is `0`, so the error is `0`
-(`sksL_εregSB`, `compiledKSRegAtSB_fails`, `compilerKSRegAtSB_nontrivial`).
--/
+/-! Refutation witnesses: the committed form read at a time budget fails at `sksL`. -/
 
 @[expose] public section
 
@@ -28,15 +16,12 @@ section KSRegAt
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- At `sksL`'s silent prover, `B_conf` declared at the budget `0` finds nothing, so `ExpectedCR` holds there. -/
 theorem sksL_expectedCR_bconfAt (H : Msg → Msg) (x : Msg) :
     ExpectedCR H ((sksL Coin).BconfAt H 0 Unit silentP x) := by
   unfold ExpectedCR
   rw [Compiled.BconfAt_pr, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- `sksL`'s committed form's error read at the budget `0` is `0`: `B_conf`'s expected cost bound there is `0`, `sksL`
-opening nothing. -/
 theorem sksL_εregAt (H : Msg → Msg) (x : Msg) : (sksL Coin).εregAt H x silentP 0 = 0 := by
   have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
   have hc : (sksL Coin).bconfCost x 0 = 0 := by
@@ -59,15 +44,12 @@ theorem compiledKSRegAt_fails (H : Msg → Msg) : ¬ (sksL Coin).KSRegAt H := by
   rw [sksL_εregAt] at h2
   norm_num at h2
 
-/-- At `sksL`'s silent prover, `B_conf` declared at the budget `0` finds nothing, so `StrictBirthday` holds there. -/
 theorem sksL_strictBirthday_bconfAt (H : Msg → Msg) (x : Msg) :
     StrictBirthday H ((sksL Coin).BconfAt H 0 Unit silentP x) := by
   intro q _
   rw [Compiled.BconfAt_pr, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
   positivity
 
-/-- `sksL`'s committed form's error at the strict birthday bound and the budget `0` is `0`: `B_conf`'s cost bound on
-every coin there is `0`, `sksL` opening nothing. -/
 theorem sksL_εregSB (H : Msg → Msg) (x : Msg) : (sksL Coin).εregSB H x silentP 0 = 0 := by
   have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
   have hc : (sksL Coin).bconfCostStrict x 0 = 0 := by
@@ -93,8 +75,6 @@ theorem compiledKSRegAtSB_fails (H : Msg → Msg) : ¬ (sksL Coin).KSRegAtSB H :
 end KSRegAt
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

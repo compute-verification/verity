@@ -34,18 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# `ZKOutLeak` says something
-
-`ZKOutLeak` is a guarantee (`Claims.zkOutLeak`), held to two witnesses (the lock's `witnesses`), at the hash SHA-512
-(`FlockDeploy.sha512`):
-
-* Honest (`zkOutLeak_honest`): its antecedent holds where the outcome takes two values. The talking prover, with every
-  witness in its relation and the verdict public (`verdictOut`), is zero knowledge per outcome at error `0`, at the
-  simulator that echoes it whatever the outcome (`echoSimAt`, `echo_zkOut`).
-* Nontrivial (`zkOutLeak_nontrivial`): its conclusion fails at the talking prover with the silent simulator, against the
-  verifier that accepts everything (`talk_leaks`).
--/
+/-! `ZKOutLeak` says something: an honest and a nontrivial witness, at SHA-512. -/
 
 @[expose] public section
 

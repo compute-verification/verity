@@ -3,17 +3,7 @@ module
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 
-/-!
-# Refutation witnesses: the two-stage extractor's cost and the two-stage KS read at a time budget
-
-`CompiledTwo.KSAt` fails at `sksLTwo` (`Witnesses.SamplingTwo`), `sksL` with the two-stage design `toyTwo`: the empty
-statement is in its scope and no witness is in its relation at `δ = 0` (`sksLTwo_scope`, `sksLTwo_noR`), so
-`Sampling.KSAt` fails there as at `sksL` (`sksL_ksAt_fails_at`), and with it `CompilerKSAtTwo`'s conclusion
-(`compilerKSAtTwo_nontrivial`). `CompilerEfficientTwo`'s conclusion is `Compiled.Efficient` at the two-stage verifier's
-own `Compiled`, so it fails at `effLTwo`, `effL` (`Witnesses.SamplingGenericCost`) with that design
-(`compilerEfficientTwo_nontrivial`). Both guarantees' premises hold together at `twoLTwo`, with two sampled sessions
-(`compilerKSTwo_honest`, and `compilerBits_honest` at its `Compiled`, `twoL`).
--/
+/-! Refutation witnesses: the two-stage extractor's cost and the two-stage KS read at a time budget. -/
 
 @[expose] public section
 
@@ -36,8 +26,6 @@ theorem compiledTwoKSAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inha
   · exact sksLTwo_noR H []
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 
