@@ -498,12 +498,6 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
     return str(f)
 
 
-@pytest.fixture(autouse=True)
-def no_node_settings(tmp_path, monkeypatch):
-    """The adapter's `run.sh settings MODEL -- CMD` reads node A's files; here CMD runs under no settings."""
-    monkeypatch.setattr(T, "SETTINGS", stand_in(tmp_path, "settings.sh", 'shift 3\nexec "$@"\n'), raising=False)
-
-
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
 /usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
