@@ -39,6 +39,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
