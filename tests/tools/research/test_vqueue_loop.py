@@ -1833,10 +1833,10 @@ def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_def
     assert seen == [default, tmp_path / "file"]
 
 
-def test_a_batch_needing_the_whole_check_is_built_apart_unless_no_apart_and_only_where_the_land_verdicts_gate_with_no_records(
+def test_a_batch_needing_the_whole_check_is_built_apart_unless_no_apart_and_only_where_the_land_verdicts_gate(
         monkeypatch, tmp_path, env):
     """The loop builds batches needing the whole check apart (`Loop.apart`) unless `--no-apart` is given, and only under `--gate
-    verdict` with no records run: under another gate, or with records runs, its snapshot says none is."""
+    verdict`, with records runs or not: under another gate its snapshot says none is."""
     seen: list[bool] = []
 
     class Built(Exception):
@@ -1860,7 +1860,7 @@ def test_a_batch_needing_the_whole_check_is_built_apart_unless_no_apart_and_only
     monkeypatch.setattr(L, "Loop", real)
     assert env.loop(vqueue.decide, apart=True, slim=vqueue_slim, gate=L.VERDICT_GATE).apart
     assert not env.loop(vqueue.decide, apart=True).apart
-    assert not env.loop(vqueue.decide, apart=True, records=object(), slim=vqueue_slim, gate=L.VERDICT_GATE).apart
+    assert env.loop(vqueue.decide, apart=True, records=object(), slim=vqueue_slim, gate=L.VERDICT_GATE).apart
 
 
 @pytest.mark.parametrize("heavy, on", [("1\n", "big"), ("1\n", ""), ("*\n", "big")], ids=["big", "off", "every"])

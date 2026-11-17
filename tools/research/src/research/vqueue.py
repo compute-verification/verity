@@ -52,11 +52,14 @@ infra.  A records commit still held `pending_s` after it was first drops its sta
 The tick that stages a batch builds the PRs with no Lean change beside it, and the tick that puts one on the chain builds on
 it there (`Build.after`).
 
-Where the land verdicts gate and no records run starts (`Snapshot.apart`), a batch needing the whole check, a Lean one too,
-never sits below plain candidates: it is built apart (`Build.apart`), on `main` off main's chain, and its whole check runs
+Where the land verdicts gate (`Snapshot.apart`), a batch needing the whole check, a Lean one too when no records run starts
+(with one it is staged as above), never sits below plain candidates: it is built apart (`Build.apart`), on `main` off main's chain, and its whole check runs
 there while plain candidates go on building and landing on the chain; it takes a place under `depth`.  Once it passed it goes
 onto the chain's top (`Commit`): on its own base as it is, else its members merged again onto that top, where the quick tier
-gates the merge as it gates a plain candidate, and `main`'s whole check after the landing reverts a culprit.  A member that
+gates the merge as it gates a plain candidate when the merge's Lean inputs are those its check saw (else the merge takes the
+whole check), and `main`'s whole check after the landing reverts a culprit.  With records runs, no Lean batch is staged while
+a candidate built apart holds a PR changing a Lean input, as none is built beside a staged batch, so a staged batch's records
+always carry onto the top it goes onto.  A member that
 doesn't merge, or isn't marked at the head it was checked at, sends its members back to building.
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -253,7 +256,7 @@ class Snapshot:
     fill: int = 1                  # the most batches a tick builds on main's chain, each on the one before (`Build.name`)
     plain: frozenset[int] = frozenset()  # the ready PRs that land on the quick tier (`vqueue_loop.Loop._plain`): a batch of PRs
                                    # with no Lean change holds only them or none, so one needing the whole check holds none back
-    apart: bool = False            # a batch of PRs not `plain` is built apart (`Build.apart`), with no records run
+    apart: bool = False            # a batch of PRs not `plain` is built apart (`Build.apart`), a Lean one only with no records run
 
 
 @dataclass(frozen=True)
@@ -352,9 +355,11 @@ class Regenerate:
 class Commit:
     """Put staged batch ``sha``, whose records run passed, onto main's chain at ``base``, its top, and enqueue its check at
     ``priority``.  Of a candidate built apart (`Build.apart`) whose whole check passed: on its own base it goes on the chain
-    as it is, and lands; on another, its members are merged again onto ``base`` in its place, checked on the quick tier, or,
-    when not every member merges, it is dropped and its members built again.  On ``base`` as staged, it is checked on ``sha`` as built when the run regenerated nothing, else on a records
-    commit of what it regenerated on top of ``sha``, made as drive commits a lock run's.  On another ``base`` its members are
+    as it is, and lands; on another, its members are merged again onto ``base`` in its place, checked on the quick tier when
+    that tree's Lean inputs are ``sha``'s and with the whole check when not, or, when not every member merges, it is dropped
+    and its members built again.  A staged batch on ``base`` as staged is checked on ``sha`` as built when the run
+    regenerated nothing, else on a records commit of what it regenerated on top of ``sha``, made as drive commits a lock
+    run's.  On another ``base`` its members are
     merged again onto it, and that tree is checked as built or with those records committed on it only when its Lean inputs
     are ``sha``'s (`vqueue_slim.lean_key`); else it is staged again, its records run first.  Whatever is pushed `repairs`
     ``sha``, which the next tick drops.  A records commit that can't be made yet is held, and ``sha`` stays staged."""
@@ -440,8 +445,9 @@ def decide(s: Snapshot) -> list[Action]:
     PR changing a Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside
     (`_aside`), which goes behind it as behind any PR waiting.
 
-    With `Snapshot.apart` and no records run, a batch of PRs not plain (`Snapshot.plain`), a Lean one too, is built apart
-    (`Build.apart`) on `main`, each taking a place under `depth`, and the Lean batch opens on no condition of the chain.  A
+    With `Snapshot.apart`, a batch of PRs not plain (`Snapshot.plain`) is built apart (`Build.apart`) on `main`, each taking a
+    place under `depth`; with no records run a Lean one too, which then opens on no condition of the chain, and with one no
+    Lean batch is staged while a candidate built apart holds a PR changing a Lean input.  A
     candidate built apart (`Candidate.apart`) is read as the lowest is (`_settle`; its reds are rung only while its base is
     `main`), and nothing on the chain is dropped for it.  Once it passed it goes onto the chain's top as a staged batch does,
     after the staged ones; one whose member isn't marked at the head it was checked at is dropped, its members back in the
@@ -520,7 +526,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
     kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
     settled = landed | ejected
     base, after, moves = chain[-1].sha if chain else main, None, hold | _moves(chain, built)
-    due = passed[:1] or passed_apart[:1]
+    due, committed = passed[:1] or passed_apart[:1], False
     if due and len(chain) < s.depth and len(acts) == n and all(
             _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
             for m, h in zip(due[0].members, due[0].heads)):
@@ -528,7 +534,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
         (apart if c.apart else kept).remove(c)
         if c.base == base or (lost := _unmarked(c, ready)) is None:
             acts.append(Commit(c.sha, base, s.depth - len(chain)))
-            chain, after = [*chain, c], c.sha
+            chain, after, committed = [*chain, c], c.sha, not c.apart
         else:
             at = "checked apart" if c.apart else "staged"
             cause = (f"#{lost} isn't taken at the head it was {at} at ({why})" if (why := _untaken(c, lost, s))
@@ -539,18 +545,22 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             base = chain[-1].sha if chain else main
         moves = hold | _moves(chain, built)
     scripts = any(built[m].scripts for d in chain for m in d.members if m in built)
-    beside_chain = s.apart and not s.records
+    beside_chain, lean_apart = s.apart, s.apart and not s.records
     outcomes, places = _outcomes(s, acts), len(chain) + len(apart)
     room, priority = places < s.depth, max(s.depth - places, 0)
     busy = landed | ejected | {m for d in (*chain, *kept, *apart) for m in d.members}
     pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts) and _crossing(r, moves)]
-    lean, why = _next(s, pool, outcomes, [] if beside_chain else chain, built)
+    lean, why = _next(s, pool, outcomes, [] if lean_apart else chain, built)
     lean = _moves_last(lean, ready)
+    if lean and s.records and (inputs := [m for c in apart for m in c.members if m in built and built[m].lean_input]):
+        lean, why = (), (f"no Lean batch is staged while #{inputs[0]}, which changes a Lean input, is built apart: its records "
+                         "wouldn't carry onto the chain's top once that lands there")
     free = min(max(s.depth - places, 0), max(s.fill, 1))
     builds = [Build(lean, base, priority, True, after)] if lean and s.records else []
-    builds += [Build(lean, main, priority, apart=True)] if lean and beside_chain and free else []
+    builds += [Build(lean, main, priority, apart=True)] if lean and lean_apart and free else []
     plain: tuple[int, ...] = ()
-    beside, taken, top, made, stacked = bool(kept or builds and s.records), set(lean), base, len(builds) * beside_chain, 0
+    beside = bool(kept or builds and s.records or beside_chain and committed)
+    taken, top, made, stacked = set(lean), base, len(builds) * lean_apart, 0
     last = -1
 
     def stack(batch: tuple[int, ...]) -> None:
@@ -570,7 +580,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
         if lean and not s.records and not all(on(ready[m]) for m in lean):
             lean, why = _next(s, [r for r in pool if r.number not in taken - set(lean) and on(r)], outcomes, chain, built)
             lean = _moves_last(lean, ready)
-        return bool(lean) and not s.records and not beside_chain
+        return bool(lean) and not s.records and not lean_apart
 
     def on(r: Ready) -> bool:
         return _crossing(r, moves) and not (r.move and scripts)
@@ -597,7 +607,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
 
 def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
     """The PRs a batch may take, in rank order: ready, merging onto `main`, and in no candidate on main's chain, on `main` or
-    staged (``busy``); beside a staged batch (``staged``: one kept, or the one this tick stages), no Lean PR and no PR
+    staged (``busy``); beside a staged batch (``staged``: one kept, the one this tick stages, or, with batches built apart,
+    the one this tick commits, which may be staged again while they are built on `main`), no Lean PR and no PR
     changing a Lean input (`Ready.lean_input`): one Lean batch is staged at a time, and no batch built beside it changes the
     Lean inputs (`vqueue_slim.lean_key`) of the chain's top it goes onto, so its records carry there rather than its records
     run starting again (`Commit`)."""

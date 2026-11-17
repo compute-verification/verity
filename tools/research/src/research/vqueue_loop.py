@@ -102,9 +102,10 @@ and no batch holding one holds a PR that isn't (`vqueue.Snapshot.plain`).  `main
 (`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
 meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
 no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
-whole check before it lands, as under `check`; with no records run, unless `--no-apart`, it takes it apart (`Loop.apart`,
-`vqueue.Build.apart`): built on `main` off the chain while plain candidates go on landing, and once it passed, its members
-merged again onto the chain's top, which the quick tier gates (`Loop._together`, `Loop._quick`).  A Lean
+whole check before it lands, as under `check`; unless `--no-apart`, it takes it apart (`Loop.apart`, `vqueue.Build.apart`;
+a Lean one only with no records run, else it is staged as below): built on `main` off the chain while plain candidates go on
+landing, and once it passed, its members merged again onto the chain's top, which the quick tier gates where its Lean
+inputs are those its check saw, else the whole check (`Loop._together`, `Loop._quick`).  A Lean
 candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
 and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A candidate built
 on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.lean_inputs`),
@@ -2639,9 +2640,8 @@ class Loop:
         #: their heads (`_plain`)
         self.red: MainRed | None = None
         self.plain: dict[int, str] = {}
-        #: whether a batch needing the whole check is built apart (`vqueue.Snapshot.apart`): where the land verdicts gate and
-        #: no records run starts
-        self.apart = apart and gate == VERDICT_GATE and records is None
+        #: whether a batch needing the whole check is built apart (`vqueue.Snapshot.apart`): where the land verdicts gate
+        self.apart = apart and gate == VERDICT_GATE
         #: the candidates whose members passed the whole check apart, merged again onto main's chain (`_commit`): the quick
         #: tier gates them (`_quick`)
         self.checked: set[str] = set()
@@ -3442,9 +3442,9 @@ class Loop:
 
     def _together(self, a: Commit, c: Candidate, t: Tick, line: dict) -> list[dict]:
         """Put ``c``, built apart, whose whole check passed, onto main's chain at ``a.base``: on its own base as it is, which
-        lands as checked; on another, its members merged again onto ``a.base``, which the quick tier gates (`checked`,
-        `_quick`) and which `repairs` ``c``; when not every member merges at the head it was checked at, ``c`` is dropped and
-        its members built again."""
+        lands as checked; on another, its members merged again onto ``a.base``, which `repairs` ``c`` and which the quick tier
+        gates (`checked`, `_quick`) when its Lean inputs are ``c``'s (`vqueue_slim.lean_key`), else the whole check; when not
+        every member merges at the head it was checked at, ``c`` is dropped and its members built again."""
         why = "its whole check passed apart"
         if a.base == c.base:
             t.committed[c.sha] = (c.sha, t.judged[c.sha].record if c.sha in t.judged else None)
@@ -3454,10 +3454,13 @@ class Loop:
             return [*recs, self._drop(Drop(c.sha, f"{why}, but not every member merges onto {a.base[:12]}, main's chain's "
                                                   "top, at the head it was checked at: its members are built again"), c, t)]
         tip, adopted = self._pushed(t, tip, a.base, merged)
-        self.checked.add(tip)
-        return self._onto(t, c, recs, {**line, "sha": tip, "base": a.base, "repairs": c.sha, "checked": c.sha,
+        same = (key := self.slim.lean_key(self.world.repo, c.sha)) is not None and key == self.slim.lean_key(self.world.repo, tip)
+        if same:
+            self.checked.add(tip)
+        return self._onto(t, c, recs, {**line, "sha": tip, "base": a.base, "repairs": c.sha, **({"checked": c.sha} if same else {}),
                                        **self._moves(merged), **({"adopted": True} if adopted else {}),
-                                       "why": f"{why}: its members merged again onto {a.base[:12]}, main's chain's top"})
+                                       "why": f"{why}: its members merged again onto {a.base[:12]}, main's chain's top"
+                                              + ("" if same else ", whose Lean inputs aren't its tree's: the whole check")})
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
         """Tell the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
@@ -4524,8 +4527,9 @@ def main(argv: list[str]) -> int:
                     help=f"with --gate {CHECK_GATE} or {VERDICT_GATE}, read no graph2 verdict in shadow (no compare lines, no followed drops); "
                          "graph2's checks are still enqueued")
     ap.add_argument("--no-apart", action="store_true",
-                    help=f"with --gate {VERDICT_GATE} and --no-records, build a batch needing the whole check on main's chain, "
-                         "below the plain ones built after it, rather than apart on `main` while the chain goes on landing")
+                    help=f"with --gate {VERDICT_GATE}, build a batch needing the whole check on main's chain, below the plain "
+                         "ones built after it, rather than apart on `main` while the chain goes on landing (a Lean batch with "
+                         "records runs is staged either way)")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",

@@ -197,6 +197,28 @@ def test_under_gate_verdict_apart_a_candidate_needing_the_whole_check_is_checked
         merged["sha"], merged["sha"], "check")
 
 
+def test_under_gate_verdict_apart_a_candidate_merged_again_onto_other_lean_inputs_takes_the_whole_check(env, monkeypatch):
+    """Merged again onto a `main` whose Lean inputs (`vqueue_slim.lean_key`) aren't those of the tree its whole check passed
+    on, a candidate checked apart isn't `checked`: its merge takes the whole check in place, not the quick tier."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2, apart=True)
+    plain, apart = [r for r in loop.tick() if r["action"] == "build"]
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    monkeypatch.setattr(vqueue_slim, "lean_key", lambda repo, commit: commit)
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["repairs"], "checked" in merged) == (plain["sha"], apart["sha"], False)
+    assert merged["why"] == (f"its whole check passed apart: its members merged again onto {plain['sha'][:12]}, main's "
+                             "chain's top, whose Lean inputs aren't its tree's: the whole check")
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == "check" and merged["sha"] not in loop.checked
+
+
 def test_under_gate_verdict_apart_a_candidate_checked_apart_on_main_as_it_still_is_lands_as_built(env, monkeypatch):
     """With nothing landed since it was built, a candidate whose whole check passed apart goes onto main's chain as built,
     with a `commit` line and no build, and lands on that check the next tick."""
