@@ -897,7 +897,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert list(refused) == sz.targets(r.at, r.name) == ["egress-0"]
     assert refused["egress-0"] == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert sz.wired(r.members) == []
-    with pytest.raises(SystemExit, match=re.escape("the network certifier failed a connection in execution phases [0], which the "
+    with pytest.raises(SystemExit, match=re.escape("the network attester failed a connection in execution phases [0], which the "
                                                    "scan refuses")):
         sz.host(tmp_path / "two", run, setup=sz.TEST, group=2)
 
@@ -1199,6 +1199,20 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
             sz.refs_of(member([bad(i) for i in range(n)]))
 
 
+def test_the_scan_leaves_out_an_empty_starts_public_salt_and_scans_a_carried_starts():
+    """The empty start's ``sin`` salt is the supplied one the record's `window` hands the verifier (`carry_of`'s
+    ``empty``); a start carried from an earlier record has the prover's own salt, which stays a witness piece."""
+    a8 = SimpleNamespace(PIECE=16, needles=lambda ps: {nd: k for k, x in ps.items() for nd in (x, x.hex().encode())},
+                         find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
+    at = SimpleNamespace(setup=sz.TEST, ordinals=[1])
+    salt = sz.REG.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
+    salts = {"start salt sin 0": salt}
+    for carry, out in ((SimpleNamespace(empty={"salt": salt.hex()}), True), (SimpleNamespace(empty=None), False),
+                       (None, False)):
+        kept = sz.LS.public_pieces(a8, salts, set(salts), sz.known([], at, carry), fields=True)[0]
+        assert ("start salt sin 0 @0" not in kept) is out
+
+
 def _a8():
     """`a8`'s piece scan as `scan_zk.received` calls it: 16-byte pieces found raw or as hex in each file the verifier
     received, and the control holding the held ones."""
@@ -1324,7 +1338,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
     with pytest.raises(SystemExit, match="egress execution phase 0's record under cells.salts isn't the rows whose root "
-                                         "the network certifier signed"):
+                                         "the network attester signed"):
         sz.host(tmp_path / "h1", run)
 
     run = published(tmp_path / "run2")
@@ -1356,7 +1370,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
     _rewrite(run / "fails.records", [RF.pack_record(replace(rec, grid=grid, window=0))])
-    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the network certifier's fails record has a "
+    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the network attester's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):

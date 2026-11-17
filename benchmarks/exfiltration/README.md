@@ -36,7 +36,7 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
-  `--step` take another case of the plan. This is the headline figure. The planner's driver reads the same rows two
+  `--step` take another case of the plan. The planner's driver reads the same rows two
   other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
   whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
   total read between the two pinned budgets that bracket it alone.
@@ -62,7 +62,7 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
     on each row that carries it, and holds no copy.
   - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
     every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
-    so the headline gives that command's own term of record beside this one's.
+    so the print gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
 at δ). The first three terms are the network attester's part and the last term's second branch is the compute
@@ -95,13 +95,13 @@ The command hands the list to the stop verdicts' reader, `verity/protocols/resou
 the reader's answer to the network attester's calculator, which charges the stop class of its rows by it and by
 nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own
 (`benchmarks/certifier_term/README.md`, "The stop class's verdicts"); the command reads none of those files itself.
-The document carries the answer (`certifier.stop`): the rows it charges, the execution phases held, whether the stop
+The document carries the answer (`attester.stop`): the rows it charges, the execution phases held, whether the stop
 class is charged below on every execution phase, the reader's own lines, the verdicts it read, and the runs it was
 handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
 
 With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
 connection charged its whole schedule, `design` equal to `design, no stop block`, and the network attester's
-figure in the headline the `scan` row's.
+part the `scan` row's.
 
 ### The output count's mark
 
@@ -416,12 +416,13 @@ the network attester's ε is 1 or more) is left out, but the world's year, the f
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
-- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` over the world's year (today
-  the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
-  each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network attester's part of record, the `scan` row at D_j = 2;
+- `benchmarks/exfiltration-network-attester-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+- `benchmarks/exfiltration-total-gb`: the two parts together, the `scan` row at D_j = 2 with the compute audit's
+  part, its error the two parts' summed; over each period the compute audit's part has a value over.
+
+The three are of equal rank: each part is its own metric, and the total is their sum.
 
 Each measurement's first input opens
 with its mark (`modeled`, and the network attester's with the mark its calculator gives the `scan` row beside it), its

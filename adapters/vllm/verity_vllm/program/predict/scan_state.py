@@ -54,9 +54,9 @@ def bridge(cls: IS.Class, prompt: int) -> Any:
 def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
     got = IS.scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
     if got is None:
-        raise ValueError(f"the scan at {scan} refuses the network certifier's ingress rows to bucket {len(ingress) - 1}: "
+        raise ValueError(f"the scan at {scan} refuses the network attester's ingress rows to bucket {len(ingress) - 1}: "
                          f"a request it can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that "
-                         "aren't the network certifier's")
+                         "aren't the network attester's")
     return got[0]
 
 

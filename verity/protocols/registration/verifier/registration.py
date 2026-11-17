@@ -10,9 +10,9 @@ An entry is one of three kinds:
   links it adds to the Site, its JSON, digest and check the Site's;
 * an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
   log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
-  and its public cap ℓ on one declaration's advice, in bits). Registration registers the site, θ and B, not the circuit
-  B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public verifier
-  parameters;
+  and its public cap ℓ on one execution phase's reported advice, in bits). Registration registers the site, θ and B,
+  not the circuit B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public
+  verifier parameters;
 * a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
   the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
   one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),

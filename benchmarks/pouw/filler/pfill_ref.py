@@ -1,4 +1,4 @@
-"""pfill's tile (pfill.cuh's `dfill_k<NC>`, dcap.cu's filler unless built with -DDFILL_V1) in Python: the receipt a tile writes, from
+"""pfill's tile (pfill.cuh's `dfill_k<NC>`, dcap.cu's filler) in Python: the receipt a tile writes, from
 the round's coins (c0, c1) and the tile's id, for each tile kind: the s8 tile on ±1 (K = 32), the e2m1 tile on ±1 (K = 64,
 -DPFILL_E2M1), the s8 tile on {0,1} bits (K = 32, -DPFILL_BITS, Theorem K's setting) and the bU tile (K = 32, A on {0, 1}
 and B on {±1, ..., ±64}, -DPFILL_BU). Written from the matrices with hashlib's SHA-512, as pfill.cuh's host `dfill_ref` is
@@ -12,21 +12,25 @@ The cheats against the folds are here too, each as the words it hands the same f
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 
 # the receipts reference: the folds' steps, key rules and pfill's lane starts
 from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as RF
 
-if "dfill_ref" not in sys.modules:  # the reference's --adopter loads this file by path, its directory not on the path
-    _spec = importlib.util.spec_from_file_location("dfill_ref", Path(__file__).with_name("dfill_ref.py"))
-    sys.modules["dfill_ref"] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules["dfill_ref"])
-smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
+M64 = (1 << 64) - 1
+
+
+def smix(x: int) -> int:
+    x = (x + 0x9E3779B97F4A7C15) & M64
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & M64
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & M64
+    return x ^ (x >> 31)
+
+
+def dseed(c0: int, c1: int, tile: int) -> int:
+    return smix(smix(c0 ^ smix(tile)) ^ c1)
 
 #: what the tests and the receipts reference's conformance check read
 __all__ = [

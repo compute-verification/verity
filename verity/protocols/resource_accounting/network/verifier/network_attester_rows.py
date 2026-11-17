@@ -1,7 +1,7 @@
 """The network attester's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits).
 Each execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a
 frame-v3-sha512 tree. The network attester signs a head that names the root and a salted digest of the execution
-phase's wiring with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as
+phase's wiring with the attester's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as
 its output port (the sender's) or its input port (the receiver's) by the Lean verifier's registered reads
 (`verity-verify-proof --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
 under the row's salt, and it must climb its path to the signed root at the row the verifier reads for the proof block.
@@ -43,7 +43,7 @@ since the rows and the wiring are the record's).
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
     cells digest = tagged_sha512(CELLS_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the cells digest: the certifier's message for the execution phase in its
+and its certificate is `Issuer.sign`'s of the cells digest: the attester's message for the execution phase in its
 session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
 record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
@@ -81,7 +81,7 @@ so a statement's positions are all it can vary, and Lean's registered reads hold
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the network attester's ordinal: the k-th connection to
-reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice
+reach it, from 0, is q = k + 1, as the active network attester's `Requests` streams it and the I/O tie's map puts advice
 request k (`order[k] + 1`).
 """
 
@@ -475,7 +475,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
-        raise ValueError("the registration's certificate doesn't verify under the network certifier's key in the session")
+        raise ValueError("the registration's certificate doesn't verify under the network attester's key in the session")
     return head, dom
 
 
@@ -555,5 +555,5 @@ def reads_text(file: Mapping[str, Any] | None) -> str:
     read by a member's first units) is a run of small numbers, as a record head's bucket counts are, which are witness.
     Written with JSON's default separators the two runs are the same bytes, and a reader that compares a released
     file's bytes with the witness's (the record's leak guard) can't tell this file from a copy of the counts; written
-    without them it shares no run of bytes with a list the certifier's record writes."""
+    without them it shares no run of bytes with a list the attester's record writes."""
     return json.dumps(file, sort_keys=True, separators=(",", ":"))

@@ -33,7 +33,7 @@
     {"file": "benchmarks/pouw/filler/capacity_of.py", "count": 2, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/opcode_probe/clock_calib_lease.sh", "count": 1, "lane": "compute-research"},
-    {"file": "benchmarks/remote_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
+    {"file": "benchmarks/poub_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
     {"file": "benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/tensor_duty/duty.cu", "count": 1, "lane": "compute-research"},
     {"file": "benchmarks/tensor_duty/run.sh", "count": 1, "lane": "compute-research"},
@@ -60,9 +60,6 @@
     {"file": "verity/circuits/ops/tables/mufu_tanh_sm89.json", "count": 1, "lane": "circuits"},
     {"file": "verity/protocols/resource_accounting/memory/poub/verifier/timing.py", "count": 8, "lane": "memory-accounting"},
     {"file": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/WipeProtocol.lean", "count": 1, "lane": "memory-accounting"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py", "count": 6, "lane": "compute-accounting"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "count": 1, "lane": "compute-accounting"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog.lean", "count": 1, "lane": "proofs"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean", "count": 9, "lane": "proofs"},
     {"file": "verity/protocols/interface/CoreProtocol/Account.lean", "count": 1, "lane": "proofs"}
