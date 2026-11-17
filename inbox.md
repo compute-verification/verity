@@ -1,0 +1,3 @@
+[2026-11-17T11:18Z] fa66b2f5b286
+MODEL: Claude Opus 5.5. DRAWMAP: all 3 vllm failures were the map (check_draw held; settings.draws held), fixed; selection passes at 5dd20f8cc95 r20261117-111036-a7f8, main passes r20261117-110451-05da. Stored-record audit: held draw_session/draw_session_ok/draw_commitment/serve.py draw_after on both sides -> head 69dcd3347ca (pass 2 rewrites 0; merges clean with 160b65; no demos/ paths). ~30 still-renamed keys look stored (DRAWN reply verb read from recorded replies, VERITY_VLLM_H1_DRAWN_J10R, output-record keys) -> NOT PROVEN. Listing art:9503b9f0741b. Suites at 69dcd: vllm 72a8, pouw-bench 1025, one_stage c58c, prover 8b76 running. Notes 10c8c54d1b.
+
