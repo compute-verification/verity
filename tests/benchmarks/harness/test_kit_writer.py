@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import math
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -143,6 +145,38 @@ def test_under_a_research_run_the_result_is_the_run_directorys_where_research_re
     with pytest.raises(ValueError, match="already holds a validation"):
         first.validation("failed", "another checker", "")
     assert _result(run_dir) == check.doc
+
+
+def test_inside_pytest_the_kit_writes_nothing_into_the_run_the_process_started_under(tmp_path, no_gpu, monkeypatch):
+    """A test run by plain pytest under `research run` inherits the run's directory: the writer and a report refuse it,
+    before they write, whatever their caller names, and a run a test plays in a directory of its own is written."""
+
+    started, played = tmp_path / "started", tmp_path / "played"
+    monkeypatch.setattr(kit, "STARTED_UNDER", (started.resolve(),))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(started))
+    for out in (played, started / "out"):
+        with pytest.raises(ValueError, match=r"nothing into the research run this process started under.*tmp_path"):
+            kit.writer(out)
+    measured = [{"name": "wall", "value": 1.5, "unit": "s"}]
+    with pytest.raises(ValueError, match="started under"):
+        kit.report("a-bench", "a-bench: 1.5 s", {"value": 1.5}, measured)
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    for place in (started, started / "out"):
+        with pytest.raises(ValueError, match="started under"):
+            kit.report("a-bench", "a-bench: 1.5 s", {"value": 1.5}, measured, out=place)
+    assert not started.exists()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(played))
+    assert kit.report("a-bench", "a-bench: 1.5 s", {"value": 1.5}, measured) == 0
+    assert [m["name"] for m in _result(played)["measurements"]] == ["wall"] and not started.exists()
+
+
+def test_the_run_a_process_started_under_is_its_starting_environments_whatever_it_sets_later(tmp_path):
+    probe = ("import os; os.environ['RESEARCH_RUN_DIR'] = 'elsewhere'; os.environ.pop('OUT'); from verity_bench import kit; "
+             "print(*kit.STARTED_UNDER)")
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True, cwd=tmp_path,
+                          env={"PATH": "/usr/bin:/bin", "PYTHONPATH": ":".join(sys.path), "RESEARCH_RUN_DIR": "run",
+                               "OUT": "run/out"})
+    assert done.stdout.split() == [str((tmp_path / "run").resolve()), str((tmp_path / "run" / "out").resolve())]
 
 
 def test_the_writer_refuses_a_second_validation_and_one_that_isnt_a_runs_own_gates(tmp_path, no_gpu, monkeypatch):
