@@ -18,25 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The headlines with the decoder premise's message half discharged
-
-Each headline takes `hdec` (`DecodesOn`, or `DecodesOnJ` at `J` tables). These corollaries fix the decoder, the
-openings, single coins, no final messages and `capOfRoot` at the values the decoding theorems are about, and replace
-`hdec` by those theorems' hypotheses:
-* `flock_headline_exec_dec`: `flock_headline_exec` with `decodesOn_exec` at `wOP`, `wLIG`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `SampleOk` at the sampling design's samples;
-* `flock_headline_exec_hidden_dec`: `flock_headline_exec_hidden` with `decodesOn_execH`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `SampleOkH` at the sampling design's samples, and the session's leaf is the
-  model's leaf of the tags' leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves);
-* `headline_tables_subset_dec`: `headline_tables_subset` at the tables verity-verify-proof sets up (`planJ`) with
-  `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `SampleOkJ` at the sampling design's samples. The decoder at `J`
-  tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
-
-`FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
-(`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which verity-verify-proof refuses a statement
-failing (`Flock.ProvedScope`).
--/
+/-! The headlines with the decoder premise `hdec`'s message half replaced by the decoding theorems' hypotheses. -/
 
 @[expose] public section
 
@@ -58,7 +40,6 @@ variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
-/-- **`flock_headline_exec` with `hdec` discharged** by `decodesOn_exec` at DecodeZL's wires `wOP`, `wLIG`. -/
 theorem flock_headline_exec_dec (ho : c.outNet = c.unitNet) (hT : TagsOk I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -127,8 +108,6 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
-/-- **`flock_headline_exec_hidden` with `hdec` discharged** by `decodesOn_execH`, at the model's leaf of the tags'
-leaf scheme (`leafOfId I.tags.merkleLeaf`). -/
 theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkHL I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -190,8 +169,6 @@ section Tables
 
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZLJ FlockSoundness.Discharge.DecodeZL
 
-/-- **`headline_tables_subset` with `hdec` discharged**, at the tables verity-verify-proof sets up (`planJ ht T₀ dj`, any
-fallback `T₀`), by `decodesOnJ_exec`. -/
 theorem headline_tables_subset_dec
     {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {I : Inputs} (ht : I.tags.typed = false) (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Lean.Json) (hT : TagsOkJ I)

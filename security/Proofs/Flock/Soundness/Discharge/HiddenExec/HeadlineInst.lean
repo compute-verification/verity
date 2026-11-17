@@ -25,20 +25,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.QSort
 
 set_option Elab.async false
 
-/-!
-# The headline at the executable over hidden-output sessions, at the template instance's program
-
-`flock_headline_exec_hidden` at the program of the whole template instance, `instProg c n` (`Inst/Prog.lean`), in place
-of `Placed.keyProg c hU n`, with the output words' bits for the program's outputs (`outsOfI`):
-* `pp := ppHI`, `hConst := constCols_instProgH`, `hZero := zeroCols_instProgH`;
-* `lay := layAtHI` and `rs := rsAtHI` (`instLayoutH`, `instRowsH`), `hHm := rsAtHI_computes` (`instRowsH_computes`, a
-  unit per VU from the check, `CheckFacts.upv_pos`);
-* `InstKeysRow` from the parse once `wiresAcyclic` passed (`instKeysRowH`, `Inst.instKeysRow_of_parse`), and `hsite`
-  from `sitesAtH_bcSiteI`, the template instance's bound from the check (`Layout.vu_lt_pow2_of`).
-
-Its circuit conditions are the rows' fit (`hrf`), the unit's reads (`hpr`) and the wires' order (`hw`), with none on the
-unit's input groups or on where the outputs are returned.
--/
+/-! The headline at the executable over hidden-output sessions at the template instance's program `instProg c n`, with no condition on the unit's input groups or on where the outputs are returned. -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -56,15 +43,12 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include ht hc in
-/-- What `HmRow.check` accepted of the session's circuit (`check_facts`). -/
 theorem checkFactsH : CheckFacts c := by
   have P := parse_facts (parse_untyped ht hc).1
   obtain ⟨ls, hls⟩ := P.check
   exact check_facts P.typed hls
 
 include hpub in
-/-- **The site fact at a sampled table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
-the check (`Layout.vu_lt_pow2_of`) in place of the unit returning the outputs. -/
 theorem tableH_bcSiteI {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc hrf) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
@@ -80,7 +64,6 @@ theorem tableH_bcSiteI {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {
     exact x.proved_rank h
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan (`tableH_bcSiteI`, `tableAtH_unsat`). -/
 theorem sitesAtH_bcSiteI :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtH dj x₀) (tabAtH dj x₀) S R u), Binding.Sat (planAtH dj x₀) (tabAtH dj x₀) S R u M →
@@ -97,8 +80,6 @@ theorem sitesAtH_bcSiteI :
   · exact absurd hM (tableAtH_unsat dj x₀ hS _)
 
 include ht hc x₀ in
-/-- **`InstKeysRow` at the session's circuit**, from the parse once `wiresAcyclic` passed (`Inst.instKeysRow_of_parse`,
-at the layout of the statement the sample `x₀` sets up). -/
 theorem instKeysRowH (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     InstKeysRow c (portRowW c) := by
   have hcx : x₀.st.c = c := setupHidden_c_of_parse hc x₀.h
@@ -126,23 +107,12 @@ noncomputable abbrev rsAtHI (hU : Built c.unit) (hpr : Layout.PortReads c hU) (h
     (pinFit_of_rowsS ht hc hrf.1)
     (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
-/-- **`hHm` at the hidden tables, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
-/-- **The headline at the executable over hidden-output sessions, at the template instance's program.**
-`flock_headline_exec_hidden` with the proving program `instProg c n`, the program of the whole template instance (the
-unit's copies, the stage nets and the lookup slots, wired), and its outputs the output words' bits (`outsOfI`): against
-any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
-committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
-at most `miss(K) + ε_ks + ε_bind`.
-
-Its circuit conditions, in place of `hscope`: the rows fit (`hrf`, as `scopeOkH`'s rows give), every input a unit row
-reads is a port bit (`hpr`), and `wiresAcyclic` passed (`hw`). The public file may carry shared-row tables. The other
-hypotheses are `flock_headline_exec_hidden`'s. -/
 theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     (hU : Built c.unit) (hpr : Layout.PortReads c hU)
     (hw : ProvedScope.wiresAcyclic c = true)

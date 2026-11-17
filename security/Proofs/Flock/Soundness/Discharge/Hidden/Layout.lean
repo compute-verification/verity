@@ -17,16 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A hidden-output statement's layout (`HiddenLayout`)
-
-An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and,
-where it pins no output, `HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta_unpinned`). Every first column of `outPairs` is a
-message bit of an output row's `sha512x3` slot or, past the row's compressions (an exact-length row's last block), of
-its `hm96` slot's `pad` (`deltaMsgCol_rowBit`). Either is an input bit of a net slot (`deltaIn_inBit`), as
-`Layout.delta` asks of every pair past the constant pairs. `Hidden.Commit` proves `HiddenLayout` (`hidden_layout'`) for
-a flat or a templated session.
--/
+/-! A hidden-output statement's layout (`HiddenLayout`): `HmOut.delta` appends to `HmRow.delta`'s Δ only `outPairs`, whose first columns are input bits of net slots. -/
 
 @[expose] public section
 
@@ -35,8 +26,6 @@ open Lean (Json)
 
 namespace FlockSoundness.Discharge.Hidden
 
-/-- **Row `p`'s message bit `t` of byte `byte`** is a message bit of the row's `sha512x3` slot for the byte's
-compression, or, past the row's compressions, a `pad` bit of its `hm96` slot. -/
 theorem deltaMsgCol_rowBit {c : Circuit} {g p byte t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht : t < 8) :
     ShaRowBit c (deltaMsgCol c g p byte t) ∨ HmRowBit c (deltaMsgCol c g p byte t) := by
   have ho := Typed.byteAt_snd (c.ports.getD p default) byte
@@ -50,8 +39,6 @@ theorem deltaMsgCol_rowBit {c : Circuit} {g p byte t : ℕ} (hg : g < c.g) (hp :
     simp only [deltaMsgCol, hk, ↓reduceIte, ho]
     omega
 
-/-- **Every first column of `outPairs` is an input bit of a net slot**, for a circuit `HmRow.parse` accepted and
-`HmOut.checkRows` passed. -/
 theorem outPairs_inBit {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) :
     ∀ x ∈ outPairs c, InBit c x.1 := by

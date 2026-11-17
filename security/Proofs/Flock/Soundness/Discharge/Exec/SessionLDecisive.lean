@@ -5,32 +5,7 @@ public import Proofs.Flock.Soundness.Audit.OneStage
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Opening
 
-/-!
-# Decisiveness of the salted batched session
-
-A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`) and two of its runs,
-for some messages and some coins (`Reaches`), end differently. These are PoUW's `Pouw.Draft.Game.Decisive`,
-`Productive` and `Reaches`, restated over `FlockSoundness.Game`.
-
-The facts here are existential: `Reaches` picks the prover's messages and the verifier's coins alike. They say the
-all-zero run accepts every table, not that an honest prover's run on a satisfying witness accepts under every coin;
-completeness of the reference prover stays open.
-
-The salted batched session `batchedSessionL` is decisive on every plan with a table, and so is the one-stage audit
-over it (`audit_tile_decisive`, and its verdict alone, `audit_tile_decisive_verdict`, for the one-table plans of a
-tiling). No table needs to be satisfiable and no schedule needs a side condition:
-
-* **acceptance** (`batchedSessionL_reaches_true`): the all-zero run accepts every table. With zero messages and zero
-  coins every running claim stays `0` (zerocheck, lincheck, every Ligerito fold, out-of-domain sample and consistency
-  batch), except the region claims, whose ring-switch message puts the claim's value on the packed position where the
-  claim's weight is `1` (at zero link points the region points are `0/1`). A zero residual `yr` makes the final sum
-  `0`. `finalCheck`'s length conjunct `orig.length + ext = m − 7` is `Schedule.WellShaped`'s shape identity, which
-  `TabSpec.hsch` gives through `fast100`. Every level's rows are zero rows under the default salt, so one value per
-  height reaches every cap entry, whatever the positions;
-* **rejection** (`batchedSessionL_reaches_false`): a rep whose zerocheck sends `final_a_eval = final_b_eval = 1` on
-  the zero claim rejects, and with it the table and the session;
-* **productivity** (`batchedSessionL_productive`): every message type of the session is inhabited.
--/
+/-! Decisiveness of the salted batched session, existential over messages and coins (the all-zero run accepts); it does not prove the reference prover's completeness. -/
 
 @[expose] public section
 
@@ -54,7 +29,6 @@ def Reaches : Game α → α → Prop
   | .send _ k, a => ∃ m, Reaches (k m) a
   | @Game.coin _ _ _ _ k, a => ∃ c, Reaches (k c) a
 
-/-- **Decisive**: every message type of `g` is inhabited, and two runs of `g` end with different outputs. -/
 def Decisive (g : Game α) : Prop :=
   Productive g ∧ ∃ a b, a ≠ b ∧ Reaches g a ∧ Reaches g b
 
@@ -78,8 +52,6 @@ theorem productive_map (f : α → β) {g : Game α} (h : Productive g) : Produc
 
 end Defs
 
-/-! ## Runs and productivity, step by step -/
-
 section Toolkit
 
 variable {α β : Type}
@@ -100,7 +72,6 @@ theorem reaches_map_of {f : α → β} {g : Game α} {a : α} {b : β} (h : Reac
     Reaches (g.map f) b :=
   hb ▸ reaches_map f h
 
-/-- A run of `g >>= f`, from a run of `g` and, for every output with `P`, a run of `f`. -/
 theorem rx_bind {g : Game α} {f : α → Game β} {P : α → Prop} {Q : β → Prop}
     (hg : ∃ a, Reaches g a ∧ P a) (hf : ∀ a, P a → ∃ b, Reaches (f a) b ∧ Q b) :
     ∃ b, Reaches (g >>= f) b ∧ Q b := by
@@ -131,7 +102,6 @@ theorem productive_recv (M : Type) [Nonempty M] : Productive (recv M) :=
 theorem productive_sample (C : Type) [Fintype C] [Nonempty C] : Productive (draw C) :=
   productive_coin_iff.2 fun _ => trivial
 
-/-- A productive game has a run. -/
 theorem productive_reaches : ∀ g : Game α, Productive g → ∃ a, Reaches g a
   | .ret a, _ => ⟨a, rfl⟩
   | .send M k, h => by
@@ -178,7 +148,6 @@ theorem productive_interleave :
           productive_interleave (k c) g (productive_coin_iff.1 h₁ c) hg)
         (fun _ => productive_map _ h₁) g₂ h₂
 
-/-- Two runs make a run of the two games interleaved: the first runs to its end, then the second. -/
 theorem reaches_interleave :
     ∀ (g₁ : Game α) (g₂ : Game β) (a : α) (b : β), Reaches g₁ a → Reaches g₂ b →
       Reaches (interleave g₁ g₂) (a, b)
@@ -241,8 +210,6 @@ theorem reaches_mapM {γ : Type} (f : γ → Game β) (g : γ → β) :
         (reaches_bind _ _ (reaches_mapM f g l fun c' hc' => h c' (by simp [hc'])) rfl)
 
 end Toolkit
-
-/-! ## The model's programs are productive -/
 
 section ModelProductive
 
@@ -369,8 +336,6 @@ theorem repC_productive (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedul
 
 end ModelProductive
 
-/-! ## Zero runs of the PIOP -/
-
 section ZeroPiop
 
 set_option linter.unusedSectionVars false
@@ -391,7 +356,6 @@ theorem residualRounds_zero : ∀ (n : ℕ) (req : Fin n → F) (c : F), c = 0 �
       obtain ⟨_, _⟩ := x
       exact rx_pure hx
 
-/-- The zero run of the zerocheck: zero messages, zero coins, and `final_a_eval = final_b_eval = 0`. -/
 theorem zerocheck_zero (A : Arith F K) (m : ℕ) :
     ∃ x, Reaches (Model.zerocheck A m) x ∧ ∃ zc, x = some zc ∧ zc.va = 0 ∧ zc.vb = 0 ∧ zc.vc = 0 := by
   unfold Model.zerocheck
@@ -403,7 +367,6 @@ theorem zerocheck_zero (A : Arith F K) (m : ℕ) :
   subst hx
   simp
 
-/-- The zerocheck rejects when `final_a_eval = final_b_eval = 1` follow the zero rounds. -/
 theorem zerocheck_reject (A : Arith F K) (m : ℕ) : Reaches (Model.zerocheck A m) none := by
   obtain ⟨x, hx, rfl⟩ : ∃ x, Reaches (Model.zerocheck A m) x ∧ x = none := by
     unfold Model.zerocheck
@@ -425,7 +388,6 @@ theorem lincheckRounds_zero : ∀ (n : ℕ) (c : F), c = 0 → ∃ x, Reaches (l
       obtain ⟨_, _⟩ := x
       exact rx_pure hx
 
-/-- The zero run of the lincheck on zero claims: its `ab` claim has value `0`. -/
 theorem lincheck_zero (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ha : zc.va = 0) (hb : zc.vb = 0) :
     ∃ x, Reaches (Model.lincheck A S zc) x ∧ ∃ ab, x = some ab ∧ ab.value = 0 := by
   unfold Model.lincheck
@@ -444,8 +406,6 @@ theorem solve_of_weight {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) (v : Fin 128) (
     ∃ s : Fin 128 → F, ∑ w, packedWeight c hm w * s w = c.value :=
   ⟨fun w => if w = v then c.value else 0, by simp [h]⟩
 
-/-- The zero run of the opening, when every claim's ring-switch check has a solution: the batching coins are zero, so
-the batched target is `0`. -/
 theorem opening_zero (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m))
     (hs : ∀ c ∈ claims, ∃ s : Fin 128 → F, ∑ v, packedWeight c hm v * s v = c.value) :
     ∃ x, Reaches (Model.opening A hm claims) x ∧ ∃ op, x = some op ∧ op.T = 0 := by
@@ -512,8 +472,6 @@ theorem packedWeight_one {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) (s : Fin 64) (
     simp only [packedWeight, h1, h2, hs, h]
     norm_num
 
-/-- At the zero link point, a region claim's weight is `1` on some packed position: its point's coordinates are
-`0` or `1`, so one skip position and one half of the packed hypercube carry weight `1`. -/
 theorem regionClaim_weight (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (hm : 7 ≤ S.m) :
     ∃ v, packedWeight (regionClaim S R ptLocal mPts (0 : Fin mPts → F)) hm v = 1 := by
   have h01 := regionPoint_zero (F := F) S R ptLocal mPts
@@ -530,8 +488,6 @@ theorem regionClaim_weight (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mP
   exacts [h01 _, Or.inl rfl]
 
 end ZeroPiop
-
-/-! ## The session is productive -/
 
 section SessionProductive
 
@@ -563,8 +519,6 @@ theorem sessionBL_productive (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
 
 end SessionProductive
 
-/-! ## The session can reject -/
-
 section SessionReject
 
 set_option linter.unusedSectionVars false
@@ -572,7 +526,6 @@ set_option linter.unusedSectionVars false
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ}
 
-/-- A batch whose games all have runs with `P` has a run whose first output has `P`. -/
 theorem reaches_batch_head {α : Type} {P : α → Prop} (gs : List (Game α)) (hne : gs ≠ [])
     (hP : ∀ g ∈ gs, ∃ a, Reaches g a ∧ P a) (hprod : ∀ g ∈ gs, Productive g) :
     ∃ as, Reaches (batch gs) as ∧ ∃ a, as.head? = some a ∧ P a := by
@@ -582,7 +535,6 @@ theorem reaches_batch_head {α : Type} {P : α → Prop} (gs : List (Game α)) (
     (productive_batch gs' fun g' hg' => hprod g' (by simp [hg']))
   exact ⟨a :: as, reaches_map_of (reaches_interleave g (batch gs') a as ha has) rfl, a, rfl, hpa⟩
 
-/-- A rep whose zerocheck sends `final_a_eval = final_b_eval = 1` rejects. -/
 theorem repC_reject (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : Reaches (repC A r S sch hm extra : Game (PendL F D)) PendL.reject := by
   unfold repC
@@ -621,11 +573,6 @@ theorem sessionBL_reject (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 
 end SessionReject
 
-/-! ## Zero openings
-
-Every level's rows are zero rows under the default salt, so every node at a height of the level's tree is one value
-(`unode`), and the siblings `unode 0, …, unode (d − 1)` take any position's leaf to the cap entry `unode d`. -/
-
 section ZeroMerkle
 
 set_option linter.unusedSectionVars false
@@ -633,7 +580,6 @@ set_option linter.unusedSectionVars false
 variable {F : Type} [Field F] {D Sl : Type} [Inhabited Sl]
 variable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
 
-/-- The lanes of level `ℓ`'s rows: `k0` at level 0, the level's lanes after. -/
 def lanesOf (sch : Schedule) (ℓ : ℕ) : ℕ := if ℓ = 0 then sch.k0 else (sch.levels.getD ℓ default).lanes
 
 /-- The path length of level `ℓ`'s openings. -/
@@ -644,10 +590,8 @@ def unode (x : D) : ℕ → D
   | 0 => x
   | k + 1 => H (E.dig (unode x k) ++ E.dig (unode x k))
 
-/-- Level `ℓ`'s zero leaf. -/
 def zleaf (sch : Schedule) (ℓ : ℕ) : D := Lf.leaf (List.replicate (2 ^ lanesOf sch ℓ) 0) default
 
-/-- Level `ℓ`'s cap over zero rows. -/
 def zcap (sch : Schedule) (ℓ : ℕ) : Cap D := fun _ => unode H E (zleaf H Lf sch ℓ) (depthOf sch ℓ)
 
 /-- The caps of levels `1 … ℓ`. -/
@@ -657,7 +601,6 @@ def zcaps (sch : Schedule) (ℓ : ℕ) : List (Cap D) := (List.range ℓ).map fu
 def zopens (sch : Schedule) : Opens F D :=
   fun _ ℓ _ => (List.replicate (2 ^ lanesOf sch ℓ) 0, (List.range' 0 (depthOf sch ℓ)).map (unode H E (zleaf H Lf sch ℓ)))
 
-/-- The default salts. -/
 def zsalts : Salts Sl := fun _ _ _ => default
 
 /-- A rep's caps are the zero caps of its levels, and each request reads a level it has a cap for, with that level's
@@ -702,7 +645,6 @@ theorem good_zcaps (sch : Schedule) (ℓ : ℕ) (reqs : List Req)
   rw [length_zcaps]
   exact h req hreq
 
-/-- **The zero openings verify** every request of a rep whose caps and requests are `Good`. -/
 theorem opensOKL_zero (sch : Schedule) (r : ℕ) (p : PendL F D) (hp : Good H E Lf sch p.caps p.reqs) :
     OpensOKL H E Lf (zcap H E Lf sch 0) r p (zopens H E Lf sch) zsalts := by
   intro req hreq
@@ -716,8 +658,6 @@ theorem opensOKL_zero (sch : Schedule) (r : ℕ) (p : PendL F D) (hp : Good H E 
     exact hw
 
 end ZeroMerkle
-
-/-! ## The zero run of a rep accepts -/
 
 section ZeroLigerito
 
@@ -769,7 +709,6 @@ theorem flatten_tail_length (L : List (List K)) :
   | nil => rfl
   | cons l L ih => simp [ih]
 
-/-- A zero residual answers a zero claim, once the folds have the schedule's length. -/
 theorem finalCheck_zero (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (levels : List (List K))
     (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ)
     (h : (initial ++ (levels.map List.tail).flatten).length + ext = n) :
@@ -784,7 +723,6 @@ theorem getD_of_drop {l t : List Level} {i : ℕ} {a : Level} (h : l.drop i = a 
 
 variable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
 
-/-- The zero run of the recursive rounds: cap messages the zero caps, zero messages and coins, a zero residual. -/
 theorem recC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (b : ℕ → F) (initial : List K)
     (hlen : initial.length + ((sch.levels.drop 1).map fun lv => lv.lanes - 1).sum + sch.ext = sch.m - 7) :
     ∀ (lvs : List Level) (st : LigStateC F K D), lvs ≠ [] → sch.levels.drop st.level = lvs → 1 ≤ st.level →
@@ -864,7 +802,6 @@ theorem recC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (b : ℕ → F) (
         rw [hlevels, ← hlv]
         simp [hch]
 
-/-- The zero run of Ligerito on a zero target. -/
 theorem ligeritoC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ → F) (hT : T = 0)
     {l₀ l₁ : Level} {rest : List Level} (hlev : sch.levels = l₀ :: l₁ :: rest)
     (hlen : sch.k0 + ((sch.levels.drop 1).map fun lv => lv.lanes - 1).sum + sch.ext = sch.m - 7) :
@@ -903,8 +840,6 @@ theorem ligeritoC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b :
     rw [hlevels]
     simp [hlev]
 
-/-- **The zero run of a rep accepts**: zero PIOP messages and coins, the extra claims' ring-switch messages solved,
-then the zero run of Ligerito. -/
 theorem repC_accept (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m))
     (hextra : ∀ c ∈ extra, ∃ s : Fin 128 → F, ∑ v, packedWeight c (by omega) v * s v = c.value)
@@ -931,10 +866,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
 
-/-! ## The schedule's shape -/
-
-/-- Every `fast100` schedule folds `k0` lanes at level 0 and one fewer than each later level's lanes after it, and
-these with `ext` make up the `m − 7` packed coordinates. -/
 theorem fast100_orig_length : ∀ m s, fast100 m = some s →
     s.k0 + ((s.levels.drop 1).map fun lv => lv.lanes - 1).sum + s.ext = s.m - 7 := by
   intro m s h
@@ -947,13 +878,9 @@ theorem fast100_orig_length : ∀ m s, fast100 m = some s →
   obtain ⟨h1, h2⟩ := hm
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; decide +kernel)
 
-/-- **`finalCheck`'s length condition, for a table**: the level-0 folds and the later levels' folds past their first
-challenge, with the clear residual, are `m − 7` coordinates. -/
 theorem TabSpec.orig_length (T : TabSpec mPts) :
     T.k0 + ((T.l₁ :: T.rest).map fun lv => lv.lanes - 1).sum + T.ext = T.m - 7 :=
   fast100_orig_length T.S.m T.sch T.hsch
-
-/-! ## The session can accept -/
 
 section SessionAccept
 
@@ -961,7 +888,6 @@ set_option linter.unusedSectionVars false
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- A table's zero run accepts: the zero level-0 cap, the zero link points, both reps' zero runs, the zero openings. -/
 theorem tabAfterL_accept (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (T : TabSpec mPts) :
     ∃ out, Reaches (tabAfterL A H E Lf T (zcap H E Lf T.sch 0) 0) out ∧ out.accepted = true := by
@@ -995,10 +921,6 @@ theorem sessionBL_accept (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 
 end SessionAccept
 
-/-! ## The session -/
-
-/-- **Can accept.** For every hash, encoding, leaf scheme, plan, sample and registration, some run of the salted batched
-session accepts. -/
 theorem batchedSessionL_reaches_true (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) :
@@ -1006,7 +928,6 @@ theorem batchedSessionL_reaches_true (H : List UInt8 → D) (E : Merkle.Enc (Lis
   obtain ⟨outs, h, hacc⟩ := sessionBL_accept execArith H E Lf (plan S R)
   exact reaches_map_of h (by simp [hacc])
 
-/-- **Can reject.** When the plan has a table on the sample, some run of the salted batched session rejects. -/
 theorem batchedSessionL_reaches_false (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) (hne : plan S R ≠ []) :
@@ -1014,14 +935,12 @@ theorem batchedSessionL_reaches_false (H : List UInt8 → D) (E : Merkle.Enc (Li
   obtain ⟨outs, h, hrej⟩ := sessionBL_reject execArith H E Lf (plan S R) hne
   exact reaches_map_of h (by simp [hrej])
 
-/-- **Productive.** Every message type the salted batched session asks for is inhabited. -/
 theorem batchedSessionL_productive (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) :
     Productive (batchedSessionL H E Lf plan S R) :=
   productive_map _ (sessionBL_productive execArith H E Lf (plan S R))
 
-/-- **The salted batched session is decisive** on a sample where the plan has a table. -/
 theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) (hne : plan S R ≠ []) :
@@ -1029,28 +948,22 @@ theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List �
   ⟨batchedSessionL_productive H E Lf plan S R, true, false, by decide,
     batchedSessionL_reaches_true H E Lf plan S R, batchedSessionL_reaches_false H E Lf plan S R hne⟩
 
-/-! ## The one-stage audit over it -/
-
-/-- **The audit can accept**, on every registration and every sample. -/
 theorem audit_reaches_accept (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (true, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_true H E Lf plan (L.draw ω) R)⟩
 
-/-- **The audit can reject**, on every registration and every sample where the plan has a table. -/
 theorem audit_reaches_reject (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω)
     (hne : plan (L.draw ω) R ≠ []) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (false, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_false H E Lf plan (L.draw ω) R hne)⟩
 
-/-- **The audit is productive** when registrations exist. -/
 theorem audit_productive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) :
     Productive (audit L Reg (batchedSessionL H E Lf plan)) :=
   ⟨inferInstance, fun R ω => productive_map _ (batchedSessionL_productive H E Lf plan (L.draw ω) R)⟩
 
-/-- **The audit is decisive** when registrations exist and the plan has a table on every sample. -/
 theorem audit_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hne : ∀ S R, plan S R ≠ []) :
@@ -1060,13 +973,11 @@ theorem audit_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 →
   exact ⟨audit_productive L H E Lf plan, (true, L.draw ω), (false, L.draw ω), by simp,
     audit_reaches_accept L H E Lf plan R ω, audit_reaches_reject L H E Lf plan R ω (hne _ _)⟩
 
-/-- **A tile's audit is decisive**: the one-stage audit over the salted batched session of a one-table plan. -/
 theorem audit_tile_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
   audit_decisive L H E Lf _ fun _ _ => List.cons_ne_nil _ _
 
-/-- **A tile's audit verdict is decisive**: `audit_tile_decisive` on the verdict alone. -/
 theorem audit_tile_decisive_verdict [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive ((audit L Reg (batchedSessionL H E Lf fun S R => [T S R])).map Prod.fst) := by

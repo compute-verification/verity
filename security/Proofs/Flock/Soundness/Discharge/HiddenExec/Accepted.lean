@@ -19,23 +19,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
-/-!
-# A sample verity-verify-proof accepts under hidden outputs sets up
-
-Integrate's `Accepted.lean` for `Stmt.setupHidden`. A `SampleSetupH` is more than setupHidden's acceptance: the sample proves
-the sampled proof blocks, `0 < c.g`, the proved units fit the blocks, `m` has a `fast100` schedule of at least two levels, and
-the statement's link points are `mPts`. All but the first and the last follow from a one-table acceptance, as on the
-public path:
-
-* `0 < c.g`: an untyped `HmOut.parse` is `HmRow.parse` then `HmOut.checkRows` (`parse_untyped`), and `HmRow.check`
-  holds a power of two of VUs per block (`CheckFacts.g_pow2`), wherever the outputs are returned;
-* the blocks: setupHidden's `nbl` is setupH's function of `n` (`setupHidden_n`), and a sampled statement's `n` is the
-  sample's proved units (`HmOut.drawn` is `HmRow.drawn` with no output word, `Layout.sampled_spec`);
-* the schedule: `verify_one_ok` and `model_sched`, as on the public path.
-
-`sampleSetupH_of_accepts` and `tableAtH_of_accepts` are `sampleSetup_of_accepts` and `tableAt_of_accepts` under hidden
-outputs (`hh : I.tags.hiddenOutputs = true`).
--/
+/-! A sample verity-verify-proof accepts under hidden outputs sets up (`sampleSetupH_of_accepts`, `tableAtH_of_accepts`). -/
 
 @[expose] public section
 
@@ -51,8 +35,6 @@ variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : F
   (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
 include ht hc
 
-/-- **A `SampleSetupH` from setupHidden's acceptance at a sample**, a `fast100` schedule of its `m`, the sample proving `S`,
-and its link points `mPts`, wherever the outputs are returned. -/
 theorem sampleSetupH_of_setupHiddenI {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitSample}
@@ -78,7 +60,6 @@ theorem sampleSetupH_of_setupHiddenI {st : Flock.Stmt}
     by have := exec_fast100_ge hf; omega, hmPts, setupHidden_wf h⟩, rfl⟩
 
 set_option linter.unusedVariables false in
-/-- `sampleSetupH_of_setupHiddenI` where the unit returns the outputs. -/
 theorem sampleSetupH_of_setupHidden (ho : c.outNet = c.unitNet) {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitSample}
@@ -86,9 +67,6 @@ theorem sampleSetupH_of_setupHidden (ho : c.outNet = c.unitNet) {st : Flock.Stmt
     ∃ x : SampleSetupH I mPts S d, x.st = st :=
   sampleSetupH_of_setupHiddenI ht hc h hf hD hS hmPts
 
-/-- **A sample verity-verify-proof accepts under hidden outputs sets up.** A one-table acceptance whose record's sample is `d`:
-setupHidden accepted its inputs at `d` (`st`), the sample decodes (`D`), and whenever `D` proves `S` and `st`'s link points
-are `mPts`, a `SampleSetupH` at `d` has statement `st`. -/
 theorem sampleSetupH_of_accepts (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
     (h : Accepts I t) (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
@@ -101,8 +79,6 @@ theorem sampleSetupH_of_accepts (hh : I.tags.hiddenOutputs = true) (hc1 : I.coun
   obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => sampleSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a sample verity-verify-proof accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
-accepted**, wherever the outputs are returned (`TableAtHOfAccepts` without `c.outNet = c.unitNet`). -/
 theorem tableAtH_of_acceptsI (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)
     (hd : recordDraw t.record = some (dj S))

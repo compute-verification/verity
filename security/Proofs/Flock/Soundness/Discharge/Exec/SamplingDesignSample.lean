@@ -5,25 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Pts
 import Mathlib.Combinatorics.Matroid.Init
 import Std.Data.HashMap.Lemmas
 
-/-!
-# How many units the live sampling design samples
-
-`SamplingDesign.execOS`'s sample at `ω` is `univ.filter (· ∈ d.units)` when `runOS` returns `d`, and every unit when the run would
-read past the source's bytes. This file counts the first case: under `ExecStrata σ k S`, a stratified sample that succeeds
-holds exactly `∑ s, k s` units (`execOS_sample_card`), so every sample of the live stratified sampling design has `∑ s, k s` units or
-is every unit (`execOS_sample_card_or`).
-
-* `uniform_lt`, `loopP_lt`, `subset_spec`: a `subset k n` sample that succeeds is `k` distinct indices below `n`, the
-  values below `k` of the loop's permutation, which keeps `[0, n)`.
-* `stratified_sub`: every unit of a successful stratified sample comes from some stratum's local sample (the converse of
-  `SamplingDesign.stratified_units`).
-* `stratified_card`: stratum `s`'s units in the sample are its local sample under `(S s).unit`, which is injective on the
-  stratum by `ExecStrata`, so the sample has `k s` units in stratum `s`.
-* `setupH_mPts_execOS`, `setupH_mPts_execOS_or`: with `Pts.lean`, when the sample file written for a sample proves exactly
-  its units (no closure), `setupH` at the sampling design's sample sets up at `mPtsOf c.g (∑ s, k s)` on every run that succeeds, and
-  at `mPtsOf c.g n` on the others. So one `mPts` serves every sample of the sampling design when those two agree; otherwise the runs
-  that read past the source's bytes set up at another.
--/
+/-! How many units the live sampling design samples: `∑ s, k s`, or every unit where the run would read past the source's bytes. -/
 
 @[expose] public section
 
@@ -31,7 +13,6 @@ namespace FlockSoundness.Discharge.Exec
 
 open FlockSoundness.Audit FlockSoundness.Audit.SamplingDesign Finset
 
-/-- **`uniform m` returns a value below `m`.** -/
 theorem uniform_lt {m : ℕ} {src : ByteArray} : ∀ {fuel pos r p : ℕ},
     Flock.Draw.uniform m src fuel pos = some (r, p) → r < m := by
   intro fuel
@@ -51,7 +32,6 @@ theorem uniform_lt {m : ℕ} {src : ByteArray} : ∀ {fuel pos r p : ℕ},
         · exact Nat.mod_lt _ hm
       · exact ih h
 
-/-- **The loop's permutation keeps `[0, n)`**, and a loop of `c > 0` steps from `i` that finishes has `i + c ≤ n`. -/
 theorem loopP_lt (n : ℕ) (src : ByteArray) : ∀ (c i : ℕ) (π π' : Equiv.Perm ℕ) (pos : ℕ),
     SampleExec.loopP n src (List.range' i c) π pos = some π' → (∀ t < n, π t < n) →
       (c = 0 ∨ i + c ≤ n) ∧ ∀ t < n, π' t < n := by
@@ -73,8 +53,6 @@ theorem loopP_lt (n : ℕ) (src : ByteArray) : ∀ (c i : ℕ) (π π' : Equiv.P
       obtain ⟨hc, hπ'⟩ := ih (i + 1) _ π' p h (SampleExec.swap_trans_lt (by omega) π hπ)
       exact ⟨Or.inr (by omega), hπ'⟩
 
-/-- **A `subset` sample that succeeds is `k ≤ n` distinct indices below `n`**: the values on `[0, k)` of a permutation
-that keeps `[0, n)`. -/
 theorem subset_spec {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     ∃ π : Equiv.Perm ℕ, k ≤ n ∧ (∀ t < n, π t < n) ∧ ∀ x, x ∈ D ↔ ∃ i < k, π i = x := by
   rw [SampleExec.subset_eq] at h
@@ -90,7 +68,6 @@ theorem subset_spec {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Dra
     · rintro ⟨i, hi, rfl⟩; exact ⟨i, Array.mem_range.1 hi, (hsw i).symm⟩
     · rintro ⟨i, hi, rfl⟩; exact ⟨i, Array.mem_range.2 hi, hsw i⟩
 
-/-- The converse of `SamplingDesign.forIn_append`: every value the loop returns was in `out` or appended by some step. -/
 theorem forIn_append_sub (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ)
     (F : ℕ → Array ℕ → Option (ForInStep (Array ℕ)))
     (hF : ∀ i out, F i out = (g i).bind fun l => some (ForInStep.yield (out ++ l.map (u i)))) :
@@ -117,8 +94,6 @@ theorem forIn_append_sub (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → �
           exact Or.inr ⟨i, List.mem_cons.2 (Or.inl rfl), li, hg, j, hj, rfl⟩
       · exact Or.inr ⟨i', List.mem_cons.2 (Or.inr hi'), li', hg', j, hj, hx'⟩
 
-/-- **Every unit of a successful stratified sample is a stratum's**: the unit of an index of that stratum's local sample
-(the converse of `SamplingDesign.stratified_units`). -/
 theorem stratified_sub (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray) (D : Array ℕ)
     (h : Flock.Draw.stratified strata streams = some D) :
     ∀ x ∈ D, ∃ i < strata.size, ∃ li, Flock.Draw.subset strata[i]!.k strata[i]!.size
@@ -142,8 +117,6 @@ theorem stratified_sub (strata : Array Flock.Draw.Stratum) (streams : Array Byte
     rw [List.mem_range'_1] at hi'
     exact ⟨i, by omega, li, hli, j, hj, hx'⟩
 
-/-- **A successful stratified sample has `∑ s, k s` units**, `k s` of them in stratum `s`, when the executable strata are
-`σ`'s (`ExecStrata`). -/
 theorem stratified_card {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum)
     (hS : ExecStrata σ k S) {streams : Array ByteArray} {D : Array ℕ}
     (h : Flock.Draw.stratified (Array.ofFn S) streams = some D) :
@@ -157,7 +130,6 @@ theorem stratified_card {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
       rw [hSs] at hli
       exact ⟨li, hli⟩
   choose li hli using hloc
-  -- a local index of stratum `s`'s sample is below the stratum's size, and its unit is a unit of `σ`'s stratum `s`
   have hlt : ∀ s, ∀ j ∈ li s, j < (S s).size := fun s j hj => by
     obtain ⟨π, hk, hπ, hmem⟩ := subset_spec (hli s)
     obtain ⟨i, hi, rfl⟩ := (hmem j).1 hj
@@ -167,7 +139,6 @@ theorem stratified_card {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
       rw [← (hS s).2.2]; exact mem_image_of_mem _ (mem_range.2 hj)
     obtain ⟨v, hv, hve⟩ := mem_map.1 this
     exact ⟨v, mem_stratum.1 hv, hve⟩
-  -- a unit is in the sample exactly when it is the unit of an index of its own stratum's local sample
   have hiff : ∀ u : Fin n, u.val ∈ D ↔ ∃ j ∈ li (σ u), (S (σ u)).unit j = u.val := by
     intro u
     constructor
@@ -191,7 +162,6 @@ theorem stratified_card {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
       exact hx ▸ hmem j hj
   rw [card_eq_sum_card_fiberwise (f := σ) (t := univ) (fun _ _ => mem_univ _)]
   refine Finset.sum_congr rfl fun s _ => ?_
-  -- stratum `s`'s units in the sample, as numbers, are its local sample's image under `(S s).unit`
   set Ls : Finset ℕ := (li s).toList.toFinset with hLs
   have hLs_card : Ls.card = k s := by
     obtain ⟨π, hk, hπ, hmem⟩ := subset_spec (hli s)
@@ -222,7 +192,6 @@ theorem stratified_card {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
 
 variable {n m : ℕ}
 
-/-- **A sample of the live stratified sampling design from a run that succeeds has `∑ s, k s` units.** -/
 theorem execOS_sample_card (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S)
     (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → ℕ} (t : Ω → (i : Fin m) → Fin (L i) → Fin 256)
     (ω : Ω) {d : Flock.Draw.UnitSample} (h : runOS (t ω) (.stratified K (Array.ofFn S)) pop = some d) :
@@ -234,8 +203,6 @@ theorem execOS_sample_card (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m
   rw [h]
   exact stratified_card σ k S hS hd
 
-/-- **Every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit** (a run that would read past the
-source's bytes). -/
 theorem execOS_sample_card_or (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum)
     (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → ℕ}
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) :
@@ -251,9 +218,6 @@ theorem execOS_sample_card_or (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fi
     rw [h]
 
 open Flock in
-/-- **`m_pts` at the live sampling design's sample, on a run that succeeds**: when the sample file `dj B` written for a sample `B` proves
-exactly `B`'s units (`hdj`: no closure beyond them), `setupH` at the sampling design's sample sets up at `mPtsOf c.g (∑ s, k s)`, the
-same at every such run (`execOS_sample_card`, `setupH_mPts_of_proved`). -/
 theorem setupH_mPts_execOS {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} {c : Flock.Circuit}
     (hc : (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok c)
@@ -269,8 +233,6 @@ theorem setupH_mPts_execOS {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
   exact setupH_mPts_of_proved hc (fun D hD => hdj _ D hD) h
 
 open Flock in
-/-- **`m_pts` at every sample of the live sampling design**, under the same `hdj`: `mPtsOf c.g (∑ s, k s)`, or `mPtsOf c.g n` at a
-run that would read past the source's bytes, whose sample is every unit (`execOS_sample_card_or`). -/
 theorem setupH_mPts_execOS_or {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} {c : Flock.Circuit}
     (hc : (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok c)

@@ -24,14 +24,7 @@ import Proofs.Flock.Soundness.TmplLayout
 import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.TmplUnitNet
 
-/-!
-# A hidden-output statement's layout at public inputs (`hidden_layoutP`)
-
-`hidden_layout'` at `SpecP`: Δ is `HmOut.delta`'s without the pairs into a public leaf's bits (`inDelta_toList`). No
-constant pair is into one, since a public leaf's bit is a unit slot's input bit (`publicCol_at`), below the unit's
-constant (`Layout.constPairs_not_below`), so the constant pairs come first as `Layout.delta` asks, and every other pair
-is one of `HmOut.delta`'s, an input bit of a net slot.
--/
+/-! A hidden-output statement's layout at public inputs (`hidden_layoutP`), where Δ drops the pairs into a public leaf's bits. -/
 
 @[expose] public section
 
@@ -40,7 +33,6 @@ open Lean (Json)
 
 namespace FlockSoundness.Discharge.Hidden
 
-/-- `HmOut.delta`'s two sides are one, on an untyped circuit. -/
 theorem outDelta_snd {c : Circuit} (ht : c.typed = none) (pin : ℕ) :
     (HmOut.delta c pin).2 = (HmOut.delta c pin).1 := by
   rw [hidden_delta', delta_snd _ _ ht]
@@ -48,16 +40,11 @@ theorem outDelta_snd {c : Circuit} (ht : c.typed = none) (pin : ℕ) :
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw : Option Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
-/-- The unit's input groups fit its input words, of any `Layout`: its logical net's (`built_spec`), which has the unit's
-input groups and words (`UnitAt`). -/
 theorem unit_groups_fit (L : Layout st) : ∀ g ∈ st.c.unit.inGroups.toList,
     g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ st.c.unit.inWords := by
   have h := (built_spec L.unit_built).2.2.2.2.1
   rwa [L.unit_at.groups, L.unit_at.in_eq] at h
 
-/-- **An untyped hidden-output statement accepted at public inputs has the layout the placement reads**, on the
-committed circuit: its flat twin's is `layout_of`'s for a flat file, `layout_of_tmpl`'s for a templated one
-(`hidden_layoutC`), where it pins no output (`hidden_delta_unpinned`). -/
 theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st)
     (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
   obtain ⟨L, hty, C, hout⟩ :

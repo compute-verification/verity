@@ -21,29 +21,7 @@ import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Soundness at `fast100`'s numbers, over everything verity-verify-proof accepts without `--zk`
-
-`flock_verify_sound`'s claims without `--zk`, `SoundExec` (public outputs), `SoundExecH` (hidden) and `SoundExecHR`
-(hidden, `--registered F`), bound the knowledge term by `StrictCR.ksAvgStrict`, whose per-table term is the table's `tableError`. `flock_verify_sound_205` states them
-with that term replaced by `2^-205` (`ksStrict205`, `ksAvgStrict205`), and with no hypothesis on the statement's range:
-acceptance gives it.
-
-* `tableError_le_205_wide`: `tableError` of a `fast100` schedule is at most `2^-205` at every shape in
-  `Stmt.InRangeWide`, `Stmt.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
-* `ksAvgStrict_le_205`: with every plan table's shape in that range, `ksAvgStrict` is at most `ksAvgStrict205`.
-* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample verity-verify-proof
-  sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
-  `setupH_inRange`, `Hidden.Spec.inRange`). A refused sample's table is a reference setup's statement with `contra`'s two
-  regions added (`SampleSetup.refused`), which is why the range is two regions wider.
-* `SoundExec205`, `SoundExecH205`, `SoundExecHR205`: `SoundExec`, `SoundExecH` and `SoundExecHR` at `ksAvgStrict205`,
-  which they give by monotonicity (`SoundExec.to205`, `SoundExecH.to205`, `SoundExecHR.to205`). `SoundExecH205` and
-  `SoundExecHR205` are split as `SoundExecH` is, by whether the circuit's wires feed its unit or outputs
-  (`SoundExecHU205`, `SoundExecHG205`, `SoundExecHRU205`, `SoundExecHRG205`).
-
-Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at Flock ZK's parameters (`TabZK.M1`,
-`ksAvgStrictZ_le_m1`). Acceptance does not give `M1` here, so the `--zk` claims stay as `flock_verify_sound` states them.
--/
+/-! Soundness at `fast100`'s numbers, `2^-205` per table, over everything verity-verify-proof accepts without `--zk`; under `--zk` acceptance does not give `M1`, so those claims are not restated here. -/
 
 @[expose] public section
 
@@ -100,19 +78,16 @@ theorem tableError_le_up_wide (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st
   push_cast
   nlinarith
 
-/-- The rational check at 1026 regions for `22 ≤ m ≤ 33`. -/
 theorem check_wide_le_33 : ∀ m, 22 ≤ m → m ≤ 33 → ∀ s, fast100 m = some s →
     linkUpWide s + repUpWide s ^ 2 ≤ (1 / 2) ^ 205 := by
   intro m h1 h2 s hs
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at hs; subst hs; decide +kernel)
 
-/-- The rational check at 1026 regions for `m = 34, 35`. -/
 theorem check_wide_34_35 : ∀ m, 34 ≤ m → m ≤ 35 → ∀ s, fast100 m = some s →
     linkUpWide s + repUpWide s ^ 2 ≤ (1 / 2) ^ 205 := by
   intro m h1 h2 s hs
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at hs; subst hs; decide +kernel)
 
-/-- The rational check at 1026 regions, for every `m` that `fast100` supports. -/
 theorem check_wide (m : ℕ) (h1 : 22 ≤ m) (h2 : m ≤ 35) (s : Schedule) (hs : fast100 m = some s) :
     linkUpWide s + repUpWide s ^ 2 ≤ (1 / 2) ^ 205 := by
   rcases le_or_gt m 33 with h | h
@@ -129,7 +104,6 @@ theorem fast100_range : ∀ m s, fast100 m = some s → 22 ≤ m ∧ m ≤ 35 :=
     split <;> simp_all
   exact hm m (by simp [h])
 
-/-- **The soundness number for `fast100` at every shape in `Stmt.InRangeWide`**: at most `2^-205` per table. -/
 theorem tableError_le_205_wide {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   obtain ⟨h1, h2⟩ := fast100_range m s hs
@@ -173,8 +147,6 @@ theorem ksStrict_le_205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (hT : ((t
   gcongr
   exact tableError_le_205_wide (ts.get j).hsch _ hT
 
-/-- **The knowledge term's closed form at `fast100`'s numbers**: with every table of the plan in `Stmt.InRangeWide`,
-`ksAvgStrict` is at most `ksAvgStrict205`. -/
 theorem ksAvgStrict_le_205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : Audit.SamplingDesign n)
     (k : ℕ) (qF qS : ℝ) (R : Reg) : ksAvgStrict plan L k qF qS R ≤ ksAvgStrict205 plan L k qF qS R := by
@@ -194,8 +166,6 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
 
-/-- **A table at a sample setup's statement is in the wide range** when its regions number at most two more than the
-statement's: `Stmt.setupH` checks the statement's range (`setupH_inRange`). -/
 theorem SampleSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetup I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
@@ -206,8 +176,7 @@ theorem SampleSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x :
   show x.st.c.kLog ≤ 27 ∧ regs.length ≤ 1026 ∧ mPts ≤ 64
   exact ⟨hk, by omega, by omega⟩
 
-/-- **Every table of the one-table plan is in the wide range**: the sample's table has its statement's regions, and a
-refused sample's table the reference setup's and `contra`'s two. -/
+/-- A refused sample's table adds `contra`'s two regions to the reference setup's, which is why the range is two regions wider. -/
 theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type} (S : Finset (Fin n)) (R : Reg) (j : Fin (planAt (Reg := Reg) ht dj x₀ S R).length) :
     (((planAt (Reg := Reg) ht dj x₀ S R).get j).S.shape mPts).InRangeWide := by
@@ -231,8 +200,6 @@ open FlockSoundness.Discharge.Integrate (SampleSetup)
 
 variable {n mPts : ℕ} {I : Inputs}
 
-/-- **A table at a hidden-output sample setup's statement is in the wide range** when its regions number at most two more
-than the statement's: `Stmt.setupHidden` checks the statement's range (`Hidden.Spec.inRange`). -/
 theorem SampleSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupH I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
@@ -243,7 +210,6 @@ theorem SampleSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x 
   show x.st.c.kLog ≤ 27 ∧ regs.length ≤ 1026 ∧ mPts ≤ 64
   exact ⟨hk, by omega, by omega⟩
 
-/-- **Every table of the hidden-output one-table plan is in the wide range** (`planAt_inRangeWide`'s twin). -/
 theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
     (j : Fin (planAtH (Reg := Reg) dj x₀ S R).length) :
@@ -395,7 +361,6 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
           ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
-/-- **`SoundExec` gives `SoundExec205`**: every table of the plan is in the wide range (`planAt_inRangeWide`). -/
 theorem SoundExec.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = false} (h : SoundExec I hh) : SoundExec205 I hh :=
   @fun _ _ dj _ x₀ Reg _ St _ _ hlaw _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hCust τ
       hCR _ _ hKS =>
@@ -537,7 +502,6 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
           ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
             (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t')
 
-/-- **`SoundExecHU` gives `SoundExecHU205`**: every table of the plan is in the wide range (`planAtH_inRangeWide`). -/
 theorem SoundExecHU.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = false}
     (h : SoundExecHU I hh hf) : SoundExecHU205 I hh hf :=
   @fun _ _ dj _ x₀ Reg D hD _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hCust τ hCR _ _ hKS =>
@@ -670,7 +634,6 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t')
 
-/-- **`SoundExecHG` gives `SoundExecHG205`**, as `SoundExecHU.to205`. -/
 theorem SoundExecHG.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = true}
     (h : SoundExecHG I hh hf) : SoundExecHG205 I hh hf :=
   @fun _ _ dj _ x₀ Reg D hD _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hCust τ hCR _ _ hKS =>
@@ -689,7 +652,6 @@ def SoundExecH205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop 
   (∀ hf : ProvedScope.wiresFeed (circS I) = false, SoundExecHU205PerTest I hh hf) ∧
     ∀ hf : ProvedScope.wiresFeed (circS I) = true, SoundExecHG205PerTest I hh hf
 
-/-- **`SoundExecH` gives `SoundExecH205`**: every table of the plan is in the wide range (`planAtH_inRangeWide`). -/
 theorem SoundExecH.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} (h : SoundExecH I hh) : SoundExecH205 I hh :=
   ⟨fun hf => SoundExecHU.to205 (hh := hh) (hf := hf) (h.1 hf), fun hf => SoundExecHG.to205 (hh := hh) (hf := hf) (h.2 hf)⟩
 
@@ -826,7 +788,6 @@ def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
         OwnReadsH own (circS I) (pubS I) o.2.2 rd.isRead rd.port rd.readAt →
           rd.Checked o.1 (regPathsH (circS I) (pubS I) o.2.2 rd.port)
 
-/-- **`SoundExecHRU` gives `SoundExecHRU205`**, as `SoundExecHU.to205`; the registered reads' conjunct is the same. -/
 theorem SoundExecHRU.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = false}
     (h : SoundExecHRU I hh hf) : SoundExecHRU205 I hh hf :=
   @fun own _ _ dj _ x₀ Reg D hD _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hCust τ hCR _ _ hKS =>
@@ -974,7 +935,6 @@ def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
         OwnReadsH own (circS I) (pubS I) o.2.2 rd.isRead rd.port rd.readAt →
           rd.Checked o.1 (regPathsH (circS I) (pubS I) o.2.2 rd.port)
 
-/-- **`SoundExecHRG` gives `SoundExecHRG205`**, as `SoundExecHG.to205`; the registered reads' conjunct is the same. -/
 theorem SoundExecHRG.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = true}
     (h : SoundExecHRG I hh hf) : SoundExecHRG205 I hh hf :=
   @fun own _ _ dj _ x₀ Reg D hD _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hCust τ hCR _ _ hKS =>
@@ -994,7 +954,6 @@ def SoundExecHR205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop
   (∀ hf : ProvedScope.wiresFeed (circS I) = false, SoundExecHRU205PerTest I hh hf) ∧
     ∀ hf : ProvedScope.wiresFeed (circS I) = true, SoundExecHRG205PerTest I hh hf
 
-/-- **`SoundExecHR` gives `SoundExecHR205`** (`planAtH_inRangeWide`). -/
 theorem SoundExecHR.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} (h : SoundExecHR I hh) :
     SoundExecHR205 I hh :=
   ⟨fun hf => SoundExecHRU.to205 (hh := hh) (hf := hf) (h.1 hf),

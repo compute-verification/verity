@@ -12,22 +12,7 @@ public import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic
 
-/-!
-# A setup at the sample of no unit, carried to another public file
-
-`Stmt.setupHidden` at a sample that proves no unit reads the public file in its header and its rows' roots, and
-nothing of it enters the statement's shape. `setupHidden_sibling`: when the setup returned at one public file and a
-sample that proves no unit, it returns at every public file of the same circuit that `HmOut.loadPublic` loads,
-`HmOut.checkPublic` passes and whose header names no `public_inputs`, at a sample of no unit of that file's population,
-and the two statements are siblings (`Stmt.Sibling`): they share the circuit, the counts, the pin, Δ, the regions and
-the statement's digest, and differ at most in the public file, Σ, the hello and the partition's finding. The shape
-check reads only what siblings share (`shapeOk_sibling`).
-
-The proof walks the first setup with `walk_step` and builds the second with `ok_step` (`OkWith.lean`). The steps that
-read the public file are carried one by one: the load and its checks (`loadPublic_in`, `checkOwn_noPorts`), the sample
-(`sampled_okWith`), the roots (`checkPublic_sampled`), the unit indices of no unit (`units_noUnit`), linking over no reader
-(`links_noUnit`), the regions of no unit (`regions_noUnit`) and the hello (`helloOf_isOk`).
--/
+/-! A setup at the sample of no unit, carried to another public file (`setupHidden_sibling`): the two statements are siblings (`Stmt.Sibling`), and the shape check reads only what siblings share. -/
 
 @[expose] public section
 
@@ -35,8 +20,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Flock Refine
 open Lean (Json)
-
-/-! ## What a loaded public file holds -/
 
 theorem obj_of_get {j : Json} {k ctx : String} {v : Json} (h : J.get j k ctx = .ok v) : ∃ m, j = .obj m := by
   cases j with
@@ -51,8 +34,6 @@ theorem wf_of_norm {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : Flo
 
 -- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **What `HmRow.loadPublic` returns**: a file with no population, whose header is an object over a well-formed tree
-that names no `unit_draw`, has a canonical text, and holds the unit indices the setup reads. -/
 theorem loadPublic_reads {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) :
     pop.population = none ∧ (∃ m : Std.TreeMap.Raw String Json compare, pop.header = .obj m ∧ m.WF) ∧
@@ -76,8 +57,6 @@ theorem loadPublic_reads {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Publ
     · obtain ⟨s, hs, -⟩ := ebind_ok ‹HmRow.publicDigest _ _ = Except.ok _›
       exact isOk_of_eq hs
 
-/-! ## The sample of no unit over a loaded public file -/
-
 theorem publicDigest_okWith {hdr : Json} {pubs : ByteArray} (h : (canonUtf8 hdr).isOk = true) :
     OkWith (HmRow.publicDigest hdr pubs) fun _ => True := by
   unfold HmRow.publicDigest
@@ -85,7 +64,6 @@ theorem publicDigest_okWith {hdr : Json} {pubs : ByteArray} (h : (canonUtf8 hdr)
   | error e => rw [hc] at h; cases h
   | ok s => exact ⟨_, rfl, trivial⟩
 
-/-- `canonUtf8` prints the header's `units` entry at any indices. -/
 theorem canonUtf8_unitsEntry (c : Circuit) (indices : Array Nat) :
     (canonUtf8 (HmRow.unitsEntry c indices)).isOk = true := by
   have hn : ∀ a : Array Nat, (canonUtf8 (Json.arr (a.map fun x => Lean.toJson x))).isOk = true := fun a =>
@@ -115,7 +93,6 @@ def sampledHeader (c : Circuit) (pop : Public) (d : Json) (k : Nat) (indices : A
   ((pop.header.setObjVal! "unit_draw" d).setObjVal! "instances" (Lean.toJson k)
     |>.setObjVal! "population" (Lean.toJson pop.n)).setObjVal! "units" (HmRow.unitsEntry c indices)
 
-/-- `canonUtf8` prints a sample's header when it prints the population's and the sample. -/
 theorem canonUtf8_sampledHeader {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hh : (canonUtf8 pop.header).isOk = true) (hd : (canonUtf8 d).isOk = true) :
@@ -128,9 +105,6 @@ theorem canonUtf8_sampledHeader {c : Circuit} {pop : Public} {d : Json} {k : Nat
 
 -- `ok_step` down `HmRow.drawn`'s unfolded do-block, a goal per step that returns on its own
 set_option maxHeartbeats 2000000 in
-/-- **A sample over a loaded public file returns**, with the header, count, population and tables `HmRow.drawn`
-gives it: the sample decodes at the population's size, the header's unit indices were read, and `canonUtf8` prints the
-header and the sample. -/
 theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitSample} {u : Json} {a : Array Json}
     {idx : Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitSample.ofJson d = .ok D) (hn : D.population = pop.n) (hpn : pop.population = none)
@@ -155,8 +129,6 @@ theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitSam
     | exact okWith_forIn_array _ _ _
     | exact publicDigest_okWith hcan
 
-/-! ## What a sample's header holds -/
-
 theorem getObjVal?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :
     (Json.obj m).getObjVal? k = match m[k]? with
       | some v => .ok v
@@ -164,7 +136,6 @@ theorem getObjVal?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :
   simp only [Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
   rfl
 
-/-- The fields `HmRow.drawn` sets in a sample's header, and `frame_v3`, which it keeps. -/
 theorem sampledHeader_reads {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m) :
     (sampledHeader c pop d k indices).getObjVal? "units" = .ok (HmRow.unitsEntry c indices) ∧
@@ -178,13 +149,8 @@ theorem sampledHeader_reads {c : Circuit} {pop : Public} {d : Json} {k : Nat} {i
     Std.TreeMap.Raw.getElem?_insert hm]
   simp only [Std.compare_self, ↓reduceIte, Std.LawfulEqCmp.compare_eq_iff_eq, String.reduceEq, and_self]
 
-/-! ## A sample's public file passes `HmOut.checkPublic` when its population's does -/
-
 -- `simp only` rewrites `HmOut.checkPublic`'s unfolded do-block at both public files
 set_option maxHeartbeats 2000000 in
-/-- **`HmOut.checkPublic` on a sample over a loaded public file** is the check on the file: the sample keeps the
-header's `frame_v3`, the tables' counts and starts and the population the roots are over, and its count is the
-sample's. -/
 theorem checkPublic_sampled {c c' : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitSample} {idx : Array Nat}
     {r : Tables → Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitSample.ofJson d = .ok D) (hpn : pop.population = none) (hnd : J.has pop.header "unit_draw" = false)
@@ -217,9 +183,6 @@ theorem checkPublic_sampled {c c' : Circuit} {pop pub : Public} {d : Json} {D : 
       bne_self_eq_false, Bool.or_self, Bool.false_eq_true, ↓reduceIte] at h ⊢
     exact h
 
-/-! ## The steps that read the public file, at a statement with no public input port and no unit -/
-
-/-- `HmIn.loadPublic` is `HmOut.loadPublic` at a circuit with no public input port and a header that names none. -/
 theorem loadPublic_in {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
     (he : pi.ports.isEmpty = true) (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
     (h : HmOut.loadPublic tags c f = .ok pop) : HmIn.loadPublic tags c pi f = .ok pop := by
@@ -240,7 +203,6 @@ theorem checkOwn_noPorts {pi : HmIn.Ports} {pop : Public} (he : pi.ports.isEmpty
   simp only [he]
   rfl
 
-/-- At no unit every block's bytes are the pinned dummy's, so the regions are the same at any two public files. -/
 theorem regions_noUnit {c : Circuit} {pub pub' : Public} (h : pub.n = 0) (h' : pub'.n = 0) :
     HmOut.regions c pub = HmOut.regions c pub' := by
   unfold HmOut.regions
@@ -252,13 +214,10 @@ theorem inRegions_noPorts {c : Circuit} {pi : HmIn.Ports} {pub : Public} (he : p
   simp only [he, ↓reduceIte]
   rfl
 
-/-- The units a sample that proves none names: none. -/
 theorem readersOf_noUnit {d : Json} {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hpr : D.proved = #[]) :
     HmLinks.readersOf (some d) = some #[] := by
   simp only [HmLinks.readersOf, Option.bind_some, hD, Except.toOption, Option.map_some, hpr]
 
-/-- **Linking at no unit returns at any public file whose unit indices read**, when it returned at one: it parses
-META's links and decodes the program, which the public file does not enter, and checks no reader. -/
 theorem links_noUnit {c : Circuit} {pop pop' : Public} {prog : ByteArray} {w : Nat} {u : Json} {a : Array Json}
     {idx : Array Nat} (h : HmLinks.check c pop (some #[]) prog = .ok w)
     (hu : J.get pop'.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
@@ -276,7 +235,6 @@ theorem links_noUnit {c : Circuit} {pop pop' : Public} {prog : ByteArray} {w : N
     | trivial
     | exact okWith_forIn_empty _ _
 
-/-- `HmRow.qwordFinding` reads the public file only in its header's `units`. -/
 theorem qwordFinding_congr {c : Circuit} {pub pub' : Public} {obj : Json} {prog : ByteArray}
     {f : HmRow.PartitionFinding}
     (h : J.get pub.header "units" "public file" = J.get pub'.header "units" "public file") :
@@ -286,7 +244,6 @@ theorem qwordFinding_congr {c : Circuit} {pub pub' : Public} {obj : Json} {prog 
 
 -- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A sample that proves no unit has the header `units` of no index.** -/
 theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitSample}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitSample.ofJson d = .ok D) (hpr : D.proved = #[]) (h : HmRow.drawn c pop d = .ok pub) :
@@ -305,8 +262,6 @@ theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitS
     unfold J.get
     dsimp only
     rw [hr, hpr, Array.map_empty]
-
-/-! ## The setup, carried -/
 
 /-- What two statements share when they differ in the public file alone, each at a sample that proves no unit:
 every field but the public file, Σ, the hello and the partition's finding. -/
@@ -387,7 +342,6 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     | (rw [qwordFinding_congr (hu₂.trans hu₁.symm)]
        exact okWith_of_eq ‹HmRow.qwordFinding _ _ _ _ _ = Except.ok _›)
 
-/-- **The shape check reads only what siblings share**: `m`, the block count, Δ, the regions and the circuit. -/
 theorem shapeOk_sibling {st₁ st₂ : Stmt} (h : Stmt.Sibling st₁ st₂) : Zk.shapeOk st₂ = Zk.shapeOk st₁ := by
   obtain ⟨-, -, hc, -, -, hnbl, hm, -, -, hreg, hda, hdb, -⟩ := h
   -- `shapeOk` discards `queries0`'s count (`let _ ←`), and its success is fixed by `m` alone, so the `wideLeaf` that
@@ -396,11 +350,6 @@ theorem shapeOk_sibling {st₁ st₂ : Stmt} (h : Stmt.Sibling st₁ st₂) : Zk
   simp only [hc, hnbl, hm, hreg, hda, hdb]
   split_ifs <;> simp only [throw_bind', pure_bind]
 
-/-- **A setup at the sample of no unit, carried to another public file.** `Stmt.setupHidden` returned `st₁` at the
-public file `pf₁` and a sample `d₁` that proves no unit (`st₁.n = 0`), with no public inputs of the verifier's own. At
-a public file `pf₂` that `HmOut.loadPublic` loads for `st₁`'s circuit and `HmOut.checkPublic` passes, whose header
-names no `public_inputs`, and a sample `d₂` of no unit over `pf₂`'s population that has a canonical text, the setup
-returns a sibling of `st₁`, on which the shape check returns what it returns on `st₁`. -/
 theorem setupHidden_sibling {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d₁ d₂ : Json} {partition : Option Json} {program : Option ByteArray}
     {st₁ : Stmt} {pop : Public}
@@ -414,8 +363,6 @@ theorem setupHidden_sibling {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : 
   obtain ⟨st₂, h₂, hs⟩ := sibling_core (setupHidden_spec' h).parse h hn₁ hpop hkey hpub hd₂ hcan
   exact ⟨st₂, h₂, hs, shapeOk_sibling hs⟩
 
-/-- **A setup at the sample of no unit, carried to another public file's sample of no unit** (`emptySample`):
-`setupHidden_sibling` at the sample the verifier's executable prints for no unit of `pf₂`'s population. -/
 theorem setupHidden_noUnit {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d₁ : Json} {partition : Option Json} {program : Option ByteArray}
     {st₁ : Stmt} {pop : Public}

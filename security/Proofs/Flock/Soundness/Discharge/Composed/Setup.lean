@@ -18,20 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `coinedOf_setup`, from the refinement's three facts
-
-`coinedOf` fixes the pinned fields of `CoinedOfSetup` (the statement, `RANK_POINTS`, the mask words) and `CoinedOK`'s
-coin ties and padding columns by definition, and `coin_facts` gives the rank check, `W^r` and `β ≠ 0` from `Admits`.
-What is left reads `bodyOf`, the refinement, and is stated here as three named facts, the third in its own file at every sample:
-
-* `bodyOf_geometry` (proved): Flock ZK's level-0 padding geometry from the table's `PadOK`, the opened positions
-  distinct and in range by `padPos`.
-* `bodyOf_padsOnto` (proved): each rep's pads code reaches every value at its opened positions (`padsOnto_pow` at
-  `coinedOf`'s `Cp`, the inner code's padding monomials at the distinct nonzero opened points).
-* `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
-  values are the public ones (`Table.InnerHolds`; `innerOf`'s `lam`, `theta`, `vals`, `lanes`, `lig`).
--/
+/-! `coinedOf_setup` from the refinement's three facts: `bodyOf_geometry`, `bodyOf_padsOnto` and `innerOf_holds`. -/
 
 @[expose] public section
 
@@ -72,8 +59,6 @@ theorem padPos_lt {L t : ℕ} (qs : List ℕ) (h : t ≤ L) (i : Fin t) : padPos
   rw [List.getD_eq_getElem _ _ (by omega)]
   exact hlt _ (List.getElem_mem _)
 
-/-- **Flock ZK's level-0 padding geometry at the sample**: from the table's `PadOK` (`cols ≤ logLen ≤ 40`, `t ≤ 2^cols`)
-and `padPos`. -/
 theorem bodyOf_geometry_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
@@ -87,7 +72,6 @@ theorem bodyOf_geometry_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     le_trans hp.ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
   exact ⟨le_trans hcl hp.hd, hp.ht, le_rfl, fun c _ => ⟨padPos_injective _ ht2, padPos_lt _ ht2⟩⟩
 
-/-- `bodyOf_geometry` at the sample. -/
 theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
@@ -113,8 +97,6 @@ theorem pt_ne_zero {a : ℕ} (ha : a < 2 ^ 63) : fOf (⟨(a + 1).toUInt64, 0⟩ 
   rw [Nat.mod_eq_of_lt (by omega)] at h2
   omega
 
-/-- **The pads onto at the sample**: `padsOnto_pow` at the opened pads points `p + 1`, distinct and nonzero by `padPos`
-below `2^63`, `Q ≤ K_PAD`. -/
 theorem bodyOf_padsOnto_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto := by
@@ -127,15 +109,12 @@ theorem bodyOf_padsOnto_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     (fun k => fOf ⟨(padPos (max (min B.padN (2 ^ 63)) Zk.Q) Zk.Q (B.padQueries r c.rest) k + 1).toUInt64, 0⟩)
     (fun i j h => padPos_injective _ hQ (pt_injective (hlt i) (hlt j) h)) (fun k => pt_ne_zero (hlt k)) (by decide)
 
-/-- `bodyOf_padsOnto` at the sample. -/
 theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto :=
   bodyOf_padsOnto_of P _ _
 
-/-- **A `--zk` table of a setup has Lemma B's facts** (`coinedOf_setup` at any table `Tz` over `st`'s statement at its
-regions, `st` a `MaskSetup` that avoids the mask slot). -/
 theorem coinedOf_setup_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
     (M : MaskSetup st) (hdm : avoidsMask st = true) :
     (coinedOf P Tz st).S = Tz.S ∧ (coinedOf P Tz st).z.nC = Zk.RANK_POINTS ∧

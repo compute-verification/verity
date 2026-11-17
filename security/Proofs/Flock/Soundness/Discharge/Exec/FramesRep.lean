@@ -7,19 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The PIOP's rounds, as the frames they emit (for the decoder premise)
-
-The phases before Ligerito, in the form `Emitted` composes (`Emit.lean`): each succeeds on retained rounds only
-by emitting its frames, in order.
-* `zerocheck_emitted`: the statement binding and the zerocheck (`Flock.Piop`), `zcFrames`; its final values
-  are left pending for the lincheck's first round.
-* `lincheck_emitted`: the lincheck (§10), `lcFrames`.
-* `ringSwitch_emitted`: the opening's ring switch (`Flock.Opening`), `rsFrames`.
-
-`rep_rounds` composes them with `ligerito_frames`: when `verifyRep` accepts, every round of the rep's stream retained
-the bytes of its chunk of `repFrames`, one chunk per round.
--/
+/-! The PIOP's phases before Ligerito, as the frames they emit on retained rounds, composed into `rep_rounds`. -/
 
 @[expose] public section
 
@@ -169,9 +157,6 @@ def repFrames (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ)
   .dom domain :: (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck ++
     lcFrames st.fold.kLog p.lincheck ++ rsFrames n p.ringSwitches ++ ligFrames sch T p.cap p.ligerito)
 
-/-- **Every round of a verified rep's stream retained its frames** (`Flock.Transcript`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`). When `verifyRep` accepts
-rep `r` of table `i`, its stream and proof decode, and on a stream whose rounds all retained their bytes, round `j`
-retained the bytes of the `j`-th chunk of the rep's frames, and there is one chunk per round. -/
 theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes cap : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

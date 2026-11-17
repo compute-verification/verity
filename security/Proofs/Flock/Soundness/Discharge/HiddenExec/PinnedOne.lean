@@ -21,20 +21,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# A pinned statement's witness satisfies its statement without Δ's pinned copies
-
-`Hidden.sat_unpin` needs two facts of a witness of an accepted statement with pinned outputs: its forced-zero row
-carries 0, and at each pinned bit `unpin`'s `B` evaluates to 1. Both hold at the layout of `Hidden.unpin st`:
-- the forced-zero row (`Hm.zeroCol`, the first unit slot's row past its useful rows) is empty in `unpin`'s `A`
-  (`Layout.placed_zero`), and its own copies are `(zero, zero)` twice, so it carries 0 (`Pinned.zero_block'`);
-- a pinned bit is a linear computed row (`LinearBit`: of any net, its local `B` the slot's constant alone), so `unpin`'s
-  `B` there is the slot's constant (`placedB_linear`), whose row reads the pin in both statements (`placed_const`: no
-  pinned bit is a slot's constant), so it carries 1.
-
-So a witness of the accepted statement satisfies `unpin`'s (`sat_pinned`). Nothing here reads a row size, a `G` or a
-producer family.
--/
+/-! A pinned statement's witness satisfies its statement without Δ's pinned copies (`sat_pinned`). -/
 
 @[expose] public section
 
@@ -63,7 +50,6 @@ theorem pos_const_eq (C : CheckFacts st.c) {g n i : ℕ} (hn : n < st.c.nets.siz
   unfold Range.slot
   rw [(net_range L C hn).2.2.2]
 
-/-- **A linear row's `B` is its slot's constant alone.** -/
 theorem placedB_linear (C : CheckFacts st.c) {g n i o : ℕ} (hg : g < st.c.g) (hn : n < st.c.nets.size)
     (hi : i < st.c.perVu.getD n 0) (hlo : netIn st.c n ≤ o) (hhi : o < (netOf st.c n).constPos)
     (hB : ∀ j, entB st.c n o j = if j = (netOf st.c n).constPos then 1 else 0)
@@ -76,7 +62,6 @@ theorem placedB_linear (C : CheckFacts st.c) {g n i o : ℕ} (hg : g < st.c.g) (
   rw [L.delta_b, hr, rangesEntry_net L C hn hg hi ho, delta_comp_net L C hn hg hi hlo hhi, add_zero,
     ite_slot_eq (v := slotEntryB st (.net n) o) hW hc hB, pos_const_eq L C hn]
 
-/-- **No linear row is a slot's constant.** -/
 theorem linear_ne_const (C : CheckFacts st.c) {x : ℕ} (hx : LinearBit st.c x) {g n i : ℕ}
     (hn : n < st.c.nets.size) (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0) :
     x ≠ pos st.c g (code n i (netOf st.c n).constPos) := by
@@ -91,7 +76,6 @@ theorem linear_ne_const (C : CheckFacts st.c) {x : ℕ} (hx : LinearBit st.c x) 
 
 end placed
 
-/-- `Pinned.mulVec_single` at a row whose one entry is named by its index. -/
 theorem mulVec_single' {N : ℕ} (M : Matrix (Fin N) (Fin N) (ZMod 2)) {r : Fin N} {kv : ℕ}
     (h : ∀ j : Fin N, M r j = if j.val = kv then 1 else 0) (hk : kv < N) (v : Fin N → ZMod 2) :
     M.mulVec v r = v ⟨kv, hk⟩ :=
@@ -100,9 +84,6 @@ theorem mulVec_single' {N : ℕ} (M : Matrix (Fin N) (Fin N) (ZMod 2)) {r : Fin 
     · rw [if_pos hj, if_pos (Fin.ext hj)]
     · rw [if_neg hj, if_neg (fun e => hj (congrArg Fin.val e))])) v
 
-/-- **A witness of an accepted statement with pinned outputs satisfies its statement without Δ's pinned copies**
-(`Hidden.unpin`), and is 0 at every pinned bit, when every pinned bit is a linear row: at `unpin`'s layout `L` and its
-flat twin's unit facts `F`. -/
 theorem sat_pinnedZ {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
     (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default)
     (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
@@ -179,8 +160,6 @@ theorem sat_pinnedZ {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden
   exact (hz.1 o k).symm.trans ((congrArg₂ (· * ·) (Pinned.mulVec_single _ hAk _) (Pinned.mulVec_single _ hBk _)).trans
     ((congrArg₂ (· * ·) (hz.2.1 o) (hz.2.1 o)).trans (one_mul 1)))
 
-/-- **A witness of an accepted statement with pinned outputs satisfies its statement without Δ's pinned copies**
-(`sat_pinnedZ`). -/
 theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
     (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default)
     (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)

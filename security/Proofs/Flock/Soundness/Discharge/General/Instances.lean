@@ -11,19 +11,7 @@ import VCVio.Prelude.Core
 meta import Flock.Test.Wires
 meta import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
-/-!
-# The general form at the tails' shapes
-
-`Layout.scopeGenH` on `Flock.Test.Wires`'s circuits, by evaluation (`#guard`), against `Layout.scopeOkH`:
-
-* RMSNorm (`rms 0`): per-warp units, each returning its square to a stage whose result (the row's rsq) is wired back to
-  every unit's cut input. The units read two input groups, so `scopeOkH` refuses it and `scopeGenH` covers it, with the
-  outputs returned by the units or (`outNet := 1`) by the stage.
-* The GEMM accumulator chain (`gemm 4`): unit `i + 1`'s cut input is unit `i`'s accumulator, a stage reads the last.
-* A lookup slot between two stages (`lookup false`).
-* At a cycle through the wires (`rms 1`, `lookup true`) both refuse: `wiresAcyclic` is the general form's one refusal
-  on the wires.
--/
+/-! `Layout.scopeGenH` against `Layout.scopeOkH` on `Flock.Test.Wires`'s circuits, by evaluation; a cycle through the wires is the general form's one refusal on the wires. -/
 
 @[expose] public section
 

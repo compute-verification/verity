@@ -20,26 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Discharge.DecodeZL
 
-/-!
-# The decoder at `J` tables: statements
-
-`headline_tables_subset`'s open guarantee is `hdec : DecodesOnJ …`: at every sample, registration and table `j` of the
-plan, on every live outcome whose session directory verity-verify-proof accepts, table `j`'s reps run on the tapes decoded from
-its streams `(j, 0)`, `(j, 1)`, and the salted table's verdict accepts. This file states it at the tables verity-verify-proof
-sets up at `count > 1` (`accepts_tables`), with dec-zl's one-table decoder run on each table's two streams:
-
-* `partJson d count j`: part `j` of the sample `d`'s units, the subset sample `partSample` that `Stmt.setupTables` sets table
-  `j` up at.
-* `SetupJ I mPts j d`: under table `j`'s tags (`tagsAt`), setupH accepts the sample `d`, at a `fast100` schedule of at
-  least two levels and `mPts` link points. `SetupJ.spec` is its table, built as `SampleSetup.specAt` builds one.
-* `tableJ`, `planJ`: table `j` at the sample's JSON is `SetupJ.spec` at part `j` where verity-verify-proof sets that part up, and
-  the fallback `T₀` elsewhere; the plan has `I.count` tables.
-* `decJ`, `opnJ`: table `j`'s decoder (`wZL ++ (wOP ++ wLIG)` at its dimensions, claims and schedule) and openings
-  (`opnOf` at setupH's statement for part `j`, on proof files `2j` and `2j + 1`).
-* `TagsOkJ`, `RecordsLiveJ`, `SampleOkJ`: `TagsOk`, `RecordsLive` and `SampleOk` at `J` tables.
-* `DecodesOnJExec`: `DecodesOnJ` at `planJ`, for every fallback `T₀`, with the decoder `decJ`, single coins as field
-  elements, no final messages, table `j`'s cap from `root_B[j]` and its openings `opnJ`.
--/
+/-! Statements of the decoder premise at the tables verity-verify-proof sets up at `count > 1` (`DecodesOnJExec`). -/
 
 @[expose] public section
 
@@ -64,8 +45,7 @@ theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A table verity-verify-proof sets up**: under table `j`'s tags, `Stmt.setupH` accepts the sample `d`; the statement's
-`fast100` schedule has at least two levels (as `TabSpec` asks) and its link points are `mPts`. -/
+/-- A table verity-verify-proof sets up; its `fast100` schedule has at least two levels, as `TabSpec` asks. -/
 structure SetupJ (j : ℕ) (d : Json) where
   st : Flock.Stmt
   h : Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
@@ -82,8 +62,6 @@ structure SetupJ (j : ℕ) (d : Json) where
 
 variable {I mPts} (ht : I.tags.typed = false)
 
-/-- **A set-up table's table**: setupH's level-0 matrices and pin at the statement's regions (`Layout.model`), its
-schedule, and the link layout at `PT_LOCAL`, as `SampleSetup.specAt` at `regionsOf`. -/
 noncomputable def SetupJ.spec {j : ℕ} {d : Json} (x : SetupJ I mPts j d) : TabSpec mPts where
   S := (setupH_layout ((tagsAt_typed I.tags I.count j).trans ht) x.h).model (regionsOf x.st)
   m := x.m
@@ -109,8 +87,6 @@ part up, and the fallback `T₀` otherwise. -/
 noncomputable def tableJ (T₀ : TabSpec mPts) (d : Json) (j : ℕ) : TabSpec mPts :=
   if h : Nonempty (SetupJ I mPts j (partJson d I.count j)) then (Classical.choice h).spec ht else T₀
 
-/-- **The plan of `J` tables** at the challenger's samples `dj`: at sample `S`, `I.count` tables, table `j` the one
-verity-verify-proof sets up at part `j` of `dj S` (`tableJ`), for every registration. -/
 noncomputable def planJ (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) {Reg : Type} :
     Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j : Fin I.count => tableJ ht T₀ (dj S) j.val
@@ -162,16 +138,11 @@ def RecordsLiveJ (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg →
           some s ∧ s.rounds.toList = o.reps j r
 
 variable (I mPts) in
-/-- **The challenger's sample at `S`, at `J` tables**: wherever setupH sets table `j` up at its part of `dj S`, it does so
-with `mPts` link points. -/
 def SampleOkJ (dj : Finset (Fin n) → Json) (S : Finset (Fin n)) : Prop :=
   ∀ j < I.count, ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
     (some (partJson (dj S) I.count j)) I.partition I.program = .ok st → st.mPts = mPts
 
-/-- **The decoder is right at `J` tables** (the decoder premise at `--session-tables J`): given the tags, `wr` the challenger's record
-and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables verity-verify-proof
-sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table's two streams, single coins as field
-elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/
+/-- The decoder premise at `--session-tables J`: `DecodesOnJ` at `planJ`, at any fallback `T₀`, with the decoder `decJ` on each table's two streams. -/
 def DecodesOnJExec : Prop :=
   ∀ {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ} (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json)
     {Reg : Type} (L : SamplingDesign n)

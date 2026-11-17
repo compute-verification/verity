@@ -3,18 +3,7 @@ module
 public import Flock.Desc
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
-/-!
-# What `Stmt.setupHidden` checked and produced, at any public inputs (`SpecP`)
-
-`Spec` is `Stmt.setupHidden`'s statement without the verifier's public inputs, where `HmIn.checkOwn` leaves no public
-input port (`checkOwn_none`) and `HmIn`'s public file, Δ and regions are `HmOut`'s. `SpecP` is the same walk at the
-verifier's own public input words `own`, any value: the circuit's public input ports `pi` (`HmIn.parse`), the public file
-`HmIn.loadPublic` reads and `HmIn.checkOwn` holds to `own`, Δ without the public leaves' copies (`HmIn.delta`), and
-`HmOut`'s regions followed by the public leaves' in regions (`HmIn.regions`).
-
-* `setupHidden_specP`: every statement `Stmt.setupHidden` accepts at `own` is its `SpecP`.
-* `SpecP.spec`: at `own = none`, `SpecP` is `Spec`.
--/
+/-! What `Stmt.setupHidden` checked and produced at the verifier's own public input words (`SpecP`), which is `Spec` without them (`SpecP.spec`). -/
 
 @[expose] public section
 
@@ -56,8 +45,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
   {draw partition : Option Json} {program own : Option ByteArray} {st : Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **What `Stmt.setupHidden` accepted at the verifier's public inputs `own`** is its `SpecP`, at the circuit's public
-input ports. -/
 theorem setupHidden_specP (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     ∃ pi, SpecP tags cf pf coins tables draw own pi st := by
   cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
@@ -92,14 +79,11 @@ theorem setupHidden_specP (h : Stmt.setupHidden tags cf pf coins tables draw par
       sigma := rfl
       hello := by assumption }⟩
 
-/-- At a flat statement's tags (`Tags.isTmpl`), the committed circuit is `HmOut.parse`'s (`Spec.parseF`). -/
 theorem SpecP.parseF {own : Option ByteArray} {pi : HmIn.Ports} (s : SpecP tags cf pf coins tables draw own pi st)
     (hi : tags.isTmpl = false) : HmOut.parse tags cf tables = .ok st.c := by
   have h := s.parse
   rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
 
-/-- **Without the verifier's public inputs, `SpecP` is `Spec`**: `HmIn.checkOwn` at `none` leaves no public input port,
-and with none `HmIn`'s public file, sample, Δ and regions are `HmOut`'s. -/
 theorem SpecP.spec {pi : HmIn.Ports} (h : SpecP tags cf pf coins tables draw none pi st) :
     Spec tags cf pf coins tables draw st := by
   obtain ⟨pop, hl, hown, hnone, hsome⟩ := h.pub

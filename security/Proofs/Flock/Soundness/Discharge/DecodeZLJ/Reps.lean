@@ -16,16 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 
-/-!
-# verity-verify-proof's acceptance at table `j`, rep by rep
-
-`accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. `Discharge/Exec`'s
-`accepts_verdict_hm96` and `accepts_rep_rounds` already speak of every table `j < sts.size`: table `j`'s streams
-`spec.tables[j]/rep r`, its proof files `2j + r`, its root `root_B[j]` and the session's shared link points.
-
-`planJ_get`, `tableJ_of`: table `j` of `planJ` is `tableJ` at part `j`, and wherever a `SetupJ` exists it is the
-`SetupJ.spec` of one with the same statement.
--/
+/-! verity-verify-proof's acceptance at table `j`, rep by rep (`accepts_reps_at`). -/
 
 @[expose] public section
 
@@ -37,10 +28,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **verity-verify-proof's acceptance, table by table and rep by rep**: the record's spec, tables and session, and at each
-table `j` its `fast100` schedule and, at the table's link claims, each rep's stream and decoded proof (file `2j + r`),
-its run on the stream's coins with the proof's messages, its stream's rounds retaining `repFrames`' chunks, and the
-salted verdict on the two runs at `capOfRoot` of `root_B[j]` and `opnOf` of proof files `2j`, `2j + 1`. -/
 theorem accepts_reps_at {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = false)
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord),
@@ -108,8 +95,6 @@ theorem planJ_length (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) (S : F
     (planJ ht T₀ dj S R).length = I.count :=
   List.length_ofFn
 
-/-- **Table `j` where verity-verify-proof sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
-the same statement. -/
 theorem tableJ_of {T₀ : TabSpec mPts} {d : Json} {j : ℕ} (x : SetupJ I mPts j (partJson d I.count j)) :
     ∃ y : SetupJ I mPts j (partJson d I.count j), y.st = x.st ∧ tableJ ht T₀ d j = y.spec ht := by
   refine ⟨Classical.choice ⟨x⟩, Except.ok.inj ((Classical.choice ⟨x⟩).h.symm.trans x.h), ?_⟩

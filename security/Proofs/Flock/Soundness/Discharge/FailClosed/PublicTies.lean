@@ -21,23 +21,13 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# What an accepted statement's public file is tied to (`flock_verify_public_ties`)
-
-Every statement `verity-verify-proof verify` sets up passed the check of its public file (`Flock.HmRow`):
-`HmRow.checkPublic` (`Exec.setupH_public`), with hidden outputs `HmOut.checkPublic` (`Hidden.Spec.checkPublic`). The
-check recomputes the frame-v3-sha512 trees natively; the circuit proves only the `hm96-sha512` leaves. `PublicTies`
-restates what it established as equalities, and `flock_verify_public_ties` states them of every statement an acceptance
-sets up, with or without `--zk` or `--registered F`, public or hidden outputs. No probability, no assumption.
--/
+/-! What an accepted statement's public file is tied to (`flock_verify_public_ties`): the check recomputes the frame-v3-sha512 trees natively, and the circuit proves only the `hm96-sha512` leaves. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
 open Flock Exec ZkExec Refine
-
-/-! ## The ties -/
 
 /-- The schema of input port `port`'s leaves: `hm96-sha512/row-seg/v1` (segmented), `…/row/v2` (v2), else `…/row/v1`. -/
 def rowSchema (port : Port) : String :=
@@ -94,8 +84,6 @@ structure PublicTies (hidden : Bool) (c : Circuit) (pub : Public) : Prop where
     pub.fv3Bytes "domain_ids" c.outPorts[j].1 = .ok dom ∧
       pub.fv3Bytes "roots" c.outPorts[j].1 = .ok (outRoot c pub (wordAt c j) c.outPorts[j].2 dom)
 
-/-! ## The checks establish them -/
-
 theorem bytes_of_not_bne {a b : ByteArray} (h : ¬ (a != b) = true) : a = b := by
   have hb : (a == b) = true := by simpa [bne] using h
   exact ByteArray.ext (beq_iff_eq.1 (hb : (a.data == b.data) = true))
@@ -107,8 +95,6 @@ theorem ok_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {x : V α} {a b : α} 
 theorem not_or_true {a b : Bool} (h : ¬ (a || b) = true) : ¬ a = true ∧ ¬ b = true := by
   cases a <;> cases b <;> simp_all
 
-/-- A loop over a list whose every step passes `P a s` and continues at `s + w a`: element `j` passed at the start plus
-the widths before it. -/
 theorem forIn_sum_each {α : Type} (f : α → ℕ → V (ForInStep ℕ)) (w : α → ℕ) (P : α → ℕ → Prop)
     (hf : ∀ a s y, f a s = .ok y → P a s ∧ y = .yield (s + w a)) :
     ∀ (L : List α) (s v : ℕ), forIn L s f = .ok v →
@@ -126,8 +112,6 @@ theorem forIn_sum_each {α : Type} (f : α → ℕ → V (ForInStep ℕ)) (w : �
         simpa [Nat.add_assoc] using this
 
 set_option maxHeartbeats 4000000 in
-/-- **The check of the public file establishes the ties**: `HmRow.checkPublic` with public outputs, `HmOut.checkPublic`
-with hidden ones. Both walk the same input loop; only `HmRow`'s has the output loop. -/
 theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
     (h : hidden = false ∧ HmRow.checkPublic c pub = .ok () ∨ hidden = true ∧ HmOut.checkPublic c pub = .ok ()) :
     PublicTies hidden c pub := by
@@ -200,13 +184,10 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
            simp only [Nat.zero_add, Array.getElem_toList] at this
            exact this) }
 
-/-! ## Every statement an acceptance sets up -/
-
 theorem tagsAt_hiddenOutputs (tags : Tags) (count j : ℕ) :
     (tagsAt tags count j).hiddenOutputs = tags.hiddenOutputs := by
   unfold tagsAt; split_ifs <;> rfl
 
-/-- Every statement `setupOf` sets up is tied to its public file. -/
 theorem ties_of_setupOf {I : Inputs} {record : String} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf I record = .ok (spec, sts)) :
     0 < sts.size ∧ ∀ (j : ℕ) (hj : j < sts.size), PublicTies I.tags.hiddenOutputs sts[j].c sts[j].pub := by

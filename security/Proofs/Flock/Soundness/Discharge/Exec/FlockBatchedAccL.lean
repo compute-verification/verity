@@ -6,28 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The batched Flock audit with the expected-time extractor (DESIGN.md §3)
-
-`FlockBatched.lean` with the extractor of expected-time collision resistance: each sampled proof block's
-table is extracted from `k` reruns of everything after `Commit` in which the session accepts, so an
-extraction costs `1 + k` runs in expectation whatever the acceptance probability `ε`. Its knowledge
-bound is relative to `ε` (`joint_le_accBL`): `ε·Pr[fails] ≤ a + r·ε`, with `a = ε_c⁻ + √(k·adv₀L)`
-and `r = N₀/(ek) < 1`. So at a incorrect sampled proof block
-$$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\varepsilon+
-\varepsilon\Pr[\text{link}],\qquad\varepsilon\le\frac{a+\varepsilon\Pr[\text{link}]}{1-r}.$$
-
-**The analysis** (`analysisBEL`) carries that inequality as its `cover`:
-
-* `ks`: `a/(1 − r)` for the unit's table, a bound rather than a probability;
-* `link`: `ε·Pr[the extracted table has the link event]/(1 − r)`, with `LinkEvB` of
-  `FlockBatched.lean` on the table extracted from accepted reruns.
-
-At `k = cN₀/e`, `1/(1 − r) = c/(c−1)`, which is `2` at the record's `c = 2`. The knowledge term is
-its own bound averaged over the sample (`flock_batched_knowledgeSoundEL`), with no named assumption.
-The binding error stays named (`BindSound`), for the link theorem under expected-time collision
-resistance (`Assumptions.SHA512CRExpected`).
--/
+/-! The batched Flock audit with the expected-time extractor, whose knowledge term takes no named assumption while the binding error stays named (`BindSound`). -/
 
 @[expose] public section
 
@@ -36,7 +15,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Audit Audit.Partition
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 
@@ -115,8 +93,6 @@ noncomputable def ksAvgBEL (k : ℕ) (R : Reg) (τ : Cont L Reg (batchedSessionL
     ENNReal.ofReal (ksBoundAccBL execArith H E Lf (plan (L.draw ω) R) j k (batchStratL H E Lf plan (τ ω)) /
       (1 - rateB (plan (L.draw ω) R) j k))
 
-/-- **`ε_ks` with the expected-time extractor**: the analysis's knowledge term is its own bound,
-averaged over the sample. -/
 theorem flock_batched_knowledgeSoundEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}
@@ -128,8 +104,6 @@ theorem flock_batched_knowledgeSoundEL
     ENNReal.ofReal (ksBoundAccBL execArith H E Lf (plan (L.draw ω) R) j k (batchStratL H E Lf plan (τ ω)) /
       (1 - rateB (plan (L.draw ω) R) j k))) (tab (L.draw ω) R u)
 
-/-- **The batched Flock audit's count curve, with the expected-time extractor**:
-`δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_countEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}
@@ -143,8 +117,6 @@ theorem flock_batched_countEL
   extraction_audit_count (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
     (flock_batched_knowledgeSoundEL P H E Lf plan tab decode Xc hk hr hlow) hlink K σ
 
-/-- **Sampled proof blocks of the batched Flock audit, with the expected-time extractor**, are correct up to
-`ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_sampledEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}

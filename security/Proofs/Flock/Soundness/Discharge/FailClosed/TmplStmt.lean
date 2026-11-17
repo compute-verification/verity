@@ -19,16 +19,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.ParseStmt
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# A templated statement the check passes
-
-`ProvedScope.check` passes a templated circuit (`Circuit.tmpl`) on its description (`ProvedScope.scopeOkT`), never on the
-rows it unrolls to. Its statement circuit, the flat circuit its template unrolls to (`HmOut.unrolled`), is then one the
-hidden-output headlines cover at the unit's program (`unrolled_scope`): `HmOut.parseStmt` reads it, it carries no
-template, its unit is `Built`, it is in `Layout.scopeOkI`, and the wires feed neither the unit nor the outputs. The unit
-reads only port bits among its inputs because the template is ordered (`portReadsB_unroll`); the public file loads at it
-as at the committed circuit (`publicOf_unrolled`).
--/
+/-! A templated statement the check passes on its description (`ProvedScope.scopeOkT`) unrolls to a flat statement circuit the hidden-output headlines cover (`unrolled_scope`). -/
 
 @[expose] public section
 
@@ -49,7 +40,6 @@ private theorem foldl_mask (x : ℕ) : ∀ (l : List ℕ) (m : Array Bool), x < 
     · subst hxy; simp [hm]
     · simp [hxy, Ne.symm hxy]
 
-/-- **The port mask is `portBits`'s membership** below its size. -/
 theorem portMask_getD (gs : Array Group) {n x : ℕ} (hx : x < n) :
     (ProvedScope.portMask gs n).getD x false = decide (x ∈ portBits gs) := by
   unfold ProvedScope.portMask
@@ -76,9 +66,6 @@ private theorem portSpan_mem {t : Tmpl} {c : ℕ} (h : t.portSpan c (c + 1) = tr
   rw [← Array.foldl_toList, foldl_add_eq_sum, Nat.zero_add] at this
   omega
 
-/-- **An ordered template's unrolled net reads, among its input columns, only port bits** (`Layout.portReadsB`), checked
-on the description (`Tmpl.ordered`): every logical row past the input rows reads input columns only at port bits
-(`TmplOrder.rows_good`). -/
 theorem portReadsB_unroll {t : Tmpl} {n : Net} (ho : t.ordered = true) (h : Tmpl.unroll t = .ok n)
     (hlog : n.unitLog ≤ 32) : Layout.portReadsB n = true := by
   unfold Tmpl.unroll at h
@@ -104,7 +91,6 @@ theorem portReadsB_unroll {t : Tmpl} {n : Net} (ho : t.ordered = true) (h : Tmpl
   · omega
   · exact portSpan_mem (hp hxn)
 
-/-- The public file loads at a circuit unrolled as at the circuit: `publicOf` reads neither its nets nor its template. -/
 theorem publicOf_unrolled (t : Tags) (c : Circuit) (f : ByteArray) :
     ProvedScope.publicOf t (HmOut.unrolled c) f = ProvedScope.publicOf t c f := by
   unfold HmOut.unrolled
@@ -114,10 +100,6 @@ theorem publicOf_unrolled (t : Tags) (c : Circuit) (f : ByteArray) :
     · rfl
   · rfl
 
-/-- **A templated circuit the check parses, unrolled**: only at hidden outputs and a templated statement's tags; its
-unit is `Tmpl.unroll`'s net, which reads the template's input groups, has the root's columns' size and, ordered, reads
-only port bits among its inputs; it returns the outputs where the committed circuit does, and its rows are the committed
-circuit's. -/
 theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit} {tu : TmplUnit}
     (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c) (ht : c.tmpl = some tu) :
     t.hiddenOutputs = true ∧ t.isTmpl = true ∧ HmOut.parseTmpl t cf tables = .ok c ∧
@@ -159,10 +141,6 @@ theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArr
   rw [hu] at hlog ⊢
   exact portReadsB_unroll ho hun hlog
 
-/-- **A templated circuit the check passes, unrolled, is a statement the hidden-output headlines cover**: the check's
-form (hidden outputs, `--zk`, at most one table) and a templated statement's
-tags; `HmOut.parseStmt` reads the statement circuit, which carries no template, has a `Built` unit, is in
-`Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs. -/
 theorem unrolled_scope {t : Tags} {zk : Bool} {count : ℕ} {cf : ByteArray} {tables : List (String × ByteArray)}
     {c : Circuit} {tu : TmplUnit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c)
     (ht : c.tmpl = some tu) (hs : ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = true) :

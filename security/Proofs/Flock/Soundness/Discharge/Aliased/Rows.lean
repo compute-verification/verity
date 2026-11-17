@@ -12,15 +12,7 @@ import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.SparseRows
 import VCVio.Prelude.Core
 
-/-!
-# The unit net's rows at its input port bits and past its useful rows
-
-Two facts about the unit net that the forced-zero rows and the input copies read, from the checks that built it:
-- `parse_rows`: a net `Net.parse` read holds exactly its `useful` rows, so every row past them is empty. `Net.ofRows`
-  checks nothing past them; the parser reads exactly `useful` row lines.
-- `portBits_nodup`, `port_self`: a built net's input port bits are distinct columns (its groups ascend, `Net.inputsOk`,
-  and each group's ports fit its words), and each is a self row `[x]·[x]` (`Net.inputsOk`).
--/
+/-! The unit net's rows at its input port bits and past its useful rows, from the checks that built it. -/
 
 @[expose] public section
 
@@ -28,9 +20,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Aliased
 
-/-! ## Rows past `useful` -/
-
-/-- A `for` loop in `Except` that pushes one entry to each of two arrays per step pushes one per item. -/
 theorem forIn_push_size {α γ : Type} {f : γ → Array α × Array α → Except String (ForInStep (Array α × Array α))}
     (hf : ∀ i b s, f i b = .ok s → ∃ x y, s = .yield (b.1.push x, b.2.push y)) :
     ∀ (l : List γ) b v, forIn l b f = .ok v → v.1.size = b.1.size + l.length ∧ v.2.size = b.2.size + l.length
@@ -43,8 +32,6 @@ theorem forIn_push_size {α γ : Type} {f : γ → Array α × Array α → Exce
     simp only [Array.size_push, List.length_cons] at this ⊢
     omega
 
-/-- **A net `Net.parse` read holds exactly its useful rows**: it reads one row line per useful row, so its `A` and `B`
-have `useful` rows and every row past them is empty. -/
 theorem parse_rows {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     net.a.rows = net.useful ∧ net.b.rows = net.useful := by
   unfold Net.parse at h
@@ -76,8 +63,6 @@ theorem parse_rows {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   rw [ofRows_rows ha, ofRows_rows hb, hu]
   omega
 
-/-! ## Input port bits -/
-
 theorem portCols_one (g : Group) : (portCols #[g]).toList = ((forIn g.bits.toList (#[], g.col * WORD)
     (fun w s => pure (ForInStep.yield (s.1.push (s.2, w), s.2 + w))) : Id _).1.toList) := by
   unfold portCols
@@ -97,7 +82,6 @@ theorem inner_bits : ∀ (L : List ℕ) (a : ℕ),
     rw [inner_append L (#[].push (a, w)), List.flatMap_append, inner_bits L (a + w), List.sum_cons]
     simp [List.range'_append_1]
 
-/-- A net's input port bits are each group's first `Σ bits` columns. -/
 theorem portBits_eq (gs : Array Group) :
     portBits gs = gs.toList.flatMap fun g => List.range' (g.col * WORD) g.bits.toList.sum := by
   unfold portBits
@@ -116,8 +100,6 @@ theorem groups_asc {ig : Array Group} (h : ∀ i (hi : i + 1 < ig.size), ig[i].c
       omega
     · exact hk
 
-/-- **A built net's input port bits are distinct columns**: its groups ascend and are disjoint (`Net.inputsOk`), and each
-group's ports fit its words. -/
 theorem portBits_nodup {net : Net} (h : Built net) : (portBits net.inGroups).Nodup := by
   obtain ⟨_, _, _, ig, _, _, _, ho⟩ := h
   have hig := (Net.ofRows_ok ho).2.2.2.2.2.1
@@ -138,7 +120,6 @@ theorem portBits_nodup {net : Net} (h : Built net) : (portBits net.inGroups).Nod
   rw [List.mem_range'_1] at hx hx'
   omega
 
-/-- **A built net's input port bits are self rows**, `[x]·[x]` (`Net.inputsOk`). -/
 theorem port_self {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : ℕ} (hx : x ∈ portBits net.inGroups)
     (j : ℕ) : sparseEntry net.a x j = (if j = x then 1 else 0) ∧ sparseEntry net.b x j = if j = x then 1 else 0 := by
   obtain ⟨_, _, _, ig, _, ra, rb, ho⟩ := h
@@ -159,7 +140,6 @@ theorem port_self {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : �
   rw [sparseEntry_ofRows ha, sparseEntry_ofRows hb, ofRows_row ha hw, ofRows_row hb hw, hra, hrb]
   exact ⟨hself, hself⟩
 
-/-- **A built net's input port bits' rows are `[x]`**, in `A` and in `B` (`port_self`'s rows). -/
 theorem port_row {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : ℕ} (hx : x ∈ portBits net.inGroups) :
     net.a.row x = #[x] ∧ net.b.row x = #[x] := by
   obtain ⟨_, _, _, ig, _, ra, rb, ho⟩ := h
@@ -177,7 +157,6 @@ theorem port_row {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : �
   · rw [ofRows_row ha hw, hra]
   · rw [ofRows_row hb hw, hrb]
 
-/-- A port bit is bit `t` of some port `p`. -/
 theorem mem_portBits {gs : Array Group} {x : ℕ} (hx : x ∈ portBits gs) :
     ∃ p t, p < (portCols gs).size ∧ t < (portCols gs)[p]!.2 ∧ x = (portCols gs)[p]!.1 + t := by
   obtain ⟨q, hq, hqr⟩ := List.mem_flatMap.1 hx
