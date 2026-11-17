@@ -191,7 +191,8 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
-_NOT_YET = "`verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it."
+_UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
+              "combined it: no composite takes it.")
 #: each demo file's header
 HEADERS = {
     "onsite_full": (
@@ -202,11 +203,11 @@ HEADERS = {
     "onsite_compute": (
         "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory attester.", _NOT_YET),
+        "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
         "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory attester.", _NOT_YET),
+        "its memory attester.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -305,7 +306,10 @@ class Piece:
     ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
     binding left unbound starts the party it reaches on its own machine, under a key and coins made for the run, in a
     development run (`coins_on`), and takes none of its other bindings; one that ``follows`` a listed component's piece
-    of the same party is unbound exactly when that piece is, since its attester signs under that one's key."""
+    of the same party is unbound exactly when that piece is, since its attester signs under that one's key. The
+    workload's piece names the runner's verbs it stands for (``verbs``, `RUNNER`'s ``served_verdicts.sh VERB``, in the
+    order its main path runs them) and what they write that the other pieces read (``writes``: under the serve dir,
+    ``D/``, or the public record, ``OUT/``); `live` still runs the runner whole (`served_window`)."""
 
     component: str
     party: str
@@ -319,6 +323,8 @@ class Piece:
     session: Session | None = None
     development: str = ""
     follows: str = ""
+    verbs: tuple[str, ...] = ()
+    writes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -365,7 +371,8 @@ class Piece:
         what it raises; a protocol whose halves aren't all in this tree is ``absent``, by module."""
         out = {"component": self.component, "runs": self.runs, "what": self.what, "scripts": list(self.scripts),
                "reaches": self.reaches or self.party, "missing": self.missing(),
-               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings)}
+               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings),
+               **({"verbs": list(self.verbs), "writes": list(self.writes)} if self.verbs else {})}
         if self.session is None:
             return out
         s, machine = self.session, {p["name"]: p["machine"] for p in cfg["party"]}[self.party]
@@ -493,7 +500,10 @@ def _certifier_piece(cfg, params, bound):
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
+              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve,
+              verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
+              writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
+                      "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
