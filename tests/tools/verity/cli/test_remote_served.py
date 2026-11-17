@@ -26,6 +26,10 @@ T = sys.modules["served_table"]
 PP = SP.IDS["pearl-plus"]
 KEY = "0" * 128
 BINDINGS = {"challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}}}
+#: every binding the challenger writes (`served_table.STARTS`), so a run that gives them doesn't start it
+STARTED = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "lane-1", "main-file": "main.txt"},
+                          "sampled-proofs": {"loopback": "loopback-host", "main-file": "main.txt"}}}
+STARTED_HOOKS = {"PEARLC_CHALLENGER_LANE": "lane-1", "MAIN_FILE": "main.txt"}
 LOCAL = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "",
          "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
 PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
@@ -69,7 +73,7 @@ def remote(tmp: Path, params: dict, **workload) -> Path:
 
 
 def test_a_dry_run_resolves_every_party_of_remote(tmp_path, capsys):
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path))
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, STARTED))
     cfg = R.load(CONFIG, REG)
     assert rc == 0 and "no-party" not in err, err
     assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
@@ -114,12 +118,12 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(ONSITE_UNBOUND), err
     assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
     assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
-    tables = json.loads(json.dumps(BINDINGS))
+    tables = json.loads(json.dumps(STARTED))
     for key in ONSITE_UNBOUND:
         p, c, k = key.split(".")
         tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
-    assert rc == 0 and hooks_of(got) == PEARLPLUS | {"PRODUCT": "onsite"}, err
+    assert rc == 0 and hooks_of(got) == PEARLPLUS | STARTED_HOOKS | {"PRODUCT": "onsite"}, err
     assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
 
 
@@ -145,7 +149,7 @@ def test_the_runners_variables_under_remote_are_pearl_pluss():
 
 
 def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload_disagrees(tmp_path, capsys):
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"class": "4,27,2"},
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, STARTED), config=remote(tmp_path, {"class": "4,27,2"},
                                                                                    **{"window-steps": 2}))
     assert rc == 0, err
     assert {k: hooks_of(got).get(k) for k in ("V3C_CLASS", "CLASSES")} == {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
@@ -163,7 +167,8 @@ def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
     assert "PEARLPLUS_TIE_UNIFORM" not in T.variables(R.load(CONFIG, REG), BINDINGS)
     assert R.load(CONFIG, REG)["params"][PP] == {"tie-uniform": False}
     for asked, want in ((True, "1"), (False, None)):
-        rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"tie-uniform": asked}))
+        rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, STARTED),
+                           config=remote(tmp_path, {"tie-uniform": asked}))
         assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
     rc, _, err = dry(capsys, config=remote(tmp_path, {"tie-uniform": 1}))
     assert rc == 2 and "refused params: tie-uniform is true or false" in err
@@ -344,13 +349,16 @@ def test_every_declared_component_has_its_records_row():
 def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, capsys):
     state = tmp_path / "state"
     written(state / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
-    rc = R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--state", str(state)], REG)
+    rc = R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--bindings", bindings(tmp_path, STARTED), "--state",
+                     str(state)], REG)
     out = capsys.readouterr()
     lines = said(out.out, "VERDICT")
     assert len(lines) == 1, out
     assert (rc, lines[0]["product"], lines[0]["verdict"], lines[0]["block"]) == (0, T.REMOTE, "accept", 3)
-    assert lines[0]["coins"] == "simulated"
-    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
+    cfg = R.load(CONFIG, REG)
+    gate = {p["name"]: p["machine"] for p in cfg["party"]}[T.CHALLENGER]
+    assert lines[0]["coins"] == T.coins_of(cfg)
+    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: gate, "pearl-plus": gate}
 
 
 def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
@@ -360,7 +368,8 @@ def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_p
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
                          ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},
-                          {spot: at[T.CHALLENGER], "pearl-plus": at[T.CHALLENGER]})):
+                          {spot: at[T.CHALLENGER], "pearl-plus": at[T.CHALLENGER]}),
+                         (STARTED, {spot: at[T.CHALLENGER], "pearl-plus": at[T.CHALLENGER]})):
         (tmp_path / T.BINDINGS).write_text(json.dumps(tables))
         got = T.remote_check(cfg, tmp_path)
         assert got["coins_on"] == want
