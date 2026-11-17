@@ -43,7 +43,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## PoUW
 
-- `llama31-8b-1gpu-pouw-h1`: H1 with fx1 on the eager exact-int8 engine, against that engine without PoUW.
 - `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.

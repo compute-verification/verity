@@ -46,9 +46,8 @@ class Preset:
         return asdict(self)
 
 
-#: Engine precisions an arm may name (`engine.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
-#: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
-PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: Engine precisions an arm may name (`engine.engine_args`)
+PRECISIONS = ("bfloat16", "fp8")
 #: The keys a preset's `engine_settings` may set: those `engine.engine_args` reads, and the two `served` sets from the
 #: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
 ENGINE_SETTINGS = (

@@ -67,17 +67,6 @@ experimental arm's call check on the installed run is the arm's own gate. Pearl-
 no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol-served` has `"none"`). The table is part of the resolved spec
 and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
 
-The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
-exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
-(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. The harness
-builds it through `verity_vllm.LLM`'s `protocols` with only H1's public parameters, which fills the engine's model runner
-and in-process coins after the build, and gives each run its own window with `reinstall`: its `steps` (S) the run's step
-bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
-coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
-before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
-arm's own gate is every window static, every served call passing the credit gate and every request entered
-(`llama31-8b-1gpu-pouw-h1`).
-
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
 arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled-full`). Its control is the built-in
