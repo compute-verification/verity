@@ -54,7 +54,7 @@ def _design(design: str, params: Mapping[str, Any]) -> None:
 def _work_design(design: str, params: Mapping[str, Any]) -> None:
     _design(design, params)
     if design.partition(":")[0] != "work":
-        raise Refused("law", f"the certifier's output tie is proved whole only beside a streamed work sample (a5's "
+        raise Refused("law", f"the network attester's output tie is proved whole only beside a streamed work sample (a5's "
                              f"output-class-needs-a-streamed-work-draw): work:K, not {design}")
 
 

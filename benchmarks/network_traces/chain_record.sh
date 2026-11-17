@@ -143,7 +143,7 @@ CR_PATH=${CR_PATH:-warden}
 [ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the network attester path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
 [ -z "$PROXY" ] || { log "chain: the network attester path reads no certifier rehearsal's run (its records through" \
-  "the older certifier's proxy), and ${PROXY#$G/} is one's"; exit 3; }
+  "the older network attester's proxy), and ${PROXY#$G/} is one's"; exit 3; }
 if [ -n "${CR_WARDEN_RUN:-}" ]; then NETWORK_CERTIFIER=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 else NETWORK_CERTIFIER=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); NETWORK_CERTIFIER=${NETWORK_CERTIFIER%/witness}; fi
 [ -n "$NETWORK_CERTIFIER" ] || { log "chain: the network attester path: no network attester run (a certified.jsonl) in $CR_GATES"; exit 3; }

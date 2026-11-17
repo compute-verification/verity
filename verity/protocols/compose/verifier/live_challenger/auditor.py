@@ -1215,7 +1215,7 @@ def coin_ports(host: Host, peer: str) -> range:
             if PORTS.start <= lo <= hi < PORTS.stop:
                 return range(lo, hi + 1)
     raise Refused(f"--peer {peer!r} has no certifier coin link: a window's coins reach its peer only through the link of "
-                  f"the certifier on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
+                  f"the network attester on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
                   f"`{peer} LO-HI`, within {PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
 
 
