@@ -272,7 +272,7 @@ def test_the_pieces_attester_row_is_the_period_checks_accept_and_composes_into_t
     (window,) = json.loads(seen["evidence.json"])["windows"]
     assert sorted(signed) == ["records", "rows"] and signed["records"] == window["certificates"]
     assert (len(signed["records"]), len(signed["rows"]), len(window["registrations"])) == (3, 2, 2)
-    assert all(sorted(c) == sorted(SP.CERTIFICATE_KEYS) for c in signed["records"] + signed["rows"])
+    assert all(sorted(c) == sorted(SP.ATTESTATION_KEYS) for c in signed["records"] + signed["rows"])
     assert signed["rows"] == [{"link": r["link"], "direction": r["direction"], "window": r["window"],
                                "key_id": r["certificate"]["key"], "digest": r["certificate"]["digest"],
                                "signature": r["certificate"]["signature"]} for r in window["registrations"]]
@@ -535,7 +535,7 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_missing_not
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
 
 
-def test_the_case_is_cut_from_the_hold_before_the_guard_and_only_its_certificates_are_released(tmp_path, network_attester):
+def test_the_case_is_cut_from_the_hold_before_the_guard_and_only_its_attestations_are_released(tmp_path, network_attester):
     """A case's evidence and params are witness: `write_case` takes the hold's period files to the private case before
     the leak guard reads the hold, so the guard is never asked to release one, and what it releases of them is the
     attestations' own fields. An attestation holding a piece of the run's witness (here a salt of its cells.salts as
