@@ -76,7 +76,10 @@ tr = vectors.trusted(rng, digest, record, held, roots, ran=ran)
 say("the run's record registers", len(ran))
 table, priced, missing = IO.table_of([f for f, _ in circuit.templates])
 say("table", len(table), "priced", sorted(priced), "missing", missing)
-limits = {"gamma": 10**16, "alpha": [338_992_160, 11_044_318_495_127]}
+import os
+limits = {"gamma": int(os.environ.get("GAMMA", 10**16)),
+          "alpha": [int(os.environ.get("ALPHA_NUM", 338_992_160)), int(os.environ.get("ALPHA_DEN", 11_044_318_495_127))]}
+say("rate limits", limits)
 count = {"table": table, "c": 11_044_318_495_127, "k": 338_992_160, "n": 4}
 case, _ = script.served_case(text, record, tr["log"], limits, count)
 (out / "pop.case.json").write_text(json.dumps(case))
