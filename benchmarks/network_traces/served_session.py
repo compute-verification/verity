@@ -615,7 +615,7 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
             "--challenger-key", str(key), "--gate-key", str(a.key)]
 
 
-def certified_io(fetch: Path) -> tuple[dict, dict]:
+def attested_io(fetch: Path) -> tuple[dict, dict]:
     """The kept network attester run's deployment.json and attested I/O (`network_attester_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
@@ -634,7 +634,7 @@ def certified(a: argparse.Namespace) -> int:
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
-    dep, io = certified_io(fetch)
+    dep, io = attested_io(fetch)
     if not io["accepted"]:
         raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
     dest = a.keep / a.run / CERTIFIED
