@@ -52,7 +52,9 @@
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0.
 # The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
-# product's.
+# product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
+# --configuration: the memory cases' keys must be that committed configuration's pins, and with none set or committed
+# its composite is a development check (key_pin: run). No hand-off carries it.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -147,12 +149,14 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
+    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(DEVELOPMENT|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
+    67) say "COMPOSITE $x: composite.py ran no check (exit 67: a memory case trusts a key the configuration doesn't pin)"; bad=1 ;;
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done

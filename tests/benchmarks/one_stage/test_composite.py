@@ -119,6 +119,69 @@ def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path
     assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
 
 
+COMMITTED_HASH = "c0" * 64
+
+
+def pinned_tree(d: Path, pins: list[tuple[str, str, bytes]]) -> Path:
+    """A tree committing one configuration, of hash `COMMITTED_HASH`, whose pins give each (party, protocol) its key."""
+    (d / C.COMMITTED).parent.mkdir(parents=True)
+    (d / C.COMMITTED).write_text(f'"demos/c.toml" = "{COMMITTED_HASH}"\n')
+    (d / "demos").mkdir()
+    (d / "demos" / "c.toml").write_text("".join(
+        f'[[pin]]\nparty = "{party}"\nprotocol = "{protocol}"\nkey-sha512 = "{hashlib.sha512(k).hexdigest()}"\n'
+        for party, protocol, k in pins))
+    return d
+
+
+def keyed(tmp_path: Path, id: str, key: bytes, configuration: list[str]) -> tuple[int, Path]:
+    """Onsite composed from one case of `id` trusting `key`, under a tree whose configuration pins the device's key
+    ``05…05`` for every memory case's party and protocol."""
+    device = b"\x05" * 64
+    tree = pinned_tree(tmp_path / "tree", [(*pin, device) for pin in C.TRUSTING.values()])
+    case = put(tmp_path / "case", id, {"trusted": [key.hex()]}, b"\x01", b"{}", b"\x01" * 64, verdict="accept")
+    rc = C.main(["onsite", "--cases", str(case), *outs(tmp_path, tree=tree), *configuration,
+                 "--exe", lean(tmp_path, {"protocol": "verity/onsite/v0", "verdict": "accept"}, 0)])
+    return rc, tmp_path / "public" / "composite.json"
+
+
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsys, id):
+    """The case is written in the developer's private directory, so its list of trusted keys is the developer's: a key
+    the configuration doesn't pin is refused by name, before the check runs, and nothing is composed."""
+    rc, record = keyed(tmp_path, id, b"\x07" * 64, ["--configuration", COMMITTED_HASH])
+    party, protocol = C.TRUSTING[id]
+    assert rc == C.UNPINNED
+    assert capsys.readouterr().out.splitlines() == [
+        f"REFUSED {id}: its case trusts 1 key(s) demos/c.toml pins for no {party} {protocol} session, and only a pinned "
+        f"key's sessions count: sign them under the key demos/c.toml pins for {party}'s {protocol} sessions, or "
+        "compose with no --configuration, a development check (key_pin: run)"]
+    assert not record.exists() and not (tmp_path / "private").exists()
+
+
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_a_key_the_configuration_pins_is_trusted(tmp_path, id):
+    rc, record = keyed(tmp_path, id, b"\x05" * 64, ["--configuration", COMMITTED_HASH])
+    doc = json.loads(record.read_text())
+    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], "development" in doc) == (0, "accept", "configuration", False)
+    trusted, = (c["params"]["trusted"] for c in json.loads((tmp_path / "private" / "params.json").read_text())["components"])
+    assert trusted == [(b"\x05" * 64).hex()]
+
+
+@pytest.mark.parametrize("configuration", [[], ["--configuration", "d1" * 64]], ids=["none", "uncommitted"])
+def test_keys_no_committed_configuration_pins_are_the_run_s_and_claim_no_record(tmp_path, configuration):
+    """A key made for the run is pinned by no committed configuration: the composite runs, says ``key_pin: run`` and is
+    a development check, which `served_verdicts.composite_answer` takes as no record."""
+    rc, record = keyed(tmp_path, "verity/pous/p2/v4/run", b"\x07" * 64, configuration)
+    doc = json.loads(record.read_text())
+    assert (rc, doc["key_pin"], doc["development"]) == (0, "run", C.RUN_KEYS)
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[0] == f"DEVELOPMENT {C.RUN_KEYS}"
+
+
+def test_memory_cases_listing_no_key_need_no_pin(tmp_path):
+    assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path), "--configuration", COMMITTED_HASH]) == 0
+    assert "key_pin" not in json.loads((tmp_path / "public" / "composite.json").read_text())
+
+
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     put(tmp_path / "cases" / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     put(tmp_path / "cases" / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)

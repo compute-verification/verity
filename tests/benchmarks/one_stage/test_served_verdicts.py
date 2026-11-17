@@ -6545,6 +6545,44 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
         assert [x.name for x in (out / "composite").iterdir()] == [composed]
 
 
+ARGV_COMPOSITE = '''import os, sys
+from pathlib import Path
+Path(os.environ["ARGV_TO"]).write_text("\\n".join(sys.argv[1:]))
+print("REFUSED verity/wipe/v0: its case trusts 1 key(s)" if os.environ["EXIT"] == "67" else "DEVELOPMENT key_pin: run")
+sys.exit(int(os.environ["EXIT"]))
+'''
+
+
+@pytest.mark.parametrize("configuration, exit, said", [
+    (None, "0", "COMPOSITE remote: DEVELOPMENT key_pin: run"),
+    ("ab" * 64, "67", "COMPOSITE remote: REFUSED verity/wipe/v0: its case trusts 1 key(s)"),
+])
+def test_each_composite_gets_the_configuration_verity_run_read_and_says_what_it_refused(tmp_path, configuration, exit,
+                                                                                        said):
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    (tree / "verity" / "protocols" / "compose" / "verifier" / "remote").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(ARGV_COMPOSITE)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "ARGV_TO": str(tmp_path / "argv"),
+           "EXIT": exit, **({"VERITY_CONFIGURATION": configuration} if configuration else {})}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env=env, check=False, capture_output=True, text=True)
+    argv = (tmp_path / "argv").read_text().splitlines()
+    given = argv[argv.index("--configuration") + 1] if "--configuration" in argv else None
+    assert given == configuration
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert lines[0] == said
+    assert r.returncode == (0 if exit == "0" else 1)
+    if exit == "67":
+        assert lines[1] == ("COMPOSITE remote: composite.py ran no check (exit 67: a memory case trusts a key the "
+                            "configuration doesn't pin)")
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
