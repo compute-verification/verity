@@ -131,7 +131,7 @@ def run_shaper(
     """An honest sender's shaper driving a network attester over len(syncs) windows.
 
     Frame k is handed at its logical bucket h(k), or later if it wasn't ready by then. A late frame delays those behind
-    it, so the grid deviates from the Program's and the window is a violation. Returns the network certificates."""
+    it, so the grid deviates from the Program's and the window is a violation. Returns the network attestations."""
     params = attester.params
     handed = handing_buckets(frames, syncs, params.buckets)
     actual, last = [], 0

@@ -2,7 +2,7 @@
 
 The design: serve-openai adds each request to the engine at the first bucket boundary after its release (the network attester's
 release bucket a, so at origin + (a + 1) tau), in release order (a, then the network attester's ordinal). The engine's arrival order
-is then the certified release order, and the replay's order bits are 0.
+is then the attested release order, and the replay's order bits are 0.
 
 A request can't be added before the frontend has it ready (its recorded engine add), and in release order none goes
 before an earlier-released one. So the counterfactual add of the k-th request in release order is
@@ -22,7 +22,7 @@ A trace without a network attester takes the client's send bucket as its release
 frontend's arrival stamp plus `--add-lag-ms` as its ready time (those corpora don't record the engine's add).
 
 Usage: python3 -P admit_release.py [--replay PATH] [--add-lag-ms NAME=MS ...] --out DIR NAME=TRACE_DIR[:ORDER_DIR] ...
-(ORDER_DIR, the trace view whose ingress is the certified order for the replay's order bits; default the trace itself).
+(ORDER_DIR, the trace view whose ingress is the attested order for the replay's order bits; default the trace itself).
 """
 
 from __future__ import annotations
@@ -213,7 +213,7 @@ def simulate(rp: Any, engine: Any, requests: list[Any], order: list[int], ready:
 
 
 def as_trace(rp: Any, trace: Any, otrace: Any, order: list[int], sim: Sim) -> Any:
-    """The simulated run as a replay `Trace`: its requests in the order they reached the engine (`order`), the certified
+    """The simulated run as a replay `Trace`: its requests in the order they reached the engine (`order`), the attested
     ingress of `otrace`, and each step's output time as its release (egress at the engine step)."""
     inv = {i: j for j, i in enumerate(order)}
     steps = [rp.Step(rows=[(inv[i], s, n) for i, s, n in st.rows], new=[inv[i] for i in st.new],
