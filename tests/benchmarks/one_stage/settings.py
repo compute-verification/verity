@@ -1,6 +1,6 @@
 """The two-stage audit's environment variables, each declared once (`verity_config.settings`): the command that runs the
-guard's Lean model (`tests/benchmarks/two_stage/TwoGuard.lean`), which
-`tests/benchmarks/two_stage/guard_node.py --pytest` makes and `tests/benchmarks/two_stage/test_guard.py` reads
+guard's Lean model (`tests/benchmarks/one_stage/TwoGuard.lean`), which
+`tests/benchmarks/one_stage/guard_node.py --pytest` makes and `tests/benchmarks/one_stage/test_guard.py` reads
 (``of(__file__)``). `guard_node.py` reads the run's output directory from the shared ones.
 """
 from __future__ import annotations
