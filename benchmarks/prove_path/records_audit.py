@@ -691,11 +691,8 @@ def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dic
         v = e.get("value") if isinstance(e, Mapping) else None
         if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
             continue
-        try:
-            want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
-                              window=run).domain_id.hex()
-        except (KeyError, TypeError, ValueError):
-            continue
+        want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                          window=run).domain_id.hex()
         if e.get("domain") == want:
             out[v] = dict(e)
     return out
