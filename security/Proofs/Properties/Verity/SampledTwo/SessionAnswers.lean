@@ -4,37 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.SessionRecordRounds
 public import Proofs.Properties.Verity.SampledTwo.CutPrints
 public import Proofs.Properties.Verity.Sampled.MovesLayout
 
-/-!
-# A release put on a session's round answers the digest the session's record gives that round
-
-The session-round locator (`locOf`) puts an opening on round `k` of session `t` where it opens, of the `t`-th coin
-tree the log opens, the stream and the round the session's layout gives `k` (`slotStream`). `SessionRecordRounds`
-holds that round to be one the session's record gives. This module reads what the opening answered: the bytes the
-challenger opened the round after are the digest the session's record gives the round (`recordDigest`).
-
-* `recordDigest`: the digest a session's record gives a round. Of the stream `TREE_SESSION`, the SHA-512 of the
-  link's `root_F` and each table's `root_B` in table-name order (`Spot.Challenger.linkAfter` at `linkRootF` and
-  `linkRootB`); of another stream, the bytes of the round's `msg_sha512`, in the record's first stream so named.
-* `link_after`, `recordDigest_round`: a record `Spot.Challenger.sessionTreeReason` accepts has its tree's
-  `TREE_SESSION` round 0 opened after the link's digest in lowercase hex, and each round the record gives a stream
-  opened after that round's `msg_sha512`.
-* `MembersHeld.answers`: at the read. The release is an opening of session `t`'s tree, of the stream and round
-  `slotStream` gives (`MembersHeld.key`). The read gives the opening its line, whose `after` in lowercase hex is the
-  bytes the release answers (`Verity.Sampled.readLog_round`), and the line is the one the tree shows that round
-  opened after (`Verity.Sampled.opening_after`). The tree is the one session `t`'s record names
-  (`MembersHeld.roots`, `MembersHeld.idx`), and the members' check holds the record to that tree less its closing
-  round (`Verity.Sampled.MemberForm.memberTreeReason_none`).
-* `LocatedAnswers`, `located_answers`: the same of the log the check read, on a play the form accepts, with the
-  record the `t`-th of the second stage's sessions' records the check read (`sessionRecords`).
-* `LogAnswers`, `logAnswers_of`, `logAnswers_run`: the same of the play's own log, at any locator of `CoinMap` that
-  agrees with the session-round locator at the sessions' rounds (`LocatesSessions`), so at the run's (`runLocate`,
-  `locates_run`): the log the check read has the device's frames and answered bytes after releases that open no
-  coin tree (`InteriorLogged`).
-
-**Not established here**: that the digest the record gives a round is the SHA-512 of the message the session's
-verifier reads at that round (the session's verifier's check of each round's bytes, and the link's roots as the
-session's statement fixes them), and what the session's closing round answers.
--/
+/-! A release put on a session's round answers the digest the session's record gives that round; that the
+digest is the SHA-512 of the message the session's verifier reads there is not established here. -/
 
 @[expose] public section
 
@@ -44,24 +15,16 @@ open Lean (Json)
 open Verity.Sampled.Binding (Read)
 open Spot Spot.Challenger
 
-/-! ## The digest a session's record gives a round -/
-
-/-- The bytes a session's record names as its link's `root_F`. -/
 def linkRootF (record : Json) : Option ByteArray :=
   match getD (getD record "link") "root_f" with
   | .str s => (Flock.unhex s).toOption
   | _ => none
 
-/-- The tables' `root_B`s a session's record names in its link, each with its table's name. -/
 def linkRootB (record : Json) : Array (String × ByteArray) :=
   (entries (getD (getD record "link") "root_b")).filterMap fun (kv : String × Json) => match kv.2 with
     | .str s => (Flock.unhex s).toOption.map (kv.1, ·)
     | _ => none
 
-/-- **The digest a session's record gives round `k` of stream `stream`** of its coin tree: of `TREE_SESSION`, whose
-round 0 is the link points, the SHA-512 of the link's `root_F` and each table's `root_B` in table-name order
-(`Spot.Challenger.linkAfter`); of another stream, the bytes of round `k`'s `msg_sha512` in the record's first stream so
-named, as `Spot.Challenger.recordRounds` counts its rounds; none where the record names no such bytes. -/
 def recordDigest (record : Json) (stream : String) (k : ℕ) : Option ByteArray :=
   if stream == TREE_SESSION then
     (linkRootF record).map fun rootF => linkAfter rootF (linkRootB record)
@@ -78,9 +41,6 @@ def recordDigest (record : Json) (stream : String) (k : ℕ) : Option ByteArray 
       | none => none
     | _ => none
 
-/-- **A record `sessionTreeReason` accepts, at any tables, has its link points opened after its link's digest**: its
-coin tree's root is that of a tree of the log, and the log shows that tree's `TREE_SESSION` round 0 opened after the
-SHA-512, in lowercase hex, of the link's `root_F` and each table's `root_B` in table-name order. -/
 theorem link_after {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧ ∃ o rootF, t.opening TREE_SESSION 0 = some o ∧
@@ -122,17 +82,12 @@ theorem link_after {trees : Array LoggedTree} {tables : Array (String × Option 
     exact h1
   exact ⟨o, rootF, rfl, hF, hlinkOk.1.2⟩
 
-/-- The digest a record gives a round of `TREE_SESSION` is its link's. -/
 theorem recordDigest_link {record : Json} {rootF : ByteArray} (h : linkRootF record = some rootF) (k : ℕ) :
     recordDigest record TREE_SESSION k = some (linkAfter rootF (linkRootB record)) := by
   unfold recordDigest
   rw [ite_eq_left (beq_self_eq_true _), h]
   rfl
 
-/-- **A round a record gives a stream other than `TREE_SESSION` has the bytes of its `msg_sha512` for its digest**,
-where each round of each of the record's streams is one the tree `t` shows opened after that round's `msg_sha512`
-(as `Verity.Sampled.rounds_held` gives it of a record `sessionTreeReason` accepts): the tree shows the round opened,
-and the record's digest for it is what that opening's `after` names. -/
 theorem recordDigest_round {record : Json} {t : LoggedTree} {streams : Array Json}
     (hstr : getD record "streams" = .arr streams)
     (hall : ∀ s ∈ streams, ∀ name rounds, getD s "stream" = .str name → getD s "rounds" = .arr rounds →
@@ -167,7 +122,6 @@ theorem recordDigest_round {record : Json} {t : LoggedTree} {streams : Array Jso
   obtain rfl : x' = x := Option.some.inj (hfind'.symm.trans hfind)
   simp only [hrs, Array.getElem?_eq_getElem hk, Option.bind_some, hmsg']
 
-/-- A session's round past its first is of a stream other than `TREE_SESSION`. -/
 theorem slotStream_ne_session (tab : String) (R : ℕ) {j : ℕ} (h : j ≠ 0) :
     (slotStream tab R j).1 ≠ TREE_SESSION := by
   unfold slotStream
@@ -178,18 +132,12 @@ theorem slotStream_ne_session (tab : String) (R : ℕ) {j : ℕ} (h : j ≠ 0) :
   · rw [ite_eq_right hR]
     exact Verity.Sampled.repStream_ne_session tab 1
 
-/-! ## The read -/
-
 section Answers
 
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Release} {trees : Array LoggedTree}
   {records : Array (String × Array (String × Option ℕ) × Json × String)} {tree : ℕ → ℕ}
 
-/-- **A release of the read the session-round locator puts on a session's round answers the digest the session's
-record gives that round**: where the members' check accepts the sessions' records against the read and the locator
-puts a release on round `j` of session `t`, the bytes the release answers are the digest session `t`'s record gives
-the stream and round `slotStream` gives `j` (`recordDigest`). -/
 theorem MembersHeld.answers (H : MembersHeld lines trees log records tree)
     (hT : coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
@@ -207,7 +155,6 @@ theorem MembersHeld.answers (H : MembersHeld lines trees log records tree)
   obtain ⟨l, ρ, name, k, hl, hro, hkey, hnm, hkk⟩ := Verity.Sampled.readLog_round hT hR he hf
   obtain rfl : name = (slotStream (tab t) (repsOf (K t)) j).1 := Option.some.inj (hnm.symm.trans hname)
   obtain rfl : k = (slotStream (tab t) (repsOf (K t)) j).2 := hkk.trans hk
-  -- the tree the release opens is the one the session's record names
   obtain ⟨-, sp, hsp, -⟩ := hkey
   obtain ⟨u, hui, hur, -⟩ := heldTrees_getElem? hsp
   have hum : u ∈ trees := Array.mem_iff_getElem?.2 ⟨_, hui⟩
@@ -215,13 +162,11 @@ theorem MembersHeld.answers (H : MembersHeld lines trees log records tree)
   obtain ⟨ρx, hρx, hux⟩ := H.roots t x hx
   have eρ : ρ = ρx := Verity.Sampled.MemberForm.findIdx_fst (H.idx t ρx hux) hsp
   have hroot : getD (getD x.2.2.1 "coin_tree") "root" = Json.str u.root := by rw [hρx, hur, eρ]
-  -- the members' check holds the record to that tree less its closing round
   obtain ⟨u', hu', hroot', _, -, -, hS⟩ := Verity.Sampled.MemberForm.memberTreeReason_none
     ((Verity.Sampled.MemberForm.membersTreeReason_none hM).1 x (Array.mem_iff_getElem?.2 ⟨t, hx⟩))
   have eu : u' = u := List.inj_on_of_nodup_map hnd (Array.mem_toList_iff.2 hu') (Array.mem_toList_iff.2 hum)
     (Json.str.inj (hroot'.symm.trans hroot))
   rw [eu] at hS
-  -- the line the read gives the release: its `after` names the bytes the release answers
   obtain ⟨hor, -, d, hd, -, aft, haft, hun⟩ := hro
   rw [← hur] at hor
   by_cases h0 : j = 0
@@ -250,13 +195,6 @@ theorem MembersHeld.answers (H : MembersHeld lines trees log records tree)
 
 end Answers
 
-/-! ## The log the check read -/
-
-/-- **A release of the log the check read that is put on a session's round answers the digest the session's record
-gives that round**: on a play the form accepts, where the session-round locator puts a release of the interior
-challenger session's log, as the check read it, on round `k` of session `t`, the bytes the release answers are the
-digest the `t`-th of the sessions' records the check read gives the stream and round `slotStream` gives `k`
-(`sessionRecords`, `recordDigest`). -/
 def LocatedAnswers (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ a r b, l = a ++ r :: b →
     ∀ t k, k < SpotFlock.k₀ A.h t → locOf A tab a r.frame = some (SpotFlock.off A.h t + k) →
@@ -264,8 +202,6 @@ def LocatedAnswers (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
         recordDigest rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) k).1
           (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) k).2 = some r.answers
 
-/-- **`LocatedAnswers`, at the form's acceptance**: the accepted check ran the members' check on the lines the read
-reads, at the sessions' records (`membersAccepted`), so `MembersHeld.answers` applies. -/
 theorem located_answers (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) : LocatedAnswers A C tab := by
   intro o hacc l hl a r b hsplit t k hk hloc
   obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, hS⟩ :=
@@ -278,12 +214,6 @@ theorem located_answers (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz :
   rw [List.getElem?_map, Array.getElem?_toList, hx]
   rfl
 
-/-! ## The play's log -/
-
-/-- **A release of the play's log that is put on a session's round answers the digest the session's record gives
-that round**: on a play the form accepts whose log the check read is the device's (`Good`), where the locator `L`
-puts a release of the play's log on round `k` of session `t`, the bytes the release answers are the digest the
-`t`-th of the sessions' records the check read gives the stream and round `slotStream` gives `k`. -/
 def LogAnswers (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (L : CoinMap.Locate) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ t k, k < SpotFlock.k₀ A.h t →
     CoinMap.locAt L a rl.frame rl.answers = some (SpotFlock.off A.h t + k) →
@@ -291,17 +221,12 @@ def LogAnswers (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (L : CoinMa
         recordDigest rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) k).1
           (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) k).2 = some rl.answers
 
-/-- The log the check read has the frames and the answered bytes of the device's releases it reads, one for one. -/
 theorem answers_of_read {l l' : List Release} (hR : List.Forall₂ Read.Of (l.map Read.ofV2) l') :
     List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l' :=
   (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => by
     obtain ⟨hf, ha, -⟩ := h
     exact ⟨hf, ha⟩
 
-/-- **`LogAnswers`, from the log the check read** (`located_answers`), at a locator that agrees with the
-session-round locator at the sessions' rounds: the play's log is the read log after releases of no coin tree, the same
-frames and answered bytes one by one (`InteriorLogged`), so the release is on the round its like in the read log is on
-(`locOf_logged`) and answers the bytes its like answers. -/
 theorem logAnswers_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : CoinMap.Locate} {tab : ℕ → String}
     (hL : LocatesSessions A tab (CoinMap.locAt L)) (hsz : HeldSize) (hI : InteriorLogged C Good) :
     LogAnswers A C Good L tab := by
@@ -323,8 +248,6 @@ theorem logAnswers_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L :
   obtain ⟨rs, rc, hrs, hrc, hd⟩ := located_answers A C tab hsz o hacc _ hl la x lrest rfl t k hk e1
   exact ⟨rs, rc, hrs, hrc, hxa ▸ hd⟩
 
-/-- **`LogAnswers` at the run's locator** (`runLocate`, which agrees with the session-round locator at the sessions'
-rounds: `locates_run`). -/
 theorem logAnswers_run (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String)
     (hsz : HeldSize) (hI : InteriorLogged C Good) : LogAnswers A C Good (runLocate A Ls tab) tab :=
   logAnswers_of (locates_run A Ls tab) hsz hI

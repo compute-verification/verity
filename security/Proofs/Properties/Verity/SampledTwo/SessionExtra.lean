@@ -2,31 +2,8 @@ module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
-/-!
-# A session's coin tree opens no round its record doesn't give
-
-`Spot.Challenger.sessionTreeReason` ends by refusing a record whose tree shows opened a round the record does not give
-that round's stream (`Spot.Challenger.EXTRA_OPENING`, `Spot.Challenger.recordRounds`).
-`Verity.Sampled.Trees.round_held` reads the lines before that one: each round the record gives is a round the log shows
-opened. This module reads that last line, the converse:
-
-* `sessionTree_recorded`: where `sessionTreeReason` accepts a record, each round its tree shows opened is below the
-  rounds the record gives that round's stream. The streams' loop returns at its first reason, so where the check
-  returns none the loop returned none and the line after it ran (`forIn_ret_none`).
-* `memberTree_recorded`: where `memberTreeReason` accepts a member's session's record, the same of each round its tree
-  shows opened but the closing round, round 1 of the stream `TREE_SESSION`: the check holds the tree less its last
-  opening, and that opening closes the session (`mem_pop_or_back`).
-* `membersTree_recorded`, `membersTree_recorded_at`: the same of each session `membersTreeReason` accepts; and, where
-  the trees' roots are distinct (as `Verity.Sampled.Lines.trees_log` gives them), of any tree of the log whose root the
-  session's record names.
-
-So a release log the members' check accepts opens, of a session's tree, only its closing round and rounds the
-session's record gives.
-
-**Not established here**: that the session-round locator puts no release on a round the record gives nothing of (it
-needs each line that opens a round to be a round its tree shows opened, which no module this one imports proves), and
-how many rounds a session's record gives a stream (the session's verifier's).
--/
+/-! A session's coin tree opens no round its record doesn't give, but its closing round; that the
+session-round locator puts no release on a round the record gives nothing of is not established here. -/
 
 @[expose] public section
 
@@ -35,8 +12,6 @@ namespace Verity.SampledTwo.SessionCoins
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-- **A loop that returns at its first reason, then what follows it**: where none returns, no step of the loop
-returned and what follows the loop returns none. -/
 theorem forIn_ret_none {α γ σ : Type} {Q : Prop}
     {f : α → Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × σ))}
     {g : Option (Option γ) × σ → Id (Option γ)}
@@ -59,9 +34,6 @@ theorem forIn_ret_none {α γ σ : Type} {Q : Prop}
     rw [e] at h
     exact hq _ h
 
-/-- **A record `sessionTreeReason` accepts, at any tables, gives each round its tree's log shows opened**: its coin
-tree's root is that of a tree of the log, and each round that tree shows opened is below the rounds the record gives
-the round's stream (`Spot.Challenger.recordRounds`): the refusal `Spot.Challenger.EXTRA_OPENING`. -/
 theorem sessionTree_recorded {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
@@ -125,17 +97,12 @@ theorem sessionTree_recorded {trees : Array LoggedTree} {tables : Array (String 
       rw [hb] at hu
       cases hu
 
-/-- Each member of an array is a member of it less its last, or its last. -/
 theorem mem_pop_or_back {α : Type} {xs : Array α} {a c : α} (ha : a ∈ xs) (hc : xs.back? = some c) :
     a ∈ xs.pop ∨ a = c := by
   obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hc
   rw [Array.pop_push]
   exact Array.mem_push.1 ha
 
-/-- **A member's session's record `memberTreeReason` accepts gives each round its tree's log shows opened, the closing
-round aside**: its coin tree's root is that of a tree of the log, and each round that tree shows opened, but round 1 of
-the stream `TREE_SESSION`, is below the rounds the record gives the round's stream. The tree's last opening is the
-closing round, and the check holds the tree less it as `sessionTreeReason` holds one (`sessionTree_recorded`). -/
 theorem memberTree_recorded {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     {evidence : String} (h : memberTreeReason trees tables record evidence = none) :
     ∃ t ∈ trees, getD (getD record "coin_tree") "root" = Json.str t.root ∧
@@ -150,9 +117,6 @@ theorem memberTree_recorded {trees : Array LoggedTree} {tables : Array (String �
   · exact absurd (Prod.ext (Verity.Sampled.MemberForm.closes_fields hcl).1
       (Verity.Sampled.MemberForm.closes_fields hcl).2.1) hne
 
-/-- **Each session `membersTreeReason` accepts gives each round its tree's log shows opened, the closing round
-aside** (`memberTree_recorded`): session `j`'s record names the root of a tree of the log, and each round that tree
-shows opened, but round 1 of the stream `TREE_SESSION`, is below the rounds the record gives the round's stream. -/
 theorem membersTree_recorded {trees : Array LoggedTree} {lines : List String}
     {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (h : membersTreeReason trees lines records = none) {j : ℕ}
@@ -163,8 +127,6 @@ theorem membersTree_recorded {trees : Array LoggedTree} {lines : List String}
   memberTree_recorded
     ((Verity.Sampled.MemberForm.membersTreeReason_none h).1 x (Array.mem_iff_getElem?.2 ⟨j, hx⟩))
 
-/-- **The same of any tree of the log whose root the session's record names**, where the trees' roots are distinct
-(as `Verity.Sampled.Lines.trees_log` gives them): the tree is the one `membersTree_recorded` finds. -/
 theorem membersTree_recorded_at {trees : Array LoggedTree} {lines : List String}
     {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (h : membersTreeReason trees lines records = none) (hn : (trees.toList.map (·.root)).Nodup) {j : ℕ}

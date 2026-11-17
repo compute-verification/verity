@@ -5,36 +5,8 @@ public import Proofs.Properties.Verity.SampledTwo.CutFirst
 public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 
-/-!
-# The cut from the form's acceptance
-
-`CutFirst` and `CutOrder` take two facts about an accepted play as premises: its first stage's coin evidence is not
-`null` (`FirstCoinsShown`), and on two windows the ledger its second stage's coin evidence carries shows the two
-sessions in order (`OrderShown`). The two-stage form refuses a play without them, so both are theorems here.
-
-* **The first stage's coin evidence** (`firstShown`): the case's evidence is the form's parse of the bytes sent
-  (`evidence_of_caseOf`), and the form's evidence parses only with the first stage's coin evidence not `null`
-  (`evidence_coins`, over `evidenceOf`'s steps). So the first stage's coins are read under the parameters' key on
-  every accepted play (`firstReads`, by `CutFirst.firstReads_of_shown`).
-* **The two sessions' order** (`orderShown`): an accepted check on two windows read the second stage's ledger under the
-  parameters' key (`Spot.Challenger.checked`) and found on it the first window's session ended at a `seq` below the
-  `reserve` of the second window's session (`Steps.accepted_ordered`, read by `ordered_order` over `stagesOrdered`'s
-  steps). `checked` runs `verifyLedger` on the entries the
-  ledger's lines read as (`Ledger.checked_ok`), and each window `verifyLedger` returns is an `open` among those
-  entries, named by its root, whose `end`, where it has one, is an `end` among them of the open's session
-  (`Ledger.verifyLedger_inv`; `win_lines`). The reserve is the one the form finds among the same entries
-  (`reserve_line`). The parameters name the two windows (`executionPhasesOf_some`) and a challenger key (`keyOf_some`).
-
-The two windows the parameters name differ (`executionPhasesOf_ne`): the form refuses an interior audit on the boundary
-registration's window.
-
-`cutBound_accept` is then the cut with one premise left about the device: its history at each play printed the play's
-log in its ledger's order (`PrintsInOrder`), with `Wired` and `SignsPlay` as in `cutBound_order`. No theorem of this
-module proves `PrintsInOrder` of a device.
-
-As in `Cut`, at a history holding one play's signatures (`SignsPlay`) a genuine signature of an earlier period that the
-evidence carries is none the history signed, so it is the forger's, and the forger's term bounds nothing there.
--/
+/-! The cut from the form's acceptance (`cutBound_accept`), with one premise about the device,
+`PrintsInOrder`, which no theorem here proves; an earlier period's genuine signature is the forger's. -/
 
 @[expose] public section
 
@@ -44,9 +16,6 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open scoped ENNReal
 
-/-! ## The first stage's coin evidence -/
-
-/-- The two-stage case's evidence is the form's parse of bytes the prover sent. -/
 theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} (h : caseOf s = .ok (p, c, e)) :
     ∃ b, VStar.Recursive.SampledTwo.evidenceOf b = .ok e := by
@@ -65,7 +34,6 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
     exact ⟨_, by rw [← hpair]; exact he'⟩
   · cases hce
 
-/-- The form's evidence parses only with the first stage's coin evidence not `null`: `evidenceOf` refuses it. -/
 private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence}
     (h : VStar.Recursive.SampledTwo.evidenceOf b = .ok e) : e.coins ≠ Json.null := by
   replace h := (VStar.Recursive.SampledTwo.evidenceOf_ok h).1
@@ -100,24 +68,15 @@ private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.E
       · cases h
     · cases h
 
-/-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstCoinsShown`): the form's
-evidence parses only so. -/
 theorem firstShown (θ : ByteArray) : FirstCoinsShown θ := by
   unfold FirstCoinsShown
   intro s _ _ p c e h1
   obtain ⟨b, hb⟩ := evidence_of_caseOf h1
   exact evidence_coins hb
 
-/-- **The first stage's coins are read under the parameters' key on every accepted play** (`FirstReads`). -/
 theorem firstReads (θ : ByteArray) : FirstReads θ :=
   firstReads_of_shown θ (firstShown θ)
 
-/-! ## The two sessions' order -/
-
-/-- **Where `stagesOrdered` passed on two windows**, the two stages' copies of the ledger are lists of lines, the
-first a prefix of the second; the second passes `Spot.Challenger.checked` under the parameters' key; and on it the
-window opened at the first root has an `end` whose `seq` is below the `reserve` found for the session of the window
-opened at the second root. -/
 private theorem ordered_order {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     (h : VStar.Recursive.SampledTwo.stagesOrdered p e = .ok ())
     {k : Spot.Challenger.ChallengerKey} {label w₁ w₂ : String} (hk : p.audit.base.challenger = some (k, label))
@@ -159,7 +118,6 @@ theorem option_bind_ok {α β : Type} {o : Option α} {f : α → Option β} {b 
   | none => cases h
   | some a => exact ⟨a, rfl, h⟩
 
-/-- The two windows `executionPhasesOf` names are the boundary registration's and the interior audit's open roots. -/
 theorem executionPhasesOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (hp : paramsAt θ = .ok p)
     {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) :
     p.boundary.verifier.windowRoot = some w₁ ∧ p.audit.base.verifier.windowRoot = some w₂ := by
@@ -180,9 +138,6 @@ theorem executionPhasesOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.
       obtain ⟨rfl, rfl⟩ := hpair
       exact ⟨rfl, rfl⟩
 
-/-- **The two windows `executionPhasesOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
-form's parameters parse only where the interior audit's window is not the boundary registration's
-(`VStar.Recursive.SampledTwo.paramsOfJson_ok`, its refusal `ONE_WINDOW`). -/
 theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
   cases hp : paramsAt θ with
   | error err =>
@@ -196,8 +151,6 @@ theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : executio
     rw [h₁, h₂] at hne
     exact fun hw => hne (congrArg some hw)
 
-/-- **A window `verifyLedger` returns is an open among the entries it read, named by its root**, and its end, where
-it has one, is an end among them of the open's session (`Ledger.verifyLedger_inv`). -/
 theorem win_lines {es : Array LedgerEntry} {key : ChallengerKey} {wins : Array Win}
     {ms : Array Spot.Challenger.PeriodRecord} (h : verifyLedger es key = .ok (wins, ms)) {w : String} {W : Win}
     (hf : wins.find? (·.root == w) = some W) :
@@ -217,7 +170,6 @@ theorem win_lines {es : Array LedgerEntry} {key : ChallengerKey} {wins : Array W
     rw [hW] at h3
     exact ⟨h1, h2, h3⟩
 
-/-- **The reserve the form finds is a `reserve` among the ledger's entries**, of the session it sought. -/
 theorem reserve_line {second : Array Json} {sid : String} {r : LedgerEntry}
     (h : (second.filterMap ledgerEntry?).find? (fun l => l.kind == "reserve" && l.session == sid) = some r) :
     r ∈ Properties.Pouw.LiveSalt.entries (Json.arr second) ∧ r.kind = "reserve" ∧ r.session = sid := by
@@ -228,9 +180,6 @@ theorem reserve_line {second : Array Json} {sid : String} {r : LedgerEntry}
   obtain ⟨line, hline, hle⟩ := Array.mem_filterMap.1 hm
   exact List.mem_filterMap.2 ⟨line, Array.mem_toList_iff.2 hline, hle⟩
 
-/-- **An accepted play on two windows shows its two sessions' order** (`OrderShown`): the ledger its second stage's
-coin evidence carries holds an open of the first window, an `end` of that open's session, an open of the second window
-and a `reserve` of that open's session, the end's `seq` below the reserve's (module docstring). -/
 theorem orderShown (θ : ByteArray) : OrderShown θ := by
   unfold OrderShown
   intro s hθ ha p c e h1 w₁ w₂ hw hne
@@ -263,15 +212,8 @@ theorem orderShown (θ : ByteArray) : OrderShown θ := by
   exact ⟨W₁.opened, hmem _ ho₁, en, hmem _ hen₁, r, hrv', W₂.opened, hmem _ ho₂, hk₁, hr₁, hke, hse, hk₂, hroot₂,
     hkr, hsr, hlt⟩
 
-/-! ## The cut -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cut from the form's acceptance**: where the sampled verdict accepts only where the form does (`Wired`) and
-the device's history at each play printed the play's log in its ledger's order (`PrintsInOrder`) and signed what the
-play's signatures are on (`SignsPlay`), an accepted play whose logs the check didn't read, or read other than the
-device's, is at most as likely as the read finder's collision plus the forger's forgery (`terms`), over both sessions.
-`cutBound_order` with `FirstReads` and `OrderShown` from the form's acceptance (`firstReads`, `orderShown`). -/
 theorem cutBound_accept (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ)

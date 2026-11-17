@@ -4,21 +4,7 @@ public import Proofs.Properties.Verity.SampledTwo.Projection
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.KS
 
-/-!
-# The coupling at the two-stage form, assembled
-
-`coupling_of` proves `CouplingOf`: the projection's bound and the majority's give `CouplingTargetTwo` with the two
-bounds' sum as its `terms`. At each commitment and strategy whose claim fails on the vocabulary's transcript, the
-statement is the one the coupling is given and the prover is the frame's, on the tapes of the period's play.
-
-1. The projection's bound puts the sampled verdict under the frame's run accepting, plus `bound`.
-2. The run's accept over the tape and the run's coins is its accept over those and the extractor's coins.
-3. That splits on whether the extracted witness is in the session's relation: the half outside it is `PrBad`, and the
-   half inside it the majority's piece bounds by `bind`, where the vocabulary's transcript is the one the claim fails
-   on.
-
-The scope clause and the published `δ` clause are the coupling's hypotheses at the same statement and prover.
--/
+/-! The coupling at the two-stage form (`coupling_of`): the projection's bound plus the majority's. -/
 
 @[expose] public section
 
@@ -29,8 +15,6 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The coupling at one commitment and strategy, from the projection and the majority**: `CouplingTwoAt` at
-the two bounds' sum, at the frame's prover. -/
 theorem coupling_at (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} (x : Msg)
     (Fr : Frame V A x θ F c σ) (tr : Verity.Circuit.Trace (V.circuitOf θ F)) (bound bind : ℝ≥0∞)
@@ -75,8 +59,6 @@ theorem coupling_at (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     _ = ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x Fr.P) + (bound + bind) := by
         ring
 
-/-- **The coupling from the projection and the majority**: `CouplingOf` holds at every vocabulary, composite,
-session of record and committed files. -/
 theorem coupling_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) : CouplingOf V k A θ F := by
   intro x Fr tr bound bind hScope hProj hMaj hX hdelta c σ hI

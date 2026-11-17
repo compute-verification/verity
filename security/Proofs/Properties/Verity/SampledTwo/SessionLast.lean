@@ -2,34 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionMiddle
 
-/-!
-# A session's last round
-
-The last round of session `t`, round `SpotFlock.k₀ A.h t - 1`, is the round its verifier gives its verdict on. The
-session-round locator puts no release on it (`SessionCoins.locOf_ne_last`). The challenger closed the session's tree
-after the SHA-512 of the session's evidence (`Verity.Sampled.MemberForm.members_read`), and that closing is in the
-play's log before the round. This module reads the closing's bytes off the log before the round and shows they are
-the SHA-512 of the session's evidence.
-
-* `lastOpened`, `closeOf`: the bytes the last opening of a tree in a log answers, and those of the `t`-th tree the
-  log opens, in the order first opened.
-* `MembersHeld.closing`: at the numbering of the sessions' trees `MembersHeld` holds, session `t`'s tree has an
-  opening that answers the bytes its evidence's SHA-512 names in hex, with no opening of the tree after it.
-* `MembersHeld.close_before`: that opening is before every release the session-round locator puts on a round at or
-  past the session's last.
-* `MembersHeld.closeOf_logged`: `closeOf` reads those bytes off a log of the same frames and answered bytes, after
-  releases of no coin tree.
-* `evidenceAt`, `LogCloses`, `logCloses_of`: on a play the form accepts whose log the check read is the device's,
-  `closeOf` of the play's log before session `t`'s last round is the SHA-512 of the evidence of the `t`-th of the
-  statements' sessions.
-* `sessionMsgs_length`, `last_msg_of`: a session of `2 + 2 · repRounds` rounds reads a message at its last round.
-* `showsAt_session_last`: `Messages.ShowsAt` at a session's last round of the form's reading, with the digest
-  `closeOf` of the log before the round and the string the session's evidence.
-
-**Not established here**: `Messages.Explains` at a session's last round. The message there is the session's
-statement, its record's text and its proof files; the evidence gives back the record and the proof files, and the
-statement is the statements' round's. `RecordsCover` and `MsgsOfRecords` are hypotheses, as in `SessionMiddle.lean`.
--/
+/-! A session's last round: its closing in the log before it answers the SHA-512 of the session's evidence;
+`Messages.Explains` there is not established here. -/
 
 @[expose] public section
 
@@ -38,8 +12,6 @@ namespace Verity.SampledTwo.SessionCoins
 open Claims
 open Lean (Json)
 open Spot Spot.Challenger
-
-/-! ## Lists -/
 
 theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} (h : List.Forall₂ R l l') :
     ∀ y ∈ l', ∃ x ∈ l, R x y := by
@@ -54,18 +26,13 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} {l : List α
     · obtain ⟨x, hx, hR⟩ := ih y hy
       exact ⟨x, List.mem_cons_of_mem _ hx, hR⟩
 
-/-! ## The bytes a tree's last opening answers -/
-
 /-- **The bytes the last opening of tree `i` in a log answers**; none where the log doesn't open the tree. -/
 def lastOpened (i : ℕ) (p : List Release) : Option ByteArray :=
   ((p.filter fun r => openTree r.frame == some i).getLast?).map (·.answers)
 
-/-- **The bytes a session's closing answers, read off a log**: the bytes the last opening of the `t`-th tree the log
-opens, in the order first opened, answers. -/
 def closeOf (t : ℕ) (p : List Release) : Option ByteArray :=
   (treesOpened p)[t]?.bind fun i => lastOpened i p
 
-/-- The last opening of tree `i` in a log is an opening of it that no opening of it follows. -/
 theorem lastOpened_of {i : ℕ} (a : List Release) {c : Release} {b : List Release}
     (hc : openTree c.frame = some i) (hb : ∀ y ∈ b, openTree y.frame ≠ some i) :
     lastOpened i (a ++ c :: b) = some c.answers := by
@@ -80,7 +47,6 @@ theorem lastOpened_of {i : ℕ} (a : List Release) {c : Release} {b : List Relea
   rw [List.filter_append, hcb, List.getLast?_append, List.getLast?_singleton]
   rfl
 
-/-- A frame that is no opening of tree `i` opens another tree, or none. -/
 theorem openTree_ne {fr : Verity.Frame} {i : ℕ} (h : ∀ s n, fr ≠ .opening i s n) : openTree fr ≠ some i := by
   intro e
   cases fr with
@@ -90,19 +56,12 @@ theorem openTree_ne {fr : Verity.Frame} {i : ℕ} (h : ∀ s n, fr ≠ .opening 
     have hj : j = i := Option.some.inj e
     exact h s n (by rw [hj])
 
-/-! ## The read -/
-
 section Closing
 
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Release} {trees : Array LoggedTree}
   {records : Array (String × Array (String × Option ℕ) × Json × String)} {tree : ℕ → ℕ}
 
-/-- **A session's tree's last opening answers the bytes the session's evidence's SHA-512 names in hex**: where the
-members' check accepts the sessions' records against the read, session `t`'s tree, at the numbering `MembersHeld`
-holds, has an opening that answers those bytes, with no opening of the tree after it
-(`Verity.Sampled.MemberForm.members_read`, whose numbering is this one at each session: both are the place of the
-record's tree among the trees the lines hold). -/
 theorem MembersHeld.closing (H : MembersHeld lines trees log records tree)
     (hT : coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
@@ -118,11 +77,6 @@ theorem MembersHeld.closing (H : MembersHeld lines trees log records tree)
   rw [e] at hc hlast
   exact ⟨Lc, c, L₂, s, n, hlog, hc, hun, hlast⟩
 
-/-- **A session's closing is before every release put on a round at or past the session's last**: where an opening
-`c` of session `t`'s tree is in the read and the session-round locator puts the release `x` on a round at least
-session `t`'s last, at a session of at least two rounds, `c` is before `x`. The release `x` opens a later session's
-tree: no release is put on the last round itself (`locOf_ne_last`), and an earlier session's rounds are below it. An
-opening of a later session's tree has no opening of session `t`'s tree after it (`MembersHeld.before`). -/
 theorem MembersHeld.close_before (H : MembersHeld lines trees log records tree)
     (hT : coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) (A : Live₂) (tab : ℕ → String) {t : ℕ}
@@ -169,11 +123,6 @@ theorem MembersHeld.close_before (H : MembersHeld lines trees log records tree)
       have := H.before Lc c L₂ hc t ht st n hcf _ (by rw [hLc]; simp) t' ht' s cc hxf
       omega
 
-/-- **`closeOf` reads a session's closing's bytes off the device's log**: where the read is releases that end at an
-opening `c` of session `t`'s tree, then releases `mid`, none an opening of that tree, then any others, and a log is
-releases `q` of no coin tree and then releases of the same frames and answered bytes as those up to `mid`'s end,
-`closeOf t` of that log is the bytes `c` answers. The trees the log opens are the read's (`same_append_of_frames`),
-the sessions' first few in order (`MembersHeld.prefix`), so the `t`-th is session `t`'s. -/
 theorem MembersHeld.closeOf_logged (H : MembersHeld lines trees log records tree)
     (hT : coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {t : ℕ} (ht : t < records.size)
@@ -212,33 +161,18 @@ theorem MembersHeld.closeOf_logged (H : MembersHeld lines trees log records tree
 
 end Closing
 
-/-! ## The play's log -/
-
-/-- **The evidence of the `t`-th of the statements' sessions**, on the case of the play `o`: the bytes
-`Spot.OneStageZk.sessionEvidence` gives the session on the case's blobs, the statements' sessions in the order
-`sessionRecords` reads their records in. -/
 def evidenceAt (C : CaseOf) (o : Exchange) (t : ℕ) : Option ByteArray := do
   let k ← C o
   let e ← (VStar.Recursive.SampledTwo.evidenceOf k.evidence).toOption
   let s ← (e.statements.toList.flatMap (·.sessions.toList))[t]?
   (Spot.OneStageZk.sessionEvidence k.blobs s).toOption
 
-/-- **The log before a session's last round holds the session's closing**: on a play the form accepts whose log the
-check read is the device's (`Good`), at a template `t` whose session has at least two rounds, the `t`-th of the
-statements' sessions has evidence on the case, and `closeOf t` of the play's log before the session's last round is
-that evidence's SHA-512. -/
 def LogCloses (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (L : CoinMap.Locate) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ t, t < A.h.ms.length → 2 ≤ SpotFlock.k₀ A.h t →
     ∃ ev, evidenceAt C o t = some ev ∧
       closeOf t (Messages.logBefore L o (SpotFlock.off A.h t + (SpotFlock.k₀ A.h t - 1))).1 =
         some (Flock.Sha512.hash ev)
 
-/-- **`LogCloses`, from the read** (`MembersHeld.closing`), at a locator that agrees with the session-round locator
-at the sessions' rounds, where the check read a session record for each template (`RecordsCover`): the play's log is
-the read log after releases of no coin tree, the same frames and answered bytes one by one (`InteriorLogged`). The
-play's log before the round is the whole log, or ends before a release put on a round at or past the session's last,
-whose like in the read log the session's closing is before (`MembersHeld.close_before`); either way `closeOf` reads
-the closing's bytes off it (`MembersHeld.closeOf_logged`). -/
 theorem logCloses_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : CoinMap.Locate} {tab : ℕ → String}
     (hL : LocatesSessions A tab (CoinMap.locAt L)) (hsz : HeldSize) (hI : InteriorLogged C Good)
     (hcov : RecordsCover A C Good) : LogCloses A C Good L := by
@@ -294,17 +228,11 @@ theorem logCloses_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : 
     rw [hL₂]
     exact List.mem_append_left _ hw
 
-/-- **`LogCloses` at the run's locator** (`runLocate`, which agrees with the session-round locator at the sessions'
-rounds: `locates_run`). -/
 theorem logCloses_run (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String)
     (hsz : HeldSize) (hI : InteriorLogged C Good) (hcov : RecordsCover A C Good) :
     LogCloses A C Good (runLocate A Ls tab) :=
   logCloses_of (locates_run A Ls tab) hsz hI hcov
 
-/-! ## The last message -/
-
-/-- **A one-table session the masked verdict accepts reads `2 + 2 · repRounds` messages**: the link's, one a round
-of each of the two reps, and the last. -/
 theorem sessionMsgs_length {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
     {record : String} {proofs : Array ByteArray} {T : String} {ms : List Msg}
     (hs : FlockDeploy.setupOf true x = some (s, spec, #[st]))
@@ -324,8 +252,6 @@ theorem sessionMsgs_length {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.Session
   rw [List.length_append, List.length_cons, List.length_singleton, hlen, hflen]
   omega
 
-/-- **Each session has at least two rounds and the session reading reads a message at its last**, from
-`RecordsCover` and `MsgsOfRecords` (`sessionMsgs_length`). -/
 theorem last_msg_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Exchange → Prop} {tab : ℕ → String}
     (hcov : RecordsCover A C Good) (hmsgs : MsgsOfRecords A C S Good tab) {t : ℕ} (ht : t < A.h.ms.length)
     {o : Exchange} (hacc : FormAccepts C o) (hgood : Good o) :
@@ -345,13 +271,6 @@ namespace Verity.SampledTwo
 
 open Claims
 
-/-! ## `ShowsAt` at a session's last round -/
-
-/-- **A session's last round of the form's reading shows the session's evidence**: at the last round of template
-`t`'s session, where the digest a play fixes for the round is the bytes the session's closing answers, read off the
-log before the round (`SessionCoins.closeOf`), and the string it shows is the evidence of the `t`-th of the
-statements' sessions (`SessionCoins.evidenceAt`), an accepted play whose log the check read is the device's shows a
-string that has its digest (`SessionCoins.LogCloses`). -/
 theorem showsAt_session_last (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hClose : SessionCoins.LogCloses A C Good L) (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) {t : ℕ}

@@ -3,26 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.SessionHeld
 public import Proofs.Properties.Verity.Sampled.RoundsRead
 
-/-!
-# Every round a session's record gives coins of is opened on that session's round
-
-`SessionCoins.located_own` says a release the session-round locator puts on a session's round is that session's
-record's coins for it. This module is the other way: on a play the two-stage form accepts, each round of a second-stage
-session whose record gives coins has its opening in the log the check read, on that session's round.
-
-* `roundOf_slotStream`: the stream and round `slotStream` gives a session's round are read back as that round
-  (`roundOf`), at the link's round and the two reps' (`j ≤ 2 * R`): no opening is read as a round past them.
-* `mem_located_of`: a release the locator puts on a round is among the round's releases.
-* `opening_of_unclosed`: a round a tree shows opened without its closing round, it shows opened.
-* `MembersHeld.opened`: where the members' check accepts the sessions' records against the read, a round session
-  `t`'s record gives coins of (`Verity.Sampled.recordRound`), the link's or a rep's, is one its tree shows opened
-  (`Verity.Sampled.Trees.round_held`), so the read opens that stream of that tree more often than the round's number
-  (`Verity.Sampled.opening_lt_openedOf`), and the opening after exactly that many is the one the locator puts on
-  session `t`'s round: the tree is the `t`-th first opened (`MembersHeld.place`) and the stream is named as the
-  record names it in the `Hello`s before it (`Verity.Sampled.readLog_named`).
-* `located_opened`: on a play the form accepts, the releases on round `j` of session `t` in the log the check read,
-  `j` the link's round or a rep's, are exactly one opening, with the coins session `t`'s record gives the round.
--/
+/-! On a play the form accepts, each round a second-stage session's record gives coins of is opened on that
+session's round in the log the check read. -/
 
 @[expose] public section
 
@@ -31,7 +13,6 @@ namespace Verity.SampledTwo.SessionCoins
 open Lean (Json)
 open Verity.Sampled (helloSpecs repStreamName)
 
-/-- **A session's round's stream and round read back as the round**, at the link's round and the two reps'. -/
 theorem roundOf_slotStream (tab : String) (R j : ℕ) (hj : j ≤ 2 * R) :
     roundOf tab R (some (slotStream tab R j).1) (slotStream tab R j).2 = some j := by
   by_cases h0 : j = 0
@@ -70,7 +51,6 @@ theorem roundOf_slotStream (tab : String) (R j : ℕ) (hj : j ≤ 2 * R) :
       congr 1
       omega
 
-/-- **A release the locator puts on a round is among the round's releases.** -/
 theorem mem_located_of {loc : List Release → Verity.Frame → Option ℕ} {n : ℕ} {a b : List Release} {r : Release}
     (h : loc a r.frame = some n) : (r.frame, r.coins) ∈ located loc n [] (a ++ r :: b) := by
   rw [located_append, List.nil_append]
@@ -78,7 +58,6 @@ theorem mem_located_of {loc : List Release → Verity.Frame → Option ℕ} {n :
   simp only [located, if_pos h]
   exact List.mem_append_left _ (List.mem_singleton.2 rfl)
 
-/-- A round's releases with one among them and at most one are that one. -/
 theorem eq_singleton {α : Type} {l : List α} {x : α} (hx : x ∈ l) (h1 : l.length ≤ 1) : l = [x] := by
   cases l with
   | nil => cases hx
@@ -91,7 +70,6 @@ theorem eq_singleton {α : Type} {l : List α} {x : α} (hx : x ∈ l) (h1 : l.l
       simp only [List.length_cons] at h1
       omega
 
-/-- **A round a tree shows opened without its closing round, it shows opened.** -/
 theorem opening_of_unclosed {u : Spot.Challenger.LoggedTree} {name : String} {k : ℕ}
     {o : Spot.Challenger.TreeOpening} (h : u.unclosed.opening name k = some o) :
     ∃ o', u.opening name k = some o' ∧ o' ∈ u.opened ∧ o'.stream = name ∧ o'.round = k := by
@@ -115,10 +93,6 @@ variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray
   {log : List Release} {trees : Array Spot.Challenger.LoggedTree}
   {records : Array (String × Array (String × Option ℕ) × Json × String)} {tree : ℕ → ℕ}
 
-/-- **Every round a session's record gives coins of is opened in the read, on that session's round**: where the
-members' check accepts the sessions' records against the read, and session `t`'s record gives coins of the stream and
-round its round `j` is (`slotStream`), `j` the link's round or a rep's (`j ≤ 2 * repsOf (K t)`), the read has a
-release the session-round locator puts on session `t`'s round `j`. -/
 theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
@@ -167,10 +141,6 @@ theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
 
 end Opened
 
-/-- **The releases on a session's round are its record's round's opening**: on a play the form accepts, where
-session `t`'s record gives coins of the stream and round its round `j` is, `j` the link's round or a rep's, the
-releases the session-round locator puts on that round in the log the check read are exactly one opening, with those
-coins' bits. -/
 theorem located_opened (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) {o : Exchange}
     (hacc : FormAccepts C o) {l : List Release} (hl : interiorRead C o = some l) {recs : List Json}
     (hrecs : sessionRecords C o = some recs) {t j : ℕ} (ht : t < A.h.ms.length) (hj : j < SpotFlock.k₀ A.h t)

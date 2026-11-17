@@ -4,34 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.StageLog
 public import Proofs.Properties.Verity.SampledTwo.SecondCoins
 public import Proofs.Properties.Verity.SampledTwo.CutHeld
 
-/-!
-# The stages' coins are on the device's log
-
-Where the play's log is the device's as the cut reads it (`LogIsDevice`: every log the form's check read, `readsLogs`,
-matches the play's release by release), the bytes each stage read start the coins the log shows released in that
-stage's family after its record's digest: the first stage's (`firstShown_of`, the premise `FirstShown`) and the
-interior's (`secondShown_of`, `SecondShown`).
-
-The cut reads the first session's log with the coins `sampleCoins` reads under the parameters' key (`readsLogs`), and the
-interior's with the coins the form's check computes (`OneStageZk.coinsOf`). On one window each read is the whole log;
-on two, the first session's releases come before the interior's (`logsOf`).
-
-**What it rests on**, each a named `Prop` taken as a hypothesis:
-* `CaseIsSent`: the play's case `C o` is the one the prover sent, as the cut decodes it (`caseOf`). It is whoever
-  instantiates `C`'s.
-* `CutReads`: on a play the form accepts, the cut reads at least one log. Where it reads none, `LogIsDevice` holds of
-  any log, and says nothing.
-* `FirstSampled`: the bytes the first stage read start the coins `sampleCoins` reads under the parameters' key, in the
-  family of the boundary registration's challenger, from the first stage's coin evidence. The run's coin check reads
-  that key and that family (`inputOf`); that it reads them as `sampleCoins` does is the run's coins' piece.
-* `SecondAlone`: on two windows, the first session's releases hold no coins of the interior's family after the
-  interior's digest. An honest run releases none there; the form does not refuse such a log today. Where it does, the
-  interior's coins would follow coins of their own family that the second stage never read, and `SecondShown` would
-  fail on a log that is the device's.
-
-**Not established here.** The run's coin check passes a signature from an earlier monitoring period. It is not worked
-around.
--/
+/-! The bytes each stage read start the coins the device's log shows released in its family; the run's coin
+check passes a signature from an earlier monitoring period. -/
 
 @[expose] public section
 
@@ -41,39 +15,27 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open Verity.Sampled (freshCoins readLog)
 
-/-! ## What the statements rest on -/
-
-/-- **The play's case is the one sent**: wherever the case `C o` decodes, the cut decodes what the prover sent to the
-same parameters, commitment and evidence, and the case's blobs are those sent. -/
 def CaseIsSent (C : CaseOf) : Prop :=
   ∀ o k p c e, C o = some k → Decoded k p c e →
     caseOf o.sent = .ok (p, c, e) ∧ k.blobs = _root_.Core.Blobs.ofArray o.sent.blobs
 
-/-- **The cut reads a log of every accepted play.** -/
+/-- The cut reads a log of every accepted play; where it reads none, `LogIsDevice` holds of any log and says
+nothing. -/
 def CutReads (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → readsLogs o.sent ≠ []
 
-/-- **The first stage read the sample the cut reads**: on a play the form accepts, the bits of the bytes the run's first
-stage read start those of the coins `sampleCoins` reads under the parameters' key, on the boundary registration's
-window, in the family of its challenger, after the boundary registration's digest. -/
 def FirstSampled (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ i read, inputOn C o = some i → FirstRead i read →
     ∀ p c e key d ξ, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key → firstSamples key p c e = some d →
       sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ →
       bitsOf (i.source.extract 0 read) <+: bitsOf ξ
 
-/-- **On two windows the first session releases none of the interior's coins**: on a play the form accepts whose two
-sessions are on two windows, the first session's releases as the cut reads them hold no coins of the interior's family
-after the interior registration's digest. -/
 def SecondAlone (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ ξ r₁ d₂, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstSamples key p c e = some d₁ → sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
     firstRead key p c e ξ = some r₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     freshCoins d₂.label d₂.after r₁ = []
 
-/-! ## The cut's reads -/
-
-/-- The first session's read: its log's lines, and the releases with the coins placed. -/
 theorem firstRead_some {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {ξ : ByteArray} {d : Draws} {r : List Release}
     (hd : firstSamples key p c e = some d) (h : firstRead key p c e ξ = some r) :
@@ -84,7 +46,6 @@ theorem firstRead_some {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Par
   | error _ => simp [hl, Except.toOption] at h
   | ok lines => exact ⟨lines, rfl, by simpa [hl, Except.toOption] using h⟩
 
-/-- The interior session's read: its records, its log's lines, and the releases with the coins placed. -/
 theorem secondRead_some {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {ξ : ByteArray} {d : Draws} {r : List Release}
     (hd : secondSamples p e = some d) (h : secondRead p e bs ξ = some r) :
@@ -99,7 +60,6 @@ theorem secondRead_some {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recur
     | error _ => simp [hr, hl, Except.toOption] at h
     | ok lines => exact ⟨recs, lines, rfl, rfl, by simpa [hr, hl, Except.toOption] using h⟩
 
-/-- The lines `firstLines` reads are the first session's log's, as JSON strings. -/
 theorem firstLines_arr {e : VStar.Recursive.SampledTwo.Evidence} {l : List String} (h : firstLines e = .ok l) :
     ∃ ls : Array Json, Spot.getD (Spot.getD (firstCoins e) "session") "log" = .arr ls ∧ ls.toList = l.map Json.str := by
   unfold firstLines at h
@@ -110,7 +70,6 @@ theorem firstLines_arr {e : VStar.Recursive.SampledTwo.Evidence} {l : List Strin
       | cases h
       | simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The first stage's sample on the case is the cut's**: its family and digest are those of the cut's first sample. -/
 theorem firstSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d : Draws} (hd : Decoded k p c e)
     (h : firstSamples key p c e = some d) : firstDraw k = some (d.label, d.after) := by
@@ -136,7 +95,6 @@ theorem firstSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : S
         rw [hl]
         rfl
 
-/-- **The interior's sample on the case is the cut's**: its family and digest are those of the cut's second sample. -/
 theorem secondSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {s : String} {c₂ : Spot.OneStage.Commitment} {d : Draws}
     (hd : Decoded k p c e) (hs : Flock.canon e.record = .ok s) (hc : Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂)
@@ -153,14 +111,12 @@ theorem secondSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : 
       | simpa using hc
   simp [hch, hs, hc', bind, Except.bind, Except.toOption]
 
-/-- The interior registration's commitment, as the form's check reads it, is the cut's. -/
 theorem interiorOf_of {e : VStar.Recursive.SampledTwo.Evidence} {s : String} {c₂ : Spot.OneStage.Commitment}
     (hs : Flock.canon e.record = .ok s) (hc : Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂) : interiorOf e = .ok c₂ := by
   unfold interiorOf
   rw [hs]
   exact hc
 
-/-- The run of record's second stage reads the interior's coins the form's check computed. -/
 theorem inputOf_interior_source (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
     (ξ ξ₂ : ByteArray) (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json))
     {it : Spot.Run.Interior} (h : (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it) :
@@ -170,9 +126,6 @@ theorem inputOf_interior_source (p : VStar.Recursive.SampledTwo.Params) (c : Spo
     | (cases h; rfl)
     | (split at h; cases h; rfl)
 
-/-! ## The stages' coins on the device's log -/
-
-/-- **The first stage's coins are on the device's log**: `FirstShown` at the cut's `LogIsDevice`. -/
 theorem firstShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hD : FirstSampled C) :
     FirstShown C LogIsDevice := by
   intro o ha hg i read hi hread _
@@ -200,7 +153,6 @@ theorem firstShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hD : F
     have hO := hg (r₁ ++ r₂) (by rw [hlogs]; simp)
     exact hpre.trans (sampled_shown_append hξ hls hlsl hrl hO)
 
-/-- **The interior's coins are on the device's log**: `SecondShown` at the cut's `LogIsDevice`. -/
 theorem secondShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hA : SecondAlone C) :
     SecondShown C LogIsDevice := by
   intro o ha hg i it hi hit

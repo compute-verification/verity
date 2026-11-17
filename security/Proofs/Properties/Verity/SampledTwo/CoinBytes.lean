@@ -3,14 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.SecondCoins
 public import Proofs.Flock.Claims.Recursion.RestFitsLift
 
-/-!
-# Any bytes are coins' bytes
-
-Every byte string of one coin's length is a coin's bytes as `Select` reads them (`exists_src`), since any 16 bytes are a
-field element's (`FlockDeploy.toBytes_surj`). So the reading's coins are well defined wherever the stages' bytes fit:
-`coinsOfBytes` and `stagesOfBytes` prove the premises `CoinsOfBytes` and `StagesOfBytes` of the stages' coins, and
-`coinsAgree_first_of` and `coinsAgree_second_of` state the stages' coins without them.
--/
+/-! Every byte string of one coin's length is a coin's bytes as `Select` reads them. -/
 
 @[expose] public section
 
@@ -18,7 +11,6 @@ namespace Verity.SampledTwo
 
 open Claims
 
-/-- Byte `t` of a coin as `Select` reads it is byte `t` of its elements' bytes. -/
 theorem src_getElem? (c : FlockDeploy.Coin) (t : ℕ) :
     (SpotFlock.src c).data[t]? = if t < SpotFlock.L then some (c.bytes.getD t 0) else none := by
   rw [show (SpotFlock.src c).data = Array.ofFn fun i => UInt8.ofFin (SpotFlock.coinByte c i) from rfl,
@@ -30,7 +22,6 @@ theorem src_getElem? (c : FlockDeploy.Coin) (t : ℕ) :
     simp [SpotFlock.coinByte]
   · rw [dif_neg ht, if_neg ht]
 
-/-- **Any coin-long bytes are a coin's.** -/
 theorem exists_src (B : ByteArray) (hB : B.size = SpotFlock.L) : ∃ c : FlockDeploy.Coin, SpotFlock.src c = B := by
   obtain ⟨vs, hlen, hv⟩ := FlockDeploy.colBytes_surj 65536 B.data.toList (by
     rw [Array.length_toList, ByteArray.size_data, hB]
@@ -62,7 +53,6 @@ theorem exists_src (B : ByteArray) (hB : B.size = SpotFlock.L) : ∃ c : FlockDe
     rw [ByteArray.size_data, hB]
     omega
 
-/-- **Bytes are a coin's prefix** (`CoinsOfBytes`). -/
 theorem coinsOfBytes : CoinsOfBytes := by
   intro b hb
   apply exists_src
@@ -74,7 +64,6 @@ theorem coinsOfBytes : CoinsOfBytes := by
 theorem div_lt_of {R x : ℕ} (hx : x < R * SpotFlock.L) : x / SpotFlock.L < R :=
   Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact hx)
 
-/-- Byte `x` of `R` rounds' coins, `x` below `R · L`, is byte `x % L` of coin `x / L`. -/
 theorem stageSrc_getElem? {R : ℕ} (cs : Fin R → FlockDeploy.Coin) {x : ℕ} (hx : x < R * SpotFlock.L) :
     (SpotFlock.stageSrc cs).data[x]? =
       (SpotFlock.src (cs ⟨x / SpotFlock.L, div_lt_of hx⟩)).data[x % SpotFlock.L]? := by
@@ -87,7 +76,6 @@ theorem stageSrc_getElem? {R : ℕ} (cs : Fin R → FlockDeploy.Coin) {x : ℕ} 
   apply UInt8.toNat_inj.1
   simp [SpotFlock.coinByte]
 
-/-- **Bytes are coins' prefix** (`StagesOfBytes`). -/
 theorem stagesOfBytes : StagesOfBytes := by
   intro R b hb
   let B : ByteArray := b ++ ⟨Array.replicate (R * SpotFlock.L - b.size) 0⟩
@@ -133,14 +121,12 @@ theorem stagesOfBytes : StagesOfBytes := by
       omega
     rw [h1, h2]
 
-/-- **The first stage's coins are the device's**, with no premise on the coins' bytes. -/
 theorem coinsAgree_first_of (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop)
     (hShow : FirstShown C Good) (hDev : DevFirst C dev) :
     CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .first :=
   coinsAgree_first A C S dev Good hShow hDev coinsOfBytes
 
-/-- **The second stage's coins are the device's**, with no premise on the coins' bytes. -/
 theorem coinsAgree_second_of (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop)
     (hShow : SecondShown C Good) (hDev : DevSecond A C dev) :

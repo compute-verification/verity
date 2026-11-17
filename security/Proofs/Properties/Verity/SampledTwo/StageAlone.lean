@@ -4,25 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.StageCut
 public import Proofs.Properties.Challenger.Coins
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 
-/-!
-# On two windows the first session's read holds none of the second stage's coins
-
-`SecondAlone`, the premise `secondShown_of` takes on two windows, from the first session's roots: where the roots of
-the session `sampleCoins` reads for the first stage show no coin of the second stage's family after the interior
-registration's digest (`FirstUnshown`), the cut's read of that session's log holds no such coins (`secondAlone_of`).
-The read places a coin only at a release whose root line names its family and digest (`none_readLog`), and the roots
-list every such line (`countFresh_zero`).
-
-The form's check refuses a case whose first session shows such a coin (`interiorUnshown`). It reads that session
-under the interior audit's challenger key, on the boundary's window against the interior audit's, in the interior
-audit's family, as the cut does (`keyOf_challenger`, `secondSamples_parts`); it differs from the cut in that it reads
-the digest of the interior record where the cut reads the interior commitment's. `firstUnshown_of` gives
-`FirstUnshown` from the check where those agree (`SessionMatches`), and the form refuses unless they do
-(`interiorDigestIs`, `INTERIOR_DIGEST`), so `SessionMatches` is the form's check (`sessionMatches_of`).
-
-`FirstSampled`, the premise `firstShown_of` takes, is the form's check (`firstSampled_of`): the run of record's coin check
-reads the cut's first sample, at the record the form holds to the commitment's digest (`digestIs`).
--/
+/-! On two windows the first session's read holds none of the second stage's coins (`SecondAlone`), from
+the form's check. -/
 
 @[expose] public section
 
@@ -36,9 +19,6 @@ local instance lawfulBEqByteArrayAlone : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-! ## The read places no coin the roots don't show -/
-
-/-- A release that is no coin of `label` after `after` adds none to the log's coins of that family. -/
 theorem freshCoins_cons_other {r : Verity.Release} {label : String} {after : ByteArray}
     (h : ∀ l, r.frame = .fresh l → ¬(l = label ∧ r.answers = after)) (rest : List Verity.Release) :
     freshCoins label after (r :: rest) = freshCoins label after rest := by
@@ -111,8 +91,6 @@ theorem none_readTail (label : String) (after : ByteArray) (records : List Json)
             have hl' : lab = l' := Verity.Frame.fresh.inj hl
             exact hc (by rw [hra, hl', h1, show root = after' from h2])
 
-/-- **The read places no coin the log's lines don't show**: where no root line of the log after its head names family
-`label'` after `after'`, the read of the log (in any family) holds no coins of `label'` after `after'`. -/
 theorem none_readLog (label : String) (after : ByteArray) (records : List Json) (ξ : ByteArray) (label' : String)
     (after' : ByteArray) {lines : List String} {log : List Verity.Release}
     (h : readLog label after records ξ lines = some log)
@@ -138,8 +116,6 @@ theorem none_readLog (label : String) (after : ByteArray) (records : List Json) 
     · rw [ite_eq_right ht] at h
       exact none_readTail label after records label' after' ls [] none ξ h (by simpa using hz)
 
-/-- **Roots that don't show a coin count none**: where a session's released roots show no coin of `label` after
-`after` (`interiorShown`), no root line of its log after the head names that family and digest. -/
 theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots} {label : String}
     {after : ByteArray} (hr : releasedRootsOf c log = .ok roots)
     (h : VStar.Recursive.SampledTwo.interiorShown roots label after = false) :
@@ -154,11 +130,6 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots}
   rw [h'] at hm
   cases hm
 
-/-! ## The premise and the statement -/
-
-/-- **On two windows the first session shows none of the second stage's coins**: on a play the form accepts whose two
-sessions are on two windows, the roots of the first session `sampleCoins` reads (from `firstCoins`, under the
-parameters' key, on the boundary's window) show no coin of the second stage's family after the interior's digest. -/
 def FirstUnshown (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstSamples key p c e = some d₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
@@ -167,7 +138,6 @@ def FirstUnshown (C : CaseOf) : Prop :=
         .ok (cm, roots) →
     VStar.Recursive.SampledTwo.interiorShown roots d₂.label d₂.after = false
 
-/-- **`SecondAlone` from the first session's roots.** -/
 theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   intro o ha p c e key d₁ ξ r₁ d₂ hcase hkey hd₁ hξ hr₁ hd₂ hw
   obtain ⟨lines, hlines, hrl⟩ := firstRead_some hd₁ hr₁
@@ -184,9 +154,6 @@ theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   subst hl
   exact none_readLog _ _ _ _ _ _ hrl (countFresh_zero hrr hsh)
 
-/-! ## From the form's check -/
-
-/-- An accepted play's case passed the form's `interiorUnshown`. -/
 theorem unshown_of_accepts {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange} (ha : FormAccepts C o)
     {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
     (hcase : caseOf o.sent = .ok (p, c, e)) : VStar.Recursive.SampledTwo.interiorUnshown p e = .ok () := by
@@ -198,7 +165,6 @@ theorem unshown_of_accepts {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange
   obtain ⟨rfl, -, rfl⟩ := hpce
   exact hu
 
-/-- **The parameters' key is the interior audit's challenger's**, on the parameters the case decodes. -/
 theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} (hcase : caseOf s = .ok (p, c, e))
     (hkey : keyOf s.params = some key) : p.audit.base.challenger.map (·.1) = some key := by
@@ -220,8 +186,6 @@ theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Param
   rw [hp] at hkey
   exact (Option.filter_eq_some_iff.1 hkey).1
 
-/-- **The interior's sample is the interior audit's**: its key and family the interior audit's challenger's, its window
-the interior audit's, after the interior commitment's digest. -/
 theorem secondSamples_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {d : Properties.Challenger.Draws} (h : secondSamples p e = some d) :
     ∃ c₂, interiorOf e = .ok c₂ ∧ p.audit.base.challenger = some (d.key, d.label) ∧
@@ -238,14 +202,11 @@ theorem secondSamples_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.R
       rcases hw : p.audit.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h' <;> cases h'
     refine ⟨c₂, ?_, ?_, ?_, rfl⟩ <;> first | rfl | assumption
 
-/-- **The check's first session is the cut's**: on a play the form accepts, the evidence's `coins` name the ledger,
-pins, main and session `firstCoins` names, and the interior record's digest is the interior commitment's. -/
 def SessionMatches (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e c₂, caseOf o.sent = .ok (p, c, e) → interiorOf e = .ok c₂ →
     Spot.Docket.digest e.record = .ok c₂.digest ∧
     ∀ f ∈ ["ledger", "pins", "main", "session"], Spot.getD (firstCoins e) f = Spot.getD e.coins f
 
-/-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
 theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : FirstUnshown C := by
   intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
   obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
@@ -268,14 +229,9 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
   rw [hwin₂]
   exact fun h => hw (Option.some.inj h)
 
-/-- **`SecondAlone` from the form's check**, where it reads the cut's session. -/
 theorem secondAlone_of_matches (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : SecondAlone C :=
   secondAlone_of C (firstUnshown_of C hC hM)
 
-/-- **The check's first session is the cut's**: `SessionMatches` from the form's check. On an accepted play the form
-refuses unless the evidence's interior record has the interior commitment's digest (`interiorDigestIs`,
-`INTERIOR_DIGEST`, read by `inputAt_interior`), and that commitment is the cut's (`interiorOf`); the cut's first
-session is the evidence's `coins` (`firstCoins`). -/
 theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C := by
   intro o ha p c e c₂ hcase hi₂
   obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
@@ -289,14 +245,9 @@ theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C :=
   subst h2
   exact ⟨(VStar.Recursive.SampledTwo.inputAt_interior hin).1, fun _ _ => rfl⟩
 
-/-- **`SecondAlone` from the form's check.** -/
 theorem secondAlone_of_sent (C : CaseOf) (hC : CaseIsSent C) : SecondAlone C :=
   secondAlone_of_matches C hC (sessionMatches_of C hC)
 
-/-! ## The first stage's sample from the form's check -/
-
-/-- The run of record's coin check reads the interior audit's key, the evidence's copy of main and `coins`, and the
-boundary registration's family. -/
 theorem inputOf_coinsRead (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
     (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
     (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).key = p.audit.base.challenger.map (·.1) ∧
@@ -315,12 +266,6 @@ theorem inputOf_coinsRead (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneS
        cases VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
 
-/-- **The first stage read the cut's sample**: `FirstSampled` from the form's check. On an accepted play the run of record's
-coin check gave no code, so either the first stage read no byte, or `sampleCoins` read the evidence's `coins` under the
-run's key, window and family after the digest of the record the run was given, and the bytes read start them
-(`Coins.coinsReason_none`). The run's key, window and family are the cut's sample's (`inputOf`, `keyOf_challenger`), and
-the form refuses unless the record the run is given has the commitment's digest (`digestIs`, `RECORD_DIGEST`), which
-is the sample's. -/
 theorem firstSampled_of (C : CaseOf) (hC : CaseIsSent C) : FirstSampled C := by
   intro o ha i read hi hread p c e key d ξ hcase hkey hd hξ
   obtain ⟨k, p', c', e', c₂, ξ₂, r, run, hk, hdec, hin, -, -, -⟩ := inputOn_accepts ha hi

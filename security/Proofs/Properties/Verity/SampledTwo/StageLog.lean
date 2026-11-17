@@ -3,17 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.FirstCoins
 public import Proofs.Properties.Verity.Sampled.Assembled
 
-/-!
-# What a stage's read of the device's log shows of its coins
-
-Where `sampleCoins` reads coins `ξ` from a stage's coin evidence, in family `label` after `after`, and the read of its
-session's log lines places them (`readLog`, as the cut's `readsLogs` reads each session), every log that read matches
-release by release (`Binding.Read.Of`, as the cut's `LogIsDevice` asks of the play's log) has exactly `ξ`'s bits as its
-coins of that family after `after` (`sampled_shown`, from the read's own coins, `sampled_fresh`); a log whose read is
-followed by other releases has them first (`sampled_shown_append`); and one whose read follows releases holding none of
-that family's coins after `after` has exactly them (`sampled_shown_after`). With the bytes a stage read a prefix of `ξ` (`bitsOf_extract_prefix`), these give the stages'
-premises `FirstShown` and `SecondShown` from the cut's `LogIsDevice`.
--/
+/-! What a stage's read of the device's log shows of the coins `sampleCoins` read. -/
 
 @[expose] public section
 
@@ -22,7 +12,6 @@ namespace Verity.SampledTwo
 open Lean (Json)
 open Verity.Sampled (freshCoins readLog)
 
-/-- The bits of a byte string's first bytes start its bits. -/
 theorem bitsOf_extract_prefix (b : ByteArray) (n : ℕ) :
     Properties.Challenger.bitsOf (b.extract 0 n) <+: Properties.Challenger.bitsOf b := by
   by_cases hn : n ≤ b.size
@@ -34,9 +23,6 @@ theorem bitsOf_extract_prefix (b : ByteArray) (n : ℕ) :
   · rw [extract_of_size_le (by omega)]
     all_goals exact List.prefix_refl _
 
-/-- **A sample's read holds its coins**: where `sampleCoins` reads coins `ξ` from coin evidence `coins` under a key, a
-window, family `label` after `after`, and the read of its session's log lines places them (`readLog`), the read's
-coins of the family released after `after` are `ξ`'s bits, none of them empty. -/
 theorem sampled_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
     {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l : List Verity.Release}
     (hd : Spot.Challenger.sampleCoins key w label after coins = .ok ξ)
@@ -59,14 +45,11 @@ theorem sampled_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {
   rw [hfresh]
   exact ⟨Verity.Sampled.chunks_flatten _ _ hsize, Verity.Sampled.chunks_ne_nil_of_size _ _ hsize⟩
 
-/-- A log's coins of a family are its parts' in order. -/
 theorem freshCoins_append (label : String) (after : ByteArray) (a b : List Verity.Release) :
     freshCoins label after (a ++ b) = freshCoins label after a ++ freshCoins label after b := by
   unfold freshCoins
   rw [List.filterMap_append]
 
-/-- **A sample's read shows its coins**: every log the read of `sampled_fresh` matches release by release has `ξ`'s bits as
-its coins of the family released after `after`. -/
 theorem sampled_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
     {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l olog : List Verity.Release}
     (hd : Spot.Challenger.sampleCoins key w label after coins = .ok ξ)
@@ -77,8 +60,6 @@ theorem sampled_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {
   obtain ⟨hf, hne⟩ := sampled_fresh hd hlog hls hr
   rw [Verity.Sampled.freshCoins_ofV2 label after hO hne, hf]
 
-/-- **A sample's read shows its coins after releases of other families**: where releases `l₀` that hold no coins of the
-family after `after` come before the read, a log the two match release by release has `ξ`'s bits as those coins. -/
 theorem sampled_shown_after {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray}
     {coins : Json} {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String}
     {l₀ l olog : List Verity.Release}
@@ -95,8 +76,6 @@ theorem sampled_shown_after {key : Spot.Challenger.ChallengerKey} {w label : Str
     exact hne
   rw [Verity.Sampled.freshCoins_ofV2 label after hO hne', happ, hf]
 
-/-- **A sample's read shows its coins first** in a log it matches the start of: there, `ξ`'s bits start the log's coins of
-the family released after `after`. -/
 theorem sampled_shown_append {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray}
     {coins : Json} {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String}
     {l l' olog : List Verity.Release}

@@ -2,28 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 
-/-!
-# The two-stage subprotocol's coin map: the play before a release reads only the coins written before it
-
-The coin map (`place`, `Proofs.Properties.Verity.SampledTwo.CoinMap`) writes a run's coins into a tape one release at a
-time: a release the locator puts on round `j` is written from the next elements of `r j` (`slot`), and nothing else of
-the run's coins is read before it. So two runs' coins give one play until the first release that is written from
-elements they differ at, and that release has the same frame and the same bytes in both.
-
-* **A written chunk** (`coinBit_chunk`, `freshVal_chunk`, `openBits_chunk`, `ChunkAgree`, `LogAgree`): the coins agree
-  where a release is written, and where every release of a list is.
-* **One until they differ** (`SameUntil`, `SameAt`, `sameUntil_prefix`, `sameUntil_next`, `sameUntil_whole`): two logs
-  that are release by release the same frame and bytes, and the same release while the coins agree at what it is
-  written from.
-* **Along the releases** (`same_placeK`): the outputs at one tape with `r` and with `r'` written in are `SameAt`, by
-  the recursion `placeK_congr` and `distribution_placeKA` take.
-* **At the period's game** (`same_place`, `place_prefix`, `place_whole`, `place_prefix_used`).
-
-What this does not say: that the releases before the one `place` puts round `n` on are on rounds below `n`. A strategy
-may ask for a later round's release first, and then that round's coin is in the log before round `n`'s release. The
-statements here are in the log's order, at the rounds the earlier releases are located on (`usedOf`), whatever those
-are; that they are the rounds a history shows is a hypothesis on the locator and the accepted form, not proved here.
--/
+/-! The play before a release reads only the run's coins written before it, in the log's order; that the
+earlier releases' rounds are the rounds a history shows is a hypothesis on the locator and the form, not proved here. -/
 
 @[expose] public section
 
@@ -34,10 +14,6 @@ open Claims
 
 variable {β : Type}
 
-/-! ## A written chunk -/
-
-/-- **A coin's bit reads one element.** Coins that agree at the elements `u` to `u + m` have the same bits `128 u` to
-`128 (u + m)`. -/
 theorem coinBit_chunk {c c' : FlockDeploy.Coin} {u m : ℕ}
     (h : ∀ a : Fin 65536, u ≤ a.val → a.val < u + m → c a = c' a) {t : ℕ} (h₁ : 128 * u ≤ t)
     (h₂ : t < 128 * (u + m)) : coinBit c t = coinBit c' t := by
@@ -68,27 +44,20 @@ def ChunkAgree (r r' : Fin K → FlockDeploy.Coin) (pre : List Verity.Release) (
   ∀ (j : Fin K) (u : ℕ), slot L K pre rl.frame rl.answers (widthOf rl.frame) = some (j, u) →
     ∀ a : Fin 65536, u ≤ a.val → a.val < u + widthOf rl.frame → r j a = r' j a
 
-/-- **The coins agree where every release of `q` is written**, after the releases `pre`. -/
 def LogAgree (r r' : Fin K → FlockDeploy.Coin) : List Verity.Release → List Verity.Release → Prop
   | _, [] => True
   | pre, rl :: q => ChunkAgree L r r' pre rl ∧ LogAgree r r' (pre ++ [rl]) q
 
-/-- **Two logs after `pre` are one until a release written from elements the coins differ at**: where the first ends
-so does the second, and `E` holds; a release of the first is answered in the second by a release of the same frame
-and bytes, the same release where the coins agree at what it is written from, and then the logs after it are one in
-the same way. -/
 def SameUntil (E : Prop) (r r' : Fin K → FlockDeploy.Coin) :
     List Verity.Release → List Verity.Release → List Verity.Release → Prop
   | _, [], log' => log' = [] ∧ E
   | pre, rl :: log, log' => ∃ rl' rest, log' = rl' :: rest ∧ rl'.frame = rl.frame ∧ rl'.answers = rl.answers ∧
       (ChunkAgree L r r' pre rl → rl' = rl ∧ SameUntil E r r' (pre ++ [rl]) log rest)
 
-/-- **Two outputs' logs after `pre` are one until the coins differ**, and the outputs are one where they never do. -/
 def SameAt (lg : β → List Verity.Release) (r r' : Fin K → FlockDeploy.Coin) (pre : List Verity.Release) (o o' : β) :
     Prop :=
   SameUntil L (o' = o) r r' pre ((lg o).drop pre.length) ((lg o').drop pre.length)
 
-/-- **Coins that agree at every round the releases `q` continue agree where each is written.** -/
 theorem logAgree_of_used {r r' : Fin K → FlockDeploy.Coin} :
     ∀ (q pre : List Verity.Release), (∀ j : Fin K, usedOf L j.val pre q ≠ 0 → r j = r' j) → LogAgree L r r' pre q
   | [], _, _ => trivial
@@ -99,7 +68,6 @@ theorem logAgree_of_used {r r' : Fin K → FlockDeploy.Coin} :
     · simp only [usedOf]
       omega
 
-/-- **The logs are one through `q`**, where the coins agree at what each release of `q` is written from. -/
 theorem sameUntil_prefix {E : Prop} {r r' : Fin K → FlockDeploy.Coin} :
     ∀ (q pre : List Verity.Release) {rest log' : List Verity.Release},
       SameUntil L E r r' pre (q ++ rest) log' → LogAgree L r r' pre q →
@@ -113,8 +81,6 @@ theorem sameUntil_prefix {E : Prop} {r r' : Fin K → FlockDeploy.Coin} :
     rw [List.append_assoc] at hs'
     exact hs'
 
-/-- **The release after `q` has the same frame and bytes**, where the coins agree at what each release of `q` is
-written from. -/
 theorem sameUntil_next {E : Prop} {r r' : Fin K → FlockDeploy.Coin} {q pre rest log' : List Verity.Release}
     {rl : Verity.Release} (h : SameUntil L E r r' pre (q ++ rl :: rest) log') (hq : LogAgree L r r' pre q) :
     ∃ cs rest', log' = q ++ ⟨rl.frame, rl.answers, cs⟩ :: rest' := by
@@ -123,14 +89,11 @@ theorem sameUntil_next {E : Prop} {r r' : Fin K → FlockDeploy.Coin} {q pre res
   refine ⟨rl'.coins, rest', ?_⟩
   rw [← hf, ← ha]
 
-/-- **The logs are one, and `E` holds**, where the coins agree at what each release of the first is written from. -/
 theorem sameUntil_whole {E : Prop} {r r' : Fin K → FlockDeploy.Coin} {q pre log' : List Verity.Release}
     (h : SameUntil L E r r' pre q log') (hq : LogAgree L r r' pre q) : log' = q ∧ E := by
   obtain ⟨rest', rfl, hs⟩ := sameUntil_prefix L q pre (rest := []) (by rw [List.append_nil]; exact h) hq
   obtain ⟨rfl, hE⟩ := hs
   exact ⟨List.append_nil q, hE⟩
-
-/-! ## Along the releases -/
 
 theorem sameAt_leaf {lg : β → List Verity.Release} {f : List Verity.Release → Game β} {pre : List Verity.Release}
     (hf : Records lg f pre) (s : Strategy (f [])) (t : Tape (f []) s) (r r' : Fin K → FlockDeploy.Coin) :
@@ -139,8 +102,6 @@ theorem sameAt_leaf {lg : β → List Verity.Release} {f : List Verity.Release �
   rw [hf [] s _ (playReaches_tapeOut _ s t), List.append_nil, List.drop_length]
   exact ⟨rfl, rfl⟩
 
-/-- One release: two outputs whose logs continue `pre` by releases of one frame and bytes, the same release and one
-after it where the coins agree at what it is written from. -/
 theorem sameAt_step {lg : β → List Verity.Release} {r r' : Fin K → FlockDeploy.Coin} {pre log log' : List Verity.Release}
     {rl rl' : Verity.Release} {o o' : β} (h : lg o = pre ++ rl :: log) (h' : lg o' = pre ++ rl' :: log')
     (hf : rl'.frame = rl.frame) (ha : rl'.answers = rl.answers)
@@ -189,9 +150,6 @@ theorem sameAt_ite {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {lg : β 
   | isFalse _ => exact h₂
   | isTrue _ => exact h₁
 
-/-- **A coin node**: the node's release has one frame and bytes at every value (`rel`), the two maps write one value
-where the coins agree at what the release is written from (`hw`), and the plays after a value are one until the coins
-differ (`hrec`). -/
 theorem sameAt_coin {lg : β → List Verity.Release} {C : Type} {iF : Fintype C} {iN : Nonempty C} {kf : C → Game β}
     (s : Strategy (@Game.coin β C iF iN kf)) (t : Tape (@Game.coin β C iF iN kf) s) {w w' : C → C}
     {F F' : (c : C) → (s : Strategy (kf c)) → Tape (kf c) s → Tape (kf c) s} {r r' : Fin K → FlockDeploy.Coin}
@@ -215,7 +173,6 @@ theorem sameAt_coin {lg : β → List Verity.Release} {C : Type} {iF : Fintype C
     exact ⟨rfl, hrec x (t'.2 x)⟩
   exact key (w t'.1) (w' t'.1) fun y hy => hw t'.1 y hy
 
-/-- The prefix distribution along `relK k`, at every layout, trees, releases before and continuation that records them. -/
 def RecSame (lg : β → List Verity.Release) {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β),
     Records lg f pre → ∀ (s : Strategy (relK k fs ts f)) (τ : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
@@ -280,10 +237,6 @@ theorem same_open {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → F
     s₃ t₃
   exact same_round L hrec fs ts pre f hf i sn n b T p s₄ t₄ r r'
 
-/-- **The play at two runs' coins is one until a release written from elements the coins differ at**, along the
-device's releases: at every layout, trees, releases before and continuation that records them, the outputs at the
-tape `τ` with `r` and with `r'` written in have logs that are one until then (`SameAt`), and are one output where the
-coins agree at what every release is written from. -/
 theorem same_placeK (lg : β → List Verity.Release) : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β), Records lg f pre →
     ∀ (s : Strategy (relK k fs ts f)) (τ : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
@@ -314,10 +267,6 @@ section Period
 variable (L : Locate) {K : ℕ}
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The period's play at two runs' coins is one until a release written from elements the coins differ at**: the
-outputs at the tape `ω` with `r` and with `r'` written in (`place`) have logs that are release by release the same
-frame and bytes, the same release while the coins agree at what it is written from (`SameUntil`), and are one output
-where they agree at what every release is written from. -/
 theorem same_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (r r' : Fin K → FlockDeploy.Coin) (ω : Tape (V.game θ F c) σ) :
     SameAt L Verity.Exchange.log r r' [] (Tape.out _ σ (place V θ F c σ L r ω))
@@ -327,9 +276,6 @@ theorem same_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : 
   exact same_placeK L Verity.Exchange.log _ _ _ _ _
     (fun log _ _ h => by rw [List.nil_append]; exact Verity.Sampled.log_of_finish h) s' t r r'
 
-/-- **The log before a release, and the release's frame and bytes, read the run's coins only where the releases before
-it are written.** Where the log at `r` is `q`, then `rl`, and `r'` agrees with `r` at the elements each release of `q`
-is written from (`LogAgree`), the log at `r'` is `q`, then a release of `rl`'s frame and bytes. -/
 theorem place_prefix (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (r r' : Fin K → FlockDeploy.Coin) (ω : Tape (V.game θ F c) σ)
     {q rest : List Verity.Release} {rl : Verity.Release}
@@ -350,8 +296,6 @@ theorem place_prefix_used (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray
     ∃ cs rest', (Tape.out _ σ (place V θ F c σ L r' ω)).log = q ++ ⟨rl.frame, rl.answers, cs⟩ :: rest' :=
   place_prefix L V θ F c σ r r' ω h (logAgree_of_used L q [] hq)
 
-/-- **The play reads the run's coins only where its releases are written**: where `r'` agrees with `r` at the elements
-each release of the log at `r` is written from, the output at `r'` is the output at `r`. -/
 theorem place_whole (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (r r' : Fin K → FlockDeploy.Coin) (ω : Tape (V.game θ F c) σ)
     (hq : LogAgree L r r' [] (Tape.out _ σ (place V θ F c σ L r ω)).log) :

@@ -3,38 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CutHeld
 public import Proofs.Properties.Verity.SampledRead
 
-/-!
-# The cut where the check read a log
-
-`LogIsDevice` speaks of every log the two-stage form's check read (`readsLogs`); on a play where it read none, it
-holds of any log. This module states the cut with the read in its event (`ReadIsDevice`: the check read a log of both
-sessions, `LogRead`, and every log it read is the device's), at the same terms (`cutBound_read`).
-
-That an accepted play is one whose logs the cut reads does not follow from the form's acceptance alone:
-
-* **The first stage's coins under the parameters' key** (`FirstReads`, a premise here). The run of record's coin check
-  (`Spot.Run.coinsCode`) reads the first stage's coin evidence with `sampleCoins` under the parameters' key, the boundary
-  registration's window and family, after its digest, as the cut does (`keyOf`, `firstSamples`), and takes `null`
-  evidence where the first stage read no byte. `CutFirst` derives `FirstReads` from the form's acceptance on every
-  play whose first stage's coin evidence is not `null` (`FirstCoinsShown`); of a two-stage audit whose first stage
-  reads no coin, the cut says nothing.
-* **The first session's log read as coin trees.** The form reads the first session's log only through `sampleCoins`,
-  which reads no coin tree. The device's run prints its log as coin trees (`PrintsOn`), and the log `sampleCoins` read
-  is that run's or the record carries a break (`Drawn.sampled_log`); so the first read exists, or a break
-  (`first_reads`).
-
-The interior session's read exists on every accepted play (`second_reads`): the form's per-member check read its coin
-trees (`members_trees`) and every statement's session's record on the blobs (`members_records`), and the second
-stage's sample read its log's pairs (`oneStageZk_reads`, `Sampled.releasedRootsOf_pairsOk`), which is what the read
-needs (`Sampled.readLog_isSome`).
-
-So an accepted play is one whose logs the cut reads, or one of its two records carries a break (`reads_or_break`), and
-the cut's bound holds with the read in its event (`cutBound_of`, `cutBound_read`).
-
-The terms are `Cut`'s, at any history. As there, at a history holding one play's signatures (`SignsPlay`) a genuine
-signature of an earlier period that the evidence carries is none the history signed, so it is the forger's, and the
-forger's term bounds nothing there.
--/
+/-! The cut with the read in its event (`cutBound_read`); of a two-stage audit whose first stage reads no
+coin it says nothing, and at a one-play history the forger's term bounds nothing. -/
 
 @[expose] public section
 
@@ -44,17 +14,10 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open scoped ENNReal
 
-/-! ## The event and the premise -/
-
-/-- **The check read a log of both sessions**: `readsLogs` reads the first stage's session and the interior's. -/
 def LogRead (o : Exchange) : Prop := readsLogs o.sent ≠ []
 
-/-- **The check read a log of both sessions, and every log it read is the device's** (`LogRead`, `LogIsDevice`). -/
 def ReadIsDevice (o : Exchange) : Prop := LogRead o ∧ LogIsDevice o
 
-/-- **The first stage's coins are read under the parameters' key**, on every accepted play after the parameters `θ`:
-they name a challenger key at the deployed LMS parameters (`keyOf`), the case names the first session's window and
-family (`firstSamples`), and `sampleCoins` under that key reads the first stage's coin evidence. -/
 def FirstReads (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
     ∃ key d ξ, keyOf θ = some key ∧ firstSamples key p c e = some d ∧
@@ -81,11 +44,6 @@ theorem mapM_isSome_of {α β : Type} (f : α → Option β) :
     rw [hb, hr]
     rfl
 
-/-! ## The first session's read -/
-
-/-- **The first session's read exists where the runs on its window print a log**, or its record carries a break: the
-lines `sampleCoins` read are a run's of the device (`Drawn.sampled_log`), which read as coin trees (`PrintsOn`) and as its
-coin commitment's pairs. -/
 theorem first_reads {dev : History} {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
     (hd : firstSamples key p c e = some d) {ξ : ByteArray}
@@ -106,9 +64,6 @@ theorem first_reads {dev : History} {key : ChallengerKey} {p : VStar.Recursive.S
     exact .inl ⟨out, he.trans hout⟩
   · exact .inr b
 
-/-! ## The interior session's read -/
-
-/-- **`membersTreesHeld` read every statement's session's record on the blobs**, as UTF-8 (`Sampled.recordOn`). -/
 theorem members_records {ts : Array LoggedTree} {L : List String}
     {sts : Array (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)} {bs : _root_.Core.Blobs}
     (h : Spot.OneStageZk.membersTreesHeld ts L sts bs = .ok ()) :
@@ -155,10 +110,6 @@ theorem members_records {ts : Array LoggedTree} {L : List String}
              rw [Verity.Sampled.Trees.get_ok _ hb']
              simp [hrec])
 
-/-- **The interior session's read exists** where the second stage's sample read its coins, the form read the
-challenger's trees from the interior's coin evidence (`treesOf`), and every statement's session's record is on the
-blobs: its lines read as coin trees (`Binding.trees_of`, `Sampled.coinTreesOf_fold`) and as its coin commitment's
-pairs (`Sampled.releasedRootsOf_pairsOk`). -/
 theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws}
     (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondSamples p e = some d) {ξ : ByteArray}
@@ -184,11 +135,6 @@ theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursiv
     simp [secondRead, hd, hr, hl, Except.toOption]
   exact ⟨out, he.trans hout⟩
 
-/-! ## An accepted play's logs are read, or a break -/
-
-/-- **On an accepted play the cut reads a log of both sessions, or the first session's record carries a break**,
-where the first stage's coins are read under the parameters' key (`FirstReads`) and the device's history at the
-play prints the play's log in its two sessions (`PrintsTwo`). -/
 theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ)
     (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     {o : Exchange} (hθ : o.params = θ) (ha : Accepts o.sent) :
@@ -251,15 +197,8 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
     exact logsOf_ne_nil _ _ _ _
   · exact .inr ⟨(d₁, firstCoins e), hm₁, by rw [hK, ← hk₁], b⟩
 
-/-! ## The cut with the read in its event -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cut at an event `Good`**: where the sampled verdict accepts only where the form does (`Wired`), every
-accepted play where `Good` fails carries a break in one of the two sessions' records under the parameters' key or an
-opening collision in a read without the samples' coins, and the device's history at each play signed what the play's
-signatures are on (`SignsPlay`), an accepted play where `Good` fails is at most as likely as the read finder's
-collision plus the forger's forgery (`terms`). `cutBound` is this at `LogIsDevice`. -/
 theorem cutBound_of (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Good : Exchange → Prop)
     (hw : Wired V k θ)
@@ -283,11 +222,6 @@ theorem cutBound_of (V : Vocab d α) (k : Verity.Registration.Composite) (dev : 
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
-/-- **The cut with the read in its event**: where the sampled verdict accepts only where the form does (`Wired`), the
-first stage's coins are read under the parameters' key (`FirstReads`), the device's history at each play prints
-the play's log in its two sessions (`PrintsTwo`) and signed what the play's signatures are on (`SignsPlay`), an
-accepted play whose logs the check didn't read, or read other than the device's, is at most as likely as the read
-finder's collision plus the forger's forgery (`terms`), over both sessions. -/
 theorem cutBound_read (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hF : FirstReads θ)

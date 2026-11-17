@@ -2,22 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Cover
 
-/-!
-# SPOT[Flock] reads a coin only where `readsAt` says
-
-`readsOnly`: `ReadsOnly` at every held copy. Each step of `SpotFlock.V` reads the coins of the rounds before it only at
-rounds `readsAt` names (`next_congr`):
-
-* rounds 0 to `stage` answer their own coin;
-* round `stage + 1`'s statement check reads round 0's coin and the second stage's;
-* a session's round reads the coins of that session's rounds so far, all before the verdict's round;
-* the verdict reads, for each template `t`, the coins of at most `k₀ t` rounds of its session (`decidedAt` takes a
-  prefix), which also come before the verdict's round.
-
-None reads round `stage + 1`'s coin or the verdict round's. So two coin vectors equal at the rounds `readsAt` names give
-the verifier the same steps, and one prover's runs on them are one run. `acceptsRun_of'` is `acceptsRun` with
-`CoinsCover` and `ReadsOnly` discharged.
--/
+/-! SPOT[Flock] reads a coin only at the rounds `readsAt` names (`readsOnly`), and `acceptsRun` with
+`CoinsCover` and `ReadsOnly` discharged (`acceptsRun_of'`). -/
 
 @[expose] public section
 
@@ -37,7 +23,6 @@ theorem any_congr' {α : Type} {l : List α} {p q : α → Bool} (h : ∀ a ∈ 
   | cons a l ih =>
     simp only [List.any_cons, h a (by simp), ih fun b hb => h b (by simp [hb])]
 
-/-- **A step of SPOT[Flock] reads the coins only at the rounds `readsAt` names.** -/
 theorem next_congr (h : SpotFlock.Held) (x : Msg) (as : List Msg) {cs cs' : List FlockDeploy.Coin}
     (hl : cs.length = as.length) (hl' : cs'.length = as.length)
     (hr : ∀ n (hn : n < cs.length), readsAt h n → cs[n] = cs'[n]'(by omega)) :
@@ -101,7 +86,6 @@ theorem next_congr (h : SpotFlock.Held) (x : Msg) (as : List Msg) {cs cs' : List
     dsimp only
     rw [ev]
 
-/-- **SPOT[Flock] reads a coin only where `readsAt` says** (`ReadsOnly`), at every held copy. -/
 theorem readsOnly (h : SpotFlock.Held) : ReadsOnly h := by
   intro H Ω P x ω r r' hr
   have hv : (fun as => (SpotFlock.V h).next x as ((List.range as.length).map (coinSeq r))) =
@@ -117,7 +101,6 @@ theorem readsOnly (h : SpotFlock.Held) : ReadsOnly h := by
     · rw [dif_neg hk, dif_neg hk]
   exact congrArg (fun vn => Claims.stepWith H P x ω vn ((SpotFlock.V h).k x) [] [] ⟨[], [], [], .rej⟩) hv
 
-/-- **The form's accept is the run's accept**, `acceptsRun` with `CoinsCover` and `ReadsOnly` discharged. -/
 theorem acceptsRun_of' (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hfit : SourcesFit A C) (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') :

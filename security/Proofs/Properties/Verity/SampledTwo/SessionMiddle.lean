@@ -5,35 +5,8 @@ public import Proofs.Properties.Verity.SampledTwo.LogStrings
 public import Proofs.Properties.Verity.SampledTwo.SessionAsk
 public import Proofs.Properties.Verity.SampledTwo.SessionReplay
 
-/-!
-# A session's rounds after its link and before its last message
-
-Round `j` of session `t`, at `1 ≤ j` and `j + 1 < SpotFlock.k₀ A.h t`, is a round of one of the session's two reps.
-The session's verifier reads there the bytes the session's record retained for that round, after the tag `0`
-(`SessionMsgs.sessionMsgs`). The challenger opened the round after the digest the record gives it
-(`SessionCoins.LogAnswers`). This module shows that digest is the SHA-512 of the retained bytes, so the round shows a
-string that has its digest, and the round's message is that string after the tag.
-
-* `recordDigest_decode`, `recordDigest_retained`: the digest a record gives a round of a stream other than
-  `TREE_SESSION` is the one `Flock.Record.decode` reads for it, which under SHA-512 digests is the SHA-512 of the
-  bytes the round retained.
-* `session_reps`: the record of a one-table session the masked verdict accepts has two rep streams, each of the
-  rep's rounds, each round's digest that of its retained bytes.
-* `slot_lt_rounds`, `mid_digest`: at such a session, each round before the last is a round its record gives, and the
-  digest the record gives a round after the link's is the SHA-512 of the message the session reads there, less its
-  tag.
-* `RoundsRecorded`, `LogOpened`, `logOpened_of`: where each session's record gives coins of each of its rounds before
-  the last, the play's log has a release the locator puts on that round.
-* `MidDigests`, `midDigests_of`, `roundsRecorded_of`: both from `RecordsCover` and `MsgsOfRecords`.
-* `showsAt_session_mid`, `explains_session_mid`: `Messages.ShowsAt` and `Messages.Explains` at such a round of the
-  form's reading, with the digest the bytes the release that ends the log before the round answers
-  (`Messages.endAnswers`) and the string the round's message less its tag.
-
-**Not established here**: `RecordsCover`, that the check read a session record for each template, and
-`MsgsOfRecords`, that the messages the session reading reads of template `t`'s session are those of the `t`-th
-record the check read, at a one-table SHA-512 setup the masked verdict accepts, of `2 + 2 · repRounds` rounds. Both
-are hypotheses here. Nor are `Messages.ShowsAt` and `Messages.Explains` at a session's first round or its last.
--/
+/-! A session's rounds between its link and its last message show their retained bytes, whose SHA-512 is
+their digest; `RecordsCover` and `MsgsOfRecords` are hypotheses here. -/
 
 @[expose] public section
 
@@ -43,8 +16,6 @@ open Claims
 open Lean (Json)
 open Verity.Sampled (repStreamName)
 open Spot Spot.Challenger
-
-/-! ## Lists -/
 
 theorem forall₂_split_left {α β : Type} {R : α → β → Prop} {a : List α} {x : α} {rest : List α} :
     ∀ {l' : List β}, List.Forall₂ R (a ++ x :: rest) l' →
@@ -96,11 +67,6 @@ theorem slotStream_succ (tab : String) (R i : ℕ) :
   unfold slotStream
   rw [ite_eq_right (Nat.succ_ne_zero i), Nat.add_sub_cancel]
 
-/-! ## The digest a record gives a rep's round -/
-
-/-- **The digest a record gives a round of a stream other than `TREE_SESSION` is the one `Flock.Record.decode` reads
-for it**, under SHA-512 digests: the record's first stream so named is the one the decoded record finds by that name,
-and the round's `msg_sha512` is the hex of the digest the decoded round has. -/
 theorem recordDigest_decode {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunRecord} {J : Json}
     (h512 : spec.sha512Digests = true) (hd : Flock.Record.decode spec text = .ok sess)
     (hJ : Flock.JsonParse.parse text = .ok J) {name : String} (hne : name ≠ TREE_SESSION)
@@ -137,10 +103,6 @@ theorem recordDigest_decode {spec : Flock.SessionSpec} {text : String} {sess : F
     rw [Verity.Sampled.str_getD hy''.1, hy''.1]
     rfl
 
-/-- **The digest a record gives a round that retained its bytes is the SHA-512 of those bytes**, under SHA-512
-digests: of a stream other than `TREE_SESSION` whose decoded rounds are, one for one, the rounds `rounds` with their
-bytes, each retained round's digest that of its bytes (as `Claims.Bridge.Custody.decode_live` gives of the live
-session's rep streams). -/
 theorem recordDigest_retained {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunRecord} {J : Json}
     (h512 : spec.sha512Digests = true) (hd : Flock.Record.decode spec text = .ok sess)
     (hJ : Flock.JsonParse.parse text = .ok J) {name : String} (hne : name ≠ TREE_SESSION)
@@ -159,12 +121,6 @@ theorem recordDigest_retained {spec : Flock.SessionSpec} {text : String} {sess :
   rw [recordDigest_decode h512 hd hJ hne hy hky, hsha b (hbytes.trans hb), hdg]
   exact congrArg some (Verity.Sampled.sha512Msg_bytes b).symm
 
-/-! ## A one-table session's record -/
-
-/-- **The record of a one-table session the masked verdict accepts has two rep streams, each of the rep's rounds**:
-the live session has the two, each of `FlockDeploy.repRounds` rounds (`SessionReplay.streams_even`), and the decoded
-record finds each by the table's rep stream name, with the live rounds' bytes, each retained round's digest that of its
-bytes (`Claims.Bridge.Custody.decode_live`). -/
 theorem session_reps {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
     {record : String} {proofs : Array ByteArray} {lv : FlockDeploy.Live} {T : String}
     (hs : FlockDeploy.setupOf true x = some (s, spec, #[st]))
@@ -202,9 +158,6 @@ theorem session_reps {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
   · rfl
   · rfl
 
-/-- **Each round before the last of a one-table session the masked verdict accepts is a round its record gives**: the
-link's is round 0 of `TREE_SESSION`, and round `j ≥ 1` is a round of the rep stream `slotStream` gives it, which has the
-rep's rounds (`session_reps`, `Verity.Sampled.recordRounds_decode`). -/
 theorem slot_lt_rounds {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
     {record : String} {proofs : Array ByteArray} {T : String} {ms : List Msg} {J : Json}
     (hs : FlockDeploy.setupOf true x = some (s, spec, #[st]))
@@ -244,10 +197,6 @@ theorem slot_lt_rounds {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec
       rw [hcount 1 (by omega)]
       omega
 
-/-- **The digest the record gives a rep's round is the SHA-512 of the message the session reads there, less its
-tag**, at a one-table session the masked verdict accepts under SHA-512 digests: the session's message at round `j`,
-after the link's and before the last, is the tag `0` and the bytes the `(j - 1)`-th of the two rep streams' rounds
-retained (`SessionMsgs.sessionMsgs`), and that round is the one `slotStream` gives `j` (`recordDigest_retained`). -/
 theorem mid_digest {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
     {record : String} {proofs : Array ByteArray} {T : String} {ms : List Msg} {J : Json}
     (hs : FlockDeploy.setupOf true x = some (s, spec, #[st]))
@@ -287,20 +236,11 @@ theorem mid_digest {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {s
     rw [ite_eq_right hiR]
     exact recordDigest_retained h512 hd hJ (Verity.Sampled.repStream_ne_session T 1) hy1 hrds1 hr hbytes
 
-/-! ## The play's log has a release on each round before a session's last -/
-
-/-- **The play's log has a release on each round before a session's last**: on a play the form accepts whose log the
-check read is the device's (`Good`), for each round `j` of template `t`'s session before its last, the locator `L` puts
-a release of the play's log on that round. -/
 def LogOpened (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (L : CoinMap.Locate) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ t j, t < A.h.ms.length → j + 1 < SpotFlock.k₀ A.h t →
     ∃ q rl rest, o.log = q ++ rl :: rest ∧
       CoinMap.locAt L q rl.frame rl.answers = some (SpotFlock.off A.h t + j)
 
-/-- **Each session's record gives coins of each of its rounds before the last**: on a play the form accepts whose log
-the check read is the device's, each round `j` of template `t`'s session before its last is the link's or a rep's
-(`j ≤ 2 * repsOf (k₀ t)`), and the `t`-th of the sessions' records the check read (`sessionRecords`) gives coins of
-the stream and round `slotStream` gives it. -/
 def RoundsRecorded (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ t j, t < A.h.ms.length → j + 1 < SpotFlock.k₀ A.h t →
     j ≤ 2 * repsOf (SpotFlock.k₀ A.h t) ∧
@@ -308,10 +248,6 @@ def RoundsRecorded (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (tab : 
         Verity.Sampled.recordRound rc (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
           (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2 = some cs
 
-/-- **`LogOpened`, from the records' rounds** (`RoundsRecorded`), at a locator that agrees with the session-round
-locator at the sessions' rounds: the log the check read has a release on the round (`MembersHeld.opened`), and the
-play's log is that log after releases of no coin tree, the same frames one by one (`InteriorLogged`), so its like in
-the play's log is on the same round (`locOf_logged`). -/
 theorem logOpened_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : CoinMap.Locate} {tab : ℕ → String}
     (hL : LocatesSessions A tab (CoinMap.locAt L)) (hsz : HeldSize) (hI : InteriorLogged C Good)
     (hG : RoundsRecorded A C Good tab) : LogOpened A C Good L := by
@@ -337,26 +273,15 @@ theorem logOpened_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : 
   rw [← locOf_logged A tab hq ha hy]
   exact hloc
 
-/-- **`LogOpened` at the run's locator** (`runLocate`, which agrees with the session-round locator at the sessions'
-rounds: `locates_run`). -/
 theorem logOpened_run (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String)
     (hsz : HeldSize) (hI : InteriorLogged C Good) (hG : RoundsRecorded A C Good tab) :
     LogOpened A C Good (runLocate A Ls tab) :=
   logOpened_of (locates_run A Ls tab) hsz hI hG
 
-/-! ## The sessions' records and the messages the session reading reads -/
-
-/-- **The check read a session record for each template**: on a play the form accepts whose log the check read is the
-device's, the sessions' records the check read have a `t`-th for each template `t`. -/
 def RecordsCover (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ t, t < A.h.ms.length →
     ∃ recs rc, sessionRecords C o = some recs ∧ recs[t]? = some rc
 
-/-- **The messages the session reading reads of template `t`'s session are those of the `t`-th record the check
-read**: on a play the form accepts whose log the check read is the device's, the `t`-th of the sessions' records the
-check read is the parse of a record text the masked verdict accepts, with proof files, at the session a statement
-sets up at one table, `tab t`, under SHA-512 digests; the session has `2 + 2 · repRounds` rounds; and the messages `S`
-reads of template `t`'s session are that record's (`SessionMsgs.sessionMsgs`). -/
 def MsgsOfRecords (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Exchange → Prop) (tab : ℕ → String) :
     Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ recs rc t, t < A.h.ms.length → sessionRecords C o = some recs →
@@ -370,17 +295,12 @@ def MsgsOfRecords (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Exchan
         Flock.JsonParse.parse record = .ok rc ∧
         SessionMsgs.sessionMsgs spec x record proofs = some ms ∧ ∀ j, S.msg o t j = ms[j]?
 
-/-- **The digest a session's record gives a rep's round is the SHA-512 of the message read there, less its tag**: on
-a play the form accepts whose log the check read is the device's, where `S` reads a message of tag `0` at round `j` of
-template `t`'s session, after the link's round and before the last, the digest the `t`-th of the sessions' records
-gives the stream and round `slotStream` gives `j` is the SHA-512 of the rest of that message. -/
 def MidDigests (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Exchange → Prop) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ recs rc t, t < A.h.ms.length → sessionRecords C o = some recs →
     recs[t]? = some rc → ∀ j u, 0 < j → j + 1 < SpotFlock.k₀ A.h t → S.msg o t j = some (0 :: u) →
       (recordDigest rc (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
         (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map (·.data.toList) = some (Verity.sha512Msg u)
 
-/-- **`MidDigests`, from `MsgsOfRecords`** (`mid_digest`). -/
 theorem midDigests_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Exchange → Prop} {tab : ℕ → String}
     (h : MsgsOfRecords A C S Good tab) : MidDigests A C S Good tab := by
   intro o hacc hgood recs rc t ht hrecs hrc j u h0 hj hmsg
@@ -392,9 +312,6 @@ theorem midDigests_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ex
   rw [hR]
   exact mid_digest hs hv h512 hT hm hJ h0 (by omega) ((hS j).symm.trans hmsg)
 
-/-- **`RoundsRecorded`, from `RecordsCover` and `MsgsOfRecords`**: a session of `2 + 2 · repRounds` rounds has the
-link's round and the two reps' before its last, each is a round the record gives (`slot_lt_rounds`), and a record the
-members' check accepts gives coins of each round it gives (`Verity.Sampled.recordRound_isSome`). -/
 theorem roundsRecorded_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Exchange → Prop}
     {tab : ℕ → String} (hsz : HeldSize) (hcov : RecordsCover A C Good) (hmsgs : MsgsOfRecords A C S Good tab) :
     RoundsRecorded A C Good tab := by
@@ -429,10 +346,6 @@ namespace Verity.SampledTwo
 
 open Claims
 
-/-! ## `ShowsAt` and `Explains` at a rep's round -/
-
-/-- **A round whose message has the tag `tag` on every accepted play is explained by the message less its tag**, at
-any context: two accepted plays that show the same string there read the same message. -/
 theorem Messages.explains_tail {κ : Type} {A : Live₂} {Rd : Reading A} {Acc Good : Verity.Exchange → Prop}
     {raw : Verity.Exchange → ℕ → Option (List Msg)} {ctx : Verity.Exchange → ℕ → κ} {i : ℕ} (tag : UInt8)
     (hm : ∀ o, Acc o → Good o → ∃ u, Rd.msg o i = some (tag :: u))
@@ -445,9 +358,6 @@ theorem Messages.explains_tail {κ : Type} {A : Live₂} {Rd : Reading A} {Acc G
   have e : u = u' := (List.cons.inj (Option.some.inj hraw)).1
   rw [hu, hu', e]
 
-/-- **A session's message before its last has the tag `0`**, at the session reading and at the form's: the play's log
-has a release on the round (`SessionCoins.LogOpened`), and the sessions' messages up to a round a release is put on
-are of tag `0` (`Messages.SessionMsgsAsk`). -/
 theorem session_msg_tag (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hOpen : SessionCoins.LogOpened A C Good L) (hAsk : Messages.SessionMsgsAsk A S (FormAccepts C) Good L)
@@ -465,12 +375,6 @@ theorem session_msg_tag (A : Live₂) (C : CaseOf) (S : SessionReading)
     Nat.add_sub_cancel_left]
   exact hmsg
 
-/-- **A rep's round of the form's reading shows its message less the tag**: at round `j` of template `t`'s session,
-after the link's round and before the last, where the digest a play fixes for the round is the bytes the release that
-ends the log before the round answers (`Messages.endAnswers`) and the string it shows is the round's message less its
-tag, an accepted play whose log the check read is the device's shows a string that has its digest. The log before the
-round ends at the release on the round (`SessionCoins.before_session`), which answers the digest the session's record
-gives the round (`SessionCoins.LogAnswers`), the SHA-512 of the message less its tag (`SessionCoins.MidDigests`). -/
 theorem showsAt_session_mid (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (tab : ℕ → String) (hL : SessionCoins.LocatesSessions A tab (CoinMap.locAt L))
@@ -498,8 +402,6 @@ theorem showsAt_session_mid (A : Live₂) (C : CaseOf) (S : SessionReading)
   · exact (hr o hA hG).trans (congrArg (Option.map fun m : Msg => [m.tail]) hm)
   · exact congrArg (fun m : Msg => [m]) e.symm
 
-/-- **A session's round before its last, of the form's reading, is explained by its message less the tag**, at any
-context: the message there has the tag `0` on every accepted play (`session_msg_tag`). -/
 theorem explains_session_mid {κ : Type} (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hOpen : SessionCoins.LogOpened A C Good L) (hAsk : Messages.SessionMsgsAsk A S (FormAccepts C) Good L)

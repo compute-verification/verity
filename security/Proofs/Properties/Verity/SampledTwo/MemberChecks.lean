@@ -6,39 +6,8 @@ public import Proofs.Properties.Verity.Sampled.Record.Inner
 public import Proofs.Properties.Verity.Sampled.Event
 public import Proofs.Flock.SpotFlock.Code
 
-/-!
-# A member's session, accepted by the per-member form, is in Flock's masked scope (`MemberChecks`)
-
-The two-stage form checks each sampled member's sessions with `Spot.OneStageZk.stepMember`: the member's statement
-(`Member.statement`: `statementOf` at the member's own inputs, then its population and block checks), then `step` on
-each session, which sets the session up at its record's sample (`setupAt`) and pushes `verdictOf`'s verdict. Where the
-statement's run accepts every session (`Run.all`), each session's statement, as `verity-verify-proof verify --zk` reads it, is in
-the scope the two-stage proof reads of it (`SpotFlock.sessionOk`): it sets up in Flock's masked scope (`zkOk`), passes
-the deployed scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs (`hiddenOf`).
-
-The session's statement is any `FlockDeploy.Raw` whose fields are the member's (`MemberFields`: the statement
-`verity/flock-circuit`, the member's circuit and public files, its own lookup tables, `--zk`, one table, the member's
-program, and no `--work`, `--stratified`, `--closure` or `--public-inputs`) and whose JSON files read back as the member's
-(`ReadsBack`: its partition object and its registered reads, each up to `PartSame`, and the record's sample). The
-statement the sessions' reading builds (the member's statement with each value printed by
-`Flock.RecordText.printT`) has these fields by definition.
-
-* `statement_ok` (the member's statement): `Member.statement` passing is `statementOf`'s statement at the member's
-  files, its own lookup tables (`ownTables`) and its registered reads (`StepAt.ofOwn`).
-* `step_all`, `foldl_all`, `stepMember_sessions` (the accepted sessions): a run that accepts every session had each
-  session's verdict `.ok`, at the record the blobs hold for it.
-* `ins_of_fields` (the statement's reading): `FlockDeploy.Raw.ins` of such a statement reads v2's inputs at the
-  member's files (`Record.SessionMatch`), with the record's sample.
-* `memberSession_checks`, `memberSession_ok`: the three checks, and `sessionOk` where the statement has its template's
-  reference statement's shape.
-
-What the statements here take as hypotheses, besides the form's accept:
-* `decode w.encode = some w`: the statement's bytes read back as its fields, which holds wherever each length fits its
-  8-byte word (`Verity.Recursive.Part.decode_encode_fits`);
-* `ReadsBack`: the verifier's JSON parser reads the statement's sample as the value the form read, and its partition
-  object and registered reads as the form's or as values alike them, which is what a printed value reads back as;
-* in `memberSession_ok`, the shape: the statement's tables have the `m` of its template's reference statement's.
--/
+/-! A member's session, accepted by the per-member form, is in Flock's masked scope, given that its bytes
+read back as its fields and its JSON files as the form's (`ReadsBack`). -/
 
 @[expose] public section
 
@@ -61,11 +30,6 @@ private theorem mapError_ok {ε α : Type} {x : Except ε α} {f : ε → ε} {a
 private theorem statement_circuit :
     Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
 
-/-! ## The member's statement -/
-
-/-- **A member's statement, where it passes, is `statementOf`'s at the member's files**: the circuit and public files
-on the blobs, the member's own lookup tables (`ownTables`), the member's registered reads, at the statement
-`verity/flock-circuit` (whose leaves are not plain), with the member's population check at its slice. -/
 theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
     ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
@@ -97,9 +61,6 @@ theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Co
   obtain ⟨rd, hrd, h⟩ := bind_ok h
   exact ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, (Except.ok.inj h).symm⟩
 
-/-! ## The statement the run reads for a member -/
-
-/-- A member's statement with its files held is its statement. -/
 theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.files slice bs = .ok a) : m.statement slice bs = .ok a := by
   unfold _root_.Spot.OneStageZk.Member.files at h
@@ -108,8 +69,6 @@ theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs :
   obtain rfl : a' = a := Except.ok.inj h
   exact hs
 
-/-- **The statement `membersFiles` read under a member's name is that member's**, where the member is the first of
-its name (`find?`). -/
 theorem files_lookup {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs} :
     ∀ {l : List _root_.Spot.OneStageZk.Member} {files : List (String × _root_.Spot.OneStageZk.StepAt)}
       {m : _root_.Spot.OneStageZk.Member} {a : _root_.Spot.OneStageZk.StepAt},
@@ -136,8 +95,6 @@ theorem files_lookup {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core
       have hl' : as.lookup m.name = some a := by simpa only [List.lookup_cons, e'] using hl
       exact files_lookup has hf' hl'
 
-/-- **The statement the per-member run reads for a member the statements name is the member's own**:
-`statementAt` on what `membersFiles` read, at a member that is the first of its name. -/
 theorem statementAt_statement {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs}
     {ms : Array _root_.Spot.OneStageZk.Member} {files : List (String × _root_.Spot.OneStageZk.StepAt)}
     {m : _root_.Spot.OneStageZk.Member} {a : _root_.Spot.OneStageZk.StepAt}
@@ -154,7 +111,6 @@ theorem statementAt_statement {slice : _root_.Spot.OneStageZk.Member → Json} {
     obtain rfl : a' = a := Except.ok.inj h
     exact files_statement (files_lookup hf (by rw [Array.find?_toList]; exact hm) hl)
 
-/-- `heldStep` adds one member, the first of its name among the parameters'. -/
 theorem heldStep_find {ms held h' : Array _root_.Spot.OneStageZk.Member} {st : _root_.Spot.OneStageZk.StatementFiles}
     (h : _root_.Spot.OneStageZk.heldStep ms held st = .ok h') :
     ∃ m, ms.find? (·.name == m.name) = some m ∧ h' = held.push m := by
@@ -193,7 +149,6 @@ private theorem foldlM_held_find {ms : Array _root_.Spot.OneStageZk.Member} :
       · exact .inr hm₁
     · exact .inr hm'
 
-/-- **Each statement's member is the first of its name among the parameters'** (`heldStep`'s `find?`). -/
 theorem membersHeld_find {ms held : Array _root_.Spot.OneStageZk.Member}
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} (h : _root_.Spot.OneStageZk.membersHeld ms sts = .ok held) :
     ∀ m ∈ held, ms.find? (·.name == m.name) = some m := by
@@ -204,11 +159,6 @@ theorem membersHeld_find {ms held : Array _root_.Spot.OneStageZk.Member}
   · simp at hm'
   · exact hm'
 
-/-! ## The accepted sessions -/
-
-/-- **One session's step, where the run still accepts every session after it**: the run accepted every session before
-it, and the session's record is UTF-8 text on the blobs, its sample fits its length word, and `verdictOf` at its record's
-sample is `.ok`, after the coin-tree keys of the sessions before it. -/
 theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {bs : Core.Blobs}
     {scope ksFiles population : V Unit} {programSha : Option String} {want : Json}
     {r r' : _root_.Spot.OneStageZk.Run} {s : _root_.Spot.OneStageZk.RunFiles}
@@ -245,8 +195,6 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
         cases hfit
   · exact absurd h (throw_ne _ _)
 
-/-- **A session the statement's run accepted**: its record is UTF-8 text on the blobs, and `verdictOf` at the
-statement `a` and the record's sample is `.ok`, after some sessions' coin-tree keys. -/
 def SessionAccepted (a : _root_.Spot.OneStageZk.StepAt) (bs : Core.Blobs) (s : _root_.Spot.OneStageZk.RunFiles) :
     Prop :=
   ∃ coinKeys b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
@@ -256,8 +204,6 @@ def SessionAccepted (a : _root_.Spot.OneStageZk.StepAt) (bs : Core.Blobs) (s : _
       (_root_.Spot.OneStageZk.coinKeyOf record
         (_root_.Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))) = .ok ()
 
-/-- **A statement's sessions, run in order, accepting every one**: the run before them accepted every session, and
-so did each of them. -/
 theorem foldl_all {a : _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     ∀ (l : List _root_.Spot.OneStageZk.RunFiles) (r r' : _root_.Spot.OneStageZk.Run),
       l.foldlM (fun r s => a.step bs r s) r = .ok r' → r'.all = true →
@@ -277,10 +223,6 @@ theorem foldl_all {a : _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     · exact ⟨r.coinKeys, b, record, hb, hrec, hv⟩
     · exact hl s' hs'
 
-/-- **The per-member form's check of one member, accepting every session**: where `stepMember` on the member `m`'s
-statement files `sf`, at a statement `st` that returns the member's own statement at its slice (`hst`), returns a run
-that accepts every session, the member's statement passed at its files and registered reads, and each of `sf`'s
-sessions was accepted there (`SessionAccepted`). -/
 theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
     {st : _root_.Spot.OneStageZk.Member → V _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs}
     {r r' : _root_.Spot.OneStageZk.Run} {sf : _root_.Spot.OneStageZk.StatementFiles}
@@ -301,12 +243,6 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
   rw [← Array.foldlM_toList] at h
   exact ⟨circuitB, pubB, rd, tables, hpl, hc, hp, hrd, ht, (foldl_all _ r r' h ha).2⟩
 
-/-! ## The session's statement as `verity-verify-proof` reads it -/
-
-/-- **A session statement's fields are a member's**: the statement `verity/flock-circuit` under `--zk` (no `--coins
-os`), the member's circuit and public files `circuitB` and `pubB`, the member's own lookup tables `tables`
-(`ownTables`), one table, the member's program, and no `--work`, `--work-table`, `--stratified`, `--closure` or
-`--public-inputs`. -/
 structure MemberFields (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member) (circuitB pubB : ByteArray)
     (tables : List (String × ByteArray)) : Prop where
   statement : w.statement = _root_.Spot.OneStageZk.STATEMENT
@@ -323,17 +259,11 @@ structure MemberFields (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member)
   closure : w.closure = none
   publicInputs : w.publicInputs = none
 
-/-- **A session statement's JSON files read back as what the form read**: the verifier's parser reads its partition
-object as the member's or as an object alike it (`PartSame`: what a printed object reads back as), its registered
-reads as the member's or as a value alike them (`PartSame` again; none where the member has none), and its sample,
-once normalized (`Flock.norm`), as the sample of the session's record `record`. -/
 structure ReadsBack (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member) (record : String) : Prop where
   partition : ∃ P, w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok P ∧ PartSame P (some m.own.partition)
   registered : ∃ R, w.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok R ∧ PartSame R m.own.registered
   draw : ∃ D, w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok D ∧ D.map Flock.norm = Flock.Witness.recordDraw record
 
-/-- Registered reads that read back as the member's, or as a value alike them, read as the verifier's registered
-reads `rd`: `Registered.ofJson` returns the same ports on alike values (`PartSame.ofJson`). -/
 theorem registered_of_reads {o : Option ByteArray} {R j : Option Json}
     (hreg : o.mapM (FlockDeploy.jsonOf "registered reads") = .ok R) (hs : PartSame R j)
     {rd : _root_.Spot.OneStageZk.Reads} (hrd : _root_.Spot.OneStageZk.readsOf j = .ok rd) :
@@ -370,10 +300,6 @@ theorem registered_of_reads {o : Option ByteArray} {R j : Option Json}
       rw [hb]
       exact hj
 
-/-- **`verity-verify-proof`'s reading of a member's session statement holds v2's inputs at the member's files**: where the
-statement's fields are the member's and its JSON files read back, `FlockDeploy.Raw.ins` reads it as `si`, which matches
-v2's inputs `inputsAt` at the member's files and own lookup tables and its registered reads `rd`
-(`Record.SessionMatch`), with the record's sample. -/
 theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} {circuitB pubB : ByteArray}
     {tables : List (String × ByteArray)} {record : String} {rd : _root_.Spot.OneStageZk.Reads}
     (hf : MemberFields w m circuitB pubB tables)
@@ -414,18 +340,10 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
         readRegistered := rfl }
   · exact hDn
 
-/-! ## The checks -/
-
 variable {slice : _root_.Spot.OneStageZk.Member → Json}
   {st : _root_.Spot.OneStageZk.Member → V _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs}
   {r r' : _root_.Spot.OneStageZk.Run} {sf : _root_.Spot.OneStageZk.StatementFiles} {m : _root_.Spot.OneStageZk.Member}
 
-/-- **A member's session statement, accepted by the per-member form, is in Flock's masked scope**: where `stepMember`
-on the member `m`'s statement files `sf` returns a run that accepts every session, at a session `s` of `sf` whose record
-on the blobs is `record`, a statement `w` whose fields are the member's (at the circuit and public files the blobs hold
-for it), whose JSON files read back (`ReadsBack`) and whose bytes decode as `w` sets up in Flock's masked scope
-(`SpotFlock.zkOk`), passes the deployed `--zk` scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs
-(`SpotFlock.hiddenOf`). -/
 theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
@@ -515,8 +433,6 @@ theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m
     rw [hm.read_tags]
     exact (Verity.Sampled.statement_zkTags statement_circuit _ _).1
 
-/-- **A member's session statement, accepted by the per-member form, is in the scope the two-stage proof reads**
-(`SpotFlock.sessionOk` at template `t`), where it has template `t`'s reference statement's shape (`hshape`). -/
 theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
     (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r')
