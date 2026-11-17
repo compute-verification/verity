@@ -18,7 +18,7 @@ verity bench ppl metrics DIR/results.json                                       
 linears as Pearl-C's served kernel computes them (`pearl-c-linears`), reported as `metrics.toml`'s three metrics:
 
 ~~~text
-research run --on NODE --gpus 1 --project verity --source . --cwd source --max-min 90 -- env WORK=/workspace bash benchmarks/ppl/h200.sh
+research run --on NODE --gpus 1 --project verity --source . --cwd source --timeout 90m -- env WORK=/workspace bash benchmarks/ppl/h200.sh
 ~~~
 
 `h200.sh` takes an idle H100 or H200 (under `gpu-lease` where the node has it), the venv and HF cache
