@@ -43,7 +43,7 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   challenger role's message of the params' session and P2's raw record. The log is the verifier's own: its clock's
   readings and its coins never come from the prover;
 * the check, in order: the close (`closeRefusal`) is under a trusted key, counts the log's lines, holds the case's
-  chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryAttester.LMS`) on the params'
+  chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryChallenger.LMS`) on the params'
   session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
   state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
   when an entry is a request the process would have answered with an error, and with the failure that rejected the
@@ -187,7 +187,7 @@ def headOf (p : Params) (c : Commitment) : ByteArray := c.digest ++ (toString p.
 /-- Why the close doesn't sign the case whose head is `head` (`headOf`) under `lp`, none when it does: its key isn't
 trusted, it counts other lines than the log's, its chain isn't the case's (`P2Close.chainOf` of the head and then the
 log's entries), or its signature doesn't verify on `P2Close.closeMessage` of the params' session
-(`MemoryAttester.lmsVerify`, the check PoUS's sessions and the wipe run). -/
+(`MemoryChallenger.lmsVerify`, the check PoUS's sessions and the wipe run). -/
 def closeRefusal (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Option String :=
   let c := e.close
   if !p.trusted.contains c.publicKey then some UNTRUSTED

@@ -47,7 +47,7 @@ def _test_signer_dir(tmp_path_factory):
     yield
     M.ts.DIR = None
 
-#: Every scheme `pous-run serve` verifies, by id (`MemoryAttester.KNOWN_SCHEMES`).
+#: Every scheme `pous-run serve` verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
 KNOWN = {**mc.SCHEMES, **M.ts.SCHEMES}
 #: Reduced widths (`2^w − c0` prime, as the spec's ladder) and parameters `P2Params` refuses.
 WIDTHS = [(64, 189), (96, 17), (128, 173)]

@@ -142,7 +142,7 @@ def Point.ofJson (j : Json) : V Point := do
   pure ⟨q, ← J.nat j "k" ctx, ← J.nat j "limit_ns" ctx⟩
 
 /-- `checkAt` on the difftest's line: `{"point", "schemes": [id, …], "trusted": [hex, …], "setup", "digests": hex,
-"session", "session_id": hex}`, the schemes by id among those `MemoryAttester` verifies. -/
+"session", "session_id": hex}`, the schemes by id among those `MemoryChallenger` verifies. -/
 def runFn (j : Json) : V Json := do
   let ctx := "run"
   let pt ← Point.ofJson (← J.get j "point" ctx)
