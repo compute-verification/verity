@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.TS.J10R
 public import Properties.Pouw.MonitoringPeriod
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.executionPhase`), J10-R
+# A period's credit over the windows served H1's verdict credits (`PouwVerifier.Credit.executionPhase`), J10-R
 
 `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
@@ -115,7 +115,7 @@ and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lan
   the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.executionPhase` samples by its own work sampling design (`Credit.samplingDesign`, one stratum a `K` template, the
   period's committed `k`). `creditDrawn` is the verifier's own sample (`Credit.executionPhaseDrawn`, which `executionPhaseLayout` holds
-  the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
+  the proofs to), and PouwVerifier's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
   reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
   bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
   a named assumption, which this statement then uses.
@@ -212,15 +212,15 @@ structure Answered where
 
 /-- **Served H1's verdict credits the window**: `Credit.executionPhase` on its inputs gives credited calls, not a refusal. -/
 def ExecutionPhaseAccepts (r : PreDraw) (e : Answered) : Prop :=
-  ∃ got : List ℕ, PouwCheck.Credit.executionPhase e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
+  ∃ got : List ℕ, PouwVerifier.Credit.executionPhase e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
 /-- **The units the window's sample demands proofs of**: `Credit.descriptorDrawn`, the verifier's `Credit.executionPhaseDrawn`
 (the sample `Credit.executionPhaseLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
 the sample's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
-def creditDrawn (r : PreDraw) (e : Answered) : PouwCheck.R (Array ℕ) :=
-  PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
+def creditDrawn (r : PreDraw) (e : Answered) : PouwVerifier.R (Array ℕ) :=
+  PouwVerifier.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
 
 /-- **A period's windows as `Credit.executionPhase` reads them**: on the period's coins, window `w`'s registration and the
 rest of its inputs, each any function of the coins. -/
@@ -318,7 +318,7 @@ def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditExecutionPhases (P
 
 /-- **Window `w`'s salt as `Credit.executionPhase` reads it**: its registered `salt`, hex-decoded. -/
 def saltOf {Ω : Type} {n : ℕ} (ws : CreditExecutionPhases Ω n) (x : Paths Ω n) (w : Fin n) : ByteArray :=
-  (PouwCheck.hex? (ws.reg x w).salt).getD ByteArray.empty
+  (PouwVerifier.hex? (ws.reg x w).salt).getD ByteArray.empty
 
 /-- **A unit's place in its window**, as the verifier derives it for the unit's public row
 (`Credit.registeredFile`'s `j10r`): its position `pos` (`u0 + t`), its call's first unit `call` (`u0`), the call's
@@ -345,7 +345,7 @@ namespace Place
 def layout (p : Place) : J10R.NoiseLayout := ⟨p.r, p.c, p.K⟩
 
 /-- The unit's first row block and first column block, the verifier's (`Credit.j10rBlocks`). -/
-def blocks (p : Place) : ℕ × ℕ := PouwCheck.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J
+def blocks (p : Place) : ℕ × ℕ := PouwVerifier.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J
 
 /-- The unit's noise at salt `s`: its call's `seed_c` at its blocks (`J10R.unitNoise`). -/
 def noise (s : ByteArray) (p : Place) : Noise :=

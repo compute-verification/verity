@@ -44,7 +44,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import PouwCheck
+import PouwVerifier
 import PouwWindow
 import Proofs.Compose.Compose.CircuitWork
 import Proofs.Compose.Compose.ServiceBudget
@@ -84,7 +84,7 @@ no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `
 * The period (`honestRun`): one coin coordinate, PoUW's, which is H1's paths; one account; the empty circuit; a window
   of one tick, in which the compute account runs `512·128·n` tensor-core multiply-adds and nothing else, the device's
   whole rate (`device`). PoUW's verdict is the deployed check's (`checkedAccepts`): the compiled PoUW check,
-  `PouwCheck.protocol.check` (`verity/protocols/accounting/pouw/verifier/lean/check`, held to the Python verifier by its difftest),
+  `PouwVerifier.protocol.check` (`verity/protocols/accounting/pouw/verifier/lean/check`, held to the Python verifier by its difftest),
   accepts every window of the period, as `Properties.Pouw.MonitoringPeriod.Accepts` reads it. The period's play
   (`checkedPlay`) is H1's honest play with that acceptance, so PoUW's verdict on the run is the play's at the run's
   coin by definition. No other subprotocol runs in the period, so none accepts. The network attester's claim at
@@ -168,7 +168,7 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
   unfold ResourceAccounting.Step.Fits
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
-/-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
+/-- **The deployed check accepts the period**: the compiled PoUW check (`PouwVerifier.protocol.check`) accepts every
 window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
   ∀ w, Accepts HonestH1.prm ((HonestH1.executionPhases n).reg x w) ((HonestH1.executionPhases n).ev x w)
@@ -354,7 +354,7 @@ open HonestH200
 
 /-- **`WorkOfH1CheckedCreditMonitoringPeriodH200`'s honest witness**: its hypotheses hold at the honest period on the H200
 (`HonestH200.honestRun`), one window of H1's honest period at the run's `δ = 10⁻⁶`, whose PoUW verdict is the compiled
-check's (`PouwCheck.protocol.check` accepting every window, `HonestH200.checkedAccepts`), at the H200's INT8 price with
+check's (`PouwVerifier.protocol.check` accepting every window, `HonestH200.checkedAccepts`), at the H200's INT8 price with
 the SHA-512 and fetch prices, which no tensor-core price reads (`HonestH200.h200S8Price_tc`), at `0`. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     Nonempty (ResourceAccounting.RealizesCreditedWords (honestRun 1) (cert 1 (1 / 1000000)) (ResourceAccounting.h200S8Price 0 0)
