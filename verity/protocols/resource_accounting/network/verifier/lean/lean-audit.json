@@ -100,12 +100,12 @@
   }
  },
  "guarantees": {
-  "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
+  "NetworkVerifier.RecordsBytes.evidenceOf_toEvidence": {
    "owner": "@network-accounting",
    "signature": [
-    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence (j : Lean.Json) :",
-    "  Eq (NetworkCheck.Check.evidenceOf j)",
-    "    (Except.instMonad.map NetworkCheck.Records.ByteEvidence.toEvidence (NetworkCheck.Records.evidenceOf j))"
+    "NetworkVerifier.RecordsBytes.evidenceOf_toEvidence (j : Lean.Json) :",
+    "  Eq (NetworkVerifier.Check.evidenceOf j)",
+    "    (Except.instMonad.map NetworkVerifier.Records.ByteEvidence.toEvidence (NetworkVerifier.Records.evidenceOf j))"
    ],
    "assumptions": [],
    "premises": {
@@ -114,15 +114,15 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "d7bf8ddfba8b0ea4d7cf8032d17af12ffd5866408dad0686344a41de65319ff6"
+   "type_hash": "1bde11d59ba0f740579fa97c422abbd30d312e66503b075da46fbe10a78209a9"
   },
-  "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
+  "NetworkVerifier.RecordsBytes.expectedGridsOfBytes_eq": {
    "owner": "@network-accounting",
    "signature": [
-    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq (g : NetworkCheck.Check.Grid) (W : Nat)",
-    "  (l : NetworkCheck.Records.ByteLink) (w : Fin W) :",
-    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGridsOfBytes g W l) w.val)",
-    "    (Option.some (NetworkCheck.Check.expectedGrid g W l.toLink w.val))"
+    "NetworkVerifier.RecordsBytes.expectedGridsOfBytes_eq (g : NetworkVerifier.Check.Grid) (W : Nat)",
+    "  (l : NetworkVerifier.Records.ByteLink) (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkVerifier.Records.expectedGridsOfBytes g W l) w.val)",
+    "    (Option.some (NetworkVerifier.Check.expectedGrid g W l.toLink w.val))"
    ],
    "assumptions": [],
    "premises": {
@@ -131,27 +131,12 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "092871ea38ce03e4ffd45e0d031320be0fea5add9d8241fbea215d8ec39efa35"
+   "type_hash": "72939c6b74fdfc3cb0e82d0eea496e053f3015f275be417a039357eab38a37d9"
   },
-  "NetworkCheck.RecordsBytes.unhex_eq": {
-   "owner": "@network-accounting",
-   "signature": ["NetworkCheck.RecordsBytes.unhex_eq (s : String) : Eq (NetworkCheck.Records.unhex s) (Flock.unhex s)"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "47004c441f361d7380e6a9c49d91ceb2bc2b4739ca315db785465a279eeeb248"
-  },
-  "NetworkCheck.RecordsGrid.expectedGrids_eq": {
+  "NetworkVerifier.RecordsBytes.unhex_eq": {
    "owner": "@network-accounting",
    "signature": [
-    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.LinkOpening)",
-    "  (w : Fin W) :",
-    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
-    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
+    "NetworkVerifier.RecordsBytes.unhex_eq (s : String) : Eq (NetworkVerifier.Records.unhex s) (Flock.unhex s)"
    ],
    "assumptions": [],
    "premises": {
@@ -160,7 +145,24 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "dbcc147c8dbdc7ca9944cc5dbab8f57d8f093fae2c773f4f64b4449524a75458"
+   "type_hash": "9ed9d628988906d7d3c801d74af6b38b49daef6e4e69c4ecf9f892e630decf92"
+  },
+  "NetworkVerifier.RecordsGrid.expectedGrids_eq": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetworkVerifier.RecordsGrid.expectedGrids_eq (g : NetworkVerifier.Check.Grid) (W : Nat)",
+    "  (l : NetworkVerifier.Check.LinkOpening) (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkVerifier.Records.expectedGrids g W l) w.val)",
+    "    (Option.some (NetworkVerifier.Check.expectedGrid g W l w.val))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8580f035cfdb586273a357b8c125a7d5d213e31d6a863f456237343fdd8c532b"
   }
  },
  "shape": {
@@ -232,61 +234,61 @@
     "NetworkAttester.payloads": "b368994673089a9e92724be8cc48d871327fbba41f7a95ad083a10c975424a2b"
    }
   },
-  "NetworkCheck.Certificate": {
-   "digest": "6051277316af97831cc0cab11afdb2aca45f8d28afc142ada3db6c4dc052e137",
+  "NetworkVerifier.Certificate": {
+   "digest": "9679508c7ad8ff5bf246d00704c3ce113bb89fc0b388d1644acb32b19e4aac3c",
    "definitions": {
-    "NetworkCheck.Params": "bfdf4cf8ed1764be3aed3b01ee66c0a48b01bb79cff171baf53fcb5a840322ae",
-    "NetworkCheck.Params.allocation": "1474079561c3cfa50494ce3561c2ba6a49e46e140a4ecf0ac30f936485f972bf",
-    "NetworkCheck.Params.buckets": "1139cd7109acd90f05e1a270fde46f369d6ee3d4b09be892123182d11d09bccd"
+    "NetworkVerifier.Params": "2b58b98fd67da688e3b461348c84a94a99de7db08254282a112c1343e75fafae",
+    "NetworkVerifier.Params.allocation": "396bf31ae960ad102c52835a6310ff85b342825323a883773c874049950bda1b",
+    "NetworkVerifier.Params.buckets": "fca746791eee99c3c6d75c7a5f0a42f70dc0ae553d601a8922034a027ea51a45"
    }
   },
-  "NetworkCheck.Check": {
-   "digest": "3ce960550e91e665e397b69fd450c048b7c86d5dae61855f45cca7e56ce7578f",
+  "NetworkVerifier.Check": {
+   "digest": "921a439f9c36aaa6ebd6aa3c8d7fdf872aca9bad0969965f89a6b8a93b848d58",
    "definitions": {
-    "NetworkCheck.Check.Evidence": "937370e1fe49513919cbb912fea6932f2051c9cbda009f84d79adbc95515470d",
-    "NetworkCheck.Check.Grid": "dda3c8c0a91166be337f73036e47a1f3321211ac26bb5c6d6e67cf10aea5a1ca",
-    "NetworkCheck.Check.LinkOpening": "fb755477ec03631af720020c35037a2ada46dcc0f03bb7b253b37c48c97238f6",
-    "NetworkCheck.Check.LinkOpening.frames": "72a5cbb9015f58691058f78953a7268600e0457b47062a219d760015a5bc90b0",
-    "NetworkCheck.Check.LinkOpening.syncs": "7a3cbe822e9e2ac8b4ddf0fe80502249b856d49c9fbfdd3e13515cb879fd5e72",
-    "NetworkCheck.Check.bitsOfBytes": "5ef530d0b8f0ff850f0bdac70d3d72aedbfa6d35ba0338f613a3c516b3c12382",
-    "NetworkCheck.Check.byteOfBits": "0da821922a7f14cd263aca7acd1c90895213d2b2567ac72da473bcfbb7a323bf",
-    "NetworkCheck.Check.bytesOfBits": "55c3111e9ce28105d625953261c07fd8e2b21b79a71ea813a860956b1981c526",
-    "NetworkCheck.Check.bytesOfBitsList": "0b76a9a879012d7db7db4df394c03084e076edba96d9ddc56f63e736fcc7f05d",
-    "NetworkCheck.Check.evidenceOf": "0e0b22922e1c85af6ed9aaed810b3282db95f9d446bc22db960003a28d2660f8",
-    "NetworkCheck.Check.expectedGrid": "b61a29eaf46766b4fd118576cbb0de993b45d2c7c20807d78ae98ee384952c46",
-    "NetworkCheck.Check.frameOf": "4520b1a4b13a412aaec8f7716df1e15d7f0effa680e9f0be59ad1ff1d8b705ce",
-    "NetworkCheck.Check.noSync": "198cf0458c4ab318fdce5c7200ef68b418022638322f10dee98ce4837b4ccf1d",
-    "NetworkCheck.Check.ratOf": "034fc4127890627944f38ccb6808b44389c9eb72692048987dcfb9370c9f9ee1",
-    "NetworkCheck.Check.syncOf": "5caff09e57652e914d669e0fb6b87bde227bb850bcd79ef7e44368b5479b9dd2"
+    "NetworkVerifier.Check.Evidence": "7cca036a5700def31e6e2bae88199a5288ca0e5bc144ffba0f382da6d2502952",
+    "NetworkVerifier.Check.Grid": "11ed4b72e293e4cd49c86c84ca5a48b23b06cf03e27acae20768ca63626fa128",
+    "NetworkVerifier.Check.LinkOpening": "76b56be6de4d8972e38d7de25aa308f404a3aa1d67689a694c92cecfcf81ba8b",
+    "NetworkVerifier.Check.LinkOpening.frames": "637ecb5c6a23cd3f6d04cc54a442d125eb7a6347f9243a09b78971fc8e4c6a56",
+    "NetworkVerifier.Check.LinkOpening.syncs": "3b8e6320eae999e253f79f3bebf92372355af8a73d977f70ca93ee0450afbf1c",
+    "NetworkVerifier.Check.bitsOfBytes": "cd2b320cae1028f5cb86cd69976908dfc6db5879ee5c436c9d3c50e5d02edab4",
+    "NetworkVerifier.Check.byteOfBits": "51eae36a62b543b50b5eefa004e334641dfa9d3d1cf7f6e51befb778954cbd11",
+    "NetworkVerifier.Check.bytesOfBits": "4723839cb6035b018e41c5f8e093acef1a3a287cb945063f5f5bfb269f6dd7b2",
+    "NetworkVerifier.Check.bytesOfBitsList": "cd544265caa6abdf05bc9c742a76c9329f1e8d2c5c9efaf48d29601d40365bf2",
+    "NetworkVerifier.Check.evidenceOf": "78d6dd893fce1809c7bfbb355f6ee6e4adadfec92866650f01ca718cb0cfea3e",
+    "NetworkVerifier.Check.expectedGrid": "60ddd8ee6a2f7a6dfd5418dd92897bd0690c8627efc3b749ef4ed9f3e7073a09",
+    "NetworkVerifier.Check.frameOf": "937b4ea1cb53a5533175f5351e2700ddaa9fb9cba9c0e741d1b79babe05d5e30",
+    "NetworkVerifier.Check.noSync": "47165d2d4381314e9858becf6fa10779218359293153d11907860933c95e0bda",
+    "NetworkVerifier.Check.ratOf": "3063f1d2cfd1ceecb6d6c7ed2e95a16eaaa38b50b507c7c53ab92950dc015c53",
+    "NetworkVerifier.Check.syncOf": "efd1fe393295926070f57ac402ed7be2ae6942f7daec20f357582fe07d1d1d3c"
    }
   },
-  "NetworkCheck.Records": {
-   "digest": "3248f481f1f92a93a7ba3a7282ca7d2e7df07e9c3e29787dab4a27ffc6d5afed",
+  "NetworkVerifier.Records": {
+   "digest": "e3a3c8a26fde7ec1e7a7d9d48c2f6b2b1070c9bb2632125c372ab28c21eaa1cb",
    "definitions": {
-    "NetworkCheck.Records.ByteEvidence": "aa580ff61f821fabe5e248a95383f2dd41c8feb9df229aa23b945432e9a56338",
-    "NetworkCheck.Records.ByteEvidence.links": "b73e6b3cbefa0c40337c3be09433789a9542fdfc99d418eb20158be63520c062",
-    "NetworkCheck.Records.ByteEvidence.toEvidence": "4913433b85a9f4e7180f9d357e7ecad9280e7a708dcfadcef961c6b2ed94a994",
-    "NetworkCheck.Records.ByteFrame": "f78ce13a64161db4abd2680336b8088354b99024932510355ee7a83f382c693e",
-    "NetworkCheck.Records.ByteFrame.anchor": "bfbe4c09eb2620591f42cf330b1beb8cbcf4582964b17152e40ade92d0ea2919",
-    "NetworkCheck.Records.ByteFrame.index": "2da144a7fd970eaaf37349f3972b0d7152774f0853db1792dddabced1277fd4b",
-    "NetworkCheck.Records.ByteFrame.payload": "07e639105bf250f71a5bacd12e02cd1f8e7ac99515cd4923b6b583ff9d774ee1",
-    "NetworkCheck.Records.ByteFrame.timing": "4341ade4fe8938769c81435af5128bf79c42e35c34d0f2b3fc391075da4eaa67",
-    "NetworkCheck.Records.ByteFrame.toLogical": "88a7a4b44d740333b98efb99dbc1a095a483910cd37d948b1f467379704012e0",
-    "NetworkCheck.Records.ByteLink": "dba855f25707846aa921b27281c87708f804ede5f677f8bdf0c06d879ebba448",
-    "NetworkCheck.Records.ByteLink.frames": "97dc2bc73b3e41a3f99224f8a229b54937de685581c7a6ee9166ca1da8ff05c9",
-    "NetworkCheck.Records.ByteLink.syncs": "67dce6282daba25116588a2c58671d7c1efa9e52784a2440da3f11b77e536da4",
-    "NetworkCheck.Records.ByteLink.toLink": "3d7dcab099cfcb61a6be48db4f7cf240955bdd147d8b105bae13c11e7c0ac856",
-    "NetworkCheck.Records.RawGrid": "e83f00f4eacd8a1ff0d0d7d44838f9fe1601e5c2cec5e9b5fc9ea6e4d7114ca4",
-    "NetworkCheck.Records.byteFrameOf": "7a1928693bd3cc73e58e48028ba5f6bd9fc15d988c49e01962b8988512cb877a",
-    "NetworkCheck.Records.enqueueCounts": "f93ce2c8694803daf1a089d881b7969bd87bac809122a2afe373fa0096ee4b66",
-    "NetworkCheck.Records.evidenceOf": "a5e816b091af367ca25ff7338f1f2359f18d3b454e7312fa6430381446a0d06a",
-    "NetworkCheck.Records.expectedGrids": "8007708028a64c8fb478e7c905de042e9a0fb1304d9b687ac9e31c66702163bf",
-    "NetworkCheck.Records.expectedGridsOfBytes": "c3ad13fd3d954e131f3274b4769a985fc82b07d9fd0a773b10a8923873b7c212",
-    "NetworkCheck.Records.handingRev": "2a1ac4f865499783a2d6241580b7e91ef326645a3a8d85f486f43553db51a60d",
-    "NetworkCheck.Records.releases": "a3c6f119eb0e7d4edea05cc8d0db5d820ab6df3ea35e018823f2024f174c0449",
-    "NetworkCheck.Records.rows": "0399e73d61bda659ee858f9d928dffc254999a7c5c55677f10c16882b3281774",
-    "NetworkCheck.Records.unhex": "6208d9f35c6b6ca3e1030618e0a9ca1f54ba5265a849233f8c711761470530cd",
-    "NetworkCheck.Records.unhexChars": "bd4810568d86512391ffc713d7df42a780aee490ea410ae1642f676c094aa1fb"
+    "NetworkVerifier.Records.ByteEvidence": "f0dad88554c7bc37d13cb7040271609fdb36f3fa4dad7be75b703a9f9ece1c08",
+    "NetworkVerifier.Records.ByteEvidence.links": "0e9a3dc4c870e7d1092b0c8d44e3260e64756d19bc0cb6f5cec12826744d4729",
+    "NetworkVerifier.Records.ByteEvidence.toEvidence": "29fda086042ef0ddf01d930892345ef00ba82f08d6deec9ae3075ff2cfae2b2c",
+    "NetworkVerifier.Records.ByteFrame": "eb0ce95a55aebaade0fa0c12aebd1e83bffd6b25db15b851148e0d94f5a30767",
+    "NetworkVerifier.Records.ByteFrame.anchor": "25bf98249cfb709d8c1ea811d290181e2cc614b1585d432795bea88f5f945aff",
+    "NetworkVerifier.Records.ByteFrame.index": "fe3657771512becca1cd2fbebc5c647a37c673bdb767507a4af04ae36144409c",
+    "NetworkVerifier.Records.ByteFrame.payload": "0020761d17a6302230b7a9c8a864f0780c9032175872ece752a5975ece80d615",
+    "NetworkVerifier.Records.ByteFrame.timing": "dbdcbae15b98e5670a533c2ce26fab34d547d7df0de1299df55f6a67ac246dc2",
+    "NetworkVerifier.Records.ByteFrame.toLogical": "7a24880a3b29afeb15673cf0ed0f87656010f5639c68590aee0dce096feb667a",
+    "NetworkVerifier.Records.ByteLink": "9bd46e51195201277d5ad4ee672eac2b445967e41c533f57c0d26bb5e29b5a80",
+    "NetworkVerifier.Records.ByteLink.frames": "1dc7bbe5137e929909184183d186d4ab97e9f372cd44d6ebbd4d183be0857ca8",
+    "NetworkVerifier.Records.ByteLink.syncs": "2dcb71e26a2c9e662f7f7d85f847b361d2e518ff100fca9814e59d98146a227b",
+    "NetworkVerifier.Records.ByteLink.toLink": "06cea64aadfdc5b0f6d69ccc3a33b95b7f255d9e64ade9b2cdd9f9fa2ba90a5e",
+    "NetworkVerifier.Records.RawGrid": "3eea83754d497e1459cf225ab2feb4386a98db859690c847e6725d30b091b732",
+    "NetworkVerifier.Records.byteFrameOf": "20bc1a64c551bb1dd23a21097659fc354f5aced5fab3562cb905b89a8faca973",
+    "NetworkVerifier.Records.enqueueCounts": "9181937472a48a715f97c7b37d557d17cee3dfc1074abb883f4921ca7245b99c",
+    "NetworkVerifier.Records.evidenceOf": "8de02b4178f444d257df1e0abfaa506a19cee5a9ebf450321c505d0df9939f71",
+    "NetworkVerifier.Records.expectedGrids": "83a71608a3c110a981e3236be9272c7b678c824283c12e14c0c21f20bfab2a1c",
+    "NetworkVerifier.Records.expectedGridsOfBytes": "50cd8c17df061c40e7bbf20b2d60f2d0899cf8d55b1dbd9de9b0ae53de9977cb",
+    "NetworkVerifier.Records.handingRev": "695374004ede2b5ce9f513b4d429f5c00bd7e50aaedb48ca021bdc89bc84e6ba",
+    "NetworkVerifier.Records.releases": "7c5aad1ddf513db9b5f736adafb550006db0deb712eba81b4224562aeac1da5f",
+    "NetworkVerifier.Records.rows": "07807ac91067ff42ae40e8870832676717be91eba32e2819ec01a78ee6c60a83",
+    "NetworkVerifier.Records.unhex": "1cc537add7edf37c840a86a0d28b24886f225db44ed4d61197aedaaa4163581f",
+    "NetworkVerifier.Records.unhexChars": "792e70bc19a4a597128451ca65c69d3ab87b111ebf6ea80ca71f996b9c86d6b6"
    }
   }
  },
