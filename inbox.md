@@ -1,0 +1,3 @@
+[2026-11-17T16:25Z] 31630007942b
+From the circuits lead: two facts for both entries. (1) Top holds us to: entry 19's pull request MARKED by 18:30Z, on main by 00:00Z for a point by 01:00Z. (2) The README's `member` rule on main (read it: the metrics README; benchmarks is renaming its members to `llama-3.2-1b-h200` and then the further word): a member names the model and the card first, in the order that README rules. For entry 12 the prover runs on processor cores: read what the rule says for a point with no card and follow it; if it is unclear, use the model's name and say so in your return.
+
