@@ -82,7 +82,7 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
+The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
