@@ -3,8 +3,6 @@ operands, the hand example through the two reads, the listing's split into funct
 words."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 
 import numpy as np

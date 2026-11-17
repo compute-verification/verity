@@ -378,7 +378,7 @@ def _p2_params(segments: int) -> Any:
 
 
 def _ready(segments: int, salt: bytes) -> dict[str, Any]:
-    """The memory challenger's setup fields for the store, as the harness's `V3.ready` gives them."""
+    """The memory attester's setup fields for the store, as the harness's `V3.ready` gives them."""
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 
     params = _p2_params(segments)
@@ -588,7 +588,7 @@ def audit_cmd(a: argparse.Namespace) -> int:
     free0, total = torch.cuda.mem_get_info(dev)
     doc["device"] = {**backend.facts(), "total_bytes": total, "free_before_bytes": free0}
     H.leave_reserved(a)
-    script, judge = H.MEMORY_CHALLENGER, ["--lean-exe", str(a.pous_timed_audit or P2H.timed_audit_exe(out))]
+    script, judge = H.MEMORY_ATTESTER, ["--lean-exe", str(a.pous_timed_audit or P2H.timed_audit_exe(out))]
     c = None
     for e in exps:
         st, rec = stores[e], doc["stores"][str(e)]
@@ -720,7 +720,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scratch", required=True)
     p.add_argument("--log2", default="19,25")
     p.add_argument("--store-seed", type=int, default=20261012,
-                   help="the synthetic store's blocks (the memory challenger flips its own coins)")
+                   help="the synthetic store's blocks (the memory attester flips its own coins)")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--audits", type=int, default=20)
     p.add_argument("--pings", type=int, default=5000)
@@ -738,7 +738,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fit-batches", default="1,8,32,64,128")
     p.add_argument("--headroom-gib", type=float, default=2.0)
     p.add_argument("--load-batch", type=int, default=32)
-    p.add_argument("--pous-timed-audit", default="", help="the Lean judge of the audits (default: pous_check's, built once)")
+    p.add_argument("--pous-timed-audit", default="", help="the Lean judge of the audits (default: pous_verifier's, built once)")
     for name in ("audit", "fit-driver"):
         p = sub.choices.get(name) or sub.add_parser(name)
         p.add_argument("--max-model-len", type=int, default=8192)

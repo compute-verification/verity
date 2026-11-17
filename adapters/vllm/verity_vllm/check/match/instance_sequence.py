@@ -12,7 +12,6 @@ from typing import Any
 
 from verity.circuits import codec, refs
 from verity.circuits.program import RUN, input_id
-from verity_vllm.definitions.registry import catalog
 
 from verity_vllm.check.match import compiler_form, split_selects
 from verity_vllm.check.match import prefix_reads as PX
@@ -20,6 +19,7 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.canonical_operands import as_progression as _asP
 from verity_vllm.check.match.canonical_operands import weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
+from verity_vllm.definitions.registry import catalog
 from verity_vllm.log import init_logger
 from verity_vllm.program.compact import expand, lean_root, rle_mapped
 
@@ -51,7 +51,9 @@ def const_value(spec: str) -> tuple[int, int] | None:
 def _registry():
     """The registry every module loaded (`verity_vllm.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    reg, errors = catalog.load()
+    loaded = catalog.load()
+    assert loaded is not None
+    reg, errors = loaded
     for e in errors:
         logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg

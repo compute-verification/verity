@@ -4,10 +4,10 @@ block), and the plan's CONTENT (sites, digest) is the same under both sources on
 from __future__ import annotations
 
 import pytest
+from verity_torch.correspondence import runtime as RC
 
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
 from verity_vllm.acquire import plan as P
-from verity_torch.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ReturnSlot,

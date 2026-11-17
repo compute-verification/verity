@@ -64,9 +64,8 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     """The specializations of the rows the replay evaluates, each ``(spec, bound)``: ``spec`` is the row's word Definition, of a
     family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
-    from verity_vllm.definitions.numerics.rows import ROWS
-
     from verity_vllm.check.replay.delegate import DELEGATES
+    from verity_vllm.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows
@@ -102,10 +101,9 @@ def kernel_refusal(specs: Iterable[tuple[str, str]]) -> str | None:
     gates of that row's ``bits`` family on the same sample (`_gates_differ`, once a pair of families per process), and the
     function-valued statics those gates were bound with to the Build's: one whose function a ``bound`` of ``specs`` binds at
     another version is refused."""
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.definitions.numerics import kernel_registry as KR
     from verity_vllm.definitions.numerics.rows import KERNEL, ROWS
-
-    from verity_vllm.commit import challenge as CH
     from verity_vllm.query.manifest.format import spec_family
 
     specs = sorted(set(specs))
@@ -153,10 +151,10 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
     from verity.circuits.evaluation.batch import type_dtype, type_shape
     from verity.circuits.evaluation.reference import resolve, signature_of, statics_of
     from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
-    from verity_vllm.definitions.numerics import kernel_registry as KR
-    from verity_vllm.definitions.numerics.rows import KERNEL
 
     from verity_vllm.commit import challenge as CH
+    from verity_vllm.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics.rows import KERNEL
 
     (reg,) = (r for r in KR.registered() if (r.key, r.kernel) == (family, KERNEL))
     out: list[str] = []
@@ -198,6 +196,7 @@ def refusal(program_dir: str, digest: str, specs: Iterable[tuple[str, str]]) -> 
     the descriptor's entry, and a Boolean one to its row's ``spec`` as well (`_word_differs`).  Of a Boolean Build a None says no
     more than that: what holds its rows' kernels to its gates is `kernel_refusal`."""
     from verity.circuits.codec import program_digest
+
     from verity_vllm.definitions.registry.catalog import load
 
     specs = list(specs)
@@ -211,7 +210,9 @@ def refusal(program_dir: str, digest: str, specs: Iterable[tuple[str, str]]) -> 
     got = program_digest(desc)
     if got != digest:
         return f"{p} is Program {got[:16]}, not the Program of record {str(digest)[:16]}"
-    registry, _errors = load()
+    loaded = load()
+    assert loaded is not None
+    registry, _errors = loaded
     ours: dict[str, Any] = {}
     seen: dict[str, str | None] = {}
     skew: list[str] = []

@@ -66,7 +66,8 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
             ({"argv": [*LEASE, "python", "-c", "import verity_bench.overhead_node"]}, "isn't a run of the door"),
             ({"sub": "run"}, "isn't a run of the door"),
             ({"argv": [*LEASE, "bash", R.NODE_JOB, "points", "--card", "h200", "--uuid=GPU-0"]}, "isn't a run of the door"),
-            ({"sub": "points", "env": {"VERITY_BENCH_SETUP": "patch.sh"}}, "set VERITY_BENCH_SETUP with --env"))):
+            ({"sub": "points", "env": {"VERITY_BENCH_SETUP": "patch.sh"}}, "set VERITY_BENCH_SETUP with --env"),
+            ({"sub": "points", "env": {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_AMX"}}, "set ONEDNN_MAX_CPU_ISA with --env"))):
         run = f"r20261104-020000-001{i}"
         s.ran(run, tmp_path / "r20261104-020000-0002", **kw)
         with pytest.raises(ValueError, match=why):
@@ -76,6 +77,9 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
     s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=gpus,
           env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
     assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
+    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points",
+          env={"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"})
+    assert R.store_points(s.store, "r20261104-020000-0022").startswith("art:")
 
     points = tmp_path / "r20261104-020000-0002" / "out" / "points.json"
     doc = json.loads(points.read_text())
@@ -218,3 +222,18 @@ def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_w
     assert table["covers"] in said and O.WITHOUT_Y in said
     monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
     assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
+
+
+@pytest.mark.parametrize("commits_y", [True, False, None])
+def test_a_gamma_of_record_says_whether_its_run_timed_y_s_commitment(tmp_path, scheme, commits_y):
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    assert R.record_run(s.store, timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")) == []
+    table = R.build(s.fresh(), root=REPO)
+    row = next(r for r in table["rows"] if (r["scheme"], r["point"], r["model"]) == ("pearl-plus", "C", O.KERNEL_MODEL))
+    del row["commits_y"]
+    if commits_y is not None:
+        row["commits_y"] = commits_y
+    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C"}) if "member" not in m)
+    assert (own["value"], own["target"], own["verdict"]) == (row["gamma"]["gamma"], O.GAMMA_MAX, "within target")
+    assert own["extra"].get("commits_y", "none written") == ("none written" if commits_y is None else commits_y)

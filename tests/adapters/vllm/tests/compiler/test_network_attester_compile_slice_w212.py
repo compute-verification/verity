@@ -15,11 +15,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+
+from tests.compiler.test_network_attester_compile_slice import BOOK
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
-from tests.compiler.test_network_attester_compile_slice import BOOK
 
 FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures"
 OWN, CLASS = "compile_slice_w212.json", "compile_slice_w212_class.json"
@@ -80,7 +80,7 @@ def test_the_served_rows_are_the_replays(w212):
     x = w212
     assert [[list(r) for r in step] for step in x.served] == x.fx["rows"]
     assert [list(map(list, s)) for s in CS.case(x.S, x.sl, BOOK).steps] == x.fx["rows"]
-    assert x.fx["steps"] == 20 and x.S.P == {OWN: 20, CLASS: 54}[x.name]
+    assert x.fx["steps"] == 20 and {OWN: 20, CLASS: 54}[x.name] == x.S.P
 
 
 def test_the_slice_accepts_w212(w212):

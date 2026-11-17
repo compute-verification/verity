@@ -215,7 +215,7 @@ def test_a_priced_tax_is_the_sum_of_its_named_parts():
             assert e[total] == pytest.approx(sum(p[key] for p in e["parts"]), rel=1e-12), (name, total)
     assert {p["part"]: p["status"] for p in kept["tokens"]["parts"]} == {
         "certified-tick rule": "simulated", "step record": "modeled", "two-stage boundary commitment": "modeled",
-        "history tables": "modeled", t.EDGE: "measured", "deterministic top-k": "modeled"}
+        "history tables": "modeled", t.EDGE: "measured", "deterministic top-k": "measured"}
     assert kept["tokens_bi"]["parts"][:-1] == kept["tokens"]["parts"]
 
     def changed(**part) -> dict:
