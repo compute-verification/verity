@@ -399,7 +399,7 @@ def _wipe(cfg, params, bound):
 
 POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
 BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
-#: served_piece.py's flag for each binding of PoUS's memory challenger, and of PoUB's bandwidth verifier
+#: served_piece.py's flag for each binding of PoUS's memory attester, and of PoUB's bandwidth verifier
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
 _BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
 
@@ -409,9 +409,9 @@ def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
 
 
 def _pous_piece(cfg, params, bound):
-    """The memory challenger's key is the configuration's pin alone, on the command line; with no pin the piece
+    """The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
     trusts no session."""
-    pin = _pinned(cfg, MEMORY_CHALLENGER, "pous")
+    pin = _pinned(cfg, MEMORY_ATTESTER, "pous")
     words = [*(["--trusted-sha512", *pin] if pin else []), "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
     return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES}

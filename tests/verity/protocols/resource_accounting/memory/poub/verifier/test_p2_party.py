@@ -238,7 +238,7 @@ def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_pa
 def test_the_party_refuses_a_closer_key_other_than_the_one_its_pin_names_before_any_session(tmp_path, capsys) -> None:
     from types import SimpleNamespace
 
-    key = SimpleNamespace(public_key=b"the memory challenger's key")
+    key = SimpleNamespace(public_key=b"the memory attester's key")
     pin = hashlib.sha512(key.public_key).hexdigest()
     absent = tmp_path / "no-registration.json"
     mc.SessionLog.create(tmp_path / "sessions")

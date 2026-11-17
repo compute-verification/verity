@@ -987,7 +987,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     if a.challenger is not None:
         signer = device_key(a.challenger)
         if hashlib.sha512(signer.public_key).hexdigest() != a.trusted_sha512:
-            ap.error(f"the memory challenger's key in {a.challenger} is not the one --trusted-sha512 pins for the close: "
+            ap.error(f"the memory attester's key in {a.challenger} is not the one --trusted-sha512 pins for the close: "
                      "it signs no session's close")
         closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
@@ -1045,7 +1045,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
 GOAL = CS.ONSITE_GOAL
 #: PoUB's P2 session's name in a deployment configuration: in its `protocols` and a binding's table
 COMPONENT = "bandwidth"
-#: its `[[pin]]` names PoUS's key: it signs the close with the memory challenger's PoUS key
+#: its `[[pin]]` names PoUS's key: it signs the close with the memory attester's PoUS key
 CLOSER_PARTY = "bandwidth-verifier"
 
 

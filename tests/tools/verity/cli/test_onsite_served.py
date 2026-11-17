@@ -81,7 +81,7 @@ RUNTIME = {
 #: PoUS's and PoUB's parties as runtime pieces of their sessions (`T.POUS`, `T.POUB`), for the runtime path of `live`
 RUNTIME_PARTIES = {
     (c, party): T.Piece(c, party, T.RUNTIME, f"{party}'s {c} run", reaches=reaches, binds=("address",), session=s)
-    for c, s, listener in (("pous", T.POUS, T.MEMORY_CHALLENGER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
+    for c, s, listener in (("pous", T.POUS, T.MEMORY_ATTESTER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
     for party, reaches in ((T.PROVER, listener), (listener, ""))}
 
 
@@ -741,7 +741,7 @@ BOTH = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {**BINDINGS["bandwidth-v
 
 def test_pouss_and_poubs_parties_start_from_the_table_and_none_raises(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
-    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_CHALLENGER),
+    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_ATTESTER),
                            (T.AUDITOR_HOST, T.BANDWIDTH_VERIFIER)):
         state = tmp_path / party
         assert R.run_main([str(CONFIG), "--on", machine, "--party", party, *(

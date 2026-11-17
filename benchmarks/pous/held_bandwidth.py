@@ -53,7 +53,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/
 
 import bandwidth as B
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
@@ -295,7 +295,7 @@ def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping
             "key_pin": "configuration" if trusted_sha512 in pinned else "run",
             mc.PREMISE: mc.trusted_device(
                 deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT, key_sha,
-                f"the bandwidth verifier, which signs the close with the memory challenger's key on {host}",
+                f"the bandwidth verifier, which signs the close with the memory attester's key on {host}",
                 configuration=deployment["configuration"], committed=deployment["committed"])}
 
 
