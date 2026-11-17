@@ -19,26 +19,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# The known-content tie: a registrant's row at a port the verifier registers at known content is that content, or SHA-512 collides
-
-`verity-verify-proof --registered F` refuses a file whose port named at known content (`Registered.KNOWN_KEY`: each row's
-u16 words and its salt) has a registered root other than the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2`
-leaves (`Registered.checkKnownAll`, run in `FlockVerify.registeredInput`). What that refusal establishes, from the
-verifier's code:
-
-* `checkKnownAll_ok`, `checkKnown_ok`: each named port is `own`'s first port of that name, of `hm96-sha512/row/v2`
-  rows, as many as its known rows, and its root is `FV3.root` of their leaves (`Registered.knownLeaves`);
-* `knownPayload_eq`: a known row's hm96 leaf is `hm96Input`'s of its `sha512/row/v2` bytes (`rowBytesV2`);
-* `knownColl_spec`: a registrant's row that opens such a root at position `i` (`opensLeaf`, `ReadsX.committed`) has
-  the bytes of known row `i`, or `knownColl` outputs two different SHA-512 inputs with one digest. As `valueColl`
-  (`C3/RegLevels/ValueTie.lean`), the pair is the hm96 leaf's (`hm96Pair`) or the opening's against the verifier's
-  tree (`openPairAs`, the schema-generic `openPairV`);
-* `bits_of_v2`: a value whose `sha512/row/v2` encoding is a known row's bytes has that row's bits.
-
-`knownColl` evaluates SHA-512 at most `5n + 2^(D+1) + 2D + 7` times, `n` the rows and `D = log2ceil n`, as
-`valueColl` does, with the known rows' digests in place of the verifier's.
--/
+/-! The known-content tie: a registrant's row at a port the verifier registers at known content is that content, or
+`knownColl` exhibits a SHA-512 collision. -/
 
 @[expose] public section
 
@@ -49,10 +31,6 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockSoundness.Refine (H512)
 open FlockSoundness.Binding (hm96Input hm96Pair hm96Pair_spec hm96_treeLeaf)
 
-/-! ## What `checkKnownAll` checked -/
-
-/-- **A port `checkKnownAll` accepts known content for** is `own`'s first port of that name, and `checkKnown` accepts it
-at that content. -/
 theorem checkKnownAll_ok {own : Array Registered.Port} {known : Array (String × Array (Array ℕ × ByteArray))}
     (h : Registered.checkKnownAll own known = .ok ()) {name : String} {ks : Array (Array ℕ × ByteArray)}
     (hm : (name, ks) ∈ known) :
@@ -64,8 +42,6 @@ theorem checkKnownAll_ok {own : Array Registered.Port} {known : Array (String ×
     exact ⟨reg, hf, h1⟩
   · cases h1
 
-/-- **What `checkKnown` checked of the registered root**: `hm96-sha512/row/v2` rows, as many as the known rows, and the
-root is `FV3.root` of their leaves. -/
 theorem checkKnown_ok {reg : Registered.Port} {ks : Array (Array ℕ × ByteArray)}
     (h : Registered.checkKnown reg ks = .ok ()) :
     reg.schema = HmRow.ROW_SCHEMA_V2 ∧ ks.size = reg.leaves ∧
@@ -85,15 +61,12 @@ theorem checkKnown_ok {reg : Registered.Port} {ks : Array (Array ℕ × ByteArra
           simp only [bne_iff_ne, ne_eq, Bool.or_eq_true, not_or, not_not] at hs hl
           exact ⟨hs.1, hl, eq_of_not_bne hr⟩
 
-/-! ## A known row's leaf -/
-
 theorem rowBytesV2_toList (row : Array ℕ) :
     (Registered.rowBytesV2 row).data.toList =
       (HmRow.rowPrefixV2 (16 * row.size)).data.toList ++ wordBytes row.toList := by
   unfold Registered.rowBytesV2
   rw [← Array.foldl_toList, foldl_bytes]
 
-/-- **A known row's hm96 leaf is hm96's leaf over its `sha512/row/v2` bytes** (`hm96_treeLeaf`). -/
 theorem knownPayload_eq (row : Array ℕ) (salt : ByteArray) :
     Registered.knownPayload row salt =
       (H512 (hm96Input (Registered.rowBytesV2 row).data.toList salt.data.toList)).1 := by
@@ -113,8 +86,6 @@ theorem knownLeaves_width (reg : Registered.Port) (ks : Array (Array ℕ × Byte
   simp only [Registered.knownLeaves, Array.mem_map] at hx
   obtain ⟨_, -, rfl⟩ := hx
   exact Sha512.hash_size _
-
-/-! ## The extractor -/
 
 /-- **The opening's extractor against the verifier's tree, at any leaf schema**: `openPairV` with the frame-v3 leaves
 of `schema` (`Registered.leafInAs`) in place of `hm96-sha512/row/v1`'s. -/
@@ -157,9 +128,7 @@ def knownColl (reg : Registered.Port) (ks : Array (Array ℕ × ByteArray)) (i :
         (H512 (hm96Input (Registered.rowBytesV2 ks[i]!.1).data.toList ks[i]!.2.data.toList)).1
         (sibsV reg.domain (Registered.knownLeaves reg ks) i)).2.data.toList)
 
-/-- **`knownColl`'s spec**: where `checkKnown` accepted `reg` at the known rows `ks`, and the registrant's hm96 leaf of
-`r` under `y` opens `reg`'s root at `i`, `i` is a known row's position, and `r` is that row's `sha512/row/v2` bytes, or
-`knownColl` collides. -/
+/-- `knownColl` evaluates SHA-512 at most `5n + 2^(D+1) + 2D + 7` times, `n` the rows and `D = log2ceil n`. -/
 theorem knownColl_spec {reg : Registered.Port} {ks : Array (Array ℕ × ByteArray)} {i : ℕ} {r y : List UInt8}
     {path : ByteArray} (hk : Registered.checkKnown reg ks = .ok ())
     (ho : Registered.opensLeaf reg (H512 (hm96Input r y)).1 i path = true) :
@@ -199,11 +168,6 @@ theorem knownColl_spec {reg : Registered.Port} {ks : Array (Array ℕ × ByteArr
       (sibsV_size _ _ (knownLeaves_width _ _) hiK) hcl
     exact some_collides rfl (FlockSoundness.Registered.collides_bytes _ hcol)
 
-/-! ## A known row's bits -/
-
-/-- **The bits of a value whose `sha512/row/v2` bytes are a known row's**: where a value's row bytes under
-`sha512/row/v2`'s first block (`rowEncP` at `Hidden.rowPre true`, a v2 row port's `encPortH`) are `rowBytesV2 row`, its
-bit `b` is bit `b % 16` of the row's word `b / 16`, zero past the row. `bits_of_rowInV` without the padding. -/
 theorem bits_of_v2 {W : ℕ} {v : Layout.BitVal W} {row : Array ℕ}
     (h : Layout.rowEncP (Hidden.rowPre true) v = (Registered.rowBytesV2 row).data.toList) (b : ℕ) (hb : b < W) :
     v.2 ⟨b, hb⟩ = (row[b / 16]!).testBit (b % 16) := by

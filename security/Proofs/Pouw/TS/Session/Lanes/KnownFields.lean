@@ -3,24 +3,8 @@ module
 public import Proofs.Pouw.TS.Session.Lanes.KnownOf
 public import Proofs.Pouw.TS.Session.Lanes.KnownBits
 
-/-!
-# A lane's known fields hold at the opened rows
-
-Where a session's known rows hold at the known content of the public inputs `P` (`KnownHeld` at `knownOf`, which
-`ResourceAccounting.Guarantees.TS.LeafLanesSound` hands each session), the opened rows' bits at its `admit`, `pub` and `o0`
-ports are `P`'s, the lane's index and `ok = 1`: the fields of `LaneHolds` that the known content fixes
-(`LaneKnownHolds`: admit, salt, position, roots, lane and ok), and `CombHolds.ok` at the combine.
-
-* `bitsNat_testBit`, `rowWords_testBit`: a known row's word `t / 16`'s bit `t % 16` is the row's bit `t`
-  (`PouwWindow.Lanes.rowWords`, `bits_words`);
-* `pubBits_salt`, `pubBits_position`, `pubBits_roots`, `pubBits_lane`: the `pub` row's bits at each field are the
-  field's, at its first bit in `lanePorts` (`fieldBit_salt` …, by evaluation);
-* `laneKnownHolds`, `combKnownOk`: through `holds_known` and `portBit_known` at each port.
-
-Each port is taken as a known value's row (`KnownPort`: a `sha512/row/v2` port without segments; a one-row value is read
-at row 0, `known_readAt_zero`) and each of its bits as on a wire of the unit (`RowBitRead`). Flock-verify's known-read
-check gives both (`Lanes.KnownRead`'s `laneKnownHolds_of_check`, `combKnownOk_of_check`).
--/
+/-! A lane's known fields (admit bits, salt, position, roots, index and `ok`) hold at the opened rows where its known
+rows hold at the public inputs' known content. -/
 
 @[expose] public section
 
@@ -28,8 +12,6 @@ namespace ResourceAccounting.TS.Lanes
 
 open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 
-/-- **The known content's fields of lane `l`'s view**, at the reader `rd` of its ports' row bits: the admit bits, the
-salt, position and roots, the index `l` and `ok = 1`, each at its place in the layout. -/
 structure LaneKnownHolds (T : Tile) (rd : String → ℕ → Option Bool) (P : LanePub) (l : Fin 32) : Prop where
   admit : ∀ i : Fin 32, rd "admit" (fieldBit (lanePorts T 0) "admit" + i.val) = some (P.admit i)
   salt : Holds (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits P.salt
@@ -44,7 +26,6 @@ theorem fieldBit_position (T : Tile) : fieldBit (lanePorts T 0) "position" = 512
 theorem fieldBit_roots (T : Tile) : fieldBit (lanePorts T 0) "roots" = 576 := rfl
 theorem fieldBit_lane (T : Tile) : fieldBit (lanePorts T 0) "lane" = 1600 := rfl
 
-/-- The number bits spell has those bits. -/
 theorem bitsNat_testBit (bs : List Bool) (i : ℕ) : (bitsNat bs).testBit i = (bs[i]?).getD false := by
   induction bs generalizing i with
   | nil => simp [bitsNat]
@@ -58,7 +39,6 @@ theorem bitsNat_testBit (bs : List Bool) (i : ℕ) : (bitsNat bs).testBit i = (b
       rw [e, ih]
       simp
 
-/-- **A row's bit from its words**: bit `t % 16` of word `t / 16` of `rowWords bs` is bit `t` of `bs`. -/
 theorem rowWords_testBit (bs : List Bool) {t : ℕ} (ht : t < bs.length) :
     ((rowWords bs)[t / 16]!).testBit (t % 16) = (bs[t]?).getD false := by
   have hw : t / 16 < (bs.length + 15) / 16 := by omega
@@ -113,7 +93,6 @@ def KnownPort (s : RowsSession) (q : Fin s.c.ports.size) : Prop :=
 
 variable {s : RowsSession}
 
-/-- **`o0` reads `ok = 1`** where the known content names `o0` with the row 1 and its bit 0 is read. -/
 theorem ok_of_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {q : Fin s.c.ports.size}
@@ -127,10 +106,6 @@ theorem ok_of_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c
   rw [rowWords_testBit [true] (by simp)]
   rfl
 
-/-- **Lane `l`'s known fields hold at the opened rows**: where its known rows hold at `knownOf P salts (some l)`
-(`KnownHeld`), under verity-verify-proof's complete check, in a circuit that names each port once, at unit 0 whose served roots
-are registered, with its `admit`, `pub` and `o0` ports each a known value's one row (`KnownPort`) and every bit of them
-read (`RowBitRead`), the view's admit bits, salt, position, roots and index are `P`'s and `l`, and `ok = 1`. -/
 theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     {P : LanePub} {salts : String → ByteArray} {l : Fin 32} (hK : KnownHeld s (knownOf P salts (some l)))
     {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
@@ -173,8 +148,6 @@ theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports
     exact hpub (by simp [laneBits]) fun i hi => pubBits_lane _ _ _ _ hi
   · exact ok_of_known hN hK hu hS hcomp ho hPo (salt := salts "o0") (by simp [knownOf, knownRows]) hro
 
-/-- **The combine reads `ok = 1`** where its known rows hold at `knownOf P salts none`, its `o0` a known value's one
-row whose bit 0 is read. -/
 theorem combKnownOk (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     {P : LanePub} {salts : String → ByteArray} (hK : KnownHeld s (knownOf P salts none)) {u : Fin s.n}
     (hu : u.val = 0) (hS : s.ServedRegistered u) (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())

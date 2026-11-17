@@ -35,21 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A leaf's group of linked sessions realizes one unit, any shape (the statement)
-
-`ResourceAccounting.Guarantees.TS.LeafGroupSound`: a sampled leaf proved as a group of one-unit Flock statements, `L` lanes of
-`n` chunks each and one combine (`ResourceAccounting.TS.Group.Ix L n`, `G = L n + 1` sessions, `L` the tile's lanes
-`(R/4)(C/8)`), is accepted with a leaf that fails its relation, and no collision in hand, with probability at most
-`G δ`: `δ` a session from `CheckedSessionSound`'s argument, joined by a union bound over the group. Its premises are named
-(`ResourceAccounting.Premises.TS`): Flock's collision resistance at every session (`SessionsCR`), the window's sampling design at every
-statement (`ExecutionPhaseDesigns`), and the group's circuits realizing the leaf's relation at the rows the sessions open
-(`GroupRealizes`). Everything else of the session argument is the verifier's: port uniqueness and the `ok` port (the
-known-read check's names, at known content ending in the `o0` row 1), full checking and a unit (the sample check),
-registered served roots (the reads built from `own` and the one-read check). At the 32 × 32 leaf with one chunk a lane
-it is `ResourceAccounting.Guarantees.TS.LeafLanesSound`'s argument, which proves `GroupRealizes` there from `LaneLowers` and
-`CombineLowers`. It sits in the proofs package because the sessions do (`reads_exempt`).
--/
+/-! The statement that a leaf proved as a group of `L n + 1` one-unit Flock sessions is accepted with a failing relation
+and no collision in hand with probability at most `(L n + 1) δ`. -/
 
 @[expose] public section
 

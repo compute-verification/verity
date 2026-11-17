@@ -33,14 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The premise that ties a checked unit's Flock circuit to its registered circuit
-
-`OkRealizes`: the session's key program computes, at each unit, the checks of one unit of the registered circuit `Cd`,
-so that its `ok` wires carrying the `ok` row means those checks hold. It belongs in
-`security/Definitions/Pouw/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
-beside `ResourceAccounting.Assumptions.TS`'s other session premises (`Proofs.Pouw.TS.Session.Assumptions`).
--/
+/-! `OkRealizes`, the premise that a session's key program computes, on its `ok` wires, the checks of one unit of the
+registered circuit `Cd`. -/
 
 @[expose] public section
 

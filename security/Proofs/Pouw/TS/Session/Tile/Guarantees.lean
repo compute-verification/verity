@@ -35,32 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A tile unit's proof layer with its Definition's checks is sound through its Flock sessions (the statement)
-
-`ResourceAccounting.Guarantees.TS.TileSessionSound`: `ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
-`ResourceAccounting.TS.Tile.tileLayer` in place of `checkedLayer`. Its relation is the unit's Definition with its check words
-fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`), what `ResourceAccounting.Served`'s docstring asks of a realizing layer's `pf.rel`;
-`CheckedSessionSound` proves the checked layer only, whose `CheckedRel` says nothing of the product or `dq`. This
-statement names what the Definition reading takes:
-
-* (a) the `ok` rows are the verifier's, proved from verity-verify-proof's known-content refusal (`Registered.checkKnownAll`)
-  as in `ResourceAccounting.Guarantees.TS.HeldSessionSound`, not a premise;
-* (b) every sampled proof block's view of the words its registered reads carry (`ResourceAccounting.TS.Tile.tileView` of `rd`) meets
-  the Definition's checks (`TileOk`) at the Definition's own dequant (`ResourceAccounting.TS.Lanes.dqOf dqW`), under the named
-  premise `ResourceAccounting.TS.Tile.TileComputes` (the circuit computes `PouwH1TileZy_v1{TILE}` there, TILE `PouwH1Tile_v1`
-  or `PouwH1Tile_v3`). That every circuit port is a port of `own` is not a hypothesis: `tileLayer`'s acceptance
-  includes verity-verify-proof's complete check (`Flock.Registered.checkComplete`), from which `checkComplete_ok` reads it.
-  That the Definition's `ok = 1` means `TileOk` is proved
-  (`ResourceAccounting.TS.Tile.tileChecks_of_computes`, which gives `ResourceAccounting.Assumptions.TS.TileChecks`), at a `K` the
-  tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), which the statement takes of its `K`: the tile verifier pins each
-  template's circuit by digest (`PouwCheck.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
-  in range.
-
-The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `TileRel` on every path,
-so the tile layer's unsound event is inside the checked layer's. It sits in the proofs package because the sessions do
-(`reads_exempt`).
--/
+/-! The statement `TileSessionSound`: `CheckedSessionSound`'s window at the tile layer, whose relation is
+`PouwH1TileZy_v1` with `ok = 1`, under the premise `TileComputes`. -/
 
 @[expose] public section
 

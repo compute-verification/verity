@@ -3,14 +3,8 @@ module
 public import Proofs.Pouw.PearlC.InertBound.IntForm
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# `_inert_bound_constants` at pinned shapes
-
-`inertBoundConstants` evaluated by the kernel at the circuit-check binding's shapes and at deployed 64 × 64 tiles, each on the
-device's own `g`, prices and cap; one shape `_inert_bound_constants` refuses; and `creditInt` where `credit_of` is called.
-`verity/protocols/accounting/pouw/verifier/tests/test_inert_bound_lean.py` reads these statements and checks each against `cap._inert_bound_constants` and
-`PearlC(forming="v1").credit_of`.
--/
+/-! `inertBoundConstants` and `creditInt` evaluated by the kernel at pinned shapes, which a test checks against
+`cap._inert_bound_constants` and `credit_of`. -/
 
 @[expose] public section
 
