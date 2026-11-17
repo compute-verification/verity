@@ -1951,6 +1951,32 @@ def test_a_renamed_file_is_its_old_paths_file_so_the_sites_its_base_holds_past_i
             "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
 
 
+#: a short file whose rename rewrites most of its bytes (a module renamed in its own text), with its one listed use
+OLD_B, NEW_B = "docs/old/b.md", "docs/new/b.md"
+OLD_B_TEXT = "# Old.B\n\nOld.B.run, Old.B.stop.\nAn Old.B teapot.\n"
+NEW_B_TEXT = OLD_B_TEXT.replace("Old", "New")
+
+
+@pytest.mark.parametrize("more", [False, True])
+def test_a_rename_git_doesnt_pair_is_the_file_it_was_when_the_list_moves_its_entry(repo, more):
+    """A rename under git's 50% similarity that moves its entry with it (``--move OLD NEW``) is the file it was: its use is
+    the base's, so the change passes; one more use in it is the change's, named at its new path."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist({"file": OLD_B, "count": 1}), OLD_B: OLD_B_TEXT})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("Old.B is New.B", {OLD_B: None, NEW_B: NEW_B_TEXT + "A New.B teapot rests.\n" * more,
+                                   REPO_TERMS_JSON: _allowlist({"file": NEW_B, "count": 1})})
+    assert set(repo.git("diff", "-M", "--name-status", "main", "pr", "--", OLD_B, NEW_B).splitlines()) == {
+        f"D\t{OLD_B}", f"A\t{NEW_B}"}
+    [c] = G.gate("main", "pr")["changes"]
+    if not more:
+        assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+    else:
+        assert (c["verdict"], c["fix"]) == ("failed", [
+            f"repo_retired_terms: {NEW_B}: 2 found, 1 allowed",
+            f"repo_retired_terms: {NEW_B}:5 'teapot' is retired; say kettle (GLOSSARY.md)"]), c["why"]
+
+
 def test_one_more_site_in_a_renamed_file_is_the_changes(terms_behind):
     """The same rename with a fifth use of the term in the moved file: it holds one more site than its old path did, so
     the change fails, naming the new path's count and the one new site."""
