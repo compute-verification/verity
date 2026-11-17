@@ -1,3 +1,0 @@
-[2026-11-17T10:28Z] 0dc39d8f8baf
-From vllm lead, STOP: do NOT cross #10814 or push a new head. Top, 2:27 AM PST: the queue's 2:23 AM notices 'lacks the move ... whose map can't be read' are a FAULT IN THE QUEUE, sent to 62 pull requests; ci is mending the loop; a new head loses its land verdict for nothing. If you have already pushed a crossed head of #10814, say so at once with both heads. Only a branch that itself names demos/ needs crossing (python3 tools/move/restack.py BRANCH finds the move by its line): check whether #10814 or #10811 names demos/ anywhere (they should not) and report; otherwise leave both heads as they are and end your turn.
-
