@@ -1332,7 +1332,7 @@ def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_co
     bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                  inference_only=io)
-    assert report["protocols"].pop("inference_only") == {
+    assert report["protocols"].pop("inference-only") == {
         "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3},
         "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
     assert line.pop("not_combined") == {"the inference-only verifier": verdict}
@@ -1350,11 +1350,11 @@ def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path
             str(_window_case(tmp_path / "audit")), "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"),
             "--node", "vy-dc-h200", "--product", "remote"]
     rc, line, rows = _recorded(tmp_path, argv, capsys)
-    assert rows["inference_only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
+    assert rows["inference-only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
     assert rc == S.RECORD_EXIT[line["composed"]] == 2
     (tmp_path / "record" / S.INFERENCE_ONLY).write_text("[")
     _, _, rows = _recorded(tmp_path, argv, capsys)
-    assert rows["inference_only"]["verdict"] == "error" and rows["inference_only"]["reason"].startswith(
+    assert rows["inference-only"]["verdict"] == "error" and rows["inference-only"]["reason"].startswith(
         f"{S.INFERENCE_ONLY} doesn't parse: ")
 
 

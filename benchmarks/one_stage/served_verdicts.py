@@ -263,6 +263,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
 WIPE = ("the wipe", "wipe", "memory-accounting", "the wipe of the serving card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 INFERENCE_ONLY = "inference-only.json"
+INFERENCE_ONLY_ROW = "inference-only"
 INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
                          "case, not this (c, k, n) verdict")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
@@ -2373,7 +2374,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``answer``: the product's compiled
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
     none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
-    inference-only verifier's verdict, which the report carries as its ``inference_only`` row and the line under
+    inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
     ``not_combined``, and which neither the combined verdict nor the block record reads."""
     from verity_e2e_demo import block_record as BR
 
@@ -2415,9 +2416,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              "answers": answers, "lean": lean, **left,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
-    io = {} if inference_only is None else {"inference_only": inference_only_row(inference_only)}
+    io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
     if io:
-        named["not_combined"] = {"the inference-only verifier": io["inference_only"]["verdict"]}
+        named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
