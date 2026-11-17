@@ -175,7 +175,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
 
 def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_the_tree(tmp_path, monkeypatch):
     """The agreement's pass is kept under the verifier's package and the packages of the tree it requires by path
-    (`agreement_closure`), and `research merge` asks for it for changes there, so a requirement from outside the tree, a
+    (`agreement_closure`), and `research.merge` asks for it for changes there, so a requirement from outside the tree, a
     fetched package or a path that leaves the repository, by the manifest or the lakefile, fails the step whether or not
     the upstream build was sent; one inside the tree doesn't, and this tree's verifier has none from outside."""
     import json
@@ -467,7 +467,7 @@ def _repo(root: Path):
 
 
 def test_a_commit_lands_as_is_only_when_merging_it_into_main_leaves_its_own_tree(tmp_path, monkeypatch):
-    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research merge` takes a check only
+    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research.merge` takes a check only
     of that tree; `--record` warns before spending a slot on one."""
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     git, commit = _repo(tmp_path)
@@ -502,7 +502,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
         out = capsys.readouterr().out
-        assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
+        assert ("check: this commit can't land as is; the queue's check is the merge check" in out) is said
         launched.clear()
 
 
@@ -1876,7 +1876,7 @@ def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
-    """`check.py --preflight`, what `research merge --train --prepare` runs on a train before pushing it."""
+    """`check.py --preflight`, the preflight alone, to prepare a machine."""
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lock", "failed: no `uv` here", tmp_path), ("preflight-lints", touch, tmp_path)])
