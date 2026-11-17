@@ -22,6 +22,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
 uv run circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'    # Definitions, at a binding
 uv run circuit-check MODULE.circuit-check.py                         # what a sidecar's bindings reach in its module
 uv run circuit-check --all                                           # every registered Definition and template
+uv run circuit-check --reached BASE [--check]                        # the --all targets a change since BASE reaches
 uv run circuit-check --structural UNIT.tmpl TARGET                   # a template as the Definition's lowering
 uv run circuit-check --structural DIR TARGET                         # a split, its nets wired to lookup slots, as it
 uv run circuit-check --ambient TARGET...                             # each lowering, read under a perturbed interpreter
