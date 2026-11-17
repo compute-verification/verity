@@ -926,7 +926,7 @@ private def drifting (n d : Nat) : List Site.Loc := hostedBy (some (fig n d))
 private def locs : List Site.Loc := drifting 0 1
 
 private def site : Site := ⟨[sheet], locs, links⟩
-private def digest : Sheet → String := Site.Registration.sha512.sheet
+private def digest (k : Sheet) : String := Core.Site.tagged Core.Site.SHEET k.toJson
 private def tick : Figure := fig 1 1000000000
 private def root : ByteArray := ⟨(List.replicate 32 (7 : UInt8)).toArray⟩
 /-- The example protocol's accepted answer on two units: its check's public output and profile, as it writes them. -/

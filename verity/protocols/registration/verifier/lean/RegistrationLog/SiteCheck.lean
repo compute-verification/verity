@@ -1,6 +1,6 @@
 module
 
-public import CoreProtocol.Site
+public import RegistrationLog.SiteLog
 
 /-!
 # Registration's check on the Site
@@ -9,8 +9,9 @@ Each check a site entry passes against the Site before it (`Site.Entry.refusal`:
 `sheetDigest`, `figures`, `capacity`, `owner`, `uncertified`, `challengerReach`, in the spec's order), a registration
 entry's refusal (`Site.Registration.Entry.refusal`, `previous` first), the inventory a log is held to at its end
 (`Site.Registration.Complete`), the log's head (`Site.Registration.head`) and the check of a log
-(`Site.Registration.check`). The Site's type, its views, the auditor's figures, the digests and the refusals' names are
-the interface's (`CoreProtocol.Site`); `Properties.Core.Site` states that each check is the spec's.
+(`Site.Registration.check`). The Site's type, its views and the auditor's figures are the interface's
+(`CoreProtocol.Site`), the log, its digests and refusals `RegistrationLog.SiteLog`'s; `Properties.Core.Site` states
+that each check is the spec's.
 -/
 
 @[expose] public section

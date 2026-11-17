@@ -52,7 +52,7 @@ def hex (c : Char) : String := String.ofList (List.replicate 128 c)
 def locs : List Loc :=
   [{ id := "site0", kind := .site, timeUnit := some (fig 1 1000000000) },
    { id := "node0", kind := .host, parent := some "site0", chip := some (1 <<< 25) },
-   { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := Site.Registration.sha512.sheet sheet },
+   { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := Core.Site.tagged Core.Site.SHEET sheet.toJson },
    { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
    { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0", scheme := lms },
    { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1", scheme := lms }]
