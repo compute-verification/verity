@@ -2004,7 +2004,10 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits.
+       Where the verdict held its passes to R itself (``verify --tie R``: its tie's record is R's digest, its B rows R's
+       window's ``pearl_b``), R's own records audit accepted is the tie, and the Lean verdict must hold the passes to R
+       on the same tables, naming no weights untied. The rule that audit's
        summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
        rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
@@ -2017,6 +2020,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
@@ -2079,14 +2083,16 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
         summary = json.loads((spot / AUDIT_SUMMARY).read_text())
     except (OSError, ValueError) as e:
         return None, f"the window's registration or its audit's summary can't be read ({type(e).__name__}: {e})"
-    if reg.get("previous") != w:
+    on_r = isinstance(reg, dict) and w == REG.digest(reg)
+    if not on_r and reg.get("previous") != w:
         return None, (f"the window's registration R is chained after {str(reg.get('previous'))[:16]}..., not right after "
                       f"Pearl+'s window record W {w[:16]}...")
-    if ((summary.get("tie") or {}).get("record")) != w:
+    if not on_r and ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
     if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
-        return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
-                      f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
+        return None, (f"the window's records audit {'of R' if on_r else 'tied to W'} didn't accept ({AUDIT_SUMMARY}'s "
+                      f"audit.accepted is {accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ "
+                      "credits")
     design, committed, n = summary.get("sampling_design"), reg.get(DESIGN), reg.get("population")
     rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
     kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
@@ -2116,8 +2122,14 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
         return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
                       f"{str(lean.get('source'))[:16]}..., not Pearl+'s verdict's run and source")
-    if ((lean.get("tie") or {}).get("record")) != w:
-        return None, f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {w[:16]}..."
+    lean_tie, tie = lean.get("tie") or {}, (answer["public"] or {}).get("tie") or {}
+    if lean_tie.get("record") != w:
+        held_to = "the window's registration record R" if on_r else "Pearl+'s window record W"
+        return None, f"the Lean verdict doesn't hold the passes to {held_to} {w[:16]}..."
+    if on_r and ("weights" in lean_tie or lean_tie.get("tables") != tie.get("tables")):
+        return None, (f"the Lean verdict holds the passes to R {w[:16]}... on {lean_tie.get('tables')!r} tables"
+                      f"{', ' + str(lean_tie['weights']) if 'weights' in lean_tie else ''}, not on R's "
+                      f"{tie.get('tables')!r} with its window's B rows")
     work, ref = lean.get("work") or {}, (answer["public"] or {}).get("work") or {}
     credited, tiles = work.get("credited"), work.get("credited_tiles")
     if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):

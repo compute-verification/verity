@@ -81,7 +81,8 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record", "window"}``, the
   retained passes' manifests, R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and the
   window record W the passes are held to with its rounds and dropped rounds, whose digest remote ties to the record R is
-  chained right after (`Core.Remote.V1.window`), and its evidence, each
+  chained right after (`Core.Remote.V1.window`), or R itself where the passes are held to R (`verify_run.tie` over R, its
+  B rows R's window's ``pearl_b``), which must then be the record the commitment names, and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
   Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
   this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
@@ -413,6 +414,9 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     window = parts["window"]
     _need(isinstance(window, dict) and set(window) == PEARL_PLUS_WINDOW and isinstance(window["record"], dict),
           f"the parts' window is not {sorted(PEARL_PLUS_WINDOW)} with the window record W the passes are held to")
+    _need("program" not in window["record"] or R.digest(window["record"]) == digest,
+          f"the parts hold the passes to a registration record {R.digest(window['record'])[:16]}…, not the record "
+          f"{digest[:16]}… the case's commitment names")
     blobs = [d / "blobs" / h for h in sorted({h for f in files for h in f.values()})]
     gone = [b for b in blobs if not b.is_file()]
     _need(not gone, f"the parts name {len(gone)} blob(s) that aren't files in {d / 'blobs'}")

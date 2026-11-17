@@ -46,7 +46,10 @@ that registers no ``pearl-b/`` value at all is such a mismatch, named as one (`U
 match, but the run's B is no registered value, so it never reads as a tie. A W that states no version is version 1,
 written before W registered the fixed operands: it is held to the calls alone, as it was then, and the tie names its fixed operands
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
-the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`). Given the window's
+registration record R in W's place (`is_registration`: the one record every protocol reads), the tie is the same over R:
+each call's A rows and y are R's registered values, each fixed operand's B rows an entry of R's ``window`` header's
+``pearl_b`` (`PEARL_B`), and an R that holds no B rows is refused (`R_UNTIED_WEIGHTS`).
 With the execution phase's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
 (`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
 refused before the coin in the class's own words (`off_load`); W's header names no class, so the verdict takes it as
@@ -513,6 +516,12 @@ UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window re
 WEIGHTS_UNTIED = "weights untied (W v1)"
 #: why `tie` refuses a version-1 W that registers a fixed operand's B rows
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
+#: the key of the window registration record R's ``window`` header that holds the fixed operands' B rows, each entry as
+#: `pearl_c.window.b_entries` writes it
+PEARL_B = "pearl_b"
+#: why `tie` refuses an R whose header holds no B rows: its fixed operands are then no registered value
+R_UNTIED_WEIGHTS = (f"R registers no weight's B rows (its window holds no {PEARL_B}: a registration written before R "
+                    "registered them)")
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
 #: the coin record's ``draw.from``: a sample session's coin on the auditor device's challenger, or this node's coins
@@ -572,37 +581,64 @@ def _owner(v: str) -> str:
     return "weight" if v.startswith(TIE_PREFIXES[2]) else "call"
 
 
+def is_registration(w: Any) -> bool:
+    """Whether the record the passes are held to is the window's registration record R (a one-stage docket, which names
+    its program), not Pearl+'s own window record W."""
+    return isinstance(w, dict) and "program" in w
+
+
+def _registered_b(r: dict) -> list:
+    """R's B rows: its ``window`` header's `PEARL_B` entries. ValueError for an R whose header holds none
+    (`R_UNTIED_WEIGHTS`), or that registers a ``pearl-b/`` value among its own values."""
+    if b := next((e.get("value") for e in r["registered"] if isinstance(e, dict) and isinstance(e.get("value"), str)
+                  and e["value"].startswith(TIE_PREFIXES[2])), None):
+        raise ValueError(f"R registers {b} among its values: R's B rows are its window's {PEARL_B} entries")
+    bs = (r.get("window") or {}).get(PEARL_B) if isinstance(r.get("window"), dict) else None
+    if not isinstance(bs, list) or not bs:
+        raise ValueError(R_UNTIED_WEIGHTS)
+    if bad := next((e for e in bs if not (isinstance(e, dict) and isinstance(e.get("value"), str)
+                                         and e["value"].startswith(TIE_PREFIXES[2]))), None):
+        raise ValueError(f"R's window's {PEARL_B} holds {str(bad)[:80]}, no pearl-b/ entry")
+    return bs
+
+
 def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: tuple[int, ...] = ()) -> dict:
     """``{"record": digest(W), "tables": n}`` for an execution phase record W at version 2 (`pearl_c.window.version_of`) that
     registers exactly the run's calls' A rows and y and its fixed operands' B rows (`tie_entries`, pass i as round ``rounds[i]``)
     among its ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside any of the ``dropped`` rounds' calls' (passes
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
     value, the tie is of the calls alone, as it was at that version, and the answer names the fixed operands untied:
-    ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise."""
+    ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise.
+
+    Given the window's registration record R instead (`is_registration`), the tie is the same over R: the calls' A rows
+    and y are R's registered ``pearl-a/`` and ``pearl-y/`` values, and the fixed operands' B rows are the entries of its
+    ``window`` header's `PEARL_B` (`pearl_c.window.b_entries`' entries), which R must hold (`R_UNTIED_WEIGHTS`), and the
+    answer is ``{"record": digest(R), "tables": n}``. R states no version."""
+    who = "R" if (on_r := is_registration(w)) else "W"
     if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
-        raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
-    tied = PWR.version_of(w) == PWR.VERSION
+        raise ValueError(f"{who} is no {REG.FORMAT_V2} record with registered values")
+    tied = on_r or PWR.version_of(w) == PWR.VERSION
     got: dict[str, dict] = {}
-    for e in w["registered"]:
+    for e in [*w["registered"], *(_registered_b(w) if on_r else ())]:
         v = e.get("value") if isinstance(e, dict) else None
         if isinstance(v, str) and v.startswith(TIE_PREFIXES):
             if v in got:
-                raise ValueError(f"W registers {v} twice")
+                raise ValueError(f"{who} registers {v} twice")
             got[v] = e
     if not tied and (b := next((v for v in got if v.startswith(TIE_PREFIXES[2])), None)):
         raise ValueError(f"{V1_WEIGHTS} {b}: a W that registers the weights states version {PWR.VERSION}")
     want, skip = tie_entries(passes, rounds, tied), {str(s) for s in dropped}
     if extra := sorted(v for v in set(got) - set(want) if not (v.startswith(TIE_CALLS) and v.split("/")[1] in skip)):
-        raise ValueError(f"W registers {extra[0]}, no {_owner(extra[0])} of the run's")
+        raise ValueError(f"{who} registers {extra[0]}, no {_owner(extra[0])} of the run's")
     if (b := next((v for v in want if v.startswith(TIE_PREFIXES[2])), None)) and not any(
             v.startswith(TIE_PREFIXES[2]) for v in got):
         raise ValueError(f"{UNTIED_WEIGHTS}, so the run's rootB is no W's ({b} first)")
     for v, x in want.items():
         if (e := got.get(v)) is None:
-            raise ValueError(f"W registers no {v}")
+            raise ValueError(f"{who} registers no {v}")
         have = {**e, "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
-            raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
+            raise ValueError(f"{who}'s {v}: its {', '.join(bad)} not the {_owner(v)}'s")
     return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
@@ -982,7 +1018,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts],
                **({} if cls is None else {"exact_work": {k: exact[k] for k in EXACT_WORK}})}
     ys = [r for p in passes for r in y_roots(p)]
-    tie_clause = "" if tied is None else (f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
+    tie_clause = "" if tied is None else (f", tied to {'R' if is_registration(window) else 'W'} {tied['record'][:16]} on its {tied['tables']} tables"
                                           + (f", {tied['weights']}" if "weights" in tied else "")
                                           + (f", at its class's fixed load ({', '.join(map(str, cls))})" if cls else ""))
     if dropped:

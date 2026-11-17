@@ -2480,11 +2480,16 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     from verity.protocols.proofs.spot.verifier.challenger import remote
 
     served, verified = _pearlplus_run()
+    on_r = case.startswith("on R")
+    committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
+    reg = {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" or on_r else PEARL_W,
+           "registered": [], "population": PEARL_BLOCKS, DESIGN: committed}
+    tied_to = REG.digest(reg) if on_r else PEARL_W
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
     source = {"node draw": "5e" * 32, "source not coin": "77" * 64}.get(case, SAMPLE_COIN)
     answer = {"protocol": S.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "c1" * 64,
               "public": {"work": verified["answer"]["public"]["work"], "unit": "MAC",
-                         **({} if case == "untied" else {"tie": {"record": PEARL_W, "tables": 6}})},
+                         **({} if case == "untied" else {"tie": {"record": tied_to, "tables": 6}})},
               "profile": {"delta": "1/100", "draws": 459, "source": source}}
     piece = tmp_path / "pieces" / "pouw"
     piece.mkdir(parents=True)
@@ -2524,8 +2529,11 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
         ledger += [{"kind": "open", "session": "s-other", "body": {"window": {"root": "c1" * 64}, "withheld": True}}]
     (piece / "ledger.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ledger))
     lean = {"verdict": "accept", "reason": None, "refused": None, "commitment": "c1" * 64, "source": source,
-            "drawn": 459, "verdicts": [], "work": PEARL_LEAN_WORK, "tie": {"record": PEARL_W}}
-    lean.update({"Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
+            "drawn": 459, "verdicts": [], "work": PEARL_LEAN_WORK,
+            "tie": {"record": tied_to, "tables": 6} if on_r else {"record": PEARL_W}}
+    lean.update({"on R, Lean untied weights": {"tie": {"record": tied_to, "tables": 4, "weights": "weights untied (W v1)"}},
+                 "on R, Lean other tables": {"tie": {"record": tied_to, "tables": 5}},
+                 "Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
                  "Lean other run": {"commitment": "c2" * 64}, "Lean untied": {"tie": None},
                  "Lean credits nothing": {"work": {**PEARL_LEAN_WORK, "credited": 0}},
                  "Lean other epsilon": {"work": {**PEARL_LEAN_WORK, "epsilon": "1/50"}},
@@ -2535,12 +2543,10 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
-    committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
-    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
-        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
-         "population": PEARL_BLOCKS, DESIGN: committed}))
-    summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
-               "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
+    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(reg))
+    summary = {**({} if on_r else {"tie": {"record": PEARL_W}}), "sampling_design": rule,
+               "audit": {"rejected": {"accepted": False}, "unsaid": {}, "on R, rejected": {"accepted": False}}.get(
+                   case, {"accepted": True})}
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else summary))
     if case != "no circuit record":
         (audit / S.CIRCUIT_RECORD).write_bytes(PEARL_RECORD)
@@ -2582,6 +2588,20 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+def test_pearlpluss_verdict_held_to_the_windows_registration_record_r_is_of_record_without_w(tmp_path, monkeypatch, live):
+    """Pearl+'s verdict held to the window's registration record R itself (its tie's record R's digest) is PoUW's verdict
+    of record with R chained after no W of Pearl+'s and its records audit tied to none: R's own audit accepted and the
+    Lean verdict held to R on the same tables are the tie."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "on R")
+    reg = json.loads((audit / S.WINDOW_REGISTRATION).read_text())
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
+    assert (row["verdict"], row["quantity"]["tie"]["record"]) == ("accept", REG.digest(reg)), row
+    assert reg["previous"] != REG.digest(reg) and "development" not in row
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
@@ -2688,6 +2708,10 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not Pearl+'s verdict's "
                        "run and source"),
     ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
+    ("on R, rejected", f"the window's records audit of R didn't accept ({S.AUDIT_SUMMARY}'s audit.accepted is False), "
+                       "so nothing shows the window SPOT audited reads the roots Pearl+ credits"),
+    ("on R, Lean untied weights", "the Lean verdict holds the passes to R "),
+    ("on R, Lean other tables", "the Lean verdict holds the passes to R "),
     ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
     ("Lean other epsilon", "the Lean verdict's ε '1/50' is not the reference's '1/100'"),
 ])
