@@ -3,22 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.SessionMsgs
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
-/-!
-# A session's statement on an accepted case is under `2^64` bytes
-
-The statements' message holds each template's session statement after its length in an 8-byte word
-(`SessionMsgs.encStmts`), so it reads back only where each statement is under `2^64` bytes
-(`SessionMsgs.stmtsOf_encStmts`). The two-stage form refuses a play one of whose second-stage sessions' statements
-would be that long (`VStar.Recursive.SampledTwo.stmtsBytesFit`, its refusal `STMT_BYTES`): for each statement's
-sessions on the blobs (`stmtSizeAt`) it sums the lengths the session's statement holds (`stmtSize`).
-
-* `stmtRaw_le`: a member's session statement (`SessionMsgs.stmtRaw`) encodes in no more bytes than the form's sum.
-* `pair_mem`: the `t`-th of the statements' sessions and its statement are a pair the form's step ran on.
-* `stmtAt_lt`: where the step passed, template `t`'s member's statement at its session's record's sample is under
-  `2^64` bytes.
-* `stmtAtCase_lt`: on a case the form's check accepts, template `t`'s session statement (`SessionMsgs.stmtAtCase`)
-  is under `2^64` bytes.
--/
+/-! A session's statement on an accepted case is under `2^64` bytes, because the form refuses a longer one. -/
 
 @[expose] public section
 
@@ -46,7 +31,6 @@ private theorem len_some (b : ByteArray) : (encOpt encBytes (some b)).length = 9
   rw [List.length_cons, len_encBytes]
   omega
 
-/-- An optional printed value's field is its tag, its length word and the value as printed. -/
 private theorem len_printed (o : Option Json) :
     (encOpt encBytes (o.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).length ≤
       9 + (o.map Spot.OneStageZk.printedSize).getD 0 := by
@@ -58,7 +42,6 @@ private theorem len_printed (o : Option Json) :
     rw [len_some, size_toUTF8]
     exact Nat.le_refl _
 
-/-- The lookup tables' field is its length word and the form's `tablesSize`. -/
 private theorem len_tables (tables : List (String × ByteArray)) :
     (encList (fun p : String × ByteArray => encStr p.1 ++ encBytes p.2) tables).length =
       8 + VStar.Recursive.SampledTwo.tablesSize tables := by
@@ -70,8 +53,6 @@ private theorem len_tables (tables : List (String × ByteArray)) :
   rw [encList, List.length_append, FlockComplete.encNat_length, List.length_flatMap, h,
     VStar.Recursive.SampledTwo.tablesSize]
 
-/-- **A member's session statement encodes in no more bytes than the form's sum** (`stmtSize`), at the sample
-`draw` as printed and the member's registered reads as printed. -/
 theorem stmtRaw_le (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : List (String × ByteArray))
     (draw : Option Json) :
     (SessionMsgs.stmtRaw m circuit pub tables (draw.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)
@@ -88,7 +69,6 @@ theorem stmtRaw_le (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (table
   unfold VStar.Recursive.SampledTwo.stmtSize VStar.Recursive.SampledTwo.STMT_HEAD
   omega
 
-/-- **The `t`-th of the statements' sessions and its statement are a pair the form's step ran on.** -/
 theorem pair_mem {l : List Spot.OneStageZk.StatementFiles} {t : ℕ} {st : Spot.OneStageZk.StatementFiles}
     {s : Spot.OneStageZk.RunFiles}
     (hst : (l.flatMap fun st => st.sessions.toList.map fun _ => st)[t]? = some st)
@@ -113,8 +93,6 @@ theorem pair_mem {l : List Spot.OneStageZk.StatementFiles} {t : ℕ} {st : Spot.
     cases hs
     exact List.mem_of_getElem? hq
 
-/-- **Where the form's step passed, template `t`'s member's statement is under `2^64` bytes**, at its session's
-record's sample, the member's circuit and public files and the blobs' lookup tables. -/
 theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} {bs}
     (hfit : VStar.Recursive.SampledTwo.stmtsBytesFit p e bs = .ok ()) {t : ℕ} {m : Spot.OneStageZk.Member}
     {s : Spot.OneStageZk.RunFiles} {record : String} {circuit pub : ByteArray}
@@ -139,9 +117,6 @@ theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
   exact Nat.lt_of_le_of_lt (stmtRaw_le m circuit pub _ (_root_.Flock.Witness.recordDraw record))
     (VStar.Recursive.SampledTwo.stmtsBytesFit_at hfit hmem hsz)
 
-/-- **On a case the form's check accepts, template `t`'s session statement is under `2^64` bytes**: the check ran
-its step on the statement's member and session (`VStar.Recursive.SampledTwo.accepted_stmtsBytesFit`), and the
-statement is that member's at that session's record's sample (`SessionMsgs.stmtAtCase_some`). -/
 theorem stmtAtCase_lt {k : Case} {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {c ξ pub prof} (hf : SessionMsgs.formOf k = some (p, e))
     (hck : VStar.Recursive.SampledTwo.checkBlobsAtWith true p c ξ e k.blobs = .accept pub prof) {t : ℕ} {x : Msg}

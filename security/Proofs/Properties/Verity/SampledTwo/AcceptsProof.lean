@@ -2,32 +2,13 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Accepts
 
-/-!
-# The form's accept is the run's accept: the proof
-
-`acceptsRun` proves `AcceptsRunOf`: `AcceptsRun` at the two-stage form's reading, from `PlayAccepts`, `SessionMsgs`,
-`SourcesFit`, `ReadsOnly` and `CoinsCover`. At a play the form's check accepts and coins `r` agreeing with what it read:
-
-* round 0's coin of `r` starts with the first stage's bytes, and `r`'s second-stage coins with the interior's: the
-  coins `coinOf` and `stageCoinsOf` chose are those bytes padded with zeros (`CoinsCover`, `SourcesFit`), and `r`
-  agrees with them on the bytes the run read (`starts_of_prefixAgree`, `stage_starts`). So `r`'s rounds 0 to `stage`
-  and its sessions' rounds are coins `PlayAccepts` speaks of, and `proverSeq` on them is accepted;
-* `proverSeq`'s run on `r` is that run: the two coin vectors agree on every round `readsAt` names (`ReadsOnly`), the
-  sessions leaving no round between them (`slot_of_lt`);
-* that run's messages are those the check read, round by round: `proverSeq`'s first messages (`[]`, the interior
-  record, `[]`, the session statements), `SessionMsgs` in the sessions' rounds and `[]` in the verdict's. Each round
-  has one: `SpotFlock.V` accepts only at its last round (`next_ne_acc`), so an accepted run has all its messages.
-
-So `ProverAt` holds, and `acceptsRun_of_proverAt` gives `AcceptsRun`.
--/
+/-! The proof of `acceptsRun`: `AcceptsRunOf` from its five premises. -/
 
 @[expose] public section
 
 namespace Verity.SampledTwo
 
 open Claims
-
-/-! ## Bytes -/
 
 theorem size_bytesOf {n : ℕ} (f : Fin n → Fin 256) : (Properties.Spot.bytesOf f).size = n := by
   rw [← ByteArray.size_data]
@@ -49,7 +30,6 @@ theorem L_pos : 0 < SpotFlock.L := by
 
 theorem stageWidth_le (b : ByteArray) (j : ℕ) : stageWidth b j ≤ SpotFlock.L := Nat.min_le_left _ _
 
-/-- **A byte string whose first `b.size` bytes are `b` is `b` and then the rest.** -/
 theorem eq_append_of_extract {a b : ByteArray} (hb : a.extract 0 b.size = b) (hn : b.size ≤ a.size) :
     a = b ++ a.extract b.size a.size :=
   calc a = a.extract 0 a.size := ByteArray.extract_zero_size.symm
@@ -62,7 +42,6 @@ theorem getElem_of_eq_append {a b u : ByteArray} (h : a = b ++ u) {k : ℕ} (hk 
   subst h
   exact ByteArray.getElem_append_left hk
 
-/-- **Coins agreeing on their first `w` bytes have the same byte at each place before `w`.** -/
 theorem getElem_of_prefixAgree {c c' : FlockDeploy.Coin} {w : ℕ} (hw : w ≤ SpotFlock.L) (h : prefixAgree w c c')
     {m : ℕ} (hm : m < w) :
     (SpotFlock.src c)[m]'(by rw [size_src]; omega) = (SpotFlock.src c')[m]'(by rw [size_src]; omega) := by
@@ -72,8 +51,6 @@ theorem getElem_of_prefixAgree {c c' : FlockDeploy.Coin} {w : ℕ} (hw : w ≤ S
   rw [ByteArray.extract_eq_extract_iff_getElem (by rw [size_src]; omega) (by rw [size_src]; omega)] at h'
   simpa using h' m hm
 
-/-- **Round 0's coin starts with the bytes the run read**: a coin agreeing on `b.size` bytes with one whose bytes start
-with `b` starts with `b`. -/
 theorem starts_of_prefixAgree {b : ByteArray} {c c' : FlockDeploy.Coin} (hb : ∃ u, SpotFlock.src c = b ++ u)
     (h : prefixAgree b.size c c') : ∃ u, SpotFlock.src c' = b ++ u := by
   obtain ⟨u, hu⟩ := hb
@@ -88,7 +65,6 @@ theorem starts_of_prefixAgree {b : ByteArray} {c c' : FlockDeploy.Coin} (hb : �
     exact e.symm
   exact ⟨_, eq_append_of_extract h' (by rw [size_src]; exact hn)⟩
 
-/-- **Byte `k` of `R` rounds' coins is byte `k % L` of coin `k / L`.** -/
 theorem getElem_stageSrc {R : ℕ} (cs : Fin R → FlockDeploy.Coin) {k : ℕ} (hk : k < R * SpotFlock.L) :
     (SpotFlock.stageSrc cs)[k]'(by rw [size_stageSrc]; exact hk) =
       (SpotFlock.src (cs ⟨k / SpotFlock.L, Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact hk)⟩))[k % SpotFlock.L]'
@@ -99,8 +75,6 @@ theorem getElem_stageSrc {R : ℕ} (cs : Fin R → FlockDeploy.Coin) {k : ℕ} (
     (k := k % SpotFlock.L) (by rw [size_bytesOf]; exact Nat.mod_lt _ L_pos)
   exact e1.trans e2.symm
 
-/-- **The second stage's coins start with the bytes the run read**: coins agreeing coin by coin, on the bytes `b`
-carries of each (`stageWidth`), with coins whose bytes start with `b` start with `b`. -/
 theorem stage_starts {R : ℕ} {b : ByteArray} {cs c₁ : Fin R → FlockDeploy.Coin}
     (hb : ∃ u, SpotFlock.stageSrc cs = b ++ u)
     (hj : ∀ j : Fin R, prefixAgree (stageWidth b j.val) (cs j) (c₁ j)) :
@@ -133,7 +107,6 @@ theorem stage_starts {R : ℕ} {b : ByteArray} {cs c₁ : Fin R → FlockDeploy.
   rw [Nat.zero_add, ByteArray.extract_zero_size] at h1
   exact ⟨_, eq_append_of_extract h1 (by rw [size_stageSrc]; exact hn)⟩
 
-/-- **The coin `coinOf` chose starts with the run's bytes.** -/
 theorem coinOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : ByteArray} {c : FlockDeploy.Coin}
     (hc : coinOf b = some c) : ∃ u, SpotFlock.src c = b ++ u := by
   unfold coinOf at hc
@@ -150,7 +123,6 @@ theorem coinOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : ByteArray}
     exact ⟨_, hsp⟩
   · cases hc
 
-/-- **The coins `stageCoinsOf` chose start with the run's bytes.** -/
 theorem stageCoinsOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : ByteArray} {cs : SpotFlock.Stage h}
     (hc : stageCoinsOf h b = some cs) : ∃ u, SpotFlock.stageSrc cs = b ++ u := by
   unfold stageCoinsOf at hc
@@ -167,9 +139,6 @@ theorem stageCoinsOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : Byte
     exact ⟨_, hsp⟩
   · cases hc
 
-/-! ## Runs -/
-
-/-- **SPOT[Flock] accepts only at its verdict's round.** -/
 theorem next_ne_acc (h : SpotFlock.Held) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin)
     (hne : as.length ≠ SpotFlock.off h h.ms.length + 1) : ((SpotFlock.next h x as cs).eval H).1 ≠ .acc := by
   unfold SpotFlock.next
@@ -186,7 +155,6 @@ theorem next_ne_acc (h : SpotFlock.Held) (H : Msg → Msg) (x : Msg) (as : List 
       simp [hne] at hc
     · nofun
 
-/-- **An accepted run of SPOT[Flock] has all its rounds' messages.** -/
 theorem length_of_acc (h : SpotFlock.Held) {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((SpotFlock.V h).k x) → FlockDeploy.Coin) (hacc : (Claims.run H P (SpotFlock.V h) x ω r).out = .acc) :
     (Claims.run H P (SpotFlock.V h) x ω r).msgs.length = SpotFlock.off h h.ms.length + 1 := by
@@ -198,7 +166,6 @@ theorem length_of_acc (h : SpotFlock.Held) {Ω : Type} (H : Msg → Msg) (P : Pr
   by_contra hne
   exact next_ne_acc h H x as' _ hne hacc'
 
-/-- **A round's message is the prover's next one on a history as long as the rounds before it.** -/
 theorem msgAt_run {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin)
     (x : Msg) (ω : Ω) (r : Fin (V.k x) → Coin) {n : ℕ} (hn : n < (Claims.run H P V x ω r).msgs.length) :
     ∃ hist : List (Msg × Msg), msgAt (Claims.run H P V x ω r) n = some ((P.next x hist ω).eval H).1 ∧
@@ -214,8 +181,6 @@ theorem msgAt_run {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prove
     rfl
   · rw [List.length_map, hnew]
 
-/-- **The sessions leave no round between them**: every round from `stage + 2` before template `m`'s session is in
-some earlier template's. -/
 theorem slot_of_lt (h : SpotFlock.Held) {n : ℕ} (h2 : h.stage + 2 ≤ n) :
     ∀ m, n < SpotFlock.off h m → ∃ t < m, SpotFlock.off h t ≤ n ∧ n < SpotFlock.off h t + SpotFlock.k₀ h t
   | 0, hn => absurd hn (Nat.not_lt.2 h2)
@@ -232,8 +197,6 @@ theorem slotOf_some {h : SpotFlock.Held} {n t : ℕ} (hs : SpotFlock.slotOf h n 
   have hp := List.find?_some hs
   simp only [List.mem_range, decide_eq_true_eq] at hm hp
   exact ⟨hm, hp⟩
-
-/-! ## The form's reading, round by round -/
 
 section Form
 
@@ -305,12 +268,6 @@ theorem form_msg_none {n : ℕ} (h0 : n ≠ 0) (h1 : n ≠ 1) (h3 : ¬n ≤ A.h.
 
 end Form
 
-/-! ## The accept -/
-
-/-- **`proverSeq` is the accepted prover sending the check's messages** (`ProverAt` at the form): at the sessions'
-provers `P'`, under `AcceptsRunOf`'s premises, at every play the form's check accepts and every coin vector agreeing
-with what it read, `SpotFlock.V` accepts `proverSeq` at the run of record's records, and its messages are those the
-check read. -/
 theorem proverAt (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hcov : CoinsCover A.h) (hfit : SourcesFit A C) (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P')
@@ -462,11 +419,6 @@ theorem proverAt (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
       rw [Nat.add_sub_cancel' (show SpotFlock.off A.h t ≤ n by omega), hT] at hsm
       exact hsm.symm
 
-/-- **The form's accept is the run's accept** (`AcceptsRunOf`): at the sessions' provers `P'`, where every coins' byte
-string is some coins' (`CoinsCover`), an accepted run read at most the coins it has (`SourcesFit`), its run of record is
-a play SPOT[Flock] accepts (`PlayAccepts`) whose sessions' messages are those the check read (`SessionMsgs`), and
-SPOT[Flock] reads a coin only where `readsAt` says (`ReadsOnly`), every run whose coins agree with what the form's
-check read and whose messages are what it read accepts. -/
 theorem acceptsRun (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : AcceptsRunOf A x C S dev := by
   intro P' hcov hfit hplay hsess hreads

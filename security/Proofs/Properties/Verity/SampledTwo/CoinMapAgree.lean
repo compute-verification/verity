@@ -2,27 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMapDistribution
 
-/-!
-# The two-stage subprotocol's coin map: its distribution with the agreement in the event (`coinMapHolds`)
-
-`CoinMapHolds` (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is `CoinMapDistribution` at the coin map's frame, with the
-agreement `ElemAgrees` inside the event and `hide = gapOf`. It is proved as `distributionAt` is, along `relK` one coin node at a
-time, now counting the mapped play only where every release after the releases before agrees with the run's coins.
-
-* **The distribution with an agreement** (`DistributionA`, `distribution_idA`, `distribution_optA`, `distribution_iteA`, `distribution_keepA`, `distribution_setA`, `distribution_writeA`):
-  `DistributionHolds` counting the mapped play only where an agreement holds. Below a coin node the agreement is the subtree's
-  own; a kept node or a node written with an independent value gives the node's agreement wherever the subtree's holds,
-  and a node written through `W` gives it wherever the written value is good, at the chance it is not.
-* **A release agrees** (`RelGood`, `LogGood`, `AgFrom`): where the locator puts a release and its elements fit, it
-  carries the round's coin's next elements; `AgFrom` holds of an output whose log's releases after `pre` all do.
-  `LogGood` after `pre` reads the run's coins only where the releases after `pre` read (`logGood_congr`).
-* **Along the releases** (`distribution_placeKA`): the distribution with `AgFrom` holds along `relK` at `gapK`. A fresh coin's release
-  is the run's elements; an opening's is wherever its class at the run's elements is not empty, which `gapRound`'s
-  middle term prices.
-* **To `ElemAgrees`** (`devBits_getD`, `elemAgrees_of_logGood`): where every release of a log agrees, the bits `devBits`
-  collects for a round are the run's coin's, so `dev`'s elements are the run's below what the releases carry.
-* **The distribution** (`distribution_placeA`, `coinMapHolds`).
--/
+/-! The coin map's distribution with the agreement `ElemAgrees` counted inside the event (`coinMapHolds`). -/
 
 @[expose] public section
 
@@ -48,11 +28,9 @@ theorem ind_le_one {p : Prop} [Decidable p] {x : ℝ≥0∞} (hx : x ≤ 1) : (i
   · rw [if_neg hp]
     exact zero_le
 
-/-- An `if` is the same at any two instances that decide its condition. -/
 theorem ite_inst {α : Type} {p : Prop} (d₁ d₂ : Decidable p) (x y : α) : @ite α p d₁ x y = @ite α p d₂ x y := by
   rw [Subsingleton.elim d₁ d₂]
 
-/-- **An output a play reaches**: the play's output at any tape. -/
 theorem playReaches_tapeOut : ∀ (g : Game β) (s : Strategy g) (t : Tape g s), PlayReaches g s (Tape.out g s t)
   | .ret _, _, _ => rfl
   | .send _ k, s, t => playReaches_tapeOut (k s.1) s.2 t
@@ -60,15 +38,11 @@ theorem playReaches_tapeOut : ∀ (g : Game β) (s : Strategy g) (t : Tape g s),
     let t' : C × ((c : C) → Tape (k c) (s c)) := t
     ⟨t'.1, playReaches_tapeOut (k t'.1) (s t'.1) (t'.2 t'.1)⟩
 
-/-! ## The distribution with an agreement -/
-
 section Node
 
 variable {R : Type} [Fintype R] [Nonempty R]
 
 open Classical in
-/-- **The distribution with the agreement `Ag`**: as `DistributionHolds`, the mapped play counted only where `Ag` holds of the coins and
-its output. -/
 def DistributionA (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (Ag : R → β → Prop) (G : ℝ≥0∞) : Prop :=
   ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
     avg (fun t : Tape g s => H (Tape.out g s t)) ≤
@@ -124,7 +98,6 @@ theorem distribution_iteA {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {A
   | isFalse _ => exact h₂
   | isTrue _ => exact h₁
 
-/-- **A kept coin node**: the node's agreement holds wherever the subtree's does. -/
 theorem distribution_keepA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
     {Ag : R → β → Prop} {Ag' : C → R → β → Prop} {G : C → ℝ≥0∞}
@@ -150,8 +123,6 @@ theorem distribution_keepA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C 
     _ ≤ _ := add_le_add (avg_mono fun r => (avg_mono fun c => avg_mono fun τ =>
         ind_mono (hup c r τ) _).trans_eq (e r).symm) le_rfl
 
-/-- **A coin node written with `v r`**, independent of what the map and the subtree's agreement read after it: the
-node's agreement holds wherever the written subtree's does. -/
 theorem distribution_setA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
     {Ag : R → β → Prop} {Ag' : C → R → β → Prop} {G : C → ℝ≥0∞} (v : R → C) (Rel : R → R → Prop)
@@ -188,9 +159,6 @@ theorem distribution_setA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C �
         (avg_mono fun τ => ind_mono (hup r τ) _).trans_eq (e r).symm) le_rfl
 
 open Classical in
-/-- **A coin node written through `W` at `e r`**, independent of what the map and the subtree's agreement read after
-it: the node's agreement holds wherever the written subtree's does and `e r` is good; the node costs `W`'s shortfall
-and the chance `e r` is not good. -/
 theorem distribution_writeA {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
     {Ag : R → β → Prop} {Ag' : C → R → β → Prop} {G : C → ℝ≥0∞} (W : P → C → C) (e : R → P) (Rel : R → R → Prop)
@@ -268,28 +236,21 @@ theorem distribution_writeA {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fin
 
 end Node
 
-/-! ## A release agrees with the run's coins -/
-
 section Along
 
 variable (L : Locate) {K : ℕ}
 
-/-- **A release agrees with the run's coins**, after the releases `pre`: where the locator puts it and its elements
-fit (`slot`), it carries the round's coin's next elements. -/
 def RelGood (r : Fin K → FlockDeploy.Coin) (pre : List Verity.Release) (rl : Verity.Release) : Prop :=
   ∀ (j : Fin K) (u : ℕ), slot L K pre rl.frame rl.answers (widthOf rl.frame) = some (j, u) →
     rl.coins = openBits (r j) u (widthOf rl.frame)
 
-/-- **Every release of `log` agrees**, after the releases `pre`. -/
 def LogGood (r : Fin K → FlockDeploy.Coin) : List Verity.Release → List Verity.Release → Prop
   | _, [] => True
   | pre, rl :: log => RelGood L r pre rl ∧ LogGood r (pre ++ [rl]) log
 
-/-- **The releases after `pre` of an output's log agree** (`lg` the output's log). -/
 def AgFrom (lg : β → List Verity.Release) (r : Fin K → FlockDeploy.Coin) (pre : List Verity.Release) (o : β) : Prop :=
   LogGood L r pre ((lg o).drop pre.length)
 
-/-- **A fresh coin's written bits are an opening's of 4 elements.** -/
 theorem ofFn_freshVal (c : FlockDeploy.Coin) (u : ℕ) : List.ofFn (freshVal c u) = openBits c u 4 := rfl
 
 theorem relGood_of_none {r : Fin K → FlockDeploy.Coin} {pre : List Verity.Release} {rl : Verity.Release}
@@ -328,9 +289,6 @@ theorem agFrom_cons {lg : β → List Verity.Release} {r : Fin K → FlockDeploy
   rw [e₁, e₂]
   exact Iff.rfl
 
-/-! ## The distribution with the agreement along the releases -/
-
-/-- The continuation `f` after the releases `pre` ends in outputs whose log is `pre` and the releases after. -/
 def Records (lg : β → List Verity.Release) (f : List Verity.Release → Game β) (pre : List Verity.Release) : Prop :=
   ∀ (log : List Verity.Release) (s : Strategy (f log)) (o : β), PlayReaches (f log) s o → lg o = pre ++ log
 
@@ -347,7 +305,6 @@ theorem Records.out {lg : β → List Verity.Release} {f : List Verity.Release �
   obtain ⟨log, s', h'⟩ := Verity.Sampled.playReaches_relK k fs ts _ s (playReaches_tapeOut _ s τ)
   exact ⟨log, h _ s' _ h'⟩
 
-/-- The distribution with `AgFrom` along `relK k`, at every layout, trees, releases before and continuation that records them. -/
 def RecDistributionA {β : Type} (lg : β → List Verity.Release) {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k)
     (gr : GapRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β),
@@ -464,8 +421,6 @@ theorem distribution_openA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fi
   refine distribution_optA _ _ (fun s => distribution_leafA L hf s) (fun p s₄ => ?_) _ s₃
   exact distribution_roundA L hlaw hrc fs ts pre f hf i sn n b T p s₄
 
-/-- **The distribution with the agreement along the releases**: at every layout, trees, releases before and continuation that
-records them, the coin map `placeK` is uniform up to `gapK`, counted where the releases after `pre` agree. -/
 theorem distribution_placeKA {β : Type} (lg : β → List Verity.Release) : ∀ (k : ℕ) (fs : List (String × ℕ))
     (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β), Records lg f pre →
     ∀ s : Strategy (relK k fs ts f),
@@ -488,9 +443,6 @@ theorem distribution_placeKA {β : Type} (lg : β → List Verity.Release) : ∀
       (fun fs ts pre f hf s => distribution_placeKA lg k fs ts pre f hf s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f hf i sn n b s')
 
-/-! ## To the device's release -/
-
-/-- **Once a round is past its coin, no release after fits.** -/
 theorem fitOf_zero (i : ℕ) : ∀ (log q : List Verity.Release), 65536 < usedOf L i [] q → fitOf L i q log = 0
   | [], _, _ => rfl
   | rl :: log, q, h => by
@@ -500,9 +452,6 @@ theorem fitOf_zero (i : ℕ) : ∀ (log q : List Verity.Release), 65536 < usedOf
     have h2 := fitOf_zero i log (q ++ [rl]) (by rw [hs]; split_ifs <;> omega)
     simp only [fitOf, if_neg h1, h2, Nat.add_zero]
 
-/-- **Where every release agrees, the bits collected for round `i` are its coin's**: bit `t` of what the releases of
-`log` after `q` carry for round `i`, below what those that fit carry, is the run's coin's bit past the `usedOf … q`
-elements `q` gave it. -/
 theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
     ∀ (log q : List Verity.Release), LogGood L r q log → ∀ t, t < 128 * fitOf L i.val q log →
       (devBits L i.val q log).getD t false = coinBit (r i) (128 * usedOf L i.val [] q + t)
@@ -543,7 +492,6 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **Where every release of an output's log agrees, `ElemAgrees` holds.** -/
 theorem elemAgrees_of_logGood {A : Live₂} {x : Msg} (reads : ℕ → Prop) {o : Verity.Exchange} (r : Coins A x)
     (h : LogGood L r [] o.log) : ElemAgrees L A x reads o r := by
   intro i _ c hc j hj
@@ -567,9 +515,6 @@ theorem elemAgrees_of_logGood {A : Live₂} {x : Msg} (reads : ℕ → Prop) {o 
       omega
     rw [e₁, e₂, dif_pos hj']
 
-/-! ## The distribution -/
-
-/-- **The coin map is uniform up to the hiding term, counted where the releases agree**, at the period's game. -/
 theorem distribution_placeA (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (K : ℕ) :
     DistributionA (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
@@ -585,8 +530,6 @@ theorem distribution_placeA (V : Vocab d α) (θ : ByteArray) (F : Array ByteArr
 
 end Along
 
-/-- **The coin map's distribution holds** (`CoinMapHolds`): at every vocabulary, statement, strategy, locator, prover and set
-of read rounds, `CoinMapDistribution` at the frame of `L`, the agreement `ElemAgrees` and `hide = gapOf`. -/
 theorem coinMapHolds {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] :
     CoinMapHolds (d := d) (α := α) := by
   classical

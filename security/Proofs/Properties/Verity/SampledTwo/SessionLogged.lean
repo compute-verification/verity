@@ -2,30 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionCoins
 
-/-!
-# The interior's log on the play's, from the cut's read
-
-The sessions' coins take one fact from the cut as a premise (`InteriorLogged`): on a play the two-stage form accepts
-whose log the check read is the device's, the play's log is the interior's read after releases that neither sample nor
-open a coin tree. This module derives it from what the cut's read gives, and names what is left.
-
-What the cut's read gives (`InteriorCut`): on one window both stages read one session, so the interior's read is the
-whole of the play's log; on two windows the play's log is the first session's read and then the interior's. So on two
-windows the releases before the interior's are the first session's, and `InteriorLogged` asks that they sample and
-open no coin tree. It has to: the interior's read numbers its coin trees from its own log's first (`readLog` starts
-from no tree), and the device numbers a play's trees from the play's first, so a tree sampled before the interior's
-session would put each of the interior's openings on another tree of the device's.
-
-* `readLog_treeless`: a read that shows no coin tree's `Hello` shows no opening (`treeStep` reads an opening only of
-  a tree read before it). So the first session's part is one fact: its read shows no `Hello`.
-* `interiorLogged_of`: `InteriorLogged`, from the cut's read (`InteriorCut`) and a first session that samples and
-  opens no coin tree (`FirstFresh`).
-* `readLog_plain`: a read of a log none of whose lines is a coin tree's shows only fresh coins, so no `Hello`.
-
-Not established here: that the first session's read shows no `Hello` on two windows. The form's first stage reads the
-first session's log only through `Spot.Challenger.releasedRootsOf`, which passes over a tree's lines; the form refuses
-such a log by a step of its own (`VStar.Recursive.SampledTwo.firstTreeless`), which `SessionTreeless` reads.
--/
+/-! `InteriorLogged` from the cut's read and a first session of no coin tree (`FirstFresh`); that the first
+session's read shows no `Hello` on two windows is not established here. -/
 
 @[expose] public section
 
@@ -34,10 +12,6 @@ namespace Verity.SampledTwo.SessionCoins
 open Lean (Json)
 open Verity.Sampled.Binding (Read)
 
-/-! ## A read that samples no coin tree opens none -/
-
-/-- **A read that shows no coin tree's `Hello` shows no opening**, after no tree: `treeStep` reads an opening only of a
-tree read before it (`Verity.Sampled.treeStep_some`), and the trees read grow only at a `Hello`. -/
 theorem readTail_treeless {label : String} {after : ByteArray} {records : List Json} :
     ∀ (lines : List String) (pending : Option String) (ξ : ByteArray) {log : List Release},
       Verity.Sampled.readTail label after records lines [] pending ξ = some log →
@@ -85,8 +59,6 @@ theorem readTail_treeless {label : String} {after : ByteArray} {records : List J
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact step _ _ rest hrest (Option.some.inj hR).symm ⟨_, rfl⟩
 
-/-- **A read of a log's lines that shows no coin tree's `Hello` shows no opening** (`readTail_treeless`), the head's
-line read first. -/
 theorem readLog_treeless {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Release}
     (hR : Verity.Sampled.readLog label after records ξ lines = some log)
@@ -112,9 +84,6 @@ theorem readLog_treeless {label : String} {after : ByteArray} {records : List Js
     · rw [ite_eq_right ht₀] at hR
       exact readTail_treeless ls none ξ hR hH
 
-/-! ## A log that is two reads, one after the other -/
-
-/-- A list related to two lists one after the other is two lists, each related to one. -/
 theorem forall₂_append_left {α β : Type} {R : α → β → Prop} : ∀ {a b : List α} {c : List β},
     List.Forall₂ R (a ++ b) c → ∃ c₁ c₂, c = c₁ ++ c₂ ∧ List.Forall₂ R a c₁ ∧ List.Forall₂ R b c₂
   | [], _, c, h => ⟨[], c, rfl, .nil, h⟩
@@ -125,7 +94,6 @@ theorem forall₂_append_left {α β : Type} {R : α → β → Prop} : ∀ {a b
       obtain ⟨c₁, c₂, rfl, h₁, h₂⟩ := forall₂_append_left ht
       exact ⟨_ :: c₁, c₂, rfl, .cons hx h₁, h₂⟩
 
-/-- Each entry of a list related to another is related to an entry of it. -/
 theorem forall₂_mem_of_right {α β : Type} {R : α → β → Prop} : ∀ {a : List α} {b : List β}, List.Forall₂ R a b →
     ∀ y ∈ b, ∃ x ∈ a, R x y
   | _, _, .nil, y, hy => absurd hy List.not_mem_nil
@@ -135,23 +103,16 @@ theorem forall₂_mem_of_right {α β : Type} {R : α → β → Prop} : ∀ {a 
     · obtain ⟨x, hx', hR⟩ := forall₂_mem_of_right ht y hy
       exact ⟨x, List.mem_cons_of_mem _ hx', hR⟩
 
-/-! ## The interior's log on the play's -/
-
-/-- **What the cut's read gives of the interior's**, on a play the form accepts where `Good` holds: the interior's
-read is the play's log, release by release (one window: both stages read one session), or the play's log is the first
-session's read `r₁` and then the interior's (two windows). -/
 def InteriorCut (C : CaseOf) (Good : Exchange → Prop) (first : Exchange → List Release) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ l, interiorRead C o = some l →
     List.Forall₂ Read.Of (l.map Read.ofV2) o.log ∨
       List.Forall₂ Read.Of ((first o ++ l).map Read.ofV2) o.log
 
-/-- **The first session's read samples no coin tree and opens none**, on a play the form accepts where `Good`
-holds. -/
+/-- The first session's read samples no coin tree and opens none, because the interior's read numbers its
+coin trees from its own log's first and the device numbers them from the play's first. -/
 def FirstFresh (C : CaseOf) (Good : Exchange → Prop) (first : Exchange → List Release) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ r ∈ first o, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp
 
-/-- **`InteriorLogged`, from the cut's read and a first session of no coin tree**: on one window the releases before
-the interior's are none; on two they are the first session's read's, frame by frame (`of_ofV2`). -/
 theorem interiorLogged_of {C : CaseOf} {Good : Exchange → Prop} {first : Exchange → List Release}
     (hcut : InteriorCut C Good first) (hfree : FirstFresh C Good first) : InteriorLogged C Good := by
   intro o hacc hgood l hl
@@ -165,10 +126,6 @@ theorem interiorLogged_of {C : CaseOf} {Good : Exchange → Prop} {first : Excha
     rw [← (of_ofV2 hR).1]
     exact hfree o hacc hgood x hx
 
-/-! ## A read of no coin tree's line -/
-
-/-- **A read of lines none of which is a coin tree's shows only fresh coins**, after any trees: `readTail` reads a
-coin tree's `Hello` or opening only at a coin tree's line (`Spot.Challenger.treeLine`). -/
 theorem readTail_plain {label : String} {after : ByteArray} {records : List Json} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       {log : List Release}, Verity.Sampled.readTail label after records lines ts pending ξ = some log →
@@ -207,8 +164,6 @@ theorem readTail_plain {label : String} {after : ByteArray} {records : List Json
         obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
         exact step _ _ rest hrest (Option.some.inj hR).symm ⟨_, rfl⟩
 
-/-- **A read of a log none of whose lines is a coin tree's shows only fresh coins** (`readTail_plain`): no coin
-tree's `Hello` and no opening. -/
 theorem readLog_plain {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Release}
     (hR : Verity.Sampled.readLog label after records ξ lines = some log)

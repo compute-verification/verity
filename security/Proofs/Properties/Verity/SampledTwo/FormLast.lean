@@ -5,40 +5,16 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Evidence
 public import Proofs.Properties.Verity.Sampled.Record.Accepts
 public import Proofs.Flock.VBridge.PartS
 
-/-!
-# A session's last message, from the session's evidence
-
-`LastFixed` (`FormRounds.lean`) says two accepted plays with one parameters' bytes, one log before a session's last
-round and one evidence of that session read one last message, or sent two blobs with one SHA-512. Here it is a theorem
-where each template's session statement is fixed (`StmtAtFixed`, `StmtsRound.lean`).
-
-A session's messages on a case (`SessionMsgs.msgsAtCase`) are those of four parts: its statement, the setup the
-statement gives, its record's text and its proof files. Between the two plays:
-
-* **The statement** is one, or two blobs collide: `StmtAtFixed`, at the log before the statements' round, which is
-  one where the log before a later round is one (`CoinMap.before_le`).
-* **The setup** is the statement's, so it is one.
-* **The record and the proof files** are the evidence's parts. A session's evidence is `evidenceBytes` of its
-  record's bytes, then each rep file's name and bytes (`sessionEvidence_ok`), which decodes one way
-  (`Verity.Sampled.MemberForm.evidenceBytes_inj`): the two sessions have one record's bytes and one list of names and
-  files. The proof files are the files of the names the setup's rep streams give, each the first of its name in that
-  list (`find_same`), so they are one list (`parts_same`).
-
-That the session has evidence on the case is `SessionCoins.LogCloses`.
-
-**Not established here**: `StmtAtFixed`, `SessionCoins.VerdictsAt` and `SessionCoins.LogCloses`, each a hypothesis,
-shown elsewhere from hypotheses of their own. Nothing is said of a session's first message (`LinkFixed`).
--/
+/-! `LastFixed` where each template's session statement is fixed; `StmtAtFixed`, `SessionCoins.VerdictsAt`
+and `SessionCoins.LogCloses` are hypotheses here. -/
 
 @[expose] public section
 
 namespace Verity.SampledTwo.CoinMap
 
-/-- The log before a round of an empty log is empty and ends at no release. -/
 theorem before_nil (L : Locate) (i : ℕ) (pre : List Verity.Release) : before L i pre [] = ([], none) := by
   simp [before]
 
-/-- The log before a round of a log that holds a release is not the empty log that ends at no release. -/
 theorem before_cons_ne_nil (L : Locate) {i : ℕ} {pre : List Verity.Release} {rl : Verity.Release}
     (log : List Verity.Release) : before L i pre (rl :: log) ≠ ([], none) := by
   intro h
@@ -48,9 +24,6 @@ theorem before_cons_ne_nil (L : Locate) {i : ℕ} {pre : List Verity.Release} {r
   · rw [before_cons_neg L log hc] at h
     exact absurd (congrArg Prod.fst h) (by simp)
 
-/-- **Two logs with one log before round `i` have one log before every earlier round**: the log before round `j`
-ends at the first release put on a round at least `j`, which is at or before the first put on a round at least `i`
-where `j ≤ i`, and up to that one the two logs hold the same releases, and it has the same frame and bytes. -/
 theorem before_le (L : Locate) {i j : ℕ} (hji : j ≤ i) : ∀ (pre log log' : List Verity.Release),
     before L i pre log = before L i pre log' → before L j pre log = before L j pre log'
   | _, [], [], _ => rfl
@@ -93,10 +66,6 @@ open Claims
 open FlockVBridge.PartS (bind_ok mapM_forall₂)
 open Verity.Sampled.Record (get_what)
 
-/-! ## A session's evidence, part by part -/
-
-/-- **The parts a session's evidence is of**: its record's bytes on the blobs and, for each rep file it names, in
-order, the file's name in UTF-8 and its bytes on the blobs; under `2^64` parts, each under `2^64` bytes. -/
 theorem sessionEvidence_ok {bs : Core.Blobs} {s : Spot.OneStageZk.RunFiles} {ev : ByteArray}
     (h : Spot.OneStageZk.sessionEvidence bs s = .ok ev) :
     ∃ (rb : ByteArray) (reps : List (Array ByteArray)), bs.get s.record s!"session {s.name}'s record" = .ok rb ∧
@@ -129,9 +98,6 @@ theorem sessionEvidence_ok {bs : Core.Blobs} {s : Spot.OneStageZk.RunFiles} {ev 
       exact Nat.lt_of_not_le fun hle => hc2 ⟨p, hp, decide_eq_true hle⟩
     · exact (Except.ok.inj h).symm
 
-/-- **One name's file is one in two sessions whose rep files' names and bytes are the same lists**: the first rep
-file of the name is at one place in both, and the blobs' bytes under a digest don't depend on what a refusal would
-name. -/
 theorem find_same {bs bs' : Core.Blobs} {nm nm' n : String} :
     ∀ {l l' : List (String × String)} {rs rs' : List (Array ByteArray)},
       List.Forall₂ (fun (fd : String × String) r => ∃ b, bs.get fd.2 s!"session {nm}'s files: {fd.1}" = .ok b ∧
@@ -167,7 +133,6 @@ theorem find_same {bs bs' : Core.Blobs} {nm nm' n : String} :
       rw [hc'] at hf'
       exact find_same t t' hrest hf hf' hg hg'
 
-/-- Two runs over one list give one list of results, where each element's two results are one. -/
 theorem mapM_same {α β : Type} {f f' : α → Except String β} :
     ∀ {l : List α} {ys ys' : List β}, (∀ a ∈ l, ∀ b b', f a = .ok b → f' a = .ok b' → b = b') →
       l.mapM f = .ok ys → l.mapM f' = .ok ys' → ys = ys'
@@ -187,8 +152,6 @@ theorem mapM_same {α β : Type} {f f' : α → Except String β} :
     rw [hall a List.mem_cons_self b b' hb hb',
       mapM_same (fun a ha => hall a (List.mem_cons_of_mem _ ha)) hbs hbs']
 
-/-- **One evidence, one record and one list of proof files**: two sessions with the same evidence's bytes, each on
-its own blobs, have the same record's text and, at one setup, the same proof files. -/
 theorem parts_same {bs bs' : Core.Blobs} {s s' : Spot.OneStageZk.RunFiles} {spec : _root_.Flock.SessionSpec}
     {ev : ByteArray} {record record' : String} {proofs proofs' : Array ByteArray}
     (hev : Spot.OneStageZk.sessionEvidence bs s = .ok ev) (hev' : Spot.OneStageZk.sessionEvidence bs' s' = .ok ev)
@@ -244,7 +207,6 @@ theorem parts_same {bs bs' : Core.Blobs} {s s' : Spot.OneStageZk.RunFiles} {spec
       · cases hb'
     · cases hb
 
-/-- **The evidence of the `t`-th of the statements' sessions is its files' on the case's blobs.** -/
 theorem evidence_ok {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} {t : ℕ} {fs : Spot.OneStageZk.RunFiles} {ev : ByteArray}
     (hk : C o = some k) (hf : SessionMsgs.formOf k = some (p, e)) (hfs : SessionMsgs.filesAt e t = some fs)
@@ -265,15 +227,6 @@ theorem evidence_ok {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar.Rec
     rw [hs] at h
     rw [Option.some.inj h]
 
-/-! ## The last message -/
-
-/-- **`LastFixed`, from the session's evidence**: where the reading's messages are the case's
-(`SessionMsgs.msgAtCase`), each session is the parts the verdict accepted (`SessionCoins.VerdictsAt`), each session
-has evidence on the case (`SessionCoins.LogCloses`) and each template's session statement is fixed (`StmtAtFixed`).
-Two plays with one log before a session's last round have one log before the statements' round
-(`CoinMap.before_le`), so one statement, or two blobs that collide; the statement gives the setup; and one evidence
-gives one record and one list of proof files (`parts_same`). The session's messages are those parts'
-(`SessionMsgs.msgsAtCase_of_parts`), so every one of them is the same, the last among them. -/
 theorem lastFixed_of (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate) (tab : ℕ → String)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)

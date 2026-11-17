@@ -3,31 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CutRead
 public import Proofs.Properties.Challenger.Coins
 
-/-!
-# The play's log shows each stage's coins after one root
-
-On a play whose logs the check read and found the device's (`ReadIsDevice`), every fresh coin the play's log shows of
-the first stage's family is released after the boundary registration's digest, and every one of the second stage's
-family after the interior registration's (`oneRoot_samples`, at the cut's two samples; `oneRoot_second`, the second
-stage's in the case's words; `OneRootIn`).
-
-A session's read shows a fresh coin of a family only after a root its log's lines show of that family
-(`readLog_fresh`), and those are the roots `releasedRootsOf` lists (`Sampled.releasedRootsOf_ok`). The challenger's
-stream for a sample refuses a session that shows a root of the sample's own family other than its digest
-(`Coins.stream_ok`), so each session's read shows its own stage's family after its own digest alone (`first_oneRoot`,
-`second_oneRoot`).
-
-Where the two sessions are on one window, each read is the whole log, and that is all it takes. On two windows the
-log is the first session's releases then the interior's, and the statement also needs each session to show the other
-stage's family after that stage's digest alone: `OtherRoots`, a named `Prop` taken as a hypothesis. The form's accept
-does not give it: on two windows it refuses a first session that shows a coin of the interior's family after the
-interior's digest, which says nothing of that family's other roots there, and it holds the interior session's roots of
-the boundary's family to nothing. `OtherRoots` holds wherever neither session's roots show the other stage's family at
-all.
-
-As in `Cut`, at a history holding one play's signatures (`SignsPlay`) a genuine signature of an earlier period that the
-evidence carries is none the history signed, so it is the forger's, and the forger's term bounds nothing there.
--/
+/-! The play's log shows each stage's coins after one root; on two windows that takes `OtherRoots`, a
+hypothesis the form's accept does not give. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -41,9 +18,6 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open Verity.Sampled.Binding (Read)
 
-/-! ## The statement -/
-
-/-- **The log shows family `ℓ` after one root**: every fresh coin of family `ℓ` in `log` is released after `after`. -/
 def OneRootIn (ℓ : String) (after : ByteArray) (log : List Release) : Prop :=
   ∀ rl ∈ log, rl.frame = .fresh ℓ → rl.answers = after
 
@@ -51,7 +25,6 @@ theorem oneRootIn_append {ℓ : String} {after : ByteArray} {a b : List Release}
     (hb : OneRootIn ℓ after b) : OneRootIn ℓ after (a ++ b) :=
   fun rl hrl hfr => (List.mem_append.1 hrl).elim (fun h => ha rl h hfr) (fun h => hb rl h hfr)
 
-/-- **A log the read is of shows what the read shows**: a read's frames and answers are the log's. -/
 theorem oneRootIn_of_read {ℓ : String} {after : ByteArray} :
     ∀ {l log : List Release}, List.Forall₂ Read.Of (l.map Verity.Sampled.Binding.Read.ofV2) log →
       OneRootIn ℓ after l → OneRootIn ℓ after log
@@ -66,8 +39,6 @@ theorem oneRootIn_of_read {ℓ : String} {after : ByteArray} :
       · obtain ⟨hf, ha, -⟩ := hxy
         exact ha.symm.trans (hl x (List.mem_cons_self ..) (hf.trans hfr))
       · exact oneRootIn_of_read hs (fun y hy => hl y (List.mem_cons_of_mem _ hy)) rl hrl hfr
-
-/-! ## A read's fresh coins are after roots its lines show -/
 
 private theorem bind_some {α β : Type} {x : Option α} {f : α → Option β} {b : β} (h : (x >>= f) = some b) :
     ∃ a, x = some a ∧ f a = some b := by
@@ -89,8 +60,6 @@ theorem sel_cons_head {L a b : String} {ps : List (String × String)} {root : By
   rw [h]
   exact ite_eq_left rfl
 
-/-- **A fresh coin the lines' read shows is after a root the lines show of its family**: the read places a fresh
-release at each pair of lines that are no coin tree's, of the family and after the root the pair's first line names. -/
 theorem readTail_fresh (label : String) (after : ByteArray) (records : List Json) :
     ∀ (ls : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       {out : List Release}, Verity.Sampled.readTail label after records ls ts pending ξ = some out →
@@ -152,8 +121,6 @@ theorem readTail_fresh (label : String) (after : ByteArray) (records : List Json
             exact sel_cons_head hra
           · exact sel_cons_mem (readTail_fresh label after records ls ts none ξ hR rl hrl L hL)
 
-/-- **A fresh coin a log's read shows is after a root the log shows of its family**: one of the roots the root lines of
-the log's pairs name for that family (`Sampled.sel`), the log's head and its coin trees' lines apart. -/
 theorem readLog_fresh {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {out : List Release}
     (h : Verity.Sampled.readLog label after records ξ lines = some out) :
@@ -181,7 +148,6 @@ theorem readLog_fresh {label : String} {after : ByteArray} {records : List Json}
     · rw [ite_eq_right ht] at h
       exact readTail_fresh label after records ls [] none ξ h rl hrl L hL
 
-/-- **A read shows a family after one root where its lines do.** -/
 theorem read_oneRoot {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {out : List Release}
     (h : Verity.Sampled.readLog label after records ξ lines = some out) {L : String} {a : ByteArray}
@@ -189,11 +155,6 @@ theorem read_oneRoot {label : String} {after : ByteArray} {records : List Json} 
     OneRootIn L a out :=
   fun rl hrl hfr => hall _ (readLog_fresh h rl hrl L hfr)
 
-/-! ## A sample's session shows its own family after its digest alone -/
-
-/-- **The session a sample's coins are read from**: its commitment and the roots it shows, its log's lines, every root
-it shows of the sample's own family the sample's digest (the challenger's stream refuses any other), and the roots it shows
-of each family those its lines' pairs name. -/
 theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ cm roots, ∃ (ls : Array Json) (lines : List String),
@@ -210,8 +171,6 @@ theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : Byte
   obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
   exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, Verity.Sampled.releasedRootsOf_ok hrr⟩
 
-/-- **The first session's read shows a family after one root where its roots do**, and its roots show the first
-sample's family after the sample's digest alone. -/
 theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws} {ξ : ByteArray} {r : List Release}
     (hd : firstSamples key p c e = some d)
@@ -231,8 +190,6 @@ theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Para
   rw [← hsel L]
   exact hall
 
-/-- **The interior session's read shows a family after one root where its roots do**, and its roots show the second
-sample's family after the sample's digest alone. -/
 theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws} {ξ : ByteArray} {r : List Release}
     (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondSamples p e = some d)
@@ -258,13 +215,8 @@ theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recurs
   rw [← hsel L]
   exact hall
 
-/-! ## The premise on two windows -/
-
-/-- **On two windows each session shows the other stage's family after that stage's digest alone**: where the case
-reads as the two-stage form's, the parameters name a key and the two samples are on two windows, the roots the first
-session shows of the second sample's family are all the second sample's digest, and the roots the interior session shows
-of the first sample's family are all the first sample's digest. It holds wherever neither session's roots show the other
-sample's family. The form's accept does not give it. -/
+/-- On two windows each session shows the other stage's family after that stage's digest alone; it holds
+wherever neither session's roots show the other sample's family, and the form's accept does not give it. -/
 def OtherRoots (s : Verity.Sent) : Prop :=
   ∀ p c e key d₁ d₂, caseOf s = .ok (p, c, e) → keyOf s.params = some key → firstSamples key p c e = some d₁ →
     secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
@@ -279,12 +231,6 @@ def OtherRoots (s : Verity.Sent) : Prop :=
         (Spot.getD e.interior.base.coins "session") = .ok (cm, roots) →
       ∀ x ∈ Verity.Sampled.look roots d₁.label, x = d₁.after
 
-/-! ## The play's log -/
-
-/-- **The play's log shows each sample's family after its digest alone**, on a play whose logs the check read and found
-the device's (`ReadIsDevice`), with every step the check read on the way: on one window each session's read is the
-whole log; on two, the log is the first session's releases then the interior's, each showing the other sample's family
-after that sample's digest alone (`OtherRoots`). -/
 theorem oneRoot_samples {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent) :
     ∃ p c e key d₁ c₂ d₂ ξ, caseOf o.sent = .ok (p, c, e) ∧ keyOf o.sent.params = some key ∧
       firstSamples key p c e = some d₁ ∧ sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
@@ -320,8 +266,6 @@ theorem oneRoot_samples {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.
       exact ⟨oneRootIn_of_read (hdev _ hl) (oneRootIn_append (hall₁ _ _ ho₁) (hall₂ _ _ (hx₂ cm₂ roots₂ ht₂))),
         oneRootIn_of_read (hdev _ hl) (oneRootIn_append (hall₁ _ _ (hx₁ cm₁ roots₁ ht₁)) (hall₂ _ _ ho₂))⟩
 
-/-! ## The second stage, in the case's words -/
-
 theorem source_samples {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws} {key : ChallengerKey}
     {label : String} (h : oneStageZkSource p c = some d) (hch : p.base.challenger = some (key, label)) :
     d.label = label ∧ d.after = c.digest := by
@@ -329,10 +273,6 @@ theorem source_samples {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitmen
   rcases hw : p.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h <;> cases h
   exact ⟨rfl, rfl⟩
 
-/-- **The play's log shows the second stage's family after the interior registration's digest alone**: the family the
-interior audit's parameters name for its challenger, on a play whose logs the check read and found the device's
-(`ReadIsDevice`), where on two windows each session shows the other stage's family after that stage's digest alone
-(`OtherRoots`). -/
 theorem oneRoot_second {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent)
     {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
     {c₂ : Spot.OneStage.Commitment} {k : ChallengerKey} {label : String} (hcase : caseOf o.sent = .ok (p, c, e))

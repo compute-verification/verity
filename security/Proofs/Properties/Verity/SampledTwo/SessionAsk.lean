@@ -6,41 +6,8 @@ public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.OfRun
 public import Proofs.Properties.Verity.SampledTwo.ProjectionOf
 
-/-!
-# A session's messages before its last are coin requests, on an accepted play
-
-`Messages.session_prefix_fixed` (`PrefixFixed.lean`) fixes the play up to a session's round's release by the coins the
-history before that round shows, where each round a release is put on answers with its coin. At the form's reading that
-is `Messages.SessionMsgsAsk`: a session's slot a release is put on is one whose session's statement sets up and whose
-session's messages up to it are of tag `0`. This module proves it from the accept of the run of record, but for one
-fact about the locator.
-
-* **The verifier's step** (`session_step_asks`, `session_asks`): at a session's round the verifier answers with a
-  message, where no shorter prefix of the session's messages is decided and the messages so far are fewer than the
-  session's statement has rounds, Flock's step on the session's messages is a coin request. A refusal ends the run,
-  and Flock accepts only as many messages as the statement has rounds (`FlockDeploy.next_acc_length_sha512`). So
-  where the verifier answered every round of a session before its last with a message, each is a coin request.
-* **An accepted run** (`run_session_asks`): an accepted run of SPOT[Flock] has all its rounds' messages, and every
-  round before its last answered a message. So, where each session statement has its template's count of rounds, the
-  statements' message sets each session up and each session's message before its last is of tag `0`.
-* **At the form** (`sessionAsks_form`): on a play the form accepts and reads at the statement `x`, whose coins as the
-  check read them agree with some run's coins (`ReadAt`), some accepted run sends the messages the check read
-  (`proverAt`, from `PlayAccepts` and `SessionMsgs`). So the session reading's statements set each session up and its
-  message at each slot before a session's last is of tag `0`.
-* **`SessionMsgsAsk`** (`sessionMsgsAsk_form`), on the plays `ReadAt` holds of, where the locator puts no release on
-  a session's last slot (`LastSlotFree`); and `Messages.session_prefix_fixed` at the form's reading and the run's
-  locator with it (`session_prefix_fixed_form`).
-
-`ReadAt` costs the messages' piece nothing: the assembly asks the messages fixed only where the coins the check read
-agree with the run's (`MessagesFixedAgreed`), and there the frame's play is read at `x` (`StmtAt`), so
-`messagesFixedAgreed_of_readAt` takes the messages fixed on the plays `ReadAt` holds of.
-
-What this does not prove: `LastSlotFree`. The session-round locator puts the `k`-th opening of a session's rep 1
-stream on slot `R + 1 + k` at `R` rounds a rep only for `k < R`, so it puts no release on the last slot, `2 R + 1`, of
-a session of at least two rounds (`SessionCoins.locOf_ne_last`). `lastSlotFree_run` states it of the session-round
-locator alone, and `LastSlot.lean` proves it from the sessions' rounds. The premises `PlayAccepts`, `SessionMsgs` and
-`RoundsHeldAt` are the join's.
--/
+/-! On an accepted play a session's messages before its last are coin requests (`SessionMsgsAsk`), from
+`LastSlotFree`, which this file does not prove. -/
 
 @[expose] public section
 
@@ -51,11 +18,6 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The verifier's step -/
-
-/-- **A session's round the verifier answers with a message is a coin request**, where no shorter prefix of the
-session's messages is decided and the messages so far are not as many as the session's statement has rounds: a
-refusal ends the run, and Flock accepts only as many messages as its statement has rounds. -/
 theorem session_step_asks (h : SpotFlock.Held) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) {t : ℕ}
     (has : h.stage + 2 < as.length) (hcs : cs.length = as.length) (hslot : SpotFlock.slotOf h as.length = some t)
     (hund : ∀ j, 0 < j → j < as.length - SpotFlock.off h t →
@@ -95,9 +57,6 @@ theorem session_step_asks (h : SpotFlock.Held) (x : Msg) (as : List Msg) (cs : L
       have hm' : (Out.rej : Out) = .msg m := hm
       cases hm'
 
-/-- **Each round of a session before its last is a coin request**, where the verifier answered each of them with a
-message and the session's statement has its template's count of rounds: by `session_step_asks`, round by round, the
-rounds before each being coin requests and so not decided. -/
 theorem session_asks (h : SpotFlock.Held) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) {t : ℕ}
     (ht : t < h.ms.length) (hcs : cs.length = as.length)
     (hk : (FlockDeploy.V true).k (SpotFlock.stmtAt h (as.getD (h.stage + 1) []) t) = SpotFlock.k₀ h t)
@@ -145,14 +104,6 @@ theorem session_asks (h : SpotFlock.Held) (x : Msg) (as : List Msg) (cs : List F
       exact hres
   exact fun l => key (l + 1) l (Nat.lt_succ_self l)
 
-/-! ## An accepted run -/
-
-/-- **In an accepted run of SPOT[Flock], the statements' message sets each session up and each session's message
-before its last is of tag `0`**, where the session's statement, read off the statements' message, has its template's
-count of rounds: the run has all its rounds' messages (`length_of_acc`), every round before the last answered a
-message (`run_msg_lt`), the verifier's on the run's messages and coins so far (`run_answer`), so each round of the
-session before its last is a coin request (`session_asks`), which is a setup and a last message of tag `0`
-(`act_coin_iff`). -/
 theorem run_session_asks (h : SpotFlock.Held) {Ω : Type} (P : Claims.Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((SpotFlock.V h).k x) → FlockDeploy.Coin)
     (hacc : (Claims.run FlockDeploy.sha512 P (SpotFlock.V h) x ω r).out = .acc) {t : ℕ} (ht : t < h.ms.length)
@@ -211,9 +162,6 @@ theorem run_session_asks (h : SpotFlock.Held) {Ω : Type} (P : Claims.Prover Ω)
     List.getElem?_map] at hu
   exact hu
 
-/-! ## At the form -/
-
-/-- The form's reading reads the session reading's statements at the statements' round. -/
 theorem formMsg_stmt (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) :
     (formReading A C S dev).msg o (A.h.stage + 1) = S.stmts o := by
@@ -222,7 +170,6 @@ theorem formMsg_stmt (A : Live₂) (C : CaseOf) (S : SessionReading)
     ite_eq_right (show ¬ A.h.stage + 1 = 1 by omega), ite_eq_right (show ¬ A.h.stage + 1 ≤ A.h.stage by omega),
     ↓reduceIte]
 
-/-- The form's reading reads the session reading's message of template `t`'s session at that session's rounds. -/
 theorem formMsg_session (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) {t l : ℕ}
     (ht : t < A.h.ms.length) (h1 : SpotFlock.off A.h t ≤ l) (h2 : l < SpotFlock.off A.h t + SpotFlock.k₀ A.h t) :
@@ -232,15 +179,10 @@ theorem formMsg_session (A : Live₂) (C : CaseOf) (S : SessionReading)
   simp only [formReading, ite_eq_right (show ¬ l = 0 by omega), ite_eq_right (show ¬ l = 1 by omega),
     ite_eq_right (show ¬ l ≤ A.h.stage by omega), ite_eq_right (show ¬ l = A.h.stage + 1 by omega), hslot]
 
-/-- **The play is read at the statement `x`, and the coins the check read of it agree with some run's coins.** -/
 structure ReadAt (A : Live₂) (x : Msg) (Rd : Reading A) (o : Verity.Exchange) : Prop where
   stmt : Rd.stmt o = some x
   agrees : ∃ r : Coins A x, ReadAgrees A x Rd o r
 
-/-- **On an accepted play, the session reading's statements set each session up and its message at each slot before
-a session's last is of tag `0`**, where the play is read at `x` and the coins the check read agree with the run
-coins `r`: some accepted run on `r` sends the messages the check read (`proverAt`), each session statement has its
-template's count of rounds (`RoundsHeldAt`), and `run_session_asks` reads the tags off that run. -/
 theorem sessionAsks_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hrounds : RoundsHeldAt A C S)
@@ -275,16 +217,10 @@ theorem sessionAsks_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReadin
     exact hset
   · rw [hmsg, Option.getD_some]
 
-/-- **No release is put on a session's last slot**: on a play accepted (`Acc`) whose log the check read is the
-device's (`Good`), the locator `L` puts no release of the play's log on the last slot of a template's session, the
-slot the session is decided on. -/
 def LastSlotFree (A : Live₂) (Acc Good : Verity.Exchange → Prop) (L : CoinMap.Locate) : Prop :=
   ∀ o, Acc o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ t, t < A.h.ms.length →
     CoinMap.locAt L a rl.frame rl.answers ≠ some (SpotFlock.off A.h t + (SpotFlock.k₀ A.h t - 1))
 
-/-- **`SessionMsgsAsk` at the form**, on the plays read at `x` whose coins as the check read them agree with some
-run's (`ReadAt`): a slot a release is put on is before the session's last (`LastSlotFree`), and the session's
-statement sets up and its messages up to that slot are of tag `0` (`sessionAsks_form`). -/
 theorem sessionMsgsAsk_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (Good : Verity.Exchange → Prop) (L : CoinMap.Locate) (hplay : PlayAccepts A C S P')
@@ -301,8 +237,6 @@ theorem sessionMsgsAsk_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionRea
     (sessionAsks_form A x C S dev P' hplay hsess hrounds hacc hs hr ht
       (show l + 1 < SpotFlock.k₀ A.h t by omega)).2⟩
 
-/-- **`LastSlotFree` at the run's locator, from the session-round locator**: the run's locator agrees with it at the
-sessions' rounds (`SessionCoins.locates_run`). -/
 theorem lastSlotFree_run (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate)
     (tab : ℕ → String)
     (h : ∀ o, FormAccepts C o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ t, t < A.h.ms.length →
@@ -318,11 +252,6 @@ theorem lastSlotFree_run (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → 
     rw [ite_eq_right hn0, ite_eq_right hn1, ite_eq_right hn2]
   exact h o hacc hgood a rl b hlog t ht ((SessionCoins.locates_run A Ls tab a rl.frame rl.answers _ hg).1 hloc)
 
-/-- **The play up to a session's round's release is fixed by the coins the history before that round shows, at the
-form's reading and the run's locator**: `session_prefix_fixed` with `ShowsPlaced` from `sessionMsgsAsk_form`, on a
-play read at `x` whose coins as the check read them agree with some run's (`ReadAt`). The rounds rise along the
-play's log (`LogRising`), the run of record's accept and its sessions' messages are the join's (`PlayAccepts`,
-`SessionMsgs`, `RoundsHeldAt`), and no release is put on a session's last slot (`LastSlotFree`). -/
 theorem session_prefix_fixed_form (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
@@ -353,12 +282,6 @@ theorem session_prefix_fixed_form (V : Vocab d α) (A : Live₂) (x : Msg) (θ :
       (sessionMsgsAsk_form A x C S dev P' Good _ hplay hsess hrounds hlast))
     ω r r' hacc ⟨hgood, hread⟩ h hi hg hs
 
-/-! ## The messages' piece on the plays `ReadAt` holds of -/
-
-/-- **The messages fixed where the coins agree, from the messages fixed on the plays `ReadAt` holds of**: where the
-frame's accepted plays are read at `x` (`StmtAt`), on agreeing coins a run whose messages are the check's at every
-round it reaches has all the verifier's messages, and a message the check reads differs from the run's at a round the
-run reaches on plays at most `miss` likely among those `ReadAt` holds of, `MessagesFixedAgreed` holds at `miss`. -/
 theorem messagesFixedAgreed_of_readAt {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Fr : Frame V A x θ F c σ} {Rd : Reading A}
     {Acc Good : Verity.Exchange → Prop} {miss : ℝ≥0∞} (hst : StmtAt V A x θ F c σ Fr Rd Acc)

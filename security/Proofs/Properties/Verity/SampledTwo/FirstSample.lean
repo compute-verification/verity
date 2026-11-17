@@ -8,22 +8,7 @@ public import Spot.Run
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The second stage's sampling design is computed from the first stage's accepted sample
-
-The two-stage form's last step holds the interior audit's sample to a sampling design it computes (`secondDesignOf`), from the `draw`
-the run of record returned. That `draw` is the first stage's sample of record:
-
-* `run_sample`: a run of record whose symbol is `accept` ran the sample of record (`Select.select`, under
-  `Select.resolve`'s rule and the work table the rule expands) on the bytes it was handed, held that sample to the
-  registration (`Draw.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
-  sample. A refused run names no symbol, and the entry a second stage adds to the answer is named `interior`.
-* `accepted_secondSamplingDesign`: where the two-stage check accepts, the sampling design its last step holds the interior audit's sample to is
-  `Select.secondSamplingDesign` of the proved units of the first stage's sample, the one `Select.select` drew on the first
-  stage's bytes `ξ` under the boundary's parameters and the run of record held to the boundary registration.
-
-Nothing imports this module.
--/
+/-! The second stage's sampling design is computed from the first stage's accepted sample. -/
 
 @[expose] public section
 
@@ -32,12 +17,10 @@ namespace VStar.Recursive.SampledTwo
 open Lean (Json)
 open Spot
 
-/-- `getD` of `Json.mkObj l` at a key of `l`'s, its keys distinct, is its value. -/
 private theorem getD_mkObj {l : List (String × Json)} (hd : FlockComplete.JsonRT.Distinct l) {k : String} {v : Json}
     (hm : (k, v) ∈ l) : Spot.getD (Json.mkObj l) k = v := by
   simp only [Spot.getD, Spot.field?, FlockComplete.JsonRT.getObjVal?_mkObj hd hm, Except.toOption, Option.getD_some]
 
-/-- `getD` of `Json.mkObj l` at a key no entry of `l` has is `null`. -/
 private theorem getD_mkObj_none {l : List (String × Json)} {k : String}
     (hk : (l.map Prod.fst).contains k = false) : Spot.getD (Json.mkObj l) k = Json.null := by
   first
@@ -48,7 +31,6 @@ private theorem getD_mkObj_none {l : List (String × Json)} {k : String}
        rw [FlockComplete.JsonRT.get?_mkObj_none hk]
        all_goals rfl)
 
-/-- **The entry a second stage adds to a run's answer** is none, or one named `interior`. -/
 private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {sample : Array Nat}
     {inner : Option (Spot.Run.Interior × Json × Json × Json × Nat)} {acc : Bool} {staged : List (String × Json)}
     (h : Spot.Run.interiorAudit form i sample inner = .ok (acc, staged)) :
@@ -77,9 +59,6 @@ private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {sample 
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 8000000 in
-/-- **A run's answer, at either switch** (`Spot.Run.run_decided`'s, with the second stage's audit): refused at a step,
-or past the population, R1–R7, the sample of record on the bytes it was handed and that sample's own check, its answer
-listing that sample as its `draw` before whatever the second stage's audit adds. -/
 private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
@@ -109,10 +88,6 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         by assumption, _, by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _, _, _,
         by assumption, (Except.ok.inj h).symm⟩
 
-/-- **An accepted run of record's `draw` is its first stage's sample**: a run of `Spot.Run.run`, at either switch,
-whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
-`Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
-sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
 theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
     ∃ n rule samplingDesign workTable derived resolved draw rest read,
@@ -149,14 +124,6 @@ theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run
       · exact getD_mkObj (by simp [FlockComplete.JsonRT.Distinct, List.pairwise_cons, Std.compare_eq_iff_eq])
           (by simp)
 
-/-- **The second stage's sampling design is computed from the first stage's accepted sample.** Where the two-stage check accepts,
-the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
-`Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
-boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
-rule gives its population), and listed it as
-its `draw`; and the sampling design the last step held the interior audit's sample to (`secondCheck` at `samplingDesign`) is
-`Select.secondSamplingDesign` of `draw`'s proved units, over the replay block's cells under the interior's query at the rule's
-counts. -/
 theorem accepted_secondSamplingDesign {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
