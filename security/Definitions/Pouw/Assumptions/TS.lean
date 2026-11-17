@@ -2,73 +2,7 @@ module
 
 public import Definitions.Pouw.TS
 
-/-!
-# The tensor–scalar model's named assumptions (trusted)
-
-The premises of EPS1-SPEC's Theorem D-ideal ((I1)–(I8), §2.7) and of the compiler lemma (Lemma C), each a `Prop` over
-`ResourceAccounting.TS`'s vocabulary, taken as a hypothesis, never an `axiom`. Each docstring opens with its claim id
-(`verity.core.claims`). An assumption over an `Anatomy` is claimed at §0.4's and §1.3's labelling of the cheater's
-instructions (heads, ownership, copies); an assumption over a run is claimed for the stated device.
-
-Which form each takes:
-
-* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
-  its statement names), checked by measurement: a corpus program that runs faster than a facet
-  falsifies it.
-* (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`ResourceAccounting.Guarantees.TS.OutputCount`)
-  is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
-* (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
-  class P and a per-instruction cap `κ` (`q = 2.03`, `q_T = 1.22`, `b_T` from `κ`), rests on Theorem C, which is
-  false as stated. The proved count is `Pouw.Guarantees.Eps1.ClassPSlots`: a class-P
-  program whose writers each create at most `w` incidences costs at least `1 + (32 − w)/(65·d)` issue slots a word,
-  `d` words a slot (`1.185` at `w = 8`, `d = 2`). No cap on `w` is proved, class P is a modeling restriction, and a
-  table route lies outside `ClassPSlots`, so the floors stay an assumption; they are the model's parameters, so every
-  statement here holds at every floor. ISA-CAP (`κ = 32/7`) is false (REFEREE Q4: an IDP.4A writes 5 incidences into
-  one word, a signed IMAD.WIDE 8) and is no premise.
-* (I5) `SideUnits` (measured per-word vectors, P11) and `NoSum` (NOSUM, P13), a measured statement: no unit outside
-  the menu heads a fresh word.
-* (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
-  `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds below the
-  menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read (every form,
-  guarded), gives both at the fan-in menu's price (`ResourceAccounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a
-  fold or filler presented as a straight-line dataflow over the words it absorbs, priced at least the menu's routes of
-  `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded: the fold priced at the words the run folds, `FoldOpt`
-  its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal prices at; the headlines take it at
-  their `π*`, so a run that skips folds is charged through `WholeLuckAt`.
-* (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
-  (`ResourceAccounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
-  * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words, through Lemma B at fibre 1;
-  * `ReceiptLuckAt`, the receipt luck, which is HMU's B′ case.
-  `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (`½`, B′'s value).
-  `OperandLuckCube` proves the operand luck at ¾ for degree-2 operands on cube bits. Its hypothesis restricts the
-  cheater to affine-operand runs, so it is a proved route, not a premise.
-* (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
-  `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
-  own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
-  `ResourceAccounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`ResourceAccounting.TS.ProofLayer`):
-  binding at `δ_bind` (at `√δ_fork` from its fork form, `ResourceAccounting.Guarantees.TS.BindingOfFork`), proof soundness at
-  `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `ResourceAccounting.Guarantees.TS.ProofsSoundOfSampled`
-  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the sampled proof blocks' proofs (`ResourceAccounting.TS.SampledLayer`): binding of every
-  committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
-  `ResourceAccounting.Guarantees.TS.SampledBindingOfFork`), the proofs' soundness jointly over a round's samples at `δ_ks`, each
-  unit's pinning, the share covering every unit that isn't good (`SampledLayer.Covers`, proved for each game), and
-  `UnitFixed`. Its crypto half, the sampled proof blocks right, is `ResourceAccounting.Guarantees.TS.SampledRightOff`.
-* `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
-  proof system's.
-* `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-system pieces as named premises, binding
-  in its fork form, so the headlines' binding is `√δ_fork` and no advantage bound.
-* `UnitFixed`: E1(c) per unit, which doesn't read the sample: the good units' words are fixed, a unit being good when
-  the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
-  every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the sampled proof blocks only,
-  so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
-  so goodness reads the run's modes, not rightness.
-
-The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
-
-SAMPLING's LIN-STEER is false and is not stated here: a segmented consumer satisfies it only when its noise-active
-segments carry equal counts. It and the bound that holds, `SegmentSteer`, are lemmas (`Proofs.ResourceAccounting.Lemmas.TS.Steer`).
--/
+/-! The tensor–scalar model's named assumptions over `ResourceAccounting.TS`'s vocabulary; E1(c) is proved on paper only and sits inside `ProofsSound`, and the joint-luck premise JL is not used. -/
 
 @[expose] public section
 
@@ -122,9 +56,6 @@ the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
 def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
-/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded). **FOLD-OPT_μ per word folded**: at every
-certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, `folded` the words it folds a unit. `FoldOpt`
-is its case at `N_w`. -/
 def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
 

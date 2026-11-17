@@ -2,25 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.TS
 
-/-!
-# The tensor–scalar model's guarantee statements (trusted)
-
-EPS1's statements over `ResourceAccounting.TS`,
-each `def G : Prop`, proved (or a `sorry` stub) as
-`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
-
-* `TimeBound`: Lemma 1, `T(P) ≥ B(P)/f_max`.
-* `DIdeal`, `DIdealFloor`: Theorem D-ideal, (2.7) and (2.7♭), in 𝒫_full from (I1)–(I8).
-* `CompilerC`: Lemma C, the compiler, in 𝒫_samp: the same bound with `ε_sample` added.
-* `TensorSlotCount`, `TensorSlotTight`: T1, the tensor slot count, and its tightness criterion.
-* `OutputCount`: Lemma 2's count, owned committed positions at most `Σ_k ω_k n_k`.
-* `FanInCount`, `SeesOfInjective`, `ThinFoldInjective`: the fan-in count, `|ι| ≤ |O| + Σ_i (sources − 1)` for a
-  straight-line program whose outputs see every input; a receipt injective in each word sees it; the thin fold's is.
-* `FoldOptOfFanIn`, `FillOptOfFanIn`: (I6) from `FanIn` at the fan-in menu's price.
-
-Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
-at most `δ`.
--/
+/-! The tensor–scalar model's guarantee statements, each proved, or a `sorry` stub, as `ResourceAccounting.SecurityProofs.TS.G`. -/
 
 @[expose] public section
 

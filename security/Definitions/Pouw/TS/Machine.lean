@@ -35,20 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The tensor–scalar machine (trusted)
-
-EPS1's tensor–scalar (TS) model (§0.1–§0.3, §1.1): instruction classes `K`,
-facets `R`, each facet a row `a r : K → ℝ` (the cycles of facet `r` one instruction of class `k` occupies, per SMSP),
-SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (P1: 2,430 MHz on sm_120).
-
-* A program's counts `n : K → ℝ` are its device totals of each class divided by the SMSPs, per unit of honest work.
-* Its load on facet `r` is `a_r · n` (`Machine.load`), and its bound `B(n) = max_r a_r · n` (`Machine.bound`).
-* A run (`Run`) is a program's counts with its cycles per SMSP and its SM clock; its time is cycles over clock.
-* A certificate (`IsCert`) is a probability vector `λ` on the facets. Its price of counts is
-  `π · n = Σ_r λ_r a_r · n` (`Machine.price`), and of a route's per-facet demand `d` it is `Σ_r λ_r d_r`
-  (`demandPrice`).
--/
+/-! EPS1's tensor–scalar machine: instruction classes, facets, a program's bound `B(n) = max_r a_r · n` and a certificate's price. -/
 
 @[expose] public section
 

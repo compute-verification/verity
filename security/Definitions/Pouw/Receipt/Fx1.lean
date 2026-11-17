@@ -4,17 +4,7 @@ public import Definitions.Pouw.Receipt.Duo
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# fx1, sm_120's receipt fold (trusted)
-
-fx1 (SAT-120's design H1 + fx1, decision 83) puts one keyed IMAD in front of duo: word `d` at chain position `(J, e)`
-is multiplied by an odd key `m = key_mul(1, (4J + e)·32)` and the product is absorbed by duo's step
-(`Definitions/Pouw/Receipt/Duo.lean`) with that position's duo keys:
-
-    d′ = d·m;   u = y ⊕ d′ ⊕ k;   y ← u·a + z;   z ← rotl(u, r) + y
-
-For odd `m`, `d ↦ d·m` is a bijection of the words, so every statement about duo's words carries over to fx1's.
--/
+/-! fx1, sm_120's receipt fold, duo behind a multiply by an odd key, a bijection of the words, so every statement about duo's words carries over. -/
 
 @[expose] public section
 

@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The data-sheet machine (trusted)
-
-The TS machine a device's vendor documents give on their own (data-sheet
-constants, no GPU self-attestation), over instruction classes `K` and Nsight Compute pipes `P`. Every facet
-is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an SM):
-
-* issue: `1` for every class, uniform-datapath classes included (A2, A2u);
-* the tensor pipe: `macs_k / (peak_k / 4)`, a class's dense MACs over a quarter of the SM's dense MACs a clock for its
-  operand type (A3);
-* one facet per pipe `p`: `128 / width_p` for the classes on `p`, `width_p` the Programming Guide's results an SM
-  clock (A4);
-* shared memory: `smem_k / 32`, the bank bytes a class's warp instruction holds over a quarter of the SM's 128 B a
-  clock (A5): one request's 128 B for every shared-memory class, since a broadcast load or a store to one address
-  moves fewer distinct bytes than its width, and a bulk or TMA class's bytes (A5b), counted by size.
-
-The machine model's `DS-NN` vectors are these rows at each device's vendor values (status `datasheet`).
--/
+/-! The data-sheet machine, the TS machine a device's vendor documents give on their own, every facet SM-clocked and each row in SMSP-cycles a warp instruction. -/
 
 @[expose] public section
 
@@ -66,10 +49,8 @@ an SM clock `peak k` for its operand type, the Nsight Compute pipe `pipe k` it i
 shared-memory bank bytes `smem k` it holds at least (`0` off shared memory); per pipe, the Programming Guide's results
 an SM clock `width p`. -/
 structure Sheet (K P : Type) where
-  /-- The top of the declared vBIOS's clock table, which no SM clock on the node exceeds (`accounting-declared-device`):
-  the data sheet's maximum boost clock (the H200's 1,980 MHz), or the driver's reported maximum where the sheet gives
-  none for the board (sm_120's Server card, 2,430 MHz, measured as the table's top; the B200's 1,965 MHz).
-  The H200's and B200's tables are unmeasured. -/
+  /-- The top of the declared vBIOS's clock table, which no SM clock on the node exceeds; the H200's and B200's tables are
+  unmeasured. -/
   fmax : ℝ
   macs : K → ℝ
   peak : K → ℝ

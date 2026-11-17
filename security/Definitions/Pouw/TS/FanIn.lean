@@ -35,15 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Fan-in: a straight-line program's dataflow (trusted)
-
-The counting object of the fan-in floor (ISA-FANIN): a straight-line program over fresh inputs `ι`, each node an
-instruction (one lane of a lane instruction, or one warp-wide instruction such as an MMA or a shuffle) in program
-order, reading the nodes `src` names and computing its value from theirs alone; its runs; which inputs feed a node;
-when a set of outputs sees every input (the receipt is injective in each word given the others); and the thin fold,
-whose receipt is.
--/
+/-! Fan-in, a straight-line program's dataflow, the counting object of the fan-in floor. -/
 
 @[expose] public section
 
@@ -67,7 +59,6 @@ variable {ι W : Type} (D : Dataflow ι W)
 def Runs (x : ι → W) (v : ι ⊕ Fin D.n → W) : Prop :=
   (∀ j, v (.inl j) = x j) ∧ ∀ i, v (.inr i) = D.op i v
 
-/-- Input `j` feeds node `s`: `s` is `j`, or reads a node `j` feeds. -/
 inductive Feeds (j : ι) : ι ⊕ Fin D.n → Prop
   | input : Feeds j (.inl j)
   | read {i : Fin D.n} {s : ι ⊕ Fin D.n} : s ∈ D.src i → Feeds j s → Feeds j (.inr i)
@@ -88,7 +79,6 @@ end Dataflow
 /-- One step of the thin fold: two words into the state, `s ⊕ w ⊕ w'` (one LOP3) or `s + w + w'` (one IADD3). -/
 def thinStep (xor : Bool) (s w w' : BitVec 32) : BitVec 32 := if xor then s ^^^ w ^^^ w' else s + w + w'
 
-/-- The thin fold: a run of words absorbed two a step, the steps alternating XOR3 and IADD3 from `xor`. -/
 def thinFold : Bool → BitVec 32 → List (BitVec 32 × BitVec 32) → BitVec 32
   | _, s, [] => s
   | xor, s, (w, w') :: ws => thinFold (!xor) (thinStep xor s w w') ws

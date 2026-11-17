@@ -5,29 +5,7 @@ public import Definitions.Pouw.PearlC.Fp4
 public import Definitions.Pouw.PearlC.TileCircuit
 import Mathlib.Algebra.Order.AbsoluteValue.Basic
 
-/-!
-# Pearl-C4's tile unit as a core circuit (definitions only)
-
-`pc4`'s tile template `Pc4Tile_v1{K, TM, TN}` (`verity.protocols.accounting.work.pouw.circuit.pc4`, its `_tile_body` and `_chain`) as a
-`Verity.Circuit`, a gate table (`TileCircuit.Spec`) as `TileCircuit` writes `pc8`'s.
-
-* **Inputs**, in the template's parameter-leaf order, with `S = K/16` scale bytes per row: the E2M1 codes of `A′`'s
-  `TM` rows (row `i` at gates `i·K, …`, 4 bits) and their UE4M3 scale bytes (from `TM·K + i·S`, 8 bits), the same for
-  `B̃`'s `TN` rows (codes from `TM·(K + S) + j·K`, bytes from `TM·(K + S) + TN·K + j·S`), then the 64 BF16 words of
-  each `P_A` row (from `(TM + TN)·(K + S) + 64·i`, 16 bits) and each `P_B` row (from
-  `(TM + TN)·(K + S) + 64·TM + 64·j`).
-* **Entry `(i, j)`'s block** (`entry4Gate`), the entries in row-major order:
-  * **the chain**: `K/64` firings of `BlackwellNvf4OmmaDot64_v1` (`atom4F`, `nvf4Word`) from `+0`, each over the next
-    64 code pairs and 4 scale bytes per operand, with no promotion. The last is `C̃_ij` (`c4Gate`);
-  * **U**: four `HopperBF16WgmmaDot16_v1` steps (`TileCircuit.peelF`) from `C̃_ij` over the slices of `P_A,i` and
-    `P_B,j`, as in `pc8`. The last is `U_ij` (`u4Gate`).
-* **One proof block** (`Spec.part`) holds every computed gate.
-
-Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
-templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The trusted part is as in `TileCircuit`: the
-order of a gate's reads and each primitive's semantics, here `nvf4Word` for the FP4 step (the primitive's three rules,
-with `Fp4Atom.step sm120Nvf4` on a finite accumulator and valid scale bytes).
--/
+/-! `pc4`'s tile template as a gate table, checked against its `CallGraph` by a test, so the order of a gate's reads and `nvf4Word` are the trusted part. -/
 
 @[expose] public section
 
@@ -107,7 +85,6 @@ def u4Gate (K TM TN i j : ℕ) : ℕ := entry4Base K TM TN i j + block4Len K - 1
 
 theorem block4Len_pos (K : ℕ) : 0 < block4Len K := by unfold block4Len; omega
 
-/-- Gate `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
 theorem tile4_block {K TM TN g : ℕ} (hg : g < tile4N K TM TN) (h : tile4In K TM TN ≤ g) :
     g = tile4In K TM TN + (g - tile4In K TM TN) / block4Len K * block4Len K + (g - tile4In K TM TN) % block4Len K ∧
       (g - tile4In K TM TN) / block4Len K / TN < TM ∧ (g - tile4In K TM TN) / block4Len K % TN < TN ∧

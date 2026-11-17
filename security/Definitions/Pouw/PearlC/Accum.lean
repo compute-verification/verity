@@ -2,24 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Defs
 
-/-!
-# Π's promoted chain over a `Pipeline` (definitions only)
-
-`Defs`' promoted product chain with the atom's step a parameter, so that a device whose FP8 step is another
-`Pipeline` has its own chain beside Π's: sm_120's `mma.sync` m16n8k32 (`sm120E4m3`, `⟨[32], 26, −133⟩`,
-`BLACKWELL_SM120_E4M3_M16N8K32`) for `pearl-c-sm120-v1` at `G = 4`. The promotion (`Defs.promote`), the groups
-(`List.toChunks G`) and the atoms (`Defs.rowAtoms`, 32 positions each) are `Defs`' own; only the step changes.
-
-* **The chain** (`groupWordP p`, `totalP p`, `chainP p G`, `ctChainP p G`): each group's atoms folded by `p.step` from
-  `+0`, each group's word promoted in order into an FP32 total from `0`.
-* **The device record's ticket** (`chainAt p G`): `ctChainP p G`, the name `PearlCDevice.ticket` reads; `G = 0` is no
-  promotion, and then `chainAt p 0` is the pure chain `ctPureChain p` (`pureChain p`, one fold over all the atoms), proved
-  in `AccumProofs`.
-* **Π's instance**: at `hopperE4m3K32` every definition is `Defs`' by `rfl` (`chainP_hopper`, `ctChainP_hopper`, and
-  `G = 4` in `chainP_hopper_four`, `ctChainP_hopper_four`, `chainAt_hopper`).
-
-This module imports no proofs, so the named protocol may read it.
--/
+/-! Π's promoted chain over a `Pipeline` with the atom's step a parameter; it imports no proofs, so the named protocol may read it. -/
 
 @[expose] public section
 
@@ -55,7 +38,6 @@ a value. -/
 def pureChain (p : Pipeline) (atoms : List AtomIn) : Option ℚ :=
   wordQ (atoms.foldl (fun w x => p.step w (List.ofFn x.1) (List.ofFn x.2)) 0)
 
-/-- `C̃ = A′·B̃ᵀ` under the pure chain on the step `p`. -/
 def ctPureChain (p : Pipeline) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
     Matrix (Fin m) (Fin n) (Option ℚ) := fun i j => pureChain p (rowAtoms (Aq i) (Bq j))
 

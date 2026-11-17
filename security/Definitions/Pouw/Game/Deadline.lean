@@ -2,26 +2,7 @@ module
 
 public import Definitions.Pouw.Game.Defs
 
-/-!
-# The deadline: a timed run and the verifier's rule (trusted)
-
-A proof of compute utilization says that an accepted trace means at least `W` of work between the salt and a
-deadline: a lower bound on the work (`Pouw.Guarantees.EndToEnd`), freshness (preprocessing never reads the salt, by
-`Adversary`'s construction) and a deadline. This file models the deadline, minimally:
-
-* **A timed run** (`TimedRun`): the verifier releases the salt at `ts` and receives the trace at `tr H s`. The
-  prover's cost is split by when it is spent: it has spent `spent H s t` by time `t`, so `spentIn H s a b` is what it
-  spends in `(a, b]`.
-* **The verifier's rule** (`AcceptsBy`): at the deadline `td` it accepts iff it received the trace by `td` and its
-  audit accepts. A trace received after `td` is rejected, whatever it holds.
-* **The budget** (`Adversary.BoundedBy`): `Adversary.Bounded` with the online phase's cost replaced by what the run
-  spends after the salt and by the deadline.
-* **What the deadline reads of an adversary** (`Adversaries`): its preprocessing, the trace it commits, and its
-  online phase's cost and oracle calls. `CostModel.adversaries` reads them in this game; Pearl-C's game reads its own.
-
-Time meets the cost model only through the named assumption `Pouw.Assumptions.HonestClock`, stated once over
-`Adversaries` for both games; `Pouw.Guarantees.WorkBetweenSaltAndDeadline` is the guarantee.
--/
+/-! The deadline, a timed run and the verifier's rule, which meets the cost model only through the named assumption `Pouw.Assumptions.HonestClock`. -/
 
 @[expose] public section
 

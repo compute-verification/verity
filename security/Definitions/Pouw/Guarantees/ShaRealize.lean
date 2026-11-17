@@ -33,18 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Commit-and-open as a theorem: `ExtractAdv` from SHA-512 as a random oracle and its realization (trusted)
-
-* `ExtractOfRealize`: on the no-fold round whose openings are Merkle openings under the oracle, with the oracle
-  reached only through calls, the realization premise `ShaRealize` at the cap `Q` (the commit phases' and work's
-  calls, and each selected answer's) and each prover's own query budget
-  `q A`, schedule `τ A` and advice size `Badv A` gives commit-and-open's extraction (`ExtractAdv`) at that prover's
-  walk-and-log cost `k · ξw + q A · ξl` and extraction error `κ_x(A) = (q_A² + ∑_w q_A (2 τ_{A,w} + 1)) / |D|`, with
-  `|D| = 2^512` for SHA-512. Its probability half is
-  `Proofs.Pouw.MerkleExtract.extract_of_ro_roots` over the lazy-sampling form, carried to the uniform oracle and
-  averaged over the verifier's coins.
--/
+/-! Commit-and-open's extraction `ExtractAdv` as a theorem from SHA-512 as a random oracle and the realization premise. -/
 
 @[expose] public section
 

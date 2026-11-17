@@ -3,14 +3,7 @@ module
 public import Definitions.Pouw.PouwWork
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# PoUW's work floor on one node, an open conjecture (trusted)
-
-A3 of the converged model (v3.1), over `ResourceAccounting.PouwWork`'s vocabulary on the actual circuit: a `Prop` about one
-strategy `S` and the verifier `P`, taken as a hypothesis by `ResourceAccounting.Guarantees.PouwLocalOff`, never an `axiom`. It
-is an open conjecture, so it is not under `shape.premises`: it becomes a premise under `shape.conjectures` once it has a
-falsification test that runs. The other three premises are in `Definitions.Pouw.Assumptions.PouwWork`.
--/
+/-! PoUW's work floor on one node, an open conjecture that `ResourceAccounting.Guarantees.PouwLocalOff` takes as a hypothesis. -/
 
 @[expose] public section
 

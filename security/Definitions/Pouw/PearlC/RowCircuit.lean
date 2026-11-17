@@ -5,31 +5,7 @@ public import Definitions.Core.Fp32
 public import Definitions.Core.Prims
 public import Definitions.Core.Scalar
 
-/-!
-# The row units as core circuits (definitions only)
-
-`pc8`'s row templates `Pc8RowA_v1{K, DEV}` and `Pc8RowB_v1{K, DEV}` (`verity.protocols.accounting.work.pouw.circuit.pc8`, their
-`_row_a_body`, `_row_b_body`, `_stats`, `_form` and `_chain`) as gate tables (`Rows`, each a `TileCircuit.Spec`),
-generic in the depth `K`; `Row4Circuit` writes `pc4`'s the same way. Unlike the tile's, a row gate names its
-primitive (`Prim`, the template's primitive id in its docstring) and lists its operands in order (`Arg`): an earlier
-gate, read plain or through core's wiring (`Wire`, which the IR's `CallGraph` folds into its readers), or a constant.
-Its value is the primitive's word function on the operands' values (`Prim.eval`):
-
-* core's primitives are the fields of `RowOps`, a parameter named as core's Lean (`Verity.Protocol.Fp32`, `.Scalar`,
-  `.Prims`), which `coreOps` fills from it;
-* PoUW's own (`PouwF32SqrtRn_v1`, `PouwETilde_v1`, `PouwBf16Neg_v1`, `PouwSq*`) are `RowPrims`' word functions;
-* `F32Add_v2` is `TileCircuit.f32Add`, the E4M3 k32 atom is the device's `p.step` (`TileCircuit.atomF`) and the NVF4
-  atom is `nvf4Word` (`TileCircuit.atom4F`), as in the tile.
-
-Every value is reduced to the primitive's width, as the circuit's `BitVec` does.
-
-A row unit's table (`Rows`) is its input gates, the template's parameter leaves in order, then runs of computed gates
-(`Run`), each a section of the template's body. The sections both families share are the statistics (`statsRuns`): the
-running max of `|x|`, the FMA partials of `x²` over every 8th position, their butterfly and `ρ`. Which gate reads which,
-in which order and through which wiring, the constants, the widths and the outputs are checked against the templates'
-own gates and their `CallGraph`, with descriptor digests pinned, by `tests/test_circuit_row_lean.py`; each primitive's
-semantics is the trusted part.
--/
+/-! `pc8`'s row templates as gate tables generic in the depth `K`, which a test checks against the templates' own gates, so each primitive's semantics is the trusted part. -/
 
 @[expose] public section
 
@@ -37,42 +13,26 @@ namespace Pouw.PearlC.RowCircuit
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit
 
-/-! ## Core's primitives, as a parameter -/
-
 /-- The word functions of core's primitives that the row units read, each on words as naturals, named as core's
 (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`). `coreOps` is core's own. -/
 structure RowOps where
-  /-- `F32Mul_v2` -/
   f32MulV2 : ℕ → ℕ → ℕ
-  /-- `F32Div_v2` -/
   f32DivV2 : ℕ → ℕ → ℕ
   /-- `F32Fma_v2`: `a·b + c` -/
   f32FmaV2 : ℕ → ℕ → ℕ → ℕ
-  /-- `F32Fmaxf_v1` -/
   f32Fmaxf : ℕ → ℕ → ℕ
-  /-- `F32Neg_v1` -/
   f32Neg : ℕ → ℕ
-  /-- `F32ToE4m3Sat_v1` -/
   f32ToE4m3Sat : ℕ → ℕ
-  /-- `F32ToE2m1Sat_v1` -/
   f32ToE2m1Sat : ℕ → ℕ
-  /-- `E4m3ToF32_v1` -/
   e4m3ToF32 : ℕ → ℕ
-  /-- `F2fpBf16_v1` -/
   f2fpBf16 : ℕ → ℕ
-  /-- `I32Le_v1` -/
   i32Le : ℕ → ℕ → ℕ
   /-- `SelectI32_v1`: the condition, then the values for `1` and for `0` -/
   selectI32 : ℕ → ℕ → ℕ → ℕ
-  /-- `SelectBf16_v1` -/
   selectBf16 : ℕ → ℕ → ℕ → ℕ
-  /-- `BitAnd_v1` -/
   bitAnd : ℕ → ℕ → ℕ
-  /-- `I32Add_v1` -/
   i32Add : ℕ → ℕ → ℕ
-  /-- `F32Fabs_v1`, wiring -/
   f32Fabs : ℕ → ℕ
-  /-- `Bf16ToF32_v1`, wiring -/
   bf16ToF32 : ℕ → ℕ
 
 /-- Core's primitives, as core's Lean defines them. -/
@@ -94,56 +54,30 @@ def coreOps : RowOps where
   f32Fabs := Verity.Scalar.f32Fabs
   bf16ToF32 := Verity.Prims.bf16ToF32
 
-/-! ## Gates that name their primitive -/
-
 /-- The row units' primitives. -/
 inductive Prim
-  /-- `F32Add_v2` -/
   | add
-  /-- `F32Mul_v2` -/
   | mul
-  /-- `F32Div_v2` -/
   | div
-  /-- `F32Fma_v2` -/
   | fma
-  /-- `PouwF32SqrtRn_v1` -/
   | sqrt
-  /-- `F32Fmaxf_v1` -/
   | fmaxf
-  /-- `F32Neg_v1` -/
   | neg
-  /-- `F32ToE4m3Sat_v1` -/
   | toE4m3
-  /-- `F32ToE2m1Sat_v1` -/
   | toE2m1
-  /-- `E4m3ToF32_v1` -/
   | e4m3ToF32
-  /-- `F2fpBf16_v1` -/
   | f2fpBf16
-  /-- `I32Le_v1` -/
   | le
-  /-- `SelectI32_v1` -/
   | selI32
-  /-- `SelectBf16_v1` -/
   | selBf16
-  /-- `BitAnd_v1` -/
   | band
-  /-- `I32Add_v1` -/
   | iadd
-  /-- The device's E4M3 k32 atom on the step `p` (`BlackwellE4m3QmmaDot32_v1` on sm_120, `HopperE4m3QgmmaDot32_v1` on
-  the H100) -/
   | atom8 (p : Pipeline)
-  /-- `BlackwellNvf4OmmaDot64_v1` -/
   | atom4
-  /-- `PouwETilde_v1` -/
   | eTilde
-  /-- `PouwBf16Neg_v1` -/
   | bf16Neg
-  /-- `PouwSqAcc_v1` -/
   | sqAcc
-  /-- `PouwSqCeil_v1` -/
   | sqCeil
-  /-- `PouwSqGe_v1` -/
   | sqGe
 
 /-- A primitive's width, its return type's. -/
@@ -189,11 +123,8 @@ def Prim.eval (ops : RowOps) (q : Prim) (l : List ℕ) : ℕ :=
 /-- How an operand reads its gate: plain, or through core's wiring, the widening first. -/
 inductive Wire
   | id
-  /-- `F32Fabs_v1` -/
   | fabs
-  /-- `Bf16ToF32_v1` -/
   | bf16
-  /-- `F32Fabs_v1` of `Bf16ToF32_v1` -/
   | bf16Fabs
 
 /-- The wiring's value on the gate's. -/
@@ -213,7 +144,6 @@ def Arg.reads : Arg → List ℕ
   | .g a _ => [a]
   | .c _ => []
 
-/-- An operand's value, the gates' values being `V`. -/
 def Arg.eval (ops : RowOps) (V : ℕ → ℕ) : Arg → ℕ
   | .g a w => w.eval ops (V a)
   | .c v => v
@@ -235,8 +165,6 @@ def fill (ops : RowOps) : List Arg → List ℕ → List ℕ
 /-- A computed gate as a `TileCircuit.GateRow`. -/
 def RGate.toGate (ops : RowOps) (G : RGate) : GateRow :=
   ⟨G.prim.w, false, G.reads, fun l => G.prim.eval ops (fill ops G.args l)⟩
-
-/-! ## Tables of runs -/
 
 /-- A run of `n` computed gates, the `r`-th being `gate r`. -/
 structure Run where
@@ -292,7 +220,6 @@ theorem runsOK_append : ∀ {L₁ L₂ : List Run} {o o' : ℕ}, RunsOK L₁ o �
   | [], _ => by simp [runsLen]
   | R :: L₁, L₂ => by simp only [List.cons_append, runsLen, runsLen_append L₁ L₂]; omega
 
-/-- An operand reads only gates below `n`. -/
 def Arg.Below (n : ℕ) : Arg → Prop
   | .g a _ => a < n
   | .c _ => True
@@ -321,7 +248,6 @@ theorem Run.rep_ok {m L o : ℕ} {blk : ℕ → ℕ → RGate}
   have := RGate.reads_lt (h (r / L) hq (r % L) (Nat.mod_lt _ hL))
   rwa [Nat.add_assoc, Nat.div_add_mod'] at this
 
-/-- Listed gates from gate `o` on read earlier gates only. -/
 def ListOK : List RGate → ℕ → Prop
   | [], _ => True
   | G :: l, o => (∀ x ∈ G.args, x.Below o) ∧ ListOK l (o + 1)
@@ -336,8 +262,6 @@ theorem Run.ofList_ok : ∀ {l : List RGate} {o : ℕ}, ListOK l o → (Run.ofLi
       intro a ha
       have := this a (by simpa [Run.ofList] using ha)
       omega
-
-/-! ## The statistics both families compute -/
 
 /-- The FMA partials' first gate, after the running max's `2·(K − 1)` from `b`. -/
 def fmaAt (K b : ℕ) : ℕ := b + 2 * (K - 1)
@@ -440,8 +364,6 @@ theorem statsRuns_len (ab w : Wire) (K b : ℕ) : b + runsLen (statsRuns ab w K 
     bf0At, fmaAt]
   omega
 
-/-! ## A row unit's table -/
-
 /-- A row unit's table: `nIn` input gates, gate `a`'s width `inW a`, then the computed gates' runs from gate `nIn`, and
 the outputs in the template's return order. -/
 structure Rows where
@@ -480,8 +402,6 @@ def Rows.spec (ops : RowOps) (T : Rows) : Spec where
     · split
       · next G hG => simp [h, hG, RGate.toGate] at hi
       · rfl
-
-/-! ## `pc8`'s rows -/
 
 /-- `pc8`'s row inputs: `x`'s `K` FP32 words (gates `0, …, K − 1`), the noise `e`'s 32 E4M3 codes (from `K`), the form
 basis' and the chain basis' `32·K` codes (from `K + 32` and `33·K + 32`, row `t`'s 32 at `·+ 32·t`), then on RowB `g`'s

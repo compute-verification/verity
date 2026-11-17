@@ -4,16 +4,7 @@ public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Core.Game
 public import Definitions.Core.Interaction
 
-/-!
-# The hidden audit (trusted)
-
-The sampled audit (`GGapSampled`) opens each sampled tile. The hidden audit makes the same sample and opens nothing: the
-verifier holds the trace's commitment, and for each sampled tile it plays a proof game with the prover, a public-coin
-interaction with live coins (core's `Verity.Game`), accepting when every verdict is accept. The proof is Flock's `--zk`
-proof of the tile-check Program. `GGapHidden` is `GGapSampled`'s bound for that audit, for every opening of the commitment
-(its salts, the prover's like the transcripts) and every prover of the proof phase in the class its proof system's
-soundness speaks of (`HiddenAudit.Bounded`), at `t·δzk(q)` more error.
--/
+/-! The hidden audit: `GGapSampled`'s sample with each sampled tile proved in a live-coin proof game instead of opened, at `t·δzk(q)` more error. -/
 
 @[expose] public section
 

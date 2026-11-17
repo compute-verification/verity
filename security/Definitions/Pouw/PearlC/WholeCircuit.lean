@@ -2,37 +2,13 @@ module
 
 public import Definitions.Pouw.PearlC.RowCircuit
 
-/-!
-# A whole Program's gate table from its units' tables (definitions only)
-
-A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof blocks' templates wired together: each row
-unit reads the Program's input regions, and each tile unit reads its rows' outputs. Its table here is a `Whole`: the
-Program's input gates, then its units' computed gates, each unit an instance of a `BlockKind`, a unit template's own table
-(`TileCircuit.Spec`, whose inputs are its first `nIn` gates) with the gate each instance's input reads (`port`). An
-instance's computed gates are the template's, in order, with every read relocated (`BlockKind.reloc`): an input to the gate
-its port names, a computed gate to the instance's own copy. These ports are the only wires between units.
-
-The partition (`Whole.part`) puts each instance's gates in a unit of its own, numbered in the blocks' order, as
-`verity.protocols.accounting.work.pouw.circuit.pc4.units` numbers the root body's members.
-
-* **`pc8`** (`whole8`, `Pc8Check{M, K, N, TM, TN, DEV}`): the inputs in `Pc8Check`'s parameter-leaf order (`a`, `ea`,
-  `b`, `eb`, `fa`, `fb`, `g`), then `N` instances of `Pc8RowB_v1{K}` (`row8B`), `M` of `Pc8RowA_v1{K}` (`row8A`) and
-  `(M / TM)·(N / TN)` of `Pc8Tile_v1{K, TM, TN}` (`tileSpec`), the tiles row-major. Tile `(rs, cs)` reads `A′`'s codes and
-  `P_A` from RowA `rs·TM + i` and `B̃`'s codes and `P_B` from RowB `cs·TN + j`. The noise lines and `G` are input
-  regions: in the deployed Program they are verifier-derived public inputs, so no unit computes `G`.
-
-The inputs' widths, the ports, the unit numbering and the outputs are checked against `pc8.unit_cut` of `Pc8Check`, with
-its descriptor digests pinned, by `tests/test_circuit_whole_lean.py`; each unit's own table is tied to its template by
-`test_circuit_row_lean.py` and `test_circuit_tile_lean.py`.
--/
+/-! A whole Program's gate table from its units' tables, wired only through ports, which a test checks against `pc8.unit_cut`. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit
-
-/-! ## Composed tables -/
 
 /-- One kind of proof block of a composed table: its template's own table `S`, whose inputs are its first `nIn`
 gates, and its `cnt` instances, instance `q`'s input `a` reading the composed table's gate `port q a`. -/
@@ -185,8 +161,6 @@ def part : Verity.Partition W.spec.toCircuit (unitCount W.blocks) where
       simp [hu]
 
 end Whole
-
-/-! ## `pc8`'s whole Program -/
 
 /-- `Pc8Check`'s input regions in its parameter-leaf order: `a`'s `M` rows of `K` FP32 words from gate `0` (row `i` at
 `i·K`), `ea`'s `M` noise lines of 32 E4M3 codes from `eaAt` (line `i` at `·+ 32·i`), `b`'s `N` rows from `bAt`, `eb`'s
@@ -379,7 +353,6 @@ theorem rowB8_lt (p : Pipeline) {M N K j a : ℕ} (hj : j < N) (ha : a < (row8B 
     have := post8At_ge K (rowIn K true); rw [row8B_N] at ha ⊢; omega)
   omega
 
-/-- Row `i < TM` of tile `e < (M / TM)·(N / TN)`'s tile row is a row of A. -/
 theorem tile_row_lt {M N TM TN e i : ℕ} (he : e < M / TM * (N / TN)) (hi : i < TM) : e / (N / TN) * TM + i < M := by
   have hn : 0 < N / TN := Nat.pos_of_ne_zero fun h => by rw [h] at he; simp at he
   have hrs : e / (N / TN) < M / TM := (Nat.div_lt_iff_lt_mul hn).2 he
@@ -387,7 +360,6 @@ theorem tile_row_lt {M N TM TN e i : ℕ} (he : e < M / TM * (N / TN)) (hi : i <
   have := Nat.div_mul_le_self M TM
   omega
 
-/-- Row `j < TN` of tile `e`'s tile column is a row of B. -/
 theorem tile_col_lt {M N TM TN e j : ℕ} (he : e < M / TM * (N / TN)) (hj : j < TN) : e % (N / TN) * TN + j < N := by
   have hn : 0 < N / TN := Nat.pos_of_ne_zero fun h => by rw [h] at he; simp at he
   have := mul_add_lt (L := TN) (Nat.mod_lt e hn) hj

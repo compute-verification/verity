@@ -4,14 +4,7 @@ public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.Guarantees.Game
 public import Definitions.Pouw.Guarantees.NCP
 
-/-!
-# PoUW's guarantees in ε form (trusted)
-
-Each is a gap guarantee restated at the adversary's advantage `ε = g/(1 − g)` (`Pouw.Gε`, `Pouw.PearlC.Gε`,
-`Pouw.AuditGε`), with the hypotheses of its gap form: the game's end to end (`EndToEnd`) and route U's game instance at
-ncp-v1 (`GapFromTTNCP_U_v1`). Pearl-C's gaps at a device record in ε form are lemmas beside their gap forms
-(`Proofs.Pouw.Lemmas.PearlCRecords`). Its proof is the theorem `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
--/
+/-! PoUW's gap guarantees restated at the adversary's advantage `ε = g/(1 − g)`, with the hypotheses of their gap forms. -/
 
 @[expose] public section
 

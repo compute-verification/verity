@@ -2,41 +2,13 @@ module
 
 public import Definitions.Pouw.PearlC.Defs
 
-/-!
-# U's pinned order, bit-exact (trusted definitions)
-
-Pearl-C's clean-up as `76134352:protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (git's `REV:PATH`,
-SHA-256 `aef10195…2485514a`; the file has moved to `verity/protocols/accounting/pouw/prover/schemes/pearl_c_u.py` and changed
-since), transcribed op for op. FP32 words are natural numbers below `2^32`, BF16 words below `2^16`.
-A function returns `none` where the pin raises `NonFinite`, that is, where a step leaves the finite range.
-
-* **The K16 step** (`bf16Product`, `bf16ProductTotal`, `hopperBf16K16`, `k16Step`): `HOPPER_BF16_WGMMA_K16`, the
-  accumulator and 16 BF16 products in one group on a 26-bit truncating adder with exponent floor −133. It is
-  `Fp8Atom`'s `groupStepTotal` (align to the largest exponent by truncating shifts, sum exactly, renormalise by
-  truncation, denormalise below `2^−126`), with the BF16 product `(s_x·s_y) <<< 9` at exponent
-  `max(E_x, 1) + max(E_y, 1) − 254` as its term, as `verity.ml.tc.total.tc_dot_total` has it.
-* **The roundings** (`finite?`, `addWord?`, `fmaWord?`, `rnBf16?`): IEEE binary32 add and FMA (`verity.ml.tc.fp32`),
-  each one round to nearest even of the exact value by `Defs`' `f32Word`, with IEEE's sign for an exact zero; and
-  `RN_bf16` of an FP32 word by the pin's bit formula.
-* **The chain** (`windowWord?`, `promoteWord?`, `chainWord?`): the atoms in windows of `Params.pi.G = 4`. Each window
-  chains its `hopperStep`s from `+0`, and its word is promoted by one FP32 add into a total from `+0` (read `−0` as
-  `+0`). It is `Defs.chain`'s order, on words.
-* **The factor rows and U** (`paRow?`, `accChain?`, `pbRow?`, `uWord?`, `peelExact`):
-  `P_A,i = [be_A,i ‖ RN_bf16(A′·F_B)]`, `P_B,j = [RN_bf16(RN_f32(acc_q − BF_jq)) ‖ −be_B,j]` with `acc_q` the FMA chain
-  from `+0` over `p = 0 … 31` ascending, and `U_ij` from `C̃_ij` by four `k16Step`s over the rows' 16-word slices.
-* **What a conformance vector asserts** (`K16Vec`, `ChainVec`, `PaVec`, `PbVec`, `CellVec`), for
-  `PeelExactVectors`, generated from the pin's vectors `76134352:protocols/pouw/tests/vectors/pearl_c_u.json`.
-
-The model follows the pin at `76134352`; a change to the pin needs the vectors regenerated and rechecked.
--/
+/-! U's pinned order, Pearl-C's clean-up transcribed op for op from the pinned `pearl_c_u.py`, returning `none` where the pin raises `NonFinite`. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.PeelExact
 
 open Pouw.Fp8Atom Pouw.PearlC Matrix
-
-/-! ## The K16 step -/
 
 /-- A BF16 word's exponent field (bits 14..7). -/
 def bf16Exp (x : Nat) : Nat := (x >>> 7) % 256
@@ -85,8 +57,6 @@ def k16Step (acc : Nat) (x y : Fin 16 → Nat) : Nat :=
   packValue (groupStepTotal hopperBf16K16.width hopperBf16K16.zeroExp (fp32Value acc)
     (List.ofFn fun l => bf16ProductTotal (x l) (y l)))
 
-/-! ## The roundings -/
-
 /-- `_finite`: the word, unless its exponent field is 255 (an infinity or NaN). -/
 def finite? (w : Nat) : Option Nat := if (w >>> 23) % 256 = 255 then none else some w
 
@@ -121,8 +91,6 @@ def rnBf16? (w : Nat) : Option Nat :=
     let out := ((w + 0x7FFF + (w >>> 16) % 2) >>> 16) % 65536
     if 0x7F80 ≤ out % 32768 then none else some out
 
-/-! ## The chain -/
-
 /-- One window's word: its atoms' `hopperStep`s from `+0`, each word finite. -/
 def windowWord? (g : List AtomIn) : Option Nat := g.foldlM (fun w x => finite? (hopperStep w x.1 x.2)) 0
 
@@ -133,8 +101,6 @@ def promoteWord? (t w : Nat) : Option Nat := (addWord? t w).map fun s => if s = 
 window's word promoted in order into a total from `+0`. -/
 def chainWord? (atoms : List AtomIn) : Option Nat :=
   (atoms.toChunks Params.pi.G).foldlM (fun t g => (windowWord? g).bind (promoteWord? t)) 0
-
-/-! ## The factor rows and U -/
 
 /-- `pa_row`: `P_A,i = [be_A,i ‖ RN_bf16(A′·F_B)]`, from the 32 BF16 words `be` and the 32 FP32 words `af`. -/
 def paRow? (be af : List Nat) : Option (List Nat) := (af.mapM rnBf16?).map (be ++ ·)
@@ -183,23 +149,17 @@ def peelExactVal {m n k : Nat} (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (
     (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat) :
     Matrix (Fin m) (Fin n) (Option ℚ) := fun i j => (peelExact Aq Bq FA FB beA beB i j).bind wordQ
 
-/-! ## What a conformance vector asserts -/
-
 /-- 16 BF16 words packed little-endian in `X` (word `l` is bits `16l … 16l + 15`). -/
 def words16 (X : Nat) : Fin 16 → Nat := fun l => (X >>> (16 * l.val)) % 65536
 
-/-- A K16 step vector: the accumulator word, 16 packed BF16 words `x` and `y`, and the word the pin writes. -/
 structure K16Vec where
   acc : Nat
   x : Nat
   y : Nat
   w : Nat
 
-/-- A K16 step vector holds for `k16Step`. -/
 def K16Vec.holds (v : K16Vec) : Bool := k16Step v.acc (words16 v.x) (words16 v.y) == v.w
 
-/-- A traced chain: each atom's 32 code pairs packed as in `Fp8Atom.codes`, the word after each atom, the total after
-each promotion, and the chain's word. -/
 structure ChainVec where
   a : List Nat
   b : List Nat
@@ -207,11 +167,8 @@ structure ChainVec where
   totals : List Nat
   c : Nat
 
-/-- The chain's atoms. -/
 def ChainVec.atomsIn (v : ChainVec) : List AtomIn := (v.a.zip v.b).map fun p => (codes p.1, codes p.2)
 
-/-- A traced chain holds: every atom's word and every promotion's total are the recorded ones, `chainWord?` gives
-the chain's word, and `Defs.chain` its value. -/
 def ChainVec.holds (v : ChainVec) : Bool :=
   let gs := v.atomsIn.toChunks Params.pi.G
   gs.flatMap (fun g => (g.scanl (fun w x => hopperStep w x.1 x.2) 0).tail) == v.atoms &&
@@ -220,16 +177,13 @@ def ChainVec.holds (v : ChainVec) : Bool :=
     chainWord? v.atomsIn == some v.c &&
     decide (chain Params.pi.G v.atomsIn = wordQ v.c)
 
-/-- A `P_A` row: `be_A,i`, the words of `A′·F_B`, and `P_A,i`. -/
 structure PaVec where
   be : List Nat
   af : List Nat
   pa : List Nat
 
-/-- A `P_A` row holds for `paRow?`. -/
 def PaVec.holds (v : PaVec) : Bool := paRow? v.be v.af == some v.pa
 
-/-- A `P_B` row: `be_B,j`, the words of `B̃·F_A`, the FMA chains' words `acc_q`, the differences, and `P_B,j`. -/
 structure PbVec where
   be : List Nat
   bf : List Nat
@@ -237,14 +191,11 @@ structure PbVec where
   diff : List Nat
   pb : List Nat
 
-/-- A `P_B` row holds for `pbRow?` on `G` (by rows), and each FMA chain's word and each difference is the recorded one. -/
 def PbVec.holds (g : List (List Nat)) (v : PbVec) : Bool :=
   (List.range Params.pi.r).all (fun q => accChain? v.be (col g q) == some (v.acc.getD q 0)) &&
     (List.range Params.pi.r).all (fun q => addWord? (v.acc.getD q 0) (negWord (v.bf.getD q 0)) == some (v.diff.getD q 0)) &&
     pbRow? v.be v.bf g == some v.pb
 
-/-- A cell: the indices of its `P_A` and `P_B` rows in the vectors' row lists, `C̃_ij`, the word after each K16 step,
-and `U_ij`. -/
 structure CellVec where
   ia : Nat
   jb : Nat
@@ -252,8 +203,6 @@ structure CellVec where
   steps : List Nat
   u : Nat
 
-/-- A cell holds on the rows `ra` and `rb`: from `C̃_ij`, the four steps over its rows' `P_A,i` and `P_B,j` give the
-recorded words, and `uWord?` gives `U_ij`. -/
 def CellVec.holds (ra : List PaVec) (rb : List PbVec) (v : CellVec) : Bool :=
   match ra[v.ia]?, rb[v.jb]? with
   | some a, some b =>
@@ -261,8 +210,6 @@ def CellVec.holds (ra : List PaVec) (rb : List PbVec) (v : CellVec) : Bool :=
       uWord? v.c a.pa b.pb == some v.u
   | _, _ => false
 
-/-- `rnBf16?` agrees with `Defs`' `bf16Rn` on a finite word whose BF16 result is finite: the BF16 word, read as the
-FP32 word `h <<< 16`, has the value `bf16Rn` gives. -/
 def bf16Agrees (w : Nat) : Bool :=
   match rnBf16? w, wordQ w with
   | some h, some x => wordQ (h <<< 16) == some (bf16Rn x)

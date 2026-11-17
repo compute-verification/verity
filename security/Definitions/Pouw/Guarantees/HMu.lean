@@ -2,34 +2,7 @@ module
 
 public import Definitions.Pouw.HMu
 
-/-!
-# (H-μ⁺) from the coins: Lemma B, the point mass of fresh noise, and Lemma B′ for persistent patterns (trusted)
-
-The statements, over `Definitions/Pouw/HMu.lean`. The proofs are in `security/Proofs/Pouw/HMu/`.
-
-* `CoinPointMass`: a skipped value `a + Σ_j [e_j]·v_j` with `u` fresh uniform bits `e` and nonzero integer weights has
-  probability at most `C(u, ⌊u/2⌋)/2^u` at any value, given any view that doesn't read `e` (Erdős's Littlewood–Offord
-  bound): `1/2` at `u = 1`, `0.140` at `u = 32`.
-* `CoinPointMassHalf`: in any additive group (`Z/2³²` included), one nonzero weight gives at most `1/2`.
-* `ReceiptLuckOfCoins` and `ReceiptLuckOfCoin`: the two together with Lemma B, on a `CoinRound`: its luck is at most
-  `Z·C(u, ⌊u/2⌋)/2^u`, or `Z/2`, times its probability of being deficient.
-
-What the coins can't give, and so what stays a premise:
-
-* The view's independence from the fresh bits is in `CoinRound`'s types. Under the one-σ order the prover holds σ
-  before it evaluates. Every coin of a skipped product's noise is also read by the honest computation of each other
-  word that shares it: a dither bit of a row's coordinate enters that row segment's word in every column, and a column's
-  `U` every row's. So a cheater that computes those words has a view that determines the skipped value, whose point
-  mass is then `1`. There (H-μ) is computational: the cheater hasn't computed the product. No distribution of coins
-  supplies that.
-* The skip decision must be in the view, with no leak: a cheater that learns one bit about the fresh coins can skip
-  exactly when that bit pins the skipped value, and is then lucky on every deficient round. So a leak of `ℓ` bits costs
-  a factor `2^ℓ` on the absolute luck, but no bound relative to the deficiency survives.
-* The fold's keys are sampled with σ, so a bound may not average over the start state. For a pattern with two or more
-  words in the first unit it reaches (two copies of one entry in a unit, a rank-1 skip across a unit's words, the served
-  `y ⊕ rotl(z, 16)` projection), Lemma B′ needs a fibre bound at the start state the cheater knows. (Inj) alone gives
-  none, and an all-state no-kernel statement isn't one.
--/
+/-! (H-μ⁺) from the coins, Lemma B, the point mass of fresh noise and Lemma B′; the view's independence from the fresh bits stays a premise. -/
 
 @[expose] public section
 

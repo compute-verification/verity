@@ -4,21 +4,7 @@ public import Mathlib.Data.Int.Notation
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToDual
 
-/-!
-# `PouwZyDequant_v1`, the served dequant, on words (trusted)
-
-`h1zy.dequant` (`verity/protocols/accounting/pouw/prover/circuit/h1zy.py`): y = RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), z an s32
-word, the scales f32 words, y a bf16 word, the activation scale first and no bias add (`int8_ops.scaled_mm`'s epilogue).
-Its primitives' word evaluators, by integer arithmetic on the encodings:
-
-* `S32ToF32Rn_v1` (`silicon.cast.s32_to_f32_rn_word`): the s32 word as the nearest f32, ties to even, zero `+0`;
-* `F32Mul_v2` (`ops.fp32.F32MulV2`): IEEE 754 binary32 multiplication, round to nearest even with subnormals and no flush,
-  every NaN result `0x7FFFFFFF` (`F32_NAN_PTX`);
-* `F2fpBf16_v1` (`silicon.cast.f32_to_bf16_hw_word`): `(u + 0x7FFF + lsb) >> 16` on a non-NaN word, every NaN `0x7FFF`.
-
-`PouwZyDequant_v2`, the circuit, is circuits' three Boolean pieces (`S32ToF32Rn_v2`, two `F32Mul_v4`, `F2fpBf16_v2`) whose
-word view this is. `Proofs.Pouw.H1Zy.DequantVectors` holds it to the Python evaluators on vectors through each case.
--/
+/-! `PouwZyDequant_v1`, the served dequant, on words by integer arithmetic on the encodings. -/
 
 @[expose] public section
 

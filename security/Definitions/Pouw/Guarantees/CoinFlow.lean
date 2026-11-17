@@ -34,30 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The coin rules give (H-μ)'s view independence (trusted)
-
-The statements, over `Definitions/Pouw/CoinFlow.lean`. The proofs are in `security/Proofs/Pouw/CoinFlow/`.
-Each holds of every Program the Build admits (`FlowGraph.admits`), with no hypothesis on its nodes' operations.
-
-* `ViewIndependent`, from rule (b): a noise injection's fresh coins reach no value outside its forward cone. Every node
-  that doesn't read the injection's value, through any chain, has the same value under any two samples that differ only
-  on those coins.
-* `CoinsThroughNoise`, from rule (a) and sink confinement: a value that isn't a sink depends on the coins only through
-  the noise injections it reads. Two samples that agree on the fresh coins of every noise injection in its backward
-  cone give it the same value.
-* `OneReader`, from rule (b): a noise injection's forward cone is the injection and its one reader's forward cone. So a
-  view may hold every value except the noised operand and what reads its consumer.
-* `PointMass`: `ResourceAccounting.Guarantees.HMu.CoinPointMass` applies outright. A skipped value `a + Σ_j [e_j]·v_j` over a
-  noise injection's `u` fresh coins, with `a`, the nonzero integer weights `v` and the view `F` functions of `View k`
-  (every value outside its forward cone and every other coin), takes any value with probability at most
-  `C(u, ⌊u/2⌋)/2^u` given the view. The bits are uniform: the probability is over every coin of the run.
-
-What stays outside, by construction: the values in the injection's forward cone. Those are its reader's other words,
-which share the noised operand (a dithered row's words in every column). So the view independence `CoinPointMass`
-needs is checked for every view built from the rest of the Program. A view holding a word that shares the operand still
-determines the skipped value, as `ResourceAccounting.Guarantees.HMu` says.
--/
+/-! The coin rules give (H-μ)'s view independence for every Program the Build admits, outside each noise injection's forward cone. -/
 
 @[expose] public section
 

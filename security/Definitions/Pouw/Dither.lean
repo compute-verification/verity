@@ -2,41 +2,7 @@ module
 
 public import Definitions.Pouw.RelativeSecurity
 
-/-!
-# The no-fold Dither protocol's work-soundness: the vocabulary its guarantee reads (trusted)
-
-Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated over:
-
-* **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices' resources
-  with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, the three device premises (G1)
-  capacity, (G2) rate and (G3) priced oracle calls (`Accel.G1`, `Accel.G2`, `Accel.G3`), the oracle reached only
-  through calls (`Accel.OracleCalls`) and the arithmetic premises (P1) and (P2) (`Accel.P1`, `Accel.P2`),
-  instantiated from `Definitions.Core.Accel`;
-* **prices** on the resources (`Accel.cost`): a run's cost `Σ_r μ_r u_r` at a price `μ_r ≥ 0` a unit of resource `r`
-  (at `μ_r = λ_r / ρ_r`, the device-seconds it takes at the price vector `λ`);
-* **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
-  commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol,
-  with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances, and its selected form, checked where its selection coin picks it (`ditherSelected`);
-* **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
-  SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
-  `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
-* **a monitoring period's prover** sampling block by sampling block, in the commit, challenge and response phases
-  (`Prover`): each block's operands committed before its coins (its instance, adapted: chosen after the earlier
-  blocks' coins), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`,
-  `Prover.calls`: its sampling blocks' commit phases and work), the cap on its calls (`Prover.WithinCap`, the
-  selected blocks' answers among them), and the service's verdict on the transcript and the auditor's devices'
-  readings (`Verdict`, `Readings`, `Prover.Passes`);
-* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): its definition, kept in
-  this one place, and its probability form, the headline's conclusion, with the selected blocks' answers within the
-  period (`AnswersFit`);
-* **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
-  luck (`fleetLuck`);
-* the error (`epsWorkSound`, `ε_skip`).
-
-`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline's only instances are
-the no-fold round's, and it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
--/
+/-! The vocabulary the no-fold Dither protocol's work-soundness reads; its only round protocols are the no-fold round's, so it doesn't cover Dither v3.2's proof block. -/
 
 @[expose] public section
 
@@ -57,12 +23,10 @@ calls `calls`, each a step of the machine that uses `callUse`. `P1` and `P2` are
 premises, exact integer MMAs and one accumulator per product, as the machine 𝓜 defines them (`Accel.Card.Exact`,
 `Assumptions.AccelProductForm`). `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
-  /-- The programs, what they compute and how they compose. -/
   Mc : Machine
-  /-- The period's devices' resources. -/
   Res : Type
   [instRes : Fintype Res]
-  /-- `ρ`: each resource's data-sheet rate, units a second, over the period's devices. -/
+  /-- `ρ`: each resource's data-sheet rate, units a second. -/
   rate : Res → ℝ
   /-- `M`: the period's devices' memory, bits. -/
   mem : ℝ
@@ -72,17 +36,14 @@ structure Accel where
   held : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- A run's wall time, seconds. -/
   wall : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
-  /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
-  attester counts, into and out of the devices), other than the challenger's coin stream, which
-  `Assumptions.CertifierSeesImports` defines exactly. -/
+  /-- Bits a run exchanges with machines outside the period's devices, in either direction, other than the
+  challenger's coin stream. -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
   calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
-  /-- The oracle-call step's use of each resource: the pinned public SHA-512 implementation's, a call. -/
+  /-- The oracle-call step's use of each resource a call, the pinned public SHA-512 implementation's. -/
   callUse : Res → ℝ
-  /-- (P1) exact operand formats, as the ACCEL model defines it. -/
   P1 : Prop
-  /-- (P2) a product lives in one accumulator, as the ACCEL model defines it. -/
   P2 : Prop
 
 attribute [instance] Accel.instRes
@@ -120,8 +81,6 @@ def OracleCalls {Orc X D : Type} (eo : Orc ≃ (X → D)) : Prop :=
 it is the device-seconds the run takes at the price vector `λ`; at a point mass it is one resource's busy time. -/
 noncomputable def cost (μ : G.Res → ℝ) {I O : Type} (f : G.Mc.Alg I O) (x : I) : ℝ := ∑ r, μ r * G.use f x r
 
-/-- **An oracle call's priced cost** at the prices `μ`: `shaPub_μ = Σ_r μ_r callUse_r`, the public implementation's
-cost a call. -/
 noncomputable def shaPub (μ : G.Res → ℝ) : ℝ := ∑ r, μ r * G.callUse r
 
 end Accel
@@ -226,17 +185,11 @@ def noFoldRound (k : NoFold) : RoundProto where
   accept o a d c r y := ∀ q, k.opens o r (k.cells c q) (y q).1 (y q).2 ∧
     (y q).1 = noFoldWord k (k.noise a d) (k.cells c q).1 (k.cells c q).2.1 (k.cells c q).2.2
 
-/-- **The honest words**: every segment prefix sum of the noised product. -/
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
 
-/-- **The no-fold round, selected or not**. The no-fold round at its knobs `k`, its check coin
-carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
-selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
-in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
-by the check coin, issued after the block's commitment, so `WorkSound`'s `sel` is `picked` of its first part, and an
-unselected block is never answered. `π` is one probability for the period's blocks, which share the knobs' shape
-(`n`, `n'`, `nb`, `L`, `s`), so a probability proportional to a block's public cost is one `π` here. -/
+/-- The selection coin rides in the check coin, issued after the block's commitment, so an unselected block is never
+answered; `π` is one probability for the period's blocks, which share the knobs' shape. -/
 def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Prop) : RoundProto where
   Inst := (noFoldRound k).Inst
   Draw := k.Draw

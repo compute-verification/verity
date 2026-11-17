@@ -34,28 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The headline on the cards: causality and the held inventory premise (trusted)
-
-* `RootAfterCoin`, `CommitAfterWork` and `AnswerAfterWork`: each commitment and each selected answer arrives no
-  sooner than the run that computed it, after the coins that run reads, physical causality (the node is within the
-  model). The commitment is the block's root after its dither coins, the operand root after the previous block's work
-  (its commit phase), and the answer after its block's dither coins.
-
-  **Why the verdict can't check them**: each bounds a time the auditor's devices sign by a program's
-  wall time in the model, and the verdict reads the transcript and the signed times, never the prover's programs. What
-  they say among the signed times alone the verdict does check (`Dither.Timed`: each operand root in before its
-  block's coins, each root before the next block's coins, each check coin after the block's roots, every deadline
-  inside the period). What is left is that the node is within the model: its runs take at least the model's
-  wall time, from the coins they read to what the certifier sees arrive.
-
-  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network attester's count
-  (`Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
-* `MonitoringPeriodInventory`, the period's devices are its inventory. It is stated and held: no guarantee reads it
-  until it is decided whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
-  protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
-  `Assumptions.CardWithinAccel`.
--/
+/-! The headline's causality premises on the cards, which the verdict can't check because each bounds a signed time by a program's wall time in the model, and the period's inventory premise. -/
 
 @[expose] public section
 
@@ -112,13 +91,9 @@ def AnswerAfterWork (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev :
   ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk) (b : Fin nsb), sel (x b).2 →
     t (dev A o x) b + G.wall (A.answer b) (A.answerIn o x b) ≤ ansAt (dev A o x) b
 
-/-- `pouw-period-inventory` (proposed, and held until it is decided whether host CPUs and DPUs are devices of the
-period; class 1, the accelerator model at θ, extended to the period's other processors). **The period's devices are
-its inventory**: every processor the period's cards reach without crossing a network attester (the cards, host CPUs
-over PCIe or NVLink-C2C, DPUs) is a device of the period (`Devices`: the cards, and `Others` at their θ rows), and
-what those processors together compute within `t` seconds (`can F t`, on any code), some program of `G` computes on
-every input within `t` seconds, exchanging nothing. With `Assumptions.CardWithinAccel` for the cards, it is what
-carries the headline from the model's provers to the fleet's. -/
+/-- `pouw-period-inventory`, proposed and read by no guarantee: every processor the period's cards reach without crossing a
+network attester is a device of the period, and what they compute within `t` seconds some program of `G` computes
+within `t` seconds, exchanging nothing. -/
 def MonitoringPeriodInventory (G : Accel) (can : ∀ {I O : Type}, (I → O) → ℝ → Prop) : Prop :=
   ∀ {I O : Type} (F : I → O) (t : ℝ), can F t →
     ∃ f : G.Mc.Alg I O, ∀ i, G.Mc.eval f i = F i ∧ G.wall f i ≤ t ∧ G.ext f i = 0

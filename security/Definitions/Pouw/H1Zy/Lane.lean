@@ -6,34 +6,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Fintype.Basic
 import Mathlib.Algebra.GroupWithZero.Nat
 
-/-!
-# `PouwH1LaneZy_v1{TILE}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)
-
-Lane `l` of a sampled H1 leaf (`verity/protocols/accounting/pouw/prover/circuit/h1zy.py`, `PouwH1LaneZy`, `_lane_body`) reads its 4 A
-rows by row slot and 8 B rows by column slot (`K` s8 codes and an f32 scale each), the leaf's 32 admit bits, the leaf's
-whole z/y record (cell `(i, j)` its s32 z and bf16 y), its committed partials row (`nw` u32 words), the leaf's salt,
-position and roots, and its index, a 16-bit word, and returns `ok`. On its primitives' word views:
-
-* **The index.** `sel`, the index's low 5 bits (`lane_bits(32, 32)`), least significant first, picks each of the
-  lane's candidates by a `PouwMuxBit` tree (`pick`, `h1zy._pick`); the OR of its 11 high bits (`PouwOrBit` tree) sends
-  `ok` to `0` (`PouwMuxBit(high, checked, 0)`).
-* **The cells.** Cell `(s, t)` of the lane (row slot `s`, column slot `t`, row-major) is the leaf's cell
-  `(laneRow l s, laneCol l t)` (`h1tile.Layout.rows`, `cols` at `R = C = 32`; `h1zy.lane_cells`), picked from the 32
-  lanes' by `sel`. Its z is the tile's EXACT on the A row's and B row's codes, `GemmAccumulatorS8_v2{K, sm120}`'s word
-  view (`gemmAccS8`: `K/32` steps of `BlackwellS8ImmaDot32_v1`, `immaS8`, from a zero accumulator).
-  `PouwZyCheck_v1{4, 8}` (`zyCheck`) is `1` exactly when every cell's record z is that z and its record y is the
-  dequant of it at its row's and column's scales (`PouwZyCell`), ANDed by a `PouwAndBit` tree in row-major order.
-* **The partials.** The lane's chain words (`h1tile._chain`: its fx1 chain's `PouwXinFinal` words per set, from its
-  rows' and columns' noise, picked from the leaf's seed_j stream by `sel`, and its fold keys, block `l` of σ_R's) are the
-  parameter `chain`; each is masked by the admit bits' OR (`PouwOrBit` tree, `PouwMask32`) and compared to the
-  committed row's word (`PouwEq32`).
-* `ok` is the `PouwAndBit` tree of the cell check and the `nw` comparisons, unless a high index bit is set.
-
-The dequant (`PouwZyDequant_v2`'s word view, `PouwZyDequant_v1`, three float roundings; `Pouw.H1Zy.zyDequant`, which
-`ResourceAccounting.Guarantees.TS.LeafLanesSound` reads) is the parameter `dqW`, and the
-chain's words the parameter `chain` (`chainOf (h1Chain K)` in `LeafLanesSound`); everything else is stated here. The leaf's `PouwH1Tile_v3` form computes z from the
-chain's words instead of EXACT, and is not stated here.
--/
+/-! `PouwH1LaneZy_v1{TILE}` on words at a 32 × 32 leaf over `PouwH1Tile_v1`, the dequant and the chain's words parameters; the `PouwH1Tile_v3` form is not stated here. -/
 
 @[expose] public section
 
@@ -74,14 +47,11 @@ def zyCheck {R C : ℕ} (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 
 /-- `PouwOrBit_v1`: `a or b`. -/
 def orBit (a b : Bool) : Bool := a || b
 
-/-- `PouwMuxBit_v1` on a candidate: `b` where `s` is `1`, else `a` (bitwise on a word, so on a whole candidate). -/
 def mux {α : Type} (s : Bool) (a b : α) : α := if s then b else a
 
 /-- `PouwMask32_v1`: each bit of `w` AND `live`. -/
 def mask32 (w : BitVec 32) (live : Bool) : BitVec 32 := if live then w else 0
 
-/-- **`h1zy._pick`**: `cands[Σ_b sel[b] 2^b]` as a `PouwMuxBit` tree over the selector's bits, least significant first,
-each pass muxing adjacent candidates; `d` for an empty list. -/
 def pick {α : Type} (d : α) (sel : List Bool) (cands : List α) : α :=
   (sel.foldl (fun cs s => pairs (mux s) cs) cands).headD d
 
@@ -120,15 +90,11 @@ theorem bitsVal_lt : ∀ l : List Bool, bitsVal l < 2 ^ l.length
       simp only [bitsVal, List.length_cons, pow_succ]
       split <;> omega
 
-/-- The index's selector bits, its low 5 (`lane_bits(32, 32)`). -/
 def LaneIn.sel {K nw : ℕ} {P : Type} (x : LaneIn K nw P) : List Bool := List.ofFn fun t : Fin 5 => x.lane (Fin.castLE (by omega) t)
 
-/-- The lane the selector names, `Σ_b sel[b] 2^b`. -/
 def LaneIn.l {K nw : ℕ} {P : Type} (x : LaneIn K nw P) : Fin 32 :=
   ⟨bitsVal x.sel, by simpa [LaneIn.sel] using bitsVal_lt x.sel⟩
 
-/-- **`PouwH1LaneZy_v1{PouwH1Tile_v1}`'s `ok`** at a 32 × 32 leaf (`h1zy._lane_body`), at the dequant `dqW` and the
-chain's words `chain` (of the public inputs, the lane `sel` names and the rows' codes). -/
 def laneOk {K nw : ℕ} {P : Type}
     (chain : P → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (x : LaneIn K nw P) : Bool :=

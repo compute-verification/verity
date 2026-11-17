@@ -5,28 +5,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.RowSem
 public import Definitions.Pouw.PearlC.PeelExactP
 
-/-!
-# `pc8`'s tile check (definitions only)
-
-The plain `pc8` Program as a `TileCheck`: at each unit shape `(m, k, n)` the circuit is `Pc8Check{m, k, n, TM, TN}`'s
-table (`WholeCircuit.whole8`) at the audit grid's tile at that shape (`tileSide`): `TM = min(m, 64)` and
-`TN = min(n, 64)`, so `pc8.TILE`'s `64 × 64`, or decode's `32 × 64`. Its partition is the units', with
-
-* `out sh rows cols`: the `C̃` and `U` gates of the entries in `rows × cols`;
-* `pub sh`: the noise lines `ea` and `eb`, the bases `fa` and `fb`, and `G`. Their anchors (`anchors8`) are the unit's
-  noise (`noise`, the same the semantics reads) as E4M3 codes, and `G_{s,q}` the chain on the step `p` of `F_B`'s column
-  `s` against `F_A`'s column `q`, the words `PeelExactP.peelExactP` reads as `G`. That the verifier's public inputs are
-  these is L8;
-* `anchorsOK`: the noise has no NaN code (`Noise8OK`): the verifier refuses a tile whose noise has one, as Python's
-  does (`fp8_to_f32` refuses a NaN code);
-* `reg sh`: the activation rows `a`, the weight rows `b` and every entry's `C̃` and `U`, at the commitment's
-  activations, its unit's weights, and its ticket and useful words (`rows8`), each as the gate's low 32 bits;
-* `Collides`: `False`, since the checked words are registered wires.
-
-The Program needs whole tiles (`pc8.Shape.check`: `TM ∣ m`, `TN ∣ n`), so a shape whose last tile is narrower than
-the others (`m = 80`: a 64-row tile and a 16-row one) is outside it. There the table is still defined, and L3 is
-stated on shapes whose tile divides them.
--/
+/-! The plain `pc8` Program as a `TileCheck` at the audit grid's tile, with L3 stated on shapes whose tile divides them. -/
 
 @[expose] public section
 

@@ -3,23 +3,7 @@ module
 public import Definitions.Pouw.PearlC.WholeCircuit
 public import Definitions.Pouw.PearlC.Row4Circuit
 
-/-!
-# `pc4`'s whole Program as a gate table (definitions only)
-
-`Pc4Check{M, K, N, TM, TN}` (`verity.protocols.accounting.work.pouw.circuit.pc4`) as a `WholeCircuit.Whole`, as `whole8` writes `Pc8Check`.
-Its input regions have `pc8`'s sizes and order (`a`, `ea`, `b`, `eb`, `fa`, `fb`, `g`), so their first gates are
-`eaAt` … `gAt` and `in8`, and a row unit reads them through `portA8` and `portB8`: RowA `i` reads row `i` of `a`, line
-`i` of `ea`, `fa` (its form basis) and `fb` (its chain basis); RowB `j` reads row `j` of `b`, line `j` of `eb`, `fb`,
-`fa` and `g`. Only the widths differ (`inW4`): BF16 rows, E2M1 lines and bases, and `G`'s FP32 words.
-
-The units are `N` instances of `Pc4RowB_v1{K}` (`row4B`), `M` of `Pc4RowA_v1{K}` (`row4A`) and `(M / TM)·(N / TN)` of
-`Pc4Tile_v1{K, TM, TN}` (`tile4Spec`), the tiles row-major. Tile `(rs, cs)` reads row `i` of its `A′` (codes, then scale
-bytes) and `P_A` row `i` from RowA `rs·TM + i`, and row `j` of its `B̃` and `P_B` row `j` from RowB `cs·TN + j`
-(`portT4`). As in `pc8`, the lines and `G` are verifier-derived public inputs, so no unit computes `G`.
-
-`verity/protocols/experimental/pearl_c4/tests/test_circuit_whole4_lean.py` checks the inputs' widths, the ports, the unit numbering and the outputs against
-`pc4.unit_cut` of `Pc4Check`, with its descriptor digests pinned.
--/
+/-! `pc4`'s whole Program `Pc4Check{M, K, N, TM, TN}` as a `WholeCircuit.Whole`, as `whole8` writes `Pc8Check`. -/
 
 @[expose] public section
 

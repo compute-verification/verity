@@ -33,15 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A credited word's named premises: its priced cost on the device, and the units the network attester admits (trusted)
-
-The two premises `Properties.Certifier.JointBridge.WorkOfCreditedWords` adds to a PoUW source statement that credits
-words (`Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`), each a `Prop` taken as a hypothesis, never an `axiom`:
-
-* `WordCostsMacs`: a per-word work lower bound, priced, for the words of units the device didn't outsource;
-* `HelpWithinCertifier`: the units the device outsourced are within the network attester's bits, at `b_unit` a unit.
--/
+/-! The two named premises a PoUW statement that credits words adds: a credited word's priced cost on the device, and the units the network attester admits. -/
 
 @[expose] public section
 

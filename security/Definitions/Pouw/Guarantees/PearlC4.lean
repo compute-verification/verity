@@ -7,14 +7,7 @@ public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.PearlC.Tile
 
-/-!
-# Pearl-C4's headline on sm_120 (trusted)
-
-Pearl-C4's gap statements at its sm_120 record (`devFp4Sm120`), on the W1 setting `W1Device.fp4Sm120 sha fetch` under
-`tt-out/fp4-sm120` at W1 (`TTOutFp4Sm120W1`, `TTOutTileFp4Sm120W1`): per unit (`GapFp4Sm120_8192`, `_16384`), per audit
-tile (`SampledFp4Sm120_8192`, `_16384`), and at 8192³ in ε form (`EpsFp4Sm120_8192`). Each is proved by the theorem
-`Pouw.SecurityProofs.PearlC.G`.
--/
+/-! Pearl-C4's gap statements at its sm_120 record, per unit, per audit tile and in ε form. -/
 
 @[expose] public section
 

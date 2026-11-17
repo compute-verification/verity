@@ -8,33 +8,7 @@ public import Mathlib.Tactic.Bound.Init
 public import Mathlib.Tactic.Finiteness.Attr
 public import Mathlib.Tactic.SetLike
 
-/-!
-# `HOPPER_E4M3_K32`: one Hopper FP8 tensor-core accumulator step, bit-exact (trusted definitions)
-
-The total step of `verity.ml.tc.total_fp8.tc_dot_total_e4m3` on `verity.ml.tc.models.HOPPER_E4M3_K32` (one accumulator
-coordinate of `wgmma.mma_async.sync.aligned.m64nNk32.f32.e4m3.e4m3`, SASS `QGMMA.64xNx32.F32.E4M3.E4M3`), transcribed
-function by function from `verity.ml.tc` (`term.py`, `models.py`, `total.py`, `total_fp8.py`):
-
-* **Terms** (`Term`, `term.Term`): `(−1)^neg · mag · 2^(exp − 23)`, `exp` the weight of bit 23.
-* **Products** (`product`, `term.e4m3_product`): exact, `mag = (sig a · sig b) <<< 17` at
-  `exp = (e_a or 1) + (e_b or 1) − 14`; a zero significand gives the unsigned zero. A NaN code gives NaN
-  (`productTotal`, `total_fp8.e4m3_product_total`). A product never overflows (`448² < 2^18`).
-* **The accumulator** (`fp32Value`, `total.fp32_value` and `term.fp32_term`): NaN, `±inf`, or a finite term; `±0`
-  is the unsigned zero.
-* **One group** (`groupSum`, `models.group_sum`): every term goes to the `width`-bit adder (`toAdder`: `>>> 10` at
-  width 14), is aligned to the group's largest exponent (`maxExp`, at least `zeroExp`) by a truncating right shift
-  (`aligned`), the aligned terms are summed exactly (`alignedSum`), and the sum is normalised to `width` bits by
-  truncation, denormalised below `2^−126`, and returned to the 24-bit grid (`normalize`).
-* **The total group step** (`groupStepTotal`, `total.group_step_total`): NaN if any term is NaN, NaN for infinities of
-  both signs, the infinity if one sign, otherwise `groupSum` of the finite terms, which saturates to an infinity of its
-  sign above the FP32 range (exponent above 127).
-* **The word** (`packValue`, `total.pack_value` and `term.pack_fp32`): `0x7FFFFFFF` for NaN, `±0x7F800000` for the
-  infinities, the FP32 encoding otherwise; zero is always `+0`.
-
-`HOPPER_E4M3_K32` is `groups = (32,)`, `width = 14`, `zero_exponent = −139` (`hopperE4m3K32`): the 32 products and the
-accumulator are summed in one group. `ADA_E4M3_M16N8K32` (`adaE4m3K32`) is the same adder with two groups of 16.
-Words are natural numbers; the step reads the low 32 bits of the accumulator word and writes a word below `2^32`.
--/
+/-! `HOPPER_E4M3_K32`, one Hopper FP8 tensor-core accumulator step, bit-exact, transcribed function by function from `verity.ml.tc`. -/
 
 @[expose] public section
 
@@ -95,8 +69,6 @@ def fp32Value (w : Nat) : Value :=
   else if e = 0 then (if m = 0 then .fin Term.zero else .fin ⟨s, -126, m⟩)
   else .fin ⟨s, (e : Int) - 127, (1 <<< 23) ||| m⟩
 
-/-! ## One group -/
-
 /-- A 24-bit FP32-grid magnitude on the `width`-bit adder (`rescale = width − 24`; a truncating shift when negative). -/
 def toAdder (width m : Nat) : Nat := if 24 ≤ width then m <<< (width - 24) else m >>> (24 - width)
 
@@ -153,8 +125,6 @@ def groupStepTotal (width : Nat) (zeroExp : Int) (acc : Value) (ps : List Value)
       let t := groupSum width zeroExp (vs.filterMap Value.finite?)
       if t.mag ≠ 0 ∧ 127 < t.exp then .inf t.neg else .fin t
 
-/-! ## The word -/
-
 /-- `pack_fp32`: a term as an FP32 word. Zero is `+0`; above exponent 127, `±inf`; a magnitude without bit 23 (at
 exponent −126) is a subnormal. -/
 def packTerm (t : Term) : Nat :=
@@ -170,8 +140,6 @@ def packValue : Value → Nat
   | .inf s => ((if s then 1 else 0) <<< 31) ||| 0x7F800000
   | .fin t => packTerm t
 
-/-! ## The pipeline and the step -/
-
 /-- A grouped-sum pipeline (`models.GroupSum`): the group sizes in `k` order, the adder width and the exponent floor. -/
 structure Pipeline where
   groups : List Nat
@@ -181,7 +149,6 @@ structure Pipeline where
 /-- `HOPPER_E4M3_K32`: one group of 32, a 14-bit adder, exponent floor −139. -/
 def hopperE4m3K32 : Pipeline := ⟨[32], 14, -139⟩
 
-/-- `ADA_E4M3_M16N8K32`: the same adder, two groups of 16. -/
 def adaE4m3K32 : Pipeline := ⟨[16, 16], 14, -139⟩
 
 /-- The groups folded over the operand pairs: each group's products join the value carried from the last. -/
@@ -197,20 +164,17 @@ def Pipeline.step (p : Pipeline) (acc : Nat) (a b : List Code) : Nat :=
 /-- **One `HOPPER_E4M3_K32` step**: the accumulator word and 32 code pairs to the FP32 word written. -/
 def hopperStep (acc : Nat) (a b : Fin 32 → Code) : Nat := hopperE4m3K32.step acc (List.ofFn a) (List.ofFn b)
 
-/-- One `ADA_E4M3_M16N8K32` step. -/
 def adaStep (acc : Nat) (a b : Fin 32 → Code) : Nat := adaE4m3K32.step acc (List.ofFn a) (List.ofFn b)
 
 /-- The 32 codes packed little-endian in `A` (code `i` is byte `i`). -/
 def codes (A : Nat) : Fin 32 → Code := fun i => ⟨(A >>> (8 * i.val)) % 256, Nat.mod_lt _ (by decide)⟩
 
-/-- A conformance vector: the accumulator word, the packed codes `a` and `b`, and the word `verity.ml.tc` computes. -/
 structure Vec where
   acc : Nat
   a : Nat
   b : Nat
   d : Nat
 
-/-- A vector holds for `step`. -/
 def Vec.holds (step : Nat → (Fin 32 → Code) → (Fin 32 → Code) → Nat) (v : Vec) : Bool :=
   step v.acc (codes v.a) (codes v.b) == v.d
 

@@ -4,28 +4,7 @@ public import Definitions.Pouw.Dither
 public import Definitions.Pouw.Assumptions.Dither
 public import Definitions.Pouw.Assumptions.ShaRealize
 
-/-!
-# The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
-
-The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`. The only round protocols the Lean
-defines are the no-fold round's (`noFoldRound`, `ditherSelected`), so none of these guarantees covers Dither v3.2's
-proof block, which no guarantee states yet.
-
-* `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
-  base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof system's
-  soundness, the network attester's count, and commit-and-open's extraction), for every prover that runs the period
-  one sampling block at a time, each in its commit, challenge and response phases, its operands committed before its
-  coins (`Prover`),
-  `Pr[accepted ∧ rv + W_other > OPT_honest + ε_A C] ≤ δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm + κ_dsha)`, `C` the
-  sampling blocks' honest cost at the dual price.
-* `WorkMoment`: `WorkSound` before its Markov step at `δ_coin`, the per-replica moment a fleet pools.
-* `WorkSoundNoFold`: the no-fold round with commit-and-open from SHA-512 as a random oracle
-  (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) at the query budget the period's capacity allows, so
-  one `ε` and one `κ` for every prover.
-* `FleetSound`: a fleet of replicas, each its own period, whose moments are pooled by convexity on every set of
-  accepted replicas at once, at `ln(N / (s δ_coin))` of luck rather than the union bound's `ln(N / δ_coin)` a replica,
-  under `OwnDither` and `CoinsConfidential` (tier A).
--/
+/-! The no-fold Dither protocol's work-soundness over a monitoring period; none of these guarantees covers Dither v3.2's proof block. -/
 
 @[expose] public section
 
