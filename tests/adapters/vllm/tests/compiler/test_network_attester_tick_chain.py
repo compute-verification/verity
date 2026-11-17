@@ -55,7 +55,7 @@ def test_the_rows_are_tick_steps():
         assert [f(v1).id.split("{")[0] for f in (RC.advance_unit, RC.load_unit, RC.close_unit)] == [
             "ReplayAdvance_v1", "ReplayLoad_v1", "ReplayClose_v1"]
     with pytest.raises(ValueError, match="TAU ≥ 1"):
-        RC.TickAdvance.bind(**{**CT.SMALL.statics(), "TAU": 0})
+        RC.TickAdvance.bind(**{**CT.SMALL.statics(), "TAU": 0}).signature()
 
 
 def test_round_trip_and_refusals():
