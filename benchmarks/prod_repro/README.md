@@ -226,6 +226,26 @@ replay that differs, the first token that does and the first step.
 A line says `not measured` with its reason where the job's files don't hold it or can't be read; the last line counts
 the measured ones and names the arms that were not served whole.
 
+## The cost priced from counts
+
+`priced.py OUT --units TOPK_CUT.jsonl` reads a finished job's `out/` with no GPU. It prices the canonical top-k's layer
+(each arm of ours over `prod-trace`, `--reference`) from what the job kept, against the top-k's device time a call on
+one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the served decode shapes):
+
+- **The rows each call reads** come from the schedule: each counted pass's decode steps in the arm's step trace, with
+  the rows past the indexer's k keys and the longest of them. A decode step makes 22 calls on each card.
+- **The rows whose fast selection failed** come from the model's outputs: the top-k's counters (`topk_counters.json`).
+  Those are lifetime totals over the processes, so the reader takes a card's share and the counted passes' share of
+  the lifetime's decode rows. It places them in calls three ways: packed, a request's rows to a call, and one row a
+  call. The bounds and the point are those placements, with each pass's time ranged over the distributions it was timed on.
+- **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
+  layer (`prod_repro.json`'s `layers`) and the difference in points. The point under
+  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer plus the
+  job's measured `prod-trace` over `prod`. It names the job's run as the run that tests it.
+- **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
+- **What it doesn't price:** prefill steps, which have no device times at prefill shapes; the host's time; and the
+  cards differing (each card is taken to fail the same rows).
+
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the

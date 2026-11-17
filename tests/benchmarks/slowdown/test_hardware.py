@@ -8,6 +8,8 @@ from slowdown.hardware import Fleet, Location
 from slowdown.params import Registry
 from verity.device import load_card, number
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
 REG = Registry.load()
 CENSUS_DIR = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
 CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
@@ -58,7 +60,7 @@ def test_the_h200_servers_memory_and_links_are_their_cards():
     """Each device holds the H200 card's `store.dram`; each host's boundary carries the DGX H200 card's `link.rate`,
     every network port, at most, and its eight cluster ports alone (`link.cluster`) at least. No data file states
     either (`Registry.load` refuses one that does)."""
-    dram, link = load_card("h200-sxm-141gb")["store"]["dram"], load_card("dgx-h200")["link"]
+    dram, link = load_card("h200-sxm-141gb", directory=CARD_FILES)["store"]["dram"], load_card("dgx-h200", directory=CARD_FILES)["link"]
     for name in params.CARDED:
         loc, links = hardware.location(REG, name), REG.param(f"location.{name}.links")
         assert loc.memory == loc.devices * number(dram) * 8

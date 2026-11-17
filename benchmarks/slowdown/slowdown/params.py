@@ -42,6 +42,8 @@ from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
 from verity.device import load_card, number
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
 DATA = Path(__file__).resolve().parent.parent / "data"
 #: the inference-only policy's calibrations, in the directory beside this package's
 CALIBRATIONS = Path(__file__).resolve().parents[2] / "nci" / "calibrations.json"
@@ -208,7 +210,7 @@ def carded(params: Mapping[str, Param]) -> list[Param]:
     out = []
     for name, (gpu, server, links) in CARDED.items():
         t = f"location.{name}"
-        dram, link = load_card(gpu)["store"]["dram"], load_card(server)["link"]
+        dram, link = load_card(gpu, directory=CARD_FILES)["store"]["dram"], load_card(server, directory=CARD_FILES)["link"]
         units = (dram["unit"], link["rate"]["unit"], link["cluster"]["unit"])
         if units != ("B", "bit/s", "bit/s"):
             raise ValueError(f"{t}: {gpu}'s store.dram and {server}'s link.rate and link.cluster are in {units}; "
