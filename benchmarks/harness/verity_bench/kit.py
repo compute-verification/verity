@@ -31,9 +31,11 @@ model or stated figures no run measured, or scaled past what a run covered; ``"p
 name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
 `mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
-`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
-says which as `member`, a non-empty string, held only where given. The writer appends: every
-writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+`OVER` (the world's compute or one datacenter's). A measurement of one of a metric's lines says which as `member`, a
+non-empty string held only where given: whatever tells it from the metric's other lines, a guarantee, a lead, an area, or
+a configuration as a slug of lower-case words joined by hyphens, model, card, then arm where arms differ
+(`llama-3.2-1b-h200`). The writer appends: every writer of a research run, whatever its `out`, appends to the run's one
+result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 

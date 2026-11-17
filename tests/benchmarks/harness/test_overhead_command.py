@@ -16,7 +16,7 @@ from verity_bench import overhead as O
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
 
-SMALL = "llama3.2-1b"
+SMALL, MEMBER = "llama3.2-1b", "llama-3.2-1b-h200"
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------
 
@@ -133,7 +133,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     assert printed == table() and printed.endswith(f"\n## {SMALL}\n\nNo labelled run times {SMALL} "
                                                    "(`run_of_record=overhead`): it has no γ.\n")
     got = result(before)
-    assert [(m["name"], m.get("member")) for m in got["measurements"]] == [(n, w) for n in metrics for w in (None, SMALL)]
+    assert [(m["name"], m.get("member")) for m in got["measurements"]] == [(n, w) for n in metrics for w in (None, MEMBER)]
     for m, point in zip(got["measurements"], [p for p in O.POINTS for _ in (0, 1)]):
         assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
         on = f" on {SMALL}" if m.get("member") else ""
@@ -207,5 +207,5 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     written = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
     assert [(m.get("member"), m["value"], m["inputs"]) for m in written] == [
         (None, rows["llama3.1-70b", "C"]["gamma"]["gamma"], [seventy, big]),
-        (SMALL, rows[SMALL, "C"]["gamma"]["gamma"], [one, small])]
+        (MEMBER, rows[SMALL, "C"]["gamma"]["gamma"], [one, small])]
     assert written[1]["extra"]["covers"] == O.covers(SMALL) and written[0]["extra"]["covers"] == table["covers"]

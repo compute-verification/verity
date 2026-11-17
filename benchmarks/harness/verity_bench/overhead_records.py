@@ -58,6 +58,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -333,8 +335,9 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
-    model's as its `member`), measured, held to the scheme gate (`overhead.GAMMA_MAX`) as its target, from its run and its
-    points' art, with its note and what the γ is over; where the table has no γ of record there, no value and why."""
+    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
+    record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -347,7 +350,7 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
                                  "extra": {"covers": table["covers"] if own else O.covers(model)}}
             if not own:
-                m["member"] = model
+                m["member"] = f"{MEMBER_MODEL[model]}-{card}"
             if r is None or not r["of_record"] or g.get("gamma") is None:
                 why = (r or {}).get("why") or (f"no labelled run times {scheme} at {card}'s {point}"
                                                + ("" if own else f" on {model}") + f" (`{RUN_OF_RECORD}={RUN_RECORD}`)")

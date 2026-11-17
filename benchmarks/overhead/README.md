@@ -20,7 +20,7 @@ verity bench overhead table [--json]                          γ per scheme, poi
 Under a research run, `table` also writes the numbers `metrics.toml` holds it to into the run's result: Pearl+'s γ of
 record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), each with the scheme gate as its target:
 Llama-3.1-70B's γ is each metric's own reading, and every other model's is written beside it as its `member`
-(`llama3.2-1b`), with no value and why while no run of record times it. `table` prints each other model's rows under its
+(`llama-3.2-1b-h200`, `overhead_records.MEMBER_MODEL`'s words and the card), with no value and why while no run of record times it. `table` prints each other model's rows under its
 own heading, or says that no labelled run times it.
 Today's run of record times no commitment of the output (each layer's output hash isn't counted, the note below), so
 their titles say so until a run of record whose arm commits y is labelled.

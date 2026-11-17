@@ -218,9 +218,11 @@ A value over a span of time or of compute says which, each as its own field of t
 `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter` (`kit.OVER`). A
 run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one id may give a
 value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s three, over a
-week, a month and a year of a datacenter's and of the world's compute). A value for one member of a set (a deployed
-guarantee, a lead) names it as `member`, a non-empty string held only where given, and the writer keys on it too, so one
-id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee). Of a run's measurements under one id,
+week, a month and a year of a datacenter's and of the world's compute). A value for one of a metric's lines names it as
+`member`, a non-empty string held only where given: whatever tells it from the metric's other lines, a guarantee, a lead,
+an area, or a configuration as a slug of lower-case words joined by hyphens, model, card, then arm where arms differ
+(`llama-3.2-1b-h200`). The writer keys on it too, so one id gives a value for each member (`lean/trust-gap`'s, one a
+deployed guarantee). Of a run's measurements under one id,
 the tab's value is the one written last that names no member, or, where the run wrote none without a member, the one
 written last: one point a run. Beside it the tab lists the measurements that name a member from the newest run that
 wrote any. So a benchmark that writes one id for several periods, scopes or members writes the metric's own last: the
