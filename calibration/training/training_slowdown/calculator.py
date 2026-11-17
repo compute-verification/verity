@@ -39,7 +39,7 @@ from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
 CALCULATOR = Path(__file__).resolve().parents[3] / "benchmarks" / "slowdown"
-DEPLOYMENTS = Path(__file__).resolve().parents[3] / "benchmarks" / "census" / "deployments.json"
+DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
 #: the theorem's inputs on the work `slowdown` chooses, as its `figure` names them and its bound's `work` carries them

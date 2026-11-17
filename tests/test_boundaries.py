@@ -1072,7 +1072,7 @@ CENSUS_PATH = re.compile(r"(?<!verity/)census[/\\]|\b(hardware|networks|workload
 
 
 def test_core_never_reads_the_census() -> None:
-    """The census (``benchmarks/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
+    """The census (``calibration/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
     ``verity``: it takes such numbers as parameters.  No string in its code (docstrings aside) names the directory or one of
     its files; a Program's census schema (``verity/census/v1``, ``ml.circuits.census``) is not the directory."""
     offenders = []
