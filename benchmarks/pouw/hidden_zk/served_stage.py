@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import hash_scratch as H
+from verity_config.settings import of
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
@@ -36,4 +37,4 @@ class Stager(stage_tile.Stager):
 
 
 if __name__ == "__main__":
-    stage_tile.main(stager=Stager())
+    stage_tile.main(stager=Stager(), staging=of(__file__).HZ_STAGE)

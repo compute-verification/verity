@@ -469,10 +469,24 @@ def test_kept_read_takes_only_the_traces_own_string():
             R.kept_read(t, bad)
 
 
+@pytest.mark.parametrize("name", CASES)
+def test_with_no_draft_the_kept_count_costs_nothing(name):
+    """With no draft no row keeps one: the kept count is 0 bits however it is read, and the table's advice is the
+    arrivals' alone. A trace the replay doesn't reproduce is still refused."""
+    t = trace(name)
+    b = R.kept_bits(t)
+    assert b == {"K": 0, "rows": 0, "counts": [0], "entropy": 0.0, "max": 0.0, "alone": 0.0, "charged": 0, "ideal": 0,
+                 "derived": 0}
+    d = R.draft_table(t, contexts=R.CONTEXTS)
+    assert d["kept_count"] == b and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
+    assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+    other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
+    with pytest.raises(ValueError, match="the replay diverges from the trace at step 0"):
+        R.kept_bits(other)
+
+
 def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
     t = trace(DRAFT_CASES[0], DRAFT)
-    with pytest.raises(ValueError, match="no draft"):
-        R.kept_bits(trace(CASES[0]))
     with pytest.raises(ValueError, match="emitted"):
         R.kept_bits(dataclasses.replace(t, emitted=None))
     other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])

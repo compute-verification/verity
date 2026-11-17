@@ -122,7 +122,7 @@ difftest only.
 | A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |
 | The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
 | The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
-| A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
+| A period's presented roots | `credit.period` | `Credit.period` (`period-roots`) | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 

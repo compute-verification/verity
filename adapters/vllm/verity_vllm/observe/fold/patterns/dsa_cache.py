@@ -3,8 +3,6 @@ the `fp8_ds_mla` latent cache's layout, which `dsa.DsaNormRope` writes and `dsa_
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from dataclasses import dataclass
 
 from verity.device import load_card, number

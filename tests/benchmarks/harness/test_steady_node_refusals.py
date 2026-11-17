@@ -99,7 +99,8 @@ INSIDE_THE_LEASE = [
     ({"stamp": {"driver": "570.86.16"}},
      "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda_toolkit': '12.8.93'}, and spec 'steady' says"),
     ({"stamp": {"card": "NVIDIA B200"}},
-     "the lease's card is a NVIDIA B200, not the `card` of spec 'steady' (h200: NVIDIA H200)"),
+     ("the card is a NVIDIA B200, not the h200 of spec 'steady' (NVIDIA H200): run it on a node whose card is a "
+      "NVIDIA H200, or use the spec for this card")),
     ({"stamp": {"card": "none", "gpus": [], "driver": None, "cuda": None, "why": "no nvidia-smi on PATH"}},
      "the host stamp doesn't say what the lease's card is (no nvidia-smi on PATH)"),
     ({"stamp": {"gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}, {"uuid": "GPU-4", "sm_mhz": 0, "mem_mhz": 0}]}},

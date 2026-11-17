@@ -2773,3 +2773,47 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     assert LC.matching("network/verifier/lean", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
     assert LC.matching("network_check", pkgs) == []
+
+
+def test_sync_refuses_a_tracked_link_and_removes_one_the_slot_tree_kept_from_before(tmp_path, monkeypatch):
+    """`sync` recreated a tracked link in the slot tree, through which `link` emptied and `lake_dirs` made directories
+    outside it. A tracked link is refused, naming it; a link the slot tree still holds from before, in a package or above
+    it, is removed rather than written through."""
+    root, tree, victim = tmp_path / "root", tmp_path / "slot", tmp_path / "victim"
+    for d in (root / "top" / "Sec", tree, victim):
+        d.mkdir(parents=True)
+    (root / "top" / "Sec" / "A.lean").write_text("a\n")
+    (root / "top" / "Sec" / "Out").symlink_to(victim)
+    monkeypatch.setattr(LC, "ROOT", root)
+    with pytest.raises(LC.AUDIT.OutsideTree, match=r"'top/Sec/Out' is a symbolic link .*the tree holds no links"):
+        LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Out"], tree)
+    (root / "top" / "Sec" / "Out").unlink()
+    (root / "top" / "Sec" / "Sub").mkdir()
+    (root / "top" / "Sec" / "Sub" / "B.lean").write_text("b\n")
+    shutil.rmtree(tree / "top")
+    (tree / "top").symlink_to(victim)
+    (victim / "Sec" / "Sub").mkdir(parents=True)
+    (victim / "Sec" / ".lake").symlink_to(victim)
+    assert LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Sub/B.lean"], tree) == 2
+    assert not (tree / "top").is_symlink() and (tree / "top" / "Sec" / "Sub" / "B.lean").read_text() == "b\n"
+    assert sorted(p.name for p in victim.rglob("*")) == [".lake", "Sec", "Sub"]
+    (tree / "top" / "Sec" / "Sub").rename(tree / "top" / "Sec" / "Gone")
+    (tree / "top" / "Sec" / "Sub").symlink_to(victim)
+    (tree / "top" / "Sec" / ".lake").symlink_to(victim)
+    assert LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Sub/B.lean"], tree) == 1
+    assert not (tree / "top" / "Sec" / "Sub").is_symlink() and not (tree / "top" / "Sec" / ".lake").is_symlink()
+    assert sorted(p.name for p in victim.rglob("*")) == [".lake", "Sec", "Sub"]
+
+
+def test_a_path_dependency_inside_the_tree_by_name_that_resolves_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`in_tree` compared the normalized name alone: `Sec/out`, a link in the tree to a directory outside it, passed."""
+    root = tmp_path / "root"
+    (root / "Sec").mkdir(parents=True)
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (root / "Sec" / "out").symlink_to(elsewhere)
+    monkeypatch.setattr(LC, "ROOT", root)
+    files = {"Sec/lake-manifest.json": json.dumps({"packages": [{"type": "path", "name": "v", "dir": "out"}]}).encode()}
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"'Sec/out', which resolves to '{elsewhere}', outside the tree"):
+        LC.closure("Sec", files.get)
+    files = {"Sec/lake-manifest.json": json.dumps({"packages": [{"type": "path", "name": "v", "dir": "in"}]}).encode()}
+    assert LC.closure("Sec", files.get) == ["Sec", "Sec/in"]
