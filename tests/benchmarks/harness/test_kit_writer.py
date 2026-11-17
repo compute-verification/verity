@@ -427,3 +427,21 @@ def test_a_measurement_carries_its_benchmarks_extra_keys_and_none_that_the_entry
     doc = _result(tmp_path)
     assert [m["name"] for m in doc["measurements"]] == ["share", "bare"]
     assert research_result.check_doc(tmp_path, doc, RUN).valid
+
+
+def test_a_registered_ids_measurement_carries_its_metrics_version_and_no_caller_gives_one(tmp_path, no_gpu, monkeypatch):
+    from research import result as research_result
+    from verity_bench import metric_versions
+
+    w = kit.writer(tmp_path)
+    registered = w.measurement("benchmarks/exfiltration-total-gb", 1.0, "GB", mark="modeled")
+    assert registered["version"] == 1 and list(registered)[:5] == ["name", "value", "unit", "mark", "version"]
+    assert "version" not in w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured")
+    with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
+        w.measurement("served_tok_s", 1, "tok/s", mark="measured", member="b8", extra={"version": 2})
+    with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
+        w.measurement("benchmarks/exfiltration-total-gb", 1.0, "GB", mark="modeled", member="b8", extra={"version": 2})
+    monkeypatch.setattr(metric_versions, "pins", lambda: {"vllm/x": {"version": 2, "unit": "s"}})
+    assert w.measurement("vllm/x", 1.0, "s", mark="measured")["version"] == 2
+    assert "version" not in w.measurement("benchmarks/exfiltration-compute-audit-gb", 1.0, "GB", mark="modeled")
+    assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid

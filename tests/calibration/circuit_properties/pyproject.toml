@@ -33,7 +33,7 @@ inputs = ["adapters/vllm/manifests", "adapters/vllm/verity_vllm/config.py", "ada
           "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
           "adapters/vllm/verity_vllm/records/workload.py",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
-          "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
+          "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/metric_versions.py", "benchmarks/harness/verity_bench/metric_versions.json", "tools/config/verity_config",
           "benchmarks/slowdown/slowdown", "benchmarks/slowdown/data", "benchmarks/nci/calibrations.json",
           "calibration/hardware/cards/h200-sxm-141gb.toml", "calibration/hardware/cards/dgx-h200.toml",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",

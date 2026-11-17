@@ -35,7 +35,7 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     # overhead.paired calls the kit's, which reads its settings
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/kit_report.py",
-    "benchmarks/harness/verity_bench/settings.py",
+    "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/metric_versions.py", "benchmarks/harness/verity_bench/metric_versions.json",
     "benchmarks/harness/verity_bench/overhead_node.py",
     "tools/config/verity_config",
     "verity/__init__.py",

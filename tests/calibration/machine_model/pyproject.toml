@@ -24,5 +24,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["benchmarks/ppl/specs", "calibration/machine_model/README.md", "security/Definitions/Registration/Sheets",
           "verity/__init__.py", "verity/errors.py", "calibration/hardware/cards", "verity/device.py",
           "verity/channel.py", "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
-          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/metric_versions.py", "benchmarks/harness/verity_bench/metric_versions.json",
           "tools/config/verity_config"]

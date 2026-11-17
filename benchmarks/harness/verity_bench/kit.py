@@ -20,9 +20,9 @@
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
-directory: under a research run, the run's). Each
-measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
-95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
+directory: under a research run, the run's). Each measurement is the form a reader of numbers takes, `value`, `unit`,
+`commit` and `run`, with its `name`, its `mark`, its metric's `version` where the name is a registered id
+(`metric_versions`), its 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
 computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and, under a research
 run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
 command's measurement from any other run's; a measurement with
@@ -49,8 +49,8 @@ where the value stands against its target (``"within target"``). **A validation 
 protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
 whole guard, and its `detail` says in the gates' own words what passed or failed.
 
-Standard library and `verity_bench.settings` only (`record_dir` imports research's store client only for a run id), so a
-kernel's runner imports it without vLLM or torch.
+Standard library, `verity_bench.settings` and `metric_versions` only (`record_dir` imports research's store client only
+for a run id), so a kernel's runner imports it without vLLM or torch.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import settings
+from verity_bench import metric_versions, settings
 
 RESULT_SCHEMA = "research/result/v0.1"
 RESULT = "result.json"
@@ -336,9 +336,10 @@ class Writer:
                over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
         """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
         to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
-        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
-        against that target, and the `inputs` it was computed from, with this run, its commit, the host stamp and, where
-        the writer has it, the run's `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        holds as `ci95`, the key `paired` gives it under, its metric's `version` where `name` is a registered id, which
+        no caller gives (`metric_versions.stamp`), its `target`, the `verdict` of its check against that target, and the
+        `inputs` it was computed from, with this run, its commit, the host stamp and, where the writer has it, the run's
+        `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
@@ -386,7 +387,7 @@ class Writer:
             interval = [low, high]
         spans = {key: x for key, x in (("period", period), ("over", over), ("member", member)) if x is not None}
         entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit, "mark": mark,
-                 **spans, "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
+                 **spans, **metric_versions.stamp(name), "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
@@ -394,7 +395,7 @@ class Writer:
         if self.command is not None:
             entry["command"] = list(self.command)
         for key, held in (extra or {}).items():
-            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command"):
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command", "version"):
                 raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
             try:
                 json.dumps(held, allow_nan=False)
