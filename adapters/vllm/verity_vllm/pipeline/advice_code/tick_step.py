@@ -4,11 +4,11 @@ certified arrivals and their release buckets, with nothing asked.
 `reference` is that step's specification in Python. It is `ReplayStep_v1`'s step
 (`verity_vllm.compiler.replay_step.reference`) with its timing input replaced: where that step reads one
 decision bit per open arrival, this one keeps the tick's clock T in its state and gives the scheduler an arrival exactly
-when T has reached the close of its release bucket. No Definition implements it; the replay's own steps are its
-difftest (`tests/adapters/vllm/tests/pipeline/test_tick_step.py`).
+when T has reached the close of its release bucket. `verity_vllm.compiler.tick_step`'s `TickStep_v1` implements it; the
+replay's own steps are its difftest (`tests/adapters/vllm/tests/pipeline/test_tick_step.py`).
 
 **State** (`State`): `ReplayStep_v1`'s state (the running list, the waiting list, the free blocks) and T, an integer
-of microseconds. The waiting list holds the preempted requests and an arrival that entered a quiet engine and wasn't
+in the rule's unit. The waiting list holds the preempted requests and an arrival that entered a quiet engine and wasn't
 scheduled; an arrival whose bucket has closed and that no step has taken stays in the certified stream, as an arrival
 no decision has admitted does in `ReplayStep_v1`.
 
@@ -18,8 +18,10 @@ no decision has admitted does in `ReplayStep_v1`.
 **Outputs** (`Out`): ok, the rows, the next state with the next T, `taken` (how far the arrivals' cursor moves) and
 `looked`. No count of decisions read.
 
-**What it computes**, with the tick's registered constants τ_b, τ_sat and τ_free (`schedule.Tick`), in order:
-1. If nothing is running or waiting and there is a next arrival, of bucket a: T ← max(T, (a + 1)·τ_b).
+**What it computes**, with the tick's registered constants (`schedule.Rule`, or a `schedule.Tick` in microseconds): the
+bucket τ_b, the step amounts τ_sat and τ_free, the amount for each token a step schedules, and the catch-up, in order:
+1. If nothing is waiting (and, under the default catch-up `quiet`, nothing is running) and there is a next arrival, of
+   bucket a: T ← max(T, (a + 1)·τ_b).
 2. The arrivals *given* to the scheduler are the leading ones whose buckets have closed, (a + 1)·τ_b ≤ T. The buckets
    never decrease in release order, so these are all the closed ones in view.
 3. `ReplayStep_v1`'s step runs on the state and the given arrivals, every decision bit 1: the waiting loop takes each
@@ -27,7 +29,8 @@ no decision has admitted does in `ReplayStep_v1`.
 4. The step is *saturated* if it preempted a request, or the next state's waiting list is nonempty, or a given arrival
    was not taken: the three ways vLLM's waiting queue is nonempty once the schedule returns, which is when the replay
    reads it.
-5. If the step has a row, T advances by τ_sat when saturated and by τ_free when not. A step with no row leaves T.
+5. If the step has a row, T advances by τ_sat when saturated and by τ_free when not, plus the token amount times the
+   tokens its rows schedule, as many buckets as that passes. A step with no row leaves T.
 
 **Three choices inside it.**
 - *An iteration of the engine core's loop that only frees finished requests is no step of the scan.* When nothing is
@@ -67,15 +70,15 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from verity_vllm.compiler import replay_step as RS
-from verity_vllm.pipeline.advice_code.schedule import Tick
+from verity_vllm.pipeline.advice_code.schedule import Rule, Tick
 
-__all__ = ["Inputs", "Out", "State", "empty", "reference"]
+__all__ = ["Inputs", "Out", "Rule", "State", "empty", "reference"]
 
 
 @dataclass(frozen=True)
 class State:
     step: RS.State                          # `ReplayStep_v1`'s state
-    clock: int = 0                          # the tick's T, in microseconds
+    clock: int = 0                          # the tick's T, in the rule's unit
 
 
 @dataclass(frozen=True)
@@ -120,9 +123,10 @@ def _preempts(S: SimpleNamespace, st: RS.State) -> bool:
     return False
 
 
-def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
+def reference(S: SimpleNamespace, tick: Tick | Rule, st: State, inp: Inputs) -> Out:
     """One step of the certified tick on the size class `S` (`replay_step.statics`' binding); `Out(False)` refuses
     what `replay_step.reference` refuses."""
+    rule = tick if isinstance(tick, Rule) else Rule(tick.bucket_us, tick.sat_us, tick.free_us)
     most = min(S.M, S.R)
     if most >= S.A:
         raise ValueError(f"A = {S.A} arrivals in view with up to {most} taken a step: the tick step needs "
@@ -130,10 +134,10 @@ def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
     if len(inp.released) != len(inp.arrivals):
         raise ValueError(f"{len(inp.released)} release buckets for {len(inp.arrivals)} arrivals")
     clock = st.clock
-    if not st.step.running and not st.step.waiting and inp.arrivals:
-        clock = max(clock, tick.close(inp.released[0]))
+    if not st.step.waiting and not (rule.quiet and st.step.running) and inp.arrivals:
+        clock = max(clock, rule.close(inp.released[0]))
     given = 0
-    while given < len(inp.arrivals) and tick.close(inp.released[given]) <= clock:
+    while given < len(inp.arrivals) and rule.close(inp.released[given]) <= clock:
         given += 1
     asked = RS.Inputs(inp.arrivals[:given], (1,) * S.A, inp.hit, inp.evict, inp.ret, inp.row_pfx)
     out = RS.reference(S, st.step, asked)
@@ -141,5 +145,5 @@ def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
         return Out(False)
     if out.rows:
         saturated = _preempts(S, st.step) or bool(out.state.waiting) or out.taken < given
-        clock += tick.sat_us if saturated else tick.free_us
+        clock += (rule.sat if saturated else rule.free) + rule.token * sum(n for *_, n in out.rows)
     return Out(True, out.rows, State(out.state, clock), out.taken, out.looked)
