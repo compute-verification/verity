@@ -39,7 +39,7 @@ name = "inference_only_verifier"
 path = "../../verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 
 [[require]]
-name = "pous_check"
+name = "pous_verifier"
 path = "../../verity/protocols/resource_accounting/memory/pous/verifier/check"
 
 [[require]]

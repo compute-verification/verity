@@ -78,6 +78,6 @@
    "inherited": true,
    "dir": "../../../../../../commitments/lean",
    "configFile": "lakefile.toml"}],
- "name": "pous_check",
+ "name": "pous_verifier",
  "lakeDir": ".lake",
  "fixedToolchain": false}
