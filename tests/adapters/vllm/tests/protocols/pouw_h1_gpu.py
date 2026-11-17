@@ -441,7 +441,7 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
 
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
                 draw_session: Any = None, **kw: Any) -> dict[str, Any]:
-    """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
+    """The option's settings for one workload: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor device's at `challenger` (``HOST:PORT``, one
     challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
     opens on the window's open root, and its sampling coin from the `draw_session` the gate reserved beside it, which `gate`
@@ -1055,7 +1055,7 @@ SERVING = "pouw_h1_gpu.serving.json"
 
 
 def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, Any]:
-    """With ``--handoff SOCK --handoff-state DIR``: the served window saved to DIR and its challenge phase's stream handed to the
+    """With ``--handoff SOCK --handoff-state DIR``: the workload saved to DIR and its challenge phase's stream handed to the
     holder at SOCK (`pouw_h1_handoff`), its record so far in ``SERVING``; this process then exits, and with it its GPU
     lease, and ``--close-from DIR`` closes and releases the window on the CPU (`fill_close`)."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
@@ -1489,7 +1489,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
                      pins: list[str] | None = None, main: list[str] | None = None, statements: Any = (),
                      live: Any = None, draw_directory: str | None = None,
                      lean_answers: str | None = None) -> dict[str, Any]:
-    """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
+    """The verifier's side, on no GPU: the workload's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
     ``pins.jsonl``, the gate's ``pins``; none refuses every challenge phase: `pouw_h1_challenger.pins_head`) and `main` the
@@ -1597,13 +1597,13 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                     help="an LLM() keyword over the workload's (repeatable, the value JSON when it parses): "
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
-    ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
+    ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a workload's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor device's "
                                                               "challenger (verity/protocols/compose/verifier/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
-                    help="no GPU: a served window's coins against the challenger run's out/ (with --window) or the "
+                    help="no GPU: a workload's coins against the challenger run's out/ (with --window) or the "
                          "session's tree (needs --key-sha512 and --ledger)")
     ap.add_argument("--draw-dir", metavar="DRAW_DIR",
                     help="with --check-challenger: the window's sampling session as CHALLENGER_DIR is its session (its "
@@ -1711,7 +1711,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                          "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
                          "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
-                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                    help="fill with --served: profile each workload's registration (Served.commit) and write its "
                          "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")

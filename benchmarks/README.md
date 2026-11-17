@@ -22,7 +22,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench certifier_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
-| `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
+| `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a workload served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
 | `verity bench exfiltration` | GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute: the compute audit's part beside the network attester's, each input labelled |
 | `verity bench f32_exhaustive` | a reference primitive against MPFR, or a Boolean version against its word, on all 2^32 binary32 words |
@@ -38,10 +38,10 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
-| `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request; on Llama 3.2 1B and one H200, `--client vllm-bench --model llama32-1b` (its README's command) |
+| `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the workload replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request; on Llama 3.2 1B and one H200, `--client vllm-bench --model llama32-1b` (its README's command) |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`). From a clone, in order: `benchmarks/one_stage/proof_layers.sh`, the Flock, zero-knowledge and sampling runs (`benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table"); the recursion job, `bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR` (`benchmarks/prove/README.md`'s "On a machine of your own"); then `verity bench prove layers --flock A --zk B --sampling C --recursion E` on the four runs' `OUT` directories |
-| `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
+| `verity bench prove_path` | a workload's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
 | `verity bench poub_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
@@ -291,9 +291,9 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a workload's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
 | `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
-| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
+| `prove_path/` | a workload's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
 | `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
@@ -329,7 +329,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record; and `h200_share.py`, the share of an H200's capacity an honest Pearl+ prover is credited, modeled from that share and a recorded tensor-rate run | maintained |
+| `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a workload served, from the verifier's side of a recorded run's record; and `h200_share.py`, the share of an H200's capacity an honest Pearl+ prover is credited, modeled from that share and a recorded tensor-rate run | maintained |
 | `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity subprotocol's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
 | `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 

@@ -15,7 +15,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
   (the tie's derivation, in the clear on the rehearsal's published witness).
-* **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
+* **The endpoint's own advice** (`served_advice`, a workload's records): `verity-vllm advice` over a `verity-vllm
   serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
   Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
   run's windows are bound to it (each window opened to its registered root, every certified request admitted in
@@ -30,7 +30,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   commitment is hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path
   is bound to them only when the file is their advice and the Commit it proves is theirs, and only a bound prove path
   counts in the OK.
-  Beside the endpoint's own advice, an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window
+  Beside the endpoint's own advice, an arm of ``prove_path.py audit --serve-run`` names the workload's Commit window
   it proves (`served_commit`); the prove path is bound to these runs when every arm's Commit is the endpoint's (its
   ``windows.jsonl``) and sealed while serving, every arm's committed advice is held by content to the report's advice
   of its window (`held_to`: its root registered under that Commit, its opening opening it to that advice, which the
@@ -519,7 +519,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
     ``bound``) and the Commit it proves is theirs, which nothing here checks (no Commit record of these runs is an
     input), so it is never bound and its ``ok`` stays out of the report's. Beside the endpoint's own advice
     (`served_advice`'s ``bits``, its records ``ep``) an arm of the fixed workload proves its own Commit, not this run's;
-    an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window it proves (`served_commit`, named
+    an arm of ``prove_path.py audit --serve-run`` names the workload's Commit window it proves (`served_commit`, named
     ``w<k> <arm>``), and the prove path is bound to these runs when every arm's is the endpoint's and sealed while
     serving, every arm's committed advice is held by content to the report's advice of its window (`held_to`: ``tied``,
     which the report's OK requires of every such arm), and an honest arm's is one of the honest run's."""
@@ -614,11 +614,11 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     a, b = c.get("advice"), c.get("bits") or {}
     served = "served" in b
     if a is None and not served:
-        out.append("Advice: none given (--advice, or --endpoint-run for the endpoint's own); a served run's comes from "
+        out.append("Advice: none given (--advice, or --endpoint-run for the endpoint's own); a workload's comes from "
                    "its step trace (`verity-vllm advice`).")
     elif not b.get("bound"):
         out.append(f"Advice: {a['file'] if a else 'the endpoint’s'} is not these runs' ({b.get('bound_why')})"
-                   + ("." if served else "; a served run's comes from the committing endpoint's step trace "
+                   + ("." if served else "; a workload's comes from the committing endpoint's step trace "
                                          "(`verity-vllm advice`)."))
     if a is not None and "upgraded" in a["form"]:
         out.append("Advice form: the stand-in's pre-v0 JSON, upgraded to v0 here; the bits are v0's of the upgrade, while "
@@ -644,7 +644,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    else "")
                 for w, x in sorted(cs.items()) if (x.get("registered") or {}).get("at_serve_time") is not True]
         apart = [f"w{w}" for w, x in sorted(cs.items()) if x["of_the_honest_run"] and not x["the_reports_root"]]
-        out.append(f"Prove path: the served run's own Commit windows ({', '.join(f'w{w}' for w in sorted(cs))}), "
+        out.append(f"Prove path: the workload's own Commit windows ({', '.join(f'w{w}' for w in sorted(cs))}), "
                    f"adopted from {p['dir']}" + "".join(f"; {x}" for x in late)
                    + (f"; the advice {', '.join(apart)}'s arms committed is a registration of its own, held to the "
                       "report's advice by its opening, which the report reads in the clear" if apart else "") + ".")
@@ -796,7 +796,7 @@ def markdown(c: dict) -> list[str]:
         if served and commit:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
-                      f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
+                      f"the endpoint's workload ({b['served']}), its step units compiled from that window's advice by "
                       "the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "

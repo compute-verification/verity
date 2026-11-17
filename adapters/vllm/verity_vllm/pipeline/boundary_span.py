@@ -1,4 +1,4 @@
-"""A span of a served window (`boundary_rows`) and its boundary rows as u16 words: the request (`Span`) and its class
+"""A span of a workload (`boundary_rows`) and its boundary rows as u16 words: the request (`Span`) and its class
 (P, O), `b.ingress`'s fields and the sampling inputs they read, `b.egress`'s finish codes, and the rows of each a span
 commits."""
 from __future__ import annotations

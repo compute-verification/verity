@@ -25,7 +25,7 @@ than its rows ran (`positions_off`), and the context carries the row's required 
 ``manifest_digest`` (a manifest naming no digest is refused, `manifest_refusal`), the manifest's ``op_path_aliases``, which the
 opened store resolves a shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
-by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
+by), and the bundle names no Programs: a workload's Programs are the registered compiler's for its advice, made after
 the window closed. With ``--retain-exclude hidden_m1`` (`serve_release.RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
 are committed as before, same leaves and roots, but not copied off the device, so the bundle's store doesn't hold them and its
 manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
@@ -72,7 +72,7 @@ ROWS = step_rows.NAME
 PORT_IDS = step_rows.ROW_BYTES // StepInputPort.IB
 #: the server's Commit scheme
 SCHEMES = (ROWS,)
-#: what a sealed served window's context says it is (`deferred_rows.of_record` reads no Programs of record for it)
+#: what a sealed workload's context says it is (`deferred_rows.of_record` reads no Programs of record for it)
 SERVED_WINDOW = "verity-vllm/served-window/v1"
 
 
@@ -258,7 +258,7 @@ def window_requests(rows: Mapping[int, Sequence[tuple]], name_of: Callable[[str]
 
 
 def served_binder(manifest: Mapping[str, Any], steps: Sequence[int], sources: Sequence[Any] = ()) -> Any:
-    """The `query.manifest.bind.Binder` of a served window's ``steps``: the identities one engine step of the bench row's
+    """The `query.manifest.bind.Binder` of a workload's ``steps``: the identities one engine step of the bench row's
     Programs commits (its manifest's rows, weights aside, each (op_path, member, invocation) once, at its first row's place in
     the Program), at every step, with the committing sources' ports. A served step batches requests at any step of their own,
     and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
@@ -532,7 +532,7 @@ def port_layout_of(layouts: Mapping[int, Any], chunk: int, port: Mapping[str, An
 
 @contextlib.contextmanager
 def gc_paused() -> Iterator[None]:
-    """No cyclic collection while the block runs: a served window's binding map is up to a few million young objects, and a
+    """No cyclic collection while the block runs: a workload's binding map is up to a few million young objects, and a
     collection that scans them stops every thread, the engine's too. Refcounting still frees what the block drops."""
     was = gc.isenabled()
     gc.disable()

@@ -1,4 +1,4 @@
-"""A served window's window ingress (`pipeline.ingress_rows.ingress`): a unit's input port is window ingress at its engine step
+"""A workload's window ingress (`pipeline.ingress_rows.ingress`): a unit's input port is window ingress at its engine step
 when every slice it reads is a committed member of a row before the window, so the circuit record declares it apart from the
 run's ingress, and the leak count holds it apart too (`interface.input_count`'s ``window_ingress``, its ``free`` still the
 run's); a port reading a row of the window, registered weights or a mix stays free.  The record states only the Programs'

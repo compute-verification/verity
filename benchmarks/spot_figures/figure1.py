@@ -118,14 +118,14 @@ CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "card_influ
 SERVED_STATUS = "card_influenceTwo_le_min"
 #: what puts the patterns' form there: on any statement the influence set has at most 2^|outs| members
 OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
-#: the replay grain's fan-out F that a served window's registration verdict publishes (`Verdict.fanout`), the capped
+#: the replay grain's fan-out F that a workload's registration verdict publishes (`Verdict.fanout`), the capped
 #: form's N: its program is a population program, each instance reading only its own share of each Input node
 #: (`partition.fanout`)
 FANOUT = 1
 
 
 def returned_bits(served: float) -> int:
-    """The bits a replay block returns, which a served window's two-stage registration publishes
+    """The bits a replay block returns, which a workload's two-stage registration publishes
     (`WindowCommitmentRecord.returned`) and under which no served cap prices it (`plancheck.two`'s `returned`).
     Modelled, and read from no registration: the model's replay block is one request whose only outputs are its tokens'
     select words, which is what the `served_bits` input `served` counts, so it returns that input."""

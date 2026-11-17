@@ -1,3 +1,3 @@
-# The served run of record that `verity bench inference_only` reads where no --from names a record (record.of_record):
+# The workload of record that `verity bench inference_only` reads where no --from names a record (record.of_record):
 # one key, `record`, the path of the run's directory or of its out/, relative to the repository's root or absolute.
 # With no `record` the command reads no record, as it does when this file is absent.

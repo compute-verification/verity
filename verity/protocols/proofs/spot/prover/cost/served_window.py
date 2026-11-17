@@ -1,4 +1,4 @@
-"""The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
+"""The workload's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window, cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
 (`n b(s) h`, paid on every proof block, sampled or not) at two readings of h, a hashed byte's cost; and the second mode
@@ -456,7 +456,7 @@ def _g(x: float) -> str:
 
 
 def render(out: dict) -> str:
-    lines = [f"# Served window, Llama-3.2-1B int8 T 8,192: proof-block size in two modes and under a code-based commitment "
+    lines = [f"# Workload, Llama-3.2-1B int8 T 8,192: proof-block size in two modes and under a code-based commitment "
              f"(δ = 2^-40, ε = {EPS:.0%}, ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
     lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h, hm96's "
                  "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "

@@ -257,7 +257,7 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     """The request's words: the gate's scan rehearsal, or its relay session where ``a`` names a ``client_port``
-    (`certifier_piece.py front --session`: the relay kept up for the served run's own load, no traffic of ours)."""
+    (`certifier_piece.py front --session`: the relay kept up for the workload's own load, no traffic of ours)."""
     tick = getattr(a, "bucket_ms", None)
     if getattr(a, "client_port", None) is not None:
         return ["relay-session", "--peer", a.peer, "--port", str(a.port), "--client-port", str(a.client_port),

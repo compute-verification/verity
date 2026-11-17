@@ -1,4 +1,4 @@
-"""A network attester run (`network_attester_serve.py rehearse`'s files) over a served window's traffic, for `a5_network_attester.py --run`: the requests of
+"""A network attester run (`network_attester_serve.py rehearse`'s files) over a workload's traffic, for `a5_network_attester.py --run`: the requests of
 a `verity-vllm serve-openai` run's closed Commit window K, sent through the network attester in the order the run recorded them, and an
 upstream that answers each with the tokens the server streamed it, so the network attester's cells carry that window's requests and
 responses.
@@ -19,7 +19,7 @@ responses.
     python benchmarks/one_stage/network_attester_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
     python benchmarks/one_stage/network_attester_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
-``--serve-window`` is the served run's Commit window; ``--window`` is the network attester's own, in buckets (`NetworkAttesterParams`).
+``--serve-window`` is the workload's Commit window; ``--window`` is the network attester's own, in buckets (`NetworkAttesterParams`).
 """
 from __future__ import annotations
 
@@ -207,7 +207,7 @@ def parser() -> argparse.ArgumentParser:
     e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the network certifier run")
     for q in (e, r):
         q.add_argument("--serve-run", required=True, type=Path, help="a serve-openai run dir (serve.json, requests.jsonl)")
-        q.add_argument("--serve-window", required=True, type=int, help="the served run's closed Commit window K")
+        q.add_argument("--serve-window", required=True, type=int, help="the workload's closed Commit window K")
         q.add_argument("--token-ms", type=float, default=20.0, help="milliseconds between a response's events")
     e.add_argument("--listen", required=True, type=ws.cli._address, help="HOST:PORT (port 0: any)")
     r.add_argument("--out", required=True, type=Path)

@@ -1,4 +1,4 @@
-"""The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
+"""The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed workload's real rows, proved in zero
 knowledge: the window's P / G units by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through
 N2-ZK's audit path (`verity/protocols/resource_accounting/network/prover/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
 

@@ -1,5 +1,5 @@
 """`verity bench compute`, the compute benchmark: its metric is the share of a served model's multiply-accumulates
-(MACs) that Pearl+ credits, over the tokens one served run served: the MACs the Pearl+ verifier credits over the MACs
+(MACs) that Pearl+ credits, over the tokens one workload served: the MACs the Pearl+ verifier credits over the MACs
 the model computes on those tokens, as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its
 target (`TARGET`). An answer that isn't an accept, is a test instance's (`profile.test_instance`), or that the record
 holds no Lean verdict of, prints no number and exits 1.

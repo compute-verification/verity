@@ -42,7 +42,7 @@ each step's events in four passes; the k-th event of a name in the step is occur
 A row whose Values are rows r0.. of the runtime tensor (`runtime_rows`) binds like any other; the binding map starts each request's
 entry at row r0 of its share (`runtime_place`).
 
-A request-owned row (`format.RUN_FAMILY`: a value the served run decides for one request, `<op_path>/<member>`) binds only by its label,
+A request-owned row (`format.RUN_FAMILY`: a value the workload decides for one request, `<op_path>/<member>`) binds only by its label,
 never a tuple slot; when several requests' rows spell it at one step (two rows at one position of one layer), occurrence k binds it for
 the k-th of them in the step's row order (`owners`), the order the collector commits its rows in.
 

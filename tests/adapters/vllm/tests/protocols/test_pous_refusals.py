@@ -179,7 +179,7 @@ def test_the_layers_pous_encodes_are_vllms_linear_layers_that_hold_a_weight(monk
 def _lean(monkeypatch, tmp_path):
     """Stand-ins for a period's parties and tools: the challenger's session in this process (`test_pous_option`'s), and
     `period.serve` answering for the tool named ``RUN`` as ``say["run"]`` makes of the Python's answer, and for any other
-    as ``say["setup"]``.  Returns ``say``, the Python's runs and what was served, each in order."""
+    as ``say["setup"]``.  Returns ``say``, the Python's runs and what the workload served, each in order."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CR, "session", session)
     audit, runs, served = period_prover.audit, [], []

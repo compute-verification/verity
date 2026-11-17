@@ -290,7 +290,7 @@ class RequestRecord:
     def check(self, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None,
               prefix_sources: Mapping[str, RequestRecord] | None = None, finish: Mapping[str, Any] | None = None,
               decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
-        """The record against what was served (the module docstring); ``seed`` the seed the request carried into the
+        """The record against what the workload served (the module docstring); ``seed`` the seed the request carried into the
         engine, ``prefix_sources`` the records a cached prefix may have come from, ``finish`` how the stream ended
         (`finish_problems`)."""
         t = [int(x) for x in prompt_ids] + [int(x) for x in streamed_ids]

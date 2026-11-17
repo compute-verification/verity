@@ -2,7 +2,7 @@
 
 H1 tile proof blocks through SPOT: a recorded or served int8 Llama-3.1-8B window's proof blocks sampled by the live coin,
 proved by Flock `--zk` under the ZK server and checked by the Lean verifier against the verifier's own public files,
-beside controls each refused or rejected by the check it breaks; and the proof blocks a served window's own sampling coin
+beside controls each refused or rejected by the check it breaks; and the proof blocks a workload's own sampling coin
 selects, read from that window's run.
 
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes: `job` at K = 4096 wants hundreds of GB
@@ -11,7 +11,7 @@ selects, read from that window's run.
 ## Runner
 
 `run.sh JOB [ARGS...]` starts one job's script with the arguments and environment as given; run it from the source tree,
-as a `research run`'s command (or, for PoUW's piece of a served window, `benchmarks/one_stage/served_verdicts.sh`'s).
+as a `research run`'s command (or, for PoUW's piece of a workload, `benchmarks/one_stage/served_verdicts.sh`'s).
 Each script's header has its full command, its knobs (`H1_*`, `DC_*`) and what it writes.
 
 ~~~text
@@ -22,16 +22,16 @@ research run --on MACHINE --project verity --source . --cwd source --mem-gb G --
 | job | what it runs | writes |
 |---|---|---|
 | `job` | one recorded window: `layer.py` records two windows' int8 codes from the checkpoint, `recorded.py prepare` commits, serves, samples, opens and stages, one loopback `--zk` session a statement, the Lean checks of the plan and the selftest build's controls, then `recorded.py summarize` | `$OUT/summary.json`, and the sessions', Lean checks' and controls' logs under `$OUT` |
-| `live` | a served window's live proof blocks, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
-| `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected proof blocks, `out/program/window-program.json.gz`, a log a negative |
+| `live` | a workload's live proof blocks, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
+| `served` | `served.py` over a workload's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected proof blocks, `out/program/window-program.json.gz`, a log a negative |
 
 One more job has no row, because its name is a term the Glossary retires; `run.sh` with no argument lists every job. It
-is PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's proof blocks staged on the
+is PoUW's piece of a workload with its sampled proof blocks proved: each sampled call's proof blocks staged on the
 window's registered values, a session a statement, the statements file checked as credit does, then
 `served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
 
 One more job has no row for the same reason: its name is that job's with `_cost` after it. It is what the ZK server
-adds to that job's sessions: on its test's served window, once under the ZK server and once on the `--zk` path without
+adds to that job's sessions: on its test's workload, once under the ZK server and once on the `--zk` path without
 it, each arm stages, proves and has credit check the window's sampled calls. It writes `out/summary.json` (each arm's
 sessions: the job cgroup's CPU seconds over each, both sides' timing records, the live verdicts, credit's line, and the
 peak RSS summed over the ZK server's processes) and each arm's log and piece directory under `out/`.

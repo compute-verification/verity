@@ -1,4 +1,4 @@
-"""The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed served window's real
+"""The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed workload's real
 rows, proved in zero knowledge: the window's P / G blocks, each a unit whose committed served rows are its leaf of the
 served-rows registration, read through the Lean verifier's registered reads, by Flock `prove --zk` behind the Lean
 ZK server and held by Lean `verify --zk --registered`, through N2-ZK's audit path (`served_tie_zk`'s stager and scan); and

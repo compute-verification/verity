@@ -4,7 +4,7 @@ batch rules, by phase, in wall seconds and resident memory.
 
 A window is its requests' (arrival step, prompt length, max_tokens), greedy, scheduled as vLLM V1 schedules them (no preemption,
 no prefix cache) at class G's 2,048 tokens a step and 256-row prefill chunks. A request Program reads only φ and its schedule
-(LP, T, its chunks and launches), never its prompt's values, so a window's Program digests are those of the served window it
+(LP, T, its chunks and launches), never its prompt's values, so a window's Program digests are those of the workload it
 reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
 
     research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&

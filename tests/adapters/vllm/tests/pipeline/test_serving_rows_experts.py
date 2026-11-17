@@ -483,7 +483,7 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
 
 
 def test_two_fused_templates_reading_one_table_declare_and_commit_it_once(monkeypatch):
-    """A served window holds one projection's fused blocks on two kernels (here w2's QGMMA block and its MMA v2 twin, each one
+    """A workload holds one projection's fused blocks on two kernels (here w2's QGMMA block and its MMA v2 twin, each one
     token's pairs), both reading the same tables: each table is declared and committed once, each template's reads and
     openings of it its own, and the record's check (`interface.listed_reads`) and the verifier's count accept it."""
     pr, ns = PROJ["w2"], build(monkeypatch, "w2")

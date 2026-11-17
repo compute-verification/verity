@@ -167,7 +167,7 @@ for s in map(int, steps.split(",")):
     same = got is not None and want is not None and len(got) == len(want) and all(
         any(g == w or g.startswith(w + "-") for g in got if got[g] == n) for w, n in want.items())
     res[s] = {"same_rows": same, "served": want, "captured": got}
-    print(f"spot: step {s}: the captured step's rows {'are' if same else 'are NOT'} the served window's step {s}'s")
+    print(f"spot: step {s}: the captured step's rows {'are' if same else 'are NOT'} the workload's step {s}'s")
 json.dump(res, open(out, "w"), indent=1)
 EOF
 mkdir -p "$OUT/commit"

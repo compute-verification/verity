@@ -6,7 +6,7 @@ parameters, canonical), commitment.bin (the registration record) and blobs.txt (
 
 With --members, the case is a stand-in window's (`benchmarks/one_stage/members_standin.py`'s: M members of one unit
 over two templates, half each, under ``stratified-rate:1/1``, so every member is sampled and shares its template's circuit
-file), audited as a served window's audit step runs it (``records_audit.py audit``
+file), audited as a workload's audit step runs it (``records_audit.py audit``
 on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) into DIR/audit, which writes the case. With --case, it
 is one a driver wrote (an audit's ``window/case-v2.json``). Either way v2's ``check`` must accept the case
 (`case_files.run`, each blob under a short name), so the pass `members-files-time` times is an accepted audit's; it

@@ -36,7 +36,7 @@ def markdown(doc: dict[str, Any]) -> str:
     runs = doc.get("run_params")
     h = doc.get("headline") or {}
     st = doc.get("staged")
-    shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'served window' if st.get('window') else 'generated values'})"
+    shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'workload' if st.get('window') else 'generated values'})"
              if st else f"K = {p.get('K')}, N = {p.get('N')}")
     lines = [f"Recursion bench: {shape}, oprove modes {p.get('modes', '?')}, "
              + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))

@@ -1,4 +1,4 @@
-"""A served window's two-stage audit as `two_stage.py` drives it: one size class's boundary docket
+"""A workload's two-stage audit as `two_stage.py` drives it: one size class's boundary docket
 (`verity_vllm.pipeline.boundary_rows`) on its two-stage stream, sampled on a test's own challenger (`fake_challenger`);
 the replay side's stream again from ``stage1.json`` alone, sampling the same spans on the bytes the first stage read; the
 interior docket over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what

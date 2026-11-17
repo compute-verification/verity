@@ -430,13 +430,13 @@ def manifests(passes: Path) -> tuple[list[Path], str | None]:
 def retention(passes: Path, served: dict) -> tuple[list[Path], list[int], tuple[int, ...]]:
     """The passes the verdict reads, their rounds (each one's place among ``served.json``'s passes with calls) and the
     rounds dropped: ``DIR/retention.json``'s (`retain`), else every pass with calls.  ValueError on a retention whose
-    rounds are not in order, distinct, and the served run's."""
+    rounds are not in order, distinct, and the workload's."""
     held = [p for p in served["passes"] if p["units"]]
     rounds = list(range(len(held)))
     if (passes / RETENTION).exists():
         got = json.loads((passes / RETENTION).read_text())["rounds"]
         if not (all(type(s) is int for s in got) and got == sorted(set(got)) and set(got) <= set(rounds)):
-            raise ValueError(f"the retention's rounds {got} are not distinct rounds of the served run's {len(held)}, in order")
+            raise ValueError(f"the retention's rounds {got} are not distinct rounds of the workload's {len(held)}, in order")
         rounds = got
     return [Path(held[s]["manifest"]) for s in rounds], rounds, tuple(s for s in range(len(held)) if s not in rounds)
 
@@ -545,7 +545,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     held = [p for p in served["passes"] if p["units"]]
     if bad := [s for s in args.drop if not 0 <= s < len(held)]:
-        print(f"retain FAIL: no round {bad[0]} among the served run's {len(held)} passes with calls", flush=True)
+        print(f"retain FAIL: no round {bad[0]} among the workload's {len(held)} passes with calls", flush=True)
         return 1
     why = {s: "dropped by the prover (--drop)" for s in args.drop}
     if args.volunteer:

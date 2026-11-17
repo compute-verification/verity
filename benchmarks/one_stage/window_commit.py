@@ -1,4 +1,4 @@
-"""`prove_path.py` with what its window-commit takes of the network attester for a served window: the reader of the
+"""`prove_path.py` with what its window-commit takes of the network attester for a workload: the reader of the
 network attester run the serve kept (`certifier_piece.kept_ingress`) and the name network attestation's scan reads the window's opened
 scan state under (`scan_zk.SCAN_STATE_FILE`). SPOT imports neither network attestation nor a benchmark, so the command takes
 them from here, where both may be imported (`served_verdicts.sh`'s V3c window-commit).

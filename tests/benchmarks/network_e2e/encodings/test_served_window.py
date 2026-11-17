@@ -1,4 +1,4 @@
-"""vLLM's served run in `fixtures/vllm-8eb1` (with its `meta.json`): it serves without prefix caching,
+"""vLLM's workload in `fixtures/vllm-8eb1` (with its `meta.json`): it serves without prefix caching,
 the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
 scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
 fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
@@ -119,7 +119,7 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     chain (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's
     max_tokens and output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own
     statics (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's
-    carry and refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
+    carry and refuses one bit less. The workloads name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
     except those the certified tick admits, which name none. code_v1's term
 width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
 at each power of two to 2^32 − 1."""

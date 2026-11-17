@@ -1,4 +1,4 @@
-"""The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
+"""The workload's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each demo's subprotocols and the
 configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
 on a machine (`live`). Pearl+ has no piece yet, so `verity run` refuses remote by name (``no-party``).
@@ -19,7 +19,7 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
-- ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
+- ``check``: the verifier's onsite check, `served_verdicts.py record` over the workload's public record, whose
   composed verdict is the period's.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
@@ -27,7 +27,7 @@ the party it reaches (``reaches``, default its own), ``party.component.key`` eac
 starts (``unbound``) and the ``optional`` ones used when bound. `describe` is what `verity run --dry-run` prints of it.
 
 The phases: Registration (the site, θ and the builder B: the weights registration before the first request, and the
-committer's compiler), then Execution (the served window), then Verification (each component's commitment, challenge,
+committer's compiler), then Execution (the workload), then Verification (each component's commitment, challenge,
 proof or timed response, and validation: the pieces and the onsite check).
 """
 from __future__ import annotations
@@ -87,11 +87,11 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _design(sampling_design: str, params: Mapping[str, Any]) -> None:
-    """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
+    """The workload's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(sampling_design)
     if parse_rate(sampling_design) is None and (strata is None or strata[0]):
-        raise Refused("law", f"the served window's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {sampling_design!r}: its "
+        raise Refused("law", f"the workload's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {sampling_design!r}: its "
                              "audit states it to its stream, which refuses a fixed count (subset:K, stratified:K, work:K), "
                              "since K of N falls as the prover pads the N it registers. In place of a count K, state K over "
                              "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
@@ -113,7 +113,7 @@ LOADS = ("varied", "fixed")
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The served window's public shape: the model at its revision and precision, the window's request ``slots``, its
+    """The workload's public shape: the model at its revision and precision, the window's request ``slots``, its
     engine steps (``window-steps``) and its ``load`` (served_verdicts.sh's LOAD)."""
     known = {"model", "revision", "precision", "slots", "window-steps", "load"}
     if extra := sorted(set(params) - known):
@@ -260,7 +260,7 @@ class Session:
     """A protocol whose parties the table starts through the runtime (module docstring): its `ProtocolDef`'s halves,
     each a ``module:attribute`` (`_protocol_def`), whose manifests are one; each configuration party's role in it
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
-    configuration party that listens (``listener``, the auditor's), and whether the run ends before the served window
+    configuration party that listens (``listener``, the auditor's), and whether the run ends before the workload
     starts (``before``) or runs beside it. ``reads`` gives a configuration party's start, beside its bindings, the state
     directory of another party's run on the same machine: binding name -> (component, party). ``starts`` are a role's
     starts the table makes, over its halves': a start handed what its protocol's code may not load."""
@@ -301,7 +301,7 @@ def held(piece: Piece, role: Role) -> Held:
 
 @dataclass(frozen=True)
 class Piece:
-    """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
+    """One party's piece of the workload (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
     variables for it from the configuration, the component's checked parameters and the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
     ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. The workload's piece names the
@@ -398,13 +398,13 @@ WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_
                 "verity.protocols.resource_accounting.memory.pous.prover.wipe_prover:PROTOCOL"),
                {MEMORY_ATTESTER: WP.CHALLENGER, PROVER: WP.PROVER}, {WP.CHALLENGER: (sw.raw_clock_ns, sw.CLOCK)},
                MEMORY_ATTESTER, before=True)
-#: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
+#: PoUS's timed rounds (`challenger_session`'s parties), beside the workload: the challenger's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
                 "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
                {MEMORY_ATTESTER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_ATTESTER)
-#: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
+#: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the workload, on
 #: the verifier's monotonic clock; the verifier reads the memory attester's PoUS key from that party's run beside it
 #: on the auditor's device (``challenger``)
 POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
@@ -418,7 +418,7 @@ POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_pa
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
 #: network attestation's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
-#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the workload; CLASSES holds it beside
 #: served_verdicts.sh's default class
 SCAN_CLASS = "8,32,4,4,16"
 
@@ -501,7 +501,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
 }
 WORKLOADS: dict[str, tuple[Workload, Piece]] = {SERVED_WINDOW: (SERVED, SERVE)}
-#: no party here runs as an entry of its own: every piece is the served window's, the gate's, the runtime's or the check's
+#: no party here runs as an entry of its own: every piece is the workload's, the gate's, the runtime's or the check's
 ORDER: tuple[str, ...] = ()
 
 
@@ -530,7 +530,7 @@ JOINED = ("SERVE_ARGS",)
 
 
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
-    """The served window's runner's variables: the configuration's hash and its `[[pin]]` entries
+    """The workload's runner's variables: the configuration's hash and its `[[pin]]` entries
     (``VERITY_CONFIGURATION``, ``VERITY_PINS``), which every device's `trusted-device` premise reads, and every listed
     piece's hooks, whichever party's they are, since the prover's pieces reach the auditor's sides through their
     bindings. A variable of `JOINED` is every piece's flags,
@@ -619,7 +619,7 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 
 
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
+    """The workload's runner with every listed piece's hooks and no composite unless the caller asks for one
     (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment)."""
     env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
@@ -633,7 +633,7 @@ VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
-    """The verifier's onsite check: `served_verdicts.py record` over the served window's public record in ``state``
+    """The verifier's onsite check: `served_verdicts.py record` over the workload's public record in ``state``
     (``out/``, all a verifier on another machine needs of it, the prover node named by its ``machine.txt``); the
     period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed subprotocol.
     Where the configuration's product is onsite's and the composite's public output is there (``out/composite``,
@@ -704,8 +704,7 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
-    """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
-    window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
+    """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the workload and the others' beside it; the workload when the workload's party is here; a gate's side as started by
     the gate; and the onsite check when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""

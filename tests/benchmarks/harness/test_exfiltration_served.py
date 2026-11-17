@@ -1,4 +1,4 @@
-"""`verity bench exfiltration`'s share of compute a served run measures."""
+"""`verity bench exfiltration`'s share of compute a workload measures."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
                      ({"stock": None, "serving_cost": -1}, "holds a serving cost of -1: a fraction over -1")):
         with pytest.raises(ValueError, match=f"{SERVED['run']}'s record {why}"):
             E.served_share(SERVED | bad)
-    with pytest.raises(ValueError, match="a served run's record is one JSON object, not list"):
+    with pytest.raises(ValueError, match="a workload's record is one JSON object, not list"):
         E.served_share([SERVED])
 
 

@@ -1,8 +1,8 @@
 """`inference-only-record-check`, the record form (the Lean's `Record` and `RecordCount`) on one case, and
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/served_record_case.py`, which writes that case from a
-served run's files with the reference's verdicts on it.
+workload's files with the reference's verdicts on it.
 
-A made run's files stand in for a served run's: the record difftest's vectors' served class's shape at two slots and
+A made run's files stand in for a workload's: the record difftest's vectors' served class's shape at two slots and
 three positions, its Program, circuit record, registration log, limits and count's limits each written as a file the
 way a serve writes them. The first test is that the script reads them back as the vectors' own case, pins
 included, and that its verdicts are the reference's. The second is each option's case, and the third `--format`'s on

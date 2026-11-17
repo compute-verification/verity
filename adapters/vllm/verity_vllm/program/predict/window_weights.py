@@ -146,8 +146,7 @@ def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
 
 def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[Any, list[tuple[str, list[int], int]], dict[str, int],
                                                                              dict[str, list[str]]]:
-    """`_fields`, the weight parameters the class circuit registers at ``grain`` and those of ``served_params`` (a served
-    window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
+    """`_fields`, the weight parameters the class circuit registers at ``grain`` and those of ``served_params`` (a workload's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
     words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
     every = lower(registered, WEIGHTS_CLASS, None, grain, wired=False).circuit.registered.params
@@ -197,7 +196,7 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
     A field held to an analytic table (the rotary table, within a bound of config.json's function) has its entry from
     its declared shape, the verifier never reading its words; a parameter whose field has neither is ``unrooted`` with
     why, and its reads stay free. The weights record is the model's, one at every class; its parameters are the grain's,
-    which the record names, and ``served_params``, a served window's record's (`_weights`), which its entries name."""
+    which the record names, and ``served_params``, a workload's record's (`_weights`), which its entries name."""
     r, fields, params, of = _weights(registered, grain, served_params)
     shapes: dict[str, dict[str, Any]] = {}
 
@@ -218,7 +217,7 @@ def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAI
     """The weights a committer serves, committed (a window's committer or the registration's): each weight
     parameter the class circuit registers at ``grain`` or ``served_params`` names (`_weights`) whose field ``served`` names
     (its words, as `check.weights_of_record` composes the field), its `weight_value` under ``key`` at its nonce
-    (`weight_nonces`), its rows held with ``keep_rows`` (a served window's committer, `serving_rows.after_commit`'s
+    (`weight_nonces`), its rows held with ``keep_rows`` (a workload's committer, `serving_rows.after_commit`'s
     ``weight_values``). So a window's root for a weight is the registered one (`weights_registration`, given the same
     ``served_params``, whose nonces are of them all) exactly when it serves the registered words, and the verifier's pin
     holds the reads of no other (`interface.input_count`)."""
@@ -246,7 +245,7 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
     """The committer's registration of the weights it serves (`records.weights_registration`), written once per model and
     key before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
-    registers at ``grain``, and each of ``served_params`` (a served window's record's, `_weights`), its `weight_value` under
+    registers at ``grain``, and each of ``served_params`` (a workload's record's, `_weights`), its `weight_value` under
     ``key`` at its nonce (`weight_nonces`), its entry core's `registered.Registered.entry()`. The key never leaves the
     committer: the registration names no salt.
 

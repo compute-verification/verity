@@ -177,7 +177,7 @@ def _security(bound: Mapping | None) -> list[str]:
 
 
 def _share(cs: Mapping) -> tuple[list[str], list[str]]:
-    """The share of compute a served run measures (`build`'s `compute_share`), beside the given share every other
+    """The share of compute a workload measures (`build`'s `compute_share`), beside the given share every other
     figure is read at: a line, and with a run's record a table of its parts."""
 
     given = f"the given {_pct(cs['given']['share'])} of total compute ({cs['given']['mark']})"

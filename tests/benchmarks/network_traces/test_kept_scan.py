@@ -1,4 +1,4 @@
-"""`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the attester front kept
+"""`prove_path.kept_scan`: a workload's scan state and slots off the network attester's run the attester front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_attester_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and

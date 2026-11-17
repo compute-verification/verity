@@ -28,7 +28,7 @@
 #     PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json (rate:1/1); with PP_PLAIN=1, whose
 #     sample is stratified, ..._step1_all_stratified.json and PP_FORGED_PARTITION=..._step24_stratified.json (stratified-rate:1/1).
 #     With PP_SERVE_STANDIN=1, the same
-#     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
+#     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a workload.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest partition is PP_PARTITION (default the Llama
@@ -38,12 +38,12 @@
 #     PP_ONLY=honest prints a PROVE-PATH line saying "no forged run". The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
-#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
+#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a workload, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the docket and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
-#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
+#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or workload's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
@@ -75,7 +75,7 @@
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
 #     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
-#   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/served-windows/rank0.
+#   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/workloads/rank0.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.

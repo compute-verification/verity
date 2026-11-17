@@ -128,7 +128,7 @@ MODEL = "LLAMA31_8B_INT8"
 def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     """The CPU phase: `pouw_h1.FILL`'s declared window Program over Llama-3.1-8B (`pouw_h1_served.declared`, no window's
     prefix), written as its descriptor's canonical JSON, gzipped (``d/PROGRAM``; the JSON's SHA-512 is its
-    `program_digest`: the period's ``--circuit``), and its layout (``d/PROGRAM_META``), which the served window's must
+    `program_digest`: the period's ``--circuit``), and its layout (``d/PROGRAM_META``), which the workload's must
     equal."""
     import gzip
     import resource

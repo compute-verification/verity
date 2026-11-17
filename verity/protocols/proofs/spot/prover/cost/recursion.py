@@ -76,7 +76,7 @@ def render(s: dict, deps: list[dict], rows: list[dict], per_window: float) -> st
     st = s.get("staged") or {}
     lines = [f"# One recursive session's cost per monitoring period ({per_window:g} a machine-window)", "",
              f"Session: {st.get('n', '?')} x {st.get('unit', '?')} (m = {st.get('m', '?')}), "
-             f"{'a served window' if st.get('window') else 'generated values'}; verdict ok = {s['ok']}.", "",
+             f"{'a workload' if st.get('window') else 'generated values'}; verdict ok = {s['ok']}.", "",
              "Measured, one session on the run's CPU node (s): "
              + ", ".join(f"{k} {v:.4g}" for k, v in {**s["prover"], **s["auditor"]}.items())
              + f"; V* statements {s['statements']}; the non-recursive --zk session over the same units "

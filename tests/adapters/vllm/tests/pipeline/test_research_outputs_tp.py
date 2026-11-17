@@ -270,4 +270,4 @@ def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
         assert "evidence/match/run.json" in doc["artifacts"]
         assert not {f.removeprefix("evidence/") for f in doc["artifacts"]} & set(PRIVATE_FILES), doc["artifacts"]
     assert [rel for rel in PRIVATE_FILES if not ro.private(rel)] == [] and [r for r in research_result.RECORDS if ro.private(r)] == []
-    assert [n for n in serve_commit.MIRRORED if ro.private(n)] == [], "a served run's $OUT gets no request value"
+    assert [n for n in serve_commit.MIRRORED if ro.private(n)] == [], "a workload's $OUT gets no request value"

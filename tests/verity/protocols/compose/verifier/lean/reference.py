@@ -367,7 +367,7 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SPOT = Ported(SPOT_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-#: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
+#: Pearl+'s run verdict, remote's work in its composite of record: on the workload a test records for it
 #: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
 #: to any other case
 PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
@@ -376,7 +376,7 @@ PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
 
 
 def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
-    """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
+    """Pearl+'s outcome on a workload whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
     ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
     0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the samples
     asked for, the tiles sampled and the passes (`profileJson`)."""

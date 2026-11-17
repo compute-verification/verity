@@ -59,7 +59,7 @@ goal = "benchmarks/proof-system-performance"
 
 # `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member
 # "flock-zero-knowledge") and last the sampling layer (member "sampling") (benchmarks/prove/README.md's "The
-# proof benchmark by layer"). Each run its command takes is a layer's run of record (a served run of layer 0's 880 RoPE
+# proof benchmark by layer"). Each run its command takes is a layer's run of record (a workload of layer 0's 880 RoPE
 # heads of Llama 3.2 1B int8), which its owner fills in: the numbers are those runs', so the loop doesn't rerun them.
 [[metric]]
 id = "benchmarks/proof-layer-prover-seconds"
