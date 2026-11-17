@@ -66,7 +66,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
-    assert set(GPUS) == {"rtx-pro-6000", "h200", "b200"}
+    assert set(GPUS) == {"rtx-pro-6000", "h200", "h100", "b200"}
 
 
 def test_every_toml_spec_strictly_loads():
