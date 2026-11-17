@@ -40,7 +40,7 @@ def main(argv=None) -> None:
     ap.add_argument("--request", choices=figure1.REQUESTS, default="census",
                     help="a request's tokens: the census's mean, or the workload card's request")
     ap.add_argument("--served", choices=figure1.SERVED, default=None,
-                    help="the tokens a request serves: at most the certifier card's response cap (the default where "
+                    help="the tokens a request serves: at most the network attester card's response cap (the default where "
                          "the model's card registers one), or every one of its tokens")
     ap.add_argument("--workers", type=int, default=os.cpu_count(),
                     help="processes planning Figure 1's points and running Lean's checks of them (default: every CPU)")
