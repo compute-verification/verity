@@ -20,6 +20,6 @@ The last four are commands, and each one's docstring has its arguments.
   `tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_v3_vectors.json` (`stream.py --vectors`) and
   `tests/verity/circuits/fixtures/memcheck_pool.json` (`vectors.py`).
 - **Loaded by:** nothing. The tests that read the two fixtures load no code from here.
-- **Loads:** the certifier's cache step and compile slices (`verity.protocols.resource_accounting.network.prover`),
+- **Loads:** network accounting's cache step and compile slices (`verity.protocols.resource_accounting.network.prover`),
   `verity.protocols.resource_accounting.network.verifier.head_check`, `verity.circuits.defs`, `verity.commitments.gates`, and the
   scheduler replay with its traces under `benchmarks/network_e2e/encodings`.

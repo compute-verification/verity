@@ -38,6 +38,7 @@ from typing import Any
 
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
+from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
 
 #: the serve dir's record of the day's declaration
@@ -135,7 +136,7 @@ def declare(opts: Any, out: Path) -> Day | None:
     params = None
     if d.day_params:
         try:
-            params = G.params_of(json.loads(Path(d.day_params).read_text()))
+            params = G.params_of(json.loads(M.read(Path(d.day_params), "MonitoringPeriodDeclaration")))
         except (OSError, ValueError) as e:
             raise UsageError(f"--day-params {d.day_params}: {e}") from None
     try:
@@ -184,7 +185,7 @@ def _read(path: Path, params: tuple[str, S.Auditor] | None) -> tuple[str, list[G
         if params is None:
             raise ValueError("no log there yet: a new log takes its composite from --day-params")
         return params[0], []
-    composite, log = G.log_of(json.loads(path.read_text()))
+    composite, log = G.log_of(json.loads(M.read(path, "MonitoringPeriodDeclaration")))
     if params is not None and params[0] != composite:
         raise ValueError(f"the log is {composite}'s, not --day-params' {params[0]}'s")
     return composite, log
