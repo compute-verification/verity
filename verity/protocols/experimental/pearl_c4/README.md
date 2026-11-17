@@ -3,7 +3,7 @@
 Pearl-C4 (`pearl-c-nvfp4-v0`, with `pearl-c-mxfp4-v0` as a contrast line) is PoUW's Pearl-C with the FP8 product
 replaced by the block-scaled FP4 one of sm_120 (`mma.sync kind::mxf4nvf4`): the noise enters inside one FP4 atom per
 element, one noisy cast forms each operand, and the BF16 clean-up is checked as in Pearl-C. It is a protocol being
-tried: no demo lists it, and its guarantee rests on a premise that is stated and not proved.
+tried: no application lists it, and its guarantee rests on a premise that is stated and not proved.
 
 ## What is here
 

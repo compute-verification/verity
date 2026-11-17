@@ -25,7 +25,7 @@ members = [
     "cluster-tests",
     "core-identity",
     "memory-attester-lean",
-    "pous-check",
+    "pous-verifier",
     "research",
     "research-tests",
     "verity",
@@ -65,7 +65,7 @@ members = [
     "verity-ops",
     "verity-ops-tests",
     "verity-pouw-benchmarks",
-    "verity-pouw-check-difftest",
+    "verity-pouw-verifier-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
     "verity-proof-throughput-tests",
@@ -1490,7 +1490,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pous-check"
+name = "pous-verifier"
 version = "0.1.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check" }
 dependencies = [
@@ -2862,7 +2862,7 @@ requires-dist = [
 provides-extras = ["research", "exact-kit"]
 
 [[package]]
-name = "verity-pouw-check-difftest"
+name = "verity-pouw-verifier-difftest"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
 

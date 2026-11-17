@@ -371,8 +371,8 @@ The table is followed by its JSON line, and under a research run, or with `$OUT`
 Its schema is `verity-bench/proof-layers/v2`: `{schema, audit, results}`, one object for each layer's benchmark result.
 v1 named that list `rows`; nothing reads either by key.
 
-Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s metrics through the
-kit's writer, each a figure a sampled proof block:
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), as `benchmarks/one_stage/proof_layers.sh`'s last step, their
+`command`, it also writes three of `metrics.toml`'s metrics through the kit's writer, each a figure a sampled proof block:
 
 | id | figure |
 |---|---|

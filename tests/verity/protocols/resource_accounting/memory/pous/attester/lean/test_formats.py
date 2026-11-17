@@ -23,7 +23,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import streamed_w
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "memory-challenger-difftest"
+EXE = "memory-attester-difftest"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, a refusal of its own (`ValueError`, which
 #: `InvalidArtifact` is), an empty `source` (`TypeError`) and a width overflowed (`OverflowError`).
 REFUSALS = (D.Reject, ValueError, TypeError, OverflowError)

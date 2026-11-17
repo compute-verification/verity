@@ -46,7 +46,7 @@ def layer {Ω U V : Type} {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
   rel x w i v := ∀ u, drawn x w u → sessOf x w u = i → rel x w u (v (key u))
   right _ _ := True
 
-open PouwCheck Properties.Pouw.MonitoringPeriod in
+open PouwVerifier Properties.Pouw.MonitoringPeriod in
 /-- **PoUW's check as a sampled layer**: window `w` is accepted where PoUW's deployed check accepts it, and its sampled
 proof blocks are the units the check publishes as sampled (`Public.drawn`), each read at its index. -/
 def checkLayer {C Ξ V : Type} {m Np n nπ : ℕ} (p : Params)
@@ -70,7 +70,7 @@ statement that fails at its openings with probability at most `δ` (`ResourceAcc
 `ResourceAccounting.Guarantees.TS.SessionSoundAt` concludes of Flock sessions), then in every window the check accepts and
 some unit it publishes as sampled fails its relation with probability at most `n_π · δ` (`ServiceSound`). -/
 def CheckProofSystemSound : Prop :=
-  ∀ {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
+  ∀ {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwVerifier.Params)
     (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
@@ -82,7 +82,7 @@ def CheckProofSystemSound : Prop :=
 population of 144 units and one session a window, has PoUW's deployed check accepting the window on every path and its
 layer, under relations every opening meets, sound at `0`. -/
 def CheckProofSystemSoundHonest : Prop :=
-  ∃ (m : ℕ) (p : PouwCheck.Params)
+  ∃ (m : ℕ) (p : PouwVerifier.Params)
     (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
     (∀ x w, Properties.Pouw.MonitoringPeriod.Accepts p (ws.reg x w) (ws.ev x w)) ∧
       ResourceAccounting.Assumptions.TS.ProofSoundAt
@@ -92,7 +92,7 @@ def CheckProofSystemSoundHonest : Prop :=
 has PoUW's deployed check accepting and publishing a sampled proof block on every path, so with relations every opening fails
 `ServiceSound` fails there at `0`. -/
 def CheckProofSystemSoundNontrivial : Prop :=
-  ∃ (m : ℕ) (p : PouwCheck.Params)
+  ∃ (m : ℕ) (p : PouwVerifier.Params)
     (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
     ¬ Properties.Pouw.MonitoringPeriod.ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0
 
