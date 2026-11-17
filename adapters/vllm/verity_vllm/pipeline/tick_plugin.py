@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import queue
 from collections.abc import Callable, Mapping
@@ -25,11 +26,13 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.serve_admit import (LOST, RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install,
                                               open_watermark, release_of)
 
-__all__ = ["OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "TickFeed", "register", "route_of", "tick_config",
-           "unseeded"]
+__all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "RuleGate", "TickFeed", "register",
+           "route_of", "tick_config", "unseeded"]
 
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
+#: when T catches up: ``quiet``, the registered rule (only with nothing running or waiting), or ``marks`` (`RuleGate`)
+CATCH_UPS = frozenset({"quiet", "marks"})
 #: the OpenAI server's routes whose request body carries sampling parameters, which `TickFeed` reads (`unseeded`)
 SAMPLED_PATHS = frozenset({"/v1/completions", "/v1/chat/completions"})
 #: the routes `TickFeed` passes unread besides `SAMPLED_PATHS` and the watermark's: none reaches the engine
@@ -39,15 +42,54 @@ OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics
 def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     """``VERITY_TICK``'s JSON object (in ``environ``, by default the process environment), None where it isn't set:
     ``bucket_us``, ``sat_us`` and ``free_us`` (the `serve_admit.Tick`), ``hold_ms`` (5000 by default), ``feed`` (the file
-    `TickFeed` appends to and `register`'s gate reads) and ``log`` (a directory for each gate's ``tick.PID.jsonl``,
-    optional)."""
+    `TickFeed` appends to and `register`'s gate reads), ``log`` (a directory for each gate's ``tick.PID.jsonl``,
+    optional), and a rule other than the registered one, ``token_ns`` and ``catch_up`` (`RuleGate`; 0 and ``quiet``,
+    the registered rule, by default)."""
     cfg = settings.get(TICK_ENV, environ)
     if cfg is None:
         return None
     if not isinstance(cfg, dict) or not cfg.get("feed"):
         raise ValueError(f"{TICK_ENV}: a JSON object with bucket_us, sat_us, free_us and feed, not {json.dumps(cfg)[:80]!r}")
+    rule = {"token_ns": cfg.get("token_ns", 0), "catch_up": cfg.get("catch_up", "quiet")}
+    if type(rule["token_ns"]) is not int or rule["token_ns"] < 0 or rule["catch_up"] not in CATCH_UPS:
+        raise ValueError(f"{TICK_ENV}: token_ns a non-negative integer and catch_up one of {sorted(CATCH_UPS)}, not {rule}")
     return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
-            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]), "log": cfg.get("log")}
+            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]), "log": cfg.get("log"), **rule}
+
+
+class RuleGate(TickGate):
+    """`TickGate` under a tick rule other than the registered one, for measuring it. ``token_ns``: T also advances that
+    many nanoseconds for each token a step schedules. ``catch_up="marks"``: before a step at which no request waits in
+    the scheduler, T moves up to the close of the newest watermark line the gate holds; which line is the server's
+    choice, so each move logs a ``catch_up`` event with its advice bits, log₂(1 + the lines since the last such step
+    that would have moved T further)."""
+
+    def __init__(self, tick: Tick, *, token_ns: int = 0, catch_up: str = "quiet", **kw: Any) -> None:
+        self.token_ns, self.catch_up = token_ns, catch_up
+        super().__init__(tick, **kw)
+
+    def _reset(self) -> None:
+        super()._reset()
+        self.seen = -1
+
+    def ready(self, sched: Any) -> bool:
+        if self.catch_up == "marks" and self.opened is None:
+            self._pull()
+            if (self.run is not None and self.lines and sched.running
+                    and not (sched.waiting or getattr(sched, "skipped_waiting", None))):
+                m = len(self.lines) - 1
+                k = m - max(self.seen, self.tick.closed(self.T))
+                self.seen = m
+                if k > 0:
+                    self._event("catch_up", step=self.steps, T=self.T, to=self.tick.close(m), bits=math.log2(1 + k))
+                    self.T = self.tick.close(m)
+        return super().ready(sched)
+
+    def scheduled(self, sched: Any, out: Any) -> None:
+        steps = self.steps
+        super().scheduled(sched, out)
+        if self.steps > steps:
+            self.T += out.total_num_scheduled_tokens * self.token_ns // 1000
 
 
 class FeedReader:
@@ -288,7 +330,9 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
 def _gated_init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., None]:
     def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
         init(self, *args, **kwargs)
-        gate = TickGate(cfg["tick"], hold_s=cfg["hold_s"], pull=FeedReader(cfg["feed"]), log=_log_to(cfg["log"]))
+        kw = {"hold_s": cfg["hold_s"], "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}
+        rule = {k: cfg[k] for k in ("token_ns", "catch_up") if cfg.get(k) not in (None, 0, "quiet")}
+        gate = RuleGate(cfg["tick"], **rule, **kw) if rule else TickGate(cfg["tick"], **kw)
         self._verity_tick_hooks = install(self, gate)
     return __init__
 
