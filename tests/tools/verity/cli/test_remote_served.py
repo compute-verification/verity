@@ -1,0 +1,368 @@
+"""Remote's configuration (`applications/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
+every party, Pearl+'s included, and without bindings Pearl+'s coins are an in-process challenger's on the workload's
+machine, which the verifier's line says, with no key blocking and no placeholder reaching the runner; a part of Pearl+'s
+live challenger is refused by name; under onsite, Pearl+ in H1's place is refused until onsite's composite lists it,
+and then its product is onsite and no compute key blocks; the runner's variables under remote
+are Pearl+'s, onsite's carry none of them; Pearl+'s class is refused by name when it disagrees with the workload's slots
+or window-steps, and its uniform tie is asked for only by its parameter. Under remote alone, the runner's exit 2 with
+the compose hand-off written is pending, and the verifier reads only the compose answer's record (Pearl+'s row under
+``work``; inference-only's row holds the verdict while the served node wrote it), undecided with no cell read without
+one. The runner and the records are stand-ins written by each test."""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from verity import config as K
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity_cli import run as R
+
+ROOT = Path(R.ROOT)
+CONFIG = ROOT / "applications" / "remote.toml"
+ONSITE = ROOT / "applications" / "onsite_full.toml"
+REG = R.registry()
+T = sys.modules["served_table"]
+PP = SP.IDS["pearl-plus"]
+KEY = "0" * 128
+BINDINGS = {"challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}}}
+LOCAL = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "",
+         "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
+PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
+             "PEARLC_CHALLENGER_PEER": "peer-1", "H1_KEY_SHA512": KEY}
+OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE_UNIFORM"}
+
+
+def toml(tables: dict) -> str:
+    return "".join(f"[{p}.{c}]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in ks.items()) + "\n"
+                   for p, cs in tables.items() for c, ks in cs.items())
+
+
+def bindings(tmp: Path, tables: dict = BINDINGS) -> str:
+    f = tmp / "bindings.toml"
+    f.write_text(toml(tables))
+    return str(f)
+
+
+def said(out: str, what: str) -> list[dict]:
+    return [json.loads(x.split(" ", 1)[1]) for x in out.splitlines() if x.startswith(what + " ")]
+
+
+def dry(capsys, *args: str, config: Path = CONFIG) -> tuple[int, dict, str]:
+    rc = R.run_main([str(config), "--dry-run", *args], REG)
+    out = capsys.readouterr()
+    return rc, {"plan": said(out.out, "PLAN"), "dry": said(out.out, "DRY")}, out.err
+
+
+def hooks_of(got: dict, component: str = "pearl-plus") -> dict:
+    return next(e["hooks"] for x in got["plan"] for e in x["entries"] if e["component"] == component
+                and x["party"] == "workers")
+
+
+def remote(tmp: Path, params: dict, **workload) -> Path:
+    cfg = K.parse(CONFIG.read_text())
+    cfg["params"] = {PP: params}
+    cfg["workload"]["params"] |= workload
+    f = tmp / "remote.toml"
+    f.write_text(K.render(cfg))
+    return f
+
+
+def test_a_dry_run_resolves_every_party_of_remote(tmp_path, capsys):
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path))
+    cfg = R.load(CONFIG, REG)
+    assert rc == 0 and "no-party" not in err, err
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert got["dry"][0]["unbound"] == []
+    pieces = {(x["party"], e["component"], e["runs"]) for x in got["plan"] for e in x["entries"]}
+    assert {(p, r) for p, c, r in pieces if c == "pearl-plus"} == {("challenger", T.GATE),
+                                                                   ("workers", T.SERVED_WINDOW), ("verifier", T.CHECK)}
+    assert {"from": "challenger", "to": "workers", "messages": ["PearlSalt"], "after": []} in cfg["channel"]
+
+
+def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_machines(capsys):
+    cfg = R.load(CONFIG, REG)
+    for on in ((), ("--on", T.PROVER_NODE)):
+        rc, got, err = dry(capsys, *on)
+        assert rc == 0 and [x["unbound"] for x in got["dry"]] == [[]], err
+        assert hooks_of(got) == LOCAL
+    assert T.unbound(cfg, {}) == []
+    variables = T.variables(cfg, {})
+    assert [k for k, v in variables.items() if "<" in v] == []
+    assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
+
+
+#: onsite's subprotocols with Pearl+ in H1's place
+ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
+ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
+
+
+def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
+    monkeypatch.setitem(T.DEMOS, "onsite_full", ONSITE_PEARLPLUS)
+    cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
+    monkeypatch.setitem(T.DEMOS, "onsite_full", T.ONSITE_COMPONENTS)
+    f = tmp / "onsite.toml"
+    f.write_text(K.render(cfg))
+    return f
+
+
+def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
+                                                                                           monkeypatch):
+    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
+    f = onsite_pearlplus(tmp_path, monkeypatch)
+    rc, got, err = dry(capsys, config=f)
+    assert rc == 0 and got["dry"][0]["unbound"] == sorted(ONSITE_UNBOUND), err
+    assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
+    assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
+    tables = json.loads(json.dumps(BINDINGS))
+    for key in ONSITE_UNBOUND:
+        p, c, k = key.split(".")
+        tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
+    assert rc == 0 and hooks_of(got) == PEARLPLUS | {"PRODUCT": "onsite"}, err
+    assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
+
+
+def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
+    for part, lacking in (({"gate": "gate-command"}, "challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512"),
+                          ({"peer": "peer-1", "key-sha512": KEY}, "challenger.pearl-plus.gate")):
+        rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": part}}))
+        assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
+        assert f"without {lacking}: bind them" in err, err
+
+
+def test_the_runners_variables_under_remote_are_pearl_pluss():
+    cfg = R.load(CONFIG, REG)
+    serve = T.SERVE.variables(cfg, BINDINGS)
+    assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
+        "REPO": "verity-int8/Llama-3.2-1B-INT8", "PRECISION": "verity_int8", "SLOTS": "4", "WINDOW_STEPS": "16",
+        "LOAD": "varied"}
+    variables = serve | PEARLPLUS | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
+    assert T.variables(cfg, BINDINGS) == variables
+    both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
+                                          "main-file": "/tmp/main.json"}}}
+    assert T.variables(cfg, both) == variables | {"PEARLC_CHALLENGER_LANE": "vllm-2", "MAIN_FILE": "/tmp/main.json"}
+
+
+def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload_disagrees(tmp_path, capsys):
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"class": "4,27,2"},
+                                                                                   **{"window-steps": 2}))
+    assert rc == 0, err
+    assert {k: hooks_of(got).get(k) for k in ("V3C_CLASS", "CLASSES")} == {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
+    for params, workload in (({"class": "4,27,2"}, {}), ({"class": "5,27,2"}, {"window-steps": 2})):
+        rc, _, err = dry(capsys, config=remote(tmp_path, params, **workload))
+        assert rc == 2 and "refused params: Pearl+'s class" in err, err
+    for bad in ("4,27", "4,0,2", "a,b,c", 4):
+        rc, _, err = dry(capsys, config=remote(tmp_path, {"class": bad}))
+        assert rc == 2 and "refused params: class is SLOTS,PROMPT,OUTPUTS" in err, err
+    rc, _, err = dry(capsys, config=remote(tmp_path, {"classes": "4,27,2"}))
+    assert rc == 2 and "refused unknown-key" in err and "known: class, tie-uniform" in err
+
+
+def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
+    assert "PEARLPLUS_TIE_UNIFORM" not in T.variables(R.load(CONFIG, REG), BINDINGS)
+    assert R.load(CONFIG, REG)["params"][PP] == {"tie-uniform": False}
+    for asked, want in ((True, "1"), (False, None)):
+        rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"tie-uniform": asked}))
+        assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
+    rc, _, err = dry(capsys, config=remote(tmp_path, {"tie-uniform": 1}))
+    assert rc == 2 and "refused params: tie-uniform is true or false" in err
+
+
+#: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
+RUNNER = """mkdir -p "$OUT"
+/usr/bin/env | grep -E '^(POUW|PRODUCT|PEARLPLUS_[A-Z_]+|PEARLC_[A-Z_]+|H1_KEY_SHA512|MAIN_FILE|V3C_CLASS|CLASSES|SLOTS|WINDOW_STEPS)=' \
+  | sort > "$OUT/hooks.txt"
+"""
+
+
+def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeypatch):
+    for k in OPTIONAL:
+        monkeypatch.delenv(k, raising=False)
+    runner = tmp_path / "runner.sh"
+    runner.write_text(RUNNER)
+    monkeypatch.setattr(T, "RUNNER", str(runner))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
+    assert rc == 0, capsys.readouterr()
+    here = sorted(p["name"] for p in R.load(CONFIG, REG)["party"] if p["machine"] == T.PROVER_NODE)
+    assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks == PEARLPLUS | {"SLOTS": "4", "WINDOW_STEPS": "16"}
+
+
+def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_path, capsys, monkeypatch):
+    for k in OPTIONAL | set(PEARLPLUS):
+        monkeypatch.delenv(k, raising=False)
+    runner = tmp_path / "runner.sh"
+    runner.write_text(RUNNER)
+    monkeypatch.setattr(T, "RUNNER", str(runner))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)
+    assert rc == 0 and set(parties(capsys).values()) == {None}
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | {"SLOTS": "4", "WINDOW_STEPS": "16"}
+
+
+HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
+
+
+def ends(tmp: Path, monkeypatch, rc: int, *lines: str) -> None:
+    runner = tmp / "runner.sh"
+    runner.write_text('mkdir -p "$OUT"\n' + "".join(f"echo {json.dumps(x)} >> \"$OUT/verdicts.txt\"\n" for x in lines)
+                      + f"exit {rc}\n")
+    monkeypatch.setattr(T, "RUNNER", str(runner))
+
+
+def onsite_bindings() -> dict:
+    tables: dict = {}
+    for key in T.unbound(R.load(ONSITE, REG), {}):
+        p, c, k = key.split(".")
+        tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
+    return tables
+
+
+def parties(capsys) -> dict:
+    return {x["party"]: x["refused"] for x in said(capsys.readouterr().out, "PARTY")}
+
+
+def test_the_runners_exit_2_with_the_hand_off_written_is_pending_under_remote(tmp_path, capsys, monkeypatch):
+    ends(tmp_path, monkeypatch, 2, "RECORD {}", HANDED)
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state",
+                     str(tmp_path / "state")], REG)
+    assert rc == 0 and set(parties(capsys).values()) == {None}
+    assert T.pending(R.load(CONFIG, REG), tmp_path / "state", 2) == HANDED
+
+
+def test_any_other_end_of_the_runner_stays_refused_under_remote(tmp_path, capsys, monkeypatch):
+    for n, (rc, lines) in enumerate(((2, ()), (2, ("HANDOFF refused: no engine steps",)), (1, (HANDED,)),
+                                     (3, (HANDED,)))):
+        ends(tmp_path, monkeypatch, rc, *lines)
+        got = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state",
+                          str(tmp_path / f"state-{n}")], REG)
+        assert got == 2 and set(parties(capsys).values()) == {T.SERVED_WINDOW}, (rc, lines)
+
+
+def test_onsites_exit_2_stays_refused_with_the_hand_off_written(tmp_path, capsys, monkeypatch):
+    ends(tmp_path, monkeypatch, 2, HANDED)
+    rc = R.run_main([str(ONSITE), "--on", T.PROVER_NODE, "--party", T.WORKERS, "--party", T.ZK_SERVER, "--bindings",
+                     bindings(tmp_path, onsite_bindings()), "--state", str(tmp_path / "state")], REG)
+    assert rc == 2 and parties(capsys) == {T.WORKERS: T.SERVED_WINDOW, T.ZK_SERVER: T.SERVED_WINDOW}
+    assert T.pending(R.load(ONSITE, REG), tmp_path / "state", 2) is None
+
+
+def written(base: Path, line: dict | None, rows: dict | None, inference_only: dict | None = None) -> None:
+    (base / "record").mkdir(parents=True, exist_ok=True)
+    if line is not None:
+        (base / "verdicts.txt").write_text(f"SPOT ...\nRECORD {json.dumps(line)}\n")
+    if rows is not None:
+        (base / "record" / "verdicts.json").write_text(json.dumps({"window": 3, "protocols": rows}))
+    if inference_only is not None:
+        (base / "record" / "inference-only.json").write_text(json.dumps(inference_only))
+
+
+ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
+#: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
+CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
+ALL_ACCEPTED = {c: "accept" for c in T.DEMOS["remote"]}
+ABSENT = {c: "absent" for c in T.DEMOS["remote"]}
+YES = {"composed": "accept", "product": "remote"}
+
+
+def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out", {"composed": "pending", "product": "remote"}, {"work": {"verdict": "missing"}})
+    written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["product"], got["block"], got["reason"]) == ("accept", T.REMOTE, 3, None)
+    assert got["components"] == ALL_ACCEPTED
+    written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
+            {**ACCEPTED, "work": {"verdict": "reject"}})
+    assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
+
+
+def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    base = tmp_path / "out" / "compose"
+    written(base, YES, ACCEPTED, {"verdict": "accept"})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["components"]["inference-only"] == "absent" and got["verdict"] == "undecided"
+    assert got["reason"] == "not accepted: inference-only absent"
+    for rows in (ACCEPTED, {**ACCEPTED, "inference-only": CHECKED}, {"work": {"verdict": "reject"}}):
+        written(base, YES, rows)
+        (tmp_path / "out" / "record").mkdir(parents=True, exist_ok=True)
+        for f in ("verdicts.txt", "record/verdicts.json", "record/inference-only.json"):
+            (tmp_path / "out" / f).unlink(missing_ok=True)
+        alone = T.remote_check(cfg, tmp_path)
+        written(tmp_path / "out", YES, {k: {"verdict": "accept"} for k in ("integrity", "work", "inference-only")},
+                {"verdict": "accept"})
+        (base / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
+        assert T.remote_check(cfg, tmp_path) == alone, rows
+
+
+def test_inference_onlys_row_as_the_served_node_wrote_it_holds_the_verdict(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    for row in ({"verdict": "accept", "answer_from": f"{T.AS_WRITTEN} (inference-only.json)"}, {"verdict": "accept"}):
+        written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": row})
+        got = T.remote_check(cfg, tmp_path)
+        assert got["components"] == ALL_ACCEPTED and got["verdict"] == "undecided"
+        assert got["reason"] == f"not accepted: inference-only {T.AS_WRITTEN}"
+    text = (ROOT / "benchmarks" / "one_stage" / "served_verdicts.py").read_text()
+    assert f'AS_WRITTEN = "{T.AS_WRITTEN}"' in text
+
+
+def test_without_a_compose_answer_no_cell_reads_the_prover_nodes_own_record(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED}, {"verdict": "accept"})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["verdict"] == "undecided" and got["components"] == ABSENT
+    assert got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
+    assert got["reason"].endswith("(the served node's own record says 'accept')")
+    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {"work": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["verdict"] == "undecided" and got["components"] == ABSENT
+
+
+def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    for line, rows, why in ((None, None, "no RECORD line"), ({"composed": "accept", "product": "remote"}, None,
+                                                            "no record/verdicts.json"),
+                            ({"composed": "accept", "product": "onsite"}, ACCEPTED, "composed for 'onsite'")):
+        written(tmp_path / "out", line, rows)
+        try:
+            T.remote_check(cfg, tmp_path)
+        except T.Refused as e:
+            assert e.name == "record" and why in e.detail
+        else:
+            raise AssertionError(why)
+
+
+def test_every_declared_component_has_its_records_row():
+    assert set(T.ROWS) == set(T.MANIFESTS) and T.ROWS["pearl-plus"] == T.ROWS["pouw"] == "work"
+
+
+def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, capsys):
+    state = tmp_path / "state"
+    written(state / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+    rc = R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--state", str(state)], REG)
+    out = capsys.readouterr()
+    lines = said(out.out, "VERDICT")
+    assert len(lines) == 1, out
+    assert (rc, lines[0]["product"], lines[0]["verdict"], lines[0]["block"]) == (0, T.REMOTE, "accept", 3)
+    assert lines[0]["coins"] == "simulated"
+    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
+
+
+def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+    spot = T.RECORD_NAMES["integrity"]
+    at = {p["name"]: p["machine"] for p in cfg["party"]}
+    for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
+                         ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},
+                          {spot: at[T.CHALLENGER], "pearl-plus": at[T.CHALLENGER]})):
+        (tmp_path / T.BINDINGS).write_text(json.dumps(tables))
+        got = T.remote_check(cfg, tmp_path)
+        assert got["coins_on"] == want
+        assert got["coins"] == ("simulated" if at[T.WORKERS] in want.values() else T.coins_of(cfg))
+    assert T.coins_of(cfg) == "development" and at[T.WORKERS] != at[T.CHALLENGER]

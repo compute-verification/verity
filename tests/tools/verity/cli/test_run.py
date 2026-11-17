@@ -34,7 +34,9 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE = ("sampled-proofs", "certifier", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
+#: onsite with H1's period as its work, which no composite takes
+ONSITE_H1 = tuple("pouw" if p == "pearl-plus" else p for p in ONSITE)
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 
@@ -130,7 +132,7 @@ def test_a_configuration_is_refused_by_name(name):
 
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
                                        ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe"),
-                                       ("sampled-proofs", "pouw"), ONSITE[:-2]])
+                                       ("sampled-proofs", "pouw"), ONSITE[:-2], ONSITE_H1])
 def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
@@ -139,16 +141,17 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v1"}
-    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v1", "verity/remote/v1"}
+    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v1"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
                                                    "pearl-plus": "verity/pouw/pearl-plus/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["sampled-proofs"] == "verity/sampled-proofs/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["pearl-plus"] == "verity/pouw/pearl-plus/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["wipe"] == "verity/wipe/v0"
+    assert "verity/onsite/v0" not in K.COMPOSITES and "verity/onsite/v0" not in SP.SUBPROTOCOLS
 
 
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
@@ -192,8 +195,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
-                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
+UNBOUNDED_ONSITE = ("0e75cafa02f5f4886972516193e8e219106013a7f87967565b60396034f04936"
+                    "ab2103ae8260d8731f686e5517802f65bbf048574d3e21651c030458eb79c02b")
 
 
 def bounded(tokens):
@@ -434,7 +437,7 @@ def test_every_party_here_accepts(tmp_path, capsys):
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
     line = lines[0]
     assert line["components"] == dict.fromkeys(ONSITE, "accept")
-    assert line["product"] == "verity/onsite/v0" and line["coins"] == "simulated" and line["block"] == 0
+    assert line["product"] == "verity/onsite/v1" and line["coins"] == "simulated" and line["block"] == 0
     assert line["registration"] == RG.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
     assert said(out, "VERDICT") == lines
