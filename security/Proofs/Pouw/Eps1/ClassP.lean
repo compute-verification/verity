@@ -43,17 +43,7 @@ import Proofs.Pouw.Eps1.WordLocal
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Theorem C's count in M3: class-P programs over issue slots
-
-`Pouw.Guarantees.Eps1.ClassPSlots`. Walking back from each output's writer through arguments that hold an incidence
-ends at an instruction that creates it (`exists_creates`), so the instructions create all `32·L·m·n` incidences
-(`total_le`). An instruction that writes no output is a free word, which creates nothing, or a tuple, which creates
-only incidences of its fields at their own segments (a field's prefix comes from an argument that holds it), at most
-`Σ_k |E_k|` of them. A field's range has at least `128|E| + 1` values (`range_ncard`), and `Π_k (128 e_k + 1) ≤ 2^32`
-with `e_k ≤ 32` caps `Σ_k e_k` at 65 (`sum_le_65`: two 32-entry fields and a one-entry field). Writers create at most
-`w` each by hypothesis, and are `L·m·n` distinct instructions (`out_injective`), each alone in its slot.
--/
+/-! Theorem C's count in M3: class-P programs over issue slots. -/
 
 @[expose] public section
 
@@ -63,7 +53,7 @@ open Pouw.Eps1 Pouw.SecurityProofs.Eps1 Finset
 
 section Capacity
 
-/-- `g s = 4097^⌊s/32⌋·(128·(s mod 32) + 1)`, the least `Π_k (128 e_k + 1)` over entries `e_k ≤ 32` summing to `s`. -/
+/-- The least `Π_k (128 e_k + 1)` over entries `e_k ≤ 32` summing to `s`. -/
 def g (s : ℕ) : ℕ := 4097 ^ (s / 32) * (128 * (s % 32) + 1)
 
 theorem g_step (a e : ℕ) (he : e ≤ 32) : g (a + e) ≤ g a * (128 * e + 1) := by
@@ -108,7 +98,6 @@ theorem g_big (s : ℕ) (hs : 66 ≤ s) : 2 ^ 32 < g s := by
       _ ≤ 4097 ^ (s / 32) * (128 * (s % 32) + 1) :=
         Nat.mul_le_mul (Nat.pow_le_pow_right (by norm_num) h) (by omega)
 
-/-- Entries `e_k ≤ 32` with `Π_k (128 e_k + 1) ≤ 2^32` sum to at most 65. -/
 theorem sum_le_65 (l : List ℕ) (h : ∀ e ∈ l, e ≤ 32) (hp : (l.map fun e => 128 * e + 1).prod ≤ 2 ^ 32) :
     l.sum ≤ 65 := by
   by_contra hc
@@ -116,7 +105,6 @@ theorem sum_le_65 (l : List ℕ) (h : ∀ e ∈ l, e ≤ 32) (hp : (l.map fun e 
   have h2 := g_big l.sum (by omega)
   omega
 
-/-- Every integer in `[−64|E|, 64|E|]` is a sum over `E` of entries in `[−64, 64]`. -/
 theorem sum_decomp (E : Finset (Fin 32)) : ∀ z : ℤ, |z| ≤ 64 * E.card →
     ∃ c : Fin 32 → ℤ, (∀ p, |c p| ≤ 64) ∧ ∑ p ∈ E, c p = z := by
   induction E using Finset.induction_on with
@@ -152,8 +140,6 @@ theorem sum_decomp (E : Finset (Fin 32)) : ∀ z : ℤ, |z| ≤ 64 * E.card →
 
 variable {m n Lseg : ℕ}
 
-/-- A field's range holds every integer in `[−64|E|, 64|E|]`: dither bits off outside its segment, and on at its
-segment exactly where the entry is nonzero. -/
 theorem Icc_sub_range (φ : Field m n Lseg) :
     Set.Icc (-(64 * φ.E.card : ℤ)) (64 * φ.E.card) ⊆ φ.range := by
   intro z hz
@@ -178,7 +164,6 @@ theorem Icc_sub_range (φ : Field m n Lseg) :
     intro p _
     by_cases h : c p = 0 <;> simp [h]
 
-/-- A field's range is finite: its values lie in `[−64·32·(L + 1), 64·32·(L + 1)]`. -/
 theorem range_finite (φ : Field m n Lseg) : φ.range.Finite := by
   apply (Set.finite_Icc (-(64 * 32 * ((Lseg : ℤ) + 1))) (64 * 32 * ((Lseg : ℤ) + 1))).subset
   rintro z ⟨R, U, hU, rfl⟩
@@ -217,13 +202,11 @@ theorem range_finite (φ : Field m n Lseg) : φ.range.Finite := by
   simp only [Field.val]
   constructor <;> linarith [hv.1, hv.2]
 
-/-- A field's range has at least `128|E| + 1` values. -/
 theorem range_ncard (φ : Field m n Lseg) : 128 * φ.E.card + 1 ≤ φ.range.ncard := by
   have h := Set.ncard_le_ncard (Icc_sub_range φ) (range_finite φ)
   rw [← Finset.coe_Icc, Set.ncard_coe_finset, Int.card_Icc] at h
   omega
 
-/-- A mixed-radix tuple's fields have at most 65 entries in all. -/
 theorem fields_card_le (π : Packing m n Lseg) (h : π.MixedRadix) :
     (π.fields.map fun f => f.1.E.card).sum ≤ 65 := by
   obtain ⟨-, -, -, hprod, -⟩ := h
@@ -247,7 +230,6 @@ section Count
 
 variable {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
 
-/-- Every incidence has a creator: walk back from its writer through arguments that hold it. -/
 theorem exists_creates (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (τ : Tau m n Lseg) (p : Fin 32) : ∃ t, Creates P pk t τ p := by
   have key : ∀ k, ∀ t : Fin G, t.val < k → Holds P pk t τ p → ∃ t', Creates P pk t' τ p := by
@@ -264,7 +246,6 @@ theorem exists_creates (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU 
   exact key _ (P.out τ) (Nat.lt_succ_self _) (Or.inl ⟨τ, rfl, rfl, le_rfl⟩)
 
 open Classical in
-/-- The incidences instruction `t` creates. -/
 noncomputable def creSet (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : Finset (Tau m n Lseg × Fin 32) :=
   univ.filter fun x => Creates P pk t x.1 x.2
@@ -280,7 +261,6 @@ theorem created_eq (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
   ext x
   simp [mem_creSet]
 
-/-- The instructions create all `32·L·m·n` incidences. -/
 theorem total_le (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) :
     32 * (Lseg * m * n) ≤ ∑ t, created P pk t := by
   classical
@@ -296,8 +276,6 @@ theorem total_le (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk
     _ ≤ ∑ t, (creSet P pk t).card := card_biUnion_le
     _ = ∑ t, created P pk t := sum_congr rfl fun t _ => (created_eq P pk t).symm
 
-/-- An instruction that writes no output creates at most 65 incidences: none as a free word, and as a tuple only
-incidences of its fields at their own segments. -/
 theorem created_le_65 (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (hP : ClassP P pk) (t : Fin G) (ht : ∀ τ, P.out τ ≠ t) :
     created P pk t ≤ 65 := by
@@ -336,8 +314,6 @@ theorem created_le_65 (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G
           simp only [L, List.length_flatMap, List.length_map, Finset.length_toList]
       _ ≤ 65 := fields_card_le π hmr
 
-/-- Distinct outputs have distinct writers: on the fiber of the later one (`rowF`, `colF` with entries `2`), its
-word is `2` and the other's is `1` or `0`. -/
 theorem out_injective (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (hC : P.Computes (fun _ U => ColsValid U) zeroOut) : Function.Injective P.out := by
   have key : ∀ τa τb : Tau m n Lseg, τb.1 ≤ τa.1 → τa ≠ τb → P.out τa ≠ P.out τb := by
@@ -371,7 +347,6 @@ theorem out_injective (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G
   · exact key τ1 τ2 h12 hne h
   · exact key τ2 τ1 h21 (Ne.symm hne) h.symm
 
-/-- **Theorem C's count over issue slots** (`Pouw.Guarantees.Eps1.ClassPSlots`). -/
 theorem classPSlots : Pouw.Guarantees.Eps1.ClassPSlots := by
   intro m n Lseg FR FU G P pk w d S slot hC hP hw halone hd
   classical

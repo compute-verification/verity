@@ -16,13 +16,7 @@ public import Proofs.Pouw.QTree
 public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Proofs of Pearl-C's guarantees
-
-One theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` per guarantee, which is the theorem in
-`Pouw.PearlC` (`DeviceInertBoundRev1Gap`) that proves the same statement under its old name, or, for a guarantee stated at
-W1, that theorem at the cost model `W1.w1Priced` (`Proofs.Pouw.PearlC.TTOutW1`).
--/
+/-! One theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` per Pearl-C guarantee. -/
 
 @[expose] public section
 

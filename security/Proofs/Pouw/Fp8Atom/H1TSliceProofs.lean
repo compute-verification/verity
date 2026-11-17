@@ -10,23 +10,13 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.H1TProofs
 
-/-!
-# One slice: L1 to L3 (`H1TSlice`), the chain's monotonicity (`H1TChainMono`) and the range (`H1TRange`)
-
-A slice of finite codes has `F = fOf fi` for some `fi ≤ 4`, and each of its codes is below `2^(fi + 5)` (`floorF_index`).
-The forming table gives every formed code's magnitude and exponent field (`form_facts`), and the tag table every tag
-code's (`tag_facts`): a tag code has exponent field `fi + 10` and significand `8 + m` for either sign. So every product
-exponent is at most `fi + 13`, the grid `2^(E − 13)` is at most `2^fi`, and a tag product, `2^fi` times an integer, is
-on it (L2). A tag flip changes one code's sign only, so no product's magnitude or exponent moves (L1).
--/
+/-! One slice: L1 to L3 (`H1TSlice`), the chain's monotonicity (`H1TChainMono`) and the range (`H1TRange`). -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T
-
-/-! ## Codes -/
 
 theorem intVal_abs_le : ∀ c : Code, c.isNaN = false → |intVal c| ≤ 229376 := by decide +kernel
 
@@ -48,8 +38,6 @@ theorem product_exp_eq {a b : Code} (h : (product a b).mag ≠ 0) :
 theorem product_mag_exp_congr {a a' b : Code} (hs : a.sig = a'.sig) (he : a.expOr1 = a'.expOr1) :
     (product a b).mag = (product a' b).mag ∧ (product a b).exp = (product a' b).exp := by
   unfold product; dsimp only; rw [hs, he]; constructor <;> split_ifs <;> rfl
-
-/-! ## The tag tuples -/
 
 theorem A0_facts : ∀ i : Fin 23, (A0 i).isNaN = false ∧ intVal (A0 i) % 512 = 0 ∧ 64 * 512 ≤ intVal (A0 i) := by
   decide +kernel
@@ -92,8 +80,6 @@ theorem tuple_sep (j j' : ℕ) (i : Fin 3) (h : tuple j i ≠ tuple j' i) :
     · exact A1_sep _ _ h
   exact_mod_cast this
 
-/-! ## The slice's `F` -/
-
 theorem foldl_max_ge (L : List ℚ) (a : ℚ) : a ≤ L.foldl max a := by
   induction L generalizing a with
   | nil => exact le_refl _
@@ -124,7 +110,6 @@ theorem fOf_eq (fi : ℕ) : fOf fi = 2 ^ ((fi : ℤ) - 2) := rfl
 
 theorem fOf_pos (fi : ℕ) : 0 < fOf fi := two_zpow_pos _
 
-/-- A slice of finite codes has `F = fOf fi` for some `fi ≤ 4`, and its codes are below `2^(fi + 5)`. -/
 theorem floorF_index (xs : Fin 29 → Code) (hx : ∀ l, (xs l).isNaN = false) :
     ∃ fi : ℕ, fi ≤ 4 ∧ floorF (sliceMax xs) = fOf fi ∧ ∀ l, |val (xs l)| < 2 ^ (fi + 5) := by
   have hle : ∀ l, |val (xs l)| ≤ sliceMax xs := fun l =>
@@ -168,15 +153,11 @@ theorem floorF_index (xs : Fin 29 → Code) (hx : ∀ l, (xs l).isNaN = false) :
     · rw [← hz]; simp [floorF, fOf]; norm_num
     · have := hle l; rw [← hz] at this; exact lt_of_le_of_lt this (by norm_num)
 
-/-! ## The forming and tag tables -/
-
 theorem val_abs_le_of {c : Code} (h : c.isNaN = false) {N : ℤ} (hN : |intVal c| ≤ N) : |val c| ≤ (N : ℚ) / 512 := by
   rw [val_eq_intVal h, abs_div, abs_of_pos (by norm_num : (0 : ℚ) < 512)]
   apply div_le_div_of_nonneg_right _ (by norm_num)
   rw [← Int.cast_abs]; exact_mod_cast hN
 
-/-- What the proofs read from a forming vector whose code is below `2^(fi + 5)`: both codes finite, their magnitudes
-(`min(144F, 448)` and `8F`, times 512) and exponent fields. -/
 def formOK (v : FormVec) : Bool :=
   !(decide (|intVal (codeOf v.x)| < 2 ^ (v.fi + 14))) ||
     ((codeOf v.x1).isNaN == false && (codeOf v.x2).isNaN == false &&
@@ -229,7 +210,6 @@ theorem form_facts {x : Code} (hx : x.isNaN = false) (pos : Bool) {fi : ℕ} (hf
 theorem tagVal_not (F : ℚ) (neg : Bool) (m : Fin 8) : tagVal F (!neg) m = -tagVal F neg m := by
   cases neg <;> simp [tagVal]
 
-/-- What the proofs read from a tag vector: both codes finite, significand `8 + m`, exponent field `fi + 10`. -/
 def tagOK (v : TagVec) : Bool :=
   (codeOf v.c1).isNaN == false && (codeOf v.c2).isNaN == false &&
     (codeOf v.c1).sig == 8 + v.m && (codeOf v.c2).sig == 8 + v.m &&
@@ -257,8 +237,6 @@ theorem tag_facts {fi : ℕ} (hfi : fi ≤ 4) (neg : Bool) (m : Fin 8) :
   obtain ⟨⟨⟨⟨⟨n1, -⟩, s1⟩, -⟩, x1⟩, -⟩ := hok
   rw [e1, h3, h1] at *
   exact ⟨n1, hr.2.2.1, s1, x1⟩
-
-/-! ## Truncation to a grid -/
 
 theorem truncTo_abs_le {g : ℚ} (hg : 0 < g) (y : ℚ) : |truncTo g y| ≤ |y| := by
   unfold truncTo
@@ -291,8 +269,6 @@ theorem truncZ_int (n : ℤ) : truncZ n = n := by
 theorem truncTo_int {g : ℚ} (hg : 0 < g) (n : ℤ) : truncTo g (n * g) = n * g := by
   rw [truncTo_mul hg, truncZ_int]
 
-/-! ## The slice's lanes -/
-
 theorem formSlice_fst_real (xs : Fin 29 → Code) (σ : SliceSalt) (l : Fin 32) (h : l.val < 29) :
     (formSlice xs σ).1 l = (formReal (floorF (sliceMax xs)) (xs ⟨l.val, h⟩) (σ.pos ⟨l.val, h⟩)).1 := by
   simp [formSlice, h]
@@ -319,7 +295,6 @@ theorem tagVal_abs_le (F : ℚ) (hF : 0 < F) (neg : Bool) (m : Fin 8) : |tagVal 
     abs_of_pos (by positivity), abs_of_pos (by positivity)]
   nlinarith
 
-/-- A formed slice's lanes: finite, bounded, and with exponent field at most `fi + 12`. -/
 theorem lane_facts (xs : Fin 29 → Code) (hx : ∀ l, (xs l).isNaN = false) (σ : SliceSalt) {fi : ℕ} (hfi : fi ≤ 4)
     (hF : floorF (sliceMax xs) = fOf fi) (hxb : ∀ l, |val (xs l)| < 2 ^ (fi + 5)) (l : Fin 32) :
     ((formSlice xs σ).1 l).isNaN = false ∧ ((formSlice xs σ).2 l).isNaN = false ∧
@@ -349,8 +324,6 @@ theorem col_facts (b : ℕ → Code) (hb : ∀ r, (b r).isNaN = false) (j τ : �
     · rw [colLanes_real b j τ l h]; exact hb _
     · rw [colLanes_tag b j τ l h]; exact (tuple_facts _ _).1
   exact ⟨hn, val_abs_le hn, expOr1_le _⟩
-
-/-! ## The slice's alignment exponent and sums -/
 
 theorem gridExp_le {a c : Fin 32 → Code} {B : ℕ} (ha : ∀ l, (a l).expOr1 ≤ B) (hc : ∀ l, (c l).expOr1 ≤ 15) :
     gridExp a c ≤ B + 1 := by
@@ -397,7 +370,6 @@ theorem tagVal_eq (fi : ℕ) (neg : Bool) (m : Fin 8) :
   rw [fOf_eq, zpow_sub₀ two_ne_zero, zpow_natCast]
   split_ifs <;> push_cast <;> ring
 
-/-- **L2**: a tag product is on the grid `2^(E − 13)` of an exponent `E ≤ fi + 13`. -/
 theorem tag_on_grid {fi : ℕ} {E : ℤ} (hE : E ≤ fi + 13) (neg : Bool) (m : Fin 8) (j : ℕ) (i : Fin 3) :
     truncTo (2 ^ (E - 13)) (tagVal (fOf fi) neg m * val (tuple j i)) = tagVal (fOf fi) neg m * val (tuple j i) := by
   obtain ⟨w, hw⟩ := tuple_int j i
@@ -410,8 +382,6 @@ theorem tag_on_grid {fi : ℕ} {E : ℤ} (hE : E ≤ fi + 13) (neg : Bool) (m : 
     rw [this]; ring
   rw [e, truncTo_int (two_zpow_pos _)]
 
-
-/-! ## One slice: L1 to L3 -/
 
 theorem block_bound (a c : Fin 32 → Code) (A B : ℚ) (ha : ∀ l, |val (a l)| ≤ if l.val < 29 then A else B)
     (hc : ∀ l, |val (c l)| ≤ 448) : |preSum a c| ≤ 29 * (A * 448) + 3 * (B * 448) := by
@@ -450,7 +420,6 @@ theorem negFlip_self (i : Fin 3) (σ : SliceSalt) : (negFlip i σ).neg i = !σ.n
 theorem negFlip_ne {i k : Fin 3} (σ : SliceSalt) (h : k ≠ i) : (negFlip i σ).neg k = σ.neg k := by
   simp [negFlip, h]
 
-/-- Flipping tag lane `29 + i`'s sign bit changes no other lane. -/
 theorem flip_lane_ne (xs : Fin 29 → Code) (σ : SliceSalt) (i : Fin 3) (l : Fin 32)
     (h : l ≠ ⟨29 + i.val, by omega⟩) :
     (formSlice xs (negFlip i σ)).1 l = (formSlice xs σ).1 l ∧ (formSlice xs (negFlip i σ)).2 l = (formSlice xs σ).2 l := by
@@ -468,7 +437,6 @@ theorem flip_lane_ne (xs : Fin 29 → Code) (σ : SliceSalt) (i : Fin 3) (l : Fi
       formSlice_snd_tag _ _ _ hl, negFlip_ne σ hk]
     exact ⟨rfl, rfl⟩
 
-/-- Every lane of the flipped slice has the original's significand and exponent field. -/
 theorem flip_lane_sig (xs : Fin 29 → Code) (σ : SliceSalt) (i : Fin 3) {fi : ℕ} (hfi : fi ≤ 4)
     (hF : floorF (sliceMax xs) = fOf fi) (l : Fin 32) :
     ((formSlice xs (negFlip i σ)).1 l).sig = ((formSlice xs σ).1 l).sig ∧
@@ -524,8 +492,6 @@ theorem h1tSlice : H1TSlice := by
       tag_on_grid hE2, tag_on_grid hE2, tagVal_not]
     ring
 
-/-! ## The chain: L7 and L4 -/
-
 theorem h1tChainMono : H1TChainMono := by
   intro T x b j σ σ' p h
   induction p with
@@ -544,7 +510,6 @@ theorem trunc14_abs_le (y : ℚ) : |trunc14 y| ≤ |y| := by
   · simp [trunc14_zero]
   · rw [trunc14_pos (abs_pos.2 hy)]; exact (tpos_spec (abs_pos.2 hy)).2.1
 
-/-- A fresh-step word of finite codes is `trunc14` of its block's sum. -/
 theorem freshWord_value {T : ℕ} {x b : ℕ → Code} (hx : ∀ r, (x r).isNaN = false) (hb : ∀ r, (b r).isNaN = false)
     (j : ℕ) (σ : ℕ → SliceSalt) (p : ℕ) :
     wordQ (freshWord T x b j σ p) = some (trunc14 (if p < T then
@@ -575,7 +540,6 @@ theorem fresh_facts {T : ℕ} {x b : ℕ → Code} (hx : ∀ r, (x r).isNaN = fa
   · exact le_trans (trunc14_abs_le _) (h1tSlice _ _ _ _ _ (hxs p) hb).1.1
   · exact le_trans (trunc14_abs_le _) (h1tSlice _ _ _ _ _ (hxs (p - T)) hb).2.1.1
 
-/-- Below `2^33` the ulp is at most 512, so rounding moves a value by at most 256. -/
 theorem rn_err_small {y : ℚ} (h : |y| < 2 ^ 33) : |rn y - y| ≤ 256 := by
   rcases eq_or_ne y 0 with rfl | hy
   · have : rn 0 = 0 := rn_exact ⟨0, 0, by norm_num, by simp⟩
@@ -596,7 +560,6 @@ theorem rnAdd_abs_le {r i : ℚ} (h : |r + i| < 2 ^ 33) : |rnAdd r i| ≤ |r + i
   have := abs_sub_abs_le_abs_sub (rn (r + i)) (r + i)
   unfold rnAdd; linarith
 
-/-- The running words' accounting: `R_p` gains at most a block's bound plus 256 per step. -/
 theorem run_bound {T : ℕ} {x b : ℕ → Code} {j : ℕ} {σ : ℕ → SliceSalt} (hT : T ≤ 1130)
     (hI : ∀ p, |freshVal T x b j σ p| ≤ (if p < T then 6142976 else 738304)) (p : ℕ) (hp : p < 2 * T) :
     |runVal T x b j σ p| ≤ (if p < T then ((p : ℚ) + 1) * 6143232 - 256
@@ -659,7 +622,6 @@ theorem h1tRange : H1TRange := by
   · have hq : (p : ℚ) + 1 ≤ 2 * U.T := by exact_mod_cast hp
     norm_num; nlinarith
 
-/-- The forming table's keys cover every slice. -/
 theorem h1tFormCover : H1TFormCover := floorF_index
 
 end Pouw.Fp8Atom.H1T.Proofs

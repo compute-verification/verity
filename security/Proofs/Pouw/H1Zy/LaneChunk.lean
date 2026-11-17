@@ -11,35 +11,18 @@ import Mathlib.Tactic.Ring.RingNF
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.Lane
 
-/-!
-# A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)
-
-`n` chunk statements of a lane (`Pouw.H1Zy.chunkOk`, `PouwH1LaneZyChunk_v1{TILE, n, c}`), each `ok = 1`, chunk `c + 1`'s
-carry in the row chunk `c`'s carry out is, check the whole lane: `laneOk` at the chain machine's words (`chainOf`) on the
-lane the chunks read (`joinIn`: each row's codes the chunks' concatenated, `joinRows`, its scales chunk 0's, and the last
-chunk's record, partials, public inputs and index). The chain lemma (`run_join`, `zRun_join`): the whole `K`'s segments
-are the chunks' in sequence, so the chain's state and each cell's z after chunk `c` are the whole lane's after its first
-`(c + 1) K_c / 32` segments. An induction over `c` (`chunkCarry_eq`) pins each carry in, through the chunk before's
-carry-out check, to that state, and each chunk's scales, through its scale check, to chunk 0's. So the last chunk's
-checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
-(with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
--/
+/-! A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`). -/
 
 @[expose] public section
 
 namespace Pouw.H1Zy
 
-/-- **A lane's whole row from its chunks' rows**: entry `k` is entry `k mod K_c` of chunk `⌊k / K_c⌋` (`SPLITK`'s chunk
-row `n i + c` holding entries `[c K_c, (c + 1) K_c)` of row `i`). -/
 def joinRows {n Kc : ℕ} (x : Fin n → Fin Kc → BitVec 8) : Fin (n * Kc) → BitVec 8 := fun k =>
   have hK : 0 < Kc := Nat.pos_of_ne_zero fun h => by have := k.isLt; simp [h] at this
   x ⟨k.val / Kc, (Nat.div_lt_iff_lt_mul hK).2 k.isLt⟩ ⟨k.val % Kc, Nat.mod_lt _ hK⟩
 
-/-- The last of `n > 0` chunks. -/
 def lastFin (n : ℕ) (hn : 0 < n) : Fin n := ⟨n - 1, by omega⟩
 
-/-- **The lane `n` chunks read**: each A and B row's codes the chunks' joined (`joinRows`), its scales chunk 0's, and the
-last chunk's admit bits, record, partials, public inputs and index. -/
 def joinIn {n Kc nw : ℕ} {P : Type} (xs : Fin n → ChunkIn Kc nw P) (hn : 0 < n) : LaneIn (n * Kc) nw P where
   a := fun s => joinRows fun c => (xs c).a s
   sa := (xs ⟨0, hn⟩).sa
@@ -52,9 +35,6 @@ def joinIn {n Kc nw : ℕ} {P : Type} (xs : Fin n → ChunkIn Kc nw P) (hn : 0 <
   pub := (xs (lastFin n hn)).pub
   lane := (xs (lastFin n hn)).lane
 
-/-! ## The chain lemma -/
-
-/-- Segment `c K_c / 32 + j` of a joined row is segment `j` of chunk `c`'s row. -/
 theorem segOf_joinRows {n Kc : ℕ} (x : Fin n → Fin Kc → BitVec 8) (hKc : 32 ∣ Kc) (c : Fin n) {j : ℕ}
     (hj : j < Kc / 32) : segOf (joinRows x) (c.val * (Kc / 32) + j) = segOf (x c) j := by
   obtain ⟨q, rfl⟩ := hKc
@@ -77,8 +57,6 @@ theorem segOf_joinRows {n Kc : ℕ} (x : Fin n → Fin Kc → BitVec 8) (hKc : 3
   · ext
     simp only [key, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlt']
 
-/-- **The chain lemma**: the chain's state after `j` segments of chunk `c`, from the whole lane's state after its first
-`c K_c / 32` segments, is the whole lane's after `c K_c / 32 + j`. -/
 theorem run_join {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw) (p : P) (l : Fin 32) (hKc : 32 ∣ Kc)
     (a : Fin n → Fin 4 → Fin Kc → BitVec 8) (b : Fin n → Fin 8 → Fin Kc → BitVec 8) (σ : ChainSt) (c : Fin n) :
     ∀ j, j ≤ Kc / 32 →
@@ -92,7 +70,6 @@ theorem run_join {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw) (p : P) (l : F
     rw [run_join M p l hKc a b σ c j (by omega), zero_add]
     simp only [segOf_joinRows _ hKc c (by omega : j < Kc / 32)]
 
-/-- The same for a cell's z: `j` steps of chunk `c` from the whole lane's z after `c K_c / 32` steps. -/
 theorem zRun_join {n Kc : ℕ} (x w : Fin n → Fin Kc → BitVec 8) (hKc : 32 ∣ Kc) (z : BitVec 32) (c : Fin n) :
     ∀ j, j ≤ Kc / 32 →
       zRun (x c) (w c) (zRun (joinRows x) (joinRows w) z (c.val * (Kc / 32))) j =
@@ -103,12 +80,9 @@ theorem zRun_join {n Kc : ℕ} (x w : Fin n → Fin Kc → BitVec 8) (hKc : 32 �
     simp only [zRun]
     rw [zRun_join x w hKc z c j (by omega), segOf_joinRows x hKc c (by omega), segOf_joinRows w hKc c (by omega)]
 
-/-- From zero, `zRun` is `GemmAccumulatorS8`'s steps. -/
 theorem zRun_zero {K : ℕ} (x w : Fin K → BitVec 8) : ∀ m, zRun x w 0 m = gemmAccSteps x w m
   | 0 => rfl
   | m + 1 => by simp only [zRun, gemmAccSteps, zRun_zero x w m]; rfl
-
-/-! ## One chunk's checks -/
 
 theorem mux_false_eq_true {b t : Bool} : mux b t false = true ↔ b = false ∧ t = true := by
   cases b <;> simp [mux]
@@ -116,8 +90,6 @@ theorem mux_false_eq_true {b t : Bool} : mux b t false = true ↔ b = false ∧ 
 theorem ChunkIn.l_eq {Kc nw : ℕ} {P : Type} {x y : ChunkIn Kc nw P} (h : x.lane = y.lane) : x.l = y.l :=
   Fin.ext (by simp only [ChunkIn.l, ChunkIn.sel, h])
 
-/-- **An accepted chunk's checks**: no high index bit, past chunk 0 its scales the carried ones, and before the last chunk
-its carry out what it computed. -/
 theorem chunkOk_parts {Kc nw : ℕ} {P : Type} (M : ChainSteps P nw) (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16)
     {n c : ℕ} {x : ChunkIn Kc nw P} (h : chunkOk M dqW n c x = true) :
     tree orBit false (List.ofFn fun t : Fin 11 => x.lane ⟨5 + t.val, by omega⟩) = false ∧
@@ -138,10 +110,6 @@ theorem chunkOk_parts {Kc nw : ℕ} {P : Type} (M : ChainSteps P nw) (dqW : BitV
   · simp only [hc, ↓reduceIte] at ht
     simpa using ht _ (List.mem_append_right _ (List.mem_singleton_self _))
 
-/-! ## The induction over chunks -/
-
-/-- **Each chunk computes the whole lane's state**: at accepted chunks linked by their carries, chunk `c` computes the
-chain's state and each cell's z after the whole lane's first `(c + 1) K_c / 32` segments, with chunk 0's scales. -/
 theorem chunkCarry_eq {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc)
     (xs : Fin n → ChunkIn Kc nw P)
@@ -191,9 +159,6 @@ theorem chunkCarry_eq {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
     · rw [hsc.1, hin]
     · rw [hsc.2, hin]
 
-/-- **A lane's chunks, accepted at one carry chain, check the whole lane.** `n > 0` chunk statements of one lane, each
-`ok = 1` at the chain machine `M` and the dequant `dqW`, with one public input and index, and chunk `c + 1`'s carry in
-chunk `c`'s carry out, give the whole lane's `ok = 1` at `M`'s words on the lane they read (`joinIn`). -/
 theorem laneOk_of_chunks {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc)
     (xs : Fin n → ChunkIn Kc nw P)
@@ -226,15 +191,9 @@ theorem laneOk_of_chunks {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
   refine List.mem_append_right _ ?_
   simpa only [zRun_zero, gemmAccS8, hks, joinIn, lastFin, LaneIn.sel, ChunkIn.sel, LaneIn.l, ChunkIn.l] using hb
 
-/-- A chunk binds where its lane does: at `n > 0` chunks of `K_c` entries, `n K_c < 2^17` gives `K_c < 2^17`, the lane
-field's range at every chunk. -/
 theorem chunk_lt {n Kc : ℕ} (hn : 0 < n) (hK : n * Kc < 2 ^ 17) : Kc < 2 ^ 17 :=
   lt_of_le_of_lt (Nat.le_mul_of_pos_left Kc hn) hK
 
-/-- **What a lane's accepted chunks give** (`laneOk_spec` at `laneOk_of_chunks`), at `K = n K_c` with `32 ∣ K_c` and
-`K < 2^17`: the last chunk's index has no high bit; each of the lane's cells has record z the s32 word of the exact dot
-of its joined A and B rows' codes over the whole `K` and record y `dqW` of it at chunk 0's scales; and the last chunk's
-partials row is the chain machine's words on the joined rows, masked by the admit bits' OR. -/
 theorem chunks_spec {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc) (hK : n * Kc < 2 ^ 17)
     (xs : Fin n → ChunkIn Kc nw P)

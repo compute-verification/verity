@@ -5,34 +5,8 @@ public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.Lemmas.Dither
 
-/-!
-# The no-fold Dither protocol's work-soundness: the headline's proof
-
-* `FreedOfFloor`: the guarantee `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
-  program.
-* `WorkMoment`: the guarantee `Definitions.Pouw.Guarantees.Dither.WorkMoment`, a replica's moment.
-  - `ExtractAdv` splits each sampling block's work into a words program and a commitment program on advice fixed
-    before the block's coins, the commitment program's output the prover's root. `OutsourceWithinEgress` replaces both
-    by programs that exchange nothing, at `β` a bit they exchanged.
-  - Their two moments (SAK(matmul)'s and SHA-512's speed's, each outside its degenerate dithers) combine by the
-    convexity of `exp` at the block's honest shares (`combined_moment_le`), in units of priced cost at one rate `η`.
-  - A block's factor reads its advice and its committed instance, both fixed before its coins
-    (`ShaRealize.inst_congr`), and its own coin. It is frozen at 1 on a block whose instance isn't registrable or whose
-    oracle and advice are bad for `SAKSha` (`roundF`), so the blocks' product is a supermartingale over the
-    challenger's coins (`expect_prod_rounds`), of average at most 1: the moment.
-  - Its bad event is the service's `κ_S` (which also covers an unregistrable instance), the extraction's `κ_x(A)`
-    on runs within the cap (a run whose sampling blocks' timed work fits, and whose selected answers run within the
-    period, is within it: `withinCap_of_fits`), the bad oracles' `κ_sha(A)` and the degenerate dithers'
-    `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off it the product is `e^{η D}` at the blocks' shortfall `D`, the blocks
-    meet the work floor at `ε + D / C` (`floor_of_rounds`), and `FreedOfFloor` turns it into freed compute.
-* `freedSound_of_momentSound`: Markov on the moment at `δ_coin`, the luck `ln(1/δ_coin)/η` added to `ε C`.
-* `WorkSound`: the guarantee `Definitions.Pouw.Guarantees.Dither.WorkSound`, `WorkMoment` then
-  `freedSound_of_momentSound`.
-* `WorkSoundNoFold`: `WorkSound` on the no-fold round with `ExtractAdv` from
-  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `(k + 1)(⌈Q⌉ + V) + k ⌈Q⌉` and the schedule
-  `τ_w = (w + 1)(⌈Q⌉ + V)` (`sum_segments`).
-* `FleetSound` is in `Proofs.Pouw.Pool`: the replicas' moments pooled by convexity.
--/
+/-! The no-fold Dither protocol's work-soundness: `FreedOfFloor`, `WorkMoment`, `WorkSound` and
+`WorkSoundNoFold`. -/
 
 @[expose] public section
 
@@ -42,9 +16,6 @@ namespace Pouw.SecurityProofs.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
-/-! ## Freed compute -/
-
-/-- `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`. -/
 theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
   intro G Pd W ε X μ z z' hμ hneeds hval hW hε hfit' hslack hfit hfloor
   refine ⟨W, z', hW, hfit', ?_⟩
@@ -64,8 +35,6 @@ theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
   unfold Period.value
   nlinarith [h1, h3, hfloor, hslack]
 
-/-! ## Expectations over fresh coins -/
-
 theorem expect_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (f : β → ℝ) :
     expect (fun a => f (e a)) = expect f := by
   unfold Claims.Ex
@@ -84,15 +53,12 @@ theorem expect_affine3 {Ω : Type} [Fintype Ω] (a b c : ℝ) (hc : 0 ≤ c) (f 
     apply le_of_eq
     rw [add_div, add_div, mul_div_assoc a, mul_div_assoc b, mul_div_cancel_left₀ c hN]
 
-/-- An event whose every slice at the first coordinate has probability at most `κ ≥ 0` has probability at most
-`κ`. -/
 theorem prob_le_of_slices_fst {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ a, prob (fun b => E (a, b)) ≤ κ) : prob E ≤ κ := by
   classical
   rw [prob_eq_expect, expect_prod]
   exact expect_le_of_le hκ fun a => by rw [← prob_eq_expect (fun b => E (a, b))]; exact h a
 
-/-- Markov's inequality at `e^t` for a nonnegative function of mean at most 1. -/
 theorem prob_le_of_expect_le_one {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (hE : expect f ≤ 1)
     (t : ℝ) {E : Ω → Prop} (hsub : ∀ ω, E ω → Real.exp t ≤ f ω) : prob E ≤ Real.exp (-t) := by
   have hpos := Real.exp_pos t
@@ -101,9 +67,6 @@ theorem prob_le_of_expect_le_one {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf :
   rw [Real.exp_neg, ← one_div, le_div_iff₀ hpos, mul_comm]
   exact h2
 
-/-- **The supermartingale over fresh coins**, as a finite product (`RoundGame.expect_weight_le` on `Fin n → Ω`): if
-round `i`'s factor `Y i` is nonnegative, reads only the coins of rounds up to `i`, and averages at most 1 over round
-`i`'s coin whatever the other coins, then the product of the factors averages at most 1. -/
 theorem expect_prod_adapted {Ω : Type} [Fintype Ω] : ∀ (n : ℕ) (Y : Fin n → (Fin n → Ω) → ℝ),
     (∀ i x, 0 ≤ Y i x) → (∀ i x x', (∀ j, j ≤ i → x j = x' j) → Y i x = Y i x') →
     (∀ i x, expect (fun ω => Y i (Function.update x i ω)) ≤ 1) →
@@ -150,7 +113,6 @@ theorem expect_prod_adapted {Ω : Type} [Fintype Ω] : ∀ (n : ℕ) (Y : Fin n 
           have := h1 0 (Fin.cons ω₀ c : Fin (n + 1) → Ω)
           simpa only [Fin.update_cons_zero] using this
 
-/-- Convexity of `exp` at three points, the third `0`. -/
 theorem exp_convex3 {a b c u v : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ c) (h : a + b + c = 1) :
     Real.exp (a * u + b * v) ≤ a * Real.exp u + b * Real.exp v + c := by
   have := convexOn_exp.map_sum_le (t := Finset.univ) (w := ![a, b, c]) (p := ![u, v, 0])
@@ -159,7 +121,6 @@ theorem exp_convex3 {a b c u v : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ 
   simpa [Fin.sum_univ_three] using this
 
 
-/-- An event on the first coordinate of a pair has at most its own probability. -/
 theorem prob_fst_le {α β : Type} [Fintype α] [Fintype β] (D : α → Prop) :
     prob (fun ω : α × β => D ω.1) ≤ prob D :=
   prob_le_of_slices (fun ω : α × β => D ω.1) (prob_nonneg D) fun _ => le_rfl
@@ -168,9 +129,6 @@ theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 :=
   unfold prob Claims.prUniform
   simp
 
-/-- **Rounds on adapted advice**: if round `w`'s factor is a nonnegative function of advice `adv x w` that reads only
-the coins before round `w` and of round `w`'s own coin, averaging at most 1 over that coin at every advice, the
-factors' product averages at most 1. -/
 theorem expect_prod_rounds {Ω Adv : Type} [Fintype Ω] {k : ℕ} (adv : (Fin k → Ω) → Fin k → Adv)
     (hadv : ∀ x x' w, (∀ v : Fin k, v < w → x v = x' v) → adv x w = adv x' w) (F : Fin k → Adv → Ω → ℝ)
     (h0 : ∀ w s ω, 0 ≤ F w s ω) (h1 : ∀ w s, expect (F w s) ≤ 1) :
@@ -184,8 +142,6 @@ theorem expect_prod_rounds {Ω Adv : Type} [Fintype Ω] {k : ℕ} (adv : (Fin k 
       rw [e]
       exact h1 i _)
 
-/-- **One round's event on adapted advice**: an event of round `w`'s advice and coin of probability at most `κ` over
-the coin at every advice has probability at most `κ` over every round's coins. -/
 theorem prob_round_le {Ω Adv : Type} [Fintype Ω] {k : ℕ} (adv : (Fin k → Ω) → Fin k → Adv)
     (hadv : ∀ x x' w, (∀ v : Fin k, v < w → x v = x' v) → adv x w = adv x' w) (w : Fin k) (E : Adv → Ω → Prop)
     {κ : ℝ} (hκ : 0 ≤ κ) (hE : ∀ s, prob (E s) ≤ κ) : prob (fun x => E (adv x w) (x w)) ≤ κ := by
@@ -223,12 +179,7 @@ theorem prob_round_le {Ω Adv : Type} [Fintype Ω] {k : ℕ} (adv : (Fin k → �
     _ ≤ (κ + t) * 1 := mul_le_mul_of_nonneg_left h2 hκt.le
     _ = κ + t := mul_one _
 
-/-! ## One round -/
-
 open Classical in
-/-- **One round's combined factor** at the advice `s` and the round's coin: `e^{η D}` where the dither is outside both
-premises' degenerate sets, the check passes on `Mw`'s words and their checked cells open under `Mh`'s root, `0`
-elsewhere, with `D` the two programs' shortfalls against the public bests, in units of priced cost. -/
 noncomputable def combY (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm ps η : ℝ) (o : P.Orc) (a : P.Inst)
     {St : Type} (s : St) (Mw : G.Mc.Alg (St × P.Draw) P.Tr) (Mh : G.Mc.Alg (P.Orc × (St × P.Draw) × P.Tr) P.Root)
     (Dm Ds : P.Draw → Prop) (ω : P.Draw × P.Chk) : ℝ :=
@@ -238,9 +189,6 @@ noncomputable def combY (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm ps
       roundShortfall ps (G.cost μ Mh (o, (s, ω.1), G.Mc.eval Mw (s, ω.1))))) else 0
 
 open Classical in
-/-- **One round's combined moment**: SAK(matmul)'s moment on the words at rate `η H/H_mm` and SHA-512's speed's on
-their commitment at rate `η H/H_sha`, at the weights `H_mm/H` and `H_sha/H`, with the rest of the honest round `H_o/H`
-at shortfall `0`, bound the combined factor's average by 1 (the convexity of `exp`). -/
 theorem combined_moment_le (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm ps η Hmm Hsha Ho : ℝ)
     (hHmm : 0 < Hmm) (hHsha : 0 < Hsha) (hHo : 0 ≤ Ho) (o : P.Orc) (a : P.Inst) {St : Type} (s : St)
     (Mw : G.Mc.Alg (St × P.Draw) P.Tr) (Mh : G.Mc.Alg (P.Orc × (St × P.Draw) × P.Tr) P.Root) (Dm Ds : P.Draw → Prop)
@@ -296,10 +244,8 @@ theorem combined_moment_le (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm
     _ = 1 := by rw [mul_one, mul_one, hsum]
 
 open Classical in
-/-- **Sampling block `w`'s factor of the supermartingale** at the oracle `o`, its advice and committed instance `s`
-(both fixed before the block's coins) and its coin: the combined factor at the instance `s.2` and the advice `s.1`
-where they are good for the block (`Good`: the instance registrable, and the oracle and advice good for `SAKSha`),
-and `1` where they aren't (the stopped process: a bad block is counted in `κ_S` or `κ_sha`, not in the luck). -/
+/-- Sampling block `w`'s factor of the supermartingale, frozen at `1` where the instance or the oracle and
+advice are bad for the block: a bad block counts in `κ_S` or `κ_sha`, not in the luck. -/
 noncomputable def roundF {G : Accel} {P : RoundProto} {k : ℕ} {Adv : Type} (μ : G.Res → ℝ) (pm ps : Fin k → ℝ)
     (η : ℝ) (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr) (Mh : Fin k → G.Mc.Alg (P.Orc × (Adv × P.Draw) × P.Tr) P.Root)
     (Good : P.Orc → Fin k → Adv × P.Inst → Prop) (Dm : Fin k → Adv × P.Inst → P.Draw → Prop)
@@ -336,12 +282,6 @@ theorem expect_roundF_le {G : Accel} {P : RoundProto} {k : ℕ} {Adv : Type} (μ
     rw [e]
     exact expect_le_of_le zero_le_one fun _ => le_rfl
 
-/-! ## The floor -/
-
-/-- **The floor over the period**: where each round's shortfall `D w` is at least its priced shortfall against the
-public bests, the exchange-free programs cost at most the extracted ones plus `β` a bit, and those cost at most the
-credited use `S` plus the walk and log `Ξ` and exchanged at most `K` bits, the credited use is at least
-`(1 − (ε_A + Σ_w D w / C)) C`, with `ε_A` the error without the luck (`epsWorkSound` at `δ = 1`). -/
 theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ) {η β K S Ξ : ℝ} (hβ : 0 ≤ β)
     (hS : 0 ≤ S) (hDw : ∀ w, pm w - cw' w + (ps w - ch' w) ≤ D w)
     (hcw : ∀ w, cw' w ≤ cw w + β * ew w) (hch : ∀ w, ch' w ≤ ch w + β * eh w)
@@ -366,12 +306,6 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
   · rw [sub_mul, add_mul, add_mul, one_mul, div_mul_cancel₀ _ hC, div_mul_cancel₀ _ hC, div_mul_cancel₀ _ hC]
     linarith
 
-/-! ## The cap on oracle calls -/
-
-/-- **A run whose timed use fits, and whose selected answers run within the period, is within the cap `Q`**: by (G3) the
-calls in the sampling blocks' commit phases and work use at least `calls · callUse_r` of a resource `r` a call uses,
-which fits within its capacity `cap_r ≤ Q callUse_r`, and a selected answer's calls use at most its use, which is at
-most `cap_r`. -/
 theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
     (sel : P.Chk → Prop) (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r)
     (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) (o : P.Orc) (x : Fin k → P.Draw × P.Chk)
@@ -392,11 +326,6 @@ theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P
     exact le_of_mul_le_mul_right ((h1.trans h2).trans hc) hr
   · exact le_of_mul_le_mul_right ((((hG3 (A.answer b) (A.answerIn o x b)).2 r).trans (hans b hb r)).trans hc) hr
 
-/-! ## The headline -/
-
-/-- **Markov on the moment at `δ_coin`**: a period sound in moment at rate `η > 0` (`MomentSound`) is `FreedSound`
-at `ε + ln(1/δ_coin)/(η C)` but with probability `δ_coin + κ`: where the shortfall `D` stays below `ln(1/δ_coin)/η` the
-moment's own bound holds at the larger `ε`, and `e^{η D} ≤ M` reaches `1/δ_coin` with probability at most `δ_coin`. -/
 theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {verdict : Verdict P k Obs}
     {dev : Readings G P k Obs} {Pd : Period G} {W C η δ : ℝ} {ε ε' κ κ' : Prover G P k → ℝ} (hη : 0 < η)
     (hδ : 0 < δ) (hC : 0 ≤ C) (h : MomentSound G P k verdict dev Pd W ε C η κ)
@@ -440,11 +369,9 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
   classical
   obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hG3 hP1 hP2 A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
-  -- A block's advice and its committed instance, both fixed before its coins.
   have hadvI : ∀ o x x' w, (∀ v : Fin k, v < w → x v = x' v) →
       ((adv o x w, A.inst o x w) : Adv × P.Inst) = (adv o x' w, A.inst o x' w) := fun o x x' w h =>
     Prod.ext (hadv o x x' w h) (Pouw.SecurityProofs.ShaRealize.inst_congr A o w h)
-  -- The exchange-free programs.
   choose Mw' hMw' using fun w => hout hG1 hG2 hP1 hP2 (Mw w)
   choose Mh' hMh' using fun w => hout hG1 hG2 hP1 hP2 (Mh w)
   have hevw : ∀ w i, G.Mc.eval (Mw' w) i = G.Mc.eval (Mw w) i := fun w i => (hMw' w i).1
@@ -453,7 +380,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     intro o x w
     rw [(hMh' w _).1, hevw]
     exact hroot o x w
-  -- SAK(matmul)'s degenerate dithers, per block, advice and registrable instance.
   have hDm0 : ∀ (w : Fin k) (s : Adv × P.Inst), ∃ D : P.Draw → Prop, s.2 ∈ Reg w → prob D ≤ κdmm (Badv A) ∧
       wordsMoment G P μ (pubmm w) (η * (Hmm w + Hsha w + Ho w) / Hmm w) s.2 s.1 (Mw' w) D ≤ 1 := by
     intro w s
@@ -462,8 +388,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
       exact ⟨D, fun _ => hD⟩
     · exact ⟨fun _ => False, fun h => absurd h hs⟩
   choose Dm hDm using hDm0
-  -- The good oracles, advice and instances: registrable, and good for SHA-512's speed, with its degenerate
-  -- dithers.
   obtain ⟨Good, hGood⟩ : ∃ Good : P.Orc → Fin k → Adv × P.Inst → Prop, ∀ o w s, Good o w s ↔ s.2 ∈ Reg w ∧
       ∃ D : P.Draw → Prop, prob D ≤ κdsha (Badv A) ∧ commitMoment G P μ (pubsha w)
         (η * (Hmm w + Hsha w + Ho w) / Hsha w) o s.2 s.1 (Mw' w) (Mh' w) D ≤ 1 :=
@@ -476,7 +400,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
       exact ⟨D, fun _ => hD⟩
     · exact ⟨fun _ => False, fun h => absurd h hg⟩
   choose Ds hDs using hDs0
-  -- The events' predicates.
   obtain ⟨okw, hokw⟩ : ∃ okw : P.Orc → (Fin k → P.Draw × P.Chk) → Fin k → Prop, ∀ o x w, okw o x w ↔
       (P.ok (A.inst o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) ∧
         P.opens o (A.root o x w) (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1))) :=
@@ -514,7 +437,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     rw [hDval]
     unfold roundShortfall
     exact add_nonneg (le_max_left _ _) (le_max_left _ _)
-  -- The error is nonnegative.
   have hC0 : 0 ≤ ∑ w, (Hmm w + Hsha w + Ho w) :=
     Finset.sum_nonneg fun w _ => by linarith [hpos w]
   have hC : ∑ r, μ r * (1 * Pd.hon r) = ∑ w, (Hmm w + Hsha w + Ho w) := by
@@ -529,7 +451,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
       (div_nonneg hΞ0 hC0)
     show 0 ≤ Hmm w + Hsha w + Ho w - pubmm w - pubsha w
     linarith [hpos w]
-  -- The floor, at the blocks' shortfall.
   have hfloor : ∀ o x, A.Passes verdict dev o x → A.WithinCap sel Q o x →
       (1 - (epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η 1 β K +
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w) + (∑ w, Dval o x w) / ∑ r, μ r * (1 * Pd.hon r))) *
@@ -579,7 +500,6 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
         rw [hevw]
         exact (hMh' w _).2.2)
       hcost hextk
-  -- The degenerate dithers.
   have hκ2 : 0 ≤ κdmm (Badv A) + κdsha (Badv A) := add_nonneg (hκd _).1 (hκd _).2
   have E4 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
       ∃ w, Good ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w) ∧ deg ox.1 ox.2 w) ≤
@@ -604,20 +524,17 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     · refine le_trans (prob_mono (q := fun _ => False) fun ω h => hg h.1) ?_
       rw [prob_false]
       exact hκ2
-  -- The bad oracles and advice at registrable instances.
   have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => ∃ w, A.inst ox.1 ox.2 w ∈ Reg w ∧
       ¬ Good ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w)) ≤ κsha A := by
     refine le_trans (prob_mono fun ox h => ?_) (hsha hG1 hG2 hG3 hP1 hP2 A (Badv A) Adv henc adv hadv Mw' Mh'
       (fun w i => (hMw' w i).2.1) (fun w i => (hMh' w i).2.1) hroot')
     obtain ⟨w, hr, hw⟩ := h
     exact ⟨w, hr, fun hD => hw ((hGood _ _ _).mpr ⟨hr, hD⟩)⟩
-  -- The extraction.
   have E2 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
       A.Accepted Reg ox.1 ox.2 ∧ A.WithinCap sel Q ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
     refine le_trans (prob_mono fun ox h => ?_) hx
     obtain ⟨hacc, hq, w, hw⟩ := h
     exact ⟨hacc, hq, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
-  -- The shortfall, the moment (the stopped supermartingale) and the bad event.
   refine ⟨fun ox => ∑ w, Dval ox.1 ox.2 w,
     fun ox => ∏ w, roundF μ pubmm pubsha η Mw' Mh' Good Dm Ds ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w) (ox.2 w),
     fun ox => (((A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ∨
@@ -669,7 +586,6 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
   rw [div_one, Real.log_one, zero_div, add_zero]
   ring
 
-/-- The segmented schedule's sum: `Σ_{i < n} (2 (i + 1) M + 1) = n ((n + 1) M + 1)`. -/
 theorem sum_segments (M n : ℕ) : ∑ i : Fin n, (2 * (((i : ℕ) + 1) * M) + 1) = n * ((n + 1) * M + 1) := by
   induction n with
   | zero => simp

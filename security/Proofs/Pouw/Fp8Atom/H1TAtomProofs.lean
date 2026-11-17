@@ -9,23 +9,13 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# The atom as two truncations (`H1TAtomValue`)
-
-With the accumulator `+0` and no NaN code, `hopperStep` sums the 32 exact products in one group: each is truncated
-toward zero to the grid `2^(E − 13)` of the largest product exponent `E` (`aligned_eq_truncZ`), the truncated products
-are summed exactly, and the sum is truncated toward zero to 14 significant bits (`normalize`). Every nonzero product
-has an exponent in `[−12, 16]` and every aligned product is below `2^15`, so the sum's exponent is in `[−25, 23]`: no
-saturation, no subnormal, and `packTerm` writes the term exactly.
--/
+/-! The atom as two truncations (`H1TAtomValue`). -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T
-
-/-! ## The step on the zero accumulator -/
 
 theorem fp32Value_zero : fp32Value 0 = .fin Term.zero := rfl
 
@@ -55,8 +45,6 @@ theorem groupStepTotal_fin (ts : List Term) :
   have h3 : (Value.fin Term.zero :: ts.map Value.fin).filterMap Value.finite? = Term.zero :: ts := by
     simp [List.filterMap_map, Function.comp_def, Value.finite?]
   simp only [h1, h2, h3, Bool.false_eq_true, ite_false, Bool.and_self]
-
-/-! ## The alignment exponent -/
 
 theorem maxExp_ge (z : ℤ) (ts : List Term) : z ≤ maxExp z ts := by
   induction ts generalizing z with
@@ -99,8 +87,6 @@ theorem maxExp_le (z B : ℤ) (ts : List Term) (hz : z ≤ B) (h : ∀ t ∈ ts,
 theorem maxExp_zero_cons (z : ℤ) (ts : List Term) : maxExp z (Term.zero :: ts) = maxExp z ts := by
   unfold maxExp; simp [Term.zero]
 
-/-! ## The first truncation, on values -/
-
 theorem truncTo_mul {g : ℚ} (hg : 0 < g) (q : ℚ) : truncTo g (q * g) = (truncZ q : ℚ) * g := by
   unfold truncTo truncZ
   rw [abs_mul, abs_of_pos hg, mul_div_cancel_right₀ _ hg.ne']
@@ -116,7 +102,6 @@ theorem truncTo_zero (g : ℚ) : truncTo g 0 = 0 := by simp [truncTo]
 
 theorem two_zpow_ne (k : ℤ) : (2 : ℚ) ^ k ≠ 0 := zpow_ne_zero _ two_ne_zero
 
-/-- An aligned term, on the grid `2^(E − 13)`, is its value truncated toward zero to the grid. -/
 theorem aligned_value {E : ℤ} {t : Term} (hE : t.mag ≠ 0 → t.exp ≤ E) :
     (aligned 14 E t : ℚ) * 2 ^ (E - 13) = truncTo (2 ^ (E - 13)) t.value := by
   by_cases hm : t.mag = 0
@@ -125,8 +110,6 @@ theorem aligned_value {E : ℤ} {t : Term} (hE : t.mag ≠ 0 → t.exp ≤ E) :
   · have hv := value_eq (w := 14) (by norm_num) (hE hm)
     rw [show (E - (14 : ℕ) + 1 : ℤ) = E - 13 by push_cast; ring] at hv
     rw [hv, aligned_eq_truncZ (by norm_num), truncTo_mul (two_zpow_pos _)]
-
-/-! ## The word -/
 
 theorem fp32Value_packTerm {t : Term} (h1 : 2 ^ 23 ≤ t.mag) (h2 : t.mag < 2 ^ 24) (e1 : -126 ≤ t.exp)
     (e2 : t.exp ≤ 127) : fp32Value (packTerm t) = .fin t := by
@@ -176,8 +159,6 @@ theorem wordQ_packTerm {t : Term} (h1 : 2 ^ 23 ≤ t.mag) (h2 : t.mag < 2 ^ 24) 
     (e2 : t.exp ≤ 127) : wordQ (packTerm t) = some t.value := by
   simp [wordQ, fp32Value_packTerm h1 h2 e1 e2, Value.finite?]
 
-/-! ## The second truncation -/
-
 theorem floor_shift (n L : ℕ) : (⌊(n : ℚ) * 2 ^ ((13 : ℤ) - L)⌋ : ℚ) =
     ((if 14 < L + 1 then n >>> (L + 1 - 14) else n <<< (14 - (L + 1)) : ℕ) : ℚ) := by
   split_ifs with h
@@ -203,8 +184,6 @@ theorem binade_nat_mul {n : ℕ} (hn : n ≠ 0) (k : ℤ) : binade ((n : ℚ) * 
   · rw [show (n.log2 : ℤ) + k + 1 = ((n.log2 + 1 : ℕ) : ℤ) + k by push_cast; ring, zpow_add₀ two_ne_zero, zpow_natCast]
     exact mul_lt_mul_of_pos_right (by exact_mod_cast h2) (two_zpow_pos _)
 
-/-- `normalize` on a nonzero sum at an exponent in `[−12, 16]`, below `2^21`: a normal term, the sum truncated toward
-zero to 14 significant bits. -/
 theorem normalize_spec {E total : ℤ} (h0 : total ≠ 0) (hE1 : -12 ≤ E) (hE2 : E ≤ 16) (hT : total.natAbs < 2 ^ 21) :
     2 ^ 23 ≤ (normalize 14 E total).mag ∧ (normalize 14 E total).mag < 2 ^ 24 ∧
       -126 ≤ (normalize 14 E total).exp ∧ (normalize 14 E total).exp ≤ 127 ∧
@@ -241,7 +220,6 @@ theorem normalize_spec {E total : ℤ} (h0 : total ≠ 0) (hE1 : -12 ≤ E) (hE2
   rw [hfa, ite_eq_right (by omega)]
   dsimp only
   refine ⟨by omega, by omega, by omega, by omega, ?_⟩
-  -- the value
   have hy0 : (total : ℚ) * 2 ^ (E - 13) ≠ 0 := mul_ne_zero (by exact_mod_cast h0) (two_zpow_ne _)
   have habs : |(total : ℚ) * 2 ^ (E - 13)| = (total.natAbs : ℚ) * 2 ^ (E - 13) := by
     rw [abs_mul, abs_of_pos (two_zpow_pos _), Nat.cast_natAbs, Int.cast_abs]
@@ -268,8 +246,6 @@ theorem normalize_spec {E total : ℤ} (h0 : total ≠ 0) (hE1 : -12 ≤ E) (hE2
     push_cast; field_simp; norm_num
   · simp only [hneg, decide_false, ite_false, Bool.false_eq_true, (not_congr hs).2 hneg]
     push_cast; field_simp; norm_num
-
-/-! ## The atom -/
 
 theorem sig_le : ∀ c : Code, c.sig ≤ 15 := by decide +kernel
 
@@ -312,7 +288,6 @@ theorem alignedSum_eq (E : ℤ) (a b : Fin 32 → Code) :
   rw [alignedSum, List.map_cons, List.sum_cons, hz, zero_add, List.map_ofFn, List.sum_ofFn]
   simp only [Function.comp_apply]
 
-/-- **The atom is two truncations.** -/
 theorem h1tAtomValue : H1TAtomValue := by
   intro a b ha hb
   rw [hopperStep_zero a b ha hb, groupStepTotal_fin]
@@ -362,9 +337,6 @@ theorem h1tAtomValue : H1TAtomValue := by
     simp only [packValue]
     rw [wordQ_packTerm m1 m2 e1 e2, hv, htot]
 
-/-! ## `trunc14`: monotone, and its cell -/
-
-/-- `trunc14` on a positive value. -/
 def tpos (t : ℚ) : ℚ := (⌊t / 2 ^ (binade t - 13)⌋ : ℚ) * 2 ^ (binade t - 13)
 
 theorem trunc14_pos {t : ℚ} (ht : 0 < t) : trunc14 t = tpos t := by
@@ -434,7 +406,6 @@ theorem trunc14_lt_zero {y : ℚ} (h : y < 0) : trunc14 y < 0 := by
 theorem trunc14_gt_zero {y : ℚ} (h : 0 < y) : 0 < trunc14 y := by
   rw [trunc14_pos h]; exact tpos_pos h
 
-/-- **L7: `trunc14` is monotone.** -/
 theorem trunc14Mono : Trunc14Mono := by
   intro y y' h
   rcases lt_trichotomy y 0 with hy | hy | hy
@@ -467,7 +438,6 @@ theorem abs_trunc14_sub (y : ℚ) : |trunc14 y - y| = abs (trunc14 (abs y) - abs
   · rw [abs_of_neg h, trunc14_neg, ← abs_neg]; ring_nf
   · rw [abs_of_nonneg h]
 
-/-- **L3: the cell.** -/
 theorem trunc14Cell : Trunc14Cell := by
   intro y y' hy
   have hay := abs_pos.2 hy

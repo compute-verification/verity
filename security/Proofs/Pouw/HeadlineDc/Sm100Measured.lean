@@ -3,23 +3,7 @@ module
 public import Proofs.Pouw.HeadlineDc.Sm100
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The B200's headline on its measured vector
-
-`Sm100MeasuredHeadline` is `Whole.dIdealFloor_whole` at DC-100-ri and `dither-2s-licpw-redux-ldtm0-l32`
-(`Definitions.Pouw.HeadlineDc.Sm100Measured`), at the data's certificate `π* = Sm100Measured.lamStar`, the issue
-row (`sm100m_lamStar`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
-
-* the data, by `decide`: issue is ♭'s largest facet of DC-100-ri's 9 (`sm100m_max`), so `B_♭` is its issue load
-  (`sm100m_bnd`); every writer kind's word costs at least `1/32768` there (`sm100m_writers`), and so do the vector
-  and table words at `½` (`sm100m_vec`), so `w* ≥ 1/32768` (`sm100m_wStar`); each of the 14 fold routes costs at
-  least the cheapest one's load there (`sm100m_fold`, `sm100m_phiStar`);
-* A6 (`SheetWords`) gives (I2)/(I4) `WordsWritten` and, at `q = q_T = ½` and `b_T = 0`, (I3) `ScalarRoute`
-  (`scalarRoute_half`); (I5) `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
-* the folded branch from those bounds (`folded_of_lower`): below `900/100000` by `decide` (`sm100m_folded_q`);
-* the unfolded branch (`unfolded_of_lower`): below `900/100000` by `decide` (`sm100m_unfolded_q`);
-* (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
--/
+/-! The B200's headline on its measured vector. -/
 
 @[expose] public section
 
@@ -28,22 +12,16 @@ namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
   ResourceAccounting.SecurityProofs.TS.Headline
 
-/-- DC-100-ri's row `r` as rationals, by class index. -/
 def vfCoef100 (r i : ℕ) : ℚ := Sparse.coeff (Sm100Measured.dc100ri.getD r []) i
 
-/-- The measured machine's row `r`. -/
 def vfRow100 (r : Fin 9) (i : ℕ) : ℚ := vfCoef100 r.val i
 
-/-- ♭'s counts on DC-100-ri, its four lists in `labelled`'s order. -/
 def flat100M : Sparse := Sm100.flatWords ++ Sm100Measured.flatFold ++ Sm100.flatFill ++ Sm100Measured.flatSkip
 
-/-- `B_♭` on DC-100-ri as a rational: ♭'s load on issue. -/
 def B100M : ℚ := dot (vfCoef100 0) 52 flat100M
 
-/-- Fold route `i`'s load on issue as a rational. -/
 def load100M (i : ℕ) : ℚ := dot (vfCoef100 0) 52 (Sm100Measured.d2s.folds.getD i [])
 
-/-- The cheapest fold route's load on issue. -/
 def phi100M : ℚ := ((List.range 14).map load100M).foldr min (load100M 0)
 
 theorem sm100m_max : ∀ i < 9, dot (vfCoef100 i) 52 flat100M ≤ B100M := by decide +kernel
@@ -96,7 +74,6 @@ theorem sm100m_qT : Sm100Measured.model.qT = 1 / 2 := by
   show ((1 / 2 : ℚ) : ℝ) = 1 / 2
   norm_num
 
-/-- The data's certificate is the issue row's. -/
 theorem sm100m_lamStar : Sm100Measured.lamStar = onFacet 0 := by
   funext r
   show ((Sparse.coeff [(0, 1, 1)] r.val : ℚ) : ℝ) = if r = 0 then 1 else 0
@@ -147,7 +124,6 @@ theorem sm100m_vecMin : 1 ≤ Sm100Measured.model.vecMin 0 := by
   rw [sm100m_hG, ← hk]
   exact_mod_cast sm100m_vec j hj
 
-/-- Every word route costs at least `1/32768` on issue. -/
 theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.demand hd 0 := by
   intro h
   cases h with
@@ -176,13 +152,11 @@ theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.
       _ ≤ 1 / 2 / 32 * Sm100Measured.model.vecMin 0 := mul_le_mul_of_nonneg_left sm100m_vecMin (by norm_num)
   | side u => exact u.elim
 
-/-- `w* ≥ 1/32768` at π*. -/
 theorem sm100m_wStar : (1 : ℝ) / 32768 ≤ Sm100Measured.model.wStar Sm100Measured.lamStar := by
   have h := wStar_ge Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     sm100m_demand_issue
   rwa [sm100m_lam0, one_mul] at h
 
-/-- `φ* ≥` the cheapest fold route's load on issue. -/
 theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Measured.lamStar := by
   refine phiStar_ge_facet Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     fun φ => ?_
@@ -196,7 +170,6 @@ theorem sm100m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm100Measured.model sm100m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 900/100000`. -/
 theorem sm100m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     1 - 900 / 100000 ≤ 1 - Sm100Measured.model.epsSkip Sm100Measured.flat Sm100Measured.lamStar -
       Sm100Measured.model.epsCert Sm100Measured.flat Sm100Measured.lamStar -
@@ -211,7 +184,6 @@ theorem sm100m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm100m_Nw, sm100m_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 900/100000`. -/
 theorem sm100m_unfolded :
     1 - 900 / 100000 ≤ (Sm100Measured.model.Nw * Sm100Measured.model.wStar Sm100Measured.lamStar +
       (1 - Sm100Measured.model.muF) * Sm100Measured.model.Nw *

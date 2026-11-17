@@ -8,15 +8,7 @@ public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Fp8Atom.Pinned
 public import Proofs.Pouw.Fp8Atom.Checks.Add
 
-/-!
-# Proofs of the FP32 add statements
-
-`binade` brackets a positive rational (`binade_spec`, from `Nat.log2` of its numerator and denominator), so a nonzero
-`x` has its significand `|x| / ulp x` in `[2^23, 2^24)`. `rn` is the sign times `rp |x|`, where `rp` rounds a
-magnitude; `rp` is monotone within a binade (`roundEven_mono`) and across binades (it maps a binade into
-`[2^k, 2^(k+1)]`). Exactness is `roundEven` of an integer; absorption and movement follow from `roundEven_near`,
-monotonicity and exactness at the neighbours `r ± ulp r`.
--/
+/-! Proofs of the FP32 add statements. -/
 
 @[expose] public section
 
@@ -24,11 +16,8 @@ namespace Pouw.Fp8Atom.Proofs
 
 open Pouw.Fp8Atom
 
-/-! ## Conformance -/
-
 theorem add_length : Vectors.add.length = 1090 := by decide +kernel
 
-/-- **FP32 add conformance** on the 1,090 vectors. -/
 theorem addConformance : AddConformance := by
   refine ⟨by rw [add_length], fun v hv => ?_⟩
   have h := List.all_eq_true.mp Checks.add v hv
@@ -36,8 +25,6 @@ theorem addConformance : AddConformance := by
   split at h
   next x y z ha hb hc => exact ⟨x, y, z, ha, hb, hc, of_decide_eq_true h⟩
   next => exact absurd h Bool.false_ne_true
-
-/-! ## Binades and significands -/
 
 theorem two_zpow_pos (k : ℤ) : (0 : ℚ) < 2 ^ k := zpow_pos (by norm_num) k
 
@@ -96,14 +83,11 @@ theorem ulp_pos (x : ℚ) : 0 < ulp x := two_zpow_pos _
 
 theorem ulp_abs (x : ℚ) : ulp |x| = ulp x := by simp [ulp]
 
-/-- The significand of `x ≠ 0` lies in `[2^23, 2^24)`. -/
 theorem sig_bounds {x : ℚ} (hx : x ≠ 0) : 2 ^ 23 ≤ |x| / ulp x ∧ |x| / ulp x < 2 ^ 24 := by
   have hx' : 0 < |x| := abs_pos.2 hx
   obtain ⟨h1, h2⟩ := binade_spec hx'
   rw [le_div_iff₀ (ulp_pos x), div_lt_iff₀ (ulp_pos x), ulp, two_pow_23, two_pow_24]
   exact ⟨h1, h2⟩
-
-/-! ### Rounding to an integer -/
 
 theorem floor_le_roundEven (m : ℚ) : ⌊m⌋ ≤ roundEven m := by
   unfold roundEven; dsimp only; split_ifs <;> omega
@@ -133,9 +117,6 @@ theorem roundEven_mono {m m' : ℚ} (h : m ≤ m') : roundEven m ≤ roundEven m
     rw [← heq]
     split_ifs <;> first | omega | (exfalso; linarith)
 
-/-! ### Rounding a magnitude -/
-
-/-- `rn` on magnitudes. -/
 def rp (t : ℚ) : ℚ := (roundEven (t / ulp t) : ℚ) * ulp t
 
 theorem rn_eq (x : ℚ) : rn x = (if x < 0 then -1 else 1) * rp |x| := by
@@ -203,11 +184,9 @@ theorem rn_neg (x : ℚ) : rn (-x) = -rn x := by
   · subst hx; simp [rp_zero]
   · rw [ite_eq_left (by linarith), ite_eq_right (by linarith)]; ring
 
-/-- `rp` fixes a magnitude whose significand is an integer. -/
 theorem rp_of_int {t : ℚ} {n : ℤ} (h : t / ulp t = n) : rp t = t := by
   unfold rp; rw [h, roundEven_intCast, ← h, div_mul_cancel₀ _ (ulp_pos t).ne']
 
-/-- A representable `x ≠ 0` has an integer significand. -/
 theorem sig_int {x : ℚ} (hr : Representable x) (hx : x ≠ 0) : ∃ n : ℤ, |x| / ulp x = n := by
   obtain ⟨m, e, hm, rfl⟩ := hr
   have hx' : 0 < |(m : ℚ) * 2 ^ e| := abs_pos.2 hx
@@ -240,7 +219,6 @@ theorem representable_neg {x : ℚ} (h : Representable x) : Representable (-x) :
   obtain ⟨m, e, hm, rfl⟩ := h
   exact ⟨-m, e, by rwa [abs_neg], by push_cast; ring⟩
 
-/-- A positive representable `r` is `n · ulp r` with `2^23 ≤ n < 2^24`. -/
 theorem pos_sig {r : ℚ} (hr : Representable r) (h0 : 0 < r) :
     ∃ n : ℤ, r = n * ulp r ∧ 2 ^ 23 ≤ n ∧ n < 2 ^ 24 := by
   obtain ⟨n, hn⟩ := sig_int hr h0.ne'
@@ -293,7 +271,6 @@ theorem term_representable (t : Term) (h : t.mag < 2 ^ 24) : Representable t.val
     split <;> simpa using this
   · unfold Term.value; split <;> push_cast <;> ring
 
-/-- Every finite FP32 word's value is representable. -/
 theorem wordQ_representable {w : Nat} {x : ℚ} (h : wordQ w = some x) : Representable x := by
   unfold wordQ fp32Value at h
   dsimp only at h
@@ -303,7 +280,5 @@ theorem wordQ_representable {w : Nat} {x : ℚ} (h : wordQ w = some x) : Represe
   · exact lt_trans (Nat.mod_lt _ (by norm_num)) (by norm_num)
   · exact Nat.or_lt_two_pow (by decide) (lt_trans (Nat.mod_lt _ (by norm_num)) (by norm_num))
 
-
-/-! ## The guarantees -/
 
 end Pouw.Fp8Atom.Proofs

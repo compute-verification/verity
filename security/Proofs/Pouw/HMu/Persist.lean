@@ -3,14 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.HMu
 public import Proofs.ResourceAccounting.Lemmas.HMu
 
-/-!
-# Lemma B′ for a persistent pattern, one word a unit
-
-Two word sequences that agree before position `i`, differ at `i` and agree from `i + 1` to the checkpoint `c` give
-different states at `c`, for a fold whose step is injective in the word and in the state: the states agree up to `i`,
-part at `i + 1` and stay apart. A persistent pattern whose only position before `c` is `i` is such a pair for any two
-skipped values.
--/
+/-! Lemma B′ for a persistent pattern, one word a unit. -/
 
 @[expose] public section
 

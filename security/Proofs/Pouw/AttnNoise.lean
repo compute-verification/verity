@@ -34,25 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Attention's noise at every operand value
-
-On the design `dP`/`dX` (`Definitions.Pouw.RelativeSecurity`): the peeled side `P̃ = P + U`, `U` of period `L` per
-row from the planes `β_p(i, j)` at weights `w`, and the served side `X = V + b` with a fresh coin per entry. Adopted
-P·V (H1's `peel`: `P̃ = P_prob − 64 + U(·, κ mod 32)`, `X = V + b`) is this design with `L = 32`.
-
-* `pairDiff_dPrefix_operands`: a committed prefix word's second differences don't read the operands, so every floor
-  the chain lemma (`chain_products_ge`, `chainBound_gProd`) gives holds at every `P` and `V` alike: the zero instance,
-  a one-hot or uniform `P`, `V = 0`. A cheater gains nothing on the words by choosing operands, so the zero-operand case
-  (`K = V = 0` for one KV head) leaves the words' floor whole.
-* `dPrefix_split`: the word at `(P, V)` is the noise's own product's word (the word at `P = 0`) plus the clean
-  product `Σ P X` (`dClean`), which is bit-affine (`crossRankLe_dClean`: cross rank 0). The peel, the noise's own
-  product, is therefore the committed word less a bit-affine word, and the peeled served output `Σ P X` forces no
-  product at any `P`: what the honest prover spends on it beyond the words has no floor.
-* `pairDiff_dPrefix_noNoise`, `not_chainBound_noNoise`: with no noise on the peeled side (`w = 0`, one-sided noise)
-  every word is bit-affine and no chain bound holds, for any class of products and any factor: B3's collapse is
-  exactly the one-sided case.
--/
+/-! Attention's noise: a committed prefix word's floor holds at every operand value, and one-sided noise has
+none. -/
 
 @[expose] public section
 
@@ -70,8 +53,6 @@ theorem dPrefix_eq_sum (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
   funext z
   simp only [dPrefix, ite_mul, one_mul, zero_mul]
 
-/-- **The words' second differences don't read the operands**: a committed prefix word at `(P, V)` has, on every
-pair of distinct bits, the second difference it has at any other `(P′, V′)`, the zero instance among them. -/
 theorem pairDiff_dPrefix_operands (pc pc' : Fin n → Fin B → Fin L → R) (vq vq' : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) {u v : DBits n L np B n'} (huv : u ≠ v) :
     pairDiff (dPrefix pc vq w i l t) u v = pairDiff (dPrefix pc' vq' w i l t) u v := by
@@ -80,8 +61,6 @@ theorem pairDiff_dPrefix_operands (pc pc' : Fin n → Fin B → Fin L → R) (vq
   rw [pairDiff_mul_left, pairDiff_mul_left, pairDiff_dIncr _ _ _ _ _ _ huv, pairDiff_dIncr _ _ _ _ _ _ huv]
   rfl
 
-/-- The clean product's prefix `Σ_{t′ ≤ t} Σ_j P_(i, t′L+j) X_(t′L+j, l)`: bit-affine, the coins entering through `X`
-alone. At `t = B − 1` it is the peeled served output of cell `(i, l)`. -/
 def dClean (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (i : Fin n) (l : Fin n') (t : ℕ) :
     BitAff (DBits n L np B n') R :=
   ⟨∑ t' : Fin B, if t'.val ≤ t then ∑ j, pc i t' j * vq t' j l else 0,
@@ -109,8 +88,6 @@ theorem dIncr_split (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L
   simp only [Pi.zero_apply]
   ring
 
-/-- **A noised word is the noise's own product plus the clean product**: the prefix word at `(P, V)` is the word at
-`P = 0` (the noise's product `U·X`, which a peel subtracts) plus `dClean`, a bit-affine word. -/
 theorem dPrefix_split (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
     (i : Fin n) (l : Fin n') (t : ℕ) (z : DBits n L np B n' → R) :
     dPrefix pc vq w i l t z = dPrefix 0 vq w i l t z + (dClean pc vq i l t).eval z := by
@@ -121,12 +98,10 @@ theorem dPrefix_split (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin
   · exact dIncr_split pc vq w i l t' z
   · simp
 
-/-- **The peeled served output forces no product**: its cross block is 0 at every `P` and `V`. -/
 theorem crossRankLe_dClean (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (i : Fin n)
     (l : Fin n') (t : ℕ) : CrossRankLe (fun z => (dClean (np := np) pc vq i l t).eval z) 0 :=
   ⟨Fin.elim0, Fin.elim0, fun _ _ => by simpa using pairDiff_aff _ Sum.inl_ne_inr⟩
 
-/-- With no noise on the peeled side every committed word is bit-affine. -/
 theorem pairDiff_dPrefix_noNoise (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (i : Fin n) (l : Fin n') (t : ℕ) {u v : DBits n L np B n'} (huv : u ≠ v) :
     pairDiff (dPrefix pc vq 0 i l t) u v = 0 := by
@@ -135,8 +110,6 @@ theorem pairDiff_dPrefix_noNoise (pc : Fin n → Fin B → Fin L → R) (vq : Fi
   rw [pairDiff_mul_left, pairDiff_dIncr _ _ _ _ _ _ huv]
   cases u <;> cases v <;> simp [dP]
 
-/-- **One-sided noise has no floor**: with `w = 0` no chain bound holds, for any class of products and any factor;
-at the zero instance every word is 0. -/
 theorem not_chainBound_noNoise (hL : 0 < L) (hn : 0 < n) (hn' : 0 < n') (hB : 0 < B)
     (Ok : ((DBits n L np B n' → R) → R) → Prop) (c : ℕ) : ¬ ChainBound R n L np B n' 0 Ok c := by
   intro h

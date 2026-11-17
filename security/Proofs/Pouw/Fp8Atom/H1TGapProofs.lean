@@ -7,14 +7,7 @@ import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 
-/-!
-# Proofs of H-1T's gap corollary
-
-A credited word of unit `u` reads only coordinate `u` of the joint salt. So placing a salt `s` of unit `u` in an
-otherwise fixed joint salt (`place`) recovers unit `u`'s word on `s`, and leaves every other unit's words alone. Two
-credited words of different units that are equal are then both constant, and a word equal to a free value is constant
-or a raw XOF word of its own unit: `DistinctLiveH1T` excludes all three. The bound is `distinctLiveMH100` at `ε = 0`.
--/
+/-! Proofs of H-1T's gap corollary. -/
 
 @[expose] public section
 
@@ -24,10 +17,8 @@ open Pouw.Fp8Atom Pouw.Fp8Atom.H1T Pouw.Dimension.H100
 
 variable {N : ℕ} {Us : Fin N → Unit}
 
-/-- The joint salt with every raw word 0. -/
 def zeroSalt (Us : Fin N → Unit) : MSalt Us := fun _ _ _ _ => ⟨0, by norm_num⟩
 
-/-- Unit `u`'s salt `s`, the others' zero. -/
 def place (Us : Fin N → Unit) (u : Fin N) (s : (Us u).Salt) : MSalt Us := Function.update (zeroSalt Us) u s
 
 theorem mword_place_self (u : Fin N) (c : Fin (Us u).m × Fin (Us u).n × Pos (Us u).T) (s : (Us u).Salt) :

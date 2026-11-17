@@ -3,25 +3,7 @@ module
 public import Proofs.Pouw.TS
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# Theorem D-ideal with fold skippers charged
-
-`DIdealFloor` with FOLD-OPT per word folded at the certificate it prices (`FoldOptFoldedAt`)
-and the whole-unit luck (`WholeLuckAt`), the form the headlines take. A round's saving is
-`κ·d_w + f·e_w`, `d_w` its deficient share and `e_w` the share of its words whose fold the run skips, with
-`κ = N_w w*/B_♭` and `f = (1 − μ_f)N_w φ*/B_♭`. The tail bound is
-PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game `wgame`, whose round weighs
-`ln(1/p₀)` when its unfolded share is positive, else `ln(1/p)` when it is deficient, else `0`:
-
-* `wgame_expBound`: the weight game has `E[e^W·1{pass}] ≤ 1` a round, from the pinned openings and the whole-unit luck
-  when `e_w > 0` (`Pr[pass] ≤ Pr[same] ≤ p₀`), else from (L) at `p`;
-* `saving_le`: along every path `κ·Σd + f·Σe ≤ Λ·ΣW` when `κ ≤ Λ·ln(1/p)` and `κ + f ≤ Λ·ln(1/p₀)`;
-* `dIdealFloor_whole`: outside `δ`, every accepted window has `T/T_cred ≥ 1 − ε_skip − ε_cert − ε_route − ε_mand −
-  Λ·ln(1/δ′)/S`; `sheetDIdealFloor_whole` is it on the data-sheet machine;
-* `max_budget`, `unfolded_floor` and `headline_of_branches`: the headlines' `Λ = max(κ/ln(1/p), (κ + f)/ln(1/p₀))`,
-  the unfolded branch's floor `(N_w w* + (1 − μ_f)N_w φ*)/B_♭ · (1 − 41/48000)` at `p₀ = ½`, `S = 48,000` and
-  `δ′ ≥ 2^-41`, and the headline's last step, a bound below both branches' floors.
--/
+/-! Theorem D-ideal with fold skippers charged. -/
 
 @[expose] public section
 
@@ -31,8 +13,6 @@ open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.
 
 variable {Ω : Type}
 
-/-- The log-luck game: round `w` weighs `ln(1/p₀)` if its unfolded share is positive, else `ln(1/p)` if its share is,
-else `0`, with the receipt game's checks. -/
 noncomputable def wgame (p p0 : ℝ) : {n : ℕ} → ReceiptGame Ω n → Unfolded Ω n → RoundGame Ω n
   | _, .done, .done => .done
   | _, .round d pass _ _ next, .round e vnext =>
@@ -46,7 +26,6 @@ theorem wgame_accepts (p p0 : ℝ) : ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfold
     simp only [wgame, ReceiptGame.game, RoundGame.accepts]
     exact and_congr_right fun _ => wgame_accepts p p0 (next x.1) (vnext x.1) x.2
 
-/-- The log-luck game's round bound: `E[e^W·1{pass}] ≤ 1` at every round, whatever the past. -/
 theorem wgame_expBound [Fintype Ω] {p p0 : ℝ} (hp : 0 < p) (hp0 : 0 < p0) :
     ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), G.Pinned → ResourceAccounting.TS.RoundGame.LuckAt p G.game →
       G.WholeLuck p0 Uf → (wgame p p0 G Uf).ExpBound 1
@@ -90,7 +69,6 @@ theorem wgame_expBound [Fintype Ω] {p p0 : ℝ} (hp : 0 < p) (hp0 : 0 < p0) :
               rw [← mul_assoc, one_div_mul_cancel hp.ne', one_mul]
           _ ≤ 1 := prob_add_not_le _
 
-/-- A round's saving is at most `Λ` times its weight: along every path, `κ·Σd + f·Σe ≤ Λ·ΣW`. -/
 theorem saving_le {p p0 κ f Λ : ℝ} [Fintype Ω] (hκ : 0 ≤ κ) (hf : 0 ≤ f) (h1 : κ ≤ Λ * Real.log (1 / p))
     (h2 : κ + f ≤ Λ * Real.log (1 / p0)) :
     ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), ResourceAccounting.TS.RoundGame.LuckAt p G.game →
@@ -119,10 +97,6 @@ theorem saving_le {p p0 κ f Λ : ℝ} [Fintype Ω] (hκ : 0 ≤ κ) (hf : 0 ≤
     simp only [ReceiptGame.game, RoundGame.deficiency, Unfolded.share, wgame]
     linarith
 
-/-- **Theorem D-ideal (2.7♭) with fold skippers charged**: `DIdealFloor` with FOLD-OPT per word folded at `π`, each
-run priced at the words it folds, `(1 − Σe/S)·N_w`, and the whole-unit luck at `p₀` beside (L) at `p`, for any `Λ ≥ 0`
-with `κ ≤ Λ·ln(1/p)` and `κ + f ≤ Λ·ln(1/p₀)`: outside an event of probability at most `δ`, every accepted window has
-`T/T_cred ≥ 1 − ε_skip − ε_cert − ε_route − ε_mand − Λ·ln(1/δ′)/S`. -/
 theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty R] [Nonempty F] [Nonempty X]
     (Z : Model K R T L U F X) (Fl : Labelled K) [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U)
@@ -199,8 +173,6 @@ theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintyp
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
 
-/-- `dIdealFloor_whole` on the data-sheet machine: its (I1) from `facetCeilings_of_sheet`, (I2)/(I4) and (I3) from A6
-(`scalarRoute_half`), (I5) from A7, as `SheetDIdealFloor`. -/
 theorem sheetDIdealFloor_whole {K P T L U F X : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T]
     [Fintype L] [Fintype U] [Fintype F] [Fintype X] [Nonempty F] [Nonempty X]
     (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (Fl : Labelled K) [Fintype Ω] {S : ℕ}
@@ -226,21 +198,18 @@ theorem sheetDIdealFloor_whole {K P T L U F X : Type} [Fintype K] [Fintype P] [D
     (fun x => (h6 x).1) (fun x => scalarRoute_half Z _ (hSplit x) (h6 x) hq hqT hb) (fun x => (h7 x).2)
     (fun x => (h7 x).1) hF hX hG hPin hL hWL hPS
 
-/-- Binding at `√δ_fork` from its fork form at `δ_fork` (`BindingOfFork`). -/
 theorem moved_le_sqrt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ)
     (hB : BindingForkAt pf δfork) (w : Fin S) : prob (fun x => pf.Moved x w) ≤ Real.sqrt δfork := by
   have h := ResourceAccounting.SecurityProofs.TS.BindingOfFork Ω S nπ pf w
   rw [← Real.sqrt_sq (prob_nonneg (fun x => pf.Moved x w))]
   exact Real.sqrt_le_sqrt (le_trans h (hB w))
 
-/-- The headlines' `Λ = max(κ/l, (κ + f)/l₀)` is `≥ 0` and meets both of `dIdealFloor_whole`'s bounds. -/
 theorem max_budget {κ f l l0 : ℝ} (hκ : 0 ≤ κ) (hl : 0 < l) (hl0 : 0 < l0) :
     0 ≤ max (κ / l) ((κ + f) / l0) ∧ κ ≤ max (κ / l) ((κ + f) / l0) * l ∧
       κ + f ≤ max (κ / l) ((κ + f) / l0) * l0 :=
   ⟨(div_nonneg hκ hl.le).trans (le_max_left _ _), (div_le_iff₀ hl).mp (le_max_left _ _),
     (div_le_iff₀ hl0).mp (le_max_right _ _)⟩
 
-/-- `κ ≥ 0` and `f ≥ 0` on a well-formed model at a certificate. -/
 theorem kappa_f_nonneg {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) :
@@ -252,9 +221,6 @@ theorem kappa_f_nonneg {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T
   rw [Model.kappa]
   exact div_nonneg (mul_nonneg hNw.le hw0) hB0.le
 
-/-- The unfolded branch at `p₀ = ½`, `S = 48,000` and `δ′ ≥ 2^-41`: with `Λ = (κ + f)/ln 2`,
-`1 − ε_skip − ε_cert − ε_route − ε_mand − Λ·ln(1/δ′)/S ≥ (N_w w* + (1 − μ_f)N_w φ*)/B_♭ · (1 − 41/48000)`, since
-`ln(1/δ′) ≤ 41 ln 2` and `χ* ≥ 0`. -/
 theorem unfolded_floor {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (S : ℕ) (hS : (S : ℝ) = 48000) (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
@@ -297,9 +263,6 @@ theorem unfolded_floor {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T
           (Real.log (1 / δ') / Real.log 2) / 48000 by ring]
   linarith
 
-/-- The headlines' last step at `p = 7/8`, `p₀ = ½`, `S = 48,000` and `δ′ ≥ 2^-41`: at
-`Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `Λ·ln(1/δ′)/S` is the folded branch's `ε_jl` or the unfolded branch's term, so a
-bound `1 − ε` below both branches' floors is below `dIdealFloor_whole`'s. -/
 theorem headline_of_branches {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (S : ℕ) (hS : (S : ℝ) = 48000) (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ')

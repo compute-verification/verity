@@ -5,31 +5,8 @@ public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
 public import Proofs.Pouw.Lemmas.Dither
 
-/-!
-# The onsite PoUW protocol's freed compute: the proof
-
-* `OnsiteFreed`: the guarantee `Definitions.Pouw.Guarantees.OnsiteFreed`. The outsourcing premise turns the prover
-  into an exchange-free one with the same transcript, which the work check accepts wherever it accepts the prover. Off
-  the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and the
-  certifier, which counts every exchanged bit and refuses counts past `K`, makes `ext ≤ K`. `FreedOfFloor` turns the
-  floor `F − β K` into freed compute, but with the floor's `κ`.
-* `outsourceMonitoringPeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
-  `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
-  path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
-* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial`: at `Definitions.Pouw.Witness`'s machine `tw`, round `twRound`
-  and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
-  checks (`twWork`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
-  `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) at the prover with every
-  answer at no use (`fitAnswers`, which passes `WorkSound`'s devices' reading) by filling each resource the prover
-  leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the certifier's count
-  at counts of `0` and `K = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest
-  prover, and the bound is `ε = ε_W < 1` at `κ = 1/2`. With a work check that accepts everything, every premise but the
-  remote floor still holds, the remote floor fails (a prover that does nothing is accepted and spends `0 < F`), and so
-  does the conclusion: that prover leaves the period to other work worth 46 against at most `32 + ε C < 46`.
-
-**What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
-refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
--/
+/-! The onsite PoUW protocol's freed compute; its witness exchanges no bits, so the `β K` term and the
+certifier's refusals are not exercised. -/
 
 @[expose] public section
 
@@ -63,8 +40,6 @@ section PerProgram
 
 variable {G : Accel} {P : RoundProto} {k : ℕ}
 
-/-- `A` with its programs replaced: the same state type, start and absorption, and the commit phases `fc`, work `fw`
-and answers `fa`. -/
 def withPrograms (A : Prover G P k) (fc : Fin k → G.Mc.Alg (P.Orc × A.St) (A.St × P.Inst))
     (fw : Fin k → G.Mc.Alg (P.Orc × A.St × P.Draw) (A.St × P.Root))
     (fa : Fin k → G.Mc.Alg (P.Orc × A.St × (Fin k → P.Draw × P.Chk)) P.Ans) : Prover G P k where
@@ -75,7 +50,6 @@ def withPrograms (A : Prover G P k) (fc : Fin k → G.Mc.Alg (P.Orc × A.St) (A.
   absorb := A.absorb
   answer := fa
 
-/-- A period's priced timed work is its sampling blocks' commit phases' and work's priced cost. -/
 theorem timed_cost (A : Prover G P k) (μ : G.Res → ℝ) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) :
     ∑ r, μ r * A.timedUse o x r =
       ∑ b, (G.cost μ (A.commit b) (A.commitIn o x b) + G.cost μ (A.work b) (A.workIn o x b)) := by
@@ -113,7 +87,6 @@ theorem withPrograms_workIn (hc : ∀ b i, G.Mc.eval (fc b) i = G.Mc.eval (A.com
     (o, (G.Mc.eval (A.commit b) (A.commitIn o x b)).1, (x b).1)
   rw [withPrograms_commitIn A (fa := fa) hc hw o x b, hc]
 
-/-- Programs that compute what `A`'s do send `A`'s transcript. -/
 theorem withPrograms_transcript (hc : ∀ b i, G.Mc.eval (fc b) i = G.Mc.eval (A.commit b) i)
     (hw : ∀ b i, G.Mc.eval (fw b) i = G.Mc.eval (A.work b) i)
     (ha : ∀ b i, G.Mc.eval (fa b) i = G.Mc.eval (A.answer b) i) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) :
@@ -126,7 +99,6 @@ theorem withPrograms_transcript (hc : ∀ b i, G.Mc.eval (fc b) i = G.Mc.eval (A
       G.Mc.eval (A.answer b) (o, (G.Mc.eval (A.work b) (A.workIn o x b)).1, x))
   rw [withPrograms_commitIn A (fa := fa) hc hw, withPrograms_workIn A (fa := fa) hc hw, hc, hw, ha]
 
-/-- Replacing only the answers leaves the timed use, which no answer is in. -/
 theorem withPrograms_timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) :
     (withPrograms A A.commit A.work fa).timedUse o x r = A.timedUse o x r := by
   unfold Prover.timedUse
@@ -136,11 +108,6 @@ theorem withPrograms_timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G
   rw [withPrograms_commitIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl),
     withPrograms_workIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl)]
 
-/-- **The per-program price of an exchanged bit implies its period form**: each sampling block's
-commit phase, work and answer replaced by its exchange-free one, the prover sends the same transcript, and its timed
-work costs at most `β` a bit its commit phases and work exchanged more, which is at most `β` a bit its programs
-exchanged (an answer's bits are a count, G2). So `OutsourceWithinEgressPeriod` asks no more of the model than
-`OutsourceWithinEgress`. -/
 theorem outsourceMonitoringPeriod_of_perProgram (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.Res → ℝ) (β : ℝ) (hβ : 0 ≤ β) :
     OutsourceWithinEgress G μ β → OutsourceWithinEgressPeriod G P k μ β := by
   intro h hG1 hG2 hP1 hP2 A
@@ -230,7 +197,6 @@ theorem twF_pos : 0 < twF := by
   rw [twF, twε_eq]
   linarith
 
-/-- The onsite bound's error at the witness is `WorkSound`'s there. -/
 theorem twEps : max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r) =
     twε honest := by
   have h2 := Real.log_two_gt_d9
@@ -247,8 +213,6 @@ theorem timedUse_nonneg (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDra
   sum_nonneg fun b _ =>
     add_nonneg ((tw_G2.2 (A.commit b) (A.commitIn o x b)).2 r).1 ((tw_G2.2 (A.work b) (A.workIn o x b)).2 r).1
 
-/-- An honest strategy's value at the witness period is at most 32: each resource's capacity of 8 less what the
-credited part takes, at `μ`, plus the credit `14 W'`, which is the credited part's use at `μ`. -/
 theorem honest_le {W' : ℝ} {z' : Fin 3 → ℝ} (h : twPd.Fits (fun r => W' * twPd.hon r) z') :
     twPd.value W' z' ≤ 32 := by
   have e : ∀ r : Fin 3, W' * twHon r + z' r ≤ 8 := fun r => by
@@ -263,8 +227,6 @@ theorem honest_le {W' : ℝ} {z' : Fin 3 → ℝ} (h : twPd.Fits (fun r => W' * 
   rw [value3]
   linarith
 
-/-- **The witness period's arithmetic**: a credited part `X` worth less than `twF` at `μ`, with each resource's rest
-filled by its job, is worth more than any honest strategy plus `ε_W C`. -/
 theorem fill_not_freed (X : Fin 3 → ℝ) (hX : ∀ r, 0 ≤ X r) (hlt : 2 * X 0 + X 1 + X 2 < twF) {ε : ℝ}
     (hε : ε = twε honest) :
     ∃ z, twPd.Fits X z ∧ ¬ twPd.FreedWithin 1 z ε (∑ r, twμ r * (1 * twPd.hon r)) := by
@@ -289,8 +251,7 @@ theorem fill_not_freed (X : Fin 3 → ℝ) (hX : ∀ r, 0 ≤ X r) (hlt : 2 * X 
     rw [twF, twε_eq] at hlt
     linarith
 
-/-- An answer at no use, with `f`'s outputs. A witness answer outputs neither words nor a root, so no sampling design charges
-it. -/
+/-- A witness answer outputs neither words nor a root, so no sampling design charges it. -/
 noncomputable def freeAnswer {I : Type} (f : TAlg I (Fin 1 → Word × Unit)) : TAlg I (Fin 1 → Word × Unit) where
   run := f.run
   use _ _ := 0
@@ -302,7 +263,6 @@ noncomputable def freeAnswer {I : Type} (f : TAlg I (Fin 1 → Word × Unit)) : 
   roots h _ := absurd (congrArg Nat.card h) (by rw [card_ans, card_troot]; omega)
   work S _ h _ := absurd (congrArg Nat.card h) (by rw [card_ans, Nat.card_prod, card_troot]; omega)
 
-/-- `A` with every answer at no use: the same transcript and timed use, and every answer runs within the period. -/
 noncomputable def fitAnswers (A : Prover tw twRound 2) : Prover tw twRound 2 :=
   withPrograms A A.commit A.work fun b => freeAnswer (A.answer b)
 
@@ -319,11 +279,6 @@ theorem fitAnswers_dev (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw
     twDev (fitAnswers A) o x :=
   fun _ _ => show (0 : ℝ) ≤ 1 * 8 by norm_num
 
-/-- **The remote floor at the witness**: from `WorkSound`'s conclusion there (`witness_freed`), at the prover with
-every answer at no use, which sends the same transcript, has the same timed use and passes the devices' reading. A
-prover whose timed work costs less than `(1 − ε_W) C` at `μ` uses each resource below its capacity (`μ ≥ 1`), and the
-rest of each resource, filled with its other job, is worth more than any honest strategy's other work plus
-`ε_W C`. -/
 theorem twFloor : RemoteWorkFloor tw twRound 2 twWork twμ twF (1 / 2) := by
   intro _ _ _ _ A _
   refine le_trans (prob_mono fun ox h => ?_) ((witness_freed (fitAnswers A)).trans (by norm_num [twκ, twδ]))
@@ -338,7 +293,6 @@ theorem twFloor : RemoteWorkFloor tw twRound 2 twWork twμ twF (1 / 2) := by
   rw [fitAnswers_timedUse]
   exact fill_not_freed (A.timedUse ox.1 ox.2) (timedUse_nonneg A ox.1 ox.2) hlt3 hε
 
-/-- A quiet sampling block's work: a constant state and root, at no use. -/
 noncomputable def quietWork : TAlg (Unit × Unit × TDraw) (Unit × TRoot) where
   run _ := ((), fun _ _ _ => 0)
   use _ _ := 0
@@ -350,7 +304,6 @@ noncomputable def quietWork : TAlg (Unit × Unit × TDraw) (Unit × TRoot) where
   roots _ _ := by simp [nonconst]
   work _ _ _ _ := by simp [nonconst]
 
-/-- A quiet answer: a constant, at no use. -/
 noncomputable def quietAnswer : TAlg (Unit × Unit × (Fin 2 → TDraw × Fin 2)) (Fin 1 → Word × Unit) where
   run _ := fun _ => (0, ())
   use _ _ := 0
@@ -362,7 +315,6 @@ noncomputable def quietAnswer : TAlg (Unit × Unit × (Fin 2 → TDraw × Fin 2)
   roots _ _ := by simp [nonconst]
   work _ _ _ _ := by simp [nonconst]
 
-/-- **The quiet prover**: it does nothing, so its sampling blocks use nothing. -/
 noncomputable def quiet : Prover tw twRound 2 where
   St := Unit
   start := ()
@@ -380,7 +332,6 @@ theorem prob_eq_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h 
   unfold prob Claims.prUniform
   rw [filter_true_of_mem fun ω _ => h ω, card_univ, div_self (by exact_mod_cast Fintype.card_ne_zero)]
 
-/-- **The witness machine's certifier sees every exchanged bit at counts of `0`**: no program exchanges any. -/
 theorem twSees : CertifierSeesImports tw twRound 2 twDev (fun _ => 0) (fun _ => 0) := fun _ _ _ => by
   show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0 + 0
   simp

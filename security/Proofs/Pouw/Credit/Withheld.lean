@@ -5,36 +5,8 @@ public import Proofs.Pouw.Credit
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# An honest window credited: `credited` accepts under a key `Lms.keygen` derives
-
-`DrawWithheld` says what a credited window's sample rests on: the auditor's ledger opens a session withheld on the
-window's sample root. This file builds a window `Internal.credited` accepts, on variables, so the property is about
-something: a window of one call and one round, its manifest row the fourteen fields the serving process writes with
-the credit bit set, whose Commit record registers no value, with the honest session withheld of
-`Properties.Challenger.Withheld` opened on its sample root. `credited` returns call 0 of it.
-
-* `pyFromHex_hex`, `digest_hex`, `isHexBytes_hex`: Python's `bytes.fromhex` reads lowercase hex back, a 64-byte
-  digest's hex is a digest, and the hex of at least one byte is `credit._HEX`'s.
-* `commit_read`: `commitOf?` reads the canonical text of a plain record of the registration format with no
-  registered value as its digest under the format.
-* `key_read`: `ChallengerKey.ofJson` reads a key of the deployed parameters back from its JSON.
-* `root_one`, `sample_ok`: the two halves of `credited`, each from what its readers return: the sample root of a
-  window of one credited call and one round, and the sample's session.
-* `credited_play`: `credited` accepts an honest play of the family `pouw/draw` whose challenge answers the window's
-  sample root and whose session the ledger opens on it, and returns the calls `creditedRoot` names.
-* `CallRow`, `roundOf`: a credited manifest row and a round's entry as their writers build them, with what
-  `creditedRoot` reads of each (`row_plain`, `row_index`, `row_bit`, `row_z`, `round_root`, `round_coin`).
-* `credited_one`: `credited_play` on the window of one call.
-* `sampleWithheld_honest`: the same at a key `Lms.keygen` derives at the deployed parameters.
-
-`credited` is one step of the window's check: it reads a round's opened challenge and checks it against nothing,
-which is `roundsCheck`'s to do, and what it returns is the credit bits whatever the proofs' outcome. So
-`sampleWithheld_honest` shows that this step returns call 0, and not that the window's check credits it.
-
-SHA-512 stays opaque and no signature is evaluated: the play's signatures verify by LMS's correctness
-(`Properties.Challenger.Withheld.exists_honest`).
--/
+/-! An honest window that `credited` accepts under a key `Lms.keygen` derives; it shows that this step returns
+call 0, not that the window's check credits it. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -56,8 +28,6 @@ open Properties.Certifier.Bytes (hash_size)
 open PouwCheck.Credit (digest? commitOf? isHexBytes callsRoot COMMIT_FORMAT DRAW_TAG Internal.creditedRoot
   Internal.creditedDraw Internal.credited)
 
-/-! ## Hex, as Python reads it -/
-
 theorem nibble : ∀ d < 16, pySpace (Flock.Hex.hd d) = false ∧ hexVal (Flock.Hex.hd d) = some d ∧
     ((Flock.Hex.hd d).isDigit || ('a' ≤ Flock.Hex.hd d && Flock.Hex.hd d ≤ 'f')) = true := by decide
 
@@ -65,7 +35,6 @@ theorem byte_back (x : UInt8) : (16 * (x.toNat / 16) + x.toNat % 16).toUInt8 = x
   rw [Nat.div_add_mod]
   exact UInt8.ofNat_toNat
 
-/-- `bytes.fromhex`'s loop reads each byte's two digits as the byte. -/
 theorem go_hex (s : String) : ∀ (l : List UInt8) (acc : ByteArray),
     PouwCommit.pyFromHex.go s (l.flatMap fun x => [Flock.Hex.hd (x.toNat / 16), Flock.Hex.hd (x.toNat % 16)]) acc =
       .ok ⟨acc.data ++ l.toArray⟩
@@ -81,7 +50,6 @@ theorem go_hex (s : String) : ∀ (l : List UInt8) (acc : ByteArray),
     rw [go_hex s l, byte_back]
     simp [ByteArray.push]
 
-/-- **`bytes.fromhex` reads lowercase hex back.** -/
 theorem pyFromHex_hex (b : ByteArray) : PouwCommit.pyFromHex (Flock.hexOf b) = .ok b := by
   unfold PouwCommit.pyFromHex
   rw [Flock.Hex.hexOf_toList]
@@ -99,7 +67,6 @@ theorem hex_chars (b : ByteArray) :
   have h2 := nibble (x.toNat % 16) (Nat.mod_lt _ (by decide))
   simp only [List.all_cons, List.all_nil, Bool.and_true, h1.2.2, h2.2.2]
 
-/-- **The hex of at least one byte is `credit._HEX`'s.** -/
 theorem isHexBytes_hex {b : ByteArray} (hb : b.size ≠ 0) : isHexBytes (Flock.hexOf b) = true := by
   have hl : (Flock.hexOf b).length = 2 * b.size := Built.hexOf_len b
   have he : (Flock.hexOf b).isEmpty = false := by
@@ -114,7 +81,6 @@ theorem isHexBytes_hex {b : ByteArray} (hb : b.size ≠ 0) : isHexBytes (Flock.h
   rw [he, hl, String.all_bool_eq, hex_chars]
   simp
 
-/-- **A 64-byte digest's hex reads as the digest.** -/
 theorem digest_hex {b : ByteArray} (h : b.size = 64) : digest? (.str (Flock.hexOf b)) = some b := by
   have hd : PouwCheck.isHexDigest (Flock.hexOf b) = true := by
     unfold PouwCheck.isHexDigest
@@ -123,9 +89,6 @@ theorem digest_hex {b : ByteArray} (h : b.size = 64) : digest? (.str (Flock.hexO
   unfold digest?
   simp only [PouwCheck.str?, PouwCheck.hex?, Option.any_some, hd, pyFromHex_hex, ite_true, Except.toOption]
 
-/-! ## Reads -/
-
-/-- PoUW's field read is the challenger's. -/
 theorem get_getD (j : Json) (k : String) : PouwCheck.get j k = getD j k := by
   cases j <;> rfl
 
@@ -135,7 +98,6 @@ theorem bind_ok {α β : Type} {x : Flock.V α} {f : α → Flock.V β} {v : β}
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- An object's canonical text is not empty: it opens with a brace. -/
 theorem canon_obj_ne {m : Std.TreeMap.Raw String Json} {text : String} (hc : Flock.canon (.obj m) = .ok text) :
     text ≠ "" := by
   rw [CanonLine.canon_obj] at hc
@@ -152,15 +114,10 @@ theorem fromUTF8_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   rw [dite_eq_left_of_eq_true (eq_true h)]
   rfl
 
-/-- A text that is not empty has bytes. -/
 theorem utf8_ne {s : String} (h : s ≠ "") : s.toUTF8.size ≠ 0 := by
   rw [String.toUTF8_eq_toByteArray, String.size_toByteArray]
   exact fun hz => h (String.utf8ByteSize_eq_zero_iff.mp hz)
 
-/-! ## The Commit record -/
-
-/-- **`commitOf?` reads its writer's record**: the canonical text `text` of a plain object `d` of the registration
-format that registers no value, as the digest of its bytes under the format. -/
 theorem commit_read {d : Json} {m : Std.TreeMap.Raw String Json} {text : String} (hp : PlainAt PyJson.DEPTH d)
     (hc : Flock.canon d = .ok text) (ho : d = .obj m) (hf : getD d "format" = .str COMMIT_FORMAT)
     (hr : getD d "registered" = .arr #[]) :
@@ -187,7 +144,6 @@ theorem commit_read {d : Json} {m : Std.TreeMap.Raw String Json} {text : String}
     ha, Option.bind, Except.toOption, Json.getArr?, jsonStrIs, beq_self_eq_true, Bool.and_self, ite_true, pure,
     Except.pure]
 
-/-- The Commit record of a window that registers no value. -/
 def commitValue : Json := Json.mkObj [("format", .str COMMIT_FORMAT), ("registered", .arr #[])]
 
 theorem commit_plain : PlainAt PyJson.DEPTH commitValue :=
@@ -199,15 +155,11 @@ theorem commit_plain : PlainAt PyJson.DEPTH commitValue :=
       · exact .str 0 (by decide)
       · exact .arr 0 fun x hx => by simp at hx)) (by decide)
 
-/-- **`commitOf?` reads the empty registration's text.** -/
 theorem commit_empty {text : String} (hc : Flock.canon commitValue = .ok text) :
     commitOf? (.str (Flock.hexOf text.toUTF8)) =
       some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ text.toUTF8), #[]) :=
   commit_read commit_plain hc rfl rfl rfl
 
-/-! ## The verifier's key -/
-
-/-- **A key of the deployed parameters reads back from its JSON.** -/
 theorem key_read {pub : ByteArray} (hs : pub.size = 80) :
     ChallengerKey.ofJson (ChallengerKey.toJson ⟨Lms.deployed, pub⟩) = .ok ⟨Lms.deployed, pub⟩ := by
   have hk : keys? (ChallengerKey.toJson ⟨Lms.deployed, pub⟩) = some #["H", "W", "public"] :=
@@ -223,7 +175,6 @@ theorem key_read {pub : ByteArray} (hs : pub.size = 80) :
   rw [hk, hH, hW, hp, beq_self_eq_true]
   simp only [hm, hs, PUBLIC_BYTES, beq_self_eq_true, ite_true, bind, Except.bind, pure, Except.pure]
 
-/-- A key `Lms.key` derives at the deployed parameters has a public key of 80 bytes. -/
 theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
     k.publicKey.size = 80 := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
@@ -233,12 +184,6 @@ theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.dep
   show k.publicKey.size = 16 + Lms.deployed.N
   simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
 
-/-! ## The two halves of `credited` -/
-
-/-- **`creditedRoot` on a window of one credited call and one round**: for any manifest row that is a plain object,
-is call 0, has its credit bit set and commits its product's table, and any round whose root is a digest and whose
-opened challenge reads, the verifier's key, call 0, and the sample root of the salt, the row, the Commit record's
-digest, the receipts' root, and the round's root and challenge. -/
 theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc z rr : ByteArray}
     {cd : ByteArray × Array Json} {o : LiveOpening} (hk : ChallengerKey.ofJson key = .ok k)
     (hs : digest? salt = some s) (hc : commitOf? commit = some cd) (ho : PouwCheck.Credit.isObj sample = true)
@@ -258,7 +203,6 @@ theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc
     Bool.and_self, Option.isNone_some, List.nil_append, List.cons_append]
   rfl
 
-/-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
 theorem sample_ok {ledger pins main sample : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
     {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get sample "root") = some (Flock.hexOf root))
     (hsess : PouwCheck.Credit.drawChallengePhase ledger k pins main (PouwCheck.get sample "session") (Flock.hexOf root) =
@@ -274,8 +218,6 @@ theorem sample_ok {ledger pins main sample : Json} {k : ChallengerKey} {root : B
     List.isEmpty_cons, ite_false, Bool.false_eq_true]
   rfl
 
-/-! ## An honest play credited -/
-
 theorem family_name : isName PouwWindow.DRAW = true := by
   rw [isName, String.all_bool_eq]
   decide
@@ -284,7 +226,6 @@ theorem family_plain : PlainStr PouwWindow.DRAW := by decide
 
 theorem family_short : PouwWindow.DRAW.length ≤ 128 := by decide
 
-/-- The window's sample: the play's opened challenge, the receipts' root, the sample root, and the session's files. -/
 def sampleOf (p : Play) (receipts : ByteArray) : Json :=
   Json.mkObj [("coin", p.opening.toJson), ("receipts", .str (Flock.hexOf receipts)),
     ("root", .str (Flock.hexOf p.window)), ("session", p.session)]
@@ -293,9 +234,6 @@ theorem sample_receipts (p : Play) (receipts : ByteArray) :
     PouwCheck.get (sampleOf p receipts) "receipts" = .str (Flock.hexOf receipts) :=
   (get_getD _ _).trans rfl
 
-/-- **`credited` accepts an honest play of the sample's family**: under the play's key, a window whose sample root
-`creditedRoot` computes as `root`, when the play's one challenge answers `root` and its session is opened on it. It
-returns the calls `creditedRoot` names. -/
 theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls served commit rounds : Json}
     {receipts root : ByteArray} {out : List Nat} (hl : p.label = PouwWindow.DRAW)
     (hroot : Internal.creditedRoot p.key.toJson salt calls served commit rounds (sampleOf p receipts) =
@@ -331,27 +269,20 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
   simp only [bind, Except.bind, hsample]
   rfl
 
-/-! ## A window of one call -/
-
-/-- An object built from increasing keys is plain one level deeper than its values. -/
 theorem plain_mkObj {l : List (String × Json)} {d : Nat} (hs : (l.map (·.1)).Pairwise (· < ·))
     (h : l.all (fun q => PouwCheck.Credit.plain d q.2) = true) :
     PouwCheck.Credit.plain (d + 1) (Json.mkObj l) = true := by
   rw [Json.mkObj, PouwCheck.Credit.plain, ← Array.all_toList, Std.TreeMap.Raw.toList_toArray, Built.toList_mkObj hs]
   exact h
 
-/-- **A credited manifest row as the serving process writes it**, the first call of its window: the call's step,
-layer and module, its sizes, its leaves, the digests of its operand's and its product's tables, and its bound. -/
 structure CallRow where
   (step layer served rows k n base units leaf m : Int)
   module : String
   (a z : ByteArray)
 
-/-- The row's tables: its operand's and its product's, each a digest in hex. -/
 def CallRow.tables (r : CallRow) : Json :=
   Json.mkObj [("a", .str (Flock.hexOf r.a)), ("z", .str (Flock.hexOf r.z))]
 
-/-- The row's fourteen fields in key order: call 0, its credit bit set. -/
 def CallRow.items (r : CallRow) : List (String × Json) :=
   [("base", .num ⟨r.base, 0⟩), ("bound", Json.mkObj [("m", .num ⟨r.m, 0⟩), ("ok", .bool true)]),
     ("credit", .bool true), ("index", .num ⟨0, 0⟩), ("k", .num ⟨r.k, 0⟩), ("layer", .num ⟨r.layer, 0⟩),
@@ -365,7 +296,6 @@ theorem CallRow.sorted (r : CallRow) : (r.items.map (·.1)).Pairwise (· < ·) :
   simp only [CallRow.items, List.map_cons, List.map_nil]
   decide
 
-/-- A read of the row is its list's. -/
 theorem row_get (r : CallRow) (k : String) : PouwCheck.get r.toJson k = (r.items.lookup k).getD .null :=
   (get_getD _ _).trans (Built.getD_mkObj r.sorted k)
 
@@ -389,14 +319,12 @@ theorem row_bit (r : CallRow) : PouwCheck.get r.toJson PouwCheck.Credit.CREDIT =
   rw [row_get]
   rfl
 
-/-- **The row commits its product's table**: the digest `creditedRoot` asks of a credited call. -/
 theorem row_z (r : CallRow) (hz : r.z.size = 64) :
     digest? (PouwCheck.get (PouwCheck.get r.toJson "tables") "z") = some r.z := by
   have ht : PouwCheck.get r.toJson "tables" = r.tables := (row_get r _).trans rfl
   have hg : PouwCheck.get r.tables "z" = .str (Flock.hexOf r.z) := (get_getD _ _).trans rfl
   exact (congrArg (fun j => digest? (PouwCheck.get j "z")) ht).trans ((congrArg digest? hg).trans (digest_hex hz))
 
-/-- A round's entry in the round log: its root, and its challenge as the challenger opens it, with no path. -/
 def roundOf (root coin csalt : ByteArray) : Json :=
   Json.mkObj [("coin", LiveOpening.toJson ⟨0, PouwWindow.ROUND, 0, root, coin, csalt, []⟩),
     ("root", .str (Flock.hexOf root))]
@@ -413,8 +341,6 @@ theorem round_coin (root coin csalt : ByteArray) :
       LiveOpening.toJson ⟨0, PouwWindow.ROUND, 0, root, coin, csalt, []⟩ := (get_getD _ _).trans rfl
   exact (congrArg LiveOpening.ofJson hg).trans (Files.opening_ofJson _ _ _ _ _ _)
 
-/-- The sample root of a window of one call and one round: its salt, its row, its Commit record's text, its
-receipts' root, and the round's root and challenge. -/
 def rootOne (salt receipts : ByteArray) (text : String) (r : CallRow) (round coin : ByteArray) : ByteArray :=
   PouwCommit.tagged DRAW_TAG [.bytes (callsRoot salt [r.toJson] none
     (some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ text.toUTF8)))), .bytes receipts, .bytes round,
@@ -425,9 +351,6 @@ theorem rootOne_size (salt receipts : ByteArray) (text : String) (r : CallRow) (
   show (Flock.Sha512.hash _).size = 64
   exact hash_size _
 
-/-- **`credited` returns call 0 of an honest play's window of one call and one round**: the row `r`, credited, and a
-round of root `round` and challenge `coin`, the Commit record the text `text` `commitOf?` reads, when the play's one
-challenge answers the window's sample root and its session is opened on that root. -/
 theorem credited_one {I : ByteArray} {p : Play} (h : p.Honest I) {salt receipts round : ByteArray} {text : String}
     (r : CallRow) (coin csalt : ByteArray) (hl : p.label = PouwWindow.DRAW) (hs : salt.size = 64)
     (hr : receipts.size = 64) (hz : r.z.size = 64) (hrd : round.size = 64) (hps : p.pub.size = 80)
@@ -446,7 +369,6 @@ theorem credited_one {I : ByteArray} {p : Play} (h : p.Honest I) {salt receipts 
     (round_coin round coin csalt)
   exact credited_play h hl (root := rootOne salt receipts text r round coin) hroot ha hw
 
-/-- A call of one row of 64 by 4096 in one unit, its tables' digests zero bytes. -/
 def call : CallRow where
   step := 0
   layer := 0

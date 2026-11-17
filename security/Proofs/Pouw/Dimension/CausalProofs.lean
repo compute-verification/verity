@@ -5,14 +5,7 @@ public import Proofs.Pouw.Dimension.Proofs
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.NCP.RelationWitness
 
-/-!
-# Theorem D with causal inputs: proofs
-
-* `sd_wordC_lt`: the four-point difference at unit `u₀` kills the words of every earlier unit.
-* `sd_wordC_self`: at unit `u₀` itself it reads the checkpoint coefficient, as for `A = g(F₁)`.
-* `indep_modC`: the words are independent modulo `V₀`, by induction from the last unit.
-* `algBoundCausal`, `causalWitness`, `algWitnessCausal`.
--/
+/-! Theorem D with causal inputs. -/
 
 @[expose] public section
 
@@ -80,8 +73,6 @@ theorem secondDifferenceC {k m n N : ℕ} (R : Mat) {A : Noise N m n k → ℕ �
   refine sum_congr rfl fun t _ => ?_
   rw [div_blocks hM]
 
-/-- Under independence, the non-final checked words for a causal `A` are linearly independent modulo `V₀`: induction
-from the last unit. -/
 theorem indep_modC {k m n N : ℕ} {R : Mat} {A : Noise N m n k → ℕ → Mat} (hA : Causal A) (B : ℕ → Mat)
     {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) (c : ℕ → ℕ → ℚ)
     (hc : (∑ u ∈ U, ∑ p ∈ range (nonFinal k m n), c u p • wordC k m n N R A B u p) ∈ V0 N m n k) :
@@ -124,7 +115,6 @@ theorem indep_subC {k m n N : ℕ} {R : Mat} {A : Noise N m n k → ℕ → Mat}
   rw [show c' u p = c ⟨(u, p), hx⟩ from dif_pos hx] at this
   exact this
 
-/-- **Theorem D with causal inputs.** -/
 theorem algBoundCausal : AlgBoundCausal := by
   intro k m n N R A B U L P hind hA hU hL hH hout
   have hcount := count_le P L
@@ -138,7 +128,6 @@ theorem algBoundCausal : AlgBoundCausal := by
   have := h16_cost hH
   omega
 
-/-- **`Causal`'s witness.** -/
 theorem causalWitness : CausalWitness := by
   intro N m n k ω ω' u _ h
   by_cases hu : u = 0
@@ -151,7 +140,6 @@ theorem causalWitness : CausalWitness := by
     · rw [dif_pos hh, dif_pos hh, h ⟨u - 1, hh.1⟩ (show u - 1 < u by omega)]
     · rw [dif_neg hh, dif_neg hh]
 
-/-- The honest program for causal inputs: one priced instruction at 16 per non-final checked word. -/
 noncomputable def honestC (k m n N : ℕ) (R : Mat) (A : Noise N m n k → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) :
     List (Instr (Noise N m n k)) :=
   U.toList.flatMap fun u => (List.range (nonFinal k m n)).map fun p => Instr.priced 16 (wordC k m n N R A B u p)
@@ -162,7 +150,6 @@ theorem mem_honestC {k m n N : ℕ} {R : Mat} {A : Noise N m n k → ℕ → Mat
       ∃ u ∈ U, ∃ p < nonFinal k m n, Instr.priced 16 (wordC k m n N R A B u p) = ins := by
   simp [honestC, List.mem_flatMap, List.mem_map]
 
-/-- **The causal bound's hypotheses hold jointly, and it is attained.** -/
 theorem algWitnessCausal : AlgWitnessCausal := by
   intro k hk h16 m n N A B U _
   obtain ⟨R, hadm, hind⟩ := RelationWitness.independentWitness k hk h16

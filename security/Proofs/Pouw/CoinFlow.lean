@@ -33,14 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The coin rules' guarantees
-
-Each statement of `Definitions/Pouw/Guarantees/CoinFlow.lean`, proved in `CoinFlow/Flow.lean`: a noise injection's
-fresh coins reach only its forward cone (rule (b)), a non-sink value reads the coins only through noise injections
-(rule (a)), the forward cone is the one reader's, and so `CoinPointMass` holds of every view built from the rest of an
-admitted Program.
--/
+/-! The coin rules' guarantees, from their proofs in `CoinFlow/Flow.lean`. -/
 
 @[expose] public section
 

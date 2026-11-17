@@ -6,13 +6,7 @@ public import Proofs.Pouw.Prob
 public import Proofs.Pouw.Lemmas.Barrier
 public import Proofs.Pouw.Break
 
-/-!
-# The degenerate-input barrier: proofs
-
-* `genericPr`, `generic`: the barrier, from the definition of `Wins`.
-* In the abstract model: the zero-input adversaries of classes (a), (b) and (c), each a plan per unit, and
-  `H_ref` plans for class (a) at `2·W_mm` and `3·W_mm` and for class (b) at `t·W_mm`.
--/
+/-! The degenerate-input barrier, generic and for the zero-input adversaries of classes (a), (b) and (c). -/
 
 @[expose] public section
 
@@ -21,8 +15,6 @@ namespace Pouw.Barrier.Proofs
 open Finset Pouw.Proofs
 
 variable {Q R S : Type}
-
-/-! ## The generic barrier -/
 
 theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) {g c₀ : ℝ}
     (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hg : g < 1 - c₀ / totalWref P U.layout)
@@ -36,13 +28,11 @@ theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s
   rw [div_lt_iff₀ hW] at h1
   linarith [mul_comm (1 - g) (totalWref P U.layout)]
 
-/-- **The generic barrier, in probability.** -/
 theorem genericPr : Pinned.GenericPr := by
   intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW g hg δ hG
   exact le_trans (pr_mono fun x hx => ⟨wins_of_all_correct P U x.1 x.2 _ hc hW hg hx.1, hx.2⟩)
     (hG U hU c₀ hc q hq A hA)
 
-/-- **The generic barrier.** -/
 theorem generic : Pouw.Guarantees.Barrier.Generic := by
   intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW g hg δ hG
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
@@ -60,15 +50,12 @@ theorem gap_ratio {g c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a
     nlinarith [mul_le_mul_of_nonneg_left hW ha]
   linarith
 
-/-! ## The abstract model -/
-
 theorem regs_eq (p : Plan) (A B : Mat) (nz : ℕ → Mat) (t : ℕ) :
     p.regs A B nz t =
       if t < p.nReg then (p.reg t).eval A B nz (fun i => if i < t then p.regs A B nz i else 0) else 0 := by
   rw [Plan.regs]
   simp only [dite_eq_ite]
 
-/-- An adversary that commits the plan `f (shape u)` on every unit (activation input `0`, no preprocessing). -/
 def planAdv (N : NoiseSrc Q R S) (f : Shape → Plan) : Adversary (gemmModel N) :=
   ⟨.done [], fun L u => if u < L.N then some (f (L.shape u)) else none, fun _ => 0⟩
 
@@ -90,7 +77,6 @@ theorem planAdv_correct (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol 
 
 theorem gemmModel_hashless (N : NoiseSrc Q R S) : (gemmModel N).Hashless := fun _ _ _ _ _ _ => rfl
 
-/-- `planAdv_correct`, with no break: the abstract model hashes nothing. -/
 theorem planAdv_cheap (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol Q R S) (U : Workload)
     (hc : ∀ (H : Q → R) (s : S), ∀ u < U.layout.N,
       Correct P U H s u ((f (U.layout.shape u)).commit N H s U (fun _ => 0) u)) :
@@ -103,9 +89,6 @@ theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold
 theorem sum_Ico_zero (k : ℕ) (f : ℕ → ℤ) : ∑ l ∈ Ico 0 (0 + k), f l = ∑ l ∈ range k, f l := by
   rw [zero_add, Finset.range_eq_Ico]
 
-/-! ## Class (a) -/
-
-/-- The zero-input plan of class (a): commit `0`, one product `(0 + E)(B + F)`, output `0`. -/
 def addPlan (sh : Shape) : Plan :=
   ⟨some 0, 1, fun _ => .gemm sh 0 (.add .act (.noise 0)) (.add .wt (.noise 1)), .const 0⟩
 
@@ -122,7 +105,6 @@ theorem addPlan_correct (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : W
     simp [addPlan, MExpr.eval, hi, hj, mm]
   · simp [Plan.commit, addPlan, MExpr.eval, mm]
 
-/-- **Class (a).** -/
 theorem additive : Pinned.Additive := by
   intro Q R S _ _ _ _ _ _ N W p D U hp hU hS hW g hg δ hG
   have hB := planAdv_bounded N addPlan U
@@ -137,8 +119,6 @@ theorem additive : Pinned.Additive := by
   exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
     (gap_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hg) δ hG
 
-/-! ## Class (a): `H_ref` plans -/
-
 theorem addProto_complete (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (D : Layout → Prop) :
     (addProto N W).Complete D := by
   intro U _ u _ H s A _
@@ -148,13 +128,10 @@ theorem addProto_complete (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (D :
     simp [h0, corner, hi, hj]
   · simp [addProto, corner, hi, hj]
 
-/-- The checked product of class (a) as a plan register. -/
 def addBase (sh : Shape) : MExpr := .gemm sh 0 (.add .act (.noise 0)) (.add .wt (.noise 1))
 
-/-- `H_ref` at `2·W_mm`: the checked product and `A·B`. -/
 def refPlan2 (sh : Shape) : Plan := ⟨none, 1, fun _ => addBase sh, .gemm sh 0 .act .wt⟩
 
-/-- `H_ref` at `3·W_mm`: the checked product and the standard decode `C' − A·F − E·(B + F)`. -/
 def refPlan3 (sh : Shape) : Plan :=
   ⟨none, 1, fun _ => addBase sh,
     .add (.add (.reg 0) (.smul (-1) (.gemm sh 0 .act (.noise 1))))
@@ -216,7 +193,6 @@ theorem refPlan3_out (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Work
     exact Finset.sum_congr rfl fun l _ => by ring
   · ring
 
-/-- **Class (a)'s witness.** -/
 theorem additiveWitness : Pinned.AdditiveWitness := by
   intro Q R S N D
   refine ⟨addProto_complete N _ D, ⟨fun L u => if u < L.N then some (refPlan2 (L.shape u)) else none,
@@ -230,9 +206,6 @@ theorem additiveWitness : Pinned.AdditiveWitness := by
   · rw [refPlan_cost N refPlan3 3 (fun sh => by simp [refPlan3, addBase, Plan.cost, MExpr.cost]; ring)]
     rfl
 
-/-! ## Class (b) -/
-
-/-- The sum `f 0 + ⋯ + f (n − 1)` as an expression. -/
 def sumE : ℕ → (ℕ → MExpr) → MExpr
   | 0, _ => .const 0
   | n + 1, f => .add (sumE n f) (f n)
@@ -248,11 +221,8 @@ theorem cost_sumE (n : ℕ) (f : ℕ → MExpr) : (sumE n f).cost = ∑ x ∈ ra
   | zero => simp [sumE, MExpr.cost]
   | succ n ih => simp [sumE, MExpr.cost, ih, Finset.sum_range_succ]
 
-/-- Checked product `i` as a plan register. -/
 def relBase (sh : Shape) (i : ℕ) : MExpr := .gemm sh 0 (.add .act (.noise (2 * i))) (.add .wt (.noise (2 * i + 1)))
 
-/-- The zero-input plan of class (b): commit `0`, the first `t − 1` products, the last one from the relation, output
-`0`. -/
 def relPlan (t : ℕ) (c : ℕ → ℤ) (sh : Shape) : Plan :=
   ⟨some 0, t, fun i => if i + 1 < t then relBase sh i
     else .smul (-c (t - 1)) (sumE (t - 1) fun i => .smul (c i) (.reg i)), .const 0⟩
@@ -328,7 +298,6 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
       linear_combination (relProd N H s U u 0 (t - 1) x.2.1 x.2.2) * hc
   · simp [Plan.commit, relPlan, MExpr.eval, mm]
 
-/-- **Class (b).** -/
 theorem relation : Pinned.Relation := by
   intro Q R S _ _ _ _ _ _ t c N W D U ht hc hN hU hS hW g hg δ hG
   have hB := planAdv_bounded N (relPlan t c) U
@@ -349,7 +318,6 @@ theorem relation : Pinned.Relation := by
   rw [show 1 - ((t : ℝ) - 1) / t = 1 / t by field_simp; ring]
   exact hg
 
-/-- **The lead's noise with output-only checks is class (b).** -/
 theorem relationWitness : Pinned.RelationWitness := by
   intro Q R S e f r
   refine ⟨⟨by simp [Finset.sum_range_succ], fun H s U u A => ⟨fun a b => ?_, fun a b => ?_, fun a b => ?_⟩⟩,
@@ -364,8 +332,6 @@ theorem relationWitness : Pinned.RelationWitness := by
     rw [h0] at h
     norm_num
     linarith
-
-/-! ## Class (b): completeness and `H_ref` -/
 
 theorem rel_sum {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (hN : RelNoise t c N) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (A : Mat) (a b : ℕ) :
@@ -411,7 +377,6 @@ theorem relProto_complete {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (hN :
   · simp only [relProto, corner, hi, hj, and_self, ite_true]
     exact rel_sum hN H s U u A i j
 
-/-- `H_ref` of class (b): the `t` checked products, and the useful output as their combination `∑ c_i·P_i`. -/
 def relRef (t : ℕ) (c : ℕ → ℤ) (sh : Shape) : Plan := ⟨none, t, relBase sh, sumE t fun i => .smul (c i) (.reg i)⟩
 
 theorem relRef_act (t : ℕ) (c : ℕ → ℤ) (sh : Shape) : (relRef t c sh).act = none := rfl
@@ -465,7 +430,6 @@ theorem plan_run (N : NoiseSrc Q R S) (P : Protocol Q R S) (f : Shape → Plan) 
     rw [hc u hu]
   · simp [gemmModel, honestTrace, hu]
 
-/-- **Class (b) with the lead's noise is a real protocol.** -/
 theorem relationAdmits : Pinned.RelationAdmits := by
   intro Q R S e f r D
   have hN := (relationWitness Q R S e f r).1
@@ -477,13 +441,8 @@ theorem relationAdmits : Pinned.RelationAdmits := by
   · rw [refPlan_cost _ (relRef 3 (fun i => if i = 2 then -1 else 1)) 3 (relRef_cost _)]
     rfl
 
-/-! ## Class (c) -/
-
-/-- Step `t` of the running sums at the zero input: `E[:, S_t]·F[S_t, :]`. -/
 def segStep (sh : Shape) (d t : ℕ) : MExpr := .gemm ⟨sh.m, d, sh.n⟩ (t * d) (.noise 0) (.noise 1)
 
-/-- The zero-input plan of class (c): commit `0`, the first `L − 1` running sums step by step, the known last one
-(`0`), output `0`. -/
 def segPlan (L d : ℕ) (sh : Shape) : Plan :=
   ⟨some 0, L, fun t => if t + 1 < L then .add (.reg (t - 1)) (segStep sh d t) else .const 0, .const 0⟩
 
@@ -544,7 +503,6 @@ theorem segPlan_correct {L d : ℕ} {α β : Mat → Mat} {N : NoiseSrc Q R S} (
       exact (hcan H s ⟨Lay, fun _ => 0⟩ u _ ha _ hb).symm
   · simp [Plan.commit, segPlan, MExpr.eval, mm]
 
-/-- **Class (c).** -/
 theorem segment : Pinned.Segment := by
   intro Q R S _ _ _ _ _ _ L d α β N W D Lay hL hα hβ hcan hU hS hW g hg δ hG
   have hB := planAdv_bounded N (segPlan L d) ⟨Lay, fun _ => 0⟩
@@ -569,12 +527,8 @@ theorem segment : Pinned.Segment := by
   rw [show 1 - ((L : ℝ) - 1) / L = 1 / L by field_simp; ring]
   exact hg
 
-/-! ## The generic barrier's hypotheses are satisfiable -/
-
-/-- One unit of shape `(1, 1, 1)` with zero weights. -/
 def oneUnit : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ => 0⟩
 
-/-- **`Generic`'s hypotheses are jointly satisfiable.** -/
 theorem genericWitness : Pinned.GenericWitness := by
   refine ⟨fun _ _ _ _ _ _ => 0, addProto (fun _ _ _ _ _ _ => 0) fun L u => 2 * (L.shape u).Wmm, fun _ => True,
     oneUnit, planAdv _ addPlan, 1, addProto_complete _ _ _, (additiveWitness Unit Unit Unit _ _).2.1, ⟨?_, by norm_num,
@@ -585,8 +539,6 @@ theorem genericWitness : Pinned.GenericWitness := by
     simpa [addPlan_cost, oneUnit, Shape.Wmm] using hB
   · simp [totalWref, addProto, oneUnit, Shape.Wmm]
   · simp [totalWref, addProto, oneUnit, Shape.Wmm]
-
-/-! ## Class (a′): entrywise encodings -/
 
 theorem affine_of_separable (s t g h : ℤ → ℤ) (α : ℤ) (hα : α ≠ 0)
     (hsep : ∀ x y, InInt7 x → InInt7 y → s x * t y = α * x * y + g x + h y) :
@@ -610,12 +562,10 @@ theorem affine_of_separable (s t g h : ℤ → ℤ) (α : ℤ) (hα : α ≠ 0)
   have := mul_right_cancel₀ hD key
   linarith
 
-/-- **Class (a′).** -/
 theorem tablesAffine : Pinned.TablesAffine := fun s t g h α hα hsep =>
   ⟨affine_of_separable s t g h α hα hsep,
     affine_of_separable t s h g α hα fun y x hy hx => by linarith [hsep x y hx hy, mul_comm (s x) (t y)]⟩
 
-/-- **`TablesAffine`'s witness.** -/
 theorem tablesAffineWitness : Pinned.TablesAffineWitness :=
   ⟨id, id, fun _ => 0, fun _ => 0, 1, one_ne_zero, fun x y _ _ => by simp⟩
 

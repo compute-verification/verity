@@ -6,14 +6,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.NCP.RelationWitness
 
-/-!
-# The mixing lemma: proofs
-
-* `span1_slots_le`: the slots lie in the span of the inputs, `B`'s outputs and `R`'s outputs.
-* `mixingLemma`: `cost ≥ 16·|B| + c_s·|R|`, `|B| ≥ D − dim W`, `|R| ≥ L(W)`.
-* `algBound4090`: with A1, `cost ≥ 16·(1 − γ₁)·D`.
-* `alg4090Witness`: the new hypotheses are satisfiable.
--/
+/-! The mixing lemma and Theorem D in AlgM_4090. -/
 
 @[expose] public section
 
@@ -116,7 +109,6 @@ theorem prodFree_get {N m n k cs : ℕ} {P : List (Instr (Noise N m n k))} (hH :
   obtain ⟨p, hp, hm⟩ := mem_prodOuts (List.get_mem _ _)
   exact ((hH p _ hm).resolve_left hp).2
 
-/-- **The mixing lemma.** -/
 theorem mixingLemma : MixingLemma := by
   intro k m n N R A B U L P cs hind hU hL hH hout
   have hD := finrank_target (m := m) (N := N) A B hind hU
@@ -143,7 +135,6 @@ theorem mixingLemma : MixingLemma := by
     rw [range_get_prodOuts]
     exact inf_le_right
 
-/-- **Theorem D in AlgM_4090.** -/
 theorem algBound4090 : AlgBound4090 := by
   intro k m n N R A B U L P cs c γ₁ hind hU hL hH hout hA1 hc hγ0 hγ1
   obtain ⟨hD, hcost, hB, -⟩ := mixingLemma k m n N R A B U L P cs hind hU hL hH hout
@@ -162,8 +153,6 @@ theorem algBound4090 : AlgBound4090 := by
     mul_le_mul_of_nonneg_right hc (mul_nonneg (by linarith) (Nat.cast_nonneg _))
   have h3 : γ₁ * Module.finrank ℚ W ≤ γ₁ * D := mul_le_mul_of_nonneg_left hWD hγ0
   linarith
-
-/-! ## Witnesses -/
 
 theorem one_mem_V0 {N m n k : ℕ} : (1 : Noise N m n k → ℚ) ∈ V0 N m n k :=
   Submodule.mem_sup_left (Submodule.subset_span (Set.mem_insert _ _))
@@ -187,7 +176,6 @@ theorem prodOuts_eq_nil {P : List (Instr G)} (h : ∀ p f, Instr.priced p f ∈ 
     | free c w => simpa [prodOuts] using ih'
     | priced p f => simp [prodOuts, h p f (by simp), ih']
 
-/-- **H4090's witness, with a scalar product.** -/
 theorem alg4090Witness : Alg4090Witness := by
   intro k hk h16 m n N A B U _
   obtain ⟨R, hadm, hind⟩ := RelationWitness.independentWitness k hk h16
@@ -208,7 +196,6 @@ theorem alg4090Witness : Alg4090Witness := by
   · rw [cost_append, honest_cost]
     simp [cost, Instr.price]
 
-/-- **`A1_W1`'s witness.** -/
 theorem a1W1Witness : A1W1Witness := fun k R γ₁ h hind _ => a1Witness k R 2 γ₁ hind (by linarith)
 
 end Pouw.Dimension

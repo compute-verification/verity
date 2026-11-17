@@ -4,13 +4,7 @@ public import Definitions.Pouw.Guarantees.HMu
 public import Proofs.Poub.Tag.LittlewoodOfford
 public import Proofs.ResourceAccounting.Lemmas.HMu
 
-/-!
-# Lemma B, and (H-μ) from the coins
-
-`lemmaB` sums (H-μ) over the at most `Z` skipped values (Inj) leaves on each deficient view. The coin bounds count bit
-vectors at each committed `ω₀`: Erdős's Littlewood–Offord bound (`ResourceAccounting.TagProofs.card_level_le_choose`, moved
-from `Fin u` to any finite index), or the pairing of each bit vector with the one that flips a bit of nonzero weight.
--/
+/-! Lemma B, and (H-μ) from the coins. -/
 
 @[expose] public section
 
@@ -56,7 +50,6 @@ theorem prob_exists_le {α : Type} (s : Finset α) (P : α → Ω → Prop) :
     _ ≤ ∑ x ∈ s, ((univ.filter (P x)).card : ℝ) := by exact_mod_cast card_biUnion_le
 
 open Classical in
-/-- A bound at every fibre of `f` is a bound. -/
 theorem prob_le_of_fibres {O : Type} (f : Ω → O) (p q : Ω → Prop) (c : ℝ)
     (h : ∀ o, prob (fun ω => p ω ∧ f ω = o) ≤ c * prob (fun ω => q ω ∧ f ω = o)) :
     prob p ≤ c * prob q := by
@@ -75,7 +68,6 @@ theorem prob_eq_one [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p 
   rw [prob_eq_card, filter_true_of_mem fun ω _ => h ω, card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
-/-- On a product, a bound on every slice `{a} × B` is a bound. -/
 theorem prob_le_of_slices {A B : Type} [Fintype A] [Fintype B] (p q : A × B → Prop) (c : ℝ)
     (h : ∀ a, prob (fun b => p (a, b)) ≤ c * prob (fun b => q (a, b))) :
     prob p ≤ c * prob q := by
@@ -101,8 +93,6 @@ section Coins
 
 variable {Ω₀ O J G : Type} [Fintype Ω₀] [Fintype J] [DecidableEq J]
 
-/-- A bound on the bit vectors at every committed `ω₀` that meets `P` bounds the probability given any view of the
-committed part. -/
 theorem prob_slice_le (V : Ω₀ → O) (o : O) (P : Ω₀ → Prop) (X : Ω₀ → (J → Bool) → Prop) (c : ℝ) (hc : 0 ≤ c)
     (h : ∀ a, P a → prob (X a) ≤ c) :
     prob (fun ω : Ω₀ × (J → Bool) => V ω.1 = o ∧ P ω.1 ∧ X ω.1 ω.2) ≤
@@ -124,7 +114,6 @@ theorem coinSum_comp_equiv {u : ℕ} (eq : J ≃ Fin u) (v : J → ℤ) (e : J �
   unfold coinSum ResourceAccounting.Tag.unreadSum
   exact (Equiv.sum_comp eq.symm (fun j => if e j then v j else 0)).symm
 
-/-- Erdős's Littlewood–Offord bound over any finite index. -/
 theorem card_coinSum_le (v : J → ℤ) (hv : ∀ j, v j ≠ 0) (t : ℤ) :
     (univ.filter fun e : J → Bool => coinSum v e = t).card ≤
       (Fintype.card J).choose (Fintype.card J / 2) := by
@@ -136,7 +125,6 @@ theorem card_coinSum_le (v : J → ℤ) (hv : ∀ j, v j ≠ 0) (t : ℤ) :
   simp only [mem_filter, mem_univ, true_and, coinSum_comp_equiv eq]
   rfl
 
-/-- (H-μ) from the coins at `μ = C(u, ⌊u/2⌋)/2^u`. -/
 theorem prob_coinSum_le (a : ℤ) (v : J → ℤ) (hv : ∀ j, v j ≠ 0) (t : ℤ) :
     prob (fun e : J → Bool => a + coinSum v e = t) ≤
       ((Fintype.card J).choose (Fintype.card J / 2) : ℝ) / 2 ^ Fintype.card J := by
@@ -154,7 +142,6 @@ theorem coinSum_update [AddCommMonoid G] (v : J → G) (e : J → Bool) (j : J) 
   · simp
   · exact sum_congr rfl fun k hk => by rw [Function.update_of_ne (ne_of_mem_erase hk)]
 
-/-- A bit of nonzero weight pairs each bit vector with one of another sum: at most half share a sum. -/
 theorem prob_coinSum_half [AddCommGroup G] (a : G) (v : J → G) (j : J) (hj : v j ≠ 0) (t : G) :
     prob (fun e : J → Bool => a + coinSum v e = t) ≤ 1 / 2 := by
   classical
@@ -185,8 +172,6 @@ theorem prob_coinSum_half [AddCommGroup G] (a : G) (v : J → G) (j : J) (hj : v
   rw [div_le_iff₀ (by positivity)]
   linarith
 
-/-- Receipt luck at each committed `ω₀`: at most `Z` skipped values give the committed receipt, each of probability at
-most `m` on the bit vectors. -/
 theorem prob_luck_le {β : Type} (X : Ω₀ → (J → Bool) → G) (hon : Ω₀ → G → β) (com : Ω₀ → β) (d : Ω₀ → ℝ)
     (P : Ω₀ → Prop) (Z : ℕ) (m : ℝ) (hm : 0 ≤ m) (hX : ∀ a, P a → ∀ x, prob (fun e => X a e = x) ≤ m) :
     prob (fun ω : Ω₀ × (J → Bool) =>
@@ -215,8 +200,6 @@ theorem prob_luck_le {β : Type} (X : Ω₀ → (J → Bool) → G) (hon : Ω₀
 
 end Coins
 
-/-- **Lemma B**: on each deficient view, the round is lucky only where its skipped value is one of the at most `Z` that
-give the committed receipt, each of point mass at most `μ`. -/
 theorem lemmaB : ResourceAccounting.Guarantees.HMu.LemmaB := by
   intro Ω O α β _ R μ Z ⟨hpm, hinj⟩
   apply prob_le_of_fibres R.view

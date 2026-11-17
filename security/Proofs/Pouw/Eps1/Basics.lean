@@ -34,12 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# M3's basic lemmas for Dither's lower bounds
-
-The lemmas Theorem B's proof reads: runs exist and are unique, a block's outside slots, the zero instance's fiber and
-the information count.
--/
+/-! M3's basic lemmas for Dither's lower bounds. -/
 
 @[expose] public section
 
@@ -47,7 +42,6 @@ namespace Pouw.SecurityProofs.Eps1
 
 open Pouw.Eps1
 
-/-- An argument's value reads only instructions before its own. -/
 theorem argVal_congr {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v' : Fin G → Word) (t : Fin G)
     (h : ∀ s : Fin G, s.val < t.val → v s = v' s) (j : Fin 3) : P.argVal x v t j = P.argVal x v' t j := by
   unfold M3.argVal
@@ -56,7 +50,6 @@ theorem argVal_congr {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v'
   · rename_i s _
     exact h _ s.isLt
 
-/-- Every M3 program has a run on every input (instructions read only earlier words). -/
 theorem run_exists {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) : ∃ v, P.IsRun x v := by
   have key : ∀ n, ∃ v : Fin G → Word, ∀ t : Fin G, t.val < n →
       v t = P.op t (P.argVal x v t 0) (P.argVal x v t 1) (P.argVal x v t 2) := by
@@ -82,7 +75,6 @@ theorem run_exists {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) : ∃ v
   obtain ⟨v, hv⟩ := key G
   exact ⟨v, fun t => hv t t.isLt⟩
 
-/-- The run is unique. -/
 theorem run_unique {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v' : Fin G → Word) (h : P.IsRun x v)
     (h' : P.IsRun x v') : v = v' := by
   have key : ∀ n, ∀ t : Fin G, t.val < n → v t = v' t := by
@@ -98,8 +90,6 @@ theorem run_unique {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v' :
   exact key _ t (Nat.lt_succ_self _)
 
 open Classical in
-/-- Theorem B's counting: a block whose live part has `a` instructions, each but the writer an argument of another
-live one, takes at most `2a + 1` of its input slots from outside it (at least `a − 1` are edges inside it). -/
 theorem block_outside_slots {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
     (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk) (τ : Tau m n Lseg)
     (live : Finset (Fin G)) (hlive : ∀ t ∈ live, blk t = τ) (hout : P.out τ ∈ live)
@@ -131,15 +121,12 @@ theorem block_outside_slots {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : 
   have hpos : 0 < live.card := Finset.card_pos.mpr ⟨_, hout⟩
   omega
 
-/-- The zero instance's fiber: `r ↦ r·u` determines a column `u` with entries in `±1..±64`, so the column-side
-words a block reads carry at least 224 bits, at least 7 words. -/
 theorem fiber_needs_seven {n : ℕ} (U U' : Cols n) (j : Fin n) (hU : ColsValid U) (hU' : ColsValid U')
     (h : ∀ r : Fin 32 → Bool, (∑ p, if r p then U j p else 0) = ∑ p, if r p then U' j p else 0) :
     ∀ p, U j p = U' j p := by
   intro p
   simpa using h fun q => decide (q = p)
 
-/-- An injection of `Fin 128` into `±1..±64`: `i ↦ i + 1` below 64, `i ↦ 63 − i` from 64. -/
 def enc (i : Fin 128) : ℤ := if i.val < 64 then (i.val : ℤ) + 1 else 63 - (i.val : ℤ)
 
 theorem enc_valid (i : Fin 128) : 1 ≤ |enc i| ∧ |enc i| ≤ 64 := by
@@ -157,8 +144,6 @@ theorem enc_injective : Function.Injective enc := by
   apply Fin.ext
   split_ifs at h <;> omega
 
-/-- The information count: six words can't tell apart the `128^32 = 2^224` columns with entries in `±1..±64`; any
-map from such columns to `k` words that is injective on them has `k ≥ 7` (`k ≥ 8` for the `2^256` int8 segments). -/
 theorem words_needed (k : ℕ) (f : (Fin 32 → ℤ) → Fin k → Word)
     (hf : ∀ u u', (∀ p, 1 ≤ |u p| ∧ |u p| ≤ 64) → (∀ p, 1 ≤ |u' p| ∧ |u' p| ≤ 64) → f u = f u' → u = u') :
     7 ≤ k := by

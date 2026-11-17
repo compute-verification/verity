@@ -41,19 +41,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Eps1.Basics
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Theorem B in M3: a word-local program's instructions
-
-Theorem B: a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general
-(int8) instance.
-
-Block `τ`'s live part `L` is its writer and the writer's ancestors inside the block. The writer's value is a function
-of `L`'s input slots and the previous segment's output (`out_determined`). On the fiber of `τ = (ℓ, i, j)`, where only
-segment `ℓ` of row `i` and column `j` vary and row `i`'s earlier segments are zero, that output is `0`, a row-side free
-word is a function of the row's segment and a column-side one of the column. The writer determines the column (at a
-general instance, the row's segment too), so at least 7 column-side slots and 1 row-side slot (8 and 8) feed `L`, and
-`block_outside_slots` caps `L`'s outside slots at `2|L| + 1`.
--/
+/-! Theorem B in M3: a word-local program costs at least 4 instructions a word at the zero instance and at least
+8 at an int8 instance. -/
 
 @[expose] public section
 
@@ -65,12 +54,10 @@ section Block
 
 variable {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
 
-/-- `a` is an argument of `b`, an instruction of block `τ`. -/
 def ArgIn (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) (a b : Fin G) : Prop :=
   blk b = τ ∧ ∃ j s, P.prog.arg b j = .inr s ∧ M3.earlier b s = a
 
 open Classical in
-/-- Block `τ`'s live part: its writer and the writer's ancestors inside the block. -/
 noncomputable def live (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) :
     Finset (Fin G) :=
   univ.filter fun t => blk t = τ ∧ Relation.ReflTransGen (ArgIn P blk τ) t (P.out τ)
@@ -99,7 +86,6 @@ theorem live_card_le (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → T
     (live P blk τ).card ≤ (univ.filter fun t => blk t = τ).card :=
   card_le_card fun t ht => mem_filter.mpr ⟨mem_univ t, (mem_live.mp ht).1⟩
 
-/-- The writer's value is a function of its live part's input slots and the previous segment's output. -/
 theorem out_determined (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) (x x' : Rd) (y y' : Cd) (v v' : Fin G → Word) (hv : P.prog.IsRun (P.inputs x y) v)
     (hv' : P.prog.IsRun (P.inputs x' y') v')
@@ -135,7 +121,6 @@ theorem out_determined (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G →
       rw [hv t, hv' t, harg 0, harg 1, harg 2]
   exact key _ _ (out_mem_live hW τ) (Nat.lt_succ_self _)
 
-/-- The live part's row-side and column-side input slots number at most `2|L| + 1` (`block_outside_slots`). -/
 theorem slots_le (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) (Sr Su : Finset (Fin 3 × Fin G))
     (hSr : ∀ tj ∈ Sr, tj.2 ∈ live P blk τ ∧ ∃ a, P.prog.arg tj.2 tj.1 = .inl (.inl a))
@@ -160,7 +145,6 @@ theorem slots_le (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m
     rw [ha] at hb
     cases hb
 
-/-- Blocks partition the instructions, so `c` instructions a block make `c·L·m·n` at least. -/
 theorem count_blocks (blk : Fin G → Tau m n Lseg) (c : ℕ)
     (h : ∀ τ, c ≤ (univ.filter fun t => blk t = τ).card) : c * (Lseg * m * n) ≤ G := by
   have hG := card_eq_sum_card_fiberwise (f := blk) (s := univ) (t := univ) (fun _ _ => mem_coe.mpr (mem_univ _))
@@ -172,7 +156,6 @@ theorem count_blocks (blk : Fin G → Tau m n Lseg) (c : ℕ)
 
 end Block
 
-/-- A 32-bit word tells apart the integers in `[−2^31, 2^31)`. -/
 theorem ofInt_inj {a b : ℤ} (ha : -2 ^ 31 ≤ a ∧ a < 2 ^ 31) (hb : -2 ^ 31 ≤ b ∧ b < 2 ^ 31)
     (h : BitVec.ofInt 32 a = BitVec.ofInt 32 b) : a = b := by
   have h' := congrArg BitVec.toInt h
@@ -183,11 +166,9 @@ section Zero
 
 variable {m n Lseg : ℕ}
 
-/-- The zero instance's fiber of `τ`: segment `τ.1` of row `τ.2.1` is `r`, every other dither bit is zero. -/
 def rowF (τ : Tau m n Lseg) (r : Fin 32 → Bool) : Dither m Lseg :=
   fun i l p => if i = τ.2.1 ∧ l = τ.1 then r p else false
 
-/-- Column `τ.2.2` is `u`, every other entry is `1`. -/
 def colF (τ : Tau m n Lseg) (u : Fin 32 → ℤ) : Cols n :=
   fun j p => if j = τ.2.2 then u p else 1
 
@@ -219,7 +200,6 @@ theorem zeroOut_fiber_prev (τ : Tau m n Lseg) (r : Fin 32 → Bool) (U : Cols n
   rw [zeroOut, zeroPrefix_rowF τ _ r U hle, zeroSeg_rowF_ne τ r U _ _ _ hne]
   rfl
 
-/-- **Theorem B's block bound, zero instance**: each block's live part has at least 4 instructions. -/
 theorem block_zero {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg) (hC : P.Computes (fun _ U => ColsValid U) zeroOut) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) : 4 ≤ (live P blk τ).card := by
@@ -240,7 +220,6 @@ theorem block_zero {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Co
   have hS := slots_le P blk hW τ Sr Su
     (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
     (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
-  -- the column side: the writer determines column `j`, so at least 7 column-side slots
   have hu7 : 7 ≤ Su.card := by
     let e := Su.equivFin
     let g : (Fin 32 → ℤ) → Fin 3 × Fin G → Word := fun u tj =>
@@ -260,7 +239,6 @@ theorem block_zero {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Co
     have h1 := abs_le.mp (hu p).2
     have h2 := abs_le.mp (hu' p).2
     exact ofInt_inj ⟨by omega, by omega⟩ ⟨by omega, by omega⟩ hd
-  -- the row side: the writer depends on the row's segment, so at least one row-side slot
   have hr1 : 1 ≤ Sr.card := by
     rw [Nat.one_le_iff_ne_zero, Ne, card_eq_zero]
     intro h0
@@ -279,14 +257,10 @@ theorem block_zero {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Co
 
 end Zero
 
-/-- **Theorem B, zero instance**: a word-local program computing Dither's prefix words has at least `4·L·m·n`
-instructions. -/
 theorem wordLocalZero : Pouw.Guarantees.Eps1.WordLocalZero := by
   intro m n Lseg FR FU G P blk hC hW
   exact count_blocks blk 4 fun τ => (block_zero P blk hC hW τ).trans (live_card_le P blk τ)
 
-/-- The int8 information count: eight words are needed to tell apart the `256^32 = 2^256` int8 segments; any map from
-them to `k` words that is injective on them has `k ≥ 8`. -/
 theorem words_needed_int8 (k : ℕ) (f : (Fin 32 → ℤ) → Fin k → Word)
     (hf : ∀ u u', (∀ p, Int8Valid (u p)) → (∀ p, Int8Valid (u' p)) → f u = f u' → u = u') : 8 ≤ k := by
   have hval : ∀ a : Fin 32 → Fin 256, ∀ p, Int8Valid (((a p : ℕ) : ℤ) - 128) := fun a p => by
@@ -312,11 +286,9 @@ section General
 
 variable {m n Lseg : ℕ}
 
-/-- A general instance's fiber of `τ`: segment `τ.1` of row `τ.2.1` of `Ã` is `a`, every other entry is zero. -/
 def rowG (τ : Tau m n Lseg) (a : Fin 32 → ℤ) : Rows m Lseg :=
   fun i l p => if i = τ.2.1 ∧ l = τ.1 then a p else 0
 
-/-- Segment `τ.1` of column `τ.2.2` of `B̃` is `b`, every other entry is zero. -/
 def colG (τ : Tau m n Lseg) (b : Fin 32 → ℤ) : GCols n Lseg :=
   fun j l p => if j = τ.2.2 ∧ l = τ.1 then b p else 0
 
@@ -363,7 +335,6 @@ theorem genOut_fiber_prev (τ : Tau m n Lseg) (a b : Fin 32 → ℤ) (h : 0 < τ
   have hne : l ≠ τ.1 := fun he => by rw [he] at hle; omega
   simp [rowG, colG, hne]
 
-/-- The indicator of entry `p`, an int8 segment. -/
 def ind (p : Fin 32) : Fin 32 → ℤ := fun q => if q = p then 1 else 0
 
 theorem ind_valid (p q : Fin 32) : Int8Valid (ind p q) := by
@@ -374,7 +345,6 @@ theorem int8_bounds {z : ℤ} (hz : Int8Valid z) : -2 ^ 31 ≤ z ∧ z < 2 ^ 31 
   unfold Int8Valid at hz
   constructor <;> omega
 
-/-- **Theorem B's block bound, general instance**: each block's live part has at least 8 instructions. -/
 theorem block_general {FR FU : Type} {G : ℕ} (P : M3Algorithm (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg)
     (hC : P.Computes (fun A B => (∀ i l p, Int8Valid (A i l p)) ∧ ∀ j l p, Int8Valid (B j l p)) genOut)
@@ -397,7 +367,6 @@ theorem block_general {FR FU : Type} {G : ℕ} (P : M3Algorithm (Rows m Lseg) (G
   have hS := slots_le P blk hW τ Sr Su
     (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
     (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
-  -- the column side: the writer determines `B̃`'s segment, so at least 8 column-side slots
   have hu8 : 8 ≤ Su.card := by
     let e := Su.equivFin
     let g : (Fin 32 → ℤ) → Fin 3 × Fin G → Word := fun b tj =>
@@ -415,7 +384,6 @@ theorem block_general {FR FU : Type} {G : ℕ} (P : M3Algorithm (Rows m Lseg) (G
     rw [hout _ _ (ind_valid p) hb, hout _ _ (ind_valid p) hb'] at hd
     simp only [ind, ite_mul, one_mul, zero_mul, sum_ite_eq', mem_univ, ite_true] at hd
     exact ofInt_inj (int8_bounds (hb p)) (int8_bounds (hb' p)) hd
-  -- the row side: the writer determines `Ã`'s segment, so at least 8 row-side slots
   have hr8 : 8 ≤ Sr.card := by
     let e := Sr.equivFin
     let g : (Fin 32 → ℤ) → Fin 3 × Fin G → Word := fun a tj =>
@@ -438,8 +406,6 @@ theorem block_general {FR FU : Type} {G : ℕ} (P : M3Algorithm (Rows m Lseg) (G
 
 end General
 
-/-- **Theorem B, general instance**: a word-local program computing the prefix words of `Ã·B̃` on every int8 instance
-has at least `8·L·m·n` instructions. -/
 theorem wordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral := by
   intro m n Lseg FR FU G P blk hC hW
   exact count_blocks blk 8 fun τ => (block_general P blk hC hW τ).trans (live_card_le P blk τ)

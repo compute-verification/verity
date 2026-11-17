@@ -6,27 +6,18 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# The combine's pieces on bits compute their word views, and so does their composition
-
-Each piece's lowering computes its word view on every input: `PouwXor32_v2`'s (`xor32Bits_bitsOf`), `PouwEq32_v2`'s
-(`eq32Bits_bitsOf`), and `PouwAndBit_v2`'s, which is `andBit` on both sides. A tree whose operation a map carries to
-another's is carried with it (`tree_map`), so the combine's body on bits, read at its words' bits, is its body on words
-(`combineBits_bitsOf`).
--/
+/-! The combine's pieces on bits compute their word views, and so does their composition. -/
 
 @[expose] public section
 
 namespace Pouw.H1Zy
 
-/-- A pass of the tree commutes with a map that carries `f` to `g`. -/
 theorem pairs_map {α β : Type} (f : α → α → α) (g : β → β → β) (φ : α → β)
     (h : ∀ a b, φ (f a b) = g (φ a) (φ b)) : ∀ l : List α, pairs g (l.map φ) = (pairs f l).map φ
   | [] => rfl
   | [_] => rfl
   | a :: b :: rest => by simp only [List.map_cons, pairs, h, pairs_map f g φ h rest]
 
-/-- **The tree commutes with a map that carries `f` to `g` and `d` to `d'`.** -/
 theorem tree_map {α β : Type} (f : α → α → α) (g : β → β → β) (φ : α → β) (d : α) (d' : β)
     (h : ∀ a b, φ (f a b) = g (φ a) (φ b)) (hd : φ d = d') : ∀ l : List α, tree g d' (l.map φ) = φ (tree f d l)
   | [] => by simp [tree, hd]
@@ -37,12 +28,10 @@ theorem tree_map {α β : Type} (f : α → α → α) (g : β → β → β) (�
 termination_by l => l.length
 decreasing_by exact length_pairs_lt f a b rest
 
-/-- **`PouwXor32_v2`'s lowering computes `PouwXor32_v1`.** -/
 theorem xor32Bits_bitsOf (a b : BitVec 32) : xor32Bits (bitsOf a) (bitsOf b) = bitsOf (xor32 a b) := by
   funext i
   simp [xor32Bits, bitsOf, xor32]
 
-/-- **`PouwEq32_v2`'s lowering computes `PouwEq32_v1`.** -/
 theorem eq32Bits_bitsOf (x y : BitVec 32) : eq32Bits (bitsOf x) (bitsOf y) = eq32 x y := by
   apply Bool.eq_iff_iff.2
   rw [eq32Bits, tree_andBit]
@@ -56,8 +45,6 @@ theorem eq32Bits_bitsOf (x y : BitVec 32) : eq32Bits (bitsOf x) (bitsOf y) = eq3
   · rintro rfl _
     simp
 
-/-- **The combine's body on bits computes it on words**: on the bits of any partials and receipt, `combineBits` is
-`combineOk`. -/
 theorem combineBits_bitsOf {L nw : ℕ} (p : Fin L → Fin nw → BitVec 32) (r : Fin nw → BitVec 32) :
     combineBits (fun l w => bitsOf (p l w)) (fun w => bitsOf (r w)) = combineOk p r := by
   unfold combineBits combineOk

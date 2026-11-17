@@ -10,27 +10,8 @@ import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# g at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged)
-
-Generated, one theorem per cast price, by a script that isn't in the tree.
-
-The statement's `W_ref` prices the E4M3 cast at the credited 8.0 per code. The sm_120 port casts at 32.06 as written,
-16.00 packed four per word, and 8.72 packed with wide stores, the kernel's target. Each theorem here is g for v1 under
-rev1 (cap 1/400) or v2 at the cap 1/1,000, per unit or per audit tile, at `devSm120v1` or `devSm120v2`, against `W_ref`
-with the honest cast at 32, 32.06, 16 or 8.72, at the issue-bound FP32 add (`Prices.sm120`) or the in-loop one
-(`Prices.sm120Loop`). At 8.72 the chain-only reading is stated too. At the statement's own cast (8) only the in-loop row
-is here: it is the exact in-loop value of the twins, which `Prices.sm120Loop` bounds from above by rounding the A-only
-forming up to 2.
-
-The forming-credited theorems take the record's own TT_OUT (TT_OUT does not read `W_ref`: `ttOut_wref`); the chain-only
-ones take its weaker chain-only form (`ttOutPearlCDevChainOnly_of_ttOut`, with the forms in `TTOutChainOnly`).
-
-Both records credit the cast at its cheapest implementation, 8.0. `W_ref`
-gains `c` per activation element over the record's: the honest cast `h` less the credited 8, plus, in the loop, the
-A-only forming's measured 1.047 less the record's rounded 2. So `c = h − 8` at `Prices.sm120` and `c = h − 8.953` at
-`Prices.sm120Loop`, and `W_ref` is the kernel's at each price exactly.
--/
+/-! g at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged), one theorem per cast price,
+with `W_ref` the kernel's at each price. -/
 
 @[expose] public section
 
@@ -43,7 +24,6 @@ section Gap
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
   (sem : PearlCSem Q R S)
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.00, the honest cast at 32: `g = 173561/22302500` (0.77821%). -/
 theorem pearlCGapSm120v1Cast32Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (32 - 8))
@@ -55,7 +35,6 @@ theorem pearlCGapSm120v1Cast32Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32: `g = 173561/22302500` (0.77821%). -/
 theorem pearlCSampledSm120v1Cast32Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (32 - 8))
@@ -72,7 +51,6 @@ theorem pearlCSampledSm120v1Cast32Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.00, the honest cast at 32: `g = 3763/587500` (0.64051%). -/
 theorem pearlCGapSm120v1Cast32Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (32 - 8))
@@ -84,7 +62,6 @@ theorem pearlCGapSm120v1Cast32Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32: `g = 3763/587500` (0.64051%). -/
 theorem pearlCSampledSm120v1Cast32Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (32 - 8))
@@ -101,7 +78,6 @@ theorem pearlCSampledSm120v1Cast32Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 32: `g = 143029/22150000` (0.64573%). -/
 theorem pearlCGapSm120v2Cast32InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (32 - 8))
@@ -113,8 +89,6 @@ theorem pearlCGapSm120v2Cast32InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32: `g = 143029/22150000`
-(0.64573%). -/
 theorem pearlCSampledSm120v2Cast32InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (32 - 8))
@@ -131,7 +105,6 @@ theorem pearlCSampledSm120v2Cast32InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 32: `g = 4150127/830450000` (0.49974%). -/
 theorem pearlCGapSm120v2Cast32InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (32 - 8))
@@ -143,8 +116,6 @@ theorem pearlCGapSm120v2Cast32InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32: `g = 4150127/830450000`
-(0.49974%). -/
 theorem pearlCSampledSm120v2Cast32InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (32 - 8))
@@ -161,7 +132,6 @@ theorem pearlCSampledSm120v2Cast32InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 173711/22302650` (0.77888%). -/
 theorem pearlCGapSm120v1Cast32p06Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -173,8 +143,6 @@ theorem pearlCGapSm120v1Cast32p06Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 173711/22302650` (0.77888%).
--/
 theorem pearlCSampledSm120v1Cast32p06Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -191,7 +159,6 @@ theorem pearlCSampledSm120v1Cast32p06Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 1255/195834` (0.64085%). -/
 theorem pearlCGapSm120v1Cast32p06Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -203,7 +170,6 @@ theorem pearlCGapSm120v1Cast32p06Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 1255/195834` (0.64085%). -/
 theorem pearlCSampledSm120v1Cast32p06Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -220,7 +186,6 @@ theorem pearlCSampledSm120v1Cast32p06Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 2720551/420853000` (0.64644%). -/
 theorem pearlCGapSm120v2Cast32p06InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -232,8 +197,6 @@ theorem pearlCGapSm120v2Cast32p06InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 2720551/420853000`
-(0.64644%). -/
 theorem pearlCSampledSm120v2Cast32p06InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -250,7 +213,6 @@ theorem pearlCSampledSm120v2Cast32p06InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 4153127/830453000` (0.50010%). -/
 theorem pearlCGapSm120v2Cast32p06InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -262,8 +224,6 @@ theorem pearlCGapSm120v2Cast32p06InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 4153127/830453000`
-(0.50010%). -/
 theorem pearlCSampledSm120v2Cast32p06InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -280,7 +240,6 @@ theorem pearlCSampledSm120v2Cast32p06InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 273461/22302650` (1.22614%). -/
 theorem pearlCGapSm120v1Cast32p06ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -292,8 +251,6 @@ theorem pearlCGapSm120v1Cast32p06ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 273461/22302650`
-(1.22614%). -/
 theorem pearlCSampledSm120v1Cast32p06ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -310,7 +267,6 @@ theorem pearlCSampledSm120v1Cast32p06ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 5095/587502` (0.86723%). -/
 theorem pearlCGapSm120v1Cast32p06ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -322,8 +278,6 @@ theorem pearlCGapSm120v1Cast32p06ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 5095/587502`
-(0.86723%). -/
 theorem pearlCSampledSm120v1Cast32p06ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (1603/50 - 8))
@@ -340,8 +294,6 @@ theorem pearlCSampledSm120v1Cast32p06ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g = 4715551/420853000`
-(1.12047%). -/
 theorem pearlCGapSm120v2Cast32p06ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -353,8 +305,6 @@ theorem pearlCGapSm120v2Cast32p06ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 32.06: `g =
-4715551/420853000` (1.12047%). -/
 theorem pearlCSampledSm120v2Cast32p06ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -371,8 +321,6 @@ theorem pearlCSampledSm120v2Cast32p06ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g = 6148127/830453000`
-(0.74033%). -/
 theorem pearlCGapSm120v2Cast32p06ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -384,8 +332,6 @@ theorem pearlCGapSm120v2Cast32p06ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 32.06: `g =
-6148127/830453000` (0.74033%). -/
 theorem pearlCSampledSm120v2Cast32p06ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (1603/50 - 8))
@@ -402,7 +348,6 @@ theorem pearlCSampledSm120v2Cast32p06ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 133561/22262500` (0.59994%). -/
 theorem pearlCGapSm120v1Cast16Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -414,7 +359,6 @@ theorem pearlCGapSm120v1Cast16Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 133561/22262500` (0.59994%). -/
 theorem pearlCSampledSm120v1Cast16Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -431,7 +375,6 @@ theorem pearlCSampledSm120v1Cast16Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 9689/1760900` (0.55023%). -/
 theorem pearlCGapSm120v1Cast16Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -443,7 +386,6 @@ theorem pearlCGapSm120v1Cast16Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 9689/1760900` (0.55023%). -/
 theorem pearlCSampledSm120v1Cast16Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -460,7 +402,6 @@ theorem pearlCSampledSm120v1Cast16Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 1917551/420050000` (0.45651%). -/
 theorem pearlCGapSm120v2Cast16InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -472,8 +413,6 @@ theorem pearlCGapSm120v2Cast16InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 1917551/420050000`
-(0.45651%). -/
 theorem pearlCSampledSm120v2Cast16InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -490,7 +429,6 @@ theorem pearlCSampledSm120v2Cast16InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 1116709/276550000` (0.40380%). -/
 theorem pearlCGapSm120v2Cast16InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -502,8 +440,6 @@ theorem pearlCGapSm120v2Cast16InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 1116709/276550000`
-(0.40380%). -/
 theorem pearlCSampledSm120v2Cast16InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -520,7 +456,6 @@ theorem pearlCSampledSm120v2Cast16InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 131/12500` (1.04800%). -/
 theorem pearlCGapSm120v1Cast16ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -532,8 +467,6 @@ theorem pearlCGapSm120v1Cast16ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 131/12500`
-(1.04800%). -/
 theorem pearlCSampledSm120v1Cast16ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -550,7 +483,6 @@ theorem pearlCSampledSm120v1Cast16ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 13679/1760900` (0.77682%). -/
 theorem pearlCGapSm120v1Cast16ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -562,8 +494,6 @@ theorem pearlCGapSm120v1Cast16ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 13679/1760900`
-(0.77682%). -/
 theorem pearlCSampledSm120v1Cast16ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (16 - 8))
@@ -580,8 +510,6 @@ theorem pearlCSampledSm120v1Cast16ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 3912551/420050000`
-(0.93145%). -/
 theorem pearlCGapSm120v2Cast16ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -593,8 +521,6 @@ theorem pearlCGapSm120v2Cast16ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 16: `g =
-3912551/420050000` (0.93145%). -/
 theorem pearlCSampledSm120v2Cast16ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -611,8 +537,6 @@ theorem pearlCSampledSm120v2Cast16ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.00, the honest cast at 16: `g = 1781709/276550000`
-(0.64426%). -/
 theorem pearlCGapSm120v2Cast16ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -624,8 +548,6 @@ theorem pearlCGapSm120v2Cast16ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 16: `g =
-1781709/276550000` (0.64426%). -/
 theorem pearlCSampledSm120v2Cast16ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
@@ -642,7 +564,6 @@ theorem pearlCSampledSm120v2Cast16ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 115361/22244300` (0.51861%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -654,8 +575,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 115361/22244300` (0.51861%).
--/
 theorem pearlCSampledSm120v1Cast8p72Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -672,7 +591,6 @@ theorem pearlCSampledSm120v1Cast8p72Rev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 2987/586724` (0.50910%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -684,7 +602,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 2987/586724` (0.50910%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -701,7 +618,6 @@ theorem pearlCSampledSm120v1Cast8p72Rev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 1553551/419686000` (0.37017%). -/
 theorem pearlCGapSm120v2Cast8p72InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -713,8 +629,6 @@ theorem pearlCGapSm120v2Cast8p72InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 1553551/419686000`
-(0.37017%). -/
 theorem pearlCSampledSm120v2Cast8p72InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -731,7 +645,6 @@ theorem pearlCSampledSm120v2Cast8p72InertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 2986127/829286000` (0.36008%). -/
 theorem pearlCGapSm120v2Cast8p72InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -743,8 +656,6 @@ theorem pearlCGapSm120v2Cast8p72InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 2986127/829286000`
-(0.36008%). -/
 theorem pearlCSampledSm120v2Cast8p72InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -761,7 +672,6 @@ theorem pearlCSampledSm120v2Cast8p72InertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 16547/1711100` (0.96704%). -/
 theorem pearlCGapSm120v1Cast8p72ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -773,8 +683,6 @@ theorem pearlCGapSm120v1Cast8p72ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 16547/1711100`
-(0.96704%). -/
 theorem pearlCSampledSm120v1Cast8p72ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -791,7 +699,6 @@ theorem pearlCSampledSm120v1Cast8p72ChainOnlyRev1_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 4317/586724` (0.73578%). -/
 theorem pearlCGapSm120v1Cast8p72ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -803,8 +710,6 @@ theorem pearlCGapSm120v1Cast8p72ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 4317/586724`
-(0.73578%). -/
 theorem pearlCSampledSm120v1Cast8p72ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 400) (218/25 - 8))
@@ -821,8 +726,6 @@ theorem pearlCSampledSm120v1Cast8p72ChainOnlyRev1_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 3548551/419686000`
-(0.84553%). -/
 theorem pearlCGapSm120v2Cast8p72ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -834,8 +737,6 @@ theorem pearlCGapSm120v2Cast8p72ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g =
-3548551/419686000` (0.84553%). -/
 theorem pearlCSampledSm120v2Cast8p72ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -852,8 +753,6 @@ theorem pearlCSampledSm120v2Cast8p72ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g = 4981127/829286000`
-(0.60065%). -/
 theorem pearlCGapSm120v2Cast8p72ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -865,8 +764,6 @@ theorem pearlCGapSm120v2Cast8p72ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.00, the honest cast at 8.72: `g =
-4981127/829286000` (0.60065%). -/
 theorem pearlCSampledSm120v2Cast8p72ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
@@ -883,7 +780,6 @@ theorem pearlCSampledSm120v2Cast8p72ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.376, the honest cast at 32: `g = 1391793839/178894700000` (0.77800%). -/
 theorem pearlCGapSm120v1LoopCast32Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (32 - 8953 / 1000))
@@ -895,8 +791,6 @@ theorem pearlCGapSm120v1LoopCast32Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32: `g = 1391793839/178894700000`
-(0.77800%). -/
 theorem pearlCSampledSm120v1LoopCast32Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (32 - 8953 / 1000))
@@ -913,7 +807,6 @@ theorem pearlCSampledSm120v1LoopCast32Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.376, the honest cast at 32: `g = 754503077/117818660000` (0.64039%). -/
 theorem pearlCGapSm120v1LoopCast32Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (32 - 8953 / 1000))
@@ -925,8 +818,6 @@ theorem pearlCGapSm120v1LoopCast32Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32: `g = 754503077/117818660000`
-(0.64039%). -/
 theorem pearlCSampledSm120v1LoopCast32Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (32 - 8953 / 1000))
@@ -943,7 +834,6 @@ theorem pearlCSampledSm120v1LoopCast32Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 32: `g = 2719901/420852350` (0.64628%). -/
 theorem pearlCGapSm120v2LoopCast32InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (32 - 8953 / 1000))
@@ -955,8 +845,6 @@ theorem pearlCGapSm120v2LoopCast32InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32: `g = 2719901/420852350`
-(0.64628%). -/
 theorem pearlCSampledSm120v2LoopCast32InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (32 - 8953 / 1000))
@@ -973,7 +861,6 @@ theorem pearlCSampledSm120v2LoopCast32InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 32: `g = 197737/39545350` (0.50003%). -/
 theorem pearlCGapSm120v2LoopCast32InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (32 - 8953 / 1000))
@@ -985,8 +872,6 @@ theorem pearlCGapSm120v2LoopCast32InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32: `g = 197737/39545350`
-(0.50003%). -/
 theorem pearlCSampledSm120v2LoopCast32InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (32 - 8953 / 1000))
@@ -1003,7 +888,6 @@ theorem pearlCSampledSm120v2LoopCast32InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 1392993839/178895900000` (0.77866%). -/
 theorem pearlCGapSm120v1LoopCast32p06Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1015,8 +899,6 @@ theorem pearlCGapSm120v1LoopCast32p06Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 1392993839/178895900000`
-(0.77866%). -/
 theorem pearlCSampledSm120v1LoopCast32p06Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1033,7 +915,6 @@ theorem pearlCSampledSm120v1LoopCast32p06Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 251634359/39273020000` (0.64073%). -/
 theorem pearlCGapSm120v1LoopCast32p06Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1045,8 +926,6 @@ theorem pearlCGapSm120v1LoopCast32p06Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 251634359/39273020000`
-(0.64073%). -/
 theorem pearlCSampledSm120v1LoopCast32p06Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1063,7 +942,6 @@ theorem pearlCSampledSm120v1LoopCast32p06Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 2722901/420855350` (0.64699%). -/
 theorem pearlCGapSm120v2LoopCast32p06InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1075,8 +953,6 @@ theorem pearlCGapSm120v2LoopCast32p06InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 2722901/420855350`
-(0.64699%). -/
 theorem pearlCSampledSm120v2LoopCast32p06InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1093,7 +969,6 @@ theorem pearlCSampledSm120v2LoopCast32p06InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 1385159/276818450` (0.50039%). -/
 theorem pearlCGapSm120v2LoopCast32p06InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1105,8 +980,6 @@ theorem pearlCGapSm120v2LoopCast32p06InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 1385159/276818450`
-(0.50039%). -/
 theorem pearlCSampledSm120v2LoopCast32p06InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1123,8 +996,6 @@ theorem pearlCSampledSm120v2LoopCast32p06InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 2190993839/178895900000`
-(1.22473%). -/
 theorem pearlCGapSm120v1LoopCast32p06ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1136,8 +1007,6 @@ theorem pearlCGapSm120v1LoopCast32p06ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g =
-2190993839/178895900000` (1.22473%). -/
 theorem pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1154,8 +1023,6 @@ theorem pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 1020903077/117819060000`
-(0.86650%). -/
 theorem pearlCGapSm120v1LoopCast32p06ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1167,8 +1034,6 @@ theorem pearlCGapSm120v1LoopCast32p06ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g =
-1020903077/117819060000` (0.86650%). -/
 theorem pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (1603/50 - 8953 / 1000))
@@ -1185,8 +1050,6 @@ theorem pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g = 4717901/420855350`
-(1.12103%). -/
 theorem pearlCGapSm120v2LoopCast32p06ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1198,8 +1061,6 @@ theorem pearlCGapSm120v2LoopCast32p06ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 32.06: `g =
-4717901/420855350` (1.12103%). -/
 theorem pearlCSampledSm120v2LoopCast32p06ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1216,8 +1077,6 @@ theorem pearlCSampledSm120v2LoopCast32p06ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g = 2050159/276818450`
-(0.74062%). -/
 theorem pearlCGapSm120v2LoopCast32p06ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1229,8 +1088,6 @@ theorem pearlCGapSm120v2LoopCast32p06ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 32.06: `g =
-2050159/276818450` (0.74062%). -/
 theorem pearlCSampledSm120v2LoopCast32p06ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (1603/50 - 8953 / 1000))
@@ -1247,7 +1104,6 @@ theorem pearlCSampledSm120v2LoopCast32p06ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 3277657/546100000` (0.60019%). -/
 theorem pearlCGapSm120v1LoopCast16Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1259,8 +1115,6 @@ theorem pearlCGapSm120v1LoopCast16Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 3277657/546100000` (0.60019%).
--/
 theorem pearlCSampledSm120v1LoopCast16Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1277,7 +1131,6 @@ theorem pearlCSampledSm120v1LoopCast16Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 1943509231/353135980000` (0.55036%). -/
 theorem pearlCGapSm120v1LoopCast16Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1289,8 +1142,6 @@ theorem pearlCGapSm120v1LoopCast16Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 1943509231/353135980000`
-(0.55036%). -/
 theorem pearlCSampledSm120v1LoopCast16Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1307,7 +1158,6 @@ theorem pearlCSampledSm120v1LoopCast16Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 639967/140017450` (0.45706%). -/
 theorem pearlCGapSm120v2LoopCast16InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1319,8 +1169,6 @@ theorem pearlCGapSm120v2LoopCast16InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 639967/140017450`
-(0.45706%). -/
 theorem pearlCSampledSm120v2LoopCast16InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1337,7 +1185,6 @@ theorem pearlCSampledSm120v2LoopCast16InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 3352477/829652350` (0.40408%). -/
 theorem pearlCGapSm120v2LoopCast16InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1349,8 +1196,6 @@ theorem pearlCGapSm120v2LoopCast16InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 3352477/829652350`
-(0.40408%). -/
 theorem pearlCSampledSm120v2LoopCast16InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1367,8 +1212,6 @@ theorem pearlCSampledSm120v2LoopCast16InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 623264613/59524900000` (1.04707%).
--/
 theorem pearlCGapSm120v1LoopCast16ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1380,8 +1223,6 @@ theorem pearlCGapSm120v1LoopCast16ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 16: `g =
-623264613/59524900000` (1.04707%). -/
 theorem pearlCSampledSm120v1LoopCast16ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1398,8 +1239,6 @@ theorem pearlCSampledSm120v1LoopCast16ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 2741509231/353135980000`
-(0.77633%). -/
 theorem pearlCGapSm120v1LoopCast16ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1411,8 +1250,6 @@ theorem pearlCGapSm120v1LoopCast16ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 16: `g =
-2741509231/353135980000` (0.77633%). -/
 theorem pearlCSampledSm120v1LoopCast16ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (16 - 8953 / 1000))
@@ -1429,8 +1266,6 @@ theorem pearlCSampledSm120v1LoopCast16ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 1304967/140017450`
-(0.93200%). -/
 theorem pearlCGapSm120v2LoopCast16ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1442,8 +1277,6 @@ theorem pearlCGapSm120v2LoopCast16ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 16: `g =
-1304967/140017450` (0.93200%). -/
 theorem pearlCSampledSm120v2LoopCast16ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1460,8 +1293,6 @@ theorem pearlCSampledSm120v2LoopCast16ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.376, the honest cast at 16: `g = 5347477/829652350`
-(0.64454%). -/
 theorem pearlCGapSm120v2LoopCast16ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1473,8 +1304,6 @@ theorem pearlCGapSm120v2LoopCast16ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 16: `g =
-5347477/829652350` (0.64454%). -/
 theorem pearlCSampledSm120v2LoopCast16ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
@@ -1491,7 +1320,6 @@ theorem pearlCSampledSm120v2LoopCast16ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 926193839/178429100000` (0.51908%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1503,8 +1331,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 926193839/178429100000`
-(0.51908%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1521,7 +1347,6 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 599303077/117663460000` (0.50934%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1533,8 +1358,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 599303077/117663460000`
-(0.50934%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1551,7 +1374,6 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 1555901/419688350` (0.37073%). -/
 theorem pearlCGapSm120v2LoopCast8p72InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1563,8 +1385,6 @@ theorem pearlCGapSm120v2LoopCast8p72InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 1555901/419688350`
-(0.37073%). -/
 theorem pearlCSampledSm120v2LoopCast8p72InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1581,7 +1401,6 @@ theorem pearlCSampledSm120v2LoopCast8p72InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 332053/92143150` (0.36037%). -/
 theorem pearlCGapSm120v2LoopCast8p72InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1593,8 +1412,6 @@ theorem pearlCGapSm120v2LoopCast8p72InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 332053/92143150`
-(0.36037%). -/
 theorem pearlCSampledSm120v2LoopCast8p72InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1611,8 +1428,6 @@ theorem pearlCSampledSm120v2LoopCast8p72InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 1724193839/178429100000`
-(0.96632%). -/
 theorem pearlCGapSm120v1LoopCast8p72ChainOnlyRev1_8192
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1624,8 +1439,6 @@ theorem pearlCGapSm120v1LoopCast8p72ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g =
-1724193839/178429100000` (0.96632%). -/
 theorem pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_8192
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1642,8 +1455,6 @@ theorem pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 50900181/6921380000`
-(0.73541%). -/
 theorem pearlCGapSm120v1LoopCast8p72ChainOnlyRev1_16384
     (hTT : TTOutPearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1655,8 +1466,6 @@ theorem pearlCGapSm120v1LoopCast8p72ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g =
-50900181/6921380000` (0.73541%). -/
 theorem pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_16384
     (hTT : TTOutTilePearlCDevRev1ChainOnly CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (218/25 - 8953 / 1000))
@@ -1673,8 +1482,6 @@ theorem pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 3550901/419688350`
-(0.84608%). -/
 theorem pearlCGapSm120v2LoopCast8p72ChainOnlyInertShare1000_8192
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1686,8 +1493,6 @@ theorem pearlCGapSm120v2LoopCast8p72ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g =
-3550901/419688350` (0.84608%). -/
 theorem pearlCSampledSm120v2LoopCast8p72ChainOnlyInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1704,8 +1509,6 @@ theorem pearlCSampledSm120v2LoopCast8p72ChainOnlyInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g = 1661159/276429450`
-(0.60093%). -/
 theorem pearlCGapSm120v2LoopCast8p72ChainOnlyInertShare1000_16384
     (hTT : TTOutPearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1717,8 +1520,6 @@ theorem pearlCGapSm120v2LoopCast8p72ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, chain-only, per audit tile, 16384³**, FP32 at 8.376, the honest cast at 8.72: `g =
-1661159/276429450` (0.60093%). -/
 theorem pearlCSampledSm120v2LoopCast8p72ChainOnlyInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainOnly CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
@@ -1735,9 +1536,6 @@ theorem pearlCSampledSm120v2LoopCast8p72ChainOnlyInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the A-only
-forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). `pearlCGapSm120v1LoopRev1_8192` bounds it
-from above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v1LoopCast8Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1749,9 +1547,6 @@ theorem pearlCGapSm120v1LoopCast8Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and
-the A-only forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). `pearlCSampledSm120v1LoopRev1_8192`
-bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v1LoopCast8Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1768,9 +1563,6 @@ theorem pearlCSampledSm120v1LoopCast8Rev1_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the A-only
-forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). `pearlCGapSm120v1LoopRev1_16384` bounds it from
-above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v1LoopCast8Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1782,9 +1574,6 @@ theorem pearlCGapSm120v1LoopCast8Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, per audit tile, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and
-the A-only forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). `pearlCSampledSm120v1LoopRev1_16384`
-bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v1LoopCast8Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1801,9 +1590,6 @@ theorem pearlCSampledSm120v1LoopCast8Rev1_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). `pearlCGapSm120v2LoopInertShare1000_8192` bounds
-it from above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v2LoopCast8InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1815,9 +1601,6 @@ theorem pearlCGapSm120v2LoopCast8InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%).
-`pearlCSampledSm120v2LoopInertShare1000_8192` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v2LoopCast8InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1834,9 +1617,6 @@ theorem pearlCSampledSm120v2LoopCast8InertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%). `pearlCGapSm120v2LoopInertShare1000_16384` bounds it
-from above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v2LoopCast8InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1848,9 +1628,6 @@ theorem pearlCGapSm120v2LoopCast8InertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, per audit tile, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%).
-`pearlCSampledSm120v2LoopInertShare1000_16384` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v2LoopCast8InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
