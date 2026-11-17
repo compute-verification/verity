@@ -1,5 +1,6 @@
 """A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
-PoUW's verifier for a period and the work of remote's development composite) is held to by ``lean/check/tests/test_period_difftest.py``.
+PoUW's verifier for a period and the work of remote's development composite) is held to by
+``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name, sessions}``: the challenger key it pins, its copy of main's
 first-parent history, the period it credits, and the ordered ids of the sessions the challenger's ledger opened for the
