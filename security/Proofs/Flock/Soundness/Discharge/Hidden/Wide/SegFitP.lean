@@ -4,18 +4,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hm.Flat
 
-/-!
-# Unsegmented or row-seg output rows at public inputs
-
-`Wide.SegFit`'s `Any.msg_copyF` and `Any.sat_flatF` at a statement whose Δ is `HmOut.delta`'s without the pairs into a
-public leaf's bits (`HmIn.delta`). Every row it drops is a public leaf's bit, inside a unit slot's input rows
-(`unitIn_of_drop`), so off those rows (`UnitIn`) its Δ is `HmOut.delta`'s (`da_offUnit`), and:
-
-* `Any.msg_copyFP`: an output row's message bit holds its copy in every block of a witness that satisfies the statement
-  off the unit input rows (`SatEx`);
-* `Any.sat_flatFP`: a satisfying witness of the statement satisfies its flat twin off the unit input rows. At a public
-  leaf the twin copies the zero, which the statement leaves out.
--/
+/-! `Wide.SegFit`'s output-row lemmas at a statement whose Δ drops the pairs into a public leaf's bits
+(`HmIn.delta`), off the unit input rows. -/
 
 @[expose] public section
 
@@ -27,7 +17,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- **A row `HmIn.delta` drops is a unit input row**: a public leaf's bit (`publicCol_at`). -/
 theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st) {pi : HmIn.Ports}
     (hp : HmIn.parse st.c = .ok pi) {r : ℕ} (hk : keepCol st.c pi r = false) : UnitIn st.c r := by
   simp only [keepCol, Bool.or_eq_false_iff] at hk
@@ -43,8 +32,6 @@ theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.Un
   have h3 := L.unit_at.const_le
   exact ⟨k, _, ⟨hk', by omega, hr⟩, hlt⟩
 
-/-- **Off the unit input rows, `HmIn.delta`'s level-0 entries are `HmOut.delta`'s**: `HmRow.delta`'s, then `outPairs`, where
-no output is pinned (`hidden_delta_unpinned`). -/
 theorem da_offUnit {tags : Tags} {st : Stmt} (L0 : Layout (flatTwin st)) (F0 : Aliased.UnitFacts tags (flatTwin st))
     {pi : HmIn.Ports} (hp : HmIn.parse st.c = .ok pi) (hda : st.da = (HmIn.delta st.c pi st.pin).1)
     (hpin : HmRow.pinnedCount st.c.metaJ = 0) (r : ℕ) (hr : ¬ UnitIn st.c r) (i : ℕ) :
@@ -64,8 +51,6 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (
   (hrows : OutRowsS st.c)
 include L L0 F0 hda hrows
 
-/-- **An output row's message bit holds its copy** in every block of a witness that satisfies the hidden statement off
-the unit input rows, with Δ `HmOut.delta`'s there (`msg_copyF`): the bit is a `sha512x3` or `hm96` slot's row. -/
 theorem msg_copyFP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
@@ -93,9 +78,6 @@ theorem msg_copyFP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z 
     exact ⟨e, by rw [L.delta_b]; exact e⟩
   exact block_of_rows_ex hz o hx hU fun i => inBit_rows (st := st) R hn hat hl hself hx hδ i
 
-/-- **A satisfying witness of the hidden statement satisfies its flat twin off the unit input rows**, with Δ
-`HmOut.delta`'s there (`sat_flatF`): past `outPairs`' message bits the rows agree, and there the twin's row is a self
-row. -/
 theorem sat_flatFP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : SatEx (L0.model regs) (UnitIn st.c) z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check

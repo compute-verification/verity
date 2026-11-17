@@ -15,15 +15,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The widened statements, with verity-verify-proof's own count of units
-
-`Wide/Defs.lean`'s six statements take `0 < st.c.upv` as a hypothesis: the unit range's `g · upv` slots are a power of
-two only when the unit returns the outputs, so nothing else refuses a tail with no unit in a template instance.
-`HmRow.check` refuses `units_per_vu = 0` (`Flock.HmRow`, D8; `setupHidden_upv_pos`), so these are the same
-statements without that hypothesis, each the conclusion of its `Wide/Defs.lean` statement under the same remaining
-conditions.
--/
+/-! `Wide/Defs.lean`'s six statements without their `0 < st.c.upv` hypothesis, which `HmRow.check`'s refusal
+of `units_per_vu = 0` discharges. -/
 
 @[expose] public section
 
@@ -31,10 +24,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
 
-/-! ## A tail that returns the outputs -/
-
-/-- **`OutputsCommittedTailChecked`**: `OutputsCommittedTail` without its `0 < st.c.upv`, which a statement
-`Stmt.setupHidden` accepts has (`setupHidden_upv_pos`). -/
 def OutputsCommittedTailChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -54,7 +43,6 @@ def OutputsCommittedTailChecked : Prop :=
           outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
         (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
-/-- **`OutputsBindingTailChecked`** (under `cr/sha-512`): `OutputsBindingTail` without its `0 < st.c.upv`. -/
 def OutputsBindingTailChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
@@ -84,9 +72,6 @@ def OutputsBindingTailChecked : Prop :=
         outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
       (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
-/-! ## `sha512/row/v2` rows -/
-
-/-- **`OutputsCommittedV2Checked`**: `OutputsCommittedV2` without its `0 < st.c.upv`. -/
 def OutputsCommittedV2Checked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -108,7 +93,6 @@ def OutputsCommittedV2Checked : Prop :=
           outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
         (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
-/-- **`OutputsBindingV2Checked`** (under `cr/sha-512`): `OutputsBindingV2` without its `0 < st.c.upv`. -/
 def OutputsBindingV2Checked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
@@ -140,9 +124,6 @@ def OutputsBindingV2Checked : Prop :=
         outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
       (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
-/-! ## Shared rows -/
-
-/-- **`OutputsCommittedWideChecked`**: `OutputsCommittedWide` without its `0 < st.c.upv`. -/
 def OutputsCommittedWideChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -164,7 +145,6 @@ def OutputsCommittedWideChecked : Prop :=
           outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
         (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
-/-- **`OutputsBindingWideChecked`** (under `cr/sha-512`): `OutputsBindingWide` without its `0 < st.c.upv`. -/
 def OutputsBindingWideChecked : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},

@@ -29,13 +29,8 @@ import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
-/-!
-# Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
-
-A shared-row population's sampled `b ‖ c` are its proved units' (`Layout.sampled_digestW`, `Layout.bcChunk_sampledW` and
-`Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_sampledW` is `bc_sampledH` without `pop.tables = none`, and
-`outputs_committed_wide'` is `outputs_committed_v2'`'s argument through it.
--/
+/-! `OutputsCommittedWide` and `OutputsBindingWide`: a shared-row population's sampled `b ‖ c` are its
+proved units'. -/
 
 @[expose] public section
 
@@ -47,11 +42,7 @@ namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout
 
-/-! ## The registered `b ‖ c` at a sampled proof block -/
-
-/-- **`bc_sampledH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a sampled
-hidden-output statement holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public
-file, at every row. It reads the session's public file and regions alone, so a templated session's too. -/
+/-- Reads the session's public file and regions alone, so it holds at a templated session too. -/
 theorem bc_sampledS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
     (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
     (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
@@ -86,8 +77,6 @@ theorem bc_sampledS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins :
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_sampledH` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled hidden-output statement
-holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
 theorem bc_sampledW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
@@ -103,8 +92,6 @@ theorem bc_sampledW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList :=
   bc_sampledS (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
-/-- **`bc_sampledS` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
-pinned outputs (`SpecC.unpinLayout`). It reads the session's public file and regions alone, as `bc_sampledS` does. -/
 theorem bc_sampledS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
     (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
     (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
@@ -140,7 +127,6 @@ theorem bc_sampledS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {c
   rw [← hchunk g hr]
   exact bc_pinned' (st := unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_sampledW` at `unpin st`'s layout** (`bc_sampledS_unpin`). -/
 theorem bc_sampledW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
@@ -191,7 +177,6 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
   exact (bc_sampledW h hpop hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
-/-- **`OutputsBindingWide` from `OutputsCommittedWide`**. -/
 theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide := by
   intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne

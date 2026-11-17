@@ -21,16 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# A segmented row's commit string at its columns
-
-`port_commit_seg` is `port_commit_rowsP` for a `sha512/row-seg/v1` row of `l` bits: when its compressions' and its
-`hm96` slot's columns hold their nets' rows, each chain start's `cv` the midstate Δ pins (`segMidstate`, then the outer
-`midstateOf`), every other `cv` the previous compression's output, and each message bit the constant or the digest bit
-`HmRow.msgBit` names, the bytes at `bcCol` are the commit string of `RowSeg.enc l` of the row's bytes at `Typed.msgCol`.
-Segment `j`'s compressions are `firstOf j … firstOf (j + 1) - 1` (`seg_digest`), the outer message's from
-`firstOf s` on, ending in the `hm96` slot (`seg_commit`).
--/
+/-! `port_commit_rowsP` for a `sha512/row-seg/v1` row: the commit string of `RowSeg.enc` of its bytes. -/
 
 @[expose] public section
 
@@ -46,13 +37,10 @@ open SegShape
 
 namespace Any
 
-/-! ## The slots' rows -/
-
 section Slots
 
 variable (c : Circuit) (w : ℕ → Bool) (g p : ℕ)
 
-/-- Compression `k`'s variables at its `sha512x3` slot. -/
 def zsOf (k : ℕ) (x : Var) : Bool := w (shaBase c g p k + col (SHA_IN.foldl (· + ·) 0) (inRowsOf SHA_IN) x)
 
 variable {c w g p} {n : ℕ} (hck : HmNets.check c = .ok ()) (hsub : ∀ k < n, shaSub c p k < 3)
@@ -96,8 +84,6 @@ theorem zs_out {k : ℕ} (hk : k < n) {t : ℕ} (ht : t < 512) :
 
 end Slots
 
-/-! ## Bits -/
-
 theorem chunkBit_wordBit {o t : ℕ} (ho : o < 128) (ht : t < 8) : HmRow.chunkBit (wordBit (8 * o + t)) = (o, t) := by
   unfold HmRow.chunkBit wordBit
   ext <;> dsimp only <;> omega
@@ -105,7 +91,6 @@ theorem chunkBit_wordBit {o t : ℕ} (ho : o < 128) (ht : t < 8) : HmRow.chunkBi
 theorem wordBit_lt {o t : ℕ} (ho : o < 128) (ht : t < 8) : wordBit (8 * o + t) < 1024 := by
   unfold wordBit; omega
 
-/-- Bit `t` of byte `b` of a padding tail, read as `HmRow.msgBit` reads it. -/
 theorem tail_bit (tl : ByteArray) (b t : ℕ) (ht : t < 8) :
     ((tl.get! b).toNat >>> t % 2 == 1) = bitL tl.data.toList (8 * b + t) := by
   unfold bitL
@@ -114,7 +99,6 @@ theorem tail_bit (tl : ByteArray) (b t : ℕ) (ht : t < 8) :
   rw [Nat.testBit, Nat.one_and_eq_mod_two]
   rcases Nat.mod_two_eq_zero_or_one (x >>> t) with h | h <;> simp [h]
 
-/-- Segment `j`'s bit `8 i + t` inside its bytes is the row's bit `8 (1024 j + i) + t`. -/
 theorem bitL_segBytes {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) / 8) {j : ℕ} (hj : j < count l)
     (tl : List UInt8) {i t : ℕ} (hi : i < (segBits l j + 7) / 8) (ht : t < 8) :
     bitL (segBytes l row j ++ tl) (8 * i + t) = bitL row (8 * (1024 * j + i) + t) := by
@@ -125,7 +109,6 @@ theorem bitL_segBytes {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) 
     List.getD_append _ _ _ _ (by rw [hd]; exact hi), segBytes, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
     List.getElem?_take_of_lt hi, List.getElem?_drop]
 
-/-- Segment `j`'s bit past its bytes is its tail's. -/
 theorem bitL_segTail {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) / 8) {j : ℕ} (hj : j < count l)
     (tl : List UInt8) {i t : ℕ} (hi : (segBits l j + 7) / 8 ≤ i) (ht : t < 8) :
     bitL (segBytes l row j ++ tl) (8 * i + t) = bitL tl (8 * (i - (segBits l j + 7) / 8) + t) := by
@@ -135,13 +118,10 @@ theorem bitL_segTail {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) /
     show (8 * i + t) % 8 = t by omega, show (8 * (i - (segBits l j + 7) / 8) + t) % 8 = t by omega,
     List.getD_append_right _ _ _ _ (by rw [hd]; exact hi), hd]
 
-/-! ## The port -/
-
 variable {c : Circuit} (R : RowRanges c)
 include R
 
 omit R in
-/-- A segmented row's byte `byte`, in a compression, is at its compression's message column. -/
 theorem msgCol_seg {segs : Array (ℕ × ℕ)} {g p byte t : ℕ} (hp : p < c.ports.size) (hs : c.ports[p]!.segs = some segs)
     (hk : firstOf segs (byte / 1024) + byte % 1024 / 128 < c.ports[p]!.chunks) (ht : t < 8) :
     Typed.msgCol c g p byte t =
@@ -152,11 +132,6 @@ theorem msgCol_seg {segs : Array (ℕ × ℕ)} {g p byte t : ℕ} (hp : p < c.po
   unfold wordBit
   omega
 
-/-- **A segmented row's `b ‖ c` at its columns**: a row of `l` bits shaped `HmRow.segShape l`, whose segments' bytes
-reach their last blocks (`SegFits`), its slots holding their nets' rows, its chain starts' `cv`s the midstates
-(`hcvS`), its other `cv`s the previous compressions' outputs (`hcvC`) and its message bits the constants (`hmC`) and
-digest bits (`hmD`) `HmRow.msgBit` names: the bytes at `bcCol` are the commit string of `RowSeg.enc l` of the row's
-`(l + 7) / 8` bytes at `Typed.msgCol`, under the salt at `saltCol`. -/
 theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
     (hs : c.ports[p]!.segs = some (HmRow.segShape l).1) (hbits : c.ports[p]!.bits = l)
     (hn : c.ports[p]!.chunks = firstOf (HmRow.segShape l).1 (count l) + outerComps l) (hfit : SegFits l)
@@ -198,7 +173,6 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by rw [hsS]; exact hj), Option.getD_some,
       ← getElem!_pos S j (by rw [hsS]; exact hj), segShape_get hj]
     rfl
-  -- a compression strictly inside a chain is no chain start
   have hnone : ∀ k, (∀ j ≤ count l, k ≠ firstOf S j) → HmRow.chainStart c.ports[p]! k = none := fun k hk =>
     chainStart_none hs fun j hj => hk j (by rw [← hsS]; exact hj)
   have hin_seg : ∀ j < count l, ∀ k, firstOf S j < k → k < firstOf S (j + 1) →
@@ -236,7 +210,6 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
     unfold digestSrc shaBase shaOut shaSub
     rw [Array.getD_eq_getD_getElem?, getElem!_def]
     rfl
-  -- each segment's chain
   have hD : ∀ j < count l, ∀ t < 512,
       Hm.bit (zsOf c w g p (firstOf S j + (segComps (segBits l j) - 1)))
         ((compression3.run St.empty).1.2.getD (shaSub c p (firstOf S j + (segComps (segBits l j) - 1))) [])
@@ -290,7 +263,6 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
           rw [hmb, segVal, Nat.add_sub_cancel_left, if_neg (by omega), decide_eq_true (by omega), Bool.true_and]
         rw [hmC _ (by omega) _ (wordBit_lt ho ht) _ hv, bitL_segTail hrow hj _ (by omega) ht, tail_bit _ _ _ ht]
         simp only [HmRow.segTail, hs, Option.getD_some, hgetD j hj]
-  -- the outer chain
   have hdigOut : ∀ k ≤ N, F ≤ k → ∀ o < 128, ∀ t < 8, 128 * (k - F) + o < 64 * count l →
       w (segMsgCol c g p k + wordBit (8 * o + t)) =
         Hm.bit (zsOf c w g p (firstOf S ((128 * (k - F) + o) / 64) + (segComps (segBits l ((128 * (k - F) + o) / 64)) - 1)))
