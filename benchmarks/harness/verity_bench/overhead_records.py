@@ -48,6 +48,8 @@ DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
                 "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
 #: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+#: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
+RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("benchmarks/census")
@@ -137,7 +139,8 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
         return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
                 f"door's options (launch it with `verity bench overhead {sub}`)")
-    if extra := sorted(set((attempt.get("params") or {}).get("env") or {}) - DOOR_ENV):
+    env = (attempt.get("params") or {}).get("env") or {}
+    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and RUN_DEFAULT_ENV.get(k) != v):
         return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
     return None
 
