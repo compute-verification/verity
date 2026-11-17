@@ -4,3 +4,6 @@ MODEL: Claude Opus 5.5. DRAWMAP phase 1: regenerated on main 1274745e2a5, head d
 [2026-11-17T09:49Z] 23c5dc8382ee
 MODEL: Claude Opus 5.5. DRAWMAP phase 1 at d016313e852: pouw/verifier r20261117-093458-702d PASS, 1819 passed 0 failed (0 cached).
 
+[2026-11-17T09:51Z] d11e792caedf
+MODEL: Claude Opus 5.5. DRAWMAP phase 1 at d016313e852: difftests r20261117-093754-66d6 PASS, 3/3 suites (commit 7, window 125+2 skipped, check 56), 0 failed, 0 cached.
+
