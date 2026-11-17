@@ -253,6 +253,18 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert hooks["DEVELOPMENT"] == "1"
 
 
+def test_with_no_gate_bound_spots_coins_are_simulated_and_only_the_placement_hold_makes_the_run_a_development_run(
+        monkeypatch):
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "0")
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1"}
+    for held in ("1", ""):
+        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", held)
+        assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
+    assert T._spot_challenger({}, {}, {"gate": "u@g"}) == {"PP_CHALLENGER": "gate:u@g"}
+
+
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
                                                                                               runtime):
     """PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
@@ -610,17 +622,25 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
 
 @pytest.mark.parametrize("named, sets, got", [
     ({}, {"COMPOSITE": ""}, "|unset"),
+    ({"VERITY_HOLD_PLACEMENT": ""}, {"COMPOSITE": ""}, "|unset"),
+    ({"VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
+    ({"VERITY_HOLD_PLACEMENT": "0"}, {}, "unset|unset"),
     ({"COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
     ({"COMPOSITE": "1"}, {}, "1|unset"),
     ({"COMPOSITE": ""}, {}, "|unset"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
+    ({"COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}, {}, "unset|0"),
+    ({"PRODUCT": "remote"}, {"COMPOSITE": ""}, "|unset"),
+    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "0"}, {}, "unset|unset"),
+    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
-    """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
-    ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
-    the node, gets the runner what it named and nothing more."""
-    for name in ("COMPOSITE", "COMPOSE_OFF_NODE"):
+    """Under VERITY_HOLD_PLACEMENT=0 the runner composes on the node, remote's as onsite's; where it composes off the
+    node (a caller's COMPOSE_OFF_NODE=1, or the default unless VERITY_HOLD_PLACEMENT=0), where it refuses onsite's, the
+    table hands it ``COMPOSITE`` empty; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named."""
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT", "PRODUCT"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():
         monkeypatch.setenv(name, value)
