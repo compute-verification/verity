@@ -672,8 +672,8 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py",
     "verity/protocols/resource_accounting/memory/poub/prover/period_prover.py",
-    "verity/protocols/resource_accounting/memory/poub/prover/remote_session/device.py",
-    "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py",
+    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py",
+    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/window.py",
     "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py",
@@ -682,7 +682,7 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py",
+    "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py",
 ]
 loads = [
     "verity/commitments",
@@ -745,7 +745,7 @@ loads = [
 paths = [
     "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py",
-    "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+    "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py",
 ]
 loads = [
     "verity/channel.py",

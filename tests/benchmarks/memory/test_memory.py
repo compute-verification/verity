@@ -26,7 +26,7 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
 from benchmarks.memory import run as M  # noqa: E402
-from benchmarks.remote_session import summary  # noqa: E402
+from benchmarks.poub_session import summary  # noqa: E402
 from verity import protocol  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
@@ -542,7 +542,7 @@ def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_n
     monkeypatch.setattr(M.os, "sched_getaffinity", lambda pid: {9, 3, 7, 5})
     assert bench(store, "--loopback", run=launch) == 0
     ((argv, cwd, env),) = seen
-    assert argv == ["bash", str(ROOT / "benchmarks/remote_session/run.sh")] and cwd == ROOT
+    assert argv == ["bash", str(ROOT / "benchmarks/poub_session/run.sh")] and cwd == ROOT
     assert (env["ROLE"], env["PLAN"], env["CPU"], env["PY"]) == ("both", "honest", "64", sys.executable)
     assert (env["VERIFIER_CPUS"], env["PROVER_CPUS"]) == ("3,5", "7,9") and "SERVE" not in env
     assert not Path(env["RESEARCH_RUN_DIR"]).exists(), "outside a research run its records are scratch"
@@ -671,7 +671,7 @@ def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run
 
     assert bench(store, "some-period", run=gate_run(tmp_path, seen), wait=wait) == 0
     ((argv, env),) = seen
-    assert argv == ["bash", str(ROOT / "benchmarks/remote_session/gate_run.sh"), "some-period"]
+    assert argv == ["bash", str(ROOT / "benchmarks/poub_session/gate_run.sh"), "some-period"]
     assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", PACED, "d" * 40)
     assert not {"HOST_GIB", "LEAF_CTAS", "UNPACED", "BIND", *WINDOWED} & set(env)
     assert len(PACED.split()) == 1 and waits == [60, 60]
@@ -1260,7 +1260,7 @@ def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, wor
     assert bench(store, "--local", run=Machine(record=a_local_record(a_session(gamma=0.199), arena=71))) == 0
 
 
-def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, capsys, work, tmp_path, monkeypatch):
+def test_a_local_session_under_a_research_run_writes_its_own_benchmark_result(store, capsys, work, tmp_path, monkeypatch):
     """Its document is the run's `out/memory.json`, and its number reaches the Metrics tab under its own row, not the
     node's: a measurement, not an audit, of a share the Python ledger computed, which its entry says."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))

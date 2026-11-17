@@ -22,8 +22,8 @@
 # Refused before anything is downloaded or built, each in one line with its fix: a setting missing; not the tree's root;
 # nvidia-smi, taskset, python3 or cargo missing; card A5_CARD not an H200 (the runs serve on one, sm_90); under 96 GB of
 # host memory available (MemAvailable: on a shared node the others' memory is not this job's); A5_CORES not a CPU list
-# this job may run on; under 25 GB free under WORK; WORK not empty; results already in --out. Each run's steps.log has
-# what the job used.
+# this job may run on; under 96 GB free under WORK (75 GB left beside WORK's peak of about 21 GB); WORK not empty;
+# results already in --out. Each run's steps.log has what the job used.
 # steps.log has each step's start (UTC), command, exit code and seconds, and three peaks over its samples (every 10 s):
 # the job's own memory (the sum of PSS over the processes of this script's session), the machine's memory in use
 # (MemTotal less MemAvailable, every process on the machine, other jobs included) and WORK's size (du, with each run's
@@ -72,7 +72,7 @@ WORK=$(realpath -m "$WORK")
 d=$WORK; while [ ! -d "$d" ]; do d=$(dirname "$d"); done
 [ -w "$d" ] || refuse "can't write $d: give a WORK you can make"
 free_gb=$(df -Pk "$d" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')
-[ "${free_gb:-0}" -ge 25 ] || refuse "${free_gb:-0} GB free under $d, not 25: the job needs 25 GB there; free some or give another WORK"
+[ "${free_gb:-0}" -ge 96 ] || refuse "${free_gb:-0} GB free under $d, not 96: WORK peaks at about 21 GB, and 75 GB must stay free beside it; free some or give another WORK"
 RESULTS=$(realpath -m "${RESULTS:-${RESEARCH_RUN_DIR:-.}/out}")
 case $RESULTS/ in "$WORK"/*) refuse "--out $RESULTS is inside WORK, which is removed at the end: give a directory outside it" ;; esac
 for f in out-flock out-zk out-sampling bootstrap proof-layers.txt proof-layers.json steps.log; do
@@ -82,7 +82,7 @@ done
 q() { printf '%q' "$1"; }
 PART=benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_CORES") --"; else ON="taskset -c $(q "$A5_CORES")"; fi
-part() {  # LAW NAME: the tree's partition file with its sampling design (its law key) set to LAW
+part() {  # LAW NAME: the tree's partition file with its sampling design (its sampling design key) set to LAW
   echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")"
 }
 run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file, its record in WORK/out-NAME

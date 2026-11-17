@@ -11,10 +11,11 @@
   step, the record's inference block) and the proof block (a unit). A block's gates are its units' templates'; its fresh
   bits are the rows it reads of registered parameters outside θ, once a row, and the output rows it reads of units in
   another block, once a row. A division's policy is its largest block's `c` and `k`.
-* **The check** (`lean_count`) is the Lean count, the package's check executable with `--count --detail` (`EXECUTABLE`,
-  built with `lake`), on the session
-  Program the integration gives it: the session Definition activated once a slot, with no θ named and no wire between
-  units, since the record's wires are declarations the Definition doesn't carry.
+* **The verdict** (`lean_count`) is the Lean verifier's, the package's check executable with `--count --detail`
+  (`EXECUTABLE`, built with `lake`), on the session Program the integration gives it: the session Definition activated
+  once a slot, its held weights registered and in θ (one-stage `inference_only.held_inputs`), and no wire between
+  units, since the record's wires are declarations the Definition doesn't carry. The record's count
+  (`inference_only.record_count`) is carried beside it.
 """
 from __future__ import annotations
 
@@ -127,9 +128,11 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     if unpriced or missing:
         raise ValueError(f"{doc.get('name')}: a block reaches primitives the gate table doesn't price, so its gates "
                          f"aren't known: {sorted({*unpriced, *missing})}")
+    import inference_only as IO
+
     by_template = {t: BC.gates(BC.resolve(t), table, memo)[0] for t, _ in doc["templates"]}
     return {"fn": fn, "slots": m, "steps": steps, "c": c, "k": BC.fresh(doc, m, pins, pins), "table": dict(table),
-            "gates": by_template}
+            "gates": by_template, "held": IO.held_inputs(doc, pins, pins), "record_count": IO.record_count(doc, m, pins, pins)}
 
 
 def _family(tid: str) -> str:
@@ -219,14 +222,11 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
 
 
 def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
-    """The count's instance for the session policy: the session Definition activated once a slot, the gate table
-    and the policy; no θ, and each block Definition one block."""
-    from verity.circuits import codec
-    from verity.circuits.population import population_program
+    """The Lean verifier's instance for the session policy: the session Definition activated once a slot, its held
+    parameters registered and in θ, the gate table and the policy, and each block Definition one block."""
+    import inference_only as IO
 
-    text = codec.canonical_json(codec.encode_program(population_program(pol["fn"], pol["slots"]))).decode()
-    return {"program": text, "theta": [], "blocks": [codec.descriptor_id(pol["fn"])], "table": pol["table"], "c": c,
-            "k": k, "n": n}
+    return IO.session_instance(pol["fn"], pol["slots"], pol["table"], c, k, n, pol.get("held", ()))
 
 
 class NoLake(RuntimeError):
@@ -298,8 +298,8 @@ def judged(got: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
              "complies": v["complies"], "counted": counted, "policy": {"c": c, "k": k, "n": n}, "cost": got["cost"]}
     if not v["complies"]:
         check["failed"] = FAILED[v["failure"][1]]
-        check["why"] = {"k": "the registered Program has no θ and no dataflow, so every row a unit reads counts as "
-                             "fresh, its weights and its wired rows too",
+        check["why"] = {"k": "the Lean verifier counts the rows the record's wires fill and the pinned tables' openings "
+                             "as fresh, because the session Program it is given carries no wires",
                         "c": "the session Definition holds more gates than the policy's c",
                         "n": "the Program activates more blocks than the policy's n"}[check["failed"]]
     return check
@@ -332,7 +332,8 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
     parts = tuple((kind, bits, "the record's reads") for kind, bits in div["session"]["k_by_kind"])
     div["session"]["k"] = pol["k"]
     say(f"{' '.join(EXECUTABLE)} on the session Program")
-    verdict = judged(check(instance(pol, pol["c"], pol["k"], n)), pol["c"], pol["k"], n)
+    verdict = {**judged(check(instance(pol, pol["c"], pol["k"], n)), pol["c"], pol["k"], n),
+               "record_count": pol["record_count"]}
     source = ("built here by verity_vllm: the class circuit (window_circuit.class_circuit), a session's gates by the "
               "gate table and its fresh bits by the record's description (block_counts)")
     return P.Policy("built", model, cls, pol["c"], pol["k"], n, work, parts, 0, source, verdict), div
