@@ -89,7 +89,8 @@ PROTOCOLS = (
     Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8", record="pearl-c-whole-step"),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
-             members=(("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served-h200"),)),
+             members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-h200"),
+                      ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served-h200"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),

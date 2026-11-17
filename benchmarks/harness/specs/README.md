@@ -58,6 +58,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `llama31-8b-fp8-1gpu-bandwidth-served-r6`: the bandwidth audit's encoded, receipted stack against its plain stack,
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
+- `llama31-8b-fp8-1gpu-bandwidth-served-h200`: the same on one H200.
 - `llama32-1b-fp8-1gpu-bandwidth-served-h200`: the same on Llama-3.2-1B on one H200.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).

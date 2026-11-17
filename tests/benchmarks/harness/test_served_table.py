@@ -25,7 +25,8 @@ BY_SPEC = {
 LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
 SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2, "bandwidth-audit": 1.0}
-R6, SMALL, MEMBER = "llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama32-1b-fp8-1gpu-bandwidth-served-h200", "llama-3.2-1b-h200"
+R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
+                  "llama32-1b-fp8-1gpu-bandwidth-served-h200")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width-h200"
 
 
@@ -491,7 +492,7 @@ def _served_overhead_metrics() -> dict[str, str]:
     return dict(module.METRICS)
 
 
-def test_the_bandwidth_audits_member_is_written_from_its_records_run_and_says_plainly_when_it_has_none(
+def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_say_plainly_when_they_have_none(
         tmp_path, monkeypatch, capsys):
     from verity_bench import kit
 
@@ -520,38 +521,47 @@ def test_the_bandwidth_audits_member_is_written_from_its_records_run_and_says_pl
         return capsys.readouterr().out, got | {"by": {(m["name"], m.get("member")): m for m in got["measurements"]}}
 
     none = "no run of record: label its runs `run_of_record=pous-bandwidth-audit`"
+    members = {"llama-3.1-8b-h200": BIG, "llama-3.2-1b-h200": SMALL}
     out, got = table("before")
-    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | {none} | — |" in out
-    assert set(got["by"]) == {("benchmarks/served-overhead-commit", None), (audit, None), (audit, MEMBER)}
+    assert set(got["by"]) == {("benchmarks/served-overhead-commit", None), (audit, None),
+                              *((audit, member) for member in members)}
     assert got["by"][audit, None]["value"] == pytest.approx(500.0) and got["by"][audit, None]["device"] == RTX
-    assert got["by"][audit, MEMBER]["value"] is None
-    assert got["by"][audit, MEMBER]["why"] == f"no served ratio at {SMALL}/b32-p512-mixed: {none}"
+    for member, spec in members.items():
+        assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | {none} | — |" in out
+        assert (got["by"][audit, member]["value"], got["by"][audit, member]["why"]) == (
+            None, f"no served ratio at {spec}/b32-p512-mixed: {none}")
     assert got["validation"]["status"] == "passed"
 
-    producer.ran("r20261117-170000-0004", SMALL, "b32-p512-mixed", _audit("b32-p512-mixed", 2.5, H200))
+    producer.ran("r20261117-170000-0004", BIG, "b32-p512-mixed", _audit("b32-p512-mixed", 2.5, H200))
     producer.label("r20261117-170000-0004", "run_of_record", "pous-bandwidth-audit", "2026-11-17T18:00:00Z")
     out, got = table("after")
-    assert f"| PoUS bandwidth audit | {H200} | `{SMALL}` | b32-p512-mixed | 2.500× ± 0.000 |" in out
-    assert none not in out
-    member = got["by"][audit, MEMBER]
+    assert f"| PoUS bandwidth audit | {H200} | `{BIG}` | b32-p512-mixed | 2.500× ± 0.000 |" in out
+    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | {none} | — |" in out
+    member = got["by"][audit, "llama-3.1-8b-h200"]
     assert (member["value"], member["device"], member["inputs"][1]) == (pytest.approx(150.0), H200,
                                                                         "r20261117-170000-0004")
+    assert got["by"][audit, "llama-3.2-1b-h200"]["value"] is None
     assert got["by"][audit, None]["value"] == pytest.approx(500.0)
     assert got["validation"]["status"] == "passed"
 
 
-def test_the_bandwidth_audits_member_spec_is_its_record_spec_on_llama_3_2_1b_on_one_h200():
-    small, big = resolve_spec(SMALL), resolve_spec(R6)
-    for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
-                 "admission"):
-        assert getattr(small, name) == getattr(big, name), name
-    assert dict(small.preset.engine_settings) == dict(big.preset.engine_settings)
-    assert dict(small.env) == {k: v for k, v in big.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}
+def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_the_small_one_on_llama_3_2_1b():
+    r6 = resolve_spec(R6)
+    for spec in (BIG, SMALL):
+        member = resolve_spec(spec)
+        for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
+                     "admission"):
+            assert getattr(member, name) == getattr(r6, name), (spec, name)
+        assert dict(member.preset.engine_settings) == dict(r6.preset.engine_settings), spec
+        assert dict(member.env) == {k: v for k, v in r6.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}, spec
+        assert (member.preset.gpu_id, member.preset.gpu_count, member.preset.precision, member.preset.vllm_pin) == (
+            "h200", 1, r6.preset.precision, r6.preset.vllm_pin), spec
+    big, small = resolve_spec(BIG).preset, resolve_spec(SMALL).preset
+    assert (big.model, big.revision, big.case, big.model_digest) == (
+        r6.preset.model, r6.preset.revision, r6.preset.case, r6.preset.model_digest)
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200").preset
-    assert (small.preset.model, small.preset.revision, small.preset.case, small.preset.model_digest) == (
+    assert (small.model, small.revision, small.case, small.model_digest) == (
         pinned.model, pinned.revision, pinned.case, None)
-    assert (small.preset.gpu_id, small.preset.gpu_count, small.preset.precision, small.preset.vllm_pin) == (
-        "h200", 1, big.preset.precision, big.preset.vllm_pin)
     [protocol] = [p for p in served_table.PROTOCOLS if p.members]
-    assert (protocol.record, protocol.members) == ("pous-bandwidth-audit", ((MEMBER, SMALL),))
-    assert protocol.arm in small.arms and served_table.SERVED in small.arms
+    assert (protocol.record, protocol.members) == (
+        "pous-bandwidth-audit", (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)))
