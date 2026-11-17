@@ -166,6 +166,14 @@ def test_an_attention_row_short_or_long_is_its_heads_key_blocks_and_ends(T, bn, 
         assert (kind, [(u["spec"], u["n"]) for u in got]) == ("split", list(templates[1:]))
 
 
+def test_the_embedding_is_cut_into_its_columns():
+    """`Embedding_v1{V, H}` (a ``SLICES`` row): H units at H = 1, each reading the token and gathering its column."""
+    row = "Embedding_v1{V=128256,H=2048}"
+    assert B.ST.unit_templates(row) == ((row, 1), ("Embedding_v1{V=128256,H=1}", 2048))
+    kind, got, _why = B.cut(row, family(row, [unit("Embedding_v1{V=128256,H=1}", 2048)], est_log=39, rows_log=39))
+    assert (kind, [(u["spec"], u["n"]) for u in got]) == ("split", [("Embedding_v1{V=128256,H=1}", 2048)])
+
+
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
     """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit or a key rows' writer
     its Boolean form), the cut `chain_ways` gives the row, so the planner rerun cuts the row as the served partition does.  It
