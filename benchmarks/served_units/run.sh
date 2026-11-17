@@ -6,5 +6,6 @@ export RESEARCH_RUN_DIR=${RESEARCH_RUN_DIR:-$PWD} SU_UNITS=${*:-${SU_UNITS:-fp8-
 export SU_MEM_GB=${SU_MEM_GB:-32}
 bash benchmarks/served_units/job.sh || exit
 s=$(python3 benchmarks/served_units/summarize.py "$RESEARCH_RUN_DIR/out") || exit
+python3 benchmarks/served_units/record.py "$RESEARCH_RUN_DIR/out" || exit
 echo "$s"
 [[ -n $s && $s != *'"as_expected": false'* ]]
