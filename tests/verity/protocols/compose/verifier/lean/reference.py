@@ -365,7 +365,7 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 #: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
 #: recursive audit refused, and the two-stage audit refused last while its switch is off.
 SPOT = Ported(SPOT_V1, spot, blobs=True)
-#: Space and bandwidth, `PousVerifier.RunProtocol.protocol` and `Poub.Protocol.protocol`.
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 #: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
 #: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer

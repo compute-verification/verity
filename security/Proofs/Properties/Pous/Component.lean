@@ -553,7 +553,7 @@ theorem wipeAccepts_nontrivial :
 /-- **The compiled check accepts every run `AcceptedAt` accepts** (the honest lemma of `RunAccepts` and of `RunBinds`),
 publishing `certify` of the point: `RunAccepts`' hypothesis holds exactly where the decision of record does, and two
 runs it accepts are two accepted runs. That every honest run is `AcceptedAt` is setup's completeness
-(`PousVerifier.Properties.AcceptsComplete`, open) and the composed check's on an honest session; `runAccepts_meets` is
+(`PousCheck.Properties.AcceptsComplete`, open) and the composed check's on an honest session; `runAccepts_meets` is
 one that is. -/
 theorem runAccepts_complete : ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence),
     AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session p.sessionId →
