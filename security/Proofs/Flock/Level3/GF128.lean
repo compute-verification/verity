@@ -9,11 +9,7 @@ import Mathlib.Tactic.ComputeDegree
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.LinearCombination
 
-/-!
-Level 3, L3-F: the executable's GF(2^128) arithmetic (`Flock.F128`, `Flock.Field`) is polynomial arithmetic over GF(2)
-modulo the GHASH polynomial `G = X^128 + X^7 + X^2 + X + 1`. An element `⟨lo, hi⟩` is the polynomial of the bits of
-`2^64·hi + lo`.
--/
+/-! The executable's GF(2^128) arithmetic is polynomial arithmetic over GF(2) modulo `X^128 + X^7 + X^2 + X + 1`. -/
 
 @[expose] public section
 
@@ -47,7 +43,6 @@ theorem toNat_toUInt64 (i : ℕ) (h : i < 64) : i.toUInt64.toNat = i := by
   simp [Nat.toUInt64, UInt64.toNat_ofNat]
   omega
 
-/-- One step of the carry-less product: adding `a · x^i` (`i < 64`) into `(lo, hi)`. -/
 theorem step128 (a lo hi : UInt64) (i : ℕ) (hi64 : i < 64) :
     w128 (lo ^^^ (a <<< i.toUInt64)) (if i = 0 then hi else hi ^^^ (a >>> (64 - i).toUInt64)) =
       w128 lo hi ^^^ (a.toNat <<< i) := by
@@ -81,7 +76,6 @@ theorem and_one_eq_one (x : UInt64) : (x &&& 1 = 1) ↔ x.toNat.testBit 0 = true
   rw [UInt64.ext_iff, UInt64.toNat_and]
   simp [Nat.and_one_is_mod, Nat.testBit_zero]
 
-/-- The carry-less product loop: after the remaining `fuel` bits of `bb`, from bit `i`. -/
 theorem clmulGo_spec (a : UInt64) : ∀ (fuel i : ℕ) (bb lo hi : UInt64), i + fuel ≤ 64 →
     natPoly (w128 (F128.clmulGo a fuel i bb lo hi).1 (F128.clmulGo a fuel i bb lo hi).2) =
       natPoly (w128 lo hi) + X ^ i * poly64 a * natPoly (bb.toNat % 2 ^ fuel) := by
@@ -133,13 +127,10 @@ theorem G_degree : G.degree = 128 := by
 section reduce
 variable (r2 r3 : UInt64)
 
-/-- The words `reduce` computes from the top 128 bits `h = 2^64·r3 + r2`: `h·S` below bit 128 (`tl`, `th`) and above
-(`o`). -/
 def tl : UInt64 := r2 ^^^ (r2 <<< 1) ^^^ (r2 <<< 2) ^^^ (r2 <<< 7)
 def th : UInt64 := r3 ^^^ ((r3 <<< 1) ||| (r2 >>> 63)) ^^^ ((r3 <<< 2) ||| (r2 >>> 62)) ^^^ ((r3 <<< 7) ||| (r2 >>> 57))
 def ov : UInt64 := (r3 >>> 63) ^^^ (r3 >>> 62) ^^^ (r3 >>> 57)
 
-/-- `h + h·x + h·x^2 + h·x^7` as bits. -/
 def hS : ℕ := let h := w128 r2 r3; h ^^^ (h <<< 1) ^^^ (h <<< 2) ^^^ (h <<< 7)
 
 theorem hi_false (x : UInt64) (k : ℕ) (hk : 64 ≤ k) : x.toNat.testBit k = false :=
@@ -261,8 +252,6 @@ theorem clmul_spec' (a b : UInt64) :
 
 theorem F128.poly_eq (a : F128) : F128.poly a = X ^ 64 * poly64 a.hi + poly64 a.lo := natPoly_w128 _ _
 
-/-- **GF(2^128) multiplication (L3-F).** The executable's product is the product of polynomials modulo the GHASH
-polynomial. -/
 theorem F128.poly_mul (a b : F128) : F128.poly (a * b) = (F128.poly a * F128.poly b) %ₘ G := by
   show F128.poly (F128.mul a b) = _
   unfold F128.mul

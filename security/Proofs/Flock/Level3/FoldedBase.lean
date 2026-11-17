@@ -1,10 +1,3 @@
-/-
-Level 3: the lemmas `folded_eq` (`Proofs.Flock.Level3.Folded`) reads, below the templated unit's fold, which reads some of
-them (`Flock.Piop`). `partial_eq_halve_fold`: halving a vector of `2^n · 64` entries
-at `ts` in turn (`halve`, the lincheck rounds' column fold) leaves at `s < 64` the sum `Σ_u eq(ts reversed, u) · v[s + 64·u]`.
-`folded_eq`: when `Stmt.folded` succeeds, its vector is `Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether
-it read the block's structure (`foldedPartial`) or folded flat.
--/
 module
 
 public import Proofs.Flock.Level3.FoldStmt
@@ -34,7 +27,6 @@ theorem sumUpTo_eq (n : ℕ) (f : ℕ → F128) : of (Stmt.sumUpTo n f) = ∑ i 
   | zero => simp [of_zero']
   | succ n ih => rw [Nat.fold_succ, of_add, ih, Finset.sum_range_succ]
 
-/-- `eq(r, u)` with `r` split after its first `a` coordinates. -/
 theorem eqTable_split (r : Array F128) (a : ℕ) (ha : a ≤ r.size) (u : ℕ) (hu : u < 2 ^ r.size) :
     of (eqTable r)[u]! = of (eqTable (r.extract 0 a))[u % 2 ^ a]! * of (eqTable (r.extract a r.size))[u / 2 ^ a]! := by
   obtain ⟨b, hsz⟩ : ∃ b, r.size = a + b := ⟨r.size - a, by omega⟩
@@ -86,8 +78,6 @@ theorem halve_get (t : F128) (v : Array F128) (i : ℕ) (hi : i < v.size / 2) :
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range, of_add, of_mul, of_add]
   ring
 
-/-- **The halvings' sum.** Halving `v` (`2^|l| · 64` entries) at `l` in turn, top bit first, leaves at `s < 64` the sum
-`Σ_u eq(l reversed, u) · v[s + 64·u]`: the column marginal at the reversed challenges. -/
 theorem partial_eq_halve_fold : ∀ (l : List F128) (v : Array F128), v.size = 2 ^ l.length * 64 → ∀ s < 64,
     of (l.foldl (fun c t => halve t c) v)[s]! =
       ∑ u ∈ Finset.range (2 ^ l.length), of (eqTable l.reverse.toArray)[u]! * of v[s + 64 * u]!
@@ -114,8 +104,6 @@ theorem foldl_halve_size : ∀ (ts : List F128) (comb : Array F128),
   | t :: ts, comb => by
       rw [List.foldl_cons, foldl_halve_size ts, halve_size, Nat.div_div_eq_div_mul, List.length_cons, pow_succ']
 
-/-! ### Sums over blocks, windows and single entries -/
-
 theorem sum_range_blocks (a b : ℕ) (f : ℕ → GF128) :
     ∑ u ∈ Finset.range (a * b), f u = ∑ q ∈ Finset.range a, ∑ j ∈ Finset.range b, f (q * b + j) := by
   induction a with
@@ -132,7 +120,6 @@ theorem sum_window (M p n : ℕ) (hpn : p + n ≤ M) (F : ℕ → GF128) :
   simp only [Finset.mem_filter, Finset.mem_range, Finset.mem_Ico]
   omega
 
-/-- The halvings' weight on one column `c`: `Σ_u f(u)·[c = s + 64·u]` is `f(⌊c/64⌋)` when `c` is in entry `s`'s column. -/
 theorem sum_spot (N s c : ℕ) (hs : s < 64) (f : ℕ → GF128) (x : GF128) :
     ∑ u ∈ Finset.range N, f u * (if c = s + 64 * u then x else 0) =
       if c < 2 ^ 6 * N ∧ c % 64 = s then f (c / 64) * x else 0 := by
@@ -166,14 +153,11 @@ theorem list_mul_sum {α : Type} (a : GF128) (l : List α) (g : α → GF128) :
   | nil => simp
   | cons x l ih => simp only [List.map_cons, List.sum_cons, mul_add, ih]
 
-/-! ### Disjoint ranges -/
-
 theorem covers_iff (r : Range) (c : ℕ) :
     covers r c ↔ r.pos0 * 2 ^ r.slotLog ≤ c ∧ c < (r.pos0 + r.count) * 2 ^ r.slotLog := by
   unfold covers
   rw [Nat.le_div_iff_mul_le (Nat.two_pow_pos _), Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _)]
 
-/-- Two ranges with no column in common, as `Stmt.structured` requires of every pair. -/
 def apart (a b : Range) : Prop :=
   (a.pos0 + a.count) * 2 ^ a.slotLog ≤ b.pos0 * 2 ^ b.slotLog ∨
     (b.pos0 + b.count) * 2 ^ b.slotLog ≤ a.pos0 * 2 ^ a.slotLog
@@ -190,7 +174,6 @@ theorem structured_spec (st : Stmt) (h : st.structured = true) :
   simp only [Stmt.structured, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   exact ⟨h.1.1, h.1.2, h.2⟩
 
-/-- What range `r` leaves at a column it covers (`rangesVal`'s term). -/
 def rangeTerm (st : Stmt) (alpha : F128) (lw rho : Array F128) (r : Range) (c : ℕ) : F128 :=
   (eHiFor rho r)[c / 2 ^ r.slotLog]! * (baseFor st alpha lw rho r)[c % 2 ^ r.slotLog]!
 
@@ -201,7 +184,6 @@ theorem rangesVal_none (st : Stmt) (alpha : F128) (lw rho : Array F128) :
       rw [rangesVal, if_neg (h r List.mem_cons_self)]
       exact rangesVal_none st alpha lw rho rs c v (fun r' hr' => h r' (List.mem_cons_of_mem _ hr'))
 
-/-- On disjoint ranges, what they leave at `c` over zero is the sum of their terms there. -/
 theorem rangesVal_sum (st : Stmt) (alpha : F128) (lw rho : Array F128) :
     ∀ (rs : List Range), rs.Pairwise apart → ∀ c, of (rangesVal st alpha lw rho rs c 0) =
       (rs.map fun r => if covers r c then of (rangeTerm st alpha lw rho r c) else 0).sum
@@ -219,11 +201,6 @@ theorem rangesVal_sum (st : Stmt) (alpha : F128) (lw rho : Array F128) :
       · simp only [if_neg hc, zero_add]
         exact rangesVal_sum st alpha lw rho rs hp.2 c
 
-/-! ### One range's share of the 64 entries -/
-
-/-- **A range's share.** After the halvings at `rr` reversed, what range `r` leaves (`eHi` at the slot times the base
-at the column within it) contributes to entry `s` its base projected on `eq(rr[.. sl − 6], ·)`, times
-`Σ_q eHi[q]·eq(rr[sl − 6 ..], q)` over its slots. -/
 theorem range_share (r : Range) (rr eHi base : Array F128) (hsl : 6 ≤ r.slotLog) (hslk : r.slotLog - 6 ≤ rr.size)
     (hin : (r.pos0 + r.count) * 2 ^ r.slotLog ≤ 2 ^ (rr.size + 6)) (s : ℕ) (hs : s < 64) :
     ∑ u ∈ Finset.range (2 ^ rr.size), of (eqTable rr)[u]! *
@@ -292,16 +269,11 @@ theorem range_share (r : Range) (rr eHi base : Array F128) (hsl : 6 ≤ r.slotLo
   refine Finset.sum_congr rfl fun k _ => ?_
   simp only [of_mul]
 
-/-! ### `partialRanges`, with the slot-type cache -/
-
-/-- Range `r`'s share of entry `s` of `foldedPartial`, at the reversed challenges `rr`. -/
 noncomputable def shareFor (st : Stmt) (alpha : F128) (lw rho rr : Array F128) (r : Range) (s : ℕ) : GF128 :=
   of (Stmt.sumUpTo r.count fun k =>
       (eHiFor rho r)[r.pos0 + k]! * (eqTable (rr.extract (r.slotLog - 6) rr.size))[r.pos0 + k]!) *
     of (Stmt.project (baseFor st alpha lw rho r) (eqTable (rr.extract 0 (r.slotLog - 6))))[s]!
 
-/-- `partialRanges` adds each range's share, and wherever it succeeds `foldRanges` does too: both look up or build the
-same slot types in the same order. -/
 theorem partialRanges_get (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : ∀ (rs : List Range)
     (bases : Array ((Kind × Nat) × Array F128)) (out res : Array F128),
     st.partialRanges alpha lw rho rr rs bases out = .ok res →
@@ -370,8 +342,6 @@ theorem partialRanges_get (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : 
         simp only [bind, Except.bind, pure, Except.pure]
         exact hres'
 
-/-! ### Δ and the pin -/
-
 theorem addDelta_size (w : ℕ → F128) : ∀ (pairs : List (ℕ × ℕ)) (out : Array F128),
     (Stmt.addDelta w pairs out).size = out.size := by
   intro pairs
@@ -405,7 +375,6 @@ theorem addPart_size (n : ℕ) (eR : Array F128) (w : ℕ → F128) : ∀ (pairs
   | nil => intro o; rfl
   | cons ic pairs ih => intro o; rw [List.foldl_cons, ih]; split_ifs <;> simp
 
-/-- `foldedPartial`'s Δ: `(i, c)` adds `w(i)·eq(r, ⌊c/64⌋)` at `c mod 64` for each column `c` in the block. -/
 theorem addPart_get (n : ℕ) (eR : Array F128) (w : ℕ → F128) : ∀ (pairs : List (ℕ × ℕ)) (o : Array F128) (s : ℕ),
     s < o.size →
     of (pairs.foldl (fun o ic => if ic.2 < n then o.modify (ic.2 % 64) (· + w ic.1 * eR[ic.2 / 64]!) else o) o)[s]! =

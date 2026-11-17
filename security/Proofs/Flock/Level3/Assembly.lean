@@ -5,10 +5,7 @@ public import Flock.Piop
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-Level 3, L3-A (`verity/protocols/proofs/flock/prover/agreement/README.md` stage 1d): the assembly. First the equality tensor: the executable's `eqTable r` holds,
-at index `b`, `eq(r, b) = Π_j (r_j if bit j of b, else 1 + r_j)` (the soundness model's `eqAt`), over the field GF128.
--/
+/-! The equality tensor: the executable's `eqTable r` holds `eq(r, b)` at index `b`, over GF128. -/
 
 @[expose] public section
 
@@ -18,7 +15,6 @@ namespace FlockLevel3
 
 open GF128
 
-/-- The factor of coordinate `x` for index bit `bit`. -/
 noncomputable def eqFactor (bit : Bool) (x : F128) : GF128 := if bit then of x else 1 + of x
 
 theorem eqStep_size (t : Array F128) (x : F128) : (eqStep t x).size = 2 * t.size := by
@@ -80,7 +76,6 @@ theorem foldl_eqStep_get (l : List F128) : ∀ (t : Array F128) (ht : 0 < t.size
     congr 1
     simp [Nat.testBit_zero, eqFactor]
 
-/-- **The equality tensor.** `eqTable r` has `2^|r|` entries, and entry `b` is `eq(r, b)`. -/
 theorem eqTable_size (r : Array F128) : (eqTable r).size = 2 ^ r.size := by
   rw [eqTable, ← Array.foldl_toList, foldl_eqStep_size]; simp
 

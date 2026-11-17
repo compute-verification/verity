@@ -44,21 +44,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The rebuilt sample: one value per equivalence class
-
-`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two samples that `sampleEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
-(`FlockDeploy.KS.sampleEq_ne`). Where the verifier keeps a sample, the record's (`Exec.recordDraw`) and the statement's
-(`Raw.ins`), it keeps `Flock.norm` of what it parsed: every object rebuilt by inserting its fields into an empty map,
-and that map's fields into another. So:
-
-* `norm_congr`: `norm` is the same on equivalent values;
-* `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the sample check
-  passes on are equal, with no premise on the parser;
-* `wf_norm`: a rebuilt value is well formed (`Claims.Json.Wf`) by construction;
-* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's sample,
-  parsed, is the statement's up to `JsonEquiv`).
--/
+/-! `Flock.norm` rebuilds a sample as one value per equivalence class. -/
 
 @[expose] public section
 
@@ -104,7 +90,6 @@ theorem sizeOf_lt_of_mem_arr {a : Array Json} {x : Json} (h : x ∈ a) : sizeOf 
   simp only [Json.arr.sizeOf_spec]
   omega
 
-/-- Induction on `Json` through arrays' elements and objects' values. -/
 theorem json_ind {P : Json → Prop} (null : P .null) (bool : ∀ b, P (.bool b)) (num : ∀ n, P (.num n))
     (str : ∀ s, P (.str s)) (arr : ∀ a : Array Json, (∀ x ∈ a, P x) → P (.arr a))
     (obj : ∀ m : Std.TreeMap.Raw String Json compare, (∀ p ∈ m.toList, P p.2) → P (.obj m)) : ∀ j, P j
@@ -119,11 +104,8 @@ decreasing_by
   · exact sizeOf_lt_of_mem_arr ‹_›
   · exact sizeOf_lt_of_mem_toList ‹_›
 
-/-! ## The rebuilt object -/
-
 theorem wf_normObj (l : List (String × Json)) : (normObj l).WF := Std.TreeMap.Raw.WF.ofList
 
-/-- A well-formed map's fields, inserted into an empty map, are its own fields. -/
 theorem toList_ofList_toList {t : Std.TreeMap.Raw String Json compare} (ht : t.WF) :
     (Std.TreeMap.Raw.ofList t.toList compare).toList = t.toList := by
   refine (Std.TreeMap.Raw.equiv_iff_toList_eq Std.TreeMap.Raw.WF.ofList ht).1 ?_
@@ -142,7 +124,6 @@ theorem toList_normObj (l : List (String × Json)) :
     (normObj l).toList = (Std.TreeMap.Raw.ofList l compare).toList :=
   toList_ofList_toList Std.TreeMap.Raw.WF.ofList
 
-/-- **Rebuilding a rebuilt object's fields gives it back.** -/
 theorem normObj_toList_normObj (l : List (String × Json)) : normObj (normObj l).toList = normObj l := by
   unfold normObj
   rw [toList_ofList_toList (Std.TreeMap.Raw.WF.ofList), toList_ofList_toList (Std.TreeMap.Raw.WF.ofList)]
@@ -167,7 +148,6 @@ theorem foldl_insert_getElem? {l : List (String × Json)} {t : Std.TreeMap.Raw S
       · exact .inl h
     · exact .inr ⟨k', List.mem_cons_of_mem _ hk⟩
 
-/-- **A rebuilt object's values are the fields' values.** -/
 theorem mem_normObj {l : List (String × Json)} {p : String × Json} (h : p ∈ (normObj l).toList) :
     ∃ k, (k, p.2) ∈ l := by
   rw [toList_normObj] at h
@@ -178,9 +158,6 @@ theorem mem_normObj {l : List (String × Json)} {p : String × Json} (h : p ∈ 
   · simp at h
   · exact h
 
-/-! ## `norm` -/
-
-/-- **`norm` is the same on equivalent values.** -/
 theorem norm_congr : ∀ a b : Json, JsonEquiv a b → Flock.norm a = Flock.norm b := by
   refine json_ind ?_ ?_ ?_ ?_ ?_ ?_
   · intro b h; cases b <;> first | rfl | (simp [JsonEquiv, jsonForm] at h)
@@ -219,7 +196,6 @@ theorem norm_congr : ∀ a b : Json, JsonEquiv a b → Flock.norm a = Flock.norm
     | arr b => simp [JsonEquiv, jsonForm] at h
     | _ => simp [JsonEquiv, jsonForm] at h
 
-/-- **`norm` is idempotent.** -/
 theorem norm_norm : ∀ a : Json, Flock.norm (Flock.norm a) = Flock.norm a := by
   refine json_ind rfl (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) ?_ ?_
   · intro a ih
@@ -239,26 +215,22 @@ theorem norm_norm : ∀ a : Json, Flock.norm (Flock.norm a) = Flock.norm a := by
     show (p.1, Flock.norm p.2) = p
     rw [← he.2, ih q hq, he.2]
 
-/-- **Rebuilt values are equivalent exactly when equal.** -/
 theorem norm_eq_of_jsonEquiv {a b : Json} (h : JsonEquiv (Flock.norm a) (Flock.norm b)) :
     Flock.norm a = Flock.norm b := by
   rw [← norm_norm a, ← norm_norm b]
   exact norm_congr _ _ h
 
-/-- **Fixed points of `norm` that are equivalent are equal.** -/
 theorem eq_of_jsonEquiv_norm {a b : Json} (ha : Flock.norm a = a) (hb : Flock.norm b = b) (h : JsonEquiv a b) :
     a = b := by
   rw [← ha, ← hb]
   exact norm_congr _ _ h
 
-/-- **Two rebuilt optional values the sample check passes on are equal.** -/
 theorem eq_of_rel_norm {a b : Option Json} (h : Option.Rel JsonEquiv a b) (ha : ∀ d, a = some d → Flock.norm d = d)
     (hb : ∀ d, b = some d → Flock.norm d = d) : a = b := by
   cases h with
   | none => rfl
   | some h => exact congrArg some (eq_of_jsonEquiv_norm (ha _ rfl) (hb _ rfl) h)
 
-/-- **A rebuilt value is well formed**: every object in it is a tree built by insertion into an empty map. -/
 theorem wf_norm : ∀ j : Json, Claims.Json.Wf (Flock.norm j) := by
   refine json_ind .null .bool .num .str ?_ ?_
   · intro a ih
@@ -276,8 +248,6 @@ theorem wf_norm : ∀ j : Json, Claims.Json.Wf (Flock.norm j) := by
     rw [← he.2]
     exact ih q hq
 
-/-- **On a well-formed value, `norm` keeps the form**: a well-formed object's fields are already in key order with one
-value per key, so rebuilding it gives the same fields. -/
 theorem jsonEquiv_norm : ∀ j : Json, Claims.Json.Wf j → JsonEquiv (Flock.norm j) j := by
   refine json_ind (fun _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) ?_ ?_
   · intro a ih hw
@@ -301,7 +271,6 @@ theorem jsonEquiv_norm : ∀ j : Json, Claims.Json.Wf j → JsonEquiv (Flock.nor
       simp only [Function.comp_apply]
       rw [ih p hp (h _ _ hv)]
 
-/-- **Alike values are well formed** on the right (`Claims.Json.Same` holds only of well-formed trees). -/
 theorem same_wf_right {a b : Json} (h : Claims.Json.Same a b) : Claims.Json.Wf b := by
   induction h with
   | null => exact .null

@@ -24,13 +24,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The rounds the shipped masked verifier reads
-
-`Zk.verifyWith h`'s phases, as `DeployRounds` has the plain verifier's: which round each squeeze reads does not depend
-on the hash. The masked replay reads `m + (kLog − 6)` rounds, Ligerito `k0 + 7 + 11 R` (the plain count and the lane
-phase's `ρ` pair), and the inner proof four; a masked rep reads all of its stream's rounds (`zkVerifyRepWith_rounds`).
--/
+/-! Which round each squeeze of the shipped masked verifier reads does not depend on the hash. -/
 
 @[expose] public section
 
@@ -40,10 +34,6 @@ open Flock Transcript FlockSoundness.Refine
 
 variable {α β : Type}
 
-/-! ## The masked replay -/
-
-/-- **The masked replay reads `m + (kLog − 6)` rounds**: zerocheck's skip and outer points, its first coin and one per
-residual round, then lincheck's `α`, `β`, one per sumcheck round, and `r'`. -/
 theorem replayWith_rounds (hs : Hashes V) {st : Setup} {lay : Zk.PadLayout} {p : Proof} {root : ByteArray}
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (h : Zk.replayWith hs st lay p root t = .ok (rp, t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + (st.m + (st.kLog - 6)) := by
@@ -100,9 +90,6 @@ theorem replayWith_rounds (hs : Hashes V) {st : Setup} {lay : Zk.PadLayout} {p :
     k₃.1, k₂.1, k₁.1]
   omega
 
-/-! ## The inner proof -/
-
-/-- A step of `V` lifted into the transcript monad keeps the transcript. -/
 theorem vlift_bind {x : V α} {f : α → TM β} {t t' : Transcript} {b : β}
     (h : ((monadLift x : TM α) >>= f) t = .ok (b, t')) : ∃ a, x = .ok a ∧ f a t = .ok (b, t') := by
   obtain ⟨a, t₁, h₁, h₂⟩ := bind_ok h
@@ -112,7 +99,6 @@ theorem vlift_bind {x : V α} {f : α → TM β} {t t' : Transcript} {b : β}
   | error e => rw [hx] at h₁; cases h₁
   | ok v => rw [hx] at h₁; cases h₁; exact ⟨_, rfl, h₂⟩
 
-/-- **The inner proof reads four rounds**: `ε`, the constraints' `γ`s, `β` and the `Q` column queries. -/
 theorem verifyInnerWith_rounds (hs : Hashes V) {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript} {u : Unit}
     (h : Zk.verifyInnerWith hs lay pr finalC cons t = .ok (u, t')) :
@@ -149,11 +135,7 @@ theorem verifyInnerWith_rounds (hs : Hashes V) {lay : Zk.PadLayout} {pr : Zk.Inn
   refine ⟨by rw [hr₁₀, r₉, k₈.2, r₇, k₆.2, r₅, k₄.2, r₃, k₂.2, k₁.2], ?_⟩
   rw [hk₁₀, kk₉, k₈.1, kk₇, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1]
 
-/-! ## Masked Ligerito -/
-
 open FlockSoundness.Discharge.ZkExec in
-/-- `queryLevel0With`: level 0's query coins are round `t.k`'s, `q` of them, and the Merkle check of its rows (with
-the extra lanes) passes at their positions; the consistency coins are round `t.k + 1`'s. -/
 theorem queryLevel0With_bind (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level}
     {cap : Array ByteArray} {fold : Array F256} (hq : lv.q ≠ 0) {f : Array ℕ × Array F128 × F256 → LM β}
     {st st' : LState} {t t' : Transcript} {b : β}
@@ -188,7 +170,6 @@ theorem queryLevel0With_bind (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoPr
     · rw [hr₆, k₅.2, hr₄, k₃.2]
     · rw [hk₆, k₅.1, hk₄, k₃.1]
 
-/-- The lane loop: each of its `k0` steps moves one round, and the last two more (the lane phase's `ρ` pair). -/
 theorem lforIn_lanes {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (k0 : ℕ)
     (hbody : ∀ i s st t b st' t', i < k0 → body i s st t = .ok ((b, st'), t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + (if i + 1 = k0 then 3 else 1) ∧ ∃ s', b = .yield s') :
@@ -217,8 +198,6 @@ theorem lforIn_lanes {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (k0 :
       omega
 
 open FlockSoundness.Discharge.ZkExec in
-/-- **Masked Ligerito reads `k0 + 7 + 11 R` rounds** on `R + 1 ≥ 2` levels: the plain count's rounds, and the lane
-phase's `ρ` pair after the last lane challenge. -/
 theorem zkLigeritoWith_rounds (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
@@ -371,13 +350,7 @@ theorem zkLigeritoWith_rounds (hs : Hashes V) (ms : MerkleScheme) (sch : Schedul
   rw [ite_eq_right (show ¬ sch.k0 = 0 by omega)]
   omega
 
-/-! ## One rep -/
-
 open FlockSoundness.Discharge.ZkExec in
-/-- **A masked rep reads every recorded round of its stream**: when `Zk.verifyRepWith hs` accepts rep `r` of table `i`,
-at the table's `--zk` schedule, its stream has `(m + (kLog − 6)) + (claims + 1) + (k0 + 7 + 11 R) + 4` rounds (the
-replay, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels, the inner proof), whatever the hashes
-`hs` are. -/
 theorem zkVerifyRepWith_rounds (hs : Hashes V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
     {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :

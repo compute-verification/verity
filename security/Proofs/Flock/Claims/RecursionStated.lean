@@ -33,8 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-! `Flock.SecurityProofs.RecursionClaimsStated : Flock.Guarantees.RecursionClaimsStated`, by reflexivity: the
-guarantee is there for its record, which holds the recursion's claims' text. -/
+/-! `Flock.SecurityProofs.RecursionClaimsStated`, by reflexivity, for its record of the recursion's claims' text. -/
 
 @[expose] public section
 

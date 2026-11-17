@@ -9,25 +9,8 @@ import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
-/-!
-# The sampled audit's knowledge soundness on `verify --zk`'s acceptance (`SampledKSLiveV3`)
-
-`Bridge.SampledKSLiveRoots` takes five things of the statement, the circuit file and the sample as hypotheses beyond the
-parses and the public file's form (`pub.tables = none`, the form without shared rows): an untyped statement, the unit a
-built net (`Built`), the circuit in `Layout.scopeOkH`, the sample's `k` a multiple of the tables, and the `--zk` tags'
-hidden outputs, retained rounds and `hm96-sha512/v1` leaves (`TagsOkZHJ`). `verify --zk` refuses every session outside
-them (`Flock.KsScope.check`, after `Flock.PortRoots.check` in its verdict), so the guarantee reads them off acceptance.
-
-* `Bridge.KsScoped I D kd`: the five.
-* `Bridge.LiveAcceptsScoped I o`: `verify --zk` accepts: `Bridge.LiveAcceptsKS`, and the files and the record's sample
-  pass `Flock.KsScope.check`.
-* `Bridge.ksScoped_files`, `Bridge.div_of_sampleWhy`: the check gives four of the five from the files (the unit is built
-  because `HmRow.parse` built it from rows, `unit_built`), and the fifth, the sample's `k` a multiple of the tables,
-  from the record's sample, which custody (`RecordCustodyZKJ`) makes the verifier's.
-* `SampledKSLiveV3`: at a statement, files and a sample in `KsScoped`, `SampledKSLiveRoots`' bound on
-  `LiveAcceptsScoped`'s event; outside them, `verify --zk` accepts with probability 0. It takes none of the five as a
-  hypothesis. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`, through `Bridge.sampledKSLiveRoots_of`.
--/
+/-! `SampledKSLiveV3`: the sampled audit's knowledge soundness on `verify --zk`'s acceptance, its preconditions read off
+the verifier. -/
 
 @[expose] public section
 
@@ -54,8 +37,6 @@ def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
     Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count
       (FlockSoundness.Discharge.Exec.recordDraw o.2.2.record) = .ok ()
 
-/-- **The files that pass `Flock.KsScope.check` are in four of `KsScoped`'s five**, and the sample passes `sampleWhy`. The
-unit is built because `HmRow.parse` built it (`unit_built`, at the untyped tags `tagsWhy` leaves). -/
 theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw : Option Lean.Json}
     (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
     (hpub : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
@@ -71,8 +52,6 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
     ⟨(zkTags_hiddenOutputs I).symm.trans ht2, (zkTags_retainRounds I).symm.trans ht3,
       (zkTags_merkleLeaf I).symm.trans ht4⟩, hd⟩
 
-/-- **The record's sample passing `sampleWhy` gives the sample's `k` a multiple of the tables**: custody makes an accepted
-record's sample `dj S`, and a `dj S` that parses the verifier's own subset sample of `kd` units. -/
 theorem div_of_sampleWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
     {Jf : Finset (Fin n) → Reg → ℕ}
     {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
@@ -117,9 +96,7 @@ def SampledKSLiveV3 : Prop :=
   ∀ (n : ℕ) (Reg : Type) (I : Inputs)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
-    -- the game's units are the public file's population
     (_hn : pub.n = n)
-    -- the statement's descriptor, and the registration's query
     (desc : Claims.Msg) (qr : Lean.Json)
     (kd : ℕ) (_hkd : kd ≤ n)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -152,16 +129,13 @@ def SampledKSLiveV3 : Prop :=
             fun _ => sampleOkZKHJ_of_file I hs.typed (Flock.Desc.parse_flat hD) kd n hs.div dj hCust.2 _)) τ
       let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
       let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
-      -- the deployed commitment's layout: the game's rows, read off the circuit file
       let Cc := (keyProg D.unroll hs.built n).circuit (Discharge.Layout.outsOf D.unroll hs.built n)
       let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
         (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hs.built n
           (Discharge.Layout.outsOf D.unroll hs.built n) g).map fun r =>
           ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-      -- the registration's frame-v3 roots, over the public file's rows
       let roots := Bridge.rootsOf D.unroll pub n
       let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
-      -- the circuit's constants, public
       let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hs.built n g
       -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
       -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
@@ -183,10 +157,6 @@ def SampledKSLiveV3 : Prop :=
       prob (fun o => Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n)
         (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
 
-/-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at a statement, files and a sample in `KsScoped`, V3's event is inside
-`Bridge.SampledKSLiveRoots`' at `KsScoped`'s five, and that follows from V2 (`Bridge.sampledKSLiveRoots_of`); outside
-them no outcome the prover reaches is accepted, since an accepted outcome's files pass `Flock.KsScope.check`
-(`Bridge.ksScoped_files`) and its record's sample is the verifier's (`Bridge.div_of_sampleWhy`). -/
 theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   have h := Bridge.sampledKSLiveRoots_of h
   intro n Reg I D hD pub hpub hpt hn desc qr kd hkd dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr

@@ -23,25 +23,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Flock's one-stage audit, end to end, with the rows link (trusted)
-
-`EndToEndRegisteredRows` is `EndToEndRegisteredSampled`'s statement with the rows link added to its event: at the sampled
-proof blocks, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
-rows are the program's outputs on them, which `EndToEndHiddenSampled` and `EndToEndRegisteredSampled` leave unstated. Its
-proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`)
-that `Desc.parse` reads, a flat file, at `EndToEndRegisteredSampledFlat`'s rows; `EndToEndRegisteredRowsFlat` is the same
-statement at `D = Desc.single c`.
-
-It is the Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
-bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a Flock session,
-the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a union bound over the `n` units, since
-`OwnReadsHJ` here is over all of a session's registered reads, not per unit.
-
-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
-`security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
--/
+/-! Flock's one-stage audit, end to end, with the rows link (trusted): the Flock side of PoUW's proof premise, which it
+does not discharge. -/
 
 @[expose] public section
 
@@ -99,30 +82,23 @@ def EndToEndRegisteredRows : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- F's registered roots: registered before the statement and its coin
     (own : Array Flock.Registered.Port)
-    -- the session's statement, its coin among it: its circuit's descriptor, which the verifier parses, and its
-    -- public file
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
-    -- the registrant's opening of `own`'s roots at the session's registered reads
     (rd : FlockSoundness.Registered.ReadsX
       (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
       (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the bound's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover: it registers the session's rows, the sinks among them, after the coin
@@ -171,28 +147,22 @@ def EndToEndRegisteredRowsFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- F's registered roots: registered before the statement and its coin
     (own : Array Flock.Registered.Port)
-    -- the session's statement, its coin among it: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH c = true)
-    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
-    -- the registrant's opening of `own`'s roots at the session's registered reads
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the bound's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover: it registers the session's rows, the sinks among them, after the coin

@@ -2,13 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.Lowers
 
-/-!
-# The lowered program is in the readable scope's order
-
-* `posOf_lt_length`: every wire's position is a gate of `progOf C κ`.
-* `topological_progOf`: `progOf C κ` reads only earlier gates (`reads_lt`) and returns only its own gates, so it is
-  topologically ordered (`Prog.Topological`), for every circuit and constants.
--/
+/-! The lowered program `progOf C κ` is topologically ordered, every wire's position one of its gates. -/
 
 @[expose] public section
 
@@ -25,7 +19,6 @@ theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length :
     rw [posOf_eq, gates_off g (by omega), List.getElem?_eq_getElem hl]
   exact (List.getElem?_eq_some_iff.1 h).1
 
-/-- **The lowered program is topologically ordered.** -/
 theorem topological_progOf : (progOf C κ).Topological :=
   ⟨fun _ _ hx _ hi => reads_lt hx hi, fun o ho => by
     obtain ⟨g, -, rfl⟩ := List.mem_map.1 ho

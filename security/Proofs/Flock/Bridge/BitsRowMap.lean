@@ -7,28 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
-/-!
-# Bits' row map is the bridge's (`Spot.Bits.rowBit`, `outRowBit`)
-
-`Spot.Bits.rowBit c n g` is where source gate `g` of Bits' key program is read, and `outRowBit c u k j t` where
-unit `u`'s instance `k` commits bit `t` of its returned output leaf `j`. The bridge's row bits are `Layout.keyRowOf` at
-an input gate and `HiddenExec.outBitRow` at a returned output's bit; `rowPosOf` reads one as Bits' position: the port's
-name, the unit's leaf and the bit.
-
-* `rowPosOf_leaf`: at a public file without shared rows, that leaf is the bridge's leaf map's (`LeafMap.ofPublic`). At a
-  shared-rows file Bits still names leaf `u`, and the refs enter below it (`Public.digest`).
-* `keyIdx_self`, `keyIdx_lt`: a key is its own key, below the inputs, so the gate a unit's input column reads is a
-  source gate `rowBit` places.
-* `wire_inGate`: a column of a unit's own instance on a source gate is an input column of the unit, and the gate's
-  input is its own key, with the column's source.
-* `rowBit_keyRowOf`: at a source gate that is its own key and whose key is the zero or a row bit (`RowKey`), Bits'
-  commitment position is the bridge's row bit, and both are none off the source gates.
-* `rowOfH_of_input`, `rowBit_wire`: at an input gate the bridge's row bit (`rowOfH`) is its key's, and at a gate a
-  unit's row reads, in a circuit whose read inputs have row keys (`KeysRow`), Bits' position is that row bit.
-* `outAt_mono`, `outPos_eq`, `outRowBit_outBitRow`: where each output row holds one output port (`outGroup_single`),
-  Bits' output row of a word is its port's (`outPortOf`), so Bits' position of a returned output's bit is the bridge's.
-* `outRowBit_outRowOf`: that position is the bridge's output-row bit of the unit's computed gate (`outRowOf`).
--/
+/-! Bits' row map (`Spot.Bits.rowBit`, `outRowBit`) is the bridge's, at an input gate and at a returned output's bit. -/
 
 @[expose] public section
 
@@ -41,23 +20,17 @@ open FlockSoundness.Discharge.HiddenExec (outBitRow outBitRow_spec outWordOf out
 variable {c : Flock.Circuit} {n : ℕ}
 
 variable (c) in
-/-- **A bridge row bit as Bits' commitment position**: bit `k` of unit `u`'s leaf of row port `q`. -/
 def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : Spot.Bits.RowPos :=
   ⟨c.ports[r.2.1].name, r.1.val, r.2.2.val⟩
 
-/-- **Bits' leaf is the bridge's leaf map's** at a public file without shared rows (`LeafMap.ident`): unit `u` reads its
-own leaf `u` of every port. Bits neither refuses a shared-rows file nor reads its refs: it places unit `u` at leaf `u`
-there too, and the refs enter below it, where `Public.digest` reads unit `u`'s row of port `q` at its table's row
-`refs[u·np + q]`, which the bridge's leaf map reads (`LeafMap.ofTables`). That file is outside this theorem. -/
+/-- Bits' leaf is the bridge's leaf map's at a public file without shared rows; a shared-rows file, where Bits still
+places unit `u` at leaf `u`, is outside this theorem. -/
 theorem rowPosOf_leaf {pub : Flock.Public} (ht : pub.tables = none) (nl : ℕ)
     (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :
     (rowPosOf c r).leaf = (LeafMap.ofPublic c pub nl).ref r.2.1.val r.1.val := by
   rw [LeafMap.ofPublic_none nl ht]
   rfl
 
-/-! ## Source gates -/
-
-/-- **A key is its own key** (`Spot.Bits.keyIdx`): the first input of a source has that source. -/
 theorem keyIdx_self {B x b : ℕ} (h : Spot.Bits.keyIdx c B x = some b) :
     Spot.Bits.keyIdx c B b = some b := by
   unfold Spot.Bits.keyIdx at h ⊢
@@ -74,9 +47,6 @@ theorem keyIdx_lt {B x b : ℕ} (h : Spot.Bits.keyIdx c B x = some b) : b < B :=
   split_ifs at h
   exact List.mem_range.1 (List.mem_of_find?_eq_some h)
 
-/-- **A column of a unit's own instance on a source gate** `2 ≤ g < 2 + n·B` is an input column of the unit: the
-gate's unit index is the unit's, and its input is its own key, with the column's source (`Layout.wire_inGateP` at
-`keyProg`). -/
 theorem wire_inGate {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) {u : Fin n}
     (x : Fin ((Placed.keyProg c hU n).rows u).w)
     (h2 : 2 ≤ ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x).val)
@@ -142,9 +112,6 @@ theorem wire_inGate {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) {u :
       rfl
     exact ⟨hd, by rw [hm]; exact keyIdx_self hk, by rw [hm, Layout.keyIdx_some hb]⟩
 
-/-- **Bits' row map at a source gate is the bridge's**: at gate `2 + u·B + b` whose input `b` is its own key (`keyIdx`)
-and whose key is the zero or a row bit (`RowKey`), Bits' commitment position is the bridge's row bit (`keyRowOf`); both
-are none off the source gates. -/
 theorem rowBit_keyRowOf {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (g : Fin (keyN c hU n))
     (h : 2 ≤ g.val → g.val < 2 + n * keyB c hU →
       Spot.Bits.keyIdx c (keyB c hU) ((g.val - 2) % keyB c hU) = some ((g.val - 2) % keyB c hU) ∧
@@ -181,8 +148,6 @@ theorem rowBit_keyRowOf {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (g : Fi
       · have h2 : 2 + n * keyB c hU ≤ g.val := by omega
         simp [h2]
 
-/-- **At an input gate the bridge's row bit is its key's** (`rowOfH` is `keyRowOf`): an input gate is no unit's, so no
-returned output's. -/
 theorem rowOfH_of_input {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
     (hg : (Placed.keyProg c hU n).unit g = none) :
     HiddenExec.rowOfH c hU n outs g = keyRowOf c hU n (portRowW c) g := by
@@ -192,8 +157,6 @@ theorem rowOfH_of_input {hU : Built c.unit} (outs : Finset (Fin (keyN c hU n))) 
     rw [hg]
   · exact HiddenExec.rowOfH_of_key outs hk
 
-/-- **Bits' row map at a gate a unit reads is the bridge's**: a column of a unit's own instance that one of its rows
-reads, in a circuit whose read inputs have row keys (`KeysRow`). -/
 theorem rowBit_wire {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (hkeys : Layout.KeysRow c hU (portRowW c))
     (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (i : Fin ((Placed.keyProg c hU n).rows u).nComp)
     (x : Fin ((Placed.keyProg c hU n).rows u).w)
@@ -208,8 +171,6 @@ theorem rowBit_wire {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32) (hkeys : La
     rw [hs]
     exact hk
 
-/-! ## Returned outputs -/
-
 variable (c) in
 theorem outAt_mono {a b : ℕ} (h : a ≤ b) : Hidden.outAt c a ≤ Hidden.outAt c b := by
   obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
@@ -217,8 +178,6 @@ theorem outAt_mono {a b : ℕ} (h : a ≤ b) : Hidden.outAt c a ≤ Hidden.outAt
   rw [List.take_add, List.map_append, List.sum_append]
   exact Nat.le_add_right _ _
 
-/-- **Bits' output row of a word is its port's**: where each output row holds one output port (`outGroup_single`), the
-first output row whose run of words holds word `x` is `x`'s port (`outPortOf`), the last starting at or before it. -/
 theorem outPos_eq (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {x : ℕ} (hx : x < c.outWords) (u t : ℕ) :
     Spot.Bits.outPos c u x t = some ⟨(c.ports.getD (HmOut.nIn c + outPortOf c x) default).name, u,
       16 * (x - Hidden.outAt c (outPortOf c x)) + t⟩ := by
@@ -243,8 +202,6 @@ theorem outPos_eq (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {x : 
   unfold Spot.Bits.outPos
   simp only [hf, Option.map_some, Hidden.outGroup_single hr hlt]
 
-/-- **Bits' position of a returned output's bit is the bridge's**: where each output row holds one output port, at an
-output leaf `j` of instance `k` whose word is an output word and whose bit `t` is a bit of its row (`outBitRow`). -/
 theorem outRowBit_outBitRow (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (u : Fin n) {k j t : ℕ}
     (hj : j < (c.leavesOut.getD k #[]).size) (hw : outWordOf c (k, j, t) < c.outWords)
     (hb : outBitRow c u (k, j, t) ≠ none) :
@@ -260,8 +217,6 @@ theorem outRowBit_outBitRow (hr : c.outRowPorts = Array.replicate c.outPorts.siz
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem q.isLt, Option.getD_some]
   rfl
 
-/-- **Bits' position of a returned output's bit is the bridge's output-row bit** of the unit's computed gate on that
-column (`outRowOf`), where each output row holds one output port. -/
 theorem outRowBit_outRowOf {hU : Built c.unit} (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
     (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((Placed.keyProg c hU n).rows u).w)
     (hgu : (Placed.keyProg c hU n).unit ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire x) = some u)

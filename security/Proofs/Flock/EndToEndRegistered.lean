@@ -2,18 +2,8 @@ module
 
 public import Proofs.Flock.EndToEndRegistered.Statement
 
-/-!
-# Proof of Flock's end-to-end guarantee with registered reads
-
-`Flock.SecurityProofs.EndToEndRegistered : Flock.Guarantees.EndToEndRegistered` is `zk_session_soundHJR_custody_regSt`
-with its first conjunct's first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s
-(`Audit.SamplingDesign.subset_miss`, and `linkBoundZC` at A2); its second conjunct is unchanged.
-`Flock.SecurityProofs.EndToEndRegisteredSampled : Flock.Guarantees.EndToEndRegisteredSampled` is
-`zk_session_soundHJR_custody_sampled_regSt` with its first conjunct's last term in closed form. Both read the circuit the
-descriptor unrolls to, a flat file's or a templated statement's (`Flock.Desc.parseStmt_stmt`), and each flat form is
-`zk_session_soundHJR_custody_reg` or `zk_session_soundHJR_custody_sampled_reg` the same way, at the circuit
-`HmOut.parse` reads.
--/
+/-! The proofs of `EndToEndRegistered` and `EndToEndRegisteredSampled`, Flock's end-to-end guarantee with registered
+reads. -/
 
 @[expose] public section
 

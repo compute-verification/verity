@@ -4,16 +4,7 @@ public import Properties.Verity.GateARow
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.BitsKeyProg
 
-/-!
-# `Γ`'s unit: the committed circuit has one gate a row
-
-`Verity.GateARow`, proved (`gateARow`). The game's circuit of committed files that parse is the key program of the parse
-(`ofFile_iff`), whose gates are its inputs and then each unit's computed rows in turn: unit `u`'s row
-`i` is gate `2 + n·nIn + u·nComp + i` (`keyProg_unit_row`), and an input gate is in no unit
-(`keyProg_unit_input`). So unit `u`'s gates are exactly its `nComp` rows (`keyProg_unit_iff`,
-`keyProg_unit_card`), and `nComp`, the unit net's computed rows and its constant stacked `units_per_vu` times, is the
-`m` the verifier counts from the parsed file (`Spot.FilePart.ofCircuit`).
--/
+/-! `Verity.GateARow`, proved (`gateARow`): unit `u`'s gates of the committed circuit are exactly its `nComp` rows. -/
 
 @[expose] public section
 
@@ -23,7 +14,6 @@ open FlockSoundness FlockSoundness.Discharge
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
-/-- **Unit `u`'s gates in the key program** are its computed rows, gate `2 + n·nIn + u·nComp + i` for row `i`. -/
 theorem keyProg_unit_iff (g : Fin (Layout.keyN c hU n)) (u : Fin n) :
     (Placed.keyProg c hU n).unit g = some u ↔
       ∃ i : Fin (Placed.circuitRows c hU).nComp,
@@ -55,7 +45,6 @@ theorem keyProg_unit_iff (g : Fin (Layout.keyN c hU n)) (u : Fin n) :
   · rintro ⟨i, hi⟩
     exact keyProg_unit_row u.isLt i g hi
 
-/-- **Unit `u` has `nComp` gates** in the key program. -/
 theorem keyProg_unit_card (u : Fin n) :
     (Finset.univ.filter fun g : Fin (Layout.keyN c hU n) => (Placed.keyProg c hU n).unit g = some u).card =
       (Placed.circuitRows c hU).nComp := by
@@ -83,7 +72,6 @@ theorem keyProg_unit_card (u : Fin n) :
     simp only at this
     omega), Finset.card_univ, Fintype.card_fin]
 
-/-- **`Γ`'s unit**: every unit of the committed circuit has one gate for each of its file's rows. -/
 theorem gateARow : Verity.GateARow := by
   intro tags cf tables pf r hr
   refine (ofFile_iff hr

@@ -41,42 +41,13 @@ import Proofs.Flock.Soundness.Audit.Circuit
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The lowering is correct, unit by unit
-
-`lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv`, at any
-`φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
-evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_incorrectRegZ` reads
-it at `b u := unitGates P u`. It is `lowers_of` at `C.eval Xv`, which holds at any wire values that apply the unit's
-gates, on committed values given only where the unit reads from outside or commits (`correct_of_local`, at a unit's
-local evaluation). Slot `u` of `partOf P κ ns`, at any strata `ns` that sum to `n`
-(`blocks_partOf_getElem?`), is that proof block followed by the
-position of each input `u` owns, which reads nothing and is on every boundary, so the slot's values are the unit's
-alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and each owned input is opened
-(`correct_blockOf`).
-
-* Where the lowered gates sit: wire `g`'s `gateSize` gates are at `off C g` onward (`gates_off`), every gate of
-  `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
-* A row `(⊕ a) ∧ (⊕ b)` is lowered to the XOR of `a`'s positions, the XOR of `b`'s and their AND, at `posOf C g`. The
-  two XORs are interior to the unit (`boundary_inner`): no output, input or gate of another unit reads them, so `Correct`
-  asks nothing of their committed values, and the AND reads them as the unit computes them.
-* `runIn_posOf_of`: by induction over the wires, each wire's position computes its value at any wire values that apply
-  the unit's gates (`C.eval`'s, `lowers`; a unit's local evaluation's, `Flock.Bridge.correct_of_progCorrect` and
-  `correct_of_local`),
-  reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
-  (`const_pos`), which `Prog.read` reads with no committed value.
-* `correct_unitGates_of`: so the unit's lowered gates are correct on committed values that carry, at each position of
-  a wire the unit computes or reads, values that hold its gates and the constants it reads; nothing is asked at the
-  two XORs.
--/
+/-! The lowering is correct unit by unit (`lowers`): unit `u` of `progOf C κ` computes what `C` computes there. -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
-
-/-! ## Indexing a `flatMap` -/
 
 theorem getElem?_flatMap_take {α β : Type} (f : α → List β) :
     ∀ (l : List α) (k : ℕ) (hk : k < l.length) (j : ℕ), j < (f l[k]).length →
@@ -104,8 +75,6 @@ theorem exists_of_lt_flatMap {α β : Type} (f : α → List β) :
       refine ⟨k + 1, by simpa using hk, j, by simpa using hj, ?_⟩
       simp only [List.take_succ_cons, List.flatMap_cons, List.length_append]
       omega
-
-/-! ## Where each wire's lowered gates sit -/
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
@@ -162,7 +131,6 @@ theorem off_add_le {g h : Fin C.N} (hgh : g < h) : off C g.val + gateSize (C.op 
   · exact hgh
   · exact lt_trans hx hgh
 
-/-- Two wires' blocks of lowered gates don't meet. -/
 theorem block_inj {g h : Fin C.N} {j k : ℕ} (hj : j < gateSize (C.op g)) (hk : k < gateSize (C.op h))
     (he : off C g.val + j = off C h.val + k) : g = h ∧ j = k := by
   rcases lt_trichotomy g h with hlt | rfl | hlt
@@ -181,7 +149,6 @@ theorem posOf_lt_off {a g : Fin C.N} (h : a < g) : posOf C a < off C g.val := by
   rw [posOf_eq]
   omega
 
-/-- The lowered program's gate at `off g + j` is `lower g`'s `j`th. -/
 theorem gates_off (g : Fin C.N) {j : ℕ} (hj : j < gateSize (C.op g)) :
     (progOf C κ).gates[off C g.val + j]? = (lower C κ g)[j]? := by
   have h := getElem?_flatMap_take (lower C κ) (List.finRange C.N) g.val (by simp) j
@@ -190,7 +157,6 @@ theorem gates_off (g : Fin C.N) {j : ℕ} (hj : j < gateSize (C.op g)) :
   rw [off_eq_length κ]
   exact h
 
-/-- Every gate of the lowered program is some wire's `j`th lowered gate. -/
 theorem exists_block {i : ℕ} {x : BGate} (hx : (progOf C κ).gates[i]? = some x) :
     ∃ g : Fin C.N, ∃ j < gateSize (C.op g), i = off C g.val + j ∧ (lower C κ g)[j]? = some x := by
   have hi : i < (progOf C κ).gates.length := (List.getElem?_eq_some_iff.1 hx).1
@@ -226,8 +192,6 @@ theorem posOf_mem_unitGates {n : ℕ} {P : Partition C n} {u : Fin n} {a : Fin C
   · intro hu
     exact ⟨a, hu, _, by omega, posOf_eq a⟩
 
-/-! ## The lowered gates' reads and values -/
-
 theorem lower_ne_const {g : Fin C.N} (hni : (C.op g).isInput = false) (b : Bool) :
     ∀ x ∈ lower C κ g, x ≠ .const b := by
   unfold lower
@@ -239,7 +203,6 @@ theorem isInput_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} 
   · rfl
   · exact absurd ((P.input_iff g).2 h) (by simp [hu])
 
-/-- A unit's own lowered gates are not constants: only an input gate lowers to one, and no unit holds an input. -/
 theorem progOf_ne_const_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u)
     (b : Bool) : (progOf C κ).gates[p]? ≠ some (.const b) := by
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
@@ -247,7 +210,6 @@ theorem progOf_ne_const_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : �
   intro h
   exact lower_ne_const (isInput_of_unit hu) b _ (List.mem_of_getElem? h) rfl
 
-/-- **A constant of the lowered program is an input the constants fix**, at its wire's position. -/
 theorem const_pos {i : ℕ} {b : Bool} (h : (progOf C κ).gates[i]? = some (.const b)) :
     ∃ a : Fin C.N, i = posOf C a ∧ C.op a = .input ∧ κ a = some b := by
   obtain ⟨g, j, hj, rfl, hx⟩ := exists_block h
@@ -265,7 +227,6 @@ theorem const_pos {i : ℕ} {b : Bool} (h : (progOf C κ).gates[i]? = some (.con
 theorem input_of_isInput {g : Fin C.N} (h : (C.op g).isInput = true) : C.op g = .input := by
   cases hop : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
-/-- An input the constants fix lowers to its constant, at its wire's position. -/
 theorem gates_posOf_const {a : Fin C.N} {b : Bool} (hin : C.op a = .input) (hk : κ a = some b) :
     (progOf C κ).gates[posOf C a]? = some (.const b) := by
   have h1 : 0 < gateSize (C.op a) := by rw [hin]; simp [gateSize]
@@ -277,7 +238,6 @@ theorem read_const {ref : ℕ → Option Bool} {i : ℕ} {b : Bool} (h : (progOf
     (progOf C κ).read ref i = some b := by
   simp [Prog.read, h]
 
-/-- A lowered gate reads wires' positions, except a row's AND, which reads its own two XORs. -/
 theorem reads_lower {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g)[j]? = some x) {i : ℕ} (hi : i ∈ x.reads) :
     (∃ a : Fin C.N, i = posOf C a) ∨ (j = 2 ∧ (i = off C g.val ∨ i = off C g.val + 1)) := by
   unfold lower at hx
@@ -303,7 +263,6 @@ theorem reads_lower {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g)[j]?
       exact Or.inl ⟨a, rfl⟩
     · exact Or.inr ⟨rfl, hi⟩
 
-/-- A lowered gate reads the positions of its wire's arguments, except a row's AND, which reads its own two XORs. -/
 theorem reads_lower_args {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g)[j]? = some x) {i : ℕ}
     (hi : i ∈ x.reads) :
     (∃ a ∈ (C.op g).args, i = posOf C a) ∨ (j = 2 ∧ (i = off C g.val ∨ i = off C g.val + 1)) := by
@@ -351,7 +310,6 @@ theorem off_ne_posOf {g a : Fin C.N} {j : ℕ} (hj : j + 1 < gateSize (C.op g)) 
   obtain ⟨rfl, -⟩ := block_inj (by omega) (by omega) he
   omega
 
-/-- **A row's two XORs are interior**: no output, input or gate outside the unit reads them. -/
 theorem boundary_inner {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (hu : P.unit g = some u) {j : ℕ}
     (hj : j + 1 < gateSize (C.op g)) : (progOf C κ).Boundary (unitGates P u) (off C g.val + j) = false := by
   obtain ⟨a, b, hab⟩ : ∃ a b, C.op g = .row a b := by
@@ -385,7 +343,6 @@ theorem boundary_inner {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (
         subst hh
         exact hg'u (mem_unitGates.2 ⟨g, hu, 2, hk, rfl⟩)
 
-/-- What a gate at `p` of the set of gates `U` reads at `i`, as `Prog.runIn` reads it. -/
 def feed (Cp : Claims.Sampling.Prog) (ref : ℕ → Option Bool) (U : List ℕ) (p i : ℕ) : Option Bool :=
   if i ∈ U then (if i < p then Cp.runIn ref U i else none) else Cp.read ref i
 
@@ -409,9 +366,6 @@ theorem val_xorList {rd : ℕ → Option Bool} {v : Fin C.N → Bool} (ws : List
     (BGate.xor (ws.map (posOf C))).val rd own = some (Verity.Boolean.xorSum ws v) := by
   simp [BGate.val, mapM_posOf ws h, Verity.Boolean.xorSum, foldl_xor]
 
-/-- **Each wire's lowered gates compute its value** in the unit holding it, at any wire values `V` that apply each of
-the unit's gates to its arguments, on committed values `ref` that carry `V` at every position the unit reads from
-outside. -/
 theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N → Bool)
     (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V) (ref : ℕ → Option Bool)
     (hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
@@ -506,8 +460,6 @@ theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N �
         hin 1 (by omega) _ h1 b' (by simp [hop, Verity.Boolean.Op.args, hb']) (by simp [BGate.reads]; exact ⟨b', hb', rfl⟩)
     simp [BGate.val, List.mapM_cons, r0, r1, Verity.Boolean.Op.apply]
 
-/-! ## The lowering is correct, unit by unit -/
-
 theorem posOf_injective : Function.Injective (posOf C) := by
   intro a b h
   have := one_le_gateSize (C.op a)
@@ -516,10 +468,6 @@ theorem posOf_injective : Function.Injective (posOf C) := by
   exact (block_inj (by omega) (by omega) h).1
 
 open FlockSoundness.Discharge.ZkLink in
-/-- **Unit `u`'s gates are correct in `progOf C κ`** at any wire values `V` that apply the unit's gates (`C.eval`'s, or
-a unit's local evaluation's), on committed values that carry `V` at the wires `φ` maps to the positions the unit reads
-from outside or commits, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads is its
-constant in `V`. Its interior positions are read as the unit computes them, so their committed values don't matter. -/
 theorem lowers_of {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
     (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
     (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → V a = b)
@@ -562,10 +510,6 @@ theorem lowers_of {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.
     exact ⟨_, by rw [hself _ hp hb, hφ], hrun g.val g rfl hu⟩
 
 open FlockSoundness.Discharge.ZkLink in
-/-- **`Lowers` for every circuit**: unit `u`'s proof block of `partOf P κ ns`, `unitGates P u`, is
-correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
-or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
-constant (`lowers_of` at `C.eval Xv`). -/
 theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
     (Xv : Fin C.N → Bool)
     (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → C.eval Xv a = b) :
@@ -573,7 +517,6 @@ theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) 
   lowers_of P u φ hφ (C.eval Xv) (fun _ hu => C.eval_op Xv (isInput_of_unit hu)) hκ ref
     fun g hg hc _ => href g hg hc
 
-/-- **The wire at a position** of the lowered program: the wire it is the position of, `d` at any other. -/
 def wireAt (C : Verity.Boolean.Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
   ((List.finRange C.N).find? fun g => posOf C g = i).getD d
 
@@ -584,18 +527,13 @@ theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
   rw [hg', Option.getD_some]
   exact posOf_injective (by simpa using List.find?_some hg')
 
-/-! ## Unit `u`'s slot -/
-
-/-- `partOf P κ ns`'s one class: its strata, the population's proof blocks cut into runs of lengths `ns`. -/
 theorem classes_partOf {n : ℕ} (P : Partition C n) (ns : List ℕ) :
     (partOf P κ ns).classes = [ns.splitLengths ((List.finRange n).map (blockOf P κ))] := rfl
 
-/-- At strata that sum to `n`, the strata hold the population's proof blocks in order. -/
 theorem flatten_strata_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
     (ns.splitLengths ((List.finRange n).map (blockOf P κ))).flatten = (List.finRange n).map (blockOf P κ) :=
   List.flatten_splitLengths _ _ (by simp [hns])
 
-/-- At strata that sum to `n`, the one class's strata have the sizes `ns`. -/
 theorem strataSizes_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
     Claims.Sampling.strataSizes (ns.splitLengths ((List.finRange n).map (blockOf P κ))) = ns :=
   List.map_splitLengths_length _ _ (by simp [hns])
@@ -605,7 +543,6 @@ theorem blocks_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.su
   simp only [Claims.Sampling.Partition.blocks, classes_partOf, List.flatten_cons, List.flatten_nil, List.append_nil]
   exact flatten_strata_partOf P hns
 
-/-- Slot `u` of `partOf P κ ns` is unit `u`'s proof block. -/
 theorem blocks_partOf_getElem? {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) (u : Fin n) :
     (partOf P κ ns).blocks[u.val]? = some (blockOf P κ u) := by
   simp [blocks_partOf P hns]
@@ -620,12 +557,10 @@ theorem mem_insOf {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} :
   · rintro ⟨h1, h2, h3⟩
     exact ⟨⟨by simp [h1, Verity.Boolean.Op.isInput], h2⟩, h3⟩
 
-/-- A wire's owner reads it. -/
 theorem reads_of_owner {n : ℕ} {P : Partition C n} {g : Fin C.N} {u : Fin n} (ho : owner P g = some u) :
     ∃ h, P.unit h = some u ∧ g ∈ (C.op h).args := by
   simpa using List.find?_some ho
 
-/-- An input the constants don't fix lowers to an input, at its wire's position. -/
 theorem gates_posOf_input {a : Fin C.N} (hin : C.op a = .input) (hk : κ a = none) :
     (progOf C κ).gates[posOf C a]? = some .input := by
   have h1 : 0 < gateSize (C.op a) := by rw [hin]; simp [gateSize]
@@ -633,7 +568,6 @@ theorem gates_posOf_input {a : Fin C.N} (hin : C.op a = .input) (hk : κ a = non
   rw [hp, gates_off a h1]
   simp [lower, hin, hk]
 
-/-- **The lowered program reads only earlier gates.** -/
 theorem reads_lt {p : ℕ} {x : BGate} (hx : (progOf C κ).gates[p]? = some x) {i : ℕ} (hi : i ∈ x.reads) : i < p := by
   obtain ⟨g, j, hj, rfl, hxj⟩ := exists_block hx
   rcases reads_lower_args hxj hi with ⟨a, ha, rfl⟩ | ⟨rfl, hi | hi⟩
@@ -641,7 +575,6 @@ theorem reads_lt {p : ℕ} {x : BGate} (hx : (progOf C κ).gates[p]? = some x) {
   · omega
   · omega
 
-/-- Gates `I` that are inputs read nothing, so adding them to `U` moves no gate on or off its boundary. -/
 theorem boundary_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}
     (hI : ∀ i ∈ I, Cp.gates[i]? = some .input) (g : ℕ) : Cp.Boundary (U ++ I) g = Cp.Boundary U g := by
   refine Bool.eq_iff_iff.2 ?_
@@ -652,7 +585,6 @@ theorem boundary_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}
   rw [hI g' hg'I] at hr
   simp [BGate.reads] at hr
 
-/-- Input gates `I` are on every boundary, so adding them to `U` leaves its values alone. -/
 theorem refIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}
     (hI : ∀ i ∈ I, Cp.gates[i]? = some .input) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
     Cp.refIn (U ++ I) val ι = Cp.refIn U val ι := by
@@ -664,8 +596,6 @@ theorem refIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}
   rw [Boundary.boundary_input (u := U) _ (hI i hiI)] at hB
   exact absurd hB (by simp)
 
-/-- In a program that reads only earlier gates, `U` with input gates `I` added computes what `U` does: it reads an
-input of `I` as its committed value, as `U` reads it from outside. -/
 theorem runIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : ∀ i ∈ I, Cp.gates[i]? = some .input)
     (htop : ∀ (p : ℕ) (x : BGate), Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
     ∀ g, Cp.runIn ref (U ++ I) g = Cp.runIn ref U g := by
@@ -688,8 +618,6 @@ theorem runIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : �
           simp [BGate.val]
         · rw [if_neg (show i ∉ U ++ I by simp [hiU, hiI])]
 
-/-- **`U` with input gates `I` added is correct** exactly when `U` is and each input of `I` is opened, in a program
-that reads only earlier gates. -/
 theorem correct_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : ∀ i ∈ I, Cp.gates[i]? = some .input)
     (htop : ∀ (p : ℕ) (x : BGate), Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
     Cp.Correct ref (U ++ I) ↔ Cp.Correct ref U ∧ ∀ i ∈ I, ref i ≠ none := by
@@ -734,23 +662,17 @@ theorem mem_blockOf {n : ℕ} {P : Partition C n} {u : Fin n} {i : ℕ} :
     i ∈ blockOf P κ u ↔ i ∈ unitGates P u ∨ ∃ g ∈ insOf P κ u, posOf C g = i := by
   simp [blockOf]
 
-/-- **The owned inputs leave the unit's values alone**: an input reads nothing and is on every boundary, so slot `u`
-reads and writes what its unit's gates `unitGates P u` do alone. -/
 theorem ref_blockOf {n : ℕ} (P : Partition C n) (u : Fin n) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
     (progOf C κ).refIn (blockOf P κ u) val ι = (progOf C κ).refIn (unitGates P u) val ι := by
   rw [blockOf]
   exact refIn_append_inputs inputs_blockOf val ι
 
-/-- **Slot `u` is correct** exactly when its unit's gates are and each input it owns is opened. -/
 theorem correct_blockOf {n : ℕ} (P : Partition C n) (u : Fin n) (ref : ℕ → Option Bool) :
     (progOf C κ).Correct ref (blockOf P κ u) ↔
       (progOf C κ).Correct ref (unitGates P u) ∧ ∀ a ∈ insOf P κ u, ref (posOf C a) ≠ none := by
   rw [blockOf, correct_append_inputs inputs_blockOf (fun _ _ hx _ hi => reads_lt hx hi) ref]
   simp
 
-/-- **A unit's lowered gates are correct on values that hold its gates** (`lowers` at such values rather than the
-circuit's evaluation): on committed values carrying `V` at the position of each wire the unit computes or reads, where
-`V` holds each of the unit's gates and each constant `κ` fixes that the unit reads. -/
 theorem correct_unitGates_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N → Bool)
     (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
     (hκ : ∀ a b, κ a = some b → (∃ g, P.unit g = some u ∧ a ∈ (C.op g).args) → V a = b) (ref : ℕ → Option Bool)

@@ -4,23 +4,7 @@ public import Proofs.Flock.Bridge.PublicDeployed
 public import Proofs.Flock.Bridge.QsRows
 import Proofs.Flock.Bridge.KSLive
 
-/-!
-# `SampledKSLivePub`'s error by the rows a sample reads
-
-`SampledKSLivePub` bounds `Q_s`, the average number of commit strings a sample reads, by `W = Σ_u |io u|`
-(`Bridge.ioSum`): every committed wire of every unit. At the session's value binding a sample of `k_d` proof blocks
-reads at most `k_d · n_p + 2` commit strings, `n_p = D.unroll.ports.size` the rows of a proof block, unless the live
-sample runs out of bytes (`qs_vbOf_execOS_le`).
-
-* `sampledKSLive_le_deltaPub_of_qs`: `SampledKSLiveV2`'s error is at most `deltaPub` at any `W` with `Q_s ≤ W`:
-  `sampledKSLivePub_of`'s proof with the bound on `Q_s` a hypothesis.
-* `sampledKSLivePub_rows`: `SampledKSLivePub`'s statement with `W = k_d · n_p + 3` in place of `Σ_u |io u|`, under two
-  more hypotheses: the verifier's byte source holds the sample's first read, `2 · k_d · width n + 64 ≤ Lb 0`, and
-  `k_d · n · n_p ≤ 2^64`, so that the samples that run out add at most one commit string to the average.
-* `sampledKSLivePub_rows_deployed`: at the deployment's parameters (`ρ = 1/2`, `k = kDep`, `M = R_w = 2^192`,
-  `t', v ≤ 2^80`) and `k_d · n_p + 3 ≤ 2^40`, the error is the sample's miss plus at most `2^-100`
-  (`deltaPub_le_deployed`).
--/
+/-! `SampledKSLivePub`'s error by the rows a sample reads: at most `k_d · n_p + 2` commit strings. -/
 
 @[expose] public section
 
@@ -33,9 +17,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **`SampledKSLiveV2`'s error is at most `deltaPub` at any bound on `Q_s`.** `SampledKSLivePub`'s setting and
-hypotheses: if the samples read at most `W` commit strings on average, `Q_s = Σ_c |Ω_c|/|Ω| ≤ W`, the error is
-`deltaPub` at that `W`. -/
 theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
     ∀ (n : ℕ) (Reg : Type)
       (I : Inputs) (ht : I.tags.typed = false)
@@ -60,7 +41,6 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
       (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
       (v : ℝ) (_hv : 0 ≤ v)
       (q : Claims.Sampling.Query)
-      -- a bound on the commit strings a sample reads
       (W : ℕ),
       let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
@@ -130,15 +110,6 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
   rw [ENNReal.ofReal_add (add_nonneg hx hy) hz, ENNReal.ofReal_add hx hy]
 
 open Classical in
-/-- **The sampled audit's knowledge soundness, live, with a public error by the rows a sample reads.**
-`SampledKSLivePub`'s setting, hypotheses and named assumptions, with two more hypotheses: the verifier's byte source
-holds the live sample's first read, `2 · k_d · width n + 64 ≤ Lb 0`, and `k_d · n · n_p ≤ 2^64`, `n_p` the rows of a
-proof block (`D.unroll.ports.size`). For every live prover,
-$$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
-  \mathrm{deltaPub}(n, k_d, K_0, k, 2(t' + v), t' + v, t' + v, M, R_w, k_d\,n_p + 3, \rho):$$
-`SampledKSLivePub`'s error with `k_d · n_p + 3` commit strings in place of `Σ_u |io u|`. A sample of `k_d` proof blocks
-reads their rows, the zero's gate and the constant's (`k_d · n_p + 2`), and the samples that run out of bytes, of
-probability at most `k_d · 2⁻⁶⁴`, read at most `n · n_p` more, one more on average. -/
 theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
     ∀ (n : ℕ) (Reg : Type)
       (I : Inputs) (ht : I.tags.typed = false)
@@ -216,12 +187,6 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
     (kd * D.unroll.ports.size + 3) hQs hCR hLink
 
 open Classical in
-/-- **The rows form at the deployment's parameters: the sample's miss plus at most `2^-100`.**
-`sampledKSLivePub_rows` at `ρ = 1/2`, `k = kDep`, `M = R_w = 2^192`, a prover's per-run time `t' ≤ 2^80` and one
-opening's verification `v ≤ 2^80`, for a sample of `k_d` proof blocks of `n_p` rows with `k_d · n_p + 3 ≤ 2^40`, at any
-population `n` with `k_d · n · n_p ≤ 2^64`:
-$$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
-  \binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + 2^{-100}.$$ -/
 theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
     ∀ (n : ℕ) (Reg : Type)
       (I : Inputs) (ht : I.tags.typed = false)
@@ -241,7 +206,6 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
       (_hA3 : Assumptions.UniformRandomBytes Lb src)
       (_hLb : 2 * kd * Flock.Draw.width n + 64 ≤ Lb 0)
       (_hsz : kd * (n * D.unroll.ports.size) ≤ 2 ^ 64)
-      -- at most `2^40` commit strings a sample
       (_hW : kd * D.unroll.ports.size + 3 ≤ 2 ^ 40)
       (hTags : TagsOkZHJ I)
       (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
