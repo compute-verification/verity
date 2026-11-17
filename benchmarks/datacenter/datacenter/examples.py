@@ -28,8 +28,8 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing as 
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
 GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
