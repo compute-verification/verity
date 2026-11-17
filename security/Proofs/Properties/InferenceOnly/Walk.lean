@@ -47,7 +47,7 @@ from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates i
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Walk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Walk
 
 open Flock.Program (Prog Seq Part parsePartsIn)
 
@@ -1042,4 +1042,4 @@ theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : F
     Properties.DescAgrees :=
   descAgrees_of (gatesLocated_of hO hE) hN
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Walk
+end InferenceOnlyVerifier.Properties.SecurityProofs.Walk

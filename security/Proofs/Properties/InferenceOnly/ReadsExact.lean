@@ -136,9 +136,9 @@ one (`RootNodes`, `rootGates_of`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
 
-open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
+open InferenceOnlyVerifier.Desc (Piece Seg PS Tgt)
 
 theorem flatMap_range_length {α : Type} (f : Nat → List α) (L : Nat) (hf : ∀ r, (f r).length = L) :
     ∀ n, ((List.range n).flatMap f).length = n * L
@@ -12943,4 +12943,4 @@ theorem rootNodes_of
   obtain ⟨hRF, hWF⟩ := hF bytes P hd ho hw
   exact ⟨rootW_circuit P memo c hm hc hRF hWF hn hs, hO bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
