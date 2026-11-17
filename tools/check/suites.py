@@ -299,7 +299,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-veri
               "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
-              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
               "verity-network-e2e",
               "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
@@ -2628,7 +2628,7 @@ def _count(r: Result) -> str:
 
 def failing_path(out: Path) -> Path:
     """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
-    have failed while it runs (the verified queue's loop reads it with the run's records)."""
+    have failed while it runs (the verified queue reads it through `research status --also`)."""
     return out.with_name(f"{out.stem}.failed.json")
 
 

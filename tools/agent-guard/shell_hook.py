@@ -80,7 +80,7 @@ there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends i
 `research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
-a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
+a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue runs
 (`compute-verification/verity` and `compute-verification/platform`, or its old name `infra`) and no other: the notes' `main` is every agent's to push.
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)

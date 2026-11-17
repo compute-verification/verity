@@ -206,7 +206,7 @@ CountWitnesses.lean  the six ingress counts' pairs: the honest run has every sta
     false at the verifier that accepts everything (`acceptAll`)
 MonitoringPeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
     false at one incorrect proof block
-Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
+Code.lean       network attestation's program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
 
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
@@ -216,7 +216,7 @@ Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), 
 lake exe cache get                         # in security/: Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                 # in security/, then security/Properties/ and security/Proofs/ (this area's proofs)
 python3 tools/verity/lean/check.py security/   # from the repository root: Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
+# the difftest is network attestation's program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/Certifier/`, the guarantees' modules among them;

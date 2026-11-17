@@ -2,8 +2,8 @@
 Where the land verdicts gate (the loop's `--gate verdict`), a plain candidate's gating task is the quick tier on its own merge,
 and `main`'s whole check follows its landing (`culprit`).
 
-A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` merge per member on top (built by `Queue._merge`,
-as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:
+A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` merge per member on top (built by `Queue._merge`), pushed
+to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:
 
     pass     `main` fast-forwards to it, so its members are on `main` and the candidate above it now sits on `main`
     fail     a failure its base has too (at its base's key, with its failing tests among the base's, or as a read outside its

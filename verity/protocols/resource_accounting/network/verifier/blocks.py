@@ -30,7 +30,7 @@ made of the record (`transfer_rows.check_registration`: the host's uplink, ingre
 verifier's own: 16-bit leaves in ``hm96-sha512/row/v2`` rows unless ``formats`` names another, as a load's f32 scale is
 one 32-bit leaf a row and its token embeddings ``hm96-sha512/row-seg/v1`` rows) under the host's network attester's key
 and session. A load without one, or a registration naming no load, is refused, so a load's root is pinned only from its
-certificate.
+attestation.
 """
 
 from __future__ import annotations
@@ -231,10 +231,10 @@ def check(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> tuple[Load, ...
 
 
 def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations: Iterable[Any], link: str,
-              certifier: tuple[PublicKey, bytes],
+              attester: tuple[PublicKey, bytes],
               formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, TR.TransferHead]:
     """Each load's head, by value, from its registration (`transfer_rows.check_registration`, for the load `check` makes
-    of the record, at the record's program digest) under ``certifier``, the key and session of the network attester on
+    of the record, at the record's program digest) under ``attester``, the key and session of the network attester on
     the host's uplink ``link``. ``formats``: the verifier's own ``(word_bits, schema)`` of a load whose leaves aren't 16
     bits or whose rows aren't ``hm96-sha512/row/v2`` (its program's parameter width, `registered.width`, and its port's
     row format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError) when the record
@@ -251,7 +251,7 @@ def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations:
         regs[v] = r
     if extra := sorted(set(regs) - {x.value for x in loads}):
         raise ValueError(f"registrations of {extra}, which no load names: a root is pinned only for a load the record reads")
-    key, session = certifier
+    key, session = attester
     heads = {}
     for x in loads:
         what = f"load {x.value!r} (on {link})"
@@ -271,8 +271,8 @@ def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations:
 
 
 def pins(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations: Iterable[Any], link: str,
-         certifier: tuple[PublicKey, bytes], formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, str]:
-    """The verifier's pins of the host's loads, ``{parameter: root}``: every load at its certified root (`certified`),
+         attester: tuple[PublicKey, bytes], formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, str]:
+    """The verifier's pins of the host's loads, ``{parameter: root}``: every load at its attested root (`certified`),
     the roots ``registration.check`` holds a pinned value to and the parameters the interface's ``input_count`` counts as
     registered. The scan's state is pinned beside them, at the root of the scan's rows the window reads."""
-    return {v: h.root.hex() for v, h in certified(doc, layouts, registrations, link, certifier, formats).items()}
+    return {v: h.root.hex() for v, h in certified(doc, layouts, registrations, link, attester, formats).items()}

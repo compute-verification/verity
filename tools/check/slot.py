@@ -104,7 +104,7 @@ a machine that lists no such slot the waiter exits NOT_STARTED at once, naming t
 sets it (`research run --env`) for a check that runs pytest, lean-suites, circuit-check, the Rust build or a Lean build or
 audit (its `train_gb`), so a train never runs in a lane slot: in one, every parallel suite gets one test worker, the
 one-process suites one process between them and circuit-check one target at a time, two to four times a train slot's wall
-time, and a build or audit can run out of memory. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
+time, and a build or audit can run out of memory. It is the environment, not an option, so the run's command stays the one `research.merge` reads; CMD doesn't inherit it.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on (`check.py
 --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one machine's line while

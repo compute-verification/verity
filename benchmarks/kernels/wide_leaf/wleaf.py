@@ -181,7 +181,8 @@ def record(out: Path, steps: Sequence[Mapping[str, Any]], host: Mapping[str, Any
                  + ("each step's ten checks pass" if not bad else "; ".join(bad)), ["out/summary.json"])
     if bad:
         return
-    card = "-".join(host["card"].lower().split()).removeprefix("nvidia-")
+    from verity_bench.overhead import CARD_FILES
+    card = kit.card_short(host["card"], directory=CARD_FILES)
     own_s, wide_s = [s["gpu_s"] for s in own], [s["gpu_s"] for s in wide]
     own_b, wide_b = own[0]["proof_bytes"][0], wide[0]["proof_bytes"][0]
     common = {"m": m, "k_log": stage["k_log"], "n": stage["n"], "definition": stage["definition"], "provers": 1,

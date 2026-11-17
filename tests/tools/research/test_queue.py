@@ -326,7 +326,7 @@ def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_b
 
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head, and one missing ref would fail the whole fetch, and every
-    drive tick with it: that PR waits, and the rest of the queue syncs."""
+    tick with it: that PR waits, and the rest of the queue syncs."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, two := world.change({"b.txt": "two\n"}))
     _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
@@ -603,7 +603,7 @@ def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """A sync writes no conflict handoff into the notes clone of the VM it runs on, where it would wait for that VM's next notes
-    push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    push; the loop tells each conflict in the merge thread."""
     monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
@@ -1975,7 +1975,7 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    """One listing of the store's remote per open PR, in turn, would take seconds of every tick; and one GET at a time
     took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
     `PREFETCH_JOBS` at once."""
     from research.queue import PREFETCH_JOBS, StoreLabels
@@ -2431,7 +2431,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
-    VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
+    VM's `research queue eject`. Off drive an eject only withdraws the mark."""
     import research.landing as L
     import research.queue as Qm
 
@@ -2441,9 +2441,6 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
-    for verb in ("sync",):
-        assert research_main(["queue", verb, *base]) == 1
-        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
     def refs() -> str:
         return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
 
@@ -4455,6 +4452,21 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert not capsys.readouterr().err
 
 
+def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_map_read_at_the_move(world):
+    """A move may add the map it runs by, which its base lacks (restack.py's `own_map`): `lacked_moves` reads that map at the
+    move, so a head below it whose own change names none of its retired names is taken, and one that names one is left out
+    for that name, not for a map it couldn't read."""
+    base = _move_main(world, {"base.txt": "b\n"})
+    files = {"c.txt": None, "moved/c.txt": "c\n", "tools/move/own_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'}
+    tree = _git(world.dev, "rev-parse", f"{world.change(files, base=base)}^{{tree}}")
+    move = _git(world.dev, "commit-tree", tree, "-p", base, "-m", "Move\n\nLayout-move: tools/move/own_map.toml")
+    _git(world.dev, "push", "-q", "origin", f"{move}:refs/heads/main")
+    clean = world.change({"b.txt": "1\n"}, base=base)
+    names = world.change({"e.txt": "reads c.txt\n"}, base=base)
+    assert Q.lacked_moves(world.origin, move, clean) == []
+    assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
@@ -5121,9 +5133,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, open, edit only, not eject"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, open, edit only, not ready"),
-                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only"),
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open, edit only, not eject"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open, edit only, not ready"),
+                      (["queue", "status", "--issue", "X-1"], "--issue is for open, link only, not status"),
                       (["queue", "cross", "--title", "x"], "--title is for open, edit only, not cross"),
                       (["queue", "stats", "--mark"], "--mark is for ready only, not stats")):
         with pytest.raises(SystemExit) as e:
@@ -5250,7 +5262,7 @@ def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
-    """A review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry is a
+    """A review tick asks `handle` of every member of a candidate, and each read of main's registry is a
     `git show` of ~70 ms in drive's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
     from research import queue as Q
 
@@ -5573,18 +5585,7 @@ def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order
     the fix."""
     monkeypatch.chdir(world.dev)
     with pytest.raises(SystemExit) as e:
-        Q.main(["sync", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+        Q.main(["status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
                 "--store", str(world.tmp / "store"), "--first", "7,8"])
     assert e.value.code == 2 and not (world.tmp / "q").exists()
     assert Q.FIRST_RETIRED in capsys.readouterr().err
-
-
-def test_sync_takes_the_priority_file_it_is_given(world, monkeypatch):
-    seen = []
-    monkeypatch.setattr(Q.Queue, "sync", lambda self, dry_run=False: seen.append((self.priority_file, dry_run)))
-    monkeypatch.chdir(world.dev)
-    path = world.tmp / "priority"
-    assert Q.main(["sync", "--dry-run", "--priority-file", str(path), "--workdir", str(world.tmp / "q" / "verity"), "--remote",
-                   str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store")]) == 0
-    assert [(str(p), d) for p, d in seen] == [(str(path), True)]
-
