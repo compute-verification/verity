@@ -534,6 +534,36 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
+def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+    rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
+    first = got["plan"][0]["entries"][0]
+    assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
+    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
+    runner = (ROOT / T.RUNNER).read_text()
+    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
+    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
+    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
+
+
+#: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
+NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO", "SERVE_ROOT",
+                 "ROW", "ROW_ID")
+
+
+def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
+    settings = {k: str(tmp_path / "node" / k.lower()) for k in NODE_SETTINGS}
+    for k, v in settings.items():
+        monkeypatch.setenv(k, v)
+    names = "|".join(NODE_SETTINGS)
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\n/usr/bin/env | grep -E '
+                                                                    f"'^({names})=' | sort > \"$OUT/node.txt\"\n"))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
+                     str(state)], REG)
+    assert rc == 0, capsys.readouterr().err
+    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
+
+
 def test_serve_openais_flags_are_every_listed_pieces():
     cfg = R.load(CONFIG, REG)
     assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == T.ID_FORM == "--protocol ids --id-payload 503"
