@@ -294,7 +294,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
 | `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
-| `multi_unit/` | an FP8 GEMM's proof blocks staged as Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
 | `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
 | `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token, the ms per block and that figure's source, and the prover GPUs per serving GPU with every block proved or at a sampling plan, from the store's labelled records | maintained |
@@ -306,7 +305,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
-| `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
 
 ### Checks
 

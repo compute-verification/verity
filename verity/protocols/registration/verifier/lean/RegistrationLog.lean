@@ -22,8 +22,8 @@ names the whole log. An entry is one of three kinds, each under its own versione
   sheets, locations and links it adds to the Site (`Core.Site`), its JSON, digest and check the Site's.
 * **information** (`verity/registration/information/v1`): the items it registers, each once in the log (`Item.key`):
   θ, each registered value (weights, initial state, tables) by its committed root, and the registered compiler `B` that compiles
-  advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
-  bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
+  advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one execution phase's reported
+  advice, in bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
   parameters, and the proof system, are that protocol's public verifier parameters, not registration. An item may also
   name a run's configuration by its SHA-512 (`configuration`, its `digest`); the log has no coin and no run to hold
   it before, so the check refuses it (`configuration-unordered`).
@@ -77,8 +77,8 @@ structure Theta where
   checkpoint : Option String := none
   deriving DecidableEq, Repr
 
-/-- The registered compiler `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
-advice, in bits. -/
+/-- The registered compiler `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one execution
+phase's reported advice, in bits. -/
 structure Builder where
   digest : String
   advice : String
