@@ -1,4 +1,4 @@
-"""The committed configurations' hashes (`tools/verity/cli/verity_cli/configurations.toml`): a line for each demo, each `.toml` file of
+"""The committed configurations' hashes (`tools/verity/cli/verity_cli/configurations.toml`): a line for each application, each `.toml` file of
 `applications/` (the configuration `verity demo NAME` runs), and none for another file, each the hash `verity config hash`
 prints of it."""
 from __future__ import annotations
