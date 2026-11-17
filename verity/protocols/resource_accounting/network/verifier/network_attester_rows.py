@@ -81,7 +81,7 @@ so a statement's positions are all it can vary, and Lean's registered reads hold
 
 **The wiring is opened to the verifier for now** (a named gap): it gives away each
 connection's first row and cells. q is the cells' stream field, the network attester's ordinal: the k-th connection to
-reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice
+reach it, from 0, is q = k + 1, as the active network attester's `Requests` streams it and the I/O tie's map puts advice
 request k (`order[k] + 1`).
 """
 

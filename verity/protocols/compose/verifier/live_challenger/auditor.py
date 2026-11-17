@@ -73,15 +73,15 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
-  such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
+  such line is refused. The network attester on this host owns that link and counts it (`coin_link.py`,
   `verity.protocols.resource_accounting.network.attester.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
   exempts only the coin openings that open against the session's committed coin root, counts everything else, and
-  writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
-  prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
-  premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
+  writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the network attester to the server crosses the
+  prover's NIC, so it is the network attester's counted ingress, not a path this side trusts. The challenger side rests on the
+  premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the network attester only on
   this auditor device) and `OneClock` (one clock for both, this host's), named in
   `verity/protocols/proofs/spot/verifier/README.md`.
 
@@ -246,7 +246,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     `--watermark` and `--height` are a scan rehearsal's, read and bounded by the same code (`parse_network_attester`). It takes
     none of a rehearsal's traffic (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, `--temperature`,
     `--top-p`). The schedule is always the scan's, at the request's tick and class (`scan_schedule`), in the id egress
-    form: the one the certifier's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
+    form: the one network attestation's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
     `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in execution phases,
     1 to the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
   - *Start.* The gate refuses the request while a rehearsal or another session runs, a key whose height can't sign
@@ -505,7 +505,7 @@ NETWORK_CERTIFIER_PUBLIC = ("deployment.json", "groups.json")
 DEPLOYMENT_PUBLIC = ("key", "session", "link", "params", "digest", "slack_ms", "start", "origin_unix", "windows",
                      "run_id")
 #: a refused store's word, all that `out/` and the end say of why (`load_relay.REFUSALS`, word for word): the
-#: certifier's own nine, of its store, its link's source and its signer, and `sink` for every way the developer's sink
+#: network attester's own nine, of its store, its link's source and its signer, and `sink` for every way the developer's sink
 #: failed, since which way is the developer's to choose. `other` stands for anything that is none of them. The
 #: sentence is the witness's (`check.json`'s problems, `rehearse.log`)
 LOAD_REFUSED = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
@@ -588,7 +588,7 @@ REFUSED_LINE = ("the line says the signer refused its execution phase, under a c
 #: (`connection_rows.check_registration`)
 ROWS_DIRECTION = "egress"
 #: what a line of `rows.jsonl` holds in place of a registration where its execution phase ends in the network
-#: certifier's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
+#: network attester's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
 #: calls public, under this key (`connection_rows_run.NO_HEAD`)
 ROWS_NO_HEAD = "no_head"
 #: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
@@ -2531,7 +2531,7 @@ def _wait(proc: subprocess.Popen, seconds: float) -> int:
         return proc.wait()
 
 
-# --- the certifier rehearsal (auditor) ----------------------------------------------------------------------------------------
+# --- the network attester rehearsal (auditor) ----------------------------------------------------------------------------------------
 
 def free_local_port() -> int:
     import socket
@@ -3064,7 +3064,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     return _end(d, rc, word, why, outcome, pinned=pinned)
 
 
-#: how a certifier run's end says it ended (`ended`), in one word: its command exited 0 (`ended`) or didn't (`exited`,
+#: how a network attester run's end says it ended (`ended`), in one word: its command exited 0 (`ended`) or didn't (`exited`,
 #: the exit beside it in `rc`), it was stopped at the request's minutes (`stopped`), a tunnel to the peer didn't come
 #: up or closed first (`tunnel`), a line of a certificates' or registrations' file or a store's record isn't ruled
 #: (`unruled`: `CERTIFICATE_LINE`, `ROW_LINE`, `STORE_PUBLIC`), or its check accepted and counted another number of

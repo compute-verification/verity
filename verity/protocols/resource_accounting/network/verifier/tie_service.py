@@ -168,7 +168,7 @@ def framing(B: int, n_max: int) -> tuple[int, ...]:
 class AdvisedProfile:
     """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
     whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
-    admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
+    admits (`framing`); and `own`, the ingress network attester's own frames at the head of every window's first bucket: 1
     with a salt frame there, else 0. The network attester's ingress has none, so `IngressTie.tie` refuses a
     profile with one."""
 

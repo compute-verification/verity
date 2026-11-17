@@ -50,9 +50,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
 - ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
-  core, `servetax_plugin.ReleaseGate`), the client standing in for the certifier, which numbers them in send order;
+  core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
 - ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.tick_plugin`), τ_sat and
-  τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the certifier (`corpus.StandIn`);
+  τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
 - ``kv``: the paged KV cache committed at window edges (every ``--kv-window-s``): the whole pool, between two steps, in
@@ -78,13 +78,13 @@ The arms, each one engine configuration; each adds its change to the arm it name
   nowhere else: a job that serves the two-stage audit serves this arm.
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
-  and like every tick arm but the next the corpus's client serves it, standing in for the certifier.
+  and like every tick arm but the next the corpus's client serves it, standing in for the network attester.
 - ``tick-certifier``: ``tick`` with the network attester itself in front, and vLLM's client behind it. The engine
-  admits on the certified tick from the certifier's own releases and watermark, and every request and every answer
-  crosses the certifier's cells. It is served by two commands (``--side``, `certified`): the server's on the node,
-  the engine and the id front before it (`certified_server`), and the client's where the certifier runs, a host of
-  the auditor's and never the node: the certifier, the shim that turns vLLM's client's completions into the
-  certifier's id requests (`cell_shim`) and the client's passes (`certified_client`). The certifier's schedule
+  admits on the certified tick from the network attester's own releases and watermark, and every request and every answer
+  crosses the network attester's cells. It is served by two commands (``--side``, `certified`): the server's on the node,
+  the engine and the id front before it (`certified_server`), and the client's where the network attester runs, a host of
+  the auditor's and never the node: the network attester, the shim that turns vLLM's client's completions into the
+  network attester's id requests (`cell_shim`) and the client's passes (`certified_client`). The network attester's schedule
   (`CELLS`) paces every answer: one id a connection each bucket after a fixed delay, so the tokens a second this
   arm serves are at most its lanes' (`ceiling`) whatever its engine does, and its cost over stock is the
   schedule's and its engine's together, not GPU time a token alone (`cost_text` says so beside it). An id
@@ -287,6 +287,8 @@ ARMS = {
     "bi-eager": Arm("eager", "eager with vLLM's batch-invariant kernels: the committing path's execution (TargetProfile's "
                     "bi-eager), nothing committed", ("--enforce-eager",), env=BATCH_INVARIANT),
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
+    "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
+                      plugin=("record", "ids")),
     "release-order": Arm("record", "+ admission in the certifier's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
@@ -404,6 +406,9 @@ class Model:
     target_parts: tuple[Part, ...] = ()
     #: the id its serving cost is recorded under in a run's result.json (`result_of`)
     metric: str | None = None
+    #: whether the number waits for the row on a repeated prefix (`prefix_row`): False for a model whose context the
+    #: prefix load fills whole, whose number is its loads' alone
+    prefix_row: bool = True
     #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
     check: str | None = None
     #: what the command of vLLM's recipe for the model (recipes.vllm.ai) adds to ``args``, for the cards this file
@@ -455,6 +460,8 @@ MODELS = {
                      ("--dtype", "bfloat16"), (2.0, 0.08)),
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
                        ("--dtype", "bfloat16"), (2.0, 0.08)),
+    "llama32-1b": Model("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "llama-3.2-1b",
+                        ("--dtype", "bfloat16"), (2.0, 0.08), metric="vllm/serving-cost-glm53", prefix_row=False),
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
@@ -1833,7 +1840,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
 # ------------------------------------------------------------------------------ an arm behind the network attester
 
 #: the two commands an arm behind the network attester (`Arm.certifier`) is served by (``--side``): the server's on
-#: the node, and the client's where the certifier runs, a host of the auditor's that reaches the node's id front
+#: the node, and the client's where the network attester runs, a host of the auditor's that reaches the node's id front
 SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
 FRONT_PORT = 18746
@@ -1856,7 +1863,7 @@ CERTIFIER_END_S = 600.0
 
 def certified_loads(arm: str, text: str | None) -> dict[str, tuple[int, ...]]:
     """``--loads`` for an arm behind the network attester: loads of a pinned dataset file's own prompts alone
-    (`certifiable`). The shim to the certifier (`cell_shim`) carries completions of a text and nothing else, and
+    (`certifiable`). The shim to the network attester (`cell_shim`) carries completions of a text and nothing else, and
     vLLM's client fits a synthetic dataset's prompts to the server's ``/tokenize`` first, so such a load's prompts
     would not be the ones stock serves; a sessions load's are token ids, a client a user."""
     if not text:
@@ -1878,9 +1885,9 @@ def certifiable(load: Load) -> bool:
 
 def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
     """The network attester's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
-    queue by default the loads' highest rung. Refused where it is no schedule of the certifier's in the id form
+    queue by default the loads' highest rung. Refused where it is no schedule of the network attester's in the id form
     (`certifier_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
-    each waits in the queue for the next bucket, and the certifier refuses a connection past it and withholds the
+    each waits in the queue for the next bucket, and the network attester refuses a connection past it and withholds the
     window. Both sides of an arm take the same one: the server's side reads its bucket and its cell from it."""
     top = max(c for rungs in loads.values() for c in rungs)
     cells = {**CELLS, "lanes": top, "queue": top}
@@ -2000,8 +2007,8 @@ def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
 
 def certified(a: argparse.Namespace) -> int:
     """Serve one side of an arm behind the network attester (`Arm.certifier`): ``--side server`` on the node
-    (`certified_server`) or ``--side client`` where the certifier runs (`certified_client`), both given the same
-    ``--loads`` and ``--cells``. Such an arm has no other client than vLLM's behind the certifier's shim."""
+    (`certified_server`) or ``--side client`` where the network attester runs (`certified_client`), both given the same
+    ``--loads`` and ``--cells``. Such an arm has no other client than vLLM's behind the network attester's shim."""
     if a.client != BENCH:
         raise SystemExit(f"arm {a.arm} is sent by vLLM's client, through the network certifier: --client {BENCH}")
     if a.side not in (SERVER, CLIENT):
@@ -2019,8 +2026,8 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
                      clock: Callable[[], float] = time.monotonic) -> int:
     """The server's side of an arm behind the network attester, on the node: the arm's engine on the certified tick
     (`server_argv`, `server_env`; the tick's bucket is the schedule's) and, once it answers, the id front before it on
-    loopback port ``--front`` (`front_argv`), both held until the certifier's run has ended (`runs_ended`) or
-    ``--stop-at`` (`hold_ends`). It sends nothing: the requests come from the client's side, through the certifier.
+    loopback port ``--front`` (`front_argv`), both held until the network attester's run has ended (`runs_ended`) or
+    ``--stop-at`` (`hold_ends`). It sends nothing: the requests come from the client's side, through the network attester.
     DIR/server.json is its record: its commands, the tick, the schedule, why it stopped, the engine's counters then
     and each time the engine emptied its prefix cache (`servetax_plugin.IdleReset`)."""
     termed: list[int] = []
@@ -2113,15 +2120,15 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
                      popen: Callable[..., subprocess.Popen] = subprocess.Popen,
                      sleep: Callable[[float], None] = time.sleep, now: Callable[[], float] = time.time,
                      clock: Callable[[], float] = time.monotonic) -> int:
-    """The client's side of an arm behind the network attester, where the certifier runs: a host of the auditor's
+    """The client's side of an arm behind the network attester, where the network attester runs: a host of the auditor's
     that reaches the node's id front on loopback port ``--front`` (a forward's end), never the node. It starts the
     network attester before that port for ``--certifier-windows`` windows (`certifier_argv`; its key made in a
     directory outside the run's and removed with it) and the shim to it (`shim_argv`), and sends each pass by vLLM's
     client at the shim (`drive_bench`) as `serve` sends an arm's: a warm-up, then each pass REPS times, the engine's
     counters read through the front around each. Each pass first waits `IDLE_S`, the engine holding nothing, so that
-    the engine empties its prefix cache for it (`servetax_plugin.IdleReset`). The certifier runs the windows fixed
+    the engine empties its prefix cache for it (`servetax_plugin.IdleReset`). The network attester runs the windows fixed
     when it starts and cuts every connection at their end, so no pass starts that can't be expected to end before
-    (`stop_before`), and the side then waits for the certifier's end. Then the certifier's offline check reads the
+    (`stop_before`), and the side then waits for the network attester's end. Then network attestation's offline check reads the
     run with the shim's record of each connection (DIR/certifier/client.json), and DIR/meta.json, an arm's, holds
     what it found (`certifier_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
     short of its length."""
@@ -3327,7 +3334,8 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     ``run`` are those of the job that served the number's load. The number's loads repeat no prefix (``label``), so it
     is never given without the row on the load that does (``prefix``, `prefix_row`), which comes directly after the
     console's keys: where that load has not run, ``value`` and ``ci95`` are None, each load's own cost is still under
-    ``loads``, and the number does not meet its target. The row is given without the number: a job of that load alone
+    ``loads``, and the number does not meet its target, but for a model whose context that load fills whole
+    (`Model.prefix_row`), whose number is its loads' alone. The row is given without the number: a job of that load alone
     has it, with no load, no arms' table and no value."""
     by = joined(arms)
     for name in (reference, arm):
@@ -3354,7 +3362,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     not_run = [n for n in NUMBER if n not in {c["load"] for c in per}]
     verdicts = {c["verdict"] for c in per}
     overall = (None if target is None else NOT_COMPARABLE if not comparable else "misses" if "misses" in verdicts else
-               "meets" if verdicts == {"meets"} and not not_run and row else "cannot tell")
+               "meets" if verdicts == {"meets"} and not not_run and (row or not model.prefix_row) else "cannot tell")
 
     def above(name: str) -> str:
         p = ARMS[name].parent if name in ARMS else None
@@ -3392,7 +3400,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         (a, b) = (ours["of"][name], ref["of"][name])
         return {"commit": a["commit"], "run": a["run"], "reference_commit": b["commit"], "reference_run": b["run"]}
 
-    at, given = job(load or PREFIX), bool(row and worst)
+    at, given = job(load or PREFIX), bool(worst and (row or not model.prefix_row))
     return {"value": _pct(worst["value"]) if given else None, "unit": UNIT, "commit": at["commit"],
             "run": at["run"], "prefix": row and {**row, **job(PREFIX)}, "label": NO_REPEAT,
             "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
@@ -3408,7 +3416,8 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
                        "rung": c["rung"], "saturated": c["saturated"], "peak": c["peak"], "reference": c["reference"],
                        "arm": c["arm"], "within": within(c),
                        **job(c["load"])} for c in per],
-            "commitment": commitment(ours), "certifier": ours.get("certifier"), "arms": rows, "no_arm": list(NO_ARM)}
+            "commitment": commitment(ours), "certifier": ours.get("certifier"), "arms": rows, "no_arm": list(NO_ARM),
+            "prefix_row": model.prefix_row, "checkpoint": f"{model.repo}@{model.revision}"}
 
 
 def _c(c: dict | None) -> str:
@@ -3539,7 +3548,7 @@ def prefix_text(row: dict) -> list[str]:
 def certifier_text(arm: str, k: dict | None) -> list[str]:
     """What the cost of an arm behind the network attester is of, as text, from its record (`certified_client`,
     `certifier_record`): the schedule's ceiling on its tokens a second, which makes its cost the schedule's and its
-    engine's together, and what the certifier's offline check found of its run. Nothing for another arm."""
+    engine's together, and what network attestation's offline check found of its run. Nothing for another arm."""
     if not k:
         return []
     c = k["cells"]
@@ -3564,7 +3573,7 @@ def cost_text(r: dict) -> str:
     on and the target's part for it, and the changes no arm turns on."""
     by = {c["load"]: c for c in r["loads"]}
     row = r["prefix"]
-    if row is None:
+    if row is None and r.get("prefix_row", True):
         n = f"not given without the row on a repeated prefix under it, and load {PREFIX} has not run"
     elif not by:
         n = "none of its loads has run"
@@ -3669,8 +3678,10 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     there.
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
     its target, what the target rests on, the target's parts with the changes the arm left off, the arm's changes no
-    part counts, its verdict (one of `verdict`'s three, or `NOT_COMPARABLE`) and each load's cost beside it; it names
-    the loads as its inputs. Where a load has not run there is no such entry: one load's cost is not the number. The
+    part counts, its verdict (one of `verdict`'s three, or `NOT_COMPARABLE`), each load's cost beside it, and the
+    ``model`` and ``hardware`` it was measured on (a metric's points are of every model and card) and, where given,
+    its ``member`` (`member`), which tells its line from another model's, card's or arm's; it names the loads
+    as its inputs. Where a load has not run there is no such entry: one load's cost is not the number. The
     row on a repeated prefix is a measurement under its load's name, with no target and no verdict, whose ``value``
     is its cost in tokens a second with one request in flight, and None where its requests are sent as they arrive:
     its figures are then their readings (``tokens``, ``ttft``, ``itl_p99``), ``cost`` names the ones that are its
@@ -3703,15 +3714,37 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     if row:
         out.append({"name": row["load"], "unit": r["unit"], "target": None, "target_basis": None, "better": r["better"],
                     "verdict": None, "what": row["what"], **under})
-    if r["id"] and not r["not_run"] and row:
+    if r["id"] and not r["not_run"] and (row or not r.get("prefix_row", True)):
         beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "rung", "saturated", "commit", "run")}
                   for c in r["loads"]]
         out.append(entry(r["id"], r, label=r["label"], prefix=under, load=r["load"], loads=beside,
                          inputs=[c["load"] for c in r["loads"]], target_parts=r["target_parts"],
-                         not_in_target=r["not_in_target"]))
+                         not_in_target=r["not_in_target"], model=r.get("checkpoint"), hardware=r.get("hardware"),
+                         **({"member": r["member"]} if r.get("member") else {})))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
             "loads": [*(c["load"] for c in r["loads"]), *([row["load"]] if row else [])], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out
+
+
+def card() -> str:
+    """The kind of card nvidia-smi names on this host (the kit's host stamp)."""
+    kit()
+    from verity_bench import kit as bench
+
+    return bench.host_stamp()["card"]
+
+
+def hardware(model: Model) -> str:
+    """A point's ``hardware``: how many cards the model is served on, of the kind nvidia-smi names on this host."""
+    return f"{tp_size(model)} × {card()}"
+
+
+def member(model: Model, arm: str, reference: str | None = None) -> str:
+    """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
+    served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
+    (``llama-3.2-1b-h200-record-over-compiled``)."""
+    kind = card().removeprefix("NVIDIA ").lower().replace(" ", "-")
+    return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 
 def write_result(r: dict, out: Path) -> None:
@@ -3719,7 +3752,9 @@ def write_result(r: dict, out: Path) -> None:
     run_dir, run_id = SHARED.RESEARCH_RUN_DIR, SHARED.RESEARCH_RUN_ID
     if not run_dir or not run_id:
         raise SystemExit("cost --result writes the run's result.json: run it under research run")
-    ok, detail, what, measurements = result_of(r)
+    model = next(m for m in MODELS.values() if m.served == r["model"])
+    ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
+                                                    "member": member(model, r["arm"], r["reference"])})
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 

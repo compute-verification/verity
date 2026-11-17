@@ -11,7 +11,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import run
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
@@ -44,7 +44,7 @@ def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.l
     tree = mc.CoinTree.draw(b"source", sid, blocks, k, key=KEY,
                             salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(k)])
     clock = Clock(1_000_000)
-    c = mc.MemoryChallenger(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
+    c = mc.MemoryAttester(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
                             binding=binding, clock=clock)
 
     def answer(i: int) -> bytes:
@@ -112,7 +112,7 @@ def test_an_audit_has_at_most_one_session_the_check_accepts():
     ids, which the check refuses."""
     log = ts.session_log()
     assert outcome(s=session(log=log)) is None
-    with pytest.raises(mc.SessionLogError, match="the memory challenger runs one session under an id"):
+    with pytest.raises(mc.SessionLogError, match="the memory attester runs one session under an id"):
         session(log=log)
     assert outcome(s=session(sid=OTHER_SID, log=log)) == "the session does not run under the id the auditor designated"
 
@@ -128,7 +128,7 @@ def test_the_verdict_refuses_last():
 
 
 def test_the_trusted_keys_are_the_verifiers_never_the_records():
-    """A server that runs a memory challenger of its own signs an honest-looking session under its own key; the run's
+    """A server that runs a memory attester of its own signs an honest-looking session under its own key; the run's
     record carries no keys, and the verifier's list holds only the device's, so the check refuses the session."""
     own = session(signer=ts.TestSigner(b"the server's own challenger", height=1))
     assert own.signed.public_key not in TRUSTED
@@ -147,7 +147,7 @@ def test_the_formats_round_trip():
 
 @pytest.mark.slow
 def test_check_is_the_deployed_point_under_s1s_lms():
-    """`check` is `check_at(DEPLOYED, memory_challenger.SCHEMES)`: the point is `2^19` labels of 2,056 bytes in 8 segments,
+    """`check` is `check_at(DEPLOYED, memory_attester.SCHEMES)`: the point is `2^19` labels of 2,056 bytes in 8 segments,
     `k = 105` and `Δ + RTT = 854,000 ns`; a run at it that a test signer signed is accepted under the test signers' schemes
     and refused by `check` for its scheme alone, and a reduced run is refused by `check` for its label count."""
     d = run.DEPLOYED
@@ -164,7 +164,7 @@ def test_check_is_the_deployed_point_under_s1s_lms():
     root = VerifierKey.from_row_digests(q, SALT, rows).root
     setup = run.Setup(q.blocks, SETUP.commitment, root, SALT)
     signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock(1_000_000)
-    c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
+    c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
                             clock=clock)
 
     def answer(i: int) -> bytes:
