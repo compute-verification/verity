@@ -443,7 +443,7 @@ def test_library_traces_the_config_alone_and_calls_no_store(tree, reg_path, tmp_
     path = write_config(tree / "a.toml")
     called = []
     monkeypatch.setattr(library, "main", lambda argv: called.append(argv) or 0)
-    monkeypatch.setattr(cmd.SHARED, "OUT", None, raising=False)
+    monkeypatch.delenv("OUT", raising=False)
     r = Research()
     assert command(r, "a", "--starts", str(reg_path), "--library") == 0
     assert command(r, "a", "--starts", str(reg_path), "--library", "--root", str(tmp_path / "out")) == 0
