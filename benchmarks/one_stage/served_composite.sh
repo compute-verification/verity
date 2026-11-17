@@ -53,7 +53,8 @@
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0.
 # The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
 # product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
-# --configuration: a memory case listing a key that committed configuration doesn't pin is refused (exit 67), and a
+# --configuration: a memory case listing a key that committed configuration doesn't pin is the run's key, refused
+# (exit 67) under VERITY_HOLD_PLACEMENT=1 and taken with it unset, and a
 # composite whose memory cases list keys is a development check (key_pin: run) either way. No hand-off carries it.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}

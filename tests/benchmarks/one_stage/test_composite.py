@@ -145,9 +145,11 @@ def keyed(tmp_path: Path, id: str, key: bytes, configuration: list[str]) -> tupl
 
 
 @pytest.mark.parametrize("id", sorted(C.TRUSTING))
-def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsys, id):
-    """The case is written in the developer's private directory, so its list of trusted keys is the developer's: a key
-    the configuration doesn't pin is refused by name, before the check runs, and nothing is composed."""
+def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsys, monkeypatch, id):
+    """The case is written in the developer's private directory, so its list of trusted keys is the developer's: under
+    ``VERITY_HOLD_PLACEMENT=1`` a key the configuration doesn't pin is refused by name, before the check runs, and
+    nothing is composed."""
+    monkeypatch.setenv(C.HOLD_PLACEMENT, "1")
     rc, record = keyed(tmp_path, id, b"\x07" * 64, ["--configuration", COMMITTED_HASH])
     party, protocol = C.TRUSTING[id]
     assert rc == C.UNPINNED
@@ -156,6 +158,47 @@ def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsy
         f"key's sessions count: sign them under the key configurations/c.toml pins for {party}'s {protocol} sessions, or "
         "compose with no --configuration, a development check (key_pin: run)"]
     assert not record.exists() and not (tmp_path / "private").exists()
+
+
+@pytest.mark.parametrize("hold", [None, "", "0"])
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_without_the_hold_a_key_the_configuration_does_not_pin_is_taken_as_the_run_s(tmp_path, capsys, monkeypatch, id,
+                                                                                     hold):
+    """With ``VERITY_HOLD_PLACEMENT`` other than ``1`` a run's key under a committed configuration is taken: the Lean
+    runs and its accept stands, and the composite is ``key_pin: run`` and a development check whose line says the key
+    is the run's, not the configuration's pin."""
+    monkeypatch.delenv(C.HOLD_PLACEMENT, raising=False)
+    if hold is not None:
+        monkeypatch.setenv(C.HOLD_PLACEMENT, hold)
+    rc, record = keyed(tmp_path, id, b"\x07" * 64, ["--configuration", COMMITTED_HASH])
+    doc = json.loads(record.read_text())
+    why = f"{C.RUN_KEY.format(ids=id, path='configurations/c.toml', hash=COMMITTED_HASH)}; {C.UNVOUCHED}"
+    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], doc["key_pin_why"], doc["development"]) == (
+        0, "accept", "run", why, C.run_keys(why))
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert lines[:2] == [f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
+    assert lines[1].startswith(f"KEY_PIN run: {id}: each lists a key configurations/c.toml (hash {COMMITTED_HASH}) pins "
+                               "for no session of its party and protocol, so that key is the run's, not the "
+                               "configuration's pin; ")
+    assert "REFUSED" not in capsys.readouterr().out
+
+
+def test_without_the_hold_a_run_s_key_never_reads_as_the_configuration_s_pin(tmp_path, capsys, monkeypatch):
+    """A run's key taken under a committed configuration, beside a pinned one, is written nowhere as
+    ``key_pin: configuration``."""
+    monkeypatch.delenv(C.HOLD_PLACEMENT, raising=False)
+    device, run = b"\x05" * 64, b"\x07" * 64
+    tree = pinned_tree(tmp_path / "tree", [(*pin, device) for pin in C.TRUSTING.values()])
+    cases = [put(tmp_path / "cases" / id.replace("/", "_"), id, {"trusted": [k.hex()]}, b"\x01", b"{}", b"\x01" * 64,
+                 verdict="accept") for id, k in (("verity/pous/p2/v4/run", run), ("verity/wipe/v0", device))]
+    rc = C.main(["onsite", *(x for c in cases for x in ("--cases", str(c))), *outs(tmp_path, tree=tree),
+                 "--configuration", COMMITTED_HASH,
+                 "--exe", lean(tmp_path, {"protocol": "verity/onsite/v0", "verdict": "accept"}, 0)])
+    doc = json.loads((tmp_path / "public" / "composite.json").read_text())
+    assert (rc, doc["key_pin"]) == (0, "run") and doc["key_pin_why"].startswith("verity/pous/p2/v4/run: each lists a key ")
+    written = [f.read_bytes() for d in ("public", "private") for f in (tmp_path / d).rglob("*") if f.is_file()]
+    for text in (*written, capsys.readouterr().out.encode()):
+        assert b'"key_pin":"configuration"' not in text.replace(b" ", b"") and b"KEY_PIN configuration" not in text
 
 
 @pytest.mark.parametrize("id", sorted(C.TRUSTING))
