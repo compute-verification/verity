@@ -24,11 +24,11 @@ from verity.circuits import evaluation as E
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import versions as BB
-from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 
 from tests.pipeline import test_serving_rows_splits as SPL
+from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.program_view import spec_statics

@@ -1073,7 +1073,7 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
     assert of.stop_rule == RULE and plain.stop_rule is None and of.release is None
 
 
-def test_a_request_the_certifier_did_not_release_is_in_no_stop_class(tmp_path):
+def test_a_request_the_network_attester_did_not_release_is_in_no_stop_class(tmp_path):
     """A serve that knows its requests' releases (``release``): each span keeps its own, (run, N), in the prover's
     index, and a request without one is filed without a stop block, however it ended. A serve that knows none files by
     the rule alone, and its spans' index entries name no release."""

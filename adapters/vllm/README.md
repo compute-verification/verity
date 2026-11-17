@@ -146,20 +146,23 @@ verity_vllm/
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
-tests/               the suite verity-vllm, a directory for each subpackage; lint/ holds the ratchets (lint/README.md)
 tools/               scripts run by path: advice_compile.py, ratchet_gate.py, suite_parts.py
 ~~~
 
+The suite, `verity-vllm`, is under the root's tests: `tests/adapters/vllm/tests/`, a directory for each subpackage, with the
+ratchets in `lint/` (`tests/adapters/vllm/tests/lint/README.md`).
+
 Imports point down a fixed layer order, with `pipeline` at the top and `config` at the bottom:
-`tests/lint/test_p09_layering.py` states the order and holds the package to it. `tests/regression/` holds the reference
-regression, skipped unless `VERITY_REGRESSION=1`.
+`tests/adapters/vllm/tests/lint/test_p09_layering.py` states the order and holds the package to it.
+`tests/adapters/vllm/tests/regression/` holds the reference regression, skipped unless `VERITY_REGRESSION=1`.
 
 ## Running
 
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
-vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
-relative to this directory, so run them from here. The suite runs remotely like every suite
-(`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. The tools read their inputs
+relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
+(`uv run tools/check/suites.py verity-vllm` from the root), and `python3 tools/suite_parts.py launch` splits it into
+parallel `research run` jobs.
 
 To serve on a machine of your own, clone this repository without the history's file contents and run the script from the
 clone's root (`--dry-run` first shows every path and step):

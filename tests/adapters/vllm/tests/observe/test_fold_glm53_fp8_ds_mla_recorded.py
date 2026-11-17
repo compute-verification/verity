@@ -21,7 +21,6 @@ from __future__ import annotations
 import collections
 import dataclasses
 import difflib
-import functools
 import hashlib
 import json
 from pathlib import Path
@@ -50,16 +49,18 @@ LAYERS, INDEXERS, PROMPT = 78, 21, 256
 FP8_KINDS = ("_fused_norm_rope_kernel", "concat_mla_q", "ConvertReqIndexToGlobalIndexKernel", "sparse_decode_fwd")
 
 
-@functools.cache
-def _fold():
+@pytest.fixture(scope="module")
+def folded():
+    """The fold, shared by this module's tests and released after them: a worker that went on holding it would carry its GBs into
+    every later test it runs."""
     return fold(read_log(str(FIXTURE)), load_profile("derived_GLM53_tp8")[0], strict=False, with_program=False)
 
 
 @pytest.mark.slow
-def test_both_steps_fold_every_fp8_cache_launch_and_nothing_is_refused_or_unread():
+def test_both_steps_fold_every_fp8_cache_launch_and_nothing_is_refused_or_unread(folded):
     """Minutes (the fold of all 78 layers of a 256-row prefill and a decode row): the only test that holds the FP8-cache patterns to
     launches vLLM served, whose arguments, cache views and FlashMLA split plan no synthetic launch reproduces."""
-    r = _fold()
+    r = folded
     assert r.report.unsupported_ops == {}, r.report.unsupported_examples[:4]
     assert r.errors == [], r.errors[:4]
     assert [s.get("unsupported") for s in r.steps] == [0, 0]
@@ -89,11 +90,11 @@ def _predicted_decode() -> list[str]:
 
 
 @pytest.mark.slow
-def test_the_decode_step_s_fold_is_the_predicted_step_call_for_call():
+def test_the_decode_step_s_fold_is_the_predicted_step_call_for_call(folded):
     """Minutes (the fold, then the rank's step prediction over 78 layers): the only test that holds the served FP8-cache step to
     the Program the predictor writes ahead of it. A step Program reads no history, so on each indexer layer its logits and their
     length read one key where the served row reads its history's PROMPT + 1; nothing else differs."""
-    r = _fold()
+    r = folded
     served = [PC._norm_T(descriptor_id(r.body.nodes[i["node"]].fn)) for i in r.instances if int(i["step"]) == 1]
     predicted = _predicted_decode()
     sm = difflib.SequenceMatcher(None, predicted, served, autojunk=False)

@@ -1,4 +1,4 @@
-"""What the certifier's zero-knowledge drivers take from code `verity` does not load.
+"""What network attestation's zero-knowledge drivers take from code `verity` does not load.
 
 The drivers (`scan_zk`, `egress_zk`, `network_attester_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
 one-stage audit's benchmark drivers under `benchmarks/one_stage/`, Flock's own distribution and Flock's proof-format

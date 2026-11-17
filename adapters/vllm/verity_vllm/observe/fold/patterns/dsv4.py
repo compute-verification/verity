@@ -17,7 +17,6 @@ from verity_vllm.definitions.registry import dsv4_indexer as I
 from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
 from verity_vllm.definitions.registry.dsa_norm import check_block
 from verity_vllm.definitions.registry.fp8 import weight_blocks
-
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out

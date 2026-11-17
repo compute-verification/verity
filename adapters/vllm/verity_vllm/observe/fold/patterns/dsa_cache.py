@@ -15,7 +15,7 @@ from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
-RECORD_SMS = int(number(load_card(CARD[CLASS_G["device_name"]])["sm"]["count"]))
+RECORD_SMS = int(number(load_card(CARD[str(CLASS_G["device_name"])])["sm"]["count"]))
 
 
 def _module(node: TreeNode) -> str:

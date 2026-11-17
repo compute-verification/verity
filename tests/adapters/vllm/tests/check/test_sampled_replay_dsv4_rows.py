@@ -10,6 +10,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of, statics_of
+
 from verity_vllm.definitions.numerics import dsv4_rows, rows
 from verity_vllm.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
 from verity_vllm.definitions.numerics.kernel_registry import Declined
@@ -25,7 +26,6 @@ from verity_vllm.definitions.registry import (
     mhc,
 )
 from verity_vllm.definitions.registry.hopper import HopperBF16WgmmaDot16
-
 from verity_vllm.query.manifest import format as RM
 
 #: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay on
