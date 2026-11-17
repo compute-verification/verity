@@ -2363,6 +2363,17 @@
    ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
+  "Properties.Pous.InProofs": {
+   "imports": [
+    "MemoryChallenger.Verdict",
+    "Properties.Pous",
+    "PousCheck.SetupInProofs",
+    "Definitions.Core.Interaction",
+    "Definitions.Core.Boolean"
+   ],
+   "except": [],
+   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
+  },
   "Properties.Pous.Period": {
    "imports": [
     "Mathlib",
@@ -2829,6 +2840,17 @@
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
   },
+  "Properties.Poub.Remote.InProofs": {
+   "imports": [
+    "Poub.Span",
+    "Definitions.Core.Boolean",
+    "Definitions.Core.Interaction",
+    "Properties.Poub.Remote",
+    "Properties.Verity.Sha512"
+   ],
+   "except": [],
+   "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
+  },
   "Properties.Poub.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
@@ -2877,28 +2899,6 @@
    ],
    "except": [],
    "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.Certifier.Premises`), the device model's lines for a span (`Definitions.Certifier.Guarantees.Marks`) and a finite sum for the bits the device sent in the span's phases (`Mathlib.Algebra.BigOperators.Group.Finset.Basic`), never a proof"
-  },
-  "Properties.Pous.InProofs": {
-   "imports": [
-    "MemoryChallenger.Verdict",
-    "Properties.Pous",
-    "PousCheck.SetupInProofs",
-    "Definitions.Core.Interaction",
-    "Definitions.Core.Boolean"
-   ],
-   "except": [],
-   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
-  },
-  "Properties.Poub.Remote.InProofs": {
-   "imports": [
-    "Poub.Span",
-    "Definitions.Core.Boolean",
-    "Definitions.Core.Interaction",
-    "Properties.Poub.Remote",
-    "Properties.Verity.Sha512"
-   ],
-   "except": [],
-   "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
   }
  },
  "reads_exempt": {
