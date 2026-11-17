@@ -308,9 +308,9 @@ def own_accept(r: dict) -> float | None:
 #: time there given the network attester's summary)
 STAGES = (
     ("client send", lambda r: r.get("send_unix"), lambda r, w: r.get("send_unix")),
-    ("attester arrival", lambda r: network_attester_at(r, "arrived"), lambda r, w: network_attester_time(w, network_attester_at(r, "arrived"))),
-    ("attester admission", lambda r: network_attester_at(r, "admitted"), lambda r, w: network_attester_time(w, network_attester_at(r, "admitted"))),
-    ("attester release", lambda r: network_attester_at(r, "released"), lambda r, w: network_attester_time(w, network_attester_at(r, "released"))),
+    ("warden arrival", lambda r: network_attester_at(r, "arrived"), lambda r, w: network_attester_time(w, network_attester_at(r, "arrived"))),
+    ("warden admission", lambda r: network_attester_at(r, "admitted"), lambda r, w: network_attester_time(w, network_attester_at(r, "admitted"))),
+    ("warden release", lambda r: network_attester_at(r, "released"), lambda r, w: network_attester_time(w, network_attester_at(r, "released"))),
     ("server accept", own_accept, lambda r, w: own_accept(r)),
     ("server headers", lambda r: r.get("headers_unix"), lambda r, w: r.get("headers_unix")),
     ("server body", lambda r: r.get("body_unix"), lambda r, w: r.get("body_unix")),
