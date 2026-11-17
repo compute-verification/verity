@@ -20,8 +20,7 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's; for a set no Lean verifier takes (`verity.config.UNACCEPTED`), its rows combined
-  in Python, which the line's ``combined_by`` says.
+  composed verdict is the period's.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
@@ -675,18 +674,11 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
     verdict = VERDICTS.get(line["composed"], "undecided")
-    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
-        or (f"no row for {absent}" if absent else None) or (line.get("lean") if verdict != "accept" else None)
-    python = {}
-    if product in K.UNACCEPTED:
-        seen = set(components.values())
-        verdict = "reject" if seen & {"reject", "error"} else "accept" if seen == {"accept"} else "undecided"
-        reason = "; ".join(f"{c} {v}" for c, v in sorted(components.items()) if v != "accept") or None
-        python = {"combined_by": f"python: no Lean verifier takes {product}, so this verdict is its rows' verdicts "
-                                 "combined in Python (each accepts: accept; one rejects or errs: reject), not a Lean "
-                                 "verifier's"}
-    return {"block": k, "components": components, "product": product, "reason": reason, "registration": None,
-            "coins": coins_of(cfg), "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
+    return {"block": k, "components": components, "product": product,
+            "reason": line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None)
+            or (f"no row for {absent}" if absent else None) or (line.get("lean") if verdict != "accept" else None),
+            "registration": None, "coins": coins_of(cfg),
+            "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
 #: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
