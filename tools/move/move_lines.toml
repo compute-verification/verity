@@ -1022,3 +1022,15 @@ reason = "The part also ran tools/move/lean_names_pass.py --apply comments --bas
 ["b07bbd7822569edb46b9490dddb70d19ef1238b3"]
 hand = ["uv.lock"]
 reason = "The commit holds uv.lock as its branch locked it, not as rename.py writes it on its base."
+
+["d0bee0dba374e720a1f2a13c5b2113229f3f111a"]
+move = false
+reason = "A branch's own earlier copy of the move by period_map.toml, which main holds only through f712c917edf, a merge that kept main's tree (-s ours); main's move by that map is 9fa40840bc5c, which every branch cut since holds."
+
+["6cc7dc6e85411babeab355c9914c7140b2b768fb"]
+move = false
+reason = "A branch's own earlier copy of the move by period_map_2.toml, which main holds only through f712c917edf, a merge that kept main's tree (-s ours); main's move by that map is 083f7bd0e6dc, which every branch cut since holds."
+
+["fd568726a1bf08be4ac543fd10df2491a49ed5ab"]
+move = false
+reason = "A branch's own earlier copy of the move by period_net_map.toml, which main holds only through f712c917edf, a merge that kept main's tree (-s ours); main's move by that map is ea6f83438142, which every branch cut since holds."
