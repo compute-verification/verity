@@ -4,14 +4,17 @@
 # `benchmarks/two_stage/` (the toy replay block, its audit and the guard export its Lean model's test reads) joins
 # `benchmarks/one_stage/`, which holds the two-stage driver it imports, and its tests join the one-stage suite. No file
 # name clashes, so every file keeps its name: a renamed bare module (`import guard as G`) is no import `layout.py` rewrites.
-# `settings.py` keeps its name too: `verity_config.settings.of` reads a distribution's registry from that file. The
-# two-stage suite's `pyproject.toml` is dropped: the one-stage suite's inputs already cover what it lists.
+# `settings.py` keeps its name too: `verity_config.settings.of` reads a distribution's registry from that file. It goes
+# beside the one-stage suite's `pyproject.toml`, where `of` finds it for the tests, its only readers: in
+# `benchmarks/one_stage/`, which other suites put on `sys.path`, it would be the `settings` their bare `import settings`
+# finds first. The two-stage suite's `pyproject.toml` is dropped: the one-stage suite's inputs already cover what it lists.
 [roots]
 old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
 new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
 
 [paths]
 "benchmarks/two_stage/" = "benchmarks/one_stage/"
+"benchmarks/two_stage/settings.py" = "tests/benchmarks/one_stage/settings.py"
 "tests/benchmarks/two_stage/TwoGuard.lean" = "tests/benchmarks/one_stage/TwoGuard.lean"
 "tests/benchmarks/two_stage/guard_node.py" = "tests/benchmarks/one_stage/guard_node.py"
 "tests/benchmarks/two_stage/test_guard.py" = "tests/benchmarks/one_stage/test_guard.py"
@@ -30,6 +33,8 @@ paths = ["tests/benchmarks/two_stage/pyproject.toml"]
 [split]
 ".gitignore: tests/benchmarks/two_stage" = { to = "tests/benchmarks/one_stage", why = "the fetched guard fixture, which test_guard.py reads beside itself" }
 "artifacts.json: tests/benchmarks/two_stage" = { to = "tests/benchmarks/one_stage", why = "the fetched guard fixture, which test_guard.py reads beside itself" }
+"tests/benchmarks/two_stage/test_guard.py: benchmarks/two_stage" = { to = "benchmarks/one_stage", why = "the directory it imports `guard` from" }
+"tools/check/suites.py: benchmarks/two_stage" = { to = "benchmarks/one_stage", why = "the suite the two-stage tests join" }
 
 [rewrite]
 # as tests_root_map.toml's
@@ -83,9 +88,11 @@ include = [
 ]
 
 
+
 [modules]
 # the rename [paths] implies (`layout.py --modules`)
 "benchmarks.two_stage" = "benchmarks.one_stage"
+"benchmarks.two_stage.settings" = "tests.benchmarks.one_stage.settings"
 "tests.benchmarks.two_stage.guard_node" = "tests.benchmarks.one_stage.guard_node"
 "tests.benchmarks.two_stage.test_guard" = "tests.benchmarks.one_stage.test_guard"
 "tests.benchmarks.two_stage.test_toy" = "tests.benchmarks.one_stage.test_toy"
