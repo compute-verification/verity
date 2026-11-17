@@ -16,7 +16,8 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
 ```
 
 `run.py` prints one `UNIT-LOWERING unit=.. k=.. tile=RxC form=.. peak_gib=.. wall_min=.. ands=.. bytes=.. k_log=..
-sha512=<16 hex>` line and writes `OUT/unit_lowering.json`.
+sha512=<16 hex>` line, then the record as one line of JSON, and writes `OUT/unit_lowering.json`. The lane run above,
+from this tree at the default form and staging, also writes its peak GiB as `metrics.toml`'s number, measured.
 
 ## The two numbers, the guard and the target
 

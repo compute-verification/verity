@@ -324,6 +324,22 @@ def test_a_line_stacked_on_a_head_that_crossed_the_move_and_landed_is_carried_by
     assert paths(repo, merged) == paths(repo, carried["result"]) and show(repo, merged, "NOTES.md") == "notes 2\n"
 
 
+def test_a_move_whose_map_main_deleted_after_it_landed_is_crossed_by_the_map_at_its_base(repo, monkeypatch, capsys):
+    """A landed move's map leaves `main`'s tree: a branch from before the move still crosses it, by the map the move's base
+    holds, and the result holds no map, as `main` doesn't."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    move = generate(repo, LINE)
+    commit(repo, "the landed move's map leaves the tree", {"tools/move/layout_map.toml": None})
+    on(repo, "pr", ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    [r] = json.loads(capsys.readouterr().out)
+    assert (r["status"], r["crossed"]) == ("clean", [move])
+    assert show(repo, r["result"], "app/extra.py") == "from app.core.util import f3\n"
+    assert "app/util.py" not in paths(repo, r["result"]) and "tools/move/layout_map.toml" not in paths(repo, r["result"])
+
+
 @pytest.fixture
 def late(repo, monkeypatch):
     """main as a move that lands late leaves it: the first move, made on `base`, reaches main by a merge after main went on
