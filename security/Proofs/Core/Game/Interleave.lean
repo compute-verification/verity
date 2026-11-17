@@ -7,19 +7,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 
-/-!
-# Two interactions run concurrently
-
-`interleave g₁ g₂` runs two interactions side by side, with the prover choosing at every step
-which one advances next, adaptively. This is how the two reps of a Flock table run on the live-coin
-part: each rep is its own stream, the server flips a stream's coins when that stream's
-round arrives, and the prover may interleave the streams in any order.
-The verifier accepts only if both interactions accept.
-
-`value_interleave_le` is the repetition theorem: against an optimal, unbounded prover, the
-probability that both interactions accept is at most the product of the two values, whatever the
-schedule. With a sound single rep, two reps on independent live coins therefore square the error.
--/
+/-! Two interactions run concurrently, and repetition on independent live coins. -/
 
 @[expose] public section
 
@@ -104,8 +92,6 @@ theorem value_interleaveWith_le (p : α → Prop) (q : β → Prop)
       · simp only [ite_true]
         exact hadv _
 
-/-- **Repetition on independent live coins.** Whatever schedule the prover chooses, the
-probability that both concurrent interactions accept is at most the product of their values. -/
 theorem value_interleave_le (p : α → Prop) (q : β → Prop) :
     ∀ (g₁ : Game α) (g₂ : Game β),
       value (fun x => p x.1 ∧ q x.2) (interleave g₁ g₂) ≤ value p g₁ * value q g₂

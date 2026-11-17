@@ -31,8 +31,6 @@ theorem SoundMono : Guarantees.SoundMono := by
   unfold Sound at *
   refine le_trans (value_mono (fun a ⟨ha, hF⟩ => ⟨hacc a ha, fun hE => hF (hEF a ha hE)⟩) g) (h.trans hδ)
 
-/-- The probability of an event about the first of two interleaved games is at most its probability in that game
-alone. -/
 private theorem value_interleave_fst {α β : Type} (p : α → Prop) (g₁ : Game α) (g₂ : Game β) :
     value (fun x => p x.1) (g₁.interleave g₂) ≤ value p g₁ :=
   calc value (fun x => p x.1) (g₁.interleave g₂)

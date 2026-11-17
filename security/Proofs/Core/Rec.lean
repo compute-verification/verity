@@ -6,20 +6,7 @@ public import Proofs.Core.Leak
 public import Proofs.Flock.Claims.ZK.Stop
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
-/-!
-# `RecZK`: zero knowledge carries through a recursion
-
-`Verity.SecurityProofs.RecZK : Verity.Guarantees.RecZK`, by the two hybrids of the recursion's zero knowledge:
-
-* the sessions' runs are replaced one at a time by `O`'s simulator at their statements (`zkmalAt_layout_stop`, with
-  `O`'s zero knowledge at each session's statement on the slot's coins: `ZKmalAt.of_coins`, `ZKmalAt.of_equiv`), which
-  needs each session's witness in `O`'s relation unless the stop fired (`WitnessIn`);
-* then the prefix's commitment strings are swapped for zero commitments at `2 δ₁` each (`zkmalAt_prefix`, through
-  `prefix_close` and `Hm96Hiding`), which is the prefix's simulator `S₀` (`Rec.Compiled.S₀_eval`).
-
-Its corollaries are the leak at public stop positions, the multiplicative form: over any recursion (`recZK_leak`) and
-at the deployed recursion's stop (`zkStop_leak`, from `Claims.Recursion.ZKStop`), through `Claims.zkmalRLeak_of_cuts`.
--/
+/-! `RecZK`: zero knowledge carries through a recursion. -/
 
 @[expose] public section
 
@@ -55,7 +42,6 @@ theorem Rec.queries_eval {α : Type} (H : Msg → Msg) :
         funext fun i => Fin.cases (by simp) (fun j => by simp) i
       rw [e]
 
-/-- The prefix's run from its next-message function: `kI` leaves under `dI`, then the stage message, as `prefixRun`. -/
 theorem interact_prefixRun {Sa Gp Cm : Type} [AddCommGroup Gp] (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → Cm)
     (ask : List Msg → Out) (kI nC : ℕ)
     (dI : List (Msg × Msg) → Gp) (dS : List (Msg × Msg) → Fin nC → Gp)
@@ -81,9 +67,6 @@ section Prefix
 
 variable {Sa Gp : Type} [Fintype Sa] [Nonempty Sa] [AddCommGroup Gp] [Fintype Gp]
 
-/-- **The prefix is zero knowledge at `2 (kI + nC) δ₁`**: a prover whose `kI` rounds are hm96 leaves of its messages and
-whose stage round is the stage message of `nC` leaves (`hC`) is simulated by the zero messages under fresh salts
-(`hS`), by `Hm96Hiding` at each leaf (`prefix_close`). -/
 theorem zkmalAt_prefix {W R : Type} [Fintype R] [Nonempty R] (H : Msg → Msg) (My : Sa → Gp) (cS : Sa → Msg)
     {δ₁ : ℝ≥0} (hT1 : Hm96Hiding My cS δ₁) (Hl : Gp × Msg → Msg) (kI nC : ℕ)
     (stg : List (Msg × Msg) → (Fin nC → Msg) → Msg) (P₀ : W → Prover ((R × (Fin kI → Sa)) × (Fin nC → Sa)))
@@ -123,7 +106,6 @@ theorem zkmalAt_prefix {W R : Type} [Fintype R] [Nonempty R] (H : Msg → Msg) (
 
 end Prefix
 
-/-- A simulator on coins in bijection with another's is zero knowledge at the same bound. -/
 theorem _root_.Claims.ZKMal.ZKmalAt.of_coins {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
     {H : Msg → Msg} {k : ℕ}
     {P : W → Prover (N × Ω)} {R : W → Prop} {x : Msg} {C C' : Type} [Fintype C] [Fintype C']
@@ -137,7 +119,6 @@ namespace Rec.Compiled
 
 variable {W WS Sa Gp : Type} [Fintype Sa] [Nonempty Sa] (G : Rec.Compiled W WS Sa Gp)
 
-/-- The prefix's simulator runs `prefixRun` at zero messages. -/
 theorem S₀_eval (H : Msg → Msg) [AddCommGroup Gp] (x : Msg) (ask : List Msg → Out)
     (c : (Fin (G.kI x) → Sa) × (Fin (G.nC x) → Sa)) :
     (SP.eval H ask (G.S₀.prog x c)).1 = prefixRun G.str G.mask (fun y => H (G.saltMsg y)) ask (G.kI x) (G.nC x)
@@ -191,20 +172,14 @@ theorem start_pos (x : Msg) : ∀ j, 0 < G.start x j
     show 0 < G.start x j + G.n x j
     exact Nat.lt_of_lt_of_le (start_pos x j) (Nat.le_add_right _ _)
 
-/-- `goesOn` itself is a continuation test `RecZK` takes. -/
 theorem goesOnAt_goesOn : G.GoesOnAt fun j x => goesOn (G.start x j) :=
   fun _ _ _ _ _ => rfl
 
-/-- **That the last answer is a message** (`Claims.Recursion.goesOn`, `Claims.Recursion.SimStop`'s test) is a
-continuation test `RecZK` takes: every session starts after the prefix's rounds, so a real run there is cut short only
-by a decision, its last answer. -/
 theorem goesOnAt_recursion : G.GoesOnAt fun _ _ => Claims.Recursion.goesOn :=
   fun x j _ ask pm => recGoesOn_interact ask pm _ [] (G.start_pos x j)
 
 end Rec.Compiled
 
-/-- **The leak at public stop positions, over any recursion**: a prover that releases `Rec.system O G go`'s run cut at
-one of `|pos x|` public positions leaks at most `log₂ |pos x|` bits beyond `RecZK`'s bound. -/
 theorem recZK_leak {W WS Sa Gp : Type} {NO ΩO : Msg → Type} [Fintype Sa] [Nonempty Sa] [AddCommGroup Gp]
     [Fintype Gp] [∀ x, Fintype (NO x)] [∀ x, Nonempty (NO x)] [∀ x, Fintype (ΩO x)] [∀ x, Nonempty (ΩO x)]
     {K : Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)]
@@ -222,9 +197,6 @@ theorem recZK_leak {W WS Sa Gp : Type} {NO ΩO : Msg → Type} [Fintype Sa] [Non
       (fun x => (pos x).card) ((Rec.system O G go).εzk δ₁) (Rec.system O G go).γzk :=
   zkmalRLeak_of_cuts (SecurityProofs.RecZK H O G δ₁ go hgo hO hHid hC hS hW) hcut hne
 
-/-- **The deployed recursion's leak at its stop positions**: from its zero knowledge with the stop
-(`Claims.Recursion.ZKStop`), a release of its run cut at one of `|pos x|` public positions leaks at most
-`log₂ |pos x|` bits. -/
 theorem zkStop_leak {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     {K : Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] {H : Msg → Msg}
     {D : Claims.Recursion.StopDeploy Coin} {I : Claims.Recursion.Inner Coin Claims.Flock.Wit}

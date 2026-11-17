@@ -3,11 +3,7 @@ module
 public import Proofs.Core.TC.Ampere.Group
 public import Definitions.Core.TC.Bridge
 
-/-!
-# One Ampere group, the semantics' side
-
-`group_sum` on the Ampere adder in terms of the relation's total and maximum exponent (`groupSum_eq`).
--/
+/-! One Ampere group, the semantics' side. -/
 
 @[expose] public section
 

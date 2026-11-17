@@ -8,21 +8,7 @@ import Proofs.Core.TC.Proofs.Complete
 import Proofs.Core.TC.Proofs.Step
 import Proofs.Core.TC.Proofs.Words
 
-/-!
-# The step relation is the step semantics
-
-For the Hopper pipeline (`HOPPER_BF16_WGMMA_K16`, whose parameters `HOPPER_BF16_M16N8K16` shares), in either alignment
-mode, over the integers:
-
-* `hopper_step_sound`: every witness the relation accepts for the input state `decode_state(acc)` and the operand words
-  `a`, `b` outputs `decode_state(tc_dot_total(acc, a, b))`;
-* `hopper_step_complete`: the relation accepts some witness for every input in `tc_dot_total`'s domain;
-* `hopper_step_iff`: together, the states the relation can output are exactly the one the semantics gives;
-* `hopper_step_hw`: under `gemm-hopper-step`, the output state is the decode of the word the device writes.
-
-A proof block starts from `zero_state = decode_state(+0)` and feeds each step's output state to the next, so the
-step theorem applies to every step of a unit in turn.
--/
+/-! The step relation is the step semantics, on the Hopper pipeline. -/
 
 @[expose] public section
 
@@ -36,7 +22,6 @@ theorem zipWith_eq_map_zip {α β γ : Type} (f : α → β → γ) : ∀ (a : L
   | _ :: _, [] => rfl
   | x :: a, y :: b => by simp [zipWith_eq_map_zip f a b]
 
-/-- The product rows of an accepted witness are the ones `step_witness` builds. -/
 theorem prods_eq (a b : List Nat) (ha : a.length = 16) (hb : b.length = 16) (ha16 : ∀ x ∈ a, x < 2 ^ 16)
     (hb16 : ∀ x ∈ b, x < 2 ^ 16) (prod : List ProdCols) (hl : prod.length = 16)
     (h : ∀ j (hj : j < prod.length), prodHolds HP (a[j]!) (b[j]!) prod[j]) :
@@ -51,7 +36,6 @@ theorem prods_eq (a b : List Nat) (ha : a.length = 16) (hb : b.length = 16) (ha1
   rw [this]
   simp [List.getElem_zip, HP]
 
-/-- The step's value: an accepted witness's output state is the canonical state of the value the semantics packs. -/
 theorem hopper_step_core (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) (w : Witness)
     (h : StepHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) a b w) :
@@ -164,8 +148,6 @@ theorem hopper_step_lt (acc : Nat) (a b : List Nat) (hin : StepInputs HOPPER_BF1
   obtain ⟨V, hV, hsem, -⟩ := hopper_step_core .div acc a b hin w hw
   rw [hsem]; exact pack_lt V hV
 
-/-- A proof block: every witness chain the relation accepts from `decode_state(acc)` outputs the decode of the
-semantics' accumulator after the unit's steps. -/
 theorem hopper_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
@@ -182,7 +164,6 @@ theorem hopper_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     rw [hopper_step_sound align acc a b hin' w hs] at hrest
     exact ih _ (hopper_step_lt acc a b hin') (fun s hs => hin s (List.mem_cons_of_mem _ hs)) hrest
 
-/-- The same from the unit's constant initial state `zero_state`, which is `decode_state(+0)`. -/
 theorem hopper_unit_sound_zero (align : Align) (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
     (out : State) (h : ChainHolds HOPPER_BF16_WGMMA_K16 align (zeroState HOPPER_BF16_WGMMA_K16) steps out) :

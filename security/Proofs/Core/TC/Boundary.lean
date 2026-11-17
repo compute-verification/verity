@@ -7,14 +7,7 @@ import Proofs.Core.TC.Proofs.Pack
 import Proofs.Core.TC.Proofs.Words
 import Proofs.Core.TC.Sound
 
-/-!
-# The unit boundary: the committed BF16 word
-
-A proof block starts from `zero_state`, chains its k16 steps (`ChainHolds`), and packs its final state
-(`pack_relation`: the FP32 word, then `cvt.rn.bf16.f32`). `hopper_unit_bf16` and `ampere_unit_bf16`: every such unit the
-relation accepts commits `cvt_rn_bf16_f32` of the semantics' accumulator, and its FP32 word is that accumulator.
-`pack_sound` and `pack_complete` are the boundary alone.
--/
+/-! The unit boundary: the committed BF16 word. -/
 
 @[expose] public section
 
@@ -22,7 +15,6 @@ open Verity.TC.Relation Verity.TC.Spec Verity.TC.Proofs
 
 namespace Verity.TC
 
-/-- `pack_relation` is `pack_value` then `cvt_rn_bf16_f32` on a group's output, and it accepts some columns. -/
 theorem pack_sound_complete (Z : Int) (V : Value) (hV : Admissible V) :
     (∀ c, packHolds (stateOf Z V) c → c.word = (packValue V : Int) ∧ c.bf16 = (cvtRnBf16F32 (packValue V) : Int)) ∧
       ∃ c, packHolds (stateOf Z V) c :=
@@ -54,8 +46,6 @@ theorem ampere_chain_value : ∀ (steps : List (List Nat × List Nat)) (acc : Na
 
 theorem zero_admissible : Admissible (.fin ZERO) := by simp [Admissible, ZERO]
 
-/-- A proof block on the Hopper pipeline, from `zero_state` to the committed BF16 word: the relation's steps and
-boundary accept only `cvt_rn_bf16_f32` of the semantics' accumulator, whose FP32 word is the accumulator itself. -/
 theorem hopper_unit_bf16 (align : Align) (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
     (out : State) (h : ChainHolds HOPPER_BF16_WGMMA_K16 align (zeroState HOPPER_BF16_WGMMA_K16) steps out)
@@ -71,7 +61,6 @@ theorem hopper_unit_bf16 (align : Align) (steps : List (List Nat × List Nat × 
   rw [hout, decode_pack V hV (fun t ht hne => by rw [ht] at hV; exact (hV.2 hne).2.1)] at hc
   exact Proofs.pack_sound (-133) V hV c hc
 
-/-- The same on the Ampere/Ada pipeline. -/
 theorem ampere_unit_bf16 (align : Align) (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
     (out : State) (h : ChainHolds AMPERE_BF16_M16N8K16 align (zeroState AMPERE_BF16_M16N8K16) steps out)

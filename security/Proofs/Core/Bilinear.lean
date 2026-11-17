@@ -3,29 +3,7 @@ module
 public import Mathlib
 public import Definitions.Core.NaiveStrassen
 
-/-!
-# Integer bilinear schemes against P1's floor: what is proved of "every scheme loses"
-
-A part of the SAK lower bound (`Pouw.SakLb`), over D4's model (`Definitions.Core.NaiveStrassen`): exact int8
-products priced by the tensor units alone, additions free.
-
-* **The cover inequality** (`cover`): every integer bilinear scheme for an `m × k` by `k × n` product (Brent's
-  equations, `IntScheme.Brent`) has `Σ_t ‖u_t‖₁ ‖v_t‖₁ ≥ m k n`: each of the `m k n` monomials `A_ij B_jl` is made by
-  some product, and a product makes at most `‖u_t‖₁ ‖v_t‖₁` of them. So a scheme whose products are all narrow
-  (`‖u_t‖₁, ‖v_t‖₁ ≤ 1`) has at least `m k n` products (`narrow_rank`).
-* **P1's floor on a product** (`floor_max`, `floor_wide`): on every one of D4's four atom lists, a depth-0 schedule
-  for operands over `a` and `b` values costs at least `log₂ max(a, b)` eighths of an s8 MAC, and at least 16 once one
-  operand takes more than 256 values and the other at least 256. Digit splits never help: every atom holds at most
-  `2^weight8` values per operand (`CapLog`), and every atom past 256 values weighs at least 16 (`WideHeavy`).
-* **One level of any 2 × 2 scheme** (`scheme_floor`): a scheme node over int8 operands whose products are then done
-  by atoms costs at least `8 (R + R_wide)` eighths, `R` its nonzero products and `R_wide` those with a combination of
-  more than one entry on one side: `κ₁ ≥ (R + R_wide) / (m k n)` of naive.
-
-What is not proved, and why it is open rather than hard to write: the floor grows like the logarithm of an operand's
-range while the cover only bounds `Σ ‖u_t‖₁ ‖v_t‖₁`, so a scheme of small rank with moderately wide products is not
-excluded by these inequalities; excluding it at the served shapes is a rank lower bound for matrix multiplication
-at those sizes. `Pouw.SakLb.SAKResidual` carries it.
--/
+/-! Integer bilinear schemes against P1's floor: the cover inequality and the floors are proved, and the rank lower bound that would exclude a scheme of small rank with moderately wide products is not (`Pouw.SakLb.SAKResidual` carries it). -/
 
 @[expose] public section
 
@@ -57,7 +35,6 @@ def nu (t : ι) : ℕ := ∑ i, ∑ j, (S.u t i j).natAbs
 /-- `‖v_t‖₁`. -/
 def nv (t : ι) : ℕ := ∑ j, ∑ l, (S.v t j l).natAbs
 
-/-- Each monomial `A_ij B_jl` is made by some product with weight at least 1. -/
 theorem monomial_covered (hB : S.Brent) (i : Fin m) (j : Fin k) (l : Fin n) :
     1 ≤ ∑ t, (S.u t i j).natAbs * (S.v t j l).natAbs := by
   have h := hB i j j l i l
@@ -77,7 +54,6 @@ theorem monomial_covered (hB : S.Brent) (i : Fin m) (j : Fin k) (l : Fin n) :
   rw [this] at h
   exact zero_ne_one h
 
-/-- **The cover inequality**: `Σ_t ‖u_t‖₁ ‖v_t‖₁ ≥ m k n`. -/
 theorem cover (hB : S.Brent) : m * k * n ≤ ∑ t, S.nu t * S.nv t := by
   calc m * k * n = ∑ _i : Fin m, ∑ _j : Fin k, ∑ _l : Fin n, (1 : ℕ) := by simp [mul_assoc]
     _ ≤ ∑ i, ∑ j, ∑ l, ∑ t, (S.u t i j).natAbs * (S.v t j l).natAbs :=
@@ -101,8 +77,6 @@ theorem cover (hB : S.Brent) : m * k * n ≤ ∑ t, S.nu t * S.nv t := by
                 (fun _ _ => Nat.zero_le _) (mem_univ j)
           _ = (S.u t i j).natAbs * ∑ j', ∑ l, (S.v t j' l).natAbs := by rw [Finset.mul_sum]
 
-/-- **A scheme of narrow products has at least `m k n` of them**: with `‖u_t‖₁, ‖v_t‖₁ ≤ 1` for every product, the
-cover gives rank `≥ m k n`, naive's count. -/
 theorem narrow_rank (hB : S.Brent) (hn : ∀ t, S.nu t ≤ 1 ∧ S.nv t ≤ 1) : m * k * n ≤ Fintype.card ι := by
   calc m * k * n ≤ ∑ t, S.nu t * S.nv t := S.cover hB
     _ ≤ ∑ _t : ι, 1 := sum_le_sum fun t _ => by
@@ -150,8 +124,6 @@ theorem contains_mem {fs : List Atom} {f : Atom} (h : fs.contains f = true) : f 
     · exact atom_eq h ▸ List.mem_cons_self
     · exact List.mem_cons_of_mem _ (ih h)
 
-/-- **P1's floor, by range**: a depth-0 schedule (atoms and digit splits) for operands over `a` and `b` values costs
-at least `log₂ max(a, b)`: `a, b ≤ 2^cost`. -/
 theorem floor_max {fs : List Atom} (hfs : CapLog fs) (ss : List Scheme) (m : ℕ) :
     ∀ (S : Sched) (a b : ℕ), S.valid fs ss m 0 a b = true → a ≤ 2 ^ S.cost 0 ∧ b ≤ 2 ^ S.cost 0 := by
   intro S
@@ -190,8 +162,6 @@ theorem le_cost_of_pow {c x : ℕ} (e : ℕ) (h : x ≤ 2 ^ c) (hx : 2 ^ e < x) 
   have : 2 ^ c ≤ 2 ^ e := Nat.pow_le_pow_right (by norm_num) (by omega)
   omega
 
-/-- **P1's floor on a wide product**: one operand over more than 256 values and the other over at least 256 cost
-at least 16 eighths, twice an s8 MAC. -/
 theorem floor_wide {fs : List Atom} (hfs : CapLog fs) (hw : WideHeavy fs) (ss : List Scheme) (m : ℕ) (S : Sched)
     (a b : ℕ) (hv : S.valid fs ss m 0 a b = true) (hab : (257 ≤ a ∧ 256 ≤ b) ∨ (256 ≤ a ∧ 257 ≤ b)) :
     16 ≤ S.cost 0 := by
@@ -240,8 +210,6 @@ theorem foldl_add_eq (xs : List ℕ) (acc : ℕ) : xs.foldl (· + ·) acc = acc 
   | nil => simp
   | cons x xs ih => simp only [List.foldl, ih, List.sum_cons, Nat.add_assoc]
 
-/-- **One level of any 2 × 2 scheme, then atoms**: a scheme node over int8 operands costs at least the sum of its
-products' floors, `Σ_t floorNu ‖u_t‖₁ ‖v_t‖₁`, so at least `8 (R + R_wide)` eighths. -/
 theorem scheme_floor {fs : List Atom} (hfs : CapLog fs) (hw : WideHeavy fs) (ss : List Scheme) (s : Scheme)
     (kids : Fin s.R → Sched) (hv : (Sched.scheme s kids).valid fs ss 0 1 256 256 = true) :
     ∑ t : Fin s.R, floorNu (l1 s.u[t.val]!) (l1 s.v[t.val]!) ≤ (Sched.scheme s kids).cost 1 := by

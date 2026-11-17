@@ -3,13 +3,7 @@ module
 public import Definitions.Core.Guarantees.DeviceFigures
 public import Proofs.Core.DeviceFigures
 
-/-!
-# A registered device's capacity is within its estimate's tolerance
-
-`CapacityWithinEstimate`: the device's figures are at most the bound's (`DeviceWithinRegisteredFigures`), and the
-bound's are themselves accepted against the estimate (`DeviceFigures.Accepted.bounding`), so within its tolerance from
-above.
--/
+/-! A registered device's capacity is within its estimate's tolerance. -/
 
 @[expose] public section
 

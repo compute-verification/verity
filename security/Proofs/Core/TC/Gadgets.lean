@@ -3,15 +3,7 @@ module
 public import Definitions.Core.TC.Gadgets
 public import Definitions.Core.TC.Relation
 
-/-!
-# The range and is-zero gadgets hold exactly when their predicates do
-
-The gadgets of `relation.Census` with their chunk columns (`Verity.Protocol.TC.Gadgets`) against the predicates the
-relation states (`Relation.RANGE`, `Relation.ISZERO`):
-
-* `range_gadget`: `Census.RANGE x bits`'s chunks hold exactly when `0 ≤ x < 2^bits`.
-* `iszero_gadget`: `Census.ISZERO x bits z`'s chunks and flags hold exactly when `x` is in range and `z = [x = 0]`.
--/
+/-! The range and is-zero gadgets hold exactly when their predicates do. -/
 
 @[expose] public section
 
@@ -60,7 +52,6 @@ theorem isZeroWidths_sum (bits : Nat) : (isZeroWidths bits).sum = bits := by
   rw [List.sum_append, sum_replicate]
   split <;> simp <;> omega
 
-/-- `Census.RANGE`'s chunks hold exactly when `x ∈ [0, 2^bits)`: `RANGE`. -/
 theorem range_gadget (x : Int) (bits : Nat) : Chunks (rangeWidths bits) x ↔ RANGE x bits := by
   rw [chunks_iff, rangeWidths_sum]; rfl
 
@@ -107,7 +98,6 @@ theorem zeroChunks_iff : ∀ (ws : List Nat) (x z : Int),
       · have : x ≠ 0 := by omega
         simp [hc, this]
 
-/-- `Census.ISZERO`'s chunks and flags hold exactly when `x ∈ [0, 2^bits)` and `z = [x = 0]`: `ISZERO`. -/
 theorem iszero_gadget (x z : Int) (bits : Nat) : ZeroChunks (isZeroWidths bits) x z ↔ ISZERO x bits z := by
   rw [zeroChunks_iff, isZeroWidths_sum]; rfl
 

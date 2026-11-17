@@ -7,14 +7,7 @@ public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.Ring
 
-/-!
-# Proofs of the working draft's Lemma 1 and Theorem 3, and of Theorem 3 at the serving blocks
-
-* `Committed.recompute_eval`: in a run of the registered circuit, a inference block recomputed from the committed
-  declaration and the run is the run: a inference block's values are determined by its unregistered inputs and `θ`;
-* `length_blockProgram`: on a Boolean circuit, inference block `u`'s program has `|e| + ⌈log₂ B⌉ + |in(I) \ θ|` bits;
-* `Partition.sum_blocks`: a sum over operation gates is the sum, over the inference blocks, of the sums over their gates.
--/
+/-! Proofs of the working draft's Lemma 1 and Theorem 3, and of Theorem 3 at the serving blocks. -/
 
 @[expose] public section
 

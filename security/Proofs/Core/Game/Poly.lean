@@ -9,14 +9,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Proofs.Core.Game.Basic
 
-/-!
-# A live coin hits a zero of a fixed polynomial rarely
-
-The per-coin bound behind every round-by-round step of the soundness proof: once the prover has
-fixed a nonzero polynomial, a uniform coin is one of its zeros with probability at most its
-degree over the field size (Schwartz–Zippel; Mathlib's `schwartz_zippel_totalDegree` and root
-counting).
--/
+/-! A live coin hits a zero of a fixed polynomial rarely. -/
 
 @[expose] public section
 
@@ -26,8 +19,6 @@ open scoped ENNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
 
-/-- **Univariate.** A nonzero polynomial of degree `d` vanishes at a uniform point with
-probability at most `d / |F|`. -/
 theorem prCoin_eval_eq_zero_le (P : Polynomial F) (hP : P ≠ 0) :
     prCoin (fun r : F => P.eval r = 0) ≤ (P.natDegree : ℝ≥0∞) / Fintype.card F := by
   classical
@@ -40,8 +31,6 @@ theorem prCoin_eval_eq_zero_le (P : Polynomial F) (hP : P ≠ 0) :
     (Finset.card_le_card hsub).trans ((Multiset.toFinset_card_le _).trans (Polynomial.card_roots' P))
   gcongr
 
-/-- Two different polynomials of degree at most `d` agree at a uniform point with probability at
-most `d / |F|`. -/
 theorem prCoin_eval_eq_eval_le (P Q : Polynomial F) (hPQ : P ≠ Q) (d : ℕ)
     (hP : P.natDegree ≤ d) (hQ : Q.natDegree ≤ d) :
     prCoin (fun r : F => P.eval r = Q.eval r) ≤ (d : ℝ≥0∞) / Fintype.card F := by
@@ -53,8 +42,6 @@ theorem prCoin_eval_eq_eval_le (P Q : Polynomial F) (hPQ : P ≠ Q) (d : ℕ)
     _ ≤ ((P - Q).natDegree : ℝ≥0∞) / Fintype.card F := prCoin_eval_eq_zero_le _ hne
     _ ≤ (d : ℝ≥0∞) / Fintype.card F := by gcongr
 
-/-- **Multivariate (Schwartz–Zippel).** A nonzero polynomial of total degree `d` in `n` variables
-vanishes at a uniform vector with probability at most `d / |F|`. -/
 theorem prCoin_mvEval_eq_zero_le {n : ℕ} (p : MvPolynomial (Fin n) F) (hp : p ≠ 0) :
     prCoin (fun f : Fin n → F => MvPolynomial.eval f p = 0) ≤
       (p.totalDegree : ℝ≥0∞) / Fintype.card F := by

@@ -8,18 +8,7 @@ import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Core.Game.Basic
 
-/-!
-# The sample from a challenger's coin: proof
-
-`SampleAfterRecorded`. The verifier's coin `i` is the challenger's flip `i` (`coin_of_log`), and the set of blocks fixed
-before it reads only the flips before `i` (`FlipsAfterRecorded`), so resampling flip `i` leaves the set where it is
-while the average over the challenger's flips stays the same (`Game.avg_update`). For each fixed set of at least `K`
-blocks, a uniform coin's sample misses it with probability the sampling design's `missProb`, at most `miss K`.
-
-Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
-premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
-other two premises (`SampleAfterRecorded_nontrivial_log`), where the bound fails.
--/
+/-! The proof of `SampleAfterRecorded`, the sample from a challenger's coin, with its honest and nontrivial witnesses. -/
 
 @[expose] public section
 
@@ -29,7 +18,6 @@ open scoped ENNReal
 
 namespace Game
 
-/-- Resampling one coordinate of a uniform tuple leaves its average unchanged. -/
 theorem avg_update {C : Type} [Fintype C] [Nonempty C] {n : Nat} (k : Fin n) (f : (Fin n → C) → ℝ≥0∞) :
     avg (fun ω => avg fun c => f (Function.update ω k c)) = avg f := by
   let e : (Fin n → C) × C ≃ (Fin n → C) × C :=
@@ -53,7 +41,6 @@ namespace Challenger
 
 open Verity.Assumptions
 
-/-- A coin the verifier reads from a challenger's log at index `i` is the challenger's flip `i`. -/
 theorem coin_of_log {R C : Type} {n : Nat} {log : (Fin n → C) → Log R C} {vc : (Fin n → C) → List C}
     (hlog : ChallengerLogsCoins log) (hread : VerifierReadsLog vc log) {ω : Fin n → C} {i : Nat} {c : C}
     (hc : (vc ω)[i]? = some c) : ∃ h : i < n, ω ⟨i, h⟩ = c := by
@@ -76,8 +63,6 @@ theorem before_map_released (l : List C) (i : Nat) :
   | nil => simp [before]
   | cons c l ih => cases i <;> simp [before, ih]
 
-/-- **A challenger that releases its flips in order, with nothing else in its log, meets both of its premises**, so
-they are not contradictory. -/
 theorem released_in_order {n : Nat} :
     ChallengerLogsCoins (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) ∧
       FlipsAfterRecorded (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) := by
