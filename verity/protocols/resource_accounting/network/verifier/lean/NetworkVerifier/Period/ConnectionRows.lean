@@ -3,7 +3,7 @@ module
 /-!
 # The connection rows' bounds
 
-The constants the period's check (`NetworkVerifier.Period`) holds a schedule's connection rows to: the bytes a cell's
+The constants the period's check (`NetworkCheck.Period`) holds a schedule's connection rows to: the bytes a cell's
 payload holds under lengths rows, the most slots, ids and classes a row or a schedule has, a class's size, the keys a
 schedule has only where it sets them, and what the check says of a schedule with connection rows.
 -/

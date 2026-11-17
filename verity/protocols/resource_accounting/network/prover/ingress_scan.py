@@ -62,7 +62,7 @@ entry is absent (`read` 0) is refused: a request no Program reads would reach th
 counting it. It is the form the Programs' outputs are tied to: a Program gives all its outputs at its anchor, and the
 slot holds them in `out` through its last egress bucket, past the execution phase's end where that is later (a group's
 scan carries its state across its execution phases). In an execution phase of nb = T / EVERY boundaries, bucket t's
-`prog<j>` reads row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkVerifier.Period`'s `readsEntries`), the row of
+`prog<j>` reads row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of
 slot j at boundary ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1`
 template's entries, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no
 Program reads passes these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So

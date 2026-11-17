@@ -1,4 +1,4 @@
-"""The count over a span between two marks (`NetworkVerifier.Span`, ``verity/certifier/span/v0``) for every difftest that
+"""The count over a span between two marks (`NetworkCheck.Span`, ``verity/certifier/span/v0``) for every difftest that
 runs it: its reference, `reference`, and its cases, `build`.
 
 `reference(case)` is the outcome of one `serve` line in the core interface's answer format
@@ -165,7 +165,7 @@ def _schedule(r: random.Random) -> Schedule:
 
 
 #: What the registered hardware's refusals of the parameters say, in Lean and in the mirror, by the change each is
-#: aimed at (`NetworkVerifier.Registered`).
+#: aimed at (`NetworkCheck.Registered`).
 REGISTERED_REASONS = {"site-link": "the network certifiers' links there are [", "site-key": "network certifier cert0"}
 #: How many forms each change to the registered hardware has. `build` takes them in turn by the seed, so that many
 #: seeds in a row show each form once.

@@ -1,5 +1,5 @@
 """The scan's ok bits at public content (`scan_ok`): the salt rule and each schedule's constants are the vectors
-`NetworkVerifier.ScanOk`'s guards hold Lean to; the members are the schedule's 2T proof blocks with an ok bit; a
+`NetworkCheck.ScanOk`'s guards hold Lean to; the members are the schedule's 2T proof blocks with an ok bit; a
 registration is held at its own schedule's constants and at no other's, its start unit's port at any root; two members of one template and one count are at one domain and root;
 a schedule of fewer than two ticks has no constants; and the hashes are the constants' alone, counted, none in the
 comparison."""
@@ -15,7 +15,7 @@ from verity.commitments import hm96, scheme
 from verity.commitments.rowleaf import bit_row
 from verity.protocols.resource_accounting.network.verifier import scan_ok as K
 
-# `NetworkVerifier.ScanOk`'s guards' vectors: (port, leaves, domain, root) at T = 16, and the roots at T = 3
+# `NetworkCheck.ScanOk`'s guards' vectors: (port, leaves, domain, root) at T = 16, and the roots at T = 3
 T16 = (
     ("ingress-0/o0", 15,
      "d85575918fa7f47e3539edee110443d3b8a548c64c291c23b45b3043ce7b9283"
@@ -95,7 +95,7 @@ def test_the_members_are_the_schedules_proof_blocks(T):
 @pytest.mark.parametrize("T", [1, 0, -3])
 def test_a_schedule_of_fewer_than_two_ticks_has_no_constants(T, sha512_calls):
     """At T = 1 the scan's one bucket would be its last, and `ingress-0` a member of no proof block, a shape no scan
-    is staged in, so the constants refuse it, in the words `NetworkVerifier.ScanOk`'s guard holds Lean's refusal to,
+    is staged in, so the constants refuse it, in the words `NetworkCheck.ScanOk`'s guard holds Lean's refusal to,
     before any hash; T = 2, the least a scan is staged at, has its three members' constants."""
     with pytest.raises(K.FewTicks) as refused:
         K.constants(T)
@@ -207,7 +207,7 @@ def test_the_hashes_are_the_constants_alone(T, sha512_calls):
 
 
 def test_the_trees_are_511_hashes_at_32_ticks():
-    """Lean's count (`NetworkVerifier.ScanOk.rootCalls`): a row is its salt's three hashes, its row digest, its salt
+    """Lean's count (`NetworkCheck.ScanOk.rootCalls`): a row is its salt's three hashes, its row digest, its salt
     digest, its hm96 leaf and its frame leaf; then the frame's pads and nodes. The three trees at T = 32 are 511."""
     def root_calls(n: int) -> int:
         width = 1 << (n - 1).bit_length()

@@ -1,4 +1,4 @@
-"""The network attester over a period (`NetworkVerifier.Period`, `verity/certifier/v0`, `network-period serve`) against its
+"""The network attester over a period (`NetworkCheck.Period`, `verity/certifier/v0`, `network-period serve`) against its
 Python mirror, through the difftest harness's `ProtocolPort`.
 
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
