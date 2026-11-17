@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# modeled: computed from data/ alone, on a CPU; each other family and reading is a member
+[[metric]]
+id = "compute-accounting/pouw-design-epsilon"
+title = "PoUW design of record epsilon"
+owner = "compute-accounting"
+unit = "percent"
+axis = "The core ε, the share of credited work a node may leave undone, of the RTX PRO 6000's PoUW design of record at the data-sheet reading (q* = ½), as machine-model headline computes it from the data."
+better = "lower"
+command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && .venv/bin/python calibration/machine_model/run.py --out \"$OUT\"'"
+every = "7d"

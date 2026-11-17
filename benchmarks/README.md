@@ -175,8 +175,8 @@ Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
-tab's report.
+`metrics.toml` on `main` under `benchmarks/`, `calibration/`, `applications/`, `infra/` or `tools/`, and `research
+metrics show` reads the tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
 which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
@@ -202,7 +202,8 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `calibration/`, `applications/`, `infra/` or
+  `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a

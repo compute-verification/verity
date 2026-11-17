@@ -20,6 +20,11 @@ It prints the vector's τ, U/F_low and margin beside the numbers it was publishe
 of every price, credit and attack, and each claim with what is under it. It exits 1 when the vector fails its check or
 doesn't reproduce a published number. `uv run machine-model` alone prints every command's usage.
 
+`run.py` puts the headline's ε on the Metrics tab (`metrics.toml`'s `compute-accounting/pouw-design-epsilon`, modeled):
+a run through `metrics.toml`'s command writes every family's core ε at each reading as a member (`h200-measured`), then
+the RTX PRO 6000's at the data sheet's reading as the metric's own point. It is the one file here that writes outside
+stdout.
+
 What it computes:
 
 - **Price vectors** (`solve`): the LP that prices every warp instruction class as a convex combination of the rows. Each
