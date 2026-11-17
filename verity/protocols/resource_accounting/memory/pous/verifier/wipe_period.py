@@ -318,7 +318,7 @@ def store_gaps(store: Mapping[str, Any] | None) -> list[str]:
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
     check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
-    signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
+    signed under the memory attester's host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
     any other count is the evidence writer's, which no network attester signed, and certifies no wipe), each
     undeclared tier, what the prover's store leaves out (`store_gaps`) and each link leaving the node that no network
     attester counts. A placement that names the prover's store (`prover_store`, before the placement named no device)

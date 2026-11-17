@@ -1,12 +1,12 @@
 """The streamed wipe's fill at link speed: `wipe_stream.c`, native on the memory challenger's own CPUs, derives the labels
-`streamed_wipe.label` does and writes them to the prover's connection as `wipe_party`'s fill frames, so the challenger
+`streamed_wipe.label` does and writes them to the prover's connection as `wipe_party`'s fill frames, so the memory attester
 streams a whole GPU's memory in minutes, not the hour Python's labels take.
 
 `Streamer.build(directory)` compiles it there (`cc -O3 -pthread`, once a source digest); `gate()` checks its labels
 against `streamed_wipe.labels` at `GATES` under `GATE_KEY` and refuses a mismatch, before any session; `stream(key, n, fd)`
 writes the fill's `n` labels to the connection `fd` and returns the streamer's own figures (`labels_per_s`, `GBps`);
 `rate(n)` derives `n` and drops them. The key goes to the streamer on stdin, never on its command line. Nothing the
-streamer writes is trusted: the challenger checks each answer against `streamed_wipe.label`, so a wrong streamer can fail
+streamer writes is trusted: the memory attester checks each answer against `streamed_wipe.label`, so a wrong streamer can fail
 an honest prover but never pass a dishonest one.
 """
 

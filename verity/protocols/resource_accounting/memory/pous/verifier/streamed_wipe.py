@@ -24,8 +24,8 @@ session has five steps:
    network attester, and gets the start certificate's bytes back.  It keeps them, and its start mark is their SHA-512.
    It does not verify them: bytes that are no certificate cost the session, never the count.  It holds the mark before
    it reads its clock for the fill, so no label is streamed before it.  With no source the start mark is empty.
-3. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
-   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.  Its clock
+3. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the memory attester reads its clock at the first and last chunk.
+   `fill_by(send)` is the same fill streamed by `send`, a streamer on the memory attester's own host given `K`.  Its clock
    is the raw monotonic clock (`raw_clock_ns`), which the header names (`CLOCK`).
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
@@ -280,7 +280,7 @@ def message(commitment: WipeCommitment, ended: str, start_mark: bytes, fill_star
 
 
 def start_message(commitment: WipeCommitment) -> bytes:
-    """The start message, what the challenger hands the network attester before the fill:
+    """The start message, what the memory attester hands the network attester before the fill:
     `SHA-512(START_TAG ‖ u64 len ‖ commitment header)`, the header the commitment's alone (`WipeCommitment.header()`),
     as sorted JSON with no spaces, the way the signed header writes it.  Not signed."""
     head = json.dumps(commitment.header(), sort_keys=True, separators=(",", ":")).encode()

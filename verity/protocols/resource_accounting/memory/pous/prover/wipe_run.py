@@ -2,11 +2,11 @@
 its streamed labels and times its spot reads, the prover keeps the fill and answers them, and the verifier answers the
 session as the wipe's component of onsite Verity (`wipe_period`).
 
-`run(node, params, ...)` runs one wipe: in one process (the challenger under `signer` and `log`, on `clock`), or with
+`run(node, params, ...)` runs one wipe: in one process (the memory attester under `signer` and `log`, on `clock`), or with
 the memory challenger a party of its own (`party`, `wipe_party`), which samples its secret, session id and coins on its
 own host and signs under its own key while the prover answers over a socket. The prover is `wipe_store.Prover` (the
 honest server) unless a test passes another, such as `wipe_store.keeping`. Then the verifier answers
-(`wipe_period.answer`). `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts
+(`wipe_period.answer`). `Side` is the memory attester's side as what starts a run hands it over, wherever `period.json` puts
 it, and `session(side, request, prover)` is the prover's end of it: one session with the side, answered from `prover`
 (`answer`, over `wipe_party`'s frames), with the connection's two addresses as it saw them.
 
@@ -108,7 +108,7 @@ def answer(f: BinaryIO, prover: wipe_store.Prover, stop_after: int | None = None
 
 def session(side: Side, request: Mapping[str, Any], prover: wipe_store.Prover, *,
             stop_after: int | None = None) -> dict[str, Any]:
-    """One wipe with the challenger's side `side` starts: `request` sent, the fill kept and each batch answered by
+    """One wipe with the memory attester's side `side` starts: `request` sent, the fill kept and each batch answered by
     `prover`, the side's report back, with `answered`, the batches the prover answered, and `connection`, the
     socket's `local` and `peer` addresses (`HOST:PORT`) on the prover's side."""
 
@@ -124,7 +124,7 @@ def session(side: Side, request: Mapping[str, Any], prover: wipe_store.Prover, *
 
 @dataclass(frozen=True)
 class Wipe:
-    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`,
+    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the memory attester's `host`,
     the SHA-512 of the key it signs under, `key_sha512`, and whether that is the key the verifier pinned, `key_pinned`;
     with the challenger a party of its own the session's `window` on its clock and the prover's `connection`; with the
     native streamer its gate and figures, `streamer` and `fill`) and the signed session, if signed."""
@@ -156,7 +156,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         coin_secret: bytes | None = None, stop_after: int | None = None, trusted_sha512: str | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL,
         chunk: int = wipe_party.CHUNK) -> Wipe:
-    """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger signs under
+    """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the memory attester signs under
     `signer`, claims its session in `log` and reads `clock` (the raw monotonic clock, which the session's header
     names); `secret`, `session_id` and `coin_secret`
     are fresh from the OS unless a test gives them. With `party` its side runs where `party` starts it, with its own
@@ -174,7 +174,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
-        assert signer is not None and log is not None, "an in-process wipe needs the challenger's signer and log"
+        assert signer is not None and log is not None, "an in-process wipe needs the memory attester's signer and log"
         c = WC.WipeMemoryChallenger(secrets.token_bytes(32) if secret is None else secret, server,
                                     secrets.token_bytes(32) if session_id is None else session_id, params, signer,
                                     log=log, clock=clock, coin_secret=coin_secret)
@@ -218,7 +218,7 @@ streamer (`native`, `wipe_stream` on
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
 `"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
 `egress_bits` is the network certifier's count over the session, in bits, which the verifier's check is given as
-evidence in whole MiB (`streamed_wipe.egress_units`), wherever the challenger runs; `None` gives none, and the check
+evidence in whole MiB (`streamed_wipe.egress_units`), wherever the memory attester runs; `None` gives none, and the check
 takes `EGRESS_MAX_UNITS`, which bounds nothing. `reads` is the session's timed reads: a challenger on this node is started
 with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the subprotocol refuses
 a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
@@ -410,11 +410,11 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
     `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`wipe_period.store_gaps`),
-    the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
+    the links leaving the node (`wipe.links`, and the memory attester's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
     its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
-    the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
+    the signed session's on the memory attester's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())

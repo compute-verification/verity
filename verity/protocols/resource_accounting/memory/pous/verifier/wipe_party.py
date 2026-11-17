@@ -4,7 +4,7 @@ module is what both sides and the verifier share: the wire's frames, the request
 report's readers (`commitment_of`, `signed_of`) and where the challenger ran (`placement`). The challenger's side is
 `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py` (`serve`, `report`, `main`).
 
-The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
+The memory attester listens and the prover connects. The memory attester streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
 includes the fill still in flight. Then it sends each batch as `C ‖ u32 count ‖ u64 index …` (reading the send time),
 and the prover answers with the batch's labels, 64 bytes an index (the challenger reads the receipt time); `E` ends the
@@ -37,7 +37,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_cha
 from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger"
-"""The module `command` starts as the challenger's side: `wipe_challenger.main`."""
+"""The module `command` starts as the memory attester's side: `wipe_challenger.main`."""
 PREMISE = mc.PREMISE
 PARTY = "memory-challenger"
 """The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
@@ -60,7 +60,7 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
     """The session's parameters: the prover's request (`REQUEST_KEYS`: its node, fill, deadline and declared tiers) and
     the challenger's own `reads`."""
     if set(request) != REQUEST_KEYS:
-        raise ValueError(f"a wipe request is {sorted(REQUEST_KEYS)}, not {sorted(request)}: the challenger chooses the "
+        raise ValueError(f"a wipe request is {sorted(REQUEST_KEYS)}, not {sorted(request)}: the memory attester chooses the "
                          "reads (--reads), never the prover")
     return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
 
@@ -73,13 +73,13 @@ def utc(unix_ns: int) -> str:
 
 
 def commitment_of(j: Mapping[str, Any]) -> sw.WipeCommitment:
-    """`WipeCommitment.to_json()`'s inverse, on the challenger's own report."""
+    """`WipeCommitment.to_json()`'s inverse, on the memory attester's own report."""
     p = sw.WipeParams(j["labels"], j["k"], j["batch"], j["limit_ns"], tuple((t, b) for t, b in j["tiers"]))
     return sw.WipeCommitment(bytes.fromhex(j["server"]), bytes.fromhex(j["session"]), p)
 
 
 def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
-    """`SignedWipe.to_json()`'s inverse, on the challenger's own report. A session of another format (`sw.PROTOCOL`),
+    """`SignedWipe.to_json()`'s inverse, on the memory attester's own report. A session of another format (`sw.PROTOCOL`),
     one whose header names another clock than the raw one (`sw.CLOCK`), or one with a start mark that is not one
     (`sw.mark_of`) is refused."""
     if j["commitment"].get("protocol") != sw.PROTOCOL:

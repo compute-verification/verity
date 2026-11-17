@@ -1,6 +1,6 @@
 """`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
 CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
-`wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
+`wipe_side.py`, the memory attester's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
 DIR/answer.json is the subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
 `piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with served.json and the
 summary beside it; the wipe runs on the serve's leased card, or under a lease of its own, by the node's `gpu-lease`
@@ -39,7 +39,7 @@ ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
 DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
-#: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
+#: the SHA-512 of the key the memory attester's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
 AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory challenger's wipe key").hexdigest()
@@ -153,7 +153,7 @@ def _decided(case: dict) -> dict:
 
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
-    accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
+    accepted core answer of verity/wipe/v0 that the case decides, the memory attester the one WIPE_COMMAND starts on
     vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-device's premise reads a rehearsal's
     whatever the host is named), the window's serve dir and the card in served.json, and the
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
@@ -340,7 +340,7 @@ def test_a_gate_key_not_on_the_node_is_refused(node, tmp_path) -> None:
 
 
 def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node, tmp_path) -> None:
-    """WIPE_KEY_SHA512 pins another key than the one the challenger signs under: the wipe runs, honest in every read,
+    """WIPE_KEY_SHA512 pins another key than the one the memory attester signs under: the wipe runs, honest in every read,
     and its answer is a reject (exit 1) naming the key untrusted, decided by a case that trusts no key. The summary
     carries the key the session came with and that it isn't the pinned one."""
     d = tmp_path / "pieces" / "wipe"

@@ -392,7 +392,7 @@ WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_
                 "verity.protocols.resource_accounting.memory.pous.prover.wipe_prover:PROTOCOL"),
                {MEMORY_CHALLENGER: WP.CHALLENGER, PROVER: WP.PROVER}, {WP.CHALLENGER: (sw.raw_clock_ns, sw.CLOCK)},
                MEMORY_CHALLENGER, before=True)
-#: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
+#: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the memory attester's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
                 "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),

@@ -1,5 +1,5 @@
 """The streamed-label wipe's timing on one node: the labels a GPU generates, what reaches host memory and the network
-stack, and the challenge round trips, so the fill time and the challenger's GPU budget are measured
+stack, and the challenge round trips, so the fill time and the memory attester's GPU budget are measured
 (`verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md`, "The streamed-label wipe").
 
 `bench.py all --bin WIPELABELS --scratch DIR --out DIR` runs every step and writes `timing.json`:

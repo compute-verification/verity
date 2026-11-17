@@ -1,6 +1,6 @@
 """The streamed-label wipe (`streamed_wipe`): the label format, an honest session accepted at batch size 1 and refused
 above it, which the guarantee doesn't cover, a wrong or late batch that ends the session with no retry, the fill before
-any challenge, the start mark the challenger holds before the fill and signs in its header, the start and end messages,
+any challenge, the start mark the memory attester holds before the fill and signs in its header, the start and end messages,
 a session of another format or with a mark that is not one refused by the reader, the tiers the fill covers, a verdict
 that fails closed, and the guarantee's bound at the deployed instance and against an exhaustive count on a tiny one.
 Every clock is injected."""

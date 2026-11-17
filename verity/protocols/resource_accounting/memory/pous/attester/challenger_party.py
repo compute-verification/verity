@@ -37,7 +37,7 @@ loop (`challenger_session.run`) on the clock and coins it is given: it reads its
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
 wherever it runs. `start` is how a deployment starts it on the auditor's device (`challenger_session`'s docstring).
 
-`python -m verity.protocols.resource_accounting.memory.pous.attester.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
+`python -m verity.protocols.resource_accounting.memory.pous.attester.challenger_party --device DIR [--listen HOST:PORT]` is the memory attester's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
 "k", "limit_ns", "node"}` (with `audit` and `published` when it names its audit, and P2's parameters, which
 `challenger_session.setup_of` checks against them), and answers the salt request with its source, or prints

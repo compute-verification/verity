@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One streamed wipe of one GPU's memory, as one Attempt. wipe_run's subprotocol on this node: the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
-# streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
+# streams it natively (wipe_stream.c, built and gated on the memory attester's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
 # Lean builds into it):
 #

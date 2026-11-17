@@ -31,7 +31,7 @@
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
 # answer.json (wipe.json's answer, whatever its verdict), served.json (the serve dir and window the wipe precedes,
 # the server, the card, the lease, the run) and stamps.txt (the piece's timeline, a line `UTC EVENT` each: its start,
-# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The subprotocol's case, which holds the challenger's signed session, goes to
+# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The subprotocol's case, which holds the memory attester's signed session, goes to
 # SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
 # piece beside it: case.json and the subprotocol's own answer.json. Its last line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build or verity/

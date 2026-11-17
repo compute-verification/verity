@@ -2,7 +2,7 @@
 `wipe_parties`'s messages). On the coins, clock readings and key `wipe_challenger.serve` is given, the ported challenger
 signs the same bytes, whatever its fill frames' size;
 an honest prover keeping the fill in host memory (`wipe_store.StoreProver`) is accepted by `verity/wipe/v0`'s verdict, one
-keeping foreign content is rejected and one that leaves is undecided; the challenger's transcript keeps each large fill
+keeping foreign content is rejected and one that leaves is undecided; the memory attester's transcript keeps each large fill
 frame as its digest, and the challenger replays from it."""
 
 from __future__ import annotations
@@ -88,7 +88,7 @@ def challenger_capabilities(secret: bytes, params: sw.WipeParams) -> dict:
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=WS.Prover,
          prover=WR.Prover, state=None, request=None, sources=None):
-    """One wipe on the runtime: in a live run on `sources` (the challenger's virtual clock and `SEED`'s coins unless
+    """One wipe on the runtime: in a live run on `sources` (the memory attester's virtual clock and `SEED`'s coins unless
     given; `{}` for the runtime's own)."""
     capabilities = {C: challenger_capabilities(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(chunk), P: prover})

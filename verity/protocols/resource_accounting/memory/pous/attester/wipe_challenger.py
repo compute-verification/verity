@@ -4,7 +4,7 @@ steps `streamed_wipe`'s docstring states), that side as a process of its own ove
 `verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties` declares.
 
 `python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device DIR [--listen HOST:PORT] [--reads K]
-[--streamer build|PATH [--threads T]]` is the challenger's side (`main`, which `wipe_party.command` starts): it reads the
+[--streamer build|PATH [--threads T]]` is the memory attester's side (`main`, which `wipe_party.command` starts): it reads the
 request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one
 prover (`serve`) and prints its report (`report`). With `--streamer` the fill is `wipe_stream`'s, native on this host's
 CPUs and gated before the side listens, and the report adds the streamer's gate (`streamer`) and its figures for the
@@ -22,7 +22,7 @@ replay name no clock, and it signs their readings under the header's name, as `W
 a clock a test injects. Its machine gives it `signing-key` (`capabilities["signer"]`, a
 `memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are
-`wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the prover. The challenger
+`wipe_party.request_of`'s request, which names no reads: the memory attester chooses them, never the prover. The memory attester
 finishes with `report` (private: what it signs is witness), refused by name, and unsigned, when the prover
 leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
 parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
@@ -83,7 +83,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties impo
 )
 
 WINDOW = 8
-"""Fill frames sent before the challenger lets the prover take them."""
+"""Fill frames sent before the memory attester lets the prover take them."""
 logger = logging.getLogger(__name__)
 
 
@@ -227,7 +227,7 @@ class WipeMemoryChallenger:
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
           reads: int = WP.READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = WP.CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> WipeMemoryChallenger:
-    """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
+    """The memory attester's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
     `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first

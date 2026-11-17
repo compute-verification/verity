@@ -257,7 +257,7 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host:
 
 
 def _gone(*args, **kw):
-    raise AssertionError("the answers reach neither the challenger nor the store")
+    raise AssertionError("the answers reach neither the memory attester nor the store")
 
 
 def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
@@ -838,7 +838,7 @@ def _bandwidth_judge(monkeypatch) -> str:
 def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_parties --listen` from the tree with no
     site packages, its close signed by `p2_party_at_leaf`'s key on a session log in ``parties/p2-challenger``), its
-    registration the challenger's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
+    registration the memory attester's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
     it, and a short session, which a toy party's flags hold it to."""
     challenger = tmp_path / "parties" / "p2-challenger"
     challenger.mkdir(parents=True, exist_ok=True)
@@ -870,7 +870,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                                                                                          monkeypatch, case_exe):
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, of the int8 checkpoint or of
     the BF16 one, the bandwidth party's
-    registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
+    registration the memory attester's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
     the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
@@ -943,7 +943,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
 
 @pytest.mark.slow
 def test_a_challenger_record_of_another_store_is_refused_and_no_case_is_made(registered, tmp_path, monkeypatch):
-    """The challenger's record names a store other than the one the piece holds: the prover refuses its registration
+    """The memory attester's record names a store other than the one the piece holds: the prover refuses its registration
     before any pass, the bandwidth answer is undecided naming that, and no case is written, while PoUS's stands."""
     other = hashlib.sha512(b"another store").hexdigest()
 
@@ -960,7 +960,7 @@ def test_a_challenger_record_of_another_store_is_refused_and_no_case_is_made(reg
 
 
 def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served, tmp_path):
-    """The challenger's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
+    """The memory attester's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
     SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
            party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
            pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")
