@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 
 /-!
 # The bits the prover chose, over an execution phase's circuit record
@@ -56,7 +56,7 @@ One step a template and one a declaration: no unit, slot, row or gate is visited
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.RecordChosen
+namespace InferenceOnlyVerifier.RecordChosen
 
 open Lean (Json toJson)
 open Record (Kind Case)
@@ -101,4 +101,4 @@ def checkDetail (j tr : Json) : Json :=
   | .ok r => r
   | .error code => refusal code
 
-end InferenceOnlyCheck.RecordChosen
+end InferenceOnlyVerifier.RecordChosen

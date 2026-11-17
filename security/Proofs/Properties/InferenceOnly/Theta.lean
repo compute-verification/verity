@@ -23,14 +23,14 @@ import Proofs.Properties.InferenceOnly.DescAgree
 /-!
 # θ's provenance check's property, proved
 
-`ThetaProvenance` (`Properties.InferenceOnly.Theta`) of `InferenceOnlyCheck.Theta.evaluate`, from its steps
+`ThetaProvenance` (`Properties.InferenceOnly.Theta`) of `InferenceOnlyVerifier.Theta.evaluate`, from its steps
 (`Proofs.Properties.InferenceOnly.ThetaSteps`) and, for each θ entry naming a node, the policy check's θ fold
-(`DescAgree.nodeThetaFold_ok`), which `InferenceOnlyCheck.Theta.evaluate` runs first.
+(`DescAgree.nodeThetaFold_ok`), which `InferenceOnlyVerifier.Theta.evaluate` runs first.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
@@ -44,4 +44,4 @@ theorem ThetaProvenance : Properties.ThetaProvenance := by
   obtain ⟨k, hk, -⟩ := (DescAgree.nodeThetaFold_ok P i.theta mask hfold).2.1 t ht
   exact ⟨k, hk⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

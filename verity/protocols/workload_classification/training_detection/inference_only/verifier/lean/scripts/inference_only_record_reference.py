@@ -1,5 +1,5 @@
 """The inference-only policy's check of an execution phase's circuit record, unit by unit: the reference
-`InferenceOnlyCheck.Record` is held to.
+`InferenceOnlyVerifier.Record` is held to.
 
     check_detail(instance, trusted) -> {"blocks", "gates", "inputs", "fresh", "cross_wires", "free", "ingress",
                                         "unregistered", "openings", "wired_rows", "wired_bits", "complies", "failure"}
