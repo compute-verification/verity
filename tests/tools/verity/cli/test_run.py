@@ -596,6 +596,23 @@ def test_a_state_of_another_configuration_is_refused(tmp_path, capsys):
     assert rc == 2 and "refused state" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("name", ["onsite_toy", "onsite-toy"])
+def test_verity_run_name_reads_the_applications_file_of_that_name(tmp_path, capsys, monkeypatch, name):
+    monkeypatch.setattr(R, "APPLICATIONS", tmp_path)
+    (tmp_path / "onsite_toy.toml").write_text(K.render(config()))
+    assert R.run_main([name, "--dry-run"], registry()) == 0
+    assert said(capsys.readouterr().out, "DRY")[0]["configuration"] == K.digest(R.load(tmp_path / "onsite_toy.toml", REG))
+
+
+def test_a_name_that_is_no_application_is_refused_with_the_applications_names(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(R, "APPLICATIONS", tmp_path)
+    for name in ("remote", "onsite_toy"):
+        (tmp_path / f"{name}.toml").write_text(K.render(config()))
+    assert R.run_main(["nosuch", "--dry-run"], registry()) == 2
+    assert capsys.readouterr().err == ("verity run: refused application: nosuch is neither a configuration's path nor an "
+                                       "application's name: NAME is one of onsite_toy, remote\n")
+
+
 def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(R, "REGISTRY", None)
     path = tmp_path / "config.toml"

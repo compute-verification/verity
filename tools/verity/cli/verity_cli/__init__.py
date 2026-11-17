@@ -7,8 +7,10 @@
     verity ci ls [--hours H]        recent check runs, running and ended, from the store's live records (tools/check/live.py)
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
-                                    a configuration's parties on this machine, and its verdict (run.py)
+    verity calibrate NAME [ARGS]    calibration/NAME's runner (run.py or run.sh)
+    verity run CONFIG|NAME [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+                                    a configuration's parties on this machine, and its verdict (run.py); NAME is an
+                                    application, applications/NAME.toml
     verity config new|check|hash    write, check or hash a configuration (run.py)
     verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
                                     its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
@@ -23,7 +25,6 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -65,8 +66,6 @@ MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its 
 #: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
 VERIFIER = "verity/protocols/proofs/flock/verifier"
 VERIFY_PROOF_ROOT = "FlockVerify"
-#: the demo `verity demo` runs given no NAME
-DEFAULT_DEMO = "onsite_compute"
 
 
 def verify_proof_exe(root: Path) -> str:
@@ -102,19 +101,6 @@ def _runner(top: str, command: str, args: list[str]) -> int:
         if (d / runner).exists():
             return _run([*argv, str(d / runner), *args[1:]])
     raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
-
-
-def _demo(args: list[str]) -> int:
-    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
-    a flag or there is none."""
-    name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
-    config = ROOT / "applications" / f"{name.replace('-', '_')}.toml"
-    if not config.is_file():
-        names = sorted(p.stem for p in (ROOT / "applications").glob("*.toml"))
-        raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
-    from . import run
-
-    return run.run_main([str(config), *rest])
 
 
 def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
@@ -316,6 +302,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run([sys.executable, str(CHECK / "live.py"), *args[1:]])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
+    if args[0] == "calibrate":
+        return _runner("calibration", "calibrate", args[1:])
     if args[0] == "tasks":
         return _run([sys.executable, str(CHECK / "tasks.py"), *args[1:]])
     if args[0] == "graph":
@@ -326,8 +314,6 @@ def main(argv: list[str] | None = None) -> int:
         from . import run
 
         return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
-    if args[0] == "demo":
-        return _demo(args[1:])
     if args[0] == "verify":
         return _verify(args[1:])
     if args[0] == "lean":

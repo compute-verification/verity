@@ -7,7 +7,7 @@ it, such as the check, a benchmark's runner, Flock's Lean verifier or a configur
 
 ~~~sh
 uv run verity --help
-uv run verity run applications/onsite_full.toml --dry-run
+uv run verity run onsite_full --dry-run
 ~~~
 
 The first prints every subcommand with a line each. The second resolves the onsite application's eight parties and the
@@ -22,7 +22,8 @@ channels between them and runs nothing: it prints a `PLAN` line for each party, 
 | `verity ci` | The check's recent runs, and one run's steps. |
 | `verity tasks`, `verity graph` | The check as a graph of tasks: listed, or one task run here. |
 | `verity bench NAME` | A benchmark's runner. |
-| `verity demo NAME`, `verity run CONFIG` | A configuration's parties on this machine, and its verdict. An application is one configuration file. |
+| `verity calibrate NAME` | A calibration's runner. |
+| `verity run CONFIG\|NAME` | A configuration's parties on this machine, and its verdict. An application is one configuration file, `applications/NAME.toml`. |
 | `verity config` | Writes, checks or hashes a configuration. |
 | `verity verify proof` | Flock's Lean verifier, with its own arguments. |
 | `verity lean try FILE`, `verity lean deployed` | One Lean file elaborated, the edit loop; the deployed guarantees' rows from the locks. |

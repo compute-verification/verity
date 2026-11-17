@@ -1,4 +1,4 @@
-# The committed configurations' hashes: each application, a configuration (`applications/NAME.toml`, the file `verity demo NAME`
+# The committed configurations' hashes: each application, a configuration (`applications/NAME.toml`, the file `verity run NAME`
 # runs), by its path, and its hash as `verity config hash` prints it, which covers the keys the configuration pins.
 # `tests/test_configurations.py` holds this file to those files, so a change to a configuration changes its line here.
 # A device's `trusted-device` holds only under a hash listed here (`memory_attester.trusted_device`): any other file is

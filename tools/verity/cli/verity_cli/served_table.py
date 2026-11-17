@@ -175,7 +175,7 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 #: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
 ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
-#: each application's subprotocols, the file `applications/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
+#: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
 DEMOS = {"onsite_full": ONSITE_COMPONENTS,
          "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
