@@ -24,7 +24,7 @@ JOBS: dict[str, tuple[str, str]] = {
     "unit_costs_menu": ("bench.unit_costs_menu", "pin each model's menu of session shapes"),
     "latency": ("bench.latency", "price a result's rounds as network round trips, per batch"),
     "judge": ("bench.judge", "compare two recorded results: refuse where their identity fields differ, else every ratio"),
-    "cell": ("bench.cell", "plan, launch, check and register one measured cell on its prover and verifier pods"),
+    "cell": ("bench.cell", "plan, launch and check one run of a benchmark on its prover and verifier pods, and register its result"),
     "placement": ("bench.placement", "probe a machine's identity and check where a run's parties are placed"),
     "sweep": ("checker.sweep", "run the reference checker over bench-instances/v1"),
     "search": ("checker.search", "search the checker's gadgets for an accepted wrong output"),

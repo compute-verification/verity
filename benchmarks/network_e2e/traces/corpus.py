@@ -775,7 +775,7 @@ def tick_from(d: Path) -> dict:
 
 def tick_for(traces: list[str], trace: str | None, given_ms: str | None) -> dict:
     """``--admit tick``'s constants for a run of `traces` (`tick_args`). Refused for the hostile schedulers' traces, and
-    for a `NETWORK_CERTIFIER` trace unless its network attester's bucket is τ_b, since that certifier's release buckets and
+    for a `NETWORK_CERTIFIER` trace unless its network attester's bucket is τ_b, since that network attester's release buckets and
     watermark lines are then the tick's buckets."""
     if bad := [n for n in traces if n in HOSTILE]:
         raise SystemExit(f"--admit tick doesn't serve the hostile schedulers' traces {bad}")

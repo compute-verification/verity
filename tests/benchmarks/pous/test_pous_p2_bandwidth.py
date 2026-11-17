@@ -29,12 +29,17 @@ sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts
 
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"))
+
+import pous_test_signer as ts  # noqa: E402
+
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
+AT_LEAF = hashlib.sha512(ts.AtLeaf(b"p2-party-at-leaf").public_key).hexdigest()
 
 
 def held_to(windows: int = 2, passes: int = 2, samples: int = 64) -> str:
@@ -222,7 +227,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         return (f"cd {ROOT} && exec {sys.executable} -S -E {Path(__file__).resolve().parent / 'p2_party_at_leaf.py'} "
                 f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
                 f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)} "
-                f"--challenger {tmp_path / 'challenger'} --session {session.hex()}")
+                f"--challenger {tmp_path / 'challenger'} --session {session.hex()} --trusted-sha512 {AT_LEAF}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--party-host", "127.0.0.1", "--device", "cpu",
             "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
@@ -273,7 +278,8 @@ def test_with_case_exe_the_case_answer_is_the_executables(tmp_path) -> None:
     party = (f"cd {ROOT} && exec {sys.executable} -S -E {Path(__file__).resolve().parent / 'p2_party_at_leaf.py'} "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
              f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)} "
-             f"--challenger {tmp_path / 'challenger'} --session {hashlib.sha512(b'judged').hexdigest()[:64]}")
+             f"--challenger {tmp_path / 'challenger'} --session {hashlib.sha512(b'judged').hexdigest()[:64]} "
+             f"--trusted-sha512 {AT_LEAF}")
     exe = tmp_path / "judge"
     exe.write_text(JUDGE.format(python=sys.executable, commitment="00" * 64, protocol=p2_case.PROTOCOL))
     exe.chmod(0o755)

@@ -38,6 +38,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import wi
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+CARD_FILES = ROOT / "hardware/cards"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -84,7 +85,7 @@ def main() -> int:
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
                     help="a paced stretch's groups are counted at this pass (0: the calibration's median)")
-    ap.add_argument("--hbm-bytes", type=int, default=load_card("rtx-pro-6000-server")["store"]["dram"]["value"],
+    ap.add_argument("--hbm-bytes", type=int, default=load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["dram"]["value"],
                     help="the memory line's capacity: one GPU's, its card's `store.dram`")
     ap.add_argument("--prover-py", default=sys.executable)
     ap.add_argument("--prover-cpus", help="the prover's cores (taskset -c; default this process's)")
@@ -101,7 +102,7 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
+    cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]

@@ -8,7 +8,7 @@ in hex:
 * ``params``: ``{"not_before_ns": n, "request": R, "session": hex, "trusted": [hex, …]}``, the verifier's clock floor,
   the prover's request R, which the replay refuses unless it restates `p2_parties.SESSION` (`P2Session.SESSION`, pinned
   there, since no digest binds R), naming each value that doesn't, so a toy party's case is refused; the session id
-  the auditor gave the memory challenger that ran the party; and the memory challengers' keys the check trusts;
+  the auditor gave the memory attester that ran the party; and the memory attesters' keys the check trusts;
 * ``commitment``: the auditor's registration file, its fields and its plan (`p2_parties.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
 * ``evidence``: ``{"close": {"chain", "lines", "public_key", "signature"}, "log": [...]}``. The log is every request the
@@ -16,9 +16,9 @@ in hex:
   line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
   `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
-  challenger's signature over the whole case: its key, the log's length, the chain (`chain`) of the case's head
+  attester's signature over the whole case: its key, the log's length, the chain (`chain`) of the case's head
   (`head`: the commitment's digest and the params' clock floor) and then its log, and the signature on the role's
-  message (`lms.memory_challenger_message`) of the session and `close_record`, `Poub.P2Close`'s bytes. That
+  message (`lms.memory_attester_message`) of the session and `close_record`, `Poub.P2Close`'s bytes. That
   chain is the one SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`);
 * ``store_root``: the store the session audits, its registration's root, 128 lowercase hex characters. That root is the
   root of `C*` PoUS's setup published (`pous.run.Setup.root`), so `same_store` holds it to PoUS's run case. No digest
@@ -27,7 +27,7 @@ in hex:
 The evidence holds `C*`'s opened blocks and the verifier's coins and clock: it is witness, and `write` puts a case only
 in a private directory (0700, its files 0600). The case's answer (`answer`) is the core form of the session's own
 answer (`P2Session.answer`), which the Lean's replay of the case is held to; `judged` is the Lean's, given its
-executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory challenger to
+executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory attester to
 sign its close (`p2_parties.Closer`), has no case.
 """
 
@@ -96,7 +96,7 @@ def close_record(lines: int, chain_: bytes) -> bytes:
 
 def close_of(signer: Any, session: bytes, head_: bytes, log: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """The close of the case whose head is `head_` (`head`) and whose log is `log`, which `signer` (a
-    `memory_challenger.Signer`) signs on `session`."""
+    `memory_attester.Signer`) signs on `session`."""
     c = chain(head_, log)
     return {"chain": c.hex(), "lines": len(log), "public_key": signer.public_key.hex(),
             "signature": signer.sign(session, close_record(len(log), c)).hex()}
@@ -106,14 +106,28 @@ def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_bef
             log: Sequence[Mapping[str, Any]], *, session: bytes, trusted: Sequence[bytes],
             close: Mapping[str, Any]) -> dict[str, Any]:
     """The case of a session over the store `registration` (`p2_parties.registration_json`, with its plan): the
-    prover's `request`, the verifier's clock floor, the memory challenger's `session` id, the keys the check
-    `trusted`, its process's `log` and the memory challenger's `close` of it (`close_of`; module docstring)."""
+    prover's `request`, the verifier's clock floor, the memory attester's `session` id, the keys the check
+    `trusted`, its process's `log` and the memory attester's `close` of it (`close_of`; module docstring)."""
     commitment = canonical_json_bytes(dict(registration))
     evidence = canonical_json_bytes({"close": dict(close), "log": [dict(x) for x in log]})
     params = {"not_before_ns": not_before_ns, "request": dict(request), "session": bytes(session).hex(),
               "trusted": [bytes(k).hex() for k in trusted]}
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params,
             "store_root": registration["root"]}
+
+
+def close_key(case: Mapping[str, Any]) -> bytes | None:
+    """None when the evidence holds no close; raises when it doesn't decode."""
+    close = json.loads(bytes.fromhex(case["evidence"])).get("close")
+    return None if close is None else bytes.fromhex(close["public_key"])
+
+
+def trusting(case: Mapping[str, Any], key_sha512: str | None) -> dict[str, Any]:
+    """`case` trusting the close's key only when its SHA-512 is `key_sha512`, else no key. The case's own list is
+    never trusted: whoever kept the case wrote it."""
+    key = close_key(case)
+    trusted = [key.hex()] if key is not None and hashlib.sha512(key).hexdigest() == key_sha512 else []
+    return dict(case) | {"params": dict(case["params"]) | {"trusted": trusted}}
 
 
 def digest(case: Mapping[str, Any]) -> bytes:
@@ -221,5 +235,5 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
 
 
 __all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_JUDGE", "PROTOCOL",
-           "STORE_ROOT", "answer", "case_of", "chain", "close_of", "close_record", "digest", "head", "head_of",
-           "judged", "same_store", "serve", "store_root", "unjudged", "write"]
+           "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest", "head", "head_of",
+           "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]

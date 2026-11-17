@@ -10,8 +10,7 @@
 # `onsite_cases` in the file ONSITE_PIECES names (`served_verdicts.sh`'s, which exports it). Then, where the tree has
 # `served_cases.py`, the cases on the window's docket R (its docstring), each under SERVE_DIR/private:
 # SPOT's one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
-# SPOT case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
-# so a window of several members has none and each composite names SPOT missing, in the form `one-stage`)
+# SPOT case (a5's v2 case of a `--zk` audit, in the form `one-stage`)
 # and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
@@ -29,14 +28,14 @@
 # COMPONENTS), but for ONSITE_SKIP's, which `onsite_cases` sets to those of a PoUS or wipe case that is not its piece's
 # with its Lean's answer, and for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R;
 # each within
-# COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
-# COMPOSITE_MEM_GB GiB (default 170). A case's evidence and params, and an answer's query, digests and profile, are
-# witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
+# COMPOSITE_TIMEOUT (default 60m) and COMPOSITE_MEM_GB GiB (default 170): a systemd user scope's MemoryMax, else
+# prlimit's address-space limit, and on a host with neither it is not run. A case's evidence and params, and an
+# answer's query, digests and profile, are witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
 # each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
-# NOT_STARTED: no check runs outside a memory scope of its own, CHECK_MEM_GB, or on blob files that sum past
+# NOT_STARTED: no check runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
 # CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
 # product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
@@ -48,8 +47,9 @@
 # makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED line names
 # the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
-# POUW=pearlplus, where the tree has remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
-# subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case), that one (composite.py remote-v1), else v0.
+# POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
+# subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
+# lacks it none (`COMPOSITE: not run`, exit 1), else v0.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
@@ -83,7 +83,11 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
   remote) products=(remote)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
+    if [ "${POUW:-}" = pearlplus ]; then
+      [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/compose/verifier/remote/RemoteV1Main.lean"; exit 1; }
+      products=(remote-v1)
+    fi ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 [ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
@@ -106,9 +110,15 @@ exe() {  # Lean executable $1 of package dir $2, built, its path printed
     || { say "COMPOSITE: $1 doesn't build in $2 (its log on the node)" >&2; return 1; }
   echo "$TREE/$2/.lake/build/bin/$1"
 }
-scope=()
-command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
-  && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${COMPOSITE_MEM_GB:-170}G" -p MemorySwapMax=0 --)
+if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+  scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${COMPOSITE_MEM_GB:-170}G" -p MemorySwapMax=0 --)
+elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then
+  # RLIMIT_AS binds each process alone: each Lean composite.py starts gets the whole limit, not a share of it.
+  scope=(prlimit "--as=$((${COMPOSITE_MEM_GB:-170} << 30))" --)
+else
+  say "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a memory limit of its own"
+  exit 1
+fi
 
 [ "$PRODUCT" != onsite ] || onsite_cases
 

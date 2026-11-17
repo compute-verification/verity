@@ -15,7 +15,7 @@
 
 `run` first runs the guard, then each attack against the network attester (`parties.py`: a server that picks a bit an
 interval and times its writes by it, the attester, and an observer on the client side, three processes on this host's
-loopback and monotonic clock), `--repeat` times each with each observer, and prints one JSON line, which it also writes
+loopback and raw monotonic clock), `--repeat` times each with each observer, and prints one JSON line, which it also writes
 to `--out`/result.json (`$OUT` under `research run`): `value`, the most bits an interval any attack showed
 (`channel.measure`'s `bits`, of that attack's pooled runs), with its `unit`, its 95% `lower` and `upper`, the scored
 intervals `n`, the `commit`, the `run`, the host, the target and every case; `ceiling` is the largest of the attacks'
@@ -32,7 +32,7 @@ its pacer, the server and the observer a core each of the run's; `--gate-ms` kee
 server around each release (`parties.network`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
 `--awake` keeps every one of the run's cores from halting (`parties.awake`).
 
-`guard` is the check that the measurement sees a channel: against a certifier that paces nothing (`relay`), a server
+`guard` is the check that the measurement sees a channel: against a network attester that paces nothing (`relay`), a server
 that delays an interval's bytes by half an interval on bit 1 must show at least `PLANTED_MIN` bits an interval, and
 the same server writing as for bit 0 whatever its bits at most `IGNORED_MAX`.
 
@@ -89,10 +89,12 @@ import channel  # noqa: E402
 import parties  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 from parties import (  # noqa: E402
-    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, plan_of, span_s,
+    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, now, plan_of, span_s,
 )
 
 SCHEMA = "certifier-timing/result/v1"
+#: the metric's id (metrics.toml), the name `run` writes its number under
+METRIC = "network-accounting/release-timing-bits"
 #: the guard's two bounds, in bits an interval
 PLANTED_MIN, IGNORED_MAX = 0.9, 0.05
 #: a server write that ended this long after its time is counted late (`late_writes`), and a pacer's release that
@@ -177,10 +179,8 @@ def base_time(opening_s: float, now_s: float, interval_ms: int) -> float:
 def _launch(cfg: dict) -> list[str]:
     """Set the case's launch gate, which opens `after_ms` past each release time from the origin's on; the command
     that removes it."""
-    base = base_time(cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000, time.monotonic(),
-                     cfg["interval_ms"])
-    if cfg["launch"]["mode"] != "gate":
-        base += time.clock_gettime(CLOCK_TAI) - time.monotonic()
+    base = base_time(cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000, now(), cfg["interval_ms"])
+    base += time.clock_gettime(time.CLOCK_MONOTONIC if cfg["launch"]["mode"] == "gate" else CLOCK_TAI) - now()
     setup, remove = launch_commands(cfg["launch"], base, cfg["interval_ms"])
     for command in setup:
         done = subprocess.run(command, capture_output=True, text=True)
@@ -204,7 +204,7 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
     attester imports `verity` from `tree`. With `listen` the observer is another host's (`observe`): the attester
     listens there for `wait_s`, the line that says so is printed, and no observer.json is left."""
     out.mkdir(parents=True, exist_ok=True)
-    cfg = cfg | {"out": str(out), "origin": time.monotonic() + cfg["start_s"]}
+    cfg = cfg | {"out": str(out), "origin": now() + cfg["start_s"]}
     cfg["stop"] = cfg["origin"] + cfg.get("wait_s", 0.0) + span_s(cfg)
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
     party = [sys.executable, str(HERE / "parties.py")]
@@ -233,7 +233,7 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
             waited = [server]
         else:
             waited = [start("observer", *(f"{k}={ready[k]}" for k in ("port", "hello", "chunk"))), server]
-        limit = cfg["stop"] - time.monotonic() + 30.0
+        limit = cfg["stop"] - now() + 30.0
         codes = [p.wait(limit) for p in waited]
         for p in started:
             if p not in waited:
@@ -417,15 +417,16 @@ def verdict(cases: list[dict]) -> dict | None:
 
 
 def host() -> dict:
-    """Where a `run`'s parties are: all three on this host, on its loopback and its monotonic clock."""
+    """Where a `run`'s parties are: all three on this host, on its loopback and its raw monotonic clock."""
     model = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
                   if line.startswith("model name")), None) if Path("/proc/cpuinfo").exists() else None
     idle = Path("/sys/devices/system/cpu/cpuidle/current_driver")
     return {"name": platform.node(), "kernel": platform.release(), "cpu": model,
             "cpus": sorted(os.sched_getaffinity(0)), "cpuidle": idle.read_text().strip() if idle.exists() else None,
             "parties": "the server, the certifier and the observer are processes on this one host, over loopback",
-            "clock": "CLOCK_MONOTONIC of this host (time.monotonic), read by all three; the kernel's stamps are its "
-                     "wall clock's, moved to it by the two clocks' difference as the observer started"}
+            "clock": "CLOCK_MONOTONIC_RAW of this host, the network attester's, read by all three; the kernel's "
+                     "stamps are its wall clock's, moved to it by the two clocks' difference as the observer started "
+                     "and as it ended"}
 
 
 def summarize(cases: list[dict]) -> dict:
@@ -496,7 +497,7 @@ def _table(docs: list[dict]) -> str:
 
 
 def _hello(certifier: str, tree: Path) -> tuple[str, int]:
-    """What an observer sends a certifier of `tree` and the bytes of one interval: the relay takes the request as it
+    """What an observer sends a network attester of `tree` and the bytes of one interval: the relay takes the request as it
     is, the network attester in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
@@ -632,7 +633,30 @@ def main(argv: list[str] | None = None) -> int:
         "pin": args.pin, "gate_ms": args.gate_ms, "waker_ms": args.waker_ms, "awake": args.awake} | SCHEDULE)
     (out / "result.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({k: v for k, v in doc.items() if k != "cases"}))
-    return 1 if not doc["guard"]["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
+    code = 1 if not doc["guard"]["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
+    if SHARED.RESEARCH_RUN_DIR:
+        record(doc, out, code)
+    return code
+
+
+def record(doc: dict, out: Path, code: int) -> None:
+    """The research run's own result, through the harness kit's writer: its validation, whether `run` exited 0, and
+    where it did, `value` under `METRIC`."""
+    from verity_bench import kit
+
+    writer = kit.writer(out)
+    kept, base = (out / "result.json").resolve(), writer.out.resolve()
+    detail = ("the guard holds and every case is a measurement" if code == 0 else "the guard does not hold" if code == 1
+              else "; ".join(doc["problems"]) or "no attack was scored")
+    writer.validation("passed" if code == 0 else "failed", "benchmarks/certifier_timing/run.py", detail,
+                      [kept.relative_to(base).as_posix()] if kept.is_relative_to(base) else [])
+    if code == 0:
+        one_host = all(c.get("observer_host") in (None, c.get("host")) for c in doc["cases"])
+        writer.measurement(METRIC, doc["value"], "bits a release interval", (doc["lower"], doc["upper"]),
+                           mark="measured", extra={"cpu": doc["host"]["cpu"], "interval_ms": doc["interval_ms"],
+                                                   "n": doc["n"], "best": doc["best"], "one_host": one_host,
+                                                   "awake": doc["certifier"]["awake"],
+                                                   "paced_ms": doc["certifier"]["paced_ms"]})
 
 
 if __name__ == "__main__":

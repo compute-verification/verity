@@ -10,8 +10,6 @@ commits per call (`native_host.CALL_DEPENDENT_RE`):
   `0` / `1`, so the hook's `<linear>/0` binds the one left, y."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import pytest
 
 from tests.acquire.glm53_model import CMAP, ENV
