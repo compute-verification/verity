@@ -43,17 +43,16 @@ edit to `codec.py`.
 
 **Proof support:** none (no kind here has a Rust twin in `zk/sp1/common/src/gateset.rs`).
 
-**Vocabulary pin:** `REF_VOCAB_VERSION` and `ref_vocab_digest()` (SHA-256 over the version string, this module's source,
-every reference kind's `(id, body/evaluator source hash)` and the shared `prims.py` primitives' `(id, evaluator source
-hash)`), for the importer's provenance record, which pins the primitive vocabulary and numerical dependencies.
+**Vocabulary pin:** `REF_VOCAB_VERSION` and `ref_vocab_digest()` (SHA-512 over the version string, this module's code
+digest, every reference kind's `(id, body/evaluator code digest)` and the shared `prims.py` primitives' `(id, evaluator
+code digest)`; a code digest is `definitions.code_digest`'s, which no comment, docstring or import sorting moves), for the
+importer's provenance record, which pins the primitive vocabulary and numerical dependencies.
 """
 
 from __future__ import annotations
 
 import decimal
 import hashlib
-import inspect
-import os
 from fractions import Fraction
 from functools import lru_cache
 
@@ -784,40 +783,38 @@ SHARED_FAMILIES = {"GatherBf16x{V}": P.gather_bf16, "GatherF32x{V}": gather_f32}
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _src_hash(obj) -> str:
+def _code(obj) -> str:
+    from verity_vllm.definitions.code_digest import code_digest
     try:
-        src = inspect.getsource(obj)
+        return code_digest(obj)
     except (OSError, TypeError):
-        src = repr(obj)
-    return hashlib.sha256(src.encode()).hexdigest()
+        return hashlib.sha512(repr(obj).encode()).hexdigest()
 
 
 def ref_vocab_manifest() -> dict:
-    """The reference vocabulary as data: version, module source hash, every reference kind with its body/evaluator
-    source hash, the shared primitives with their evaluator source hashes, the on-demand families."""
-    here = os.path.abspath(__file__)
-    with open(here, "rb") as fh:
-        module_sha = hashlib.sha256(fh.read()).hexdigest()
+    """The reference vocabulary as data: version, this module's code digest, every reference kind with its body/evaluator
+    code digest, the shared primitives with their evaluators', the on-demand families'."""
+    import sys
     kinds = {}
     for p in REF_PRIMITIVES:
-        kinds[p.id] = {"kind": "primitive", "evaluator_sha256": _src_hash(p.evaluate),
+        kinds[p.id] = {"kind": "primitive", "evaluator_code": _code(p.evaluate),
                        "params": [[n, repr(t)] for n, t in p.params], "ret": repr(p.ret)}
     for c in REF_COMPOSITES:
-        kinds[c.id] = {"kind": "composite", "statics": list(c.statics), "body_sha256": _src_hash(c.body),
-                       "signature_sha256": _src_hash(c.signature)}
-    shared = {p.id: {"kind": "primitive", "evaluator_sha256": _src_hash(p.evaluate)} for p in SHARED_PRIMITIVES}
+        kinds[c.id] = {"kind": "composite", "statics": list(c.statics), "body_code": _code(c.body),
+                       "signature_code": _code(c.signature)}
+    shared = {p.id: {"kind": "primitive", "evaluator_code": _code(p.evaluate)} for p in SHARED_PRIMITIVES}
     for c in SHARED_COMPOSITES:
-        shared[c.id] = {"kind": "composite", "body_sha256": _src_hash(c.body)}
-    families = {name: _src_hash(fn) for name, fn in SHARED_FAMILIES.items()}
-    return {"schema": "verity-ir/ref-vocab/v0", "version": REF_VOCAB_VERSION, "module": "verity_vllm.definitions.registry.ref_prims",
-            "module_sha256": module_sha, "decimal_precision": _DEC_PREC, "kinds": kinds, "shared": shared, "families": families}
+        shared[c.id] = {"kind": "composite", "body_code": _code(c.body)}
+    families = {name: _code(fn) for name, fn in SHARED_FAMILIES.items()}
+    return {"schema": "verity-ir/ref-vocab/v1", "version": REF_VOCAB_VERSION, "module": __name__,
+            "module_code": _code(sys.modules[__name__]), "decimal_precision": _DEC_PREC, "kinds": kinds, "shared": shared,
+            "families": families}
 
 
 def ref_vocab_digest() -> str:
-    """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what a derived program's provenance records."""
-    import json
-    m = ref_vocab_manifest()
-    return hashlib.sha256(json.dumps(m, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    """SHA-512 over the canonical JSON of `ref_vocab_manifest()` — what a derived program's provenance records."""
+    from verity.circuits.codec import canonical_json
+    return hashlib.sha512(canonical_json(ref_vocab_manifest())).hexdigest()
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",

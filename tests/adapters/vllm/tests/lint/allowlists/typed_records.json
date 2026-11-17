@@ -50,7 +50,7 @@
     {"file": "verity_vllm/settings.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/settings/v1"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/gemm-correspondence/v1"},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/twins/v1"},
-    {"file": "verity_vllm/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
+    {"file": "verity_vllm/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v1"},
     {"file": "verity_vllm/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"}
   ]
 }

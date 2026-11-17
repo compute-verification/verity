@@ -9,7 +9,8 @@
   digest records primitives by id and signature and the codec retrieves their evaluators from the registry at
   decode time, so the digest alone does not pin them (§8.1). This record does: the ids, signatures and
   conformance statuses of every registered primitive, the ids and static parameters of every registered
-  composite, and the SHA-256 of the registry sources that define the evaluators. It is part of every
+  composite, and the code digests of the registry modules that define the evaluators, which no comment, docstring
+  or import sorting moves. It is part of every
   derivation's provenance; conformance evidence should be keyed by (program digest, specialisation, this version).
 """
 
@@ -20,11 +21,12 @@ import inspect
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity_vllm.definitions.code_digest import code_digest
 
 
 def registry_version() -> dict:
     """The primitive-vocabulary version: ids + signatures + conformance of every primitive, ids + statics of
-    every composite, and the SHA-256 of the registry sources; `digest` is the SHA-256 of that record."""
+    every composite, and the registry modules' code digests (`code_digest`); `digest` is the SHA-512 of that record."""
     from verity_vllm.definitions.registry import b1, prims  # registration
     # The record is computed over the DECLARED vocabulary (module-level definitions of `registry.prims` / `registry.b1`),
     # not over `registry.defs` at call time: after a program is built the registry also holds shape-instantiated
@@ -46,13 +48,10 @@ def registry_version() -> dict:
                 comp_rows.append([d.id, list(d.statics), d.conformance])
     prim_rows.sort(key=lambda r: r[0])
     comp_rows.sort(key=lambda r: r[0])
-    sources = {}
-    for mod in (prims, b1):
-        src = inspect.getsource(mod).encode()
-        sources[mod.__name__] = hashlib.sha256(src).hexdigest()
-    rec = {"schema": "verity-ir/registry-version/v0", "primitives": prim_rows, "composites": comp_rows, "sources": sources}
-    digest = hashlib.sha256(canonical_json(rec)).hexdigest()
-    return {"schema": rec["schema"], "digest": digest, "primitives": len(prim_rows), "composites": len(comp_rows), "sources": sources}
+    code = {mod.__name__: code_digest(mod) for mod in (prims, b1)}
+    rec = {"schema": "verity-ir/registry-version/v1", "primitives": prim_rows, "composites": comp_rows, "code": code}
+    digest = hashlib.sha512(canonical_json(rec)).hexdigest()
+    return {"schema": rec["schema"], "digest": digest, "primitives": len(prim_rows), "composites": len(comp_rows), "code": code}
 
 
 __all__ = ["registry_version"]

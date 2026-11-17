@@ -116,7 +116,7 @@ def DivFullScaleAV2(a: int, b: int) -> int:
 @primitive("F32Sub", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
 def F32SubV2(a: int, b: int) -> int:
     """FSUB: RN(a - b), no ftz; every NaN result `F32_NAN_PTX`.  `F32Sub_v1` is a reference primitive (`ref_prims`, NaN
-    0x7FC00000), whose module source is its vocabulary's pin, so the GPU's version lives here."""
+    0x7FC00000), whose module code is its vocabulary's pin, so the GPU's version lives here."""
     return f32_gpu_nan(f32_sub_bits(a, b))
 
 

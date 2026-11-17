@@ -3,12 +3,14 @@ encodings (§8.5), the registry version record (§8.1). Runs locally."""
 
 from __future__ import annotations
 
+import inspect
+
 from verity.circuits import Program, bind
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity.circuits.liveness import dead_gates
 from verity.circuits.refs import Coll, Concat, Strided, array_of
 from verity.circuits.types import Array
-from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import b1, hopper, prims
 from verity_vllm.definitions.registry.prims import F32
 
 from tests.frontend.running_example import Id16, Relu16, make_program
@@ -168,6 +170,23 @@ def test_a_bindings_diff_names_a_function_by_its_id():
 
 def test_registry_version_is_stable_and_names_the_vocabulary():
     v1, v2 = registry_version(), registry_version()
-    assert v1["digest"] == v2["digest"] and len(v1["digest"]) == 64
+    assert v1["digest"] == v2["digest"] and len(v1["digest"]) == 128
     assert v1["primitives"] > 20 and v1["composites"] >= 20
-    assert set(v1["sources"]) == {"verity_vllm.definitions.registry.prims", "verity_vllm.definitions.registry.b1"}
+    assert set(v1["code"]) == {"verity_vllm.definitions.registry.prims", "verity_vllm.definitions.registry.b1"}
+
+
+def test_registry_version_holds_under_a_comment_and_a_docstring_and_moves_with_a_constant(monkeypatch):
+    real, src = inspect.getsource, inspect.getsource(prims)
+    before = registry_version()["digest"]
+
+    def digest_with(text: str) -> str:
+        monkeypatch.setattr(inspect, "getsource", lambda o: text if o is prims else real(o))
+        try:
+            return registry_version()["digest"]
+        finally:
+            monkeypatch.setattr(inspect, "getsource", real)
+
+    assert prims.__doc__ and prims.__doc__ in src
+    assert digest_with(src.replace(prims.__doc__, "Another docstring.", 1) + "\n# a closing comment\n") == before
+    assert '", 1, [' in src
+    assert digest_with(src.replace('", 1, [', '", 2, [', 1)) != before

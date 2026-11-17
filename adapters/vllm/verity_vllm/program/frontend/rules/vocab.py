@@ -145,7 +145,7 @@ PROFILE_B1_EAGER = Vocabulary(
 # -- reference: NUMERIC's reference kinds (`adapters/vllm/verity_vllm/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
-# `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
+# `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body code digest).
 
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,

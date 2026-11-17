@@ -757,9 +757,9 @@ def test_ref_vocab_manifest_and_digest():
     for d in R.REF_PRIMITIVES + R.REF_COMPOSITES:
         assert d.id in ids and d.id in REGISTRY
     assert "GatherBf16x{V}" in m["families"] and "GatherF32x{V}" in m["families"]
-    assert all(len(v["evaluator_sha256"]) == 64 for v in m["shared"].values() if "evaluator_sha256" in v)
+    assert all(len(v["evaluator_code"]) == 128 for v in m["shared"].values() if "evaluator_code" in v)
     d1, d2 = R.ref_vocab_digest(), R.ref_vocab_digest()
-    assert d1 == d2 and len(d1) == 64
+    assert d1 == d2 and len(d1) == 128
     assert all(d.conformance.startswith("reference-defined") for d in R.REF_PRIMITIVES + R.REF_COMPOSITES)
     RECORD_DIR.mkdir(parents=True, exist_ok=True)
     (RECORD_DIR / "ref-vocab-manifest.json").write_text(json.dumps({"digest": d1, **m}, indent=1, sort_keys=True) + "\n")
