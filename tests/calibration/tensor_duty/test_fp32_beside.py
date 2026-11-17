@@ -17,6 +17,7 @@ R_1980 = 132 * 4096 * 1980e6
 F_1980 = 132 * 128 * 1980e6
 R_A = 0.98 * R_1830
 IDEAL = 128 * 64 / 67
+H200 = "h200-sxm-141gb"
 
 
 def bpoint(arm: str, *, x: float = 0, p: float | None = None, share: float = 0.0, clock: str = "1980",
@@ -39,6 +40,7 @@ def run(tmp_path: Path, *pts: dict, smi: str = "", name: str = "out") -> tuple[i
     out = tmp_path / name
     out.mkdir()
     (out / "beside.jsonl").write_text("".join(json.dumps(p) + "\n" for p in pts))
+    (out / "found.json").write_text(json.dumps({"name": "NVIDIA H200"}))
     if smi:
         (out / "smi.csv").write_text(smi)
     rc = S.main([str(out), "--arms", "fp32-beside", "--json", str(tmp_path / f"{name}.json")])
@@ -51,12 +53,12 @@ def verdicts(v: dict) -> dict[str, str]:
 
 def test_the_two_readings_and_their_ceilings_come_from_the_card() -> None:
     """The default first, then the tensor-clock reading, each with its ceilings; no third reading."""
-    rd = S.price_readings()
+    rd = S.price_readings(H200)
     assert [(r["reading"], r["price"], r["default"]) for r in rd] == [("sm", 32, True), ("tensor", 29.58, False)]
     assert [r["tensor_ceiling"] for r in rd] == pytest.approx([R_1980, R_1830])
     assert [r["fp32_ceiling"] for r in rd] == pytest.approx([F_1980, F_1980])
     assert "never exceeds 1830 MHz" in rd[1]["source"]
-    assert S.ideal_adds() == pytest.approx(IDEAL)
+    assert S.ideal_adds(H200) == pytest.approx(IDEAL)
 
 
 def test_points_under_every_ceiling_refute_neither_reading_whatever_p_reads(tmp_path: Path) -> None:
