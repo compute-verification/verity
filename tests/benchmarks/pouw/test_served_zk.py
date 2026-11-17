@@ -1422,7 +1422,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
         assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
             f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
-            "to the template or to Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
+            "to the template or to Flock's lowering lands its new digest in PouwVerifier/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, sample, t, (out / "pub.bin").read_bytes(), op, record=ORL.Record()) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

@@ -31,7 +31,7 @@ commitment, the given source and the node's sample. `--tie W.json` holds the pas
 
 @[expose] public section
 
-open Lean PouwCommit PouwCheck.PearlPlus
+open Lean PouwCommit PouwVerifier.PearlPlus
 
 structure Args where
   coins : Option String := none
@@ -124,7 +124,7 @@ def main (argv : List String) : IO UInt32 := do
           try cache := cache.insert full (← IO.FS.readBinFile full) catch _ => pure ()
         if !checked.contains (full, spec.compress) then
           checked := checked.insert (full, spec.compress) (match cache.get? full with
-            | some b => PouwCheck.PearlPlus.held spec b
+            | some b => PouwVerifier.PearlPlus.held spec b
             | none => throw s!"FileNotFoundError: {f}")
   let files := checked
   let pl? := (plan input).toOption

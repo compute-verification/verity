@@ -33,7 +33,7 @@ open Pouw.PearlPlus.Sample (cells tickets_eq mem_cells dvd_lcmOf lcmOf tile?_off
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCheck.PearlPlus
+open PouwVerifier.PearlPlus
 
 open Classical
 

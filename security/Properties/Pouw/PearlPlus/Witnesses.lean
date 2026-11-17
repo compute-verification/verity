@@ -13,7 +13,7 @@ public import PouwPearlPlus
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 /-- The hm96 tile tree of one position that `rowsDomain` builds under a zero binding, owner −1 (a transcript's). -/
 def witnessDomain : RowsDomain :=

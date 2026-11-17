@@ -62,7 +62,7 @@ end ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
-open PouwCheck
+open PouwVerifier
 open Lean (Json)
 open PouwWindow (Work Sampling)
 
@@ -72,7 +72,7 @@ def h1Tile : Tile := tiles[4]
 /-- The subprotocol's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
 entries bound 1024, no coin mode. -/
 def h1Check : CheckItem :=
-  { entries := 1024, scheme := PouwCheck.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
+  { entries := 1024, scheme := PouwVerifier.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
 
 /-- The subprotocol's check parameters (`h1_params`) in the period's context `context`. -/
 def h1Params (context : String) : Params where
@@ -105,7 +105,7 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Exec
   program := program
   query := h1Tile.query
   partition := partition
-  scheme := PouwCheck.scheme
+  scheme := PouwVerifier.scheme
   population := 144
   samplingDesign := subsetSamplingDesign 24
   roots := #[]
@@ -133,7 +133,7 @@ end Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
-open PouwCheck (Params)
+open PouwVerifier (Params)
 open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -174,7 +174,7 @@ def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds 
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
+def reg : PouwVerifier.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
 
 /-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=

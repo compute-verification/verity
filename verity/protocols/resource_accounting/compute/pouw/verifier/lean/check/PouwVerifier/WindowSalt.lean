@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Pass
+public import PouwVerifier.Pass
 
 /-!
 # A live execution phase's salt (`core_check.window_salt`)
@@ -18,7 +18,7 @@ answer carries no salt. Every refusal is `core_check.py`'s.
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open Spot.Challenger (Audited LedgerEntry LiveCommitment LiveOpening)
@@ -145,4 +145,4 @@ written: tied here to its entry of the table (`Identity.Domains`), it reads the 
 example : ANCHORED_EPOCH_TAG = Domains.POUW_ANCHORED_EPOCH_OPEN.toUTF8 := rfl
 example : VALUES_TAG = Domains.POUW_PERIOD_VALUES.toUTF8 := rfl
 
-end PouwCheck
+end PouwVerifier

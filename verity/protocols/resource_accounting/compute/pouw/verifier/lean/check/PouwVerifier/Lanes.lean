@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 public import PouwWindow.KnownRows
 public import Spot.Produced
 
@@ -27,10 +27,10 @@ least `LEAST_K`, of one chunk and not J10-R's; any other sampled lanes-form leaf
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace PouwCheck.Lanes
+namespace PouwVerifier.Lanes
 
 open Lean (Json toJson)
-open PouwCheck.Credit
+open PouwVerifier.Credit
 
 /-- `credit.LEAF_PROGRAMS`: the committed circuit files' field of each lanes-form file's leaf Program's digest. -/
 def LEAF_PROGRAMS : String := "leaf_programs"
@@ -586,4 +586,4 @@ def outcomes (rec : Json) (held : Held) (program : String) : R (Array Json) := d
     Json.mkObj [("unit", toJson u), ("verdict", Json.str "accept"), ("program", Json.str program),
       ("registered", Json.mkObj ps.toList)]
 
-end PouwCheck.Lanes
+end PouwVerifier.Lanes

@@ -1,7 +1,7 @@
 [project]
-name = "verity-pouw-check-difftest"
+name = "verity-pouw-verifier-difftest"
 version = "0.0.0"
-description = "The difftest of `pouw_check` against `verity.protocols.resource_accounting.compute.pouw.verifier.core_check`, `credit` and `period_check`."
+description = "The difftest of `pouw_verifier` against `verity.protocols.resource_accounting.compute.pouw.verifier.core_check`, `credit` and `period_check`."
 requires-python = ">=3.12"
 dependencies = []
 
