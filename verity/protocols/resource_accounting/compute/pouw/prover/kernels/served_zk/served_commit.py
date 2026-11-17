@@ -1458,7 +1458,7 @@ def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     def sample(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
         p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(sampling_design["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
-        lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("SAMPLE ")]
+        lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
             raise _refused("sampler", f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
         if log is not None:

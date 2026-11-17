@@ -494,7 +494,7 @@ def registration(com: dict, served: dict) -> bytes:
 
 def lean_sample(lean: str, n: int, k: int, src: bytes) -> list[int]:
     p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(k), "--stream", src.hex()], capture_output=True, text=True)
-    lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("SAMPLE ")]
+    lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
     if p.returncode != 0 or len(lines) != 1:
         raise SystemExit(f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
     return [int(u) for u in json.loads(lines[0])["units"]]

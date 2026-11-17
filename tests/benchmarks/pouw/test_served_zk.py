@@ -919,7 +919,7 @@ def test_check_opens_the_sampled_proof_blocks_rows_only(served, tmp_path):
     assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
     op = SC.opening(advice, priv, params, 5)
     assert "not entry 0's row" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 6), op, record=ORL.Record())
-    assert "not sampled" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), record=ORL.Record())
+    assert "not drawn" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), record=ORL.Record())
     assert SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), sampled=False, record=ORL.Record()) is None
     assert "not the unit's row" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), op, sampled=False, record=ORL.Record())
     oparams, opublic, oadvice, opriv = _window(words, run="r-other")
@@ -1294,7 +1294,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"
-                    "print('SAMPLE ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
+                    "print('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
     rec = json.loads((tmp_path / "registration.json").read_text())
     dry = _challenger(params, coins=_coins())        # the process's coins: its sample is the one the job opens
