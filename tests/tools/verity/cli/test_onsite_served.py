@@ -727,7 +727,6 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     argv = json.loads((state / "record" / "argv.json").read_text())
     assert argv[argv.index("--composite") + 1:][:1] == [str(state / "out" / "composite")] if composite else \
         "--composite" not in argv
-    assert "combined_by" not in line
 
 
 def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
@@ -739,7 +738,7 @@ def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
     onsite_composite(tmp_path / "out", "verity/onsite/v0", "accept")
     got = T.onsite_check(cfg, tmp_path)
     assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
-    assert got["product"] != T.ONSITE and got["combined_by"].startswith("python: ") and got["verdict"] == "accept"
+    assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"
 
 
 NETWORK = ROOT / "applications" / "onsite_network.toml"
@@ -832,23 +831,6 @@ def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_oth
     assert (flag["--trusted-sha512"], flag["--bw-trusted-sha512"]) == (pinned.get("pous"), pinned.get("bandwidth"))
     assert flag["--challenger-command"] == "ssh -i key auditor-1 challenger_party" and flag["--bw-host"] == "192.0.2.2"
     assert "d" * 128 not in argv
-
-
-@pytest.mark.parametrize("rows, verdict, reason", [
-    ({}, "accept", None),
-    ({"communication": "reject"}, "reject", "certifier reject"),
-    ({"wipe": "missing"}, "undecided", "wipe missing"),
-])
-def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows,
-                                                                                verdict, reason):
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
-    state = tmp_path / "state"
-    (state / "out").mkdir(parents=True)
-    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
-    line = T.onsite_check(R.load(NETWORK, REG), state)
-    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
-    assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")
-    assert line["combined_by"].endswith("not a Lean verifier's")
 
 
 def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
