@@ -619,7 +619,8 @@ def published(state: Path, rows: dict, composed: str = "accept", reason: str = "
     ({"bandwidth": "accept"}, "accept", "undecided", 2, "no row for ['inference-only']"),
     ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "accept", 0, None),
     ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
-     "the network certifier: error"),
+     "certifier error"),
+    ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "certifier error"),
 ])
 def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, capsys, rows, composed, verdict, rc,
                                                                     reason):
@@ -634,9 +635,8 @@ def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, ca
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
     assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
-    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
-                                  **{T.RECORD_NAMES[k]: rows.get(k, "absent") for k in ("bandwidth", "inference-only")},
-                                  "certifier": rows.get("communication", "accept")}
+    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
+                                  "inference-only": "absent", **{T.RECORD_NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
     assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
 

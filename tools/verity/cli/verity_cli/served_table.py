@@ -723,8 +723,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     missing = sorted(c for c, v in components.items() if v == "missing")
     composed = (doc.get("composed") or {}).get("verdict")
     verdict, product = VERDICTS.get(composed, "undecided"), K.composite(cfg["protocols"], MANIFESTS)
-    reason = (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
-        or ((doc.get("composed") or {}).get("reason") if verdict != "accept" else None)
+    wrong = "; ".join(f"{c} {v}" for c, v in sorted(components.items()) if v in ("reject", "error"))
+    reason = (wrong or (doc.get("composed") or {}).get("reason")) if verdict == "reject" else \
+        (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None)
     python = {}
     if product in K.UNACCEPTED:
         seen = set(components.values())
