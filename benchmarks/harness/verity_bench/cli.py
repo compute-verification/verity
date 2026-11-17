@@ -30,7 +30,7 @@ from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.engine import ProcessEngineFactory
-from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
+from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served, wrong_card
 from verity_bench.vllm.result import write
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
@@ -92,11 +92,14 @@ def _run(args: Any) -> int:
         raise ValueError("--end bounds a direct point's wait for its GPU slot: it needs --direct NODE")
     if isinstance(plan.spec, steady_spec.SteadySpec):
         return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores, end=args.end)
-    if args.card is not None or args.cores is not None:
-        raise ValueError(f"--card and --cores are a steady-state point's: spec {plan.spec.id!r}'s points lease their own "
-                         "GPUs")
+    if (args.card is not None or args.cores is not None) and args.direct is None:
+        raise ValueError("--card and --cores are a booked card's and its slot's on a GPU node: they need --direct NODE")
+    if args.card is not None and args.cores is None:
+        raise ValueError(f"--card {args.card} needs --cores, the booked slot's cores: the first free slot may be on "
+                         "another NUMA node than the card")
     return jobs.dispatch(plan, args.spec, direct=args.direct,
-                         command=lambda *point: jobs.direct_command(*point, end=args.end))
+                         command=lambda *point: jobs.direct_command(*point, card=args.card, cores=args.cores,
+                                                                    end=args.end))
 
 
 def _point(args: Any) -> int:
@@ -119,6 +122,8 @@ def _point(args: Any) -> int:
         if found != spec.preset.model_digest:
             raise ValueError(f"checkpoint {spec.preset.model} hashes to {found}, not the spec's model_digest "
                              f"{spec.preset.model_digest}")
+    if why := wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
+        raise ValueError(why)
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     doc = run_benchmark(
@@ -363,10 +368,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--direct", metavar="NODE", default=None,
                      help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
     run.add_argument("--card", type=int, default=None, metavar="INDEX",
-                     help="a steady-state point's booked card, which its lease is asked of alone (needs --cores)")
+                     help="a booked card, which a direct point's lease is asked of alone (needs --cores)")
     run.add_argument("--cores", default=None, metavar="CPUS",
-                     help="a steady-state point's booked slot, by its cores (34-43): the slot taker runs under "
-                          "`taskset -c CPUS`")
+                     help="a booked slot, by its cores (34-43): the slot taker runs under `taskset -c CPUS`, and a vLLM "
+                          "point's lease declares them")
     run.add_argument("--end", type=_end, default=None, metavar="UTC",
                      help="the booked period's end (2026-11-15T03:30Z), which a direct point's run never passes: it "
                           "waits for its slot until its max_minutes before it, and one that could not finish by then "

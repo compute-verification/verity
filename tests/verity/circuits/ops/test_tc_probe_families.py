@@ -1,4 +1,4 @@
-"""``benchmarks/tc_probe/tc_probe.py`` tile generation without a device: the FP8 families are byte-identical
+"""``calibration/tc_probe/tc_probe.py`` tile generation without a device: the FP8 families are byte-identical
 for a fixed seed, the accumulator / adder families now exist for BF16 with shapes, dtypes and determinism, the adder-width ratios
 bracket every BF16 pipeline's width so the survive/truncate boundary is observable, and the D15(b) floor probe cannot tell any
 adder floor in [-152, -126] apart under the pinned Hopper FP8 model (the structural reason is tested on ``group_sum`` directly).
@@ -58,7 +58,7 @@ CANONICAL = ("zero_products_nonzero_acc", "acc_only_lsb_walk", "specials", "adde
 
 @pytest.fixture(scope="module")
 def P():
-    sys.path.insert(0, str(REPO_ROOT / "benchmarks" / "tc_probe"))
+    sys.path.insert(0, str(REPO_ROOT / "calibration" / "tc_probe"))
     try:
         import tc_probe
     finally:

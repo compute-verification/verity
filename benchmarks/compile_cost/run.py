@@ -38,9 +38,14 @@ from pathlib import Path
 
 from verity.device import load_card
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"], "batch_invariant": False,
+LLAMA32_1B = {"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}
+CLASS_1B = (4, 27, 2)
+MODELS = {"glm-5.3": "GLM-5.3", "llama-3.2-1b": "Llama 3.2 1B"}
+TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]["value"], "batch_invariant": False,
           "attention_backend": None,
           "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
           "moe_backend": "triton"}
@@ -112,6 +117,29 @@ def registered(rank: int, layers: int | None, execution: str = "eager"):
     phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, **({"compilation": graphs} if graphs else {})},
               execution=execution, tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     return Registered.of(phi, default_seed=DEFAULT_SEED)
+
+
+def class_cost(m: Meter) -> dict:
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict import window_circuit
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import Registered
+    from verity_vllm.program.predict.window_class import WindowClass
+    hf = json.loads(pinned_hf_config(LLAMA32_1B["repo"], LLAMA32_1B["revision"]).read_text())
+    t0 = time.perf_counter()
+    with m.phase("Registered.of"):
+        reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"},
+                                target={k: TARGET[k] for k in ("compute_capability", "num_sms")}), default_seed=DEFAULT_SEED)
+    with m.phase("lower"):
+        low = window_circuit.lower(reg, WindowClass(*CLASS_1B), wired=False)
+    wall = time.perf_counter() - t0
+    m.stop.set()
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+    units = [k for _, k in low.circuit.templates]
+    return {"window": "class-" + "-".join(map(str, CLASS_1B)), "execution": reg.phi.execution, "templates": len(units),
+            "units": sum(units), "wall_s": round(wall, 3), "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3),
+            "phases": m.by_phase()}
 
 
 def _rss() -> int:
@@ -206,9 +234,11 @@ def instrument(m: Meter) -> None:
     defs.Builder.finish = top_finish
 
 
-def main() -> int:
+def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--window", choices=sorted(WINDOWS), default=None)
+    ap.add_argument("--model", choices=sorted(MODELS), default="glm-5.3",
+                    help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered unwired, in place of a window")
+    ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
@@ -220,18 +250,36 @@ def main() -> int:
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
+    if a.window and a.requests:
+        ap.error("one of --window and --requests")
+    if a.model != "glm-5.3":
+        if a.window or a.requests or a.layers is not None or a.guard or a.engine:
+            ap.error(f"--model {a.model} compiles its class circuit: no --window, --requests, --layers, --guard or --engine")
+        return a
+    if not a.requests:
+        a.window = a.window or "long-w0"
+    return a
+
+
+def main() -> int:
+    a = parse()
     if a.engine:
         ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
-    if (a.window is None) == (a.requests is None):
-        ap.error("one of --window and --requests")
-    reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
     from verity_bench import settings
     out = Path(a.out or settings.OUT or Path(settings.RESEARCH_RUN_DIR) / "out")
     out.mkdir(parents=True, exist_ok=True)
     m = Meter()
     if not a.no_phases:
         instrument(m)
+    if a.model != "glm-5.3":
+        rec = class_cost(m)
+        (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
+        print(f"COMPILE-COST model={a.model} window={rec['window']} execution={rec['execution']} wall_min={rec['wall_min']} "
+              f"peak_gib={rec['peak_gib']} templates={rec['templates']} units={rec['units']}", flush=True)
+        record(out, a.model, rec["window"], rec["execution"], rec)
+        return 0
+    reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
     from verity_vllm.program.predict.steps import compile_steps
     advice, ingress = session(reqs)
     reg = registered(a.rank, a.layers, a.execution)
@@ -285,17 +333,17 @@ def main() -> int:
             print(f"COMPILE-COST guard FAILED: digests {[d[:16] for d in digests]} against PINS {want}", flush=True)
             return 1
     if a.layers is None and a.window:
-        record(out, a.window, a.execution, rec)
+        record(out, a.model, a.window, a.execution, rec)
     return 0
 
 
-def record(out: Path, window: str, execution: str, rec: dict) -> None:
+def record(out: Path, model: str, window: str, execution: str, rec: dict) -> None:
     from verity_bench import kit
     w = kit.writer(out)
     card = w.stamp["card"]
-    fields = {"model": "GLM-5.3", "window": window, "execution": execution,
+    fields = {"model": MODELS[model], "window": window, "execution": execution,
               "machine": "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")}
-    member = f"glm-5.3-{window}-{execution}-{fields['machine']}"
+    member = f"glm-5.3-{window}-{execution}-{fields['machine']}" if model == "glm-5.3" else f"{model}-h200"
     for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
         m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)
         print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)

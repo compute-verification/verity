@@ -41,23 +41,25 @@ POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-dc-h200"}
+NODES = {"h200": "vy-spot-glm53"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
                 "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
 #: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+#: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
+RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
-CENSUS = Path("benchmarks/census")
+CENSUS = Path("calibration/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
 GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
-GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
 #: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
 MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
 
@@ -137,7 +139,8 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
         return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
                 f"door's options (launch it with `verity bench overhead {sub}`)")
-    if extra := sorted(set((attempt.get("params") or {}).get("env") or {}) - DOOR_ENV):
+    env = (attempt.get("params") or {}).get("env") or {}
+    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and RUN_DEFAULT_ENV.get(k) != v):
         return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
     return None
 
@@ -413,7 +416,7 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:

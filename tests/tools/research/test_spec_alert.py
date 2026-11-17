@@ -5,7 +5,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import research.merge as merge
 import research.spec_alert as spec
 from research.slack import SlackError
 
@@ -565,25 +564,6 @@ def test_any_failure_after_the_push_is_reported_and_never_raised(tmp_path, monke
     api = Api()
     assert spec.alert(repo, old, new, api=api, reg=REG, log=lambda *_: None)
     assert "reading its `lean-audit.json` records failed: KeyError: 'pins'" in api.calls[0]["text"]
-
-
-def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatch):
-    remote = tmp_path / "remote.git"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
-    repo = _repo(tmp_path)
-    subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", str(remote)], check=True)
-    old = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
-    subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
-    mid = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : B", H2)}), "Merge #8 (abc)")
-    subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
-    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", old], check=True)  # a stale fetch
-    new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : C", H3)}), "Merge #9 (abc)")
-    seen = []
-    monkeypatch.setattr(spec, "alert", lambda repo, was, now, **kw: seen.append((was, now)) or True)
-    monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
-    monkeypatch.setattr(merge, "report_landings", lambda *a, **kw: True)     # it asks GitHub (`gh pr list`) and posts to Slack
-    assert merge._push_and_sweep(repo, "main", "origin", True) == 0
-    assert seen == [(mid, new)]
 
 
 def test_the_queue_names_the_pull_requests_it_landed(tmp_path):

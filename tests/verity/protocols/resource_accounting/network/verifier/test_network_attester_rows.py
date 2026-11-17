@@ -1,7 +1,7 @@
 """The network attester's cells as registered rows (`network_attester_rows`): an execution phase is a row a bucket whatever the
 load, each row is its bucket's cells in slot order, the wiring places each connection's cells where its client got them,
 each row opens the signed root at its position and only there, the registration reads back under the network attester's
-key and session and the schedule, and refuses any field, key, session or certificate but its own, and the port reads
+key and session and the schedule, and refuses any field, key, session or attestation but its own, and the port reads
 only what the network attester's wiring places."""
 
 from __future__ import annotations
@@ -149,8 +149,8 @@ def test_salts_are_fresh_and_never_shared_and_the_witness_reads_back():
 
 def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, tmp_path):
     """The verifier's read takes the execution phase it expects and the schedule's parameters; any other field, an extra
-    key, a root or wiring the certificate doesn't sign, another key, session or execution phase, or the wire record's
-    certificate of the same execution phase, is refused."""
+    key, a root or wiring the attestation doesn't sign, another key, session or execution phase, or the wire record's
+    attestation of the same execution phase, is refused."""
     network_attester, _ = traffic
     record = records(network_attester)[1][1]
     issuer, cells_, cert = _attest(tmp_path / "a", record)
@@ -189,7 +189,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
         W.check_registration(forged, key, signers.SESSION, *args)
 
 
-def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
+def test_a_refused_signer_gives_no_attestation(traffic, tmp_path):
     network_attester, _ = traffic
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)
@@ -198,7 +198,7 @@ def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
     assert len(cells_.rows) == T
 
 
-def test_the_port_reads_the_rows_the_network_certifiers_wiring_places_and_nothing_else(traffic, tmp_path):
+def test_the_port_reads_the_rows_the_network_attesters_wiring_places_and_nothing_else(traffic, tmp_path):
     """`port` holds only a `verity/registered-reads/v1` port's keys (`Flock.Registered.PORT_KEYS`), reads each (q, k)'s
     row under the wiring the head names, and names the head's root, domain and row format. A wiring the head doesn't
     name, a connection the wiring doesn't hold, a cell past its connection's or read twice, and a read that isn't
@@ -306,7 +306,7 @@ def test_the_programs_units_name_their_wiring_and_a_statement_for_any_other_is_r
 
 
 def test_the_issuers_sign_is_certifys_signature(tmp_path):
-    """`certify` signs through `sign`: one leaf a certificate, both verifying under the key in the session."""
+    """`certify` signs through `sign`: one leaf an attestation, both verifying under the key in the session."""
     idle, _, _ = run([], {}, windows=1)
     record = records(idle)[1][0]
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)

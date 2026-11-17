@@ -123,7 +123,7 @@ COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
-"""The coarsest clock the memory attester runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
+"""The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
 COMPLETE, LATE = "complete", "late"
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()
@@ -387,7 +387,7 @@ PREMISE_BEFORE = "trusted-host"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
-"""The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
+"""The committed configurations' hashes, each application's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
 
 

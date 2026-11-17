@@ -34,7 +34,7 @@ query_ast.evaluate(program, "//GemmCoordinate")   # its 8 output coordinates, ea
 | `circuits/base/`, `circuits/lean/`, `commitments/lean/` | The three base Lean packages: bytes, hashes and parsing; the circuit format; frame-v3 and the sampling of proof blocks. Flock's verifier and every package that requires it load them, and they require nothing above them. |
 | [`runtime/`](runtime/README.md) | Runs a protocol's parties over channels and keeps each party's log of the run. It knows no protocol. |
 | `party.py`, `channel.py`, `protocol.py`, `errors.py` | What a party is (a next-message machine), what its messages declare, what a protocol declares with the placement check, and the shared exception classes. |
-| `device.py` | The registered hardware (the Site), the check each registration entry passes, and the readers of the data sheets in [`hardware/`](../hardware/README.md). |
+| `device.py` | The registered hardware (the Site), the check each registration entry passes, and the readers of the data sheets in [`calibration/hardware/`](../calibration/hardware/README.md). |
 | `config.py` | The configuration a run starts from (`verity run CONFIG`). |
 
 The protocols, by layer, with registration beside them:

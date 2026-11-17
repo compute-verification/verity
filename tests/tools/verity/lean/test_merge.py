@@ -242,7 +242,7 @@ def test_a_definition_one_side_stops_reading_leaves_the_merge_unless_the_other_s
     """A reads-only clash (one side moves definitions out of a module that the other side's new guarantees read).  No
     guarantee of the side that stopped reading the definition reads it, so in the merged tree only the other side's new
     ones may: the removal applies, named as a candidate, unless that side also changed the definition's hash, where the
-    union stays with its hash and the Lean check of `next` regenerates."""
+    union stays with its hash and a candidate's Lean check regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -1209,13 +1209,13 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
         return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
     tail = '"Proofs.Properties.InferenceOnly"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
-    theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_verifier")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
+    theirs = LAKEFILE.replace(anchor, anchor + req("network_verifier")).replace(
         tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
+    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_verifier", "network_verifier"]
     assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
                                            "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())

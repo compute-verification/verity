@@ -9,10 +9,10 @@ The number, at each reading r of `READINGS` (the card's `clock.tensor` and `cloc
 each the card file's value):
 
     value(r) = rate / ceiling(r) * share
-    rate       an honest H200's e4m3 MACs a second: `benchmarks/tensor_duty`'s `--arms fp32-beside` arm A (the e4m3
+    rate       an honest H200's e4m3 MACs a second: `calibration/tensor_duty`'s `--arms fp32-beside` arm A (the e4m3
                wgmma alone) on uniform operands at the driver's default clocks, its MACs over the host's interval
                around the kernel, read from that run's `out/beside.jsonl` (`--duty RUN`)
-    ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `hardware/cards/` `CARD`)
+    ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `calibration/hardware/cards/` `CARD`)
     share      `compute-accounting/verified-compute-share`: the MACs the Pearl+ verifier credits over the MACs the
                served model computes, on a served run of record (`run.py --from RUN`, which refuses an answer that
                isn't an accept)
@@ -38,10 +38,13 @@ import json
 import sys
 from collections.abc import Callable
 from fractions import Fraction
+from pathlib import Path
 
 import run as compute
 from verity.device import load_card, rate as peak
 from verity_bench import kit
+
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 __all__ = ["BESIDE", "CARD", "METRIC", "READINGS", "UNIT", "document", "honest_rate", "main", "measured"]
 
@@ -64,7 +67,7 @@ def honest_rate(points: list[dict]) -> Fraction:
     honest = [p for p in points if (p.get("arm"), p.get("class"), p.get("clock", CLOCK)) == (ARM, CLASS, CLOCK)]
     if not honest:
         raise compute.Unreadable(f"the duty run holds no arm {ARM} point on {CLASS} operands at the {CLOCK} clocks: "
-                                 f"run benchmarks/tensor_duty/run.sh --arms fp32-beside")
+                                 f"run calibration/tensor_duty/run.sh --arms fp32-beside")
     rates = []
     for p in honest:
         span = Fraction(str(p["host_t1"])) - Fraction(str(p["host_t0"]))
@@ -83,7 +86,7 @@ def duty_points(store: compute.EvidenceStore, run: str) -> list[dict]:
 
 def document(share_doc: dict, rate: Fraction, duty_run: str) -> dict:
     """The printed document: the number at each reading, from `run.py`'s document `share_doc` and the honest `rate`."""
-    card = load_card(CARD)
+    card = load_card(CARD, directory=CARD_FILES)
     share = Fraction(share_doc["credited_macs"], share_doc["model_macs"])
     readings = {}
     for r in READINGS:
@@ -128,7 +131,7 @@ def main(argv: list[str] | None = None, *,
     ap.add_argument("--from", dest="run", metavar="RUN", required=True,
                     help="a served run of record: its verified compute share read from its record (run.py --from)")
     ap.add_argument("--duty", metavar="RUN", required=True,
-                    help="a benchmarks/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
+                    help="a calibration/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)
     try:
         store = store_of()
