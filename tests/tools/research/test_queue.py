@@ -3484,6 +3484,31 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
+#: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
+ADDED = "tools/check/added_lines.py"
+ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
+    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+
+
+def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
+    """added-lines is a warn gate: a PR whose added comment names an issue id is marked, and the mark prints the line and the
+    lane-text lint's fix."""
+    from research.queue import WARN_GATE_SAYS, MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, ADDED_FILES)
+    main = _git(world.origin, "rev-parse", "main")
+    issue = "-".join(("CI", "4850"))
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_pkg.py": f"def test_pkg():  # {issue}\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    (said,) = [s for s in world.logs if "warning" in s]
+    assert said.startswith(
+        f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate {ADDED} at `main` {main[:12]}: pkg/tests/test_pkg.py "
+        f"gains 1 issue id(s), 0 -> 1: pkg/tests/test_pkg.py:1 linear: {issue} in `def test_pkg(): # {issue}`; Say what is "
+        "true now"), said
+    assert said.endswith(f"(`python3 {ADDED} origin/main HEAD` in the branch runs it). {WARN_GATE_SAYS}"), said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
     """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
     stand-in without touching adapters/vllm is marked, and the candidate's check runs the lint."""

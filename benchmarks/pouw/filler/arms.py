@@ -1,4 +1,4 @@
-"""The filler arm contract (v1) and the baseline arms.
+"""The filler arm contract (v1) and the baseline arm, `idle`.
 
 An arm is a filler implementation plus its placement policy. The scorer (`score.py`) owns everything else: the serving
 workload, the timing and its serving-alone controls, the gates and the arithmetic. An arm is any object with:
@@ -29,7 +29,6 @@ with no arguments.
 from __future__ import annotations
 
 import importlib.util
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -38,7 +37,7 @@ from typing import Any
 
 #: what the scorer, the arms' modules and their runners read
 __all__ = [
-    "ARMS", "ArmError", "Colocation", "FILL_V1_SPLIT", "FOLDS", "FillV1", "Filler", "Idle", "NOISE", "NONE", "VERSION",
+    "ARMS", "ArmError", "Colocation", "FILL_V1_SPLIT", "FOLDS", "Filler", "Idle", "NOISE", "NONE", "VERSION",
     "check_arm", "config", "load", "placed", "point_lookup", "record_problems",
 ]
 
@@ -222,32 +221,7 @@ def point_lookup(table: dict, b: int, l: int) -> Any:
     return table[(pb, pl)]
 
 
-@dataclass
-class FillV1:
-    """FILL v1: dcap.cu's register-resident chained int8 mma.sync filler (W 8, NC 4, S 2048), on a green-context split
-    sized per (B, L) from FILL's table; no filler during prefill (compute-bound)."""
-
-    name: str = "fill-v1"
-    lineage: dict = field(default_factory=lambda: {
-        "parent": "cursor/dram-free-filler-ea24@e015e0515", "approach": "pouw/filler-dram-free",
-        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "prefill:none"],
-        "hypothesis": "FILL v1 as measured: 0.35–0.62 certified ÷ capacity at ≤ 5% decode slowdown"})
-    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
-    filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
-    choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
-    #: dcap.cu builds pfill.cuh's filler unless -DDFILL_V1; score.py's nvcc reads NVCC_APPEND_FLAGS after the arm loads
-    nvcc_flags: str = "-DDFILL_V1"
-
-    def __post_init__(self):
-        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
-
-    def placement(self, phase: str, b: int, l: int) -> Colocation:
-        if phase == "prefill":
-            return NONE
-        return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
-
-
-ARMS = {"idle": Idle, "fill-v1": FillV1}
+ARMS = {"idle": Idle}
 
 
 def load(spec: str, *, record: bool = False) -> Any:

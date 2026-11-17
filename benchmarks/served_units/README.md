@@ -39,6 +39,8 @@ Files:
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
+- `run.sh`: `verity bench served_units`; `record.py` writes each proof block's prove seconds and peak memory
+  (`metrics.toml`) into the run's result, only where every check gave the verdict it must.
 - `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
@@ -108,7 +110,7 @@ count:
 uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none
 uv run -q python benchmarks/served_units/cover_count.py art:ID --form listed # the listed form only
 uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # exit 1 unless every type has one
-uv run -q python benchmarks/served_units/cover_count.py art:ID --card benchmarks/sampling_plan/glm53_blocks.json  # exit 2 unless its types are the card's
+uv run -q python benchmarks/served_units/cover_count.py art:ID --card calibration/sampling_plan/glm53_blocks.json  # exit 2 unless its types are the card's
 ~~~
 
 ## Interface

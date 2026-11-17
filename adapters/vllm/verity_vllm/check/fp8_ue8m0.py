@@ -77,7 +77,10 @@ def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = No
 
 def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarray]:
     """(e4m3 words [N, K], f32 words [cdiv(N, G), K / G]) -> the ue8m0 requantised pair, as `requant_weight_ue8m0_inplace`."""
-    from verity_vllm.definitions.numerics.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
+    from verity_vllm.definitions.numerics.fp8_twins import (
+        np_e4m3_to_f32,
+        np_f32_to_e4m3_sat,
+    )
     N, K = w.shape
     NB, KB = -(-N // G), -(-K // G)
     sf = s.view(np.float32).reshape(NB, KB)

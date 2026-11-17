@@ -1,7 +1,7 @@
 """psched's arm-side runner (benchmarks/pouw/filler/psched_score.py) on synthetic out dirs: the locked `score.py report`
 scores pscore's rows (the phase filler's work counted in FILL chunks) unchanged, the runner's two added gates (the phase
 filler's DRAM share against the same counter's control, and its receipts and tile counts) void the SCORE when they fail,
-and the arm (psched_arm.py) places a phase filler only beside a split, as a pure function of the point."""
+and its arm (pfill_arm.py's PFillKPhase) places a phase filler only beside a split, as a pure function of the point."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import psched_score as P
 import pytest
 
 A, S, SC = P.A, P.S, P.SC
-ARM = "benchmarks/pouw/filler/psched_arm.py:PhaseSched"
+ARM = "benchmarks/pouw/filler/pfill_arm.py:PFillKPhase"
 PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' tag
 
 
@@ -59,9 +59,8 @@ def v2_rounds(r, phase):
             b["solo"]["phase_round"] = a_round(pt, r["slots"], 2 + 3 * n + i, PBIT)
 
 
-def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0, spec=ARM,
-              sgates=None) -> tuple[Path, object]:
-    arm = A.load(spec)
+def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0) -> tuple[Path, object]:
+    arm = A.load(ARM)
     out = tmp / arm.name
     out.mkdir(parents=True)
     (out / "arm.json").write_text(json.dumps({**SC.arm_doc(arm), "spec": ARM}))
@@ -91,7 +90,7 @@ def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad
     fillers = [arm.filler] + sorted({P.filler_of(arm, ph, b, l) for ph, b, l in S.points()
                                      if A.placed(arm, ph, b, l).place != "none"} - {arm.filler}, key=str)
     sg = [{"mode": "sgate", "W": f.W, "NC": f.NC, "S": f.S, "tiles": (1 << f.chunk_log2) // (f.W * f.NC * f.S), "ok": True}
-          for f in fillers] if sgates is None else sgates
+          for f in fillers]
     (out / "sgate.jsonl").write_text("".join(json.dumps(r) + "\n" for r in sg))
     (out / "dgate.jsonl").write_text(json.dumps({"mode": "dgate", "NC": 4, "S": 2048, "ok": True}) + "\n" + json.dumps(
         {"mode": "pgate", "NC": 4, "S": 128, "mismatches": 0, "control_equal": 0, "ok": True}) + "\n")
@@ -155,23 +154,6 @@ def test_arm_places_a_phase_filler_only_beside_a_split():
         assert (p, q) == (A.placed(arm, ph, b, l), P.phase_of(arm, ph, b, l))
         if q is not None:
             assert p.place == "split" and q.S % 8 == 0 and q.S > 8 and q.tiles >= 1 and q.NC in (1, 2, 4)
-    assert A.placed(arm, "prefill", 8192, 0) == A.NONE and arm.phase("prefill", 8192, 0) is None
+    assert A.placed(arm, "prefill", 8192, 0) == A.Colocation("split", 4) and arm.phase("prefill", 8192, 0) is None
     assert arm.phase("decode", 1, 2048) is None and A.placed(arm, "decode", 1, 2048) == A.Colocation("split", 108)
     assert S.honesty(arm, {}, S.points())["ok"]
-
-
-@pytest.mark.parametrize("cls, co_tiles", [("PhaseSchedCo", (8, 4, 128, 8)), ("PhaseSchedCo2", (4, 4, 128, 32))])
-def test_co_arm_runs_its_prefill_shape_and_needs_an_sgate_for_it(tmp_path, cls, co_tiles):
-    spec = f"benchmarks/pouw/filler/psched_arm.py:{cls}"
-    arm = A.load(spec)
-    assert not A.check_arm(arm)
-    assert A.placed(arm, "prefill", 8192, 0) == A.Colocation("co")
-    co = P.filler_of(arm, "prefill", 8192, 0)
-    assert co != arm.filler and co.chunk_log2 < arm.filler.chunk_log2
-    assert all(P.filler_of(arm, ph, b, l) == arm.filler for ph, b, l in S.points() if P.phase_of(arm, ph, b, l))
-    res = P.report(*write_run(tmp_path / "two", spec=spec))
-    assert res["scored"] and res["gates"]["sgates"] == {"ok": True, "rows": 2, "shapes": 2,
-                                                        "ran": sorted({(8, 4, 2048, 8), co_tiles}, key=str)}
-    res = P.report(*write_run(tmp_path / "one", spec=spec, sgates=[{"mode": "sgate", "W": 8, "NC": 4, "S": 2048,
-                                                                       "tiles": 8, "ok": True}]))
-    assert not res["gates"]["sgates"]["ok"] and res["SCORE"] is None and res["score_if_gated"] is not None

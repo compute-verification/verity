@@ -1,5 +1,5 @@
 """The network attester's transfer rows (`transfer_rows`): a value committed as a registered value under the
-certifier's salts, its head signed for one link in one execution phase, and the verifier's read of its registration and
+attester's salts, its head signed for one link in one execution phase, and the verifier's read of its registration and
 of a unit's rows."""
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def rows(n: int, words: int, seed: int = 1) -> list[list[int]]:
 
 
 def attested(tmp_path, data=None):
-    """A load value of 4 one-word rows in window 0 on `LINK`, its certificate and the issuer that signed it."""
+    """A load value of 4 one-word rows in window 0 on `LINK`, its attestation and the issuer that signed it."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", data or rows(4, 1))
     assert cert is not None
@@ -118,12 +118,12 @@ def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, v
 
 
 @pytest.mark.parametrize("other", ["link", "window", "direction"])
-def test_check_registration_refuses_a_certificate_for_another_phase_or_direction(tmp_path, other):
+def test_check_registration_refuses_a_attestation_for_another_phase_or_direction(tmp_path, other):
     t, _cert, issuer = attested(tmp_path)
     at = {"link": LINK, "direction": Direction.INGRESS, "window": 0}
     at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.EGRESS}[other]
     cert = issuer.sign(at["link"], at["direction"], at["window"], t.head.digest())
-    with pytest.raises(ValueError, match="doesn't verify under the network certifier's key"):
+    with pytest.raises(ValueError, match="doesn't verify under the network attester's key"):
         TR.check_registration(TR.registration(t.head, cert), public(), signers.SESSION, **expect(t))
 
 

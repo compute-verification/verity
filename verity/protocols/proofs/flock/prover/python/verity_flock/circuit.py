@@ -735,7 +735,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     them one META already has.
 
     ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
-    its own (`multi_unit`; `read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
+    its own (`read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
     unit type, wired slot by slot (META ``per_vu``), and returned outputs on a repeated last stage (or a ``slotted_rets`` tail's)
     are ``out_net_ports`` of ``[slot, port]``.
 

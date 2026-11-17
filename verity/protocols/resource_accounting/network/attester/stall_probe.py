@@ -272,7 +272,7 @@ def stop(proc, out: Path) -> dict:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="stall_probe.py", description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--origin", required=True, type=float, help="the network certifier's origin on the host's raw clock")
+    ap.add_argument("--origin", required=True, type=float, help="the network attester's origin on the host's raw clock")
     ap.add_argument("--label", action="append", default=[], help="TID=NAME: a thread's label (default: thread)")
     ap.add_argument("--samples", type=int, help="stop after this many samples")
     ap.add_argument("watched", nargs="+", help="NAME=PID: a process whose threads are sampled")
