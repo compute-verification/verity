@@ -8,7 +8,7 @@ from slowdown.hardware import Fleet, Location
 from slowdown.params import Registry
 from verity.device import load_card, number
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 REG = Registry.load()
 CENSUS_DIR = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
