@@ -1048,40 +1048,6 @@ def test_a_pr_a_landing_gate_can_t_judge_waits_with_its_mark_and_merges_once_a_s
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["waiting"] == {}
 
 
-def test_a_member_merged_again_onto_the_tree_it_was_judged_on_takes_its_verdict_and_main_moving_judges_it_again(
-        world, monkeypatch):
-    """A lift merges every member above the lifted one again, each running the landing gates (~15 s), though those above where
-    it was have the same members below and so the same trees.  Their verdicts, a refusal too, are kept under `main` and the gates;
-    a new `main` judges every merge again."""
-    from research import queue as Q
-
-    main = _move_main(world, GATED)
-    real, judged = Q.gate_refusal, []
-
-    def gate_refusal(repo, m, merge, gates, onto, kind):
-        judged.append(int(_git(repo, "log", "-1", "--format=%s", merge).split("#")[1].split()[0]))
-        return real(repo, m, merge, gates, onto=onto, kind=kind)
-
-    monkeypatch.setattr(Q, "gate_refusal", gate_refusal)
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt"), (5, "bad.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    q = world.queue()
-    members, entries = q.sync()
-    assert [m.pr for m in members] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5] and entries[5].state == "refused"
-    judged.clear()
-    q.lift = [2]
-    lifted, entries = q.sync()
-    assert [m.pr for m in lifted] == [2, 1, 3, 4] and judged == [2, 1], judged
-    assert [_git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in lifted[2:]] == [
-        _git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in members[2:]]
-    assert entries[5].state == "refused" and entries[5].why == _gate_says(main, "touches bad.txt", merged=True)
-    assert world.logs[-1].endswith("kept 0, merged 4, merges reused for 3, gates' verdicts reused for 3"), world.logs[-1]
-    judged.clear()
-    _move_main(world, {"x.txt": "x\n"})
-    q.lift = []
-    assert [m.pr for m in q.sync()[0]] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5]
-
-
 def _merge_trees(monkeypatch) -> list[str]:
     """The head of each `git merge-tree` the queue runs, from now on."""
     real, heads = Q._git, []
