@@ -8,7 +8,7 @@ import fold_kernel_check as fk
 import numpy as np
 import pytest
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
 def test_fold_kernel_matches_meet_in_the_middle(tmp_path):
