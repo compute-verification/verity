@@ -6,7 +6,7 @@
 A config (an attack's TOML file) names its `start`, its `target.gain`, its `policy`, its `honest` config and its
 `seeds` (`search` and `final`). DIR holds one config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json`
 with `split` `search` or `final`. `--honest` is the honest config's DIR, and each `--also` another config's at the
-same start and gain. The grade reads no file of a served run. A record may say where it came from (`provenance`, which
+same start and gain. The grade reads no file of a workload. A record may say where it came from (`provenance`, which
 no job writes): the grade never reads it and passes it on, beside each record it read (`records`) and, for the record
 whose slowdown it read, in what S rests on (`rests_on`). It prints the block (`text`) and writes `OUT/slowdown.json` (`SCHEMA`):
 

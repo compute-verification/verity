@@ -1,11 +1,11 @@
-# The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the
+# The workload under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the
 # inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node
 # and the auditor's on its own machine. `verity run` refuses it by name until each party has its piece.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pearl-plus", "inference-only"]
 
 [workload]
-name = "served-window"
+name = "workload"
 
 [workload.params]
 model = "verity-int8/Llama-3.2-1B-INT8"

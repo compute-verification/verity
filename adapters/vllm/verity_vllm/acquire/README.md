@@ -1,6 +1,6 @@
 # verity_vllm.acquire
 
-Value acquisition: how a served run's values reach the Commit. The package's docstring lists its modules.
+Value acquisition: how a workload's values reach the Commit. The package's docstring lists its modules.
 
 ## Interface
 

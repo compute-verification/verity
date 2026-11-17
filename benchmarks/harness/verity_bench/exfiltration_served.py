@@ -1,4 +1,4 @@
-"""The share of compute a served run measures, as `verity bench exfiltration` (`verity_bench.exfiltration`) reads it
+"""The share of compute a workload measures, as `verity bench exfiltration` (`verity_bench.exfiltration`) reads it
 from the run's record."""
 
 from __future__ import annotations
@@ -46,12 +46,12 @@ def _on_cpus(entries: Any) -> bool:
 
 
 def served_share(record: Mapping[str, Any] | None) -> dict:
-    """The audit's share of compute on a served two-stage run, from its ``record`` (the reader of a served run's
+    """The audit's share of compute on a served two-stage run, from its ``record`` (the reader of a workload's
     record gives it): its GPU-seconds over the window's serving GPU-seconds. Each part of the audit (`SERVED_PARTS`)
     is read from the record and marked measured, and where the record lacks it, its gap is named and the share is not
     claimed. None: no record, and the share is `NO_RUN`.
 
-    The record is one object: ``run``, the served run's id; ``prove``, ``staging``, ``replay`` and ``interior``, each
+    The record is one object: ``run``, the workload's id; ``prove``, ``staging``, ``replay`` and ``interior``, each
     a list of what held GPUs for that part, one entry a session or a step, each ``{"seconds": s, "gpus": g}`` (the
     seconds it held them and how many it held); ``serving``, one such entry, the window's load: the seconds it was
     served over and the GPUs its engine held; and for the serving charge, ``stock``, one such entry for stock vLLM
@@ -72,8 +72,8 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
         return {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
                 "missing": []}
     if not isinstance(record, Mapping):
-        raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
-    run = str(record.get("run") or "the served run")
+        raise ValueError(f"a workload's record is one JSON object, not {type(record).__name__}")
+    run = str(record.get("run") or "the workload")
     said = record.get(PROVE_SOURCE)
     if said is not None and said not in PROVE_SOURCES:
         raise ValueError(f"{run}'s record holds `{PROVE_SOURCE}` {said!r}: one of "

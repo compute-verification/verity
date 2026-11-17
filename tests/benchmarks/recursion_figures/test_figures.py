@@ -68,8 +68,8 @@ def test_the_ks_error_at_the_census_pools_t_eps_over_the_period():
             for f in ("datacenter", "world")] == [-121.5, -129.7]
 
 
-def test_the_served_window_counts_every_element_of_its_blocks():
-    """The served window's statement: 3 instances of `SiluMul_v2{I=8192}`, each a VU of 8,192 silu-mul units of 1,380
+def test_the_workload_counts_every_element_of_its_blocks():
+    """The workload's statement: 3 instances of `SiluMul_v2{I=8192}`, each a VU of 8,192 silu-mul units of 1,380
     ANDs, so 33,914,880 ANDs, and every per-AND figure over that count."""
     times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
     fig = F.figures(_doc(ands=1380, n=3, per_vu=8192), times)

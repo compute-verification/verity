@@ -232,7 +232,7 @@ def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the
 
 
 def test_a_stop_class_is_charged_its_whole_schedule_but_where_verdict_records_say_less():
-    """Every row that holds the lengths by a stop block reads how its stop class is charged from a served run's
+    """Every row that holds the lengths by a stop block reads how its stop class is charged from a workload's
     verdict records, and from nothing else: with none read each of its connections is charged its schedule, at
     every scope, monitoring period and jitter bound, so that the design's row is the row before it; a row is below
     its schedules only under a `Stop` that says so. No other row reads it, no input holds it and the command has no

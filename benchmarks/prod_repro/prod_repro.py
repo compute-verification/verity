@@ -28,7 +28,7 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   says so; and the adapter's record of the value settings in force in each server's environment and in the replay's
   engine's, where the benchmark kept it (`value_settings`): how many variables are set, the record's digest, and by
   name the ones ours's differs from stock's in and the replay's from ours's;
-- ``tokens``: the served window the replay re-ran (`replay.window`), how many of its requests and served tokens the
+- ``tokens``: the workload the replay re-ran (`replay.window`), how many of its requests and served tokens the
   replay's kept tokens were compared with (`replay.token_diff`) and how many differ, with the steps that differ and
   the requests of the window that began from a prefix-cache hit. Where they differ: the first token that does (its
   request, position, served and replayed ids and the step that emitted it) and the first step whose rows do. The
@@ -54,7 +54,7 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
 A line is measured from the job's files, or it says ``not measured`` and why; a line whose files can't be read says
 so and the rest of the report stands. Nothing here measures: the metrics, the cost and its interval, the comparison
 and the advice's split are the benchmark's and the adapter's functions. It exits 1 where the replay differs from what
-was served, naming each differing request and its first position, and where a replay was asked for
+the workload served, naming each differing request and its first position, and where a replay was asked for
 (``--expect-replay``) and the tokens line is not measured; 0 otherwise: any other line that is not measured is not a
 failure, and the last line counts the lines that are measured.
 
@@ -603,7 +603,7 @@ def given_back(served: dict[str, list[int]], got: dict[str, list[int]]) -> dict:
 
 
 def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, state: dict) -> dict:
-    """The tokens line: the served window of ``ours``'s pass ``load`` rep ``rep`` against the tokens its replay kept.
+    """The tokens line: the workload of ``ours``'s pass ``load`` rep ``rep`` against the tokens its replay kept.
     ``dirs`` are the arm's directories (`arm_dirs`): of an arm served in lifetimes, the window is the pass of the
     lifetime the replay's record names. Not measured without a replay, where the replay is of another window, or
     where the window can't be read back. Each differing request has its first differing position, the ids served and
@@ -619,7 +619,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
                                                "re-run, from an arm that keeps each request's ids)"
                                                if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir})"))
     rec, run = json.loads((replay_dir / "replay.json").read_text()), meta.get("run_id")
-    of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("served_run_id"))
+    of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("workload_id"))
     arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or of[1:] != (load, rep, run):
         return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
@@ -628,7 +628,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
         w = R.window(arm_dir, load, rep)
         got = R.read_tokens(replay_dir)
     except (SystemExit, OSError, KeyError, ValueError) as e:
-        return not_measured(f"the served window or the replay's tokens can't be read back: {type(e).__name__}: {e}")
+        return not_measured(f"the workload or the replay's tokens can't be read back: {type(e).__name__}: {e}")
     served = {r["engine_id"]: r["served"] for r in w["requests"]}
     diff, at = R.token_diff(served, got), R.emitted_at(w["steps"])
     for d in diff:
@@ -669,7 +669,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
             "window": {"arm": ours, "lifetime": json.loads((arm_dir / "meta.json").read_text()).get("lifetime"),
                        "load": load, "rep": rep, "run": run, "chosen": WINDOW},
             "served_mode": rec["served_mode"], "replay_mode": rec["mode"], "replay_run": rec.get("run_id"),
-            "served_window_s": rec["served_window_s"], "replay_wall_s": rec["replay_wall_s"],
+            "execution_phase_s": rec["execution_phase_s"], "replay_wall_s": rec["replay_wall_s"],
             "engine_ready_s": rec["engine_ready_s"]}
 
 
@@ -1446,7 +1446,7 @@ def text(r: dict) -> str:
     elif rp["ended"]:
         lines.append("  the replay: ended" + ("" if not t["measured"] else
                                               f" in {t['replay_wall_s']:.0f} s, its engine ready in {t['engine_ready_s']:.0f} s; "
-                                              f"the served window took {t['served_window_s']:.0f} s"))
+                                              f"the execution phase took {t['execution_phase_s']:.0f} s"))
     elif rp["expected"]:
         lines.append("  the replay: DID NOT END" + (f"; its log ends: {rp['last_line']} ({rp['log']})" if rp["log"] else
                                                     ": it left no log, so it did not start"))
@@ -1516,7 +1516,7 @@ def text(r: dict) -> str:
     early = [name for name, s in ran["arms"].items() if not s.get("ok")]
     why = failed(r)
     lines.append(f"prod_repro: {done} of 3 lines measured"
-                 + ("" if not why else "; FAILED: the replay differs from what was served" if t["measured"] else
+                 + ("" if not why else "; FAILED: the replay differs from what the workload served" if t["measured"] else
                     "; FAILED: a replay was asked for and the tokens line is not measured")
                  + (f"; not served whole: {', '.join(early)}" if early else ""))
     return "\n".join(lines) + "\n"

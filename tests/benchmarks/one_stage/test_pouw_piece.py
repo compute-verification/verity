@@ -153,7 +153,7 @@ def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
 def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier(tmp_path, statements, period_exe,
                                                                                    capsys):
     """The kit's windows are over PouwH1Tile_v1, whose per-unit noise the period's guarantee doesn't cover, so the
-    case credit accepts is refused at its form, as a served window over h1zy's default tile is."""
+    case credit accepts is refused at its form, as a workload over h1zy's default tile is."""
     d, windows = statements._period(0, tmp_path / "proofs")
     out, (credit, why) = P.proved(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows)
     assert why is None and credit["windows"] == [statements._credited(w) for w in windows]
@@ -225,7 +225,7 @@ def test_a_rerun_that_goes_missing_leaves_no_stale_case(tmp_path):
 
 
 def test_a_served_period_is_its_windows_session_then_its_samples(tmp_path):
-    """The period's close lists the served window's session and then its sample's (``--cap 2``), and credit reads the
+    """The period's close lists the workload's session and then its sample's (``--cap 2``), and credit reads the
     sample from the sample's session: a record naming no sample session, or a close listing other sessions, is
     missing with why."""
     sid, dsid, serve, pouw = "s-window", "s-sample", tmp_path / "serve", tmp_path / "pouw"

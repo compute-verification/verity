@@ -743,7 +743,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
 
-    run_value_rows(P, corr, step_of, add, unmodelled)       # the values the served run decides (`fmt.RUN_PARAM`)
+    run_value_rows(P, corr, step_of, add, unmodelled)       # the values the workload decides (`fmt.RUN_PARAM`)
     moe_layers = moe_plane_rows(P, events, impl, add)       # the MoE block planes (kernel geometry, v1's)
 
     for f in alias_faults + pop.tp_faults:

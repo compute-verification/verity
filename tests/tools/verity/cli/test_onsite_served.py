@@ -1,9 +1,9 @@
-"""The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
+"""The workload's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; the network attester's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
-a binding; the served window runs once with every piece's hooks, and the onsite check
+a binding; the workload runs once with every piece's hooks, and the onsite check
 reads the record's composed verdict, the onsite composite's Lean answer where the composite ran, undecided while the
 record has no row for a listed subprotocol or takes no Lean answer. The runner, the record and the composite's public
 output are stand-ins written by each test."""
@@ -44,7 +44,7 @@ BINDINGS = {
     "network-certifier": {"certifier": {"gate": "user@gate-1"}},
 }
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
-#: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
+#: the workload's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
     "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
@@ -217,7 +217,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert len(got["channel"]) == len(cfg["channel"]) == 13
     assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 21, "unbound": []}]
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
-    assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
+    assert {c for _, c in pieces} == {*T.PROTOCOLS, T.WORKLOAD}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD", "BANDWIDTH_CMD"} & set(hooks)
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
@@ -273,7 +273,7 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
-    assert [e["component"] for e in got["plan"][0]["entries"]] == [T.SERVED_WINDOW, "sampled-proofs", "pouw",
+    assert [e["component"] for e in got["plan"][0]["entries"]] == [T.WORKLOAD, "sampled-proofs", "pouw",
                                                                    "certifier"]
 
 
@@ -291,7 +291,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
 def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
-    assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
+    assert (side.runs, side.scripts, side.reaches, side.binds) == (T.WORKLOAD, (T.CERTIFIER_PIECE,),
                                                                     NC.NETWORK_CERTIFIER, ("gate",))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
@@ -302,11 +302,11 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
     assert all(principal[p] == "developer" for ps in REG.parties.values() for p, e in ps.items()
-               if e.runs == T.SERVED_WINDOW)
+               if e.runs == T.WORKLOAD)
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path))
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
     mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_CERTIFIER]["certifier"]
-    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_CERTIFIER,
+    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.WORKLOAD, NC.NETWORK_CERTIFIER,
                                                                             [T.CERTIFIER_PIECE])
     assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_CERTIFIER,
                                                                                          [], {}, [])
@@ -324,7 +324,7 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
                                                                                          monkeypatch):
     """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
-    request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
+    request), which doesn't reach the table yet: the run raises by the row's name before the workload starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / T.PROVER_NODE
     with pytest.raises(NotImplementedError) as e:
@@ -336,7 +336,7 @@ def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_b
                                                                                                      capsys):
     """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
-    request is read or any party or the served window starts."""
+    request is read or any party or the workload starts."""
     state = tmp_path / T.AUDITOR_HOST
     run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
@@ -482,8 +482,8 @@ def test_a_component_declaring_a_channel_to_an_undeclared_party_is_refused():
 
 
 @pytest.mark.parametrize("fixed", ["subset:1", "stratified:1", "work:1", "work-rate:1/8", "bernoulli:1/8"])
-def test_a_served_windows_rule_that_is_no_rate_is_refused_by_name_with_the_rate_to_state(fixed):
-    """The served window's audit states the configuration's rule to its stream, which takes a rate: the file's own rule is
+def test_a_workloads_rule_that_is_no_rate_is_refused_by_name_with_the_rate_to_state(fixed):
+    """The workload's audit states the configuration's rule to its stream, which takes a rate: the file's own rule is
     one, and a configuration whose rule is a fixed count, or a work rate, for which the window has no work table, is
     refused at its check, by name, with the rate to state in its place."""
     cfg = K.parse(CONFIG.read_text())
@@ -510,7 +510,7 @@ RUNNER = """mkdir -p "$OUT"
 """
 
 
-def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, monkeypatch):
+def test_the_workload_runs_once_with_every_piece_s_hooks(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
     state = tmp_path / "state"
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
@@ -520,7 +520,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD"} & set(hooks)
-    # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
+    # the workload's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
@@ -531,7 +531,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
 
 
-#: the prover node's parties whose pieces are the served window's alone: its prover's are runtime parties (`live`)
+#: the prover node's parties whose pieces are the workload's alone: its prover's are runtime parties (`live`)
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
@@ -556,7 +556,7 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
     ({"COMPOSITE": ""}, {}, "|unset"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
 ])
-def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
+def test_the_workload_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
     """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
     ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
@@ -574,7 +574,7 @@ def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp
     assert (state / "out" / "composite.txt").read_text().strip() == got
 
 
-def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys, monkeypatch):
+def test_the_workload_with_a_binding_missing_never_starts(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / "state"
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)

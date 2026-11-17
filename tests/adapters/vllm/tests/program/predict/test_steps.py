@@ -1430,8 +1430,7 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
 @pytest.mark.slow
 def test_a_class_g_chunked_prompts_traced_build_is_its_compiled_program(tmp_path):
     """The chunked prompt above (q0's 20 prompt tokens in chunks of 8, 8 and 4 beside q1, then two decodes), compiled at rank 0,
-    and its trace: the command `trace_commands` gives it (the Build's chunked request wrapper at its launch context, as a served
-    window's trace runs it), run on the pinned vLLM with GLM-5.3's config of record and no CUDA device visible, as the row driver
+    and its trace: the command `trace_commands` gives it (the Build's chunked request wrapper at its launch context, as a workload's trace runs it), run on the pinned vLLM with GLM-5.3's config of record and no CUDA device visible, as the row driver
     runs a Build (`gpu_lease.hide_devices`; vLLM keeps Triton then). `compare` finds the two digests equal. What no cheaper test
     can: that the Build's chunked request wrapper traces the Program the compiler predicts. It needs the pinned vLLM (a pod's
     venv), so it skips without it; its Build takes minutes on one core."""

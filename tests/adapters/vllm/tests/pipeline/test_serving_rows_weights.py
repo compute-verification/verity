@@ -1,4 +1,4 @@
-"""A served window's registered reads of its weights (`pipeline.weight_rows.reads`): a slice unit's port that reads one whole
+"""A workload's registered reads of its weights (`pipeline.weight_rows.reads`): a slice unit's port that reads one whole
 row of one weight (`Gemm_v2{N=1}`'s ``w[n]``) as ``row/v2`` bit rows of its width is a read of ``weights/<label>@<words>`` at the
 weight's own leaves, in runs over consecutive units; the circuit record declares the reads beside its listed members and its
 window ingress, and the window's members are cut where the reads begin and end (`weight_rows.cut`), so each covers whole

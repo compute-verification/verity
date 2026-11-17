@@ -328,7 +328,7 @@ class Ctx:
             refuse("numerics_unregistered", node, self.module_path(node), str(e))
 
     def run_value(self, name: str, t: Type, declared: str, node=None) -> Coll:
-        """The field `name` of the `run` parameter (`RunInputs.value`): a value the served run decides and the Program checks in
+        """The field `name` of the `run` parameter (`RunInputs.value`): a value the workload decides and the Program checks in
         gates rather than computes, declared by the rule's `Rule.run_inputs` and read under `program.inputs.RUN[declared]`."""
         node = node or self.current
         try:

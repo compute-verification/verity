@@ -15,7 +15,7 @@ length is no one's choice:
   request's Program.
 
 **A verdict record** is an object with the six fields `FIELDS`: the run that produced the verdict (`run`, its id),
-the served run the class came from (`serve`, its id), the digest of what that serve registered (`registration`),
+the workload the class came from (`serve`, its id), the digest of what that serve registered (`registration`),
 the verifier that judged it (`verifier`: its `module` and the `commit` it ran at), the verdict (`verdict`) and what
 proves the verifier (`proved_by`: a guarantee's name, or null while none does). A record that names no run, no
 serve, no registration, or no verifier by its module and commit, is refused like one that is no object (`reads`;
@@ -99,7 +99,7 @@ RUN, SERVE, REGISTRATION, VERIFIER, VERDICT, PROVED_BY = FIELDS = (
     "run", "serve", "registration", "verifier", "verdict", "proved_by")
 #: how a record names its verifier
 MODULE, COMMIT = NAMES = ("module", "commit")
-#: what a class's records on a head name one of: the served run the class came from, and what that serve registered
+#: what a class's records on a head name one of: the workload the class came from, and what that serve registered
 ONE = (SERVE, REGISTRATION)
 LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
 #: two fields more every verdict states, which move no charge: what its verifier held its accept back for, null or

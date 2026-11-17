@@ -410,7 +410,7 @@ def supplied(program: str, links: Sequence[Link], q: int, entries: Sequence[Mapp
              schemas: Mapping[str, str] | None = None,
              pins: Mapping[str, Mapping[str, Any]] | None = None) -> tuple[Any, ...]:
     """The values the `Supply`s of ``links`` name for ``q`` sampled spans, each committed as core's `Registered` under
-    ``program`` at its public salts (`registered.supplied_salts`), as `interface.supplied` fills a served window's table reads: an
+    ``program`` at its public salts (`registered.supplied_salts`), as `interface.supplied` fills a workload's table reads: an
     index's row ``s·per + r`` the I32 ``index[r]``'s two u16 words, the low one first; a table read's, its span's table's root or domain id as a
     `Digest` port's 32 words (`interface.digest_words`), from the tables' entries alone (``entries[s]`` sampled span s's,
     `history.HistoryTable.entry`); a registered table's, row ``s·per + r`` table ``tables[r]``'s root or domain id, from

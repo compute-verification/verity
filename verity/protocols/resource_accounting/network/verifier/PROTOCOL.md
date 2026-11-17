@@ -1910,15 +1910,13 @@ prompt ids and a size of ids released, each a power of two.
     whose close hands it (`NetworkAttesterParams.head_tick`), counted in the device's buckets, its one clock. The run's
     last two execution phases, handed at its last close, share a due tick.
   - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network attester
-    (`NetworkAttester.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a served
-    run the publisher process sends the line of `rows.jsonl` back and the tick appends it. The line holds no
+    (`NetworkAttester.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a workload the publisher process sends the line of `rows.jsonl` back and the tick appends it. The line holds no
     tick: the tick it left at is the network attester's own note, in its log alone (`warden.json`'s `heads`).
     No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
     not built.
   - **A head back by its due tick** leaves at that tick and never sooner.
   - **A head back later** leaves at the first tick it is back by, at most W = `head_wait` ticks after the due one.
-  - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A served
-    run's tick writes the network attester's own unsigned note of it in the line's place. The run's check reads
+  - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A workload's tick writes the network attester's own unsigned note of it in the line's place. The run's check reads
     that note: it stands where a head or the word would, so it can only take one away. What an execution phase
     with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The
     check's summary names those execution phases for it (`heads`).

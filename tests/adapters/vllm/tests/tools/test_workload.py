@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run"
-#: where the served run's scripts sit in the tree
-SERVED_RUN = Path("adapters/vllm/tools/served_run")
+HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "workload"
+#: where the workload's scripts sit in the tree
+WORKLOAD_RUN = Path("adapters/vllm/tools/workload")
 #: the challenger host's address as a launch's environment holds it, here a documentation address
 CHALLENGER_HOST = "192.0.2.21"
 
@@ -28,9 +28,9 @@ def run(tmp_path: Path, *args: str, key: bool = True, **env: str) -> subprocess.
     ``env`` over it: the completed run."""
     tree = tmp_path / "tree"
     if not tree.exists():
-        (tree / SERVED_RUN).mkdir(parents=True)
+        (tree / WORKLOAD_RUN).mkdir(parents=True)
         for name in ("run.sh", "placement.toml"):
-            shutil.copy(HERE / name, tree / SERVED_RUN / name)
+            shutil.copy(HERE / name, tree / WORKLOAD_RUN / name)
         row = tomllib.loads((HERE / "placement.toml").read_text())["row"]
         workload = json.dumps({"model": "some/model", "case": "served", "engine": {"revision": "ab12"}}).encode()
         (tree / "adapters" / "vllm" / "workloads").mkdir(parents=True)
@@ -41,7 +41,7 @@ def run(tmp_path: Path, *args: str, key: bool = True, **env: str) -> subprocess.
     if key:
         (tree / "challenger-key.json").write_text('{"schema": "challenger-key/v1"}\n')
     held = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
-    return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
+    return subprocess.run(["bash", str(tree / WORKLOAD_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
 

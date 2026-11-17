@@ -1,6 +1,6 @@
 """served_cases.py: one-stage v1's case (no composite's), SPOT case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
-served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
+workload, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
 bare v2 case, each in a 0700 directory beside its Lean answer, in the directory form a
 composition reads as a case (remote's three subprotocols; no composite runs v2's bare case), and every answer naming the
@@ -12,7 +12,7 @@ all three cases commit to R, the policy's log is the serve's H1 log through W, a
 record (H1's own W, or none) is refused before any composite, so neither product is handed it. v1's own ``parameters``
 name the window's tables as values ahead of its templates', and a Program that isn't that population is refused.
 
-On a toy window (two templates of four slots each, as a served window's population program holds its class's
+On a toy window (two templates of four slots each, as a workload's population program holds its class's
 templates) v1's Lean (`spot-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
@@ -1371,7 +1371,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 @lean
 @pytest.mark.slow
 def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, inference_only_exe):
-    """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the served window's audit
+    """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the workload's audit
     holds it, its population program over the class's templates: the inference-only case `inference_only_case` makes from
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
     (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests

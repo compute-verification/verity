@@ -54,7 +54,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     and the replay's arrivals, and ``commitment``, the scheme the record was committed in (the store's: its run root and its step
     roots folded are the run root of record, 32 bytes under vllm-v1 and 64 under rows-sha512).  A slim bundle holds the replay's
     picks only: refused.  The Definitions the Build bound are not held to this tree's: no row is evaluated here, and the one-stage
-    proof is over the verifier's own template.  A served window's bundle (`serve_seal.seal_window`) names no Programs: its
+    proof is over the verifier's own template.  A workload's bundle (`serve_seal.seal_window`) names no Programs: its
     Programs are the registered compiler's for the window's advice, so it opens with none (``programs`` empty, each request's
     arrival its first step in the window), and ``manifest`` is the alias table it sealed (the bench row's ``op_path_aliases``,
     which `opening.CommittedStore` resolves a shared module's layer-N path through), or None when it sealed none."""
@@ -63,7 +63,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     if ctx.get("slim"):
         raise CPU.Refused(f"{bdir} is a slim bundle: it holds the replay's picks, not every unit of the population")
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
-    if (sw := ctx.get("served_window")):
+    if (sw := ctx.get("workload_window")):
         aliases = sw.get("op_path_aliases")
         return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
                                commitment=store.commit_scheme, manifest=None if aliases is None else {"op_path_aliases": aliases},

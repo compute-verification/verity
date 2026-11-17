@@ -19,7 +19,7 @@ window's period-open signed.
    (`pouw_h1_challenger.draw_session_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
    (`pouw_h1_challenger.manifest_reason`). The window's salt and round coins are its served values' checks (vllm's
    verify), not the sample's.
-2. The sample is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the served window's arguments: stream the window's
+2. The sample is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the workload's arguments: stream the window's
    root, registration its sample root, receipt ``{"receipts": …}``), over the layout of the descriptor its period committed
    (`credit.layout_of`), at the K that period's open committed (`credit.committed_k`): one work stratum a K.
 3. Each sampled proof block is located in the window's calls: unit u is call i's unit u - base_i, its row block b and column block

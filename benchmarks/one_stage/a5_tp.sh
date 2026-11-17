@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
-# window through docket, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
+# One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's workload through docket, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
 # Lean's verity-verify-proof are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
@@ -32,7 +31,7 @@
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
 #     network_attester:altered reads one cell a bit off, and network_attester:pad, network_attester:pad-named and network_attester:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that network attester run instead of rehearsing one (e.g. network_attester_replay.py's, a served window's traffic through the
+#     audits that network attester run instead of rehearsing one (e.g. network_attester_replay.py's, a workload's traffic through the
 #     network attester), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_network_attester.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,

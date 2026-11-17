@@ -30,12 +30,12 @@
   the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
   rows computed.
 
-`verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one sample source ("The run's
+`verify_passes` is a workload's verdict over all its passes (`served_passes.py verify`): one sample source ("The run's
 sample" below), sampled once every pass's roots are read, keys t samples over all the passes' tickets together, and an accept credits
 the run's credited MACs at the scheme's named assumption (`assumption_of`), less what ε of the tickets' weight could hold
 at δ, in core's answer form.
 With an execution phase record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
-retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
+retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the workload's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
 and its rows, words and word bits; each fixed operand w the passes read is W's ``pearl-b/<w>``, at the root the execution phase's fixed operands'
@@ -161,7 +161,7 @@ from clear_audit import TileOpening, Transcript, Verifier
 
 settings = of(__file__)
 DRAWS = 3
-#: a served run's verdict over all its passes (`verify_passes`)
+#: a workload's verdict over all its passes (`verify_passes`)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
@@ -541,7 +541,7 @@ def tie_entries(passes: list[Pass], rounds: list[int] | None = None, weights: bo
     `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root; then,
     with ``weights`` (a version-2 W's), for each fixed operand the passes read (pass by pass, by ascending id), B, its n rows of K
     FP32 words under `weight_binding`'s domain, at the root the pass's execution phase commits it under. Pass i is round
-    ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a fixed operand two passes
+    ``rounds[i]`` (default i): its place among the workload's passes with calls. ValueError for a fixed operand two passes
     commit under another root or shape."""
     want, ss = {}, list(range(len(passes)) if rounds is None else rounds)
     for s, p in zip(ss, passes, strict=True):
@@ -829,7 +829,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
                   draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False,
                   window_class: tuple[int, int, int] | None = None) -> dict:
-    """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
+    """One workload's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the execution phase record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), sampled after, keys `draws` work-weighted tiles over every pass's tickets
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
@@ -861,7 +861,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
     node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
-    ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
+    ``paths`` are the passes the prover retained, pass i the workload's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused

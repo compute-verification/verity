@@ -1,4 +1,4 @@
-"""network_attester_replay's traffic and upstream over a served window: the window's requests as the bodies the client sends (what each
+"""network_attester_replay's traffic and upstream over a workload: the window's requests as the bodies the client sends (what each
 brought, its prompt's recorded token ids, in the run's order), and each answered over a loopback socket with the tokens the
 server streamed it, its finish reason and usage, a prompt the window doesn't hold answered 404."""
 
@@ -82,8 +82,8 @@ def test_each_request_is_answered_with_the_tokens_the_server_streamed_it(run):
     assert _exchange(held, {"prompt": [9]})["status"] == 404
 
 
-def test_the_served_window_is_its_own_flag_beside_the_network_certifiers_schedule(run):
-    """The served run's Commit window and the network attester's own window (`NetworkAttesterParams.window`, in buckets) are separate flags, and the
+def test_the_workload_is_its_own_flag_beside_the_network_certifiers_schedule(run):
+    """The workload's Commit window and the network attester's own window (`NetworkAttesterParams.window`, in buckets) are separate flags, and the
     schedule's flags reach the network attester as `network_attester_serve.py rehearse` passes them, in the bytes egress form."""
     args = WP.parser().parse_args(["rehearse", "--serve-run", str(run), "--serve-window", "212", "--out", str(run / "o"),
                                    "--window", "300"])

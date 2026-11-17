@@ -207,8 +207,7 @@ def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[Any, int, sl
 def test_every_peer_row_of_a_tp_window_is_wired_from_its_ranks_gathered_row(toy):
     """The TP window holds both ranks' producer units and their gathers into 64-word rows, one combine unit a row that both
     ranks read, and the calls reading them. Every combine unit's parts are cut in two, each row its rank's gathered row;
-    every read of a combine's output (the norms' x and residual) is wired uncut, and each rank's token select is the served
-    window's four group units, each reading a gathered LM-head row of 64 words, and its select. None is left free, and each
+    every read of a combine's output (the norms' x and residual) is wired uncut, and each rank's token select is the workload's four group units, each reading a gathered LM-head row of 64 words, and its select. None is left free, and each
     of the window's own units passes Flock's proof block check but the select, whose 16 groups' bests and indices are no
     row past 111 B at the toy's 256 logits (GLM-5.3's is, `test_tp_steps`). `input_count` counts every peer bit wired; rank 0's and
     rank 1's windows alone wire only their own rows, each peer row free. Every wire runs forward in the window's public

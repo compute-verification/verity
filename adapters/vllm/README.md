@@ -17,13 +17,13 @@ Verity itself knows nothing of vLLM.
   `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
   flag and record.
-- **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts the served-verdicts launcher,
-  `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
+- **The workload** (`bash adapters/vllm/tools/workload/run.sh`) starts the served-verdicts launcher,
+  `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/workload/placement.toml` names. It runs
   the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network attester follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and
-  `adapters/vllm/tools/served_run/README.md` says what the run establishes.
+  `adapters/vllm/tools/workload/README.md` says what the run establishes.
 - **`verity-vllm COMMAND`** (`verity_vllm/pipeline/cli.py`, or `python -m verity_vllm.pipeline.cli`): every tool here is a
   subcommand of this one command line. `verity-vllm --help` lists them all. `COMMANDS` maps each to its module, whose
   docstring documents it. The commands to start from:
@@ -35,7 +35,7 @@ Verity itself knows nothing of vLLM.
 | `build`, `match`, `commit` | one stage of one workload |
 | `tp-capture`, `tp-match`, `tp-commit` | the same stages at a tensor-parallel size above 1 |
 | `predict row\|compare\|emit` | the Build of record from the workload alone; held to a traced Build; a switched workload's Build |
-| `advice` | a served run's advice, from its step trace and Commit record |
+| `advice` | a workload's advice, from its step trace and Commit record |
 | `commit-replay`, `serving-rows` | a sealed Commit's replay on CPU; its serving rows and registration |
 | `records show\|programs\|fetch\|publish` | the circuit database |
 | `neutrality --tier fast\|heavy` | rebuilds the workloads of record's Programs and fails when a digest moved |
@@ -66,7 +66,7 @@ engine spec (`verity_vllm/engine/spec.py`). Outside code imports only the public
 Under the two-stage design (`GLOSSARY.md`), serving commits only what each replay block reads and writes at its edges.
 After the first stage samples replay blocks, the developer replays each sampled one and registers its interior, and the
 second stage samples proof blocks inside it. Here a replay block is one request, from its first engine step to its
-finish inside one served window. The parts, in the order they run:
+finish inside one workload. The parts, in the order they run:
 
 - **The boundary commitment at serve** (`verity_vllm/pipeline/boundary_rows.py`). For each request that finishes in a
   window, the engine core keeps two hiding rows: its ingress (the prompt's length, the sampling inputs and seed, the
@@ -109,7 +109,7 @@ the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `RE
 REPLAY_CAPTURE=ID,...` replays that load's window alone and captures the named requests. A replay block that is a span
 of positions inside a request, and a served prefix-cache hit, are not on this path.
 
-What a replay costs is measured, and no figure is kept in the tree. `replay.json` holds the served window's seconds
+What a replay costs is measured, and no figure is kept in the tree. `replay.json` holds the execution phase's seconds
 beside the replay's and the engine's start. `benchmarks/serve_tax/tp_restore.sh` serves, restores a fresh engine from a
 snapshot taken at a window's edge and replays to the next edge; its `restore.json` holds the seconds of the build, the
 restore and the replay. For an engine in one process, `benchmarks/serve_tax/restore.py` and `rebuild.py` also write

@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.resource_accounting.network.verifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.resource_accounting.network.verifier.advice`) for a workload, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -85,7 +85,7 @@ SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
 COMPILER = "verity_vllm.program.predict.steps.compile_steps"
-#: a served run's exit code while a window it reads waits on a Commit record the running server hasn't written yet
+#: a workload's exit code while a window it reads waits on a Commit record the running server hasn't written yet
 PENDING = 3
 
 
@@ -526,7 +526,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     server has `stopped`, a window holding a request with no Commit record yet is named in ``pending``, and neither it nor any
     window after it is read.  ``out/windows.json`` (public) lists each window's registration, written only when none is pending."""
     if io is None:
-        raise ValueError("a served run's advice needs its Commit record, requests.jsonl")
+        raise ValueError("a workload's advice needs its Commit record, requests.jsonl")
     io_all = io_record(io)
     final = stopped(run)
     commits: dict[int, dict[str, Any]] = {}
@@ -635,7 +635,7 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    """Write a served run's advice (I1) from its step trace and Commit record, committed: registration.json public, the advice and
+    """Write a workload's advice (I1) from its step trace and Commit record, committed: registration.json public, the advice and
     its opening under private/; a serve-openai run's, one a closed Commit window under w<k>/; exit 0 iff each round-trips, 3
     (`PENDING`) while a window waits on a Commit record its running server hasn't written yet."""
     run: str = option("run", help="the run directory (step_trace.jsonl or a server's advice_trace.jsonl, and requests.jsonl or windows.jsonl)")

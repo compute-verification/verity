@@ -1,4 +1,4 @@
-# `verity bench compute` (`run.py`): the share of a served model's MACs that Pearl+ credits over the tokens a served run
+# `verity bench compute` (`run.py`): the share of a served model's MACs that Pearl+ credits over the tokens a workload
 # served, read from the verifier's side of the run's record. Not a package: the suite holds the printer and the model's
 # MAC count to the small record under tests/fixtures, with a stand-in for the evidence store, so nothing is fetched in
 # it (`uv run tools/check/suites.py benchmarks/compute`).

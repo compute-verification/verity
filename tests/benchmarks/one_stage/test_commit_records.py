@@ -1,6 +1,6 @@
 """A Commit run publishes only listed files. `research run` publishes what a script leaves under $OUT, its stdout and the
-other files of its run dir, so `adapters/vllm/tools/served_run/commit.sh` and `a5_llama1b_h200.sh` put a row's file there only when
-`adapters/vllm/tools/served_run/published.sh` lists it with the reason it holds nothing of a request, and name the files they leave on the node.
+other files of its run dir, so `adapters/vllm/tools/workload/commit.sh` and `a5_llama1b_h200.sh` put a row's file there only when
+`adapters/vllm/tools/workload/published.sh` lists it with the reason it holds nothing of a request, and name the files they leave on the node.
 Here the list never matches a file known to hold a value; each script's `row` and `records` run over a stand-in row dir with
 values planted in every file a stage leaves; and the demo's Commit runs whole in a toy tree under a stub of vLLM's venv, where
 its run dir gains only listed files, its stdout no planted value, the evidence store nothing, and its bundle stays in the row
@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-PUBLISHED_SH = ROOT / "adapters" / "vllm" / "tools" / "served_run" / "published.sh"
-COMMIT_SH = ROOT / "adapters" / "vllm" / "tools" / "served_run" / "commit.sh"
+PUBLISHED_SH = ROOT / "adapters" / "vllm" / "tools" / "workload" / "published.sh"
+COMMIT_SH = ROOT / "adapters" / "vllm" / "tools" / "workload" / "commit.sh"
 A5_SH = ROOT / "benchmarks" / "one_stage" / "a5_llama1b_h200.sh"
 ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: what every file a stage leaves carries here, and no path can

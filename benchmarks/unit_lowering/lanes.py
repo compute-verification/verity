@@ -1,6 +1,6 @@
 """`lanes.py KIND K R C PATH TREE STAGING`: an R x C leaf's lane statement (`PouwH1LaneZy_v1`, one circuit for all its lanes,
 each 4 rows by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's leaf module stages it
-(`leaf_file`; its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it
+(`leaf_file`; its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a workload's verifier derives for it
 (`derived`), flat unless ``H1_TMPL`` says otherwise; or KIND ``tile``, the H1 tile unit's statement at K on R x C
 (`h1unit.Shape.stager`, TREE's), bound to `ZERO_BIND`. At STAGING ``fast`` `fast_stage` is installed first.
 """

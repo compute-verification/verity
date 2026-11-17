@@ -330,7 +330,7 @@ A run made before the `COINS` line has `ran with: not stated`.
 A prove_path served-arm run (`flock/out` or `zk/out` under the run's directory) takes its `ran with:` line from
 `ran-with.txt`, which names its coins and parameters in these words. Its workload opens `served per ran-with.txt (...)`
 from that file's `served` line. Where the audit's own `source` field says otherwise (prove_path writes `stand-in` for a
-sealed served window), the two statements disagree, and the workload says so and prints both: `the output disagrees on
+sealed workload), the two statements disagree, and the workload says so and prints both: `the output disagrees on
 its values: ran-with.txt says served (...), the audit's source field says stand-in:`. Under `PP_RECORDS=1` the arm has a
 `RECORDS` line and no `PROVE-PATH` line: its benchmark result is accepted where `RECORDS` is ok and accepted with its
 negatives refused, and the A5 line's Lean verdicts are true. A `*-forged` arm with no `audit.log` is no forged run: the

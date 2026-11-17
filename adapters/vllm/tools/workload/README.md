@@ -1,8 +1,8 @@
-# The vLLM served run: the remote protocol on a served H200
+# The vLLM workload: the remote protocol on a served H200
 
-The served run is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
+The workload is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
 period as its work, which no configuration names, in `verity/protocols/compose/verifier/remote/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
-what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
+what an auditor with no devices at the site establishes about a datacenter serving a model. One workload of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
@@ -13,10 +13,10 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
-  blocks within their gate and fresh-input budgets. The served run doesn't run it: the served run doesn't produce the
+  blocks within their gate and fresh-input budgets. The workload doesn't run it: the workload doesn't produce the
   declared division yet.
 
-PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
+PoUW's verdict on the workload credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
@@ -53,13 +53,13 @@ what a window run on the served node ends with, since its own composite is a dev
 means a rejection, a refused composite, or a failed step.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
-directory holds the served run's own: its placement and its commands.
+directory holds the workload's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
 (`verity/remote-bandwidth/v0`) and network attestation. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
+isn't yet a subprotocol of either composite. Each runs on the workload as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 
@@ -95,11 +95,11 @@ doesn't control.
   `run.sh` fills from the environment the run is launched in, and without it the window run starts nothing and says so.
 - `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
   Lean verifier's; `init` refuses when that verifier doesn't build.
-- `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
+- `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`). It starts the run with
+`run.sh` is the one command (`bash adapters/vllm/tools/workload/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`). It starts the run with
 the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
 recorder (`--env MAIN_SHA=SHA`); `--dry-run` prints the command, and `--development` takes development coins.
 
@@ -111,7 +111,7 @@ recorder (`--env MAIN_SHA=SHA`); `--dry-run` prints the command, and `--developm
    stage's flags, exit code and verdict word, the sealed bundle's manifest digest, the GPU lease's times, the row's
    target), and the run names every file it left on the node; to publish another file, give it an entry there.
    `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
-2. `run.sh` (`window`, the default): `served_verdicts.sh`, the served run through every subprotocol, as above.
+2. `run.sh` (`window`, the default): `served_verdicts.sh`, the workload through every subprotocol, as above.
 3. `run.sh serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
    phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).

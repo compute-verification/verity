@@ -680,7 +680,7 @@ def _own_leaves(values: list[tuple[str, bytes]], chunk: int) -> list[tuple[str, 
 
 
 @pytest.mark.parametrize("coins", ["in-process", "gate"])
-def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_reads_after_its_coin(tmp_path, monkeypatch,
+def test_a_workload_under_release_after_pouw_releases_exactly_h1s_sampled_reads_after_its_coin(tmp_path, monkeypatch,
                                                                                                     coins):
     """``--retain device --seal --release-after pouw``: a window served on the server's Commit, its values held on the
     device (here a CPU pool) as the Commit acquired them, waits on the sealer's thread until its H1 release, off the loop,

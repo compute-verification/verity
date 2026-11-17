@@ -3,7 +3,7 @@
 # `tests/test_configurations.py` holds this file to those files, so a change to a configuration changes its line here.
 # A device's `trusted-device` holds only under a hash listed here (`memory_attester.trusted_device`): any other file is
 # a rehearsal, no bound. A second lane's demo puts its line in this same file, and no change touches another demo's line.
-"demos/onsite_full.toml" = "f8fd02322844310fd45ec865cbc9694b5d94035fecdbaa5666654f29b88e0902b949ad70f5fa71b54080fd7465cbc8599edf8153269c0fe2dcb7c67135263612"
-"demos/onsite_compute.toml" = "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322"
-"demos/onsite_network.toml" = "9d9c1d03935955f17207629a34cc2001c04b90185587a00fe6a08bb88f342c59cde7036cc73eef8d75abb2b9e14295857d7ab94207f3b2d7572fc78ef519f00e"
-"demos/remote.toml" = "852ab2389ca582b8bf0b769c5634611e7b1a3703855c158e2df6a31ae4e62fd2dfa569dd657dd188a55dfdfded897868b1158603d4e890774fa029145af607eb"
+"demos/onsite_full.toml" = "41dc92c7cf452fc52630f3bc29084b23a48be242346d6ef97ec65892c39862517683c16490964d494be9037d5e2d4651e62e39dacf7a5d99f632c0c7d67f6044"
+"demos/onsite_compute.toml" = "401bdbcc75d2cb987d8f70e07410db5e186fec4559c0e418cf9cdf697e835481088ec920173437c462dec14d4df4cf04d93e14ab95b06df4a04b167448a11d6e"
+"demos/onsite_network.toml" = "765b875fde45ea12f1b3532f6501b82c0cce8d9ea1dd1d2d42430ecba207d2dbaf6cd6b925224ccc0852193d6cd406d1f5a95a047f4796c3200627c16197c029"
+"demos/remote.toml" = "c83b260ffe6322e1a47418b153166a153ff9fbf5c95c0f782e98c7a3e30cbd27190a7cb1de2472c3fc46868a5a4f4b47b32a696bd0ca9130f487962dd000a53b"

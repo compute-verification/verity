@@ -262,7 +262,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
                     "its sample and 1.2 s before the next window closed |") == 2
     stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
             if x.startswith("Prove path")]
-    assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
+    assert stub == [f"Prove path: the workload's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
                     "was registered after serving, by the lane (r-reg), 1503.6 s after its Commit window closed, "
                     "1502.9 s after the next window closed, 852.6 s before the first sample, not by the endpoint while "
                     "serving; the advice w1's arms committed is a registration of its own, held to the report's advice "
@@ -418,7 +418,7 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
 
 
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
-    """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
+    """The own-advice endpoint's first three Commit windows (its workload's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
     not bound when a window falls outside the run's execution phases, holds a request the run didn't certify, opens another

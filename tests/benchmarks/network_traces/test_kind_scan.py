@@ -6,7 +6,7 @@ it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no
 count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
 rebuild), or any step the network attester path doesn't run, is a finding naming the check.
 
-What a verifier on another machine receives of a served run's OUT (``--received``: the attester's piece, V3c's audit,
+What a verifier on another machine receives of a workload's OUT (``--received``: the attester's piece, V3c's audit,
 the registered compiler, the advice and weights registrations and the window circuit's count) scans clean as the run
 writes it, and anything that reads the advice or counts the window is a finding: a log left in either dir, an undeclared
 file, the advice's own length in its registration, a workload in φ, the advice's length in a count, a compile in the
@@ -170,7 +170,7 @@ def test_dirs_files_are_the_pieces():
     assert f"profile.placement.{CP.PREMISE}" in KS.ANSWER
 
 
-#: a served run's registered compiler as `prove_path.py compiler` prints it (`prove_path.compiler_doc`)
+#: a workload's registered compiler as `prove_path.py compiler` prints it (`prove_path.compiler_doc`)
 COMPILER = {"name": "verity-vllm/capped/v1", "digest": "0a" * 64, "cap_bits": L_A,
             "inner": {"name": "verity_vllm.program.predict.steps.compile_steps", "digest": "0b" * 64},
             "served": {"name": "verity_vllm.program.predict.steps.compile_steps", "digest": "0b" * 64},
@@ -197,7 +197,7 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
 
 
 def _out(tmp_path: Path, period, v3c: dict = V3C_WINDOW) -> Path:
-    """A served run's OUT as the verifier receives it (`RECEIVED`): the attester's piece (with the served.json a
+    """A workload's OUT as the verifier receives it (`RECEIVED`): the attester's piece (with the served.json a
     deferral's follow-on leaves, naming the served node it audited), V3c's audit as the run
     copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited
     and its period audit), the registered compiler, the window's advice registration in its public form
@@ -231,7 +231,7 @@ def _out(tmp_path: Path, period, v3c: dict = V3C_WINDOW) -> Path:
     return out
 
 
-def test_what_a_verifier_receives_of_a_served_run_is_of_the_public_kinds(tmp_path, period):
+def test_what_a_verifier_receives_of_a_workload_is_of_the_public_kinds(tmp_path, period):
     """OUT as the run writes it scans clean, every file the scan names read (the leaves counted by kind), and every
     file of OUT is one the scan reads."""
     out = _out(tmp_path, period)

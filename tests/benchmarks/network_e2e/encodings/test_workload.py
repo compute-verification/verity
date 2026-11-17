@@ -1,4 +1,4 @@
-"""vLLM's served run in `fixtures/vllm-8eb1` (with its `meta.json`): it serves without prefix caching,
+"""vLLM's workload in `fixtures/vllm-8eb1` (with its `meta.json`): it serves without prefix caching,
 the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
 scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
 fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
@@ -73,7 +73,7 @@ def test_every_window_opens_drained(recs):
     assert windows == list(range(339))
     steps, sync = 0, []
     for w in windows:
-        sub, _base = RV.served_window(recs, w)
+        sub, _base = RV.workload(recs, w)
         tr = RP.load_step_trace(sub)
         steps += len(tr.steps)
         try:
@@ -98,7 +98,7 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
                 if s["source"].startswith("async-light"))["decisions"]["book"]
     per, as_ones, forced = [], [], []
     for w in range(339):
-        ds, rp = RP.decisions(RP.load_step_trace(RV.served_window(recs, w)[0]))
+        ds, rp = RP.decisions(RP.load_step_trace(RV.workload(recs, w)[0]))
         per.append([int(d.arrived) for d in ds])
         forced.append(sum(rp.forced))
         ones = [(rp.admitted[i], i, 1) for i, f in enumerate(rp.forced) if f]
@@ -119,7 +119,7 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     chain (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's
     max_tokens and output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own
     statics (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's
-    carry and refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
+    carry and refuses one bit less. The workloads name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
     except those the certified tick admits, which name none. code_v1's term
 width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
 at each power of two to 2^32 − 1."""
@@ -134,7 +134,7 @@ at each power of two to 2^32 − 1."""
                 if s["source"].startswith("async-light"))["decisions"]["book"]
     per, reqs = [], []
     for w in range(213):
-        tr = RP.load_step_trace(RV.served_window(recs, w)[0])
+        tr = RP.load_step_trace(RV.workload(recs, w)[0])
         per.append([int(d.arrived) for d in RP.decisions(tr)[0]])
         reqs.append(tr.requests)
     D, L = 32, max(map(len, reqs))
@@ -172,13 +172,13 @@ def test_a_window_on_a_busy_engine_is_refused(recs):
     moved = [{**r, "before_step": 3968} if r.get("kind") == "window" and (r["window"], r["event"]) == (213, "open") else r
              for r in recs]
     with pytest.raises(ValueError, match="1 requests unfinished, cmpl-ca0396cc2f3e49b18f0f2d65890a3a51-0"):
-        RV.served_window(moved, 213)
+        RV.workload(moved, 213)
 
 
 def test_replay_step_is_w212s_scheduler(recs):
     """Under the served engine (AsyncScheduler, AS = 1) each of w212's 22 units (20 steps, one lag schedule after the last
     finish and the update after it) is ReplayStep_v1's, by its reference and by its circuit."""
-    sub, _base = RV.served_window(recs, 212)
+    sub, _base = RV.workload(recs, 212)
     st, vs = RV.vectors(RP.load_step_trace(sub), R=2, W=1, A=2)
     assert st["AS"] == 1 and len(vs) == 22 and all(RV.fits(st, *v) for v in vs)
     assert RV.check(st, vs, circuit=True) == {"checked": 22, "reference_mismatches": 0, "reference_first": [],
@@ -196,7 +196,7 @@ def test_the_slice_fixture_is_w212s(recs, tmp_path):
     fx = json.loads(SLICE.read_text())
     assert [a[0] for a in fx["arrivals"]] == [308, 309, 310] and fx["IW"] == 9
     assert fx["decisions"] == [0] * 6 + [1] + [0] * 6 + [1] and fx["P"] == fx["steps"] == len(fx["rows"]) == 20
-    sub, base = RV.served_window(recs, 212)
+    sub, base = RV.workload(recs, 212)
     assert base == 308
     assert [[[base + i, s, n] for i, s, n in st.rows] for st in RP.load_step_trace(sub).steps] == \
         [[[r[1], r[3], r[4]] for r in step] for step in fx["rows"]]
@@ -235,7 +235,7 @@ def test_the_async_class_fixture_is_w212s(tmp_path):
 
 
 def test_a_class_smaller_than_the_window_is_refused(recs):
-    sub, base = RV.served_window(recs, 212)
+    sub, base = RV.workload(recs, 212)
     with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 21"):
         RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, base=base, D=13, P=19)
 
@@ -244,7 +244,7 @@ def test_w1_is_async_only(recs):
     """Window 1 (requests 4 to 7, 3 decisions) is the smallest of the 25 windows the sync slice refuses with more than one
     request: its sync replay diverges at step 2, and under the served async engine each of its 39 units is ReplayStep_v1's
     at the engine class (AS = 1), by its reference and by its circuit."""
-    sub, base = RV.served_window(recs, 1)
+    sub, base = RV.workload(recs, 1)
     tr = RP.load_step_trace(sub)
     with pytest.raises(ValueError, match="diverges from the trace at step 2"):
         RV.slice_inputs(tr, R=8, W=1, A=9, base=base, AS=0)

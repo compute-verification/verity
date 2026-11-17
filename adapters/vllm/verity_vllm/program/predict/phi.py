@@ -247,7 +247,7 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     ``execution`` label, ``eager`` where it states none, and its ``engine_record``): the model at its pinned config ``hf_config``,
     with the checkpoint dtype that config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's
     tensor-parallel world at ``rank`` with the engine args class G states and the layout of an FP8 KV cache (`engine_of`, whose
-    ValueError it raises); no workload. A served window's registered compiler and the Builds its row dir holds both compile under
+    ValueError it raises); no workload. A workload's registered compiler and the Builds its row dir holds both compile under
     it, so the Programs the one compiles are the Programs the other wrote."""
     tp, engine = engine_of(meta, rank, hf_config)
     dtype = checkpoint_dtype(hf_config)

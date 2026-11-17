@@ -1244,7 +1244,7 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
 
 
 def test_each_benchmark_result_is_the_run_that_measures_it_and_no_reprint_is_rerun():
-    """`metrics.toml`: every metric `run.py` writes has a row whose command is the served run (`serve.sh`), which
+    """`metrics.toml`: every metric `run.py` writes has a row whose command is the workload (`serve.sh`), which
     writes them under its own run, and never `run.py --from`, a reprint of a stored run that the weekly rerun loop
     would record as a new reading. A row that reads a stored run (the h200 row) takes it as the placeholder
     ``RUN_OF_RECORD``, which keeps it off that loop, and the header's ``RUN OF RECORD`` line names the run and its

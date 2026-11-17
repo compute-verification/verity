@@ -14,7 +14,7 @@ each the card file's value):
                around the kernel, read from that run's `out/beside.jsonl` (`--duty RUN`)
     ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `hardware/cards/` `CARD`)
     share      `compute-accounting/verified-compute-share`: the MACs the Pearl+ verifier credits over the MACs the
-               served model computes, on a served run of record (`run.py --from RUN`, which refuses an answer that
+               served model computes, on a workload of record (`run.py --from RUN`, which refuses an answer that
                isn't an accept)
 
 Credit counts each MAC at its pipe's data-sheet ceiling, so a span of T seconds holds ceiling(r) * T MACs of capacity,
@@ -126,7 +126,7 @@ def main(argv: list[str] | None = None, *,
          store_of: Callable[[], compute.EvidenceStore] = compute.opened) -> int:
     ap = argparse.ArgumentParser(prog="h200_share.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--from", dest="run", metavar="RUN", required=True,
-                    help="a served run of record: its verified compute share read from its record (run.py --from)")
+                    help="a workload of record: its verified compute share read from its record (run.py --from)")
     ap.add_argument("--duty", metavar="RUN", required=True,
                     help="a benchmarks/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)

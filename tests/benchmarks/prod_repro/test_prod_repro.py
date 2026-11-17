@@ -86,8 +86,8 @@ def replayed(out: Path, ours: str = "record", *, tokens: dict[str, list[int]] | 
     d = out / "replay-compiled"
     d.mkdir()
     (d / "replay.json").write_text(json.dumps({
-        "arm_dir": str(out / ours), "served_run_id": "r-1", "run_id": "r-1", "load": load, "rep": 1, "mode": "compiled",
-        "served_mode": "compiled", "served_window_s": 0.2, "replay_wall_s": 0.3, "engine_ready_s": 9.0,
+        "arm_dir": str(out / ours), "workload_id": "r-1", "run_id": "r-1", "load": load, "rep": 1, "mode": "compiled",
+        "served_mode": "compiled", "execution_phase_s": 0.2, "replay_wall_s": 0.3, "engine_ready_s": 9.0,
         "served_under": None, **R.compare(w, got), **over}))
     R.write_tokens(d, got["tokens"])
     if keep_steps:
@@ -123,7 +123,7 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
             "  compiled: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
             "  compiled-again: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
             "  record: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
-            "  the replay: ended in 0 s, its engine ready in 9 s; the served window took 0 s\n"
+            "  the replay: ended in 0 s, its engine ready in 9 s; the execution phase took 0 s\n"
             "  the replay's engine: vLLM's own (record serves with no other vLLM plugin of ours than its record)\n"
             "settings of record, with compiled's beside:\n") in txt
     assert ("tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests\n"
@@ -164,7 +164,7 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
             f"  request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)\n") in txt
     assert r["tokens"]["differing"][0] | {"served_id": 1, "replayed_id": 9, "step": 1} == r["tokens"]["differing"][0]
     assert r["failed"] == [f"request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)"]
-    assert txt.endswith("prod_repro: 2 of 3 lines measured; FAILED: the replay differs from what was served\n")
+    assert txt.endswith("prod_repro: 2 of 3 lines measured; FAILED: the replay differs from what the workload served\n")
     # of two requests that differ, the first is the one whose token serving emitted in the earlier step
     shutil.rmtree(out / "replay-compiled")
     a = rid(f"{LOAD}1", 0)
@@ -280,7 +280,7 @@ def test_without_a_replay_of_this_window_the_tokens_are_not_measured(tmp_path: P
     assert rc == 0 and r["tokens"] == {"measured": False, "why": f"no replay ran (no replay.json in {out / 'replay-compiled'})"}
     assert txt.endswith("prod_repro: 1 of 3 lines measured\n")
     # a replay of another job's serve of the same arm, or of another rep, is not this window's
-    for other in ({"served_run_id": "r-0"}, {"rep": 2}, {"arm_dir": str(out / "compiled")}):
+    for other in ({"workload_id": "r-0"}, {"rep": 2}, {"arm_dir": str(out / "compiled")}):
         shutil.rmtree(out / "replay-compiled", ignore_errors=True)
         replayed(out, **other)
         rc, txt, r = run(out)
@@ -383,7 +383,7 @@ def test_files_the_benchmarks_readers_refuse_end_their_lines_and_not_the_report(
     (out / "record/server/step_trace.9.jsonl.gz").write_bytes(b"not gzip")
     rc, txt, r = run(out)
     assert rc == 0 and "record's settings can't be read from the job's files: BadGzipFile" in r["ran"]["unread"]["record"]
-    assert "tokens: not measured: the served window or the replay's tokens can't be read back: BadGzipFile" in txt
+    assert "tokens: not measured: the workload or the replay's tokens can't be read back: BadGzipFile" in txt
     assert "  prefix caching: not read (record's files can't be read)\n" in txt and "cost: record over compiled" in txt
 
 
@@ -1659,9 +1659,9 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
     assert p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
     p = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none")
     assert p.returncode == 1 and "FAILED: a replay was asked for and the tokens line is not measured" in p.stdout
-    # a job whose time ends (SIGTERM) still reports what was served and replayed by then
+    # a job whose time ends (SIGTERM) still reports what the workload served and replayed by then
     p = bash(script, *argv, run_dir=run_dir, STAND_IN_TERM="1", TERM_WAIT_S="0")
-    assert p.returncode == 143 and "ended early (SIGTERM): the report is of what was served and replayed by then" in p.stdout
+    assert p.returncode == 143 and "ended early (SIGTERM): the report is of what the workload served and replayed by then" in p.stdout
     assert "  prod: up in 300 s; the load served 1 time, 200 requests" in p.stdout and "the replay: DID NOT END" in p.stdout
 
 

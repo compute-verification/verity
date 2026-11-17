@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit (at its fixed slots): a served window is its class's one Circuit of the
+"""verity_vllm.program.predict.window_circuit (at its fixed slots): a workload is its class's one Circuit of the
 catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row or a registered read
 of the weights or the network attester's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
 Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
@@ -694,8 +694,8 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
     assert IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN})["free"] == _alone(doc, ROPE) > 0
 
 
-def test_a_served_windows_weight_reads_register_at_their_widths_beside_the_grains(tmp_path):
-    """A served window's slice units read a GEMM's weight one row of K words a unit (`pipeline.weight_rows`): given those
+def test_a_workloads_weight_reads_register_at_their_widths_beside_the_grains(tmp_path):
+    """A workload's slice units read a GEMM's weight one row of K words a unit (`pipeline.weight_rows`): given those
     parameters (``served_params``, the record's), the committer registers each weight at that width too, under nonces of
     all its parameters, the verifier's record states their shapes, and the pins hold them; a window serving the
     checkpoint's words commits the registered roots, rows held for its reads by reference. A registration without them

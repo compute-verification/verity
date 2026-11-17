@@ -128,7 +128,7 @@ and each row says where it stands:
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
   block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
-  to the response's ids. Whether it does is read from a served run's verdict records, as the row `design`'s is (The
+  to the response's ids. Whether it does is read from a workload's verdict records, as the row `design`'s is (The
   stop class's verdicts, below): with no record read, or one verdict lacking, each connection is charged its
   schedule under these two rows too, as is each connection of an execution phase no registration was read for. The
   jitter's 0 under `timing` and `all three` rests on the set-time card, which is simulated.
@@ -137,7 +137,7 @@ and each row says where it stands:
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
   Its failed connections' charge, its jitter, its count and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths proof block on the network attester's records, and a stop block
-  sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
+  sampled on a served audit. How its stop class is charged is read from a workload's verdict records and from
   nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
   holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
   count. With no record read, or one verdict lacking, each connection is charged its schedule and the row is the
@@ -165,7 +165,7 @@ from the signed head of an execution phase and the verdict records on a class of
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
-- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `serve` (the served run
+- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `serve` (the workload
   its class came from), `registration` (the digest of what that serve registered), `verifier` (its `module` and
   the `commit` it ran at), `verdict` and `proved_by`. A record that names no run, serve, registration or verifier
   doesn't read, and one that doesn't read holds no execution phase, in a run that no other replaces. Of its

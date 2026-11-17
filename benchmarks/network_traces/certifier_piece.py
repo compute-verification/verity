@@ -86,7 +86,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   DIR. Before the guard reads the hold, its period files become SERVE_DIR/`CASES`/`CASE` (`write_case`; the directory
   0700, the file 0600), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the
   commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no
-  blob (about 83 MB on a served window, nearly all of it the params); the certificates are cut from that evidence, and
+  blob (about 83 MB on a workload, nearly all of it the params); the certificates are cut from that evidence, and
   the hold's period files then go, so the case has one copy. It is there only where the step ended with its files
   released (`settle`), and no answer is beside it: the answer is DIR's. Only the protocol rejects: a step that can't
   run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
@@ -102,21 +102,20 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
   benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
-  served window itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
+  workload itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
   one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
   window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The check reads an audit's state
   entry among its ``roots`` and its ``registered`` alone, and V3c's registration holds its `SCAN_STATE` in its window's
-  ``activations.values`` alone, so a served window's answer is a reject at the state tie. It answers nothing
+  ``activations.values`` alone, so a workload's answer is a reject at the state tie. It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
   DIR/`CHAINED`, the chain's scan read no V3c window or another, or V3C has no window-circuit record beside it. Each
   releases through its own hold and refuses as
   the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
-* **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
-  run's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
+* **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the workload's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
   - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
     the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases.
     ``--height`` at the piece's default, 10, which signs 204 of them, is raised to the least whose key signs the
@@ -140,7 +139,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
     (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
     a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the
-    served run without the attester's answer. The run's records cover the connections that crossed the relay; that
+    workload without the attester's answer. The run's records cover the connections that crossed the relay; that
     nothing else reaches the endpoint is the placement's, as a rehearsal's.
   - ``--gate local`` is the dry run's: this tree's gate on a scratch host under SERVE_DIR/`PRIVATE`, its unit a
     process of the front's (`local_unit`) with a `relay` each way in the place of its ssh.
@@ -537,7 +536,7 @@ def kept_run(serve_dir: Path) -> str:
 
 
 def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]] | None:
-    """The network attester run the front kept under ``serve_dir`` as a served window's scan reads it
+    """The network attester run the front kept under ``serve_dir`` as a workload's scan reads it
     (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its certified I/O
     (`network_attester_chain.io`) and its certified ingress, each execution phase's number and rows (`network_attester_rows.window_rows`);
     None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
@@ -1217,7 +1216,7 @@ def parser() -> argparse.ArgumentParser:
                    help="plain requests of the group's shape straight to PORT first, each in a window of its own "
                         "(none by default)")
     f.add_argument("--session", action="store_true",
-                   help="the gate's relay session, kept up for the served run's own load: no group is sent")
+                   help="the gate's relay session, kept up for the workload's own load: no group is sent")
     f.add_argument("--client-port", type=int, metavar="PORT",
                    help="with --session: the port of the peer's loopback the load's clients connect to")
     f.add_argument("--windows", type=int, metavar="N", help="with --session: its length, in execution phases")

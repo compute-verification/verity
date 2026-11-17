@@ -2,9 +2,9 @@
 # served_zk's window through the proof system on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # sampled subset:K' once, every sampled tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
-# serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
+# serve.sh's run WORKLOAD_RUN retained its two requests under $WORK/passes/$WORKLOAD_RUN.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
-#     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
+#     --declared-output 'out/*/*' --env WORKLOAD_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
 #     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
 # The sampled proof blocks run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /
 # SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
@@ -71,7 +71,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 # shellcheck source=../../../../../../../../benchmarks/pouw/hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
-PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
+PASSES=$WORK/passes/${WORKLOAD_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/tools/difftest/python
 SC="$SRC/benchmarks/pouw/served_zk/served_commit_run.py"   # served_commit.py with the checks of record's Lean side
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
@@ -134,7 +134,7 @@ R=$OUT/request/registration.json RP=$OUT/request/params.json
 # A pass salted by epoch coins (manifest v2) was salted by the serving controller's challenger, whose entropy this one holds
 MAN=$PASSES/request/manifest.json
 V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'] == 'verity-vllm/pouw-pearl-c-run/v1')" "$MAN")
-STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
+STATE=${SZ_COIN_STATE:-$WORK/coin-state/$WORKLOAD_RUN}
 if [ "$V1" = True ]; then REC=true STATEARG=(); else REC=false STATEARG=(--state "$STATE"); fi
 log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
 coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
@@ -206,7 +206,7 @@ finish() {       # the challenger quits, then its requests again from its record
 summary() {      # summary.json
   {
     echo "{"
-    echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
+    echo "\"workload\": \"$WORKLOAD_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
     echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": ${FU:-null}, \"params\": $(cat "$RP"),"
     echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
     echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"

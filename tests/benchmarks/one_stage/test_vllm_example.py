@@ -1,4 +1,4 @@
-"""The vLLM served run's endpoint serves under its workload's Build of record, the ahead-of-time compiler's (`verity-vllm predict
+"""The vLLM workload's endpoint serves under its workload's Build of record, the ahead-of-time compiler's (`verity-vllm predict
 row`), never its Commit of record's traced Build, which is only the cross-check (`predict compare --predicted`): `serve.sh` in a
 toy tree whose `verity_vllm.pipeline.cli` is a stub that records each call."""
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / "adapters" / "vllm" / "tools" / "served_run"
+EXAMPLE = ROOT / "adapters" / "vllm" / "tools" / "workload"
 ROW = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 FAKE_CLI = '''import json, os, sys

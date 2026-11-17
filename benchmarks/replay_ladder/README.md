@@ -1,6 +1,6 @@
 # The replay ladder
 
-Does replaying a served window under its recorded schedule give the served tokens on models other than the one it was
+Does replaying a workload under its recorded schedule give the served tokens on models other than the one it was
 first measured on? On each model of a ladder of pinned checkpoints (`ladder.LADDER`: dense, MoE and FP8 MoE at one GPU,
 a dense model at TP2, an FP8 MoE at TP4 and GLM-5.3, an FP8 MoE with DeepSeek sparse attention, at TP8), `ladder.py` serves one saturated window with the scheduler's step trace,
 replays it several times on compiled vLLM at the integration's pin (d9105ea80), and serves a sample of its requests alone.

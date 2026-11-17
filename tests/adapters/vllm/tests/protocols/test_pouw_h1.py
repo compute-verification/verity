@@ -1079,7 +1079,7 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
 
 
 def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
-    """`pouw_h1_challenger.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
+    """`pouw_h1_challenger.manifest_reason` holds a workload's record to its coins: the honest record passes, and one with a
     call's table root, a served tree's entry or a round's root changed is refused."""
     _host(tmp_path, monkeypatch)
     _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
@@ -1131,7 +1131,7 @@ def _drawn(host, sid, root, withhold=True):
 
 
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
-    """`honest` (a served window's commitment) with its coins swapped for those of challenge phase `CH.session_id(seed)`, which
+    """`honest` (a workload's commitment) with its coins swapped for those of challenge phase `CH.session_id(seed)`, which
     the auditor's ledger reserved (unless not `reserved`) and opened on `opened_on` and whose salt coin opened after
     `salt_after`, then its round coins after the window's own roots and its flip coin from a sampling challenge phase of
     its own, opened withheld on the window's sample root (`_drawn`); and that challenge phase's host (`name`)."""
@@ -1151,7 +1151,7 @@ def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, re
 
 
 def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monkeypatch):
-    """A served window's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
+    """A workload's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
     its round-0 request table's root (committed before the salt, round 0's ``requests``) and its challenge phase, the root the
     auditor's ledger opened that challenge phase on (`core_check.salt_of_record`). Refused: a challenge phase the ledger opened on another window's
     root, on the bare weights' root or on another challenge phase's open root, whatever its salt followed; a challenge phase opened on its

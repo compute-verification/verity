@@ -67,7 +67,7 @@ R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"
 #: the session's record, and its case until `decide` answers it, in the private directory
 SESSION, HELD = "session.json", "held-case.json"
-SCOPE = ("beside the served window: the session ran on the card after window {k} was served and PoUS's session bound the "
+SCOPE = ("beside the workload: the session ran on the card after window {k} was served and PoUS's session bound the "
          "store, over that store as the PoUS piece encoded and held it, and was not interleaved with the engine's reads "
          "(serving is not hooked), so it certifies the session's own reads of the store, not the window's")
 

@@ -1,4 +1,4 @@
-"""onsite-record: the onsite demo's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
+"""onsite-record: the onsite demo's record of one workload (``record/onsite.json``, `FORMAT`): every verdict its run of
 record needs, the network attester's bound term by term, and that bound over each monitoring period for the serving
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
@@ -88,8 +88,7 @@ summed), each with its share of the period's proof blocks at a window an executi
 run's window by its rule (`POOLED_RULES`); a sampling_design other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
 names the draws a run of record doesn't make (`MULTI`), and it is conditional on the coins while they are open.
 
-**Coins** (``coins``, `COINS`): SPOT's coins as the run's COINS lines in verdicts.txt name them (the served
-run's, or the follow-on's where it audits), and the network attester's chain draws as its published report states
+**Coins** (``coins``, `COINS`): SPOT's coins as the run's COINS lines in verdicts.txt name them (the workload's, or the follow-on's where it audits), and the network attester's chain draws as its published report states
 each one's sampling_design (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
 where the network attester accepted, each chain draw takes everything, naming each draw that doesn't
 (``open_draws``), and ``missing`` where the run published no COINS line. While they are open, live-coins is named
@@ -141,7 +140,7 @@ it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on e
 (``conditional_on``). Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit
 tied to a phase's scan: free, its whole free inputs, as the tree's period check charges it, refusing a scan state that
 is not its wired audit's (RowsStateTied); stateFree, its free inputs with its reads of the scan's state held, only where
-RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold. Beside the bound, ``advice_charge``: the served run's
+RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold. Beside the bound, ``advice_charge``: the workload's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
@@ -376,7 +375,7 @@ CREDIT = ("sampled proofs credits only the drawn members whose --registered file
           "auditor's record tied that registration to the coins after the sessions (`a5.tie_after_sessions`, "
           "checks_after_draw.record), and the member's Lean verdict of record, which refuses a file that leaves out a "
           "port (Flock.Registered.checkComplete), accepted it reporting exactly its reads (registered_reads). A member "
-          "accepted with no file or a partial one is no evidence of the served window, whose inputs it commits afresh, "
+          "accepted with no file or a partial one is no evidence of the workload, whose inputs it commits afresh, "
           "so each other drawn member is listed as not credited, by name; one the audit couldn't complete (a port with "
           "no committed tree) refuses the audit, which rejects naming it, and so does a tie that fails, each a visible "
           "failure")
@@ -2147,7 +2146,7 @@ def positive(s: str) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("out", type=Path, nargs="?", help="the served run's public $OUT")
+    ap.add_argument("out", type=Path, nargs="?", help="the workload's public $OUT")
     ap.add_argument("--window-steps", type=positive, metavar="S",
                     help="the run's S, served_verdicts.sh's WINDOW_STEPS, with --max-tokens (`SERVING`)")
     ap.add_argument("--max-tokens", type=positive, metavar="M",
@@ -2207,7 +2206,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0
     if a.out is None:
-        ap.error("give the served run's OUT, or --beside its records")
+        ap.error("give the workload's OUT, or --beside its records")
     if (a.window_steps is None) != (a.max_tokens is None):
         ap.error("--window-steps and --max-tokens go together: the run's S and MAX_TOKENS label its figures")
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)

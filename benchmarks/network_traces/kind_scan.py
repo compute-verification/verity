@@ -28,7 +28,7 @@ and so is a text file (`TEXT`, a
 refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
 CERTIFIER_PRIVATE).
 
-``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`): the
+``--received OUT`` scans what a verifier on another machine reads of a workload's OUT (`RECEIVED`): the
 attester's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
 reads of it and the period's compute audit), each whole, so a file in either that no declaration covers is a finding;
 and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
@@ -214,7 +214,7 @@ WEIGHTS = {"schema": S, "program": S, "model.repo": S, "model.revision": S, "gra
            "unrooted.*": S}
 #: the window circuit's input count at a class (`prove_path.window_circuit_of_class`), the class circuit's structure
 COUNT = {"count.*": S, "seconds.*": S}
-#: what a verifier on another machine reads of a served run's OUT, by path: each of
+#: what a verifier on another machine reads of a workload's OUT, by path: each of
 #: `RECEIVED_DIRS` whole by its declarations, and each other path (a glob) by its one
 RECEIVED_DIRS: dict[str, dict[str, dict[str, Any]]] = {"pieces/certifier": DOCS, "v3c-audit": V3C_DOCS}
 RECEIVED: dict[str, dict[str, Any]] = {"compiler.json": COMPILER, "registration.json": ADVICE_REGISTRATION,
@@ -330,7 +330,7 @@ def padded(rel: str, reg: Any) -> list[Finding]:
 
 
 def received(out: Path) -> tuple[list[Finding], Counter]:
-    """What a verifier on another machine reads of a served run's ``out`` (module docstring): each dir of
+    """What a verifier on another machine reads of a workload's ``out`` (module docstring): each dir of
     `RECEIVED_DIRS` scanned whole, each path of `RECEIVED` by its declaration, the advice registration's length held to
     its limit (`padded`). A dir or file missing is no finding: what reads it reads its absence."""
     kinds, found = Counter(), []
@@ -352,7 +352,7 @@ def received(out: Path) -> tuple[list[Finding], Counter]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="kind_scan.py", description=__doc__.splitlines()[0])
     ap.add_argument("dir", type=Path, nargs="?")
-    ap.add_argument("--received", type=Path, metavar="OUT", help="a served run's OUT: what a verifier reads of it")
+    ap.add_argument("--received", type=Path, metavar="OUT", help="a workload's OUT: what a verifier reads of it")
     a = ap.parse_args(argv)
     if (a.dir is None) == (a.received is None):
         ap.error("DIR or --received OUT, one of them")

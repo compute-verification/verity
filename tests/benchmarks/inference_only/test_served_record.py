@@ -1,4 +1,4 @@
-"""`verity bench inference_only --from`: a served run's record, made small from the record check's own shaped case.
+"""`verity bench inference_only --from`: a workload's record, made small from the record check's own shaped case.
 The check's case is written by its script; its verdicts come from a stand-in that prints the script's reference
 verdicts as the compiled command prints them, or, where `lake` is, from the compiled command itself. What the command
 keeps of each verdict is its public form; the share is PoUW's verdict of record's, refused where it can't be; and the
@@ -76,7 +76,7 @@ def stand_in(tmp_path) -> Path:
 def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9, macs: int | None = None,
          tie: str | None = "same", n: int | None = None, kinds: bool = True, counts: int = 1,
          limits: dict | None = None, registered: bool = False, unregister: bool = False) -> list[str]:
-    """``case`` as a served run's files under ``where``, and the options that read them. Its rate rule's limits are the
+    """``case`` as a workload's files under ``where``, and the options that read them. Its rate rule's limits are the
     case's, or ``limits``; its policy is the case's count limits (``n`` in place of its n) on class `CLASS`, k by kind
     made of the linears' outputs and a scan state row of 16 bits (none where not ``kinds``). Its PoUW row is a development accept, or with ``accept`` Pearl+'s accept of record
     crediting ``credited`` of the ``macs`` it counts (default the class's linears), its window record the run's
@@ -162,7 +162,7 @@ def test_with_no_accept_of_record_there_is_no_number_and_the_exit_is_1(case, sta
     out = capsys.readouterr().out
     rec, every, lines = doc["record"], out.splitlines(), _record(out.splitlines())
     assert code == 1 and every[:6] == [f"inference_only: no number: {DEV_WHY}", NOT_STATED, NOT_AN_AUDIT,
-                                       report.TITLE, f"The served run's record read: {tmp_path / 'out'}", ""]
+                                       report.TITLE, f"The workload's record read: {tmp_path / 'out'}", ""]
     assert lines[0] == f"FROM RUN made's RECORD: no number, {DEV_WHY}"
     assert (rec["run"], rec["block"]["value"], rec["no_number"], rec["pouw"]["share"]) == (RUN, None, DEV_WHY, 1.0)
     shown = json.loads(every[-1])
@@ -241,7 +241,7 @@ def test_with_a_record_read_its_number_heads_the_print_and_the_json_at_its_own_m
     lines, one = out.splitlines(), doc["record"]["block"]
     assert code == 0 and doc["record"]["no_number"] is None and "no number" not in out
     assert lines[:5] == [report.TITLE, NOT_STATED, NOT_AN_AUDIT,
-                         f"The served run's record read: {tmp_path / 'out'}", ""]
+                         f"The workload's record read: {tmp_path / 'out'}", ""]
     assert lines[5].startswith(f"FROM RUN {RUN}'s RECORD: {report._n(one['value'])} (partial), ")
     stated = [i for i, x in enumerate(lines) if x.startswith("THE SERVED POLICY'S NUMBER, NOT THE RESULT: ")]
     assert len(stated) == 1 and stated[0] > 5 and "AS SERVED" not in out
@@ -317,7 +317,7 @@ def test_the_served_class_option_picks_one_count_of_several(case, stand_in, tmp_
                                   "of the classes 2,2,2, record") in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
         _main([R.CLASS_OPTION, "record"], stand_in)
-    assert e.value.code == 2 and f"{R.CLASS_OPTION} names a class of a served run's record, and no record is read" in (
+    assert e.value.code == 2 and f"{R.CLASS_OPTION} names a class of a workload's record, and no record is read" in (
         capsys.readouterr().err)
 
 
@@ -415,7 +415,7 @@ def test_served_alone_reads_the_run_directorys_registered_files(case, stand_in, 
         lines = capsys.readouterr().out.splitlines()
         assert lines.index(NOT_AN_AUDIT) == 2 and lines.index(report.TITLE) == (0 if accept else 3)
         assert lines[lines.index(report.TITLE) + (3 if accept else 1)] == (
-            f"The served run's record read: {tmp_path / 'b' / 'out'}")
+            f"The workload's record read: {tmp_path / 'b' / 'out'}")
         keys = ("run", "check", "pouw", "block", "files")
         assert {x: got[x] for x in keys} == {x: named[x] for x in keys}
         assert got["files"]["log_records"] == 3 and got["pouw"]["verdict"] == ("accept" if accept else "missing")
@@ -437,7 +437,7 @@ def test_a_weight_left_unregistered_is_refused_by_the_count(case, stand_in, tmp_
     assert (rec["block"]["value"], rec["no_number"]) == (None, "the check refused the record (both rules)")
 
 
-def test_the_data_file_names_the_served_run_of_record_or_none(tmp_path) -> None:
+def test_the_data_file_names_the_workload_of_record_or_none(tmp_path) -> None:
     """Absent, empty or with no `record`, the data file names no run; a path is the repository's root's or absolute;
     any other key or a record that isn't a path is refused."""
     f = tmp_path / "of_record.toml"

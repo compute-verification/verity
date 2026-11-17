@@ -2,7 +2,7 @@
 
 Under `LLM(quantization="fp8")` on an H100 (pinned build d9105ea80, eager, `VLLM_BATCH_INVARIANT=1`, TP=1) every
 decoder linear of Qwen2.5-1.5B (qkv_proj, o_proj, gate_up_proj, down_proj; the tied lm_head stays bf16) is
-executed by two kernels, both read from the vLLM source and confirmed on the served run:
+executed by two kernels, both read from the vLLM source and confirmed on the workload:
 
 1. `_C.dynamic_per_token_scaled_fp8_quant` (`dynamic_per_token_scaled_fp8_quant_kernel_strided`, 256 threads per
    token row, `scale_ub = None`): per-row absmax `m = max_e |f32(x_e)|` (thread partials from `0.f` over 8-element
@@ -27,7 +27,7 @@ max(|W|)` over the bf16 fused tensor, `s_w = f32(amax) / 448` (torch f32 divisio
 (`static_scaled_fp8_quant`: here a *reciprocal multiply*), stored as `layer.weight = W_q.t()` ([K, N] view) and
 `layer.weight_scale` (one f32).  They are **derived Inputs** of the program, bound from the commit's stored e4m3/f32
 words.  `numerics.fp8_twins.np_online_weight_quant` is this quantisation on CPU, and on the checkpoint's layer-0
-qkv_proj it gives the served run's committed words (`tests/adapters/vllm/verity_vllm/definitions/test_fp8_twins.py`); binding
+qkv_proj it gives the workload's committed words (`tests/adapters/vllm/verity_vllm/definitions/test_fp8_twins.py`); binding
 doesn't call it, so a commit's weight words are not compared with a re-quantisation of the checkpoint.  The activation
 scale `s_x` and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 

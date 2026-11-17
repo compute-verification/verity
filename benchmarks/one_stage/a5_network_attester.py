@@ -1,6 +1,6 @@
 """One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the network attester's signed cells,
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
-(``--challenger local``). No served window has transfer gates yet (the I/O
+(``--challenger local``). No workload has transfer gates yet (the I/O
 shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the network attester), so
 this window stands in for one, its cells a network attester run's (`network_attester_serve.py rehearse`, ``--run``).
 

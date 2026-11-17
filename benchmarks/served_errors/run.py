@@ -57,7 +57,7 @@ RHO = Fraction(1, 400)
 H100 = {"r": 32, "G": 4, "add": 32, "bf16": 2, "fs": 64, "qa": 4, "c": 0}
 G0 = Fraction(1, 400)
 
-# The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
+# The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the workload's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
 # A K_d that `security/Definitions/Compose/Guarantees/Compose.lean`'s docstring takes as its example; not served.
@@ -119,7 +119,7 @@ def sampling_eps(delta: Fraction, t: int = SAMPLE) -> float:
 
 
 def operand_positions() -> int:
-    """Every operand element the served run's tiles read: each call's A (m x k) and B (n x k)."""
+    """Every operand element the workload's tiles read: each call's A (m x k) and B (n x k)."""
     return sum(LAYERS * (m * k + n * k) for m in PASSES for n, k in LINEARS.values())
 
 
@@ -174,7 +174,7 @@ def rows() -> list[dict[str, Any]]:
         "ExpectedCR; κ = 0 assumed (κ unbounded on main)", "assumed")
 
     ks_pouw = lg(SAMPLE) + s64
-    for d, what in ((WINDOW_DELTA, "WINDOW_DELTA"), (SERVED_DELTA, "the served run's δ")):
+    for d, what in ((WINDOW_DELTA, "WINDOW_DELTA"), (SERVED_DELTA, "the workload's δ")):
         p = l2sum(lg(d), bind_el, ks_pouw)
         row("pouw p", "the remote product's monitoring-period guarantee (p = δ_s + δ_bind + δ_ks)", "δ_s + δ_bind + δ_ks a window",
             f"δ_s = {what}, δ_bind at κ = 0 at bytes, δ_ks at K_d = {SAMPLE}", p,

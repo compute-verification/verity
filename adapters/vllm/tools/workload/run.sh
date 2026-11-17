@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# `bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`: one of the vLLM served run's runs,
+# `bash adapters/vllm/tools/workload/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`: one of the vLLM workload's runs,
 # started by `research run` on the node placement.toml places it on, with that node's paths and the run's own variables as
-# its environment, and the model the served run's workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
+# its environment, and the model the workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
 #   window   the default: one sampling block of the served execution blocks through every subprotocol,
 #            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
@@ -42,7 +42,7 @@ import tomllib
 from pathlib import Path
 
 here, run, dev = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1"
-script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "adapters/vllm/tools/served_run/commit.sh", "serve": "adapters/vllm/tools/served_run/serve.sh"}[run]
+script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "adapters/vllm/tools/workload/commit.sh", "serve": "adapters/vllm/tools/workload/serve.sh"}[run]
 placement = tomllib.loads((here / "placement.toml").read_text())
 r = placement["run"][run]
 node = placement["node"][r["node"]]
