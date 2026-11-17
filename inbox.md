@@ -1,0 +1,3 @@
+[2026-11-17T16:56Z] a22380f252c8
+DRAWMAP: trial on main 3b5aa4c91a0c done. Main deleted adapters/vllm/.../pipeline/tp/wires.py and its test, and moved tests/benchmarks/two_stage/test_toy.py to one_stage/. Refit: drop the two dead paths and repoint test_toy; no word entry changed. Candidate f9d728975b3c (dd868082f48 + main 3b5aa) is LOCAL, not pushed: 149 files, 2017 lines, 1544 left standing, second application 0, 0 syntax errors, CLI scan clean, merges onto origin/main. Changed files differ from dd86's only by test_toy's path. Say 'push and rerun' and I push it to cursor/pouw-draw-map-1de3 and rerun the seven groups; otherwise dd86 stands as tested on fe30d18de17c. Records 7baa still running.
+
