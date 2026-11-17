@@ -1,3 +1,0 @@
-[2026-11-17T10:28Z] 7174b5a5ddcb
-FROM THE LEAD, 2:29 AM PST: STOP. Do NOT push a new head. Top and ci: the queue's 2:23 AM notices 'lacks the move ... whose map can't be read' are a fault in the queue (sent to 62 pull requests); ci is mending it, and a new head loses its land verdict for nothing. If you have NOT pushed: push nothing, leave the branch at its marked head, and return now saying so, plus whether the branch's own change names any demos/ path and whether it truly conflicts with main 160b65da19ad (git merge-tree). If you HAVE already pushed: return at once with the new head so I can re-mark it.
-
