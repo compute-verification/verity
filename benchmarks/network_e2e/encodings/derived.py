@@ -605,7 +605,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     t = sub.add_parser("table", help="bits per window, v0 against derived")
     t.add_argument("--trace", required=True, type=Path, nargs="+")
     t.add_argument("--out", required=True, type=Path)
-    t.add_argument("--T", type=int, default=600, help="buckets a certifier window")
+    t.add_argument("--T", type=int, default=600, help="buckets a network attester window")
     t.add_argument("--bucket-ms", type=float, default=100.0)
     c = t.add_argument_group("a trace-corpus trace directory (`load_corpus_trace`)")
     c.add_argument("--block-size", type=int, default=16)

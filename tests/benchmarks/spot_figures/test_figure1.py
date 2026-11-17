@@ -148,9 +148,9 @@ def test_every_caption_names_spots_roles_and_what_its_bounds_rest_on():
     for panel in ("exfiltration", "exfiltration_appendix", "skipped_work"):
         deployment = f.DEPLOYMENT["skipped_work" if panel == "skipped_work" else "exfiltration"]
         assert caps[panel].startswith(f"{deployment} {f.ROLES} {f.TRUST} "), panel
-    assert "no ZK server and no recursion" in f.ROLES and "network certifier" in f.ROLES
+    assert "no ZK server and no recursion" in f.ROLES and "network attester" in f.ROLES
     assert all(x in f.TRUST for x in ("soundness alone", "SHA-512's collision resistance",
-                                       "uniform verifier randomness", "an honest verifier", "certifier's own assumptions"))
+                                       "uniform verifier randomness", "an honest verifier", "network attestation's own assumptions"))
     assert "zero knowledge" not in f.ROLES + f.TRUST
 
 
