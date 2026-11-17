@@ -35,7 +35,7 @@ The claims that carry the game to the deployed system are `Pous.EndToEnd`'s four
 @[expose] public section
 
 open MemoryAttester MemoryAttester.Properties
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 
 namespace Pous.EndToEnd
 

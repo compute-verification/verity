@@ -29,7 +29,7 @@ public import Properties.Pous.EndToEndAt
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 
@@ -54,7 +54,7 @@ structure AuditsOf {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (ΩW �
   /-- the payload `C*` decodes to, as the ring game's bits -/
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
-  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.ChallengePhaseRecord
+  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousVerifier.Run.ChallengePhaseRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → MemoryAttester.Properties.Challengers
 

@@ -1,8 +1,8 @@
 """P2 v4 on the CPU, the scheme's reference (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2", outlines it): the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on. Its maps and key streams are the registered scheme's
-(`verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
-its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
+(`verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2`, held to `PousVerifier.P2` by its difftest), under the reference's names and with
+its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousVerifier.Wire`
 mirrors), v4's leaves and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
@@ -14,7 +14,7 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile and the store's shape (blocks per segment, segments). A
   registered store's are core's `P2Params` (`Params.of`), `DEPLOYMENT` the certificate's (`p2-2054B`: 2,054 bytes of each
   2,056-byte block); the wire also takes the reduced-width conformance profiles no registered scheme produces, as
-  `PousCheck.Wire.Params` does. `vector_params` is the map vectors'.
+  `PousVerifier.Wire.Params` does. `vector_params` is the map vectors'.
 - `setup_salt`, `expand_prefix`: the post-commitment salt and the key prefix, which frames the model commitment and a
   32-byte salt where the registered scheme's frames its 24-byte salt alone.
 - `stream`, `keys`, `keys_after`: the per-block `K` and `t` after a prefix (`schemes.p2.stream` and `sha512_keys_indexed`:
@@ -51,7 +51,7 @@ ENTRY_SHA512 = {
     16448: "2a227a512683d67624bca51ba087ec05a4dda85c5e93b67c50c03349a7823f50f84b98f4f2f9e92d9c87ddc41ab0e5fd8d2211472709a05093e7c0121a86811c",
 }
 """The vectors' pins: each file's SHA-512, and by width the SHA-512 of `vectors.json`'s entry (the canonical JSON of
-the entry without its `sha512`), which `PousCheck.SetupDifftest.ENTRY_SHA512` holds too. `vectors.py` writes the three
+the entry without its `sha512`), which `PousVerifier.SetupDifftest.ENTRY_SHA512` holds too. `vectors.py` writes the three
 files and rewrites these."""
 PROTOCOL = P2.PROTOCOL_ID
 SETUP_DOMAIN = "verity/pous/p2-setup/v4"

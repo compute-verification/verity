@@ -1,6 +1,6 @@
-"""`pous_check` against the Python reference, through the core difftest harness (`tools/difftest`).
+"""`pous_verifier` against the Python reference, through the core difftest harness (`tools/difftest`).
 
-The protocol: `pous-setup serve` (`PousCheck.SetupProtocol`, `verity/pous/p2/v4/setup`) against
+The protocol: `pous-setup serve` (`PousVerifier.SetupProtocol`, `verity/pous/p2/v4/setup`) against
 `protocol.verifier_key(P2(params), commitment, salt, mode=PUBLIC, encoded=C*)` behind the interface's framing, on honest
 setups at the spec's reduced widths and at w = 16,448 (the scheme's pinned instance), each mutation of them (a block flipped,
 set to p or all ones, cut short or lengthened, dropped; blocks or segments swapped, a segment missing or extra, no segment;
@@ -8,7 +8,7 @@ another salt, of the right length and not; a commitment flipped or to another W)
 parameters that aren't the manifest, and malformed cases. Verdict, digest, public outputs (the root among them) and profile
 must agree.
 
-The functions, `pous-setup-difftest` (`PousCheck.SetupDifftest.table`): the maps d, σ and D (`_Field`), the keys
+The functions, `pous-setup-difftest` (`PousVerifier.SetupDifftest.table`): the maps d, σ and D (`_Field`), the keys
 (`expand_prefix`, `sha512_keys_indexed`: K, t and which candidate t is), `decode_segment` with its refusals by kind, the commitment with
 its manifest (the identity hash itself is `core_identity`'s, difftested there). The spec's vectors file is held to its pinned SHA-512, and each of its vectors and
 σ rejection cases to what Lean computes from the vector's inputs.
@@ -99,7 +99,7 @@ def _kind(e: ValueError) -> str:
     raise ValueError(f"an unclassified refusal: {m}")
 
 
-# The functions' references: Python's answer in the form of `PousCheck.SetupDifftest`'s output.
+# The functions' references: Python's answer in the form of `PousVerifier.SetupDifftest`'s output.
 
 def maps(i) -> dict:
     q = _p2(P.nat(i, "w"), P.nat(i, "c0"))
