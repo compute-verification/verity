@@ -132,7 +132,7 @@ def main(blocks_of: Callable[[int], tuple[Any, Any]] | None = None) -> int:
     a = ap.parse_args()
     if a.stop and blocks_of is None:
         ap.error("--stop needs the stop block and the network certifier's response tie, which SPOT never imports: "
-                 "call main(blocks_of=...) from a caller that holds the adapter and the certifier")
+                 "call main(blocks_of=...) from a caller that holds the adapter and network attestation")
     card = load(a.card)
     cs = candidates(card, a.requests)
     print(f"{card['model']}: {len(cs)} proof-block Definitions over {a.requests} request(s) of {card['prompt_len']} prompt "
