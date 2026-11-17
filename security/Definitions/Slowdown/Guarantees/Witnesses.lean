@@ -7,14 +7,10 @@ public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Partition
 public import Definitions.InferenceOnly
-public import Definitions.Slowdown.Slowdown
 public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Assumptions.Layered
-public import Definitions.Slowdown.Assumptions.Slowdown
-public import Definitions.Slowdown.Guarantees.Remote
-public import Definitions.Slowdown.Cut.Toy
 
 /-!
 # The inference-only policy's guarantees: their witnesses
@@ -31,20 +27,16 @@ witnesses at the toy circuit (`Slowdown.Capability.Toy`, with the instances of `
 
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference training algorithm (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
-in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ExecutionPhasesHold`
-for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
-computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E).
+in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`).
 -/
 
 @[expose] public section
-
-open Verity.Game renaming prPMFReal → prob
 
 open InferenceOnly
 
 namespace Slowdown.Guarantees
 
-open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown
+open Verity Finset Slowdown.Capability.Toy Slowdown.Witness
 
 /-- **`ThreadedTraining`'s and `ThreadedTrainingOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`,
 `b_w = b_a = 1/2`, `κ = 1`, `r = d = Toy.D` through the containment of the toy in itself, the threading `T1` and
@@ -154,112 +146,5 @@ def LayeredTraining_nontrivial : Prop :=
     ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) ∧
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) (1 - 0) (0 + 0 * 0) * D.D.size D.D.computed)
-
-/-- **`SlowdownThreaded`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b_w = b_a = 1/2`, the
-threading `T1` at `(dd, e) = (1, 0)`, `κ = 1`, monitored compute `C = 2` all certified (`W = 2`), no unmonitored
-compute or fault, one counted multiplication (`M = 1`, the declared one), one server, `F = 2`, `H = L = R = 1`. -/
-def SlowdownThreaded_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.ExecutionPhaseLength (1 / 2) 2 1 1 ∧
-    ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    Assumptions.ExecutionPhasesHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
-
-/-- **`SlowdownThreaded` without `ExecutionPhasesHold`**: at the threading `T0`, with no state (`R = 0`) and no rate (`F = 0`),
-one counted multiplication in the residual (`W = 0`, `M = M_r = 1`) is held by no window, and the efficiency `1`
-exceeds the bound `0`. -/
-def SlowdownThreaded_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 / 2 ∧
-    (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
-    Assumptions.ThetaRegistered D D M1 ∧
-    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 1 + (T0 D).M.card + 0 ∧
-    ((0 : ℕ) : ℝ) ≤ 1 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 1 * (2 - 0) / 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 0 * (2 + 0) / 2 ∧
-    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.ExecutionPhaseLength (1 / 2) 0 1 0 ∧
-    ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    ¬ Assumptions.ExecutionPhasesHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
-    ¬ (efficiency 1 1 2 0 ≤
-        unregisteredShare 2 0 +
-            min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
-          declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
-
-/-- **`SlowdownThreadedSlots`' premises hold together**: `SlowdownThreaded_honest`'s instance, the weight in its own
-parameter slot (`σ1`). -/
-def SlowdownThreadedSlots_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.ExecutionPhaseLength (1 / 2) 2 1 1 ∧
-    ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    Assumptions.ExecutionPhasesHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
-
-/-- **`SlowdownThreadedSlots` without `ExecutionPhasesHold`**: `SlowdownThreaded_nontrivial`'s instance, at `T0`'s one parameter
-slot (`σ0`). -/
-def SlowdownThreadedSlots_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 / 2 ∧
-    (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
-    Assumptions.ThetaRegistered D D M1 ∧
-    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D (T0 D) (σ0 D) 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 1 + (T0 D).M.card + 0 ∧
-    ((0 : ℕ) : ℝ) ≤ 1 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 1 * (2 - 0) / 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 0 * (2 + 0) / 2 ∧
-    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.ExecutionPhaseLength (1 / 2) 0 1 0 ∧
-    ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    ¬ Assumptions.ExecutionPhasesHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
-    ¬ (efficiency 1 1 2 0 ≤
-        unregisteredShare 2 0 +
-            min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
-          declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
-
-/-- **`SlowdownRemote`'s premises hold together** over the outcomes `Bool` sampled uniformly: one PoUW window of capacity
-`C = 2`, its certificate never incorrect (`p = 0`), all of it certified (`W = 2`), no incorrect proof block, so that every
-detection holds at `q = 1` and the residual is `0`, and the declaration the toy `Slowdown.Cut.Toy`, complying with
-`CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the counted multiplications. -/
-def SlowdownRemote_honest : Prop :=
-  Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
-    (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
-    Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
-      OneWindow.time 1 ∧
-    CompliesAtMost 1 2 2 Cut.Toy.d ∧ Cut.ValuesInjective Cut.Toy.W Cut.Toy.val ∧
-    Cut.NoSharedPair Cut.Toy.W Cut.Toy.val ∧ Cut.Assumptions.Hardness Cut.Toy.d Cut.Toy.arrays Cut.Toy.val ![1, 1] 2 ∧
-    Cut.Assumptions.Exports Cut.Toy.W 2 ∧ Assumptions.SourcesCover 2 0 0 Cut.Toy.W.N 0 ∧
-    (∀ ω, Assumptions.ResidualAtMost 0 2 2 0 2 (incorrectCapacity OneWindow.cap (OneWindow.right ω))
-      (∑ b ∈ OneWindow.bad ω, OneWindow.time b))
-
-/-- **`SlowdownRemote` without PoUW's soundness**: one window of capacity `C = 100`, its certificate incorrect at every
-outcome, so the residual holds its capacity, `M_r = 100` counted multiplications, all of `C` certified, `κ = 2`,
-`ε' = 1/2` and `θ = 1/4`, beside `SlowdownRemote_honest`'s declaration, whose bound `X = 8` is `8/100` of the compute.
-The efficiency `1` exceeds the bound `ε' + θ + 8/100 = 83/100` at every outcome, so the event has probability `0`,
-below `1 − δ = 1`. -/
-def SlowdownRemote_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ i, 0 ≤ (fun _ : Fin 1 => (100 : ℝ)) i) ∧
-    Assumptions.WithinCompute (fun _ : Fin 1 => (100 : ℝ)) 100 ∧
-    ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.incorrect 0 ∧
-    (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 100 ∧
-    (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.ident b ∈ (∅ : Finset Unit)) ∧
-    (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
-    (∀ ω j t, ∑ b ∈ OneWindow.bad ω with OneWindow.ident b = j ∧ t ≤ OneWindow.time b ∧ OneWindow.time b ≤ t + 0,
-      OneWindow.time b ≤ 0 * 0) ∧
-    (0 : ℝ) < 1 / 4 ∧ (∀ b, 0 ≤ OneWindow.time b) ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 0 ∧
-    (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.time b ≤ 0) ∧
-    Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
-      OneWindow.time 1 ∧
-    (0 : ℝ) < 2 ∧ (0 : ℝ) < 100 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧
-    (0 : ℝ) < 2 ∧ CompliesAtMost 1 2 2 Cut.Toy.d ∧ Cut.ValuesInjective Cut.Toy.W Cut.Toy.val ∧
-    Cut.NoSharedPair Cut.Toy.W Cut.Toy.val ∧ Cut.Assumptions.Hardness Cut.Toy.d Cut.Toy.arrays Cut.Toy.val ![1, 1] 2 ∧
-    Cut.Assumptions.Exports Cut.Toy.W 2 ∧
-    0 < 100 ∧ Assumptions.SourcesCover 100 0 100 Cut.Toy.W.N 0 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 2 * 0 / 2 ∧
-    (∀ ω, Assumptions.ResidualAtMost 100 2 100 0 100 (incorrectCapacity (fun _ : Fin 1 => (100 : ℝ)) (OneWindow.incorrect ω))
-      (∑ b ∈ OneWindow.bad ω, OneWindow.time b)) ∧
-    ((0 : ℕ) : ℝ) ≤ 2 * 0 * (100 + 0) / 2 ∧
-    ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 100)) ≤
-      prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 100 100 0 ≤
-          unregisteredShare 100 0 +
-              (1 - unregisteredShare 100 0) *
-                (residualShare 100 100 + 0 * 100 / 100 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
-            efficiency 2 (Cut.workHE 2 2 (1 * 1) 2 Cut.Toy.W.O) 100 0 + 0 ∧
-        remoteSlowdown 1 (unregisteredShare 100 0)
-            ((1 - unregisteredShare 100 0) *
-                (residualShare 100 100 + 0 * 100 / 100 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
-              efficiency 2 (Cut.workHE 2 2 (1 * 1) 2 Cut.Toy.W.O) 100 0 + 0) ≤
-          hardwareMultiple 1 2 100 100 0))
 
 end Slowdown.Guarantees

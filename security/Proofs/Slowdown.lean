@@ -18,8 +18,7 @@ public import Proofs.Core
 
 The cuts and the min-cut bound (`Cut`, `CutCharged`), the work and product counts of threads, fit and layered
 references, covering at one and two costs, the local bounds (`Capability`), the
-training formalism (`Formalism`), the slowdown over execution phases (`Slowdown`), the remote bound over monitoring
-periods (`RemoteMonitoringPeriod`), and their witnesses. The policy they take as a hypothesis is
+training formalism (`Formalism`), and their witnesses. The policy they take as a hypothesis is
 `Proofs.InferenceOnly`'s. Inference divided into sessions complies and is slowed by at most 1 (`Inference`).
 -/
 
