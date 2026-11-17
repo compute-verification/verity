@@ -30,9 +30,11 @@ REPORT = "proof-layers"
 #: a proof block's figures, and the build step's wall, a layer's run's one build of the served workload's whole circuit
 FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block",
            "build_s": "s a build"}
-#: the layers each metric id holds, in the order they are written, each with its member: the sampling layer, the system
-#: as served, last
-MEMBERS = {"flock": "flock", "zk": "flock-zero-knowledge", "sampling": "sampling"}
+#: the layers each metric id holds, in the order they are written, each with what its member adds to the model and card
+#: the outputs state (`Result.serves`): the sampling layer, the system as served and so the metric's own reading, last
+MEMBERS = {"flock": "-flock", "zk": "-flock-zero-knowledge", "sampling": ""}
+#: a served row's model, the first field of its name, as a member names it
+MODELS = {"llama32-1b": "llama-3.2-1b"}
 #: a research run's id, which the store fetches
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
@@ -99,6 +101,8 @@ class Result:
     #: the commit its output states it ran at, and which of its files states it
     commit: str | None = None
     commit_from: str | None = None
+    #: the model of the row its output served and the card it took, as a member names them (`llama-3.2-1b-h200`)
+    serves: str | None = None
     #: a layers.sh benchmark result's figures, one a statement (its name, proof blocks, Flock's and Lean's seconds, its proof's bytes)
     statements: list[dict[str, Any]] = field(default_factory=list)
 
