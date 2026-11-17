@@ -216,8 +216,8 @@ def test_summary_reads_a_model_directory(tmp_path):
     L.summary(SimpleNamespace(dirs=[d], out=tmp_path / "s"))
     doc = json.loads((tmp_path / "s" / "result.json").read_text())
     metric = [m for m in doc["measurements"] if m["name"] == L.METRIC]
-    assert [m.get("member") for m in metric] == ["qwen3-8b/pinned/replay-1", "qwen3-8b/pinned/replay-2", None]
-    assert metric[-1]["value"] == pytest.approx(0.9) and metric[-1]["model"] == "qwen3-8b"
+    assert [(m["model"], m["replay"]) for m in metric] == [("qwen3-8b", 2)] and metric[0]["member"].startswith("qwen3-8b-")
+    assert metric[0]["value"] == pytest.approx(0.9) and [x["bit_exact"] for x in metric[0]["replays"]] == [True, False]
     assert doc["validation"]["status"] == "passed"
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
