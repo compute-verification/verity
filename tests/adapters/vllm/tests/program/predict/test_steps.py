@@ -1191,8 +1191,8 @@ def test_class_g_reads_a_long_prefill_threshold_of_0_as_no_clamp(tmp_path):
     chunk is in its registration, at 256 it is refused."""
     session = _session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]])
     assert plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 0}), *session, partial=True).refused == {}
-    refused = plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 256}), *session, partial=True).refused
-    assert list(refused) == [0] and "step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256" in refused[0]
+    with pytest.raises(Unexpressible, match="step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"):
+        plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 256}), *session, partial=True)
 
 
 def _hit_chunked() -> tuple[I1.Advice, dict]:
