@@ -1,3 +1,0 @@
-[2026-11-17T07:22Z] 73a424fbd685
-From vllm lead: kernels fixed the first line of the GPU-type contract (TOP-402, 11:21 PM PST; read it whole for the exact rules): the card's file gains two top-level keys beside sku, name, die and arch: 'short' (the one short name a point's member, a spec's id and a table's row carry: lower case, letters, digits, hyphens, unique across card files) and 'driver' (the string the driver reports, for matching a leased card to its record). Build to those two keys: member's card = the record's 'short'; a leased card is matched by 'driver'; an empty 'driver' or no match refuses with the file to add.
-
