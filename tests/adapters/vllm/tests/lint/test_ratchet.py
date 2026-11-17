@@ -80,3 +80,10 @@ def test_malformed_allowlists_are_refused(tmp_path, monkeypatch, entries) -> Non
     (tmp_path / "x.json").write_text(json.dumps({"rule": "X", "entries": entries}))
     with pytest.raises(AssertionError):
         R.load_allowlist("x")
+
+
+def test_the_definitions_tests_are_keyed_as_beside_the_definitions():
+    p = R.DEFINITION_TESTS / "registry" / "test_a.py"
+    assert R.rel(p) == "verity_vllm/definitions/tests/registry/test_a.py" and R.path_of(R.rel(p)) == p
+    assert R.TESTS_ARGS == (R.TESTS_ARG, R.DEFINITION_TESTS_ARG) and (R.ROOT / R.DEFINITION_TESTS_ARG).resolve() == R.DEFINITION_TESTS
+    assert (R.DEFINITION_TESTS / "test_catalog.py").is_file()

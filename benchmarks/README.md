@@ -269,7 +269,7 @@ cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`,
 
 Two cases decide where a price comes from:
 
-- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+- **A cost that depends on the load,** such as the attested tick's holding a request back until its admission step,
   is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
   and never as a unit cost from the copy.
 - **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
@@ -371,6 +371,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
+| `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT, evaluated at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (bound's formula proved in Lean under four open premises; value evaluated in Python; PoUW's and the policy's parts open) | maintained |
 
 ### Checks
 
