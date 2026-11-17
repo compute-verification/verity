@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Finds
 public import Proofs.Flock.Recursive.Transfer
 public import Proofs.Flock.Recursive.Multi
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -87,6 +88,7 @@ end FlockSoundness.StrictCR
 namespace FlockSoundness.Discharge.Recursion
 
 open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession ZkLink StrictCR ZkReg
+
 open scoped ENNReal
 
 section Cost
@@ -111,24 +113,13 @@ theorem finderCost_nonneg {c : τ → ℝ} (hc : ∀ e, 0 ≤ c e) (x : τ × Li
 end Cost
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
+
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
 
 section Session
 
 variable (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
   (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (cap₀ : Cap D)
-
-/-- **A fork of a `--zk` table's finders in a session** (`SessCRZ`'s): at some rep `r`, two continuations of the prover
-from one of the table's committed objects (a level cap, the pads root, the `τ` commitment) that open it to different
-rows, pairs or values; two runs after `Commit` that open a level-0 position to different rows; or one run that opens the
-table two ways. Each outputs a collision of `H` at an outcome it reaches. -/
-def SessForkZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Prop :=
-  (∃ r ∈ Finset.range 2, ∃ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
-      (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).Finds Hs.H) ∨
-    (∃ r ∈ Finset.range 2, (advPadsSFinderZ A Hs T pre post cap₀ r σ).Finds Hs.H) ∨
-    (∃ r ∈ Finset.range 2, (advTauSFinderZ A Hs T pre post cap₀ r σ).Finds Hs.H) ∨
-    (adv₀SFinderZ A Hs T pre post cap₀ σ).Finds Hs.H ∨
-    (selfSFinderZ A Hs T pre post cap₀ σ).Finds Hs.H
 
 theorem sessCRZ_of_not_fork {σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))}
     (h : ¬ SessForkZ A Hs T pre post cap₀ σ) : SessCRZ A Hs T pre post cap₀ σ 0 0 :=
@@ -143,12 +134,6 @@ end Session
 section Batch
 
 variable (A : Arith F K) (Hs : Hashes F D Sl)
-
-/-- **A fork of table `j`'s finders in a compiled `--zk` session** with the prover's session strategy `τ`
-(`TableCRZ`'s finders). -/
-abbrev TableForkZ (ts : List (TabZK F mPts)) (j : Fin ts.length) (τ : Strategy (sessionZC A Hs ts)) : Prop :=
-  SessForkZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-    (stratZ A Hs ts j τ)
 
 theorem tableCRZ_of_not_fork {ts : List (TabZK F mPts)} {j : Fin ts.length} {τ : Strategy (sessionZC A Hs ts)}
     (h : ¬ TableForkZ A Hs ts j τ) : TableCRZ A Hs ts j τ 0 0 :=
@@ -176,24 +161,10 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc) (wo : vb.Pos → vb.Opening)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
-/-- **A fork of the registered-value finders**: for some commit string `c` a sample can read, a trial from the prover's
-continuation reads at `c` a value other than the registrant's opening of `c`'s registered commitment, and the two
-openings are a collision of `Hc` (`regFinderZC`). -/
-def RegForkZC (k Rw : ℕ) : Prop :=
-  ∃ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), (regFinderZC A Hs P planZ tab vb wo R τ c k Rw).Finds Hc
-
 omit [Fintype K] in
 theorem regCRZC_of_not_fork {k Rw : ℕ} (h : ¬ RegForkZC A Hs P planZ tab vb wo R τ k Rw) :
     RegCRZC A Hs P planZ tab vb wo R τ k Rw 0 :=
   fun c _ => Finder.cr_of_not_finds (fun hf => h ⟨c, inferInstance, hf⟩) 0
-
-/-- **A fork of the link finders**: for some commit string `c` a sample can read, the link finder's trials from the
-prover's continuation (`finderG`, `M` further trials) open `c` to two different values, a collision of `Hc`
-(`outCZC`). -/
-def LinkForkZC (k Rw M : ℕ) : Prop :=
-  ∃ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)),
-    FindsColl Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
-      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
 
 omit [Fintype K] in
 theorem linkCRZC_of_not_fork {k Rw M : ℕ} (h : ¬ LinkForkZC A Hs P planZ tab vb R τ k Rw M) :

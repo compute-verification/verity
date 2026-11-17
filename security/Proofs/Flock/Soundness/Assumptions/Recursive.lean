@@ -1,14 +1,18 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
+public import Proofs.Flock.Soundness.Discharge.Recursion.DrawnRefines
+public import Proofs.Flock.Soundness.Discharge.Recursion.Finds
 public import Proofs.Flock.Soundness.Discharge.Recursion.Flock
 public import Proofs.Flock.Soundness.Discharge.Recursion.Fork
 public import Proofs.Flock.Soundness.Discharge.Recursion.Multi
 public import Proofs.Flock.Soundness.Discharge.Recursion.Off
 public import Proofs.Flock.Soundness.Discharge.Recursion.Raw
+public import Proofs.Flock.Soundness.Discharge.Recursion.RegLink
 public import Proofs.Flock.Soundness.Discharge.Recursion.Registrants
 public import Proofs.Flock.Soundness.Discharge.Recursion.Stage
 public import Proofs.Flock.Claims.Steps.VStar
+public import Proofs.Flock.Soundness.Discharge.Recursion.Vals
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

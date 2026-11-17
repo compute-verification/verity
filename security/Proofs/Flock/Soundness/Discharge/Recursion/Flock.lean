@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
+public import Proofs.Flock.Soundness.Discharge.Recursion.Finds
 public import Proofs.Flock.Soundness.Discharge.Recursion.Off
 public import Proofs.Flock.Claims.Steps.VStar
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
@@ -132,6 +133,21 @@ noncomputable def layer (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Fin (Layou
   XplurZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
     zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
 
+/-- **A fork of the session at the strategy `τ`**: a run of one of `CR`'s finders, or of the link finder, from the
+prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a sampled table
+(`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a sampled row's registered leaf off the
+registrant's (`ReadsX.pick`), or the link finder (`LinkForkZC`). -/
+def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
+  (∃ ω j, TableForkZ execArith hs512 (planZHJ zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
+      (zcStrat execArith hs512 (planZHJ zo.dj zo.y₀) (cont (zo.sim dg N τ) ω))) ∨
+    RegForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ))
+      (cont (zo.sim dg N τ)) k Rw ∨
+    (StrictCR.oneRun (zo.game dg N) τ fun o =>
+      (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).Finds H512 ∨
+    LinkForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw M
+
 /-- **A layer agrees with the registrant**: every wire a unit reads at a registered read carries the registrant's bit. -/
 def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
   ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
@@ -154,6 +170,15 @@ structure VSamplingDesign (nv : ℕ) : Type 1 where
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
 
 attribute [instance] VSamplingDesign.fintypeΩ VSamplingDesign.nonemptyΩ
+
+namespace VSamplingDesign
+
+variable {nv : ℕ} (samplingDesign : VSamplingDesign nv)
+
+/-- The live full sample on the source's bytes. -/
+abbrev live : SamplingDesign nv := SamplingDesign.execOS (n := nv) samplingDesign.src (.subset nv) nv
+
+end VSamplingDesign
 
 /-- **A public verifier**: its circuit `c` over `nv` units, proved in sessions of `J` tables, and its sampling design. -/
 structure VStmt : Type 1 where

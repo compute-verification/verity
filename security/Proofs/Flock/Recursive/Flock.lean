@@ -261,21 +261,6 @@ open Classical in
 noncomputable def boundIf (Lm : SamplingDesign nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   if zo.CR dg N k Rw qF qS qW qR τ then zo.bound dg N Lm k Rw M ρ t' qF qS qW qR τ else 1
 
-/-- **A fork of the session at the strategy `τ`**: a run of one of `CR`'s finders, or of the link finder, from the
-prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a sampled table
-(`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a sampled row's registered leaf off the
-registrant's (`ReadsX.pick`), or the link finder (`LinkForkZC`). -/
-def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
-  (∃ ω j, TableForkZ execArith hs512 (planZHJ zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
-      (zcStrat execArith hs512 (planZHJ zo.dj zo.y₀) (cont (zo.sim dg N τ) ω))) ∨
-    RegForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
-      (tabZHJ zo.dj zo.y₀) zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ))
-      (cont (zo.sim dg N τ)) k Rw ∨
-    (StrictCR.oneRun (zo.game dg N) τ fun o =>
-      (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).Finds H512 ∨
-    LinkForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
-      (tabZHJ zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw M
-
 /-- **With no fork, the session's finders satisfy `cr/sha-512` at budget `0`** and its link finder `ecr/sha-512` at
 cost `0`. -/
 theorem cr_of_not_fork {k Rw M : ℕ} {τ : Strategy (zo.game dg N)} (h : ¬ zo.Fork dg N k Rw M τ) :
@@ -417,9 +402,6 @@ end ZkOuter
 namespace VSamplingDesign
 
 variable {nv : ℕ} (samplingDesign : VSamplingDesign nv)
-
-/-- The live full sample on the source's bytes. -/
-abbrev live : SamplingDesign nv := SamplingDesign.execOS (n := nv) samplingDesign.src (.subset nv) nv
 
 /-- The model's full sample. It reads nothing of the sampling design but its unit count; the argument is there so that
 `(Vs j).samplingDesign.model` names it. -/

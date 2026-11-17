@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Vals
 public import Proofs.Flock.Recursive.ZkReg.DrawnRefines
 public import Proofs.Flock.Recursive.ZkReg.RegLink
 public import Proofs.Flock.Soundness.Registered.ReadsX
@@ -37,19 +38,16 @@ is).
 namespace FlockSoundness.Discharge.ZkReg
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+
 open Composed
+
 open ZkHidden (planZHJ tabZHJ SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ placeZHJ)
+
 open FlockSoundness.Discharge.Tables (LiveOutJ)
+
 open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
-
-/-- **The value binding of a hidden-output `--zk` session of `J` tables** (`rsZHJS`'s). -/
-noncomputable abbrev vbHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-    (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) :=
-  (rsZHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).bindingZ (rsZHJS_computes dj y₀ ht hc hscope hU hpub)
 
 /-- **The registrant's opening** of each commit string of `vbHJ`: the row and the salt `rd` reads there. -/
 def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}

@@ -107,10 +107,6 @@ theorem openingsOf_vb :
     openingsOf execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
       (tabZHJ zo.dj zo.y₀) zo.vb = obK c hU nv := rfl
 
-/-- **A transcript V*'s session writes at the registration `R'`**: `wr`'s at some sample of the sampling design and some output of
-the live session, the transcript of every outcome of its game at `R'` (`prob_auditLive_liveOfZJ_mono`). -/
-def Writes (R' : Reg') (tr : Exec.Transcript) : Prop := ∃ ω x, tr = zo.wr (Lv.draw ω) R' x
-
 /-- **A session that accepts no transcript it writes at the registration the prover sends accepts with probability
 `0`**: every outcome of its game is one it writes there (`prob_auditLive_liveOfZJ_mono`). -/
 theorem prob_unwritten {τ : Strategy (zo.game dg N)} {p : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}

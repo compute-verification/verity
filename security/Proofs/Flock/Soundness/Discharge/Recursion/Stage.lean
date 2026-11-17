@@ -90,6 +90,17 @@ noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.o
 
 end Fixed
 
+namespace ZkOuter
+
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
+
+/-- **A transcript V*'s session writes at the registration `R'`**: `wr`'s at some sample of the sampling design and some output of
+the live session, the transcript of every outcome of its game at `R'` (`prob_auditLive_liveOfZJ_mono`). -/
+def Writes (R' : Reg') (tr : Exec.Transcript) : Prop := ∃ ω x, tr = zo.wr (Lv.draw ω) R' x
+
+end ZkOuter
+
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
 variable {Reg₂ : Type}
