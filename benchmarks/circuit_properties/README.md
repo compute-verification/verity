@@ -11,11 +11,15 @@ optimizer circuit.
 
 ## Try it
 
-    uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
+    uv sync --all-packages --extra torch-cpu
+    uv run verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
+    uv run verity bench circuit_properties --models llama32-1b --out DIR   # Llama 3.2 1B's layer and its point
 
 It needs only a CPU. For each circuit it prints one JSON line: its gates, its counted products, s_×, a_out and a_in,
 and whether each agrees with the slowdown calculator's. A served layer of 10^9 to 10^12 gates measures in seconds. With
-`--out DIR` it writes `DIR/properties.json`.
+`--out DIR` it writes `DIR/properties.json`, and for a run of every configuration or of one, the metric's point, which
+it prints last: for one, `partial`, with that configuration's `model`. `llama32-1b` is Llama 3.2 1B's configuration as
+the adapter serves it, read from its pinned config.json (`references.pinned`).
 
 In Python:
 
