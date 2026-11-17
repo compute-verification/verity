@@ -869,6 +869,7 @@
         "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
+        "calibration/",
         "applications/README.md",
         "applications/",
         "benchmarks/tree/",
