@@ -1120,8 +1120,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
-    # below: its group closes into a window of its own, the run's earliest, which the window of record is under
-    # PEARLPLUS_TIE never (the fixed load's) and otherwise only where it has the most requests.
+    # below: its group closes into a window of its own, the run's earliest: never the window of record under
+    # PEARLPLUS_TIE (that is the fixed load's), and otherwise the window of record only where it has the most requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
