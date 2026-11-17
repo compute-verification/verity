@@ -291,8 +291,6 @@ theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
   exact ⟨rs, s, hr, ho⟩
 
-/-- `Record.run` has an accepted play: some node and record the Lean verifier accepts. -/
-theorem record_accepts : ∃ (node : Node) (r : Record), Verified node r := ⟨node1, record1, record_verified⟩
 
 /-! ## `LineHeld`'s premises at the record -/
 

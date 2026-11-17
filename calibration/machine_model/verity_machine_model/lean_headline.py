@@ -43,7 +43,7 @@ from verity_machine_model.sheet import ROOT
 from verity_machine_model.skip import design_skip
 
 #: What other files read of it: the command and its test, three tests (both exporters' and the census cover's) and
-#: `theory/cpw_floor.py` in `benchmarks/pouw/`, `dc_reading`, and `lean_headline_dc`, which is this exporter for the
+#: `calibration/pouw/theory/cpw_floor.py`, `dc_reading`, and `lean_headline_dc`, which is this exporter for the
 #: data-centre families and also takes its private `_list`, `_words` and `_wrap`.
 __all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P_M", "OFF_MENU", "OUT", "OUT_M", "P",
            "P_OPERAND", "Q", "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "design_skip", "exact",
