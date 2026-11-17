@@ -18,20 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
-/-!
-# A hidden-output statement without Δ's pinned copies (`unpin`)
-
-`HmOut.delta` is `HmRow.delta`, `outPairs`, then `pinList` (`hidden_delta'`). `unpin st` is `st` with Δ `HmRow.delta`
-and `outPairs` only: the same statement where no output is pinned, and in general the statement whose rows are the
-circuit's own. It has `layout_of`'s layout with `outPairs` past its Δ (`Hidden.Commit`'s `unpin_layout`), with or without
-pinned outputs.
-
-`pinList` is `pinnedCols`, the pinned bits' columns, each with `(i, i)` and `(i, zero)` (`pinList_eq`). So the matrices
-`stmtOf` reads off an accepted statement are `unpin`'s plus, at row `i`, `pinnedCols`'s count of `i` copies of
-`e_i + e_zero` (`matA_unpin`, `matB_unpin`, `pinRows_unpin`: `Pinned.PinRows`). By `Pinned.sat_unpin`, a witness of the
-accepted statement satisfies `unpin`'s, and carries 0 on every pinned bit (`sat_unpin`). Nothing here reads a row size,
-a `G` or a producer family.
--/
+/-! A hidden-output statement without Δ's pinned copies (`unpin`), which every witness of the accepted statement satisfies, carrying 0 on every pinned bit (`sat_unpin`). -/
 
 @[expose] public section
 
@@ -58,14 +45,11 @@ theorem pinList_eq (c : Circuit) : pinList c = (pinnedCols c).flatMap fun i => [
   unfold pinList pinnedCols
   simp only [List.flatMap_assoc, List.flatMap_map, Function.comp_def]
 
-/-- **No pinned outputs, no pinned bits.** -/
 theorem pinnedCols_nil {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : pinnedCols c = [] := by
   unfold pinnedCols
   rw [pinnedWords_zero h]
   simp
 
-/-- **`(i, i)` and `(i, zero)` for each `i` of `L`** hold the pair `(r, j)` `L.count r` times for each of `j = r` and
-`j = zero`. -/
 theorem count_pinPairs (L : List ℕ) (zero r j : ℕ) :
     (L.flatMap fun i => [(i, i), (i, zero)]).count (r, j) =
       L.count r * ((if j = r then 1 else 0) + (if j = zero then 1 else 0)) := by
@@ -98,7 +82,6 @@ theorem dCnt_pinB (c : Circuit) (pin i j : ℕ) :
   rw [dCnt_append, pinList_eq, dCnt_toArray (List.flatMap _ _), count_pinPairs]
   rfl
 
-/-- **`A₀` of an accepted statement is `unpin`'s and the pinned copies**. -/
 theorem matA_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1) (i j : ℕ) :
     matA st i j = matA (unpin st) i j + (pinCnt st.c i j : ZMod 2) := by
   have e : matA (unpin st) i j = ((rangeCnt (slotA st) st.c.ranges.toList i j +
@@ -111,7 +94,6 @@ theorem matA_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1) (i j 
   push_cast
   ring
 
-/-- **`B₀` of an accepted statement is `unpin`'s and the pinned copies**. -/
 theorem matB_unpin {st : Stmt} (hdb : st.db = (HmOut.delta st.c st.pin).2) (i j : ℕ) :
     matB st i j = matB (unpin st) i j + (pinCnt st.c i j : ZMod 2) := by
   have e : matB (unpin st) i j = ((rangeCnt (slotB st) st.c.ranges.toList i j +
@@ -126,8 +108,6 @@ theorem matB_unpin {st : Stmt} (hdb : st.db = (HmOut.delta st.c st.pin).2) (i j 
 
 theorem unpin_wf {st : Stmt} (h : StmtWF st) : StmtWF (unpin st) := ⟨h.hk6, h.hk, h.pin, h.slots⟩
 
-/-- **`stmtOf` of an accepted statement is `stmtOf` of `unpin`'s with the pinned copies** (`Pinned.PinRows`), at a
-forced-zero row `zero` on `Hm.zeroCol` and `pinnedCols`'s count of each row mod 2. -/
 theorem pinRows_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (zero : Fin (2 ^ st.c.kLog))
@@ -151,8 +131,6 @@ theorem pinRows_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
   exact ⟨(matA_unpin hda r.val j.val).trans (congrArg (matA (unpin st) r.val j.val + ·) hc),
     (matB_unpin hdb r.val j.val).trans (congrArg (matB (unpin st) r.val j.val + ·) hc)⟩
 
-/-- **A witness of an accepted statement satisfies `unpin`'s, and carries 0 on its pinned bits**: where its forced-zero
-row `zero` carries 0 and, at each pinned bit (odd in `pinnedCols`), `unpin`'s `B` evaluates to 1. -/
 theorem sat_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {zero : Fin (2 ^ st.c.kLog)}

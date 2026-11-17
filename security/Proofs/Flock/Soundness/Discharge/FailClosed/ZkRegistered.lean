@@ -22,23 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJSt
 
-/-!
-# The registered `--zk` headline, over what verity-verify-proof accepts
-
-`verity-verify-proof verify --zk --registered F` accepts `VerifiesZKR` (`LiveVerifiesZKR`): the setup, registered check and
-verdict `ZkReg.AcceptsZKR` models (every table's statement passes `checkRegistered` at F's ports `own`), and the
-statement check with the verifier's own registered reads (`ScopeZR`), which also passes a shared-row public file of a
-statement with hidden outputs (`ProvedScope.sharedRowsOk`). `zk_session_soundHJR` is `ZkReg.zk_session_soundHJR` over
-it with no hypothesis on the statement's form, as `FailClosed.ZkHidden` is for `ZkHidden`: the circuit (`circZ I`), the
-public file (`pubZ I`) and the facts the `ZkReg` headline took about them come from the check at each statement it
-passes (`hs : ScopeZR I`), and at a statement the check refuses the event is empty. It is at the statement circuit
-`ScopeZR.parseH` reads (`HmOut.parseStmt`, a templated statement's committed circuit unrolled; the rows' fit
-`ScopeZR.rowsFitH`), through `ZkReg.zk_session_soundHJRSt`, whose rows (`rsZHJSt`) read no `pub.tables = none`, so it
-holds at the shared-row statements the check passes, templated or flat.
-
-At public outputs the check does not tell the registered reads apart (`ScopeZR.scopeZ`), so there what the verifier
-accepts with `--registered F` it accepts without (`verifiesZK_of_R`), and the claims over `VerifiesZK` hold.
--/
+/-! The registered `--zk` headline over what `verify --zk --registered F` accepts (`VerifiesZKR`), with no hypothesis on the statement's form. -/
 
 @[expose] public section
 
@@ -58,13 +42,10 @@ def VerifiesZKR (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Trans
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- `VerifiesZKR` at the live session's transcript. -/
 def LiveVerifiesZKR (I : Inputs) (own : Array Flock.Registered.Port) (o : Reg × Finset (Fin n) × Exec.Transcript) :
     Prop :=
   VerifiesZKR I own o.2.2
 
-/-- **At public outputs, `--registered F` accepts no more than `verify --zk`**: the registered check only refuses more,
-and the statement check is the same (`ScopeZR.scopeZ`). -/
 theorem verifiesZK_of_R {I : Inputs} {own : Array Flock.Registered.Port} {t : Exec.Transcript} (h : VerifiesZKR I own t)
     (hh : I.tags.hiddenOutputs = false) : VerifiesZK I t :=
   ⟨acceptsZK_of_R h.1, h.2.scopeZ hh⟩
@@ -72,14 +53,10 @@ theorem verifiesZK_of_R {I : Inputs} {own : Array Flock.Registered.Port} {t : Ex
 theorem ScopeZR.tagsOkZHJ {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) : TagsOkZHJ I :=
   ⟨hh, h.retainRounds, h.merkleLeaf⟩
 
-/-- **The statement circuit's rows are covered** where the wires feed neither the unit nor the outputs
-(`rowsFit_of_stmt` at `ScopeZR.parseH`). -/
 theorem ScopeZR.rowsFitH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : Hidden.Any.RowsFitS (circZ I) :=
   rowsFit_of_stmt ((zkTags_typed I).trans h.typed) (h.parseH hh) (h.scopeH hf)
 
-/-- **Where the wires feed the unit or the outputs, the statement is flat** (a templated statement's feed neither,
-`Checks.templated`), so `HmOut.parse` reads its circuit. -/
 theorem ScopeZR.parseHG {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true)
     (hf : ProvedScope.wiresFeed (circZ I) = true) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) := by
@@ -91,26 +68,18 @@ theorem ScopeZR.parseHG {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs 
     rw [hw] at hf
     cases hf
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables that verity-verify-proof accepts is sound, and its
-registered reads are checked.** `ZkReg.zk_session_soundHJRSt` over `VerifiesZKR`, at a public file with or without shared
-rows: the first conjunct is its bound, the second the registered check's consequence at every accepted outcome. -/
 theorem zk_session_soundHJR
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZR I,

@@ -27,21 +27,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 
-/-!
-# The hidden-output `--zk` headlines, over what verity-verify-proof accepts
-
-Each theorem here is the `ZkHidden` headline of the same name, in its `…St` form at the statement circuit
-`ScopeZ.parseH` reads (`HmOut.parseStmt`, a templated statement's committed circuit unrolled; the rows' fit
-`ScopeZ.rowsFitH`), over `VerifiesZK` (`LiveVerifiesZK`), what
-`verity-verify-proof verify --zk` accepts, with no hypothesis on the statement's form, as `FailClosed.Composed` is for public
-outputs: the circuit (`circZ I`), the public file and the facts the `ZkHidden` headline took about them come from the
-statement check at each statement it passes (`hs : ScopeZ I`), and at a statement the check refuses the event is empty.
-
-What stays a hypothesis on the statement is which headline applies: hidden outputs (`hh`) and, for the stratified sampling design,
-one table (`hn`); `zk_session_soundHJ` covers every number of tables. Zero knowledge's `avoidsMask` comes from each
-table's setup (`SampleSetupZHJ.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot
-(`Zk.maskFree`, D12). The `ZkHidden` headlines remain, as lemmas.
--/
+/-! The hidden-output `--zk` headlines over what verity-verify-proof accepts (`VerifiesZK`), with no hypothesis on the statement's form beyond hidden outputs and, for the stratified sampling design, one table. -/
 
 @[expose] public section
 
@@ -57,14 +43,10 @@ theorem ScopeZ.tagsOkH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = 
     TagsOkH I :=
   ⟨hh, h.retainRounds, h.merkleLeaf, hn⟩
 
-/-- **The statement circuit's rows are covered** where the wires feed neither the unit nor the outputs
-(`rowsFit_of_stmt` at `ScopeZ.parseH`). -/
 theorem ScopeZ.rowsFitH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = true)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : Hidden.Any.RowsFitS (circZ I) :=
   rowsFit_of_stmt ((zkTags_typed I).trans h.typed) (h.parseH hh) (h.scopeH hf)
 
-/-- **Where the wires feed the unit or the outputs, the statement is flat** (a templated statement's feed neither,
-`Checks.templated`), so `HmOut.parse` reads its circuit. -/
 theorem ScopeZ.parseHG {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = true)
     (hf : ProvedScope.wiresFeed (circZ I) = true) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) := by
@@ -85,27 +67,20 @@ section
 
 variable (P : LigProver)
 
-/-- **One hidden-output `--zk` sampled session of `J` tables that verity-verify-proof accepts, sound and zero knowledge.** `ZkHidden.zk_session_composedHJ` over `VerifiesZK`; zero knowledge, a property of the honest prover, at every statement the check passes. -/
 theorem zk_session_composedHJ
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
-    -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
@@ -143,25 +118,19 @@ theorem zk_session_composedHJ
 
 end
 
-/-- **One hidden-output `--zk` sampled session that verity-verify-proof accepts is sound.** `ZkHidden.zk_session_soundH` over `VerifiesZK`. -/
 theorem zk_session_soundH
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) (hn : I.count ≤ 1)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKH I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
-    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZK I dj wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I, ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
@@ -186,24 +155,18 @@ theorem zk_session_soundH
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.ZkHidden.zk_session_soundHSt I hs.typed dj y₀ wr dg N (hs.parseH hh) (hs.rowsFitH hh hf) hs.built (hs.loadH hh) (hs.scopeH hf) σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOkH hh hn) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk` sampled session that verity-verify-proof accepts is sound, under `live-verifier`.** `ZkHidden.zk_session_soundH_custody` over `VerifiesZK`. -/
 theorem zk_session_soundH_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) (hn : I.count ≤ 1)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I (mPtsOf (circZ I).g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf (circZ I).g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- live-verifier: the record and its sample file are the live session's
     (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf (circZ I).g (∑ s, ks s)) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I, ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
@@ -235,24 +198,18 @@ theorem zk_session_soundH_custody
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.ZkHidden.zk_session_soundH_custodySt I hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) hs.built (hs.loadH hh) (hs.scopeH hf) σs ks hks St hS Kd pop Lb src hA3 dj y₀ wr dg N (hs.tagsOkH hh hn) hCust hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound.** `ZkHidden.zk_session_soundHJ` over `VerifiesZK`, at every number of tables. -/
 theorem zk_session_soundHJ
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I,
@@ -284,7 +241,6 @@ theorem zk_session_soundHJ
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.ZkHidden.zk_session_soundHJSt I hs.typed dj y₀ wr dg N (hs.parseH hh) (hs.rowsFitH hh hf) hs.built (hs.loadH hh) (hs.scopeH hf) kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound, at the challenger's live-coin part's custody.** `ZkHidden.zk_session_soundHJ_custody` over `VerifiesZK`. -/
 theorem zk_session_soundHJ_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
@@ -295,7 +251,6 @@ theorem zk_session_soundHJ_custody
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's custody of the record and its sample file
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
@@ -333,7 +288,6 @@ theorem zk_session_soundHJ_custody
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custodySt I hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) hs.built (hs.loadH hh) (hs.scopeH hf) kd hkd hdiv dj y₀ wr dg N Lb src hA3 (hs.tagsOkZHJ hh) hCust hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound, at the record's custody and the printed sample file.** `ZkHidden.zk_session_soundHJ_custody_json` over `VerifiesZK`. -/
 theorem zk_session_soundHJ_custody_json
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
@@ -344,8 +298,6 @@ theorem zk_session_soundHJ_custody_json
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `verity-verify-proof draw`
-    -- printed the verifier's sample
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

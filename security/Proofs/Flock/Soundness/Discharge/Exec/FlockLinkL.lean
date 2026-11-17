@@ -6,46 +6,9 @@ public import Proofs.Flock.Soundness.Audit.FlockLink
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The link theorem: `ε_bind` under expected-time collision resistance (DESIGN.md §3)
-
-The batched audit's binding error (`analysisBEL`) is discharged here for the plurality value layer,
-under expected-time collision resistance of SHA-512 for an explicit finder
-(`Assumptions.SHA512CRExpected`) and the binding of wires to commit strings (`ValueBinding`,
-named).
-
-* **The binding** (`ValueBinding`): each wire is held by a commit string (a leaf under the serving
-  roots, `pos`). A satisfying witness of a sampled proof block's table opens the commit string of each of the
-  unit's wires, registered at `R`, to a value whose bit on the wire is the decoded one. Two openings
-  of one string with different values give a SHA-512 collision. The circuit prover's `hm96-sha512` leaf layout
-  discharges it.
-* **Readings** (`readsAtL`): after an extraction, the values sampled proof blocks open a commit string to.
-* **The trial** (`trialGL`) for a commit string `c`: a sample that reads `c`, uniform among such samples;
-  a fresh session; if the session accepts, `k` waits of at most `Rw` reruns each for a rerun in which
-  the session accepts. It reads what the extraction from the runs found reads at `c` (`rdTL`), and
-  costs `t'` per run it plays (`cTL`), `t'·(1 + k)` in expectation, `t'` one run's SHA-512 evaluations: the
-  prover's and the verifier's, whose verdict the trial reads. The cost counts SHA-512 calls only. The message a
-  reading is opened from is the radius decoder's (`candL`): the decoder hashes nothing, and its running time is not
-  bounded by that count.
-* **The value layer** (`XplurL`) is the plurality of the trial's single readings at each commit
-  string. It is a function of the registration state.
-* **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
-  (`outCL`), so under A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
-
-A2 is asked of one prover at a time (`LinkCRL`): some prover hard-codes two openings of a commit string, and its
-finders find a collision, so no bound holds for every prover under A2. The theorem bounds the binding error at each prover
-whose finders satisfy A2, and gives `⊤` at any other (`linkBoundCRL`).
-
-The link event at a sampled proof block gives a reading other than the plurality at some commit string, so
-the audit's binding error is at most the ideal link mass, summed over commit strings. The ideal extractor
-and the trial differ only by the waits that give up (`k/(eRw)`). Each commit string is weighted by
-the probability `π c` that a sample reads it (`flock_batched_linkSoundEL`):
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}{eM}+
-\frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
-with `ρ ≥ N₀/(ek)` for every table. `Q_s` is the expected number of commit strings the sampled proof blocks
-read, at most the `N_s` leaves under the serving roots. At `k = ⌈2N₀/e⌉`, `ρ = 1/2`, this is the
-record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order terms.
--/
+/-! The link theorem: `ε_bind` under expected-time collision resistance of SHA-512, asked of one prover's finders at a time
+(`LinkCRL`, `⊤` at any other prover), since a prover can hard-code two openings of a commit string. The trial's cost
+counts SHA-512 calls only: the radius decoder (`candL`) hashes nothing, and its running time is not bounded. -/
 
 @[expose] public section
 
@@ -54,7 +17,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Extract LinkFinder Audit Audit.Partition
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
@@ -188,9 +150,6 @@ noncomputable def XvalL (k Rw : ℕ) (c : vb.Pos) : vb.Val :=
 noncomputable def XplurL (k Rw : ℕ) : Fin C.N → Bool :=
   fun g => vb.bit (XvalL P H E Lf plan tab vb R τ k Rw (vb.pos g)) g
 
-/-! ## Openings, and the finder's output -/
-
-/-- **The candidate fits the table**: it is close to the extracted table and packs a satisfying witness. -/
 theorem candL_spec {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
     {M : Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols}
@@ -204,8 +163,6 @@ theorem candL_spec {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
   unfold candL at h
   simpa only [decide_eq_true_eq] using List.find?_some h
 
-/-- **A committed table has a candidate**: the radius decoder lists the close message that packs a satisfying
-witness (`mem_decodeL_of_close`), so the search finds one that fits. -/
 theorem candL_of_committed {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
     (hc : Committed execArith (Partition.tabOf plan tab (L.draw ω) R u).S
       (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs)) :
@@ -237,7 +194,6 @@ theorem opensAt_specL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.P
   rw [hgc] at h1
   exact h1
 
-/-- The listed openings of `c` are the extraction's openings of it. -/
 theorem mem_opensL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.Pos} {p : vb.Val × vb.Opening} :
     p ∈ opensL P H E Lf plan tab vb R τ ω bs c ↔ OpensAtL P H E Lf plan tab vb R τ ω bs c p.1 p.2 := by
   classical
@@ -257,8 +213,6 @@ theorem mem_opensL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.Pos}
     show some (vb.val (vb.opening (L.draw ω) R u M c), vb.opening (L.draw ω) R u M c) = some p
     rw [← ho, hv]
 
-/-- Every opening a trial lists at `c` is an opening of `c`'s registered commit string, of the value it is listed
-with. -/
 theorem opsTL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {p : vb.Val × vb.Opening}
     (hp : p ∈ opsTL P H E Lf plan tab vb R τ c e) : vb.com p.2 = vb.cs R c ∧ vb.val p.2 = p.1 := by
   classical
@@ -273,7 +227,6 @@ theorem opsTL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {p : vb.Val × vb.Opening
   · rw [ite_eq_right hacc] at hp
     simp at hp
 
-/-- Every value a trial reads at `c` is listed with an opening. -/
 theorem opsTL_of_mem_rdTL {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
     (hv : v ∈ rdTL P H E Lf plan tab vb R τ c e) : ∃ o, (v, o) ∈ opsTL P H E Lf plan tab vb R τ c e := by
   classical
@@ -293,7 +246,6 @@ theorem opsTL_of_mem_rdTL {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
   · rw [ite_eq_right hacc] at hv
     simp at hv
 
-/-- **Every success of the finder outputs a collision.** -/
 theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl))
     (hS : Succ (rdTL P H E Lf plan tab vb R τ c) x) :
     ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
@@ -301,8 +253,6 @@ theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hp => opsTL_spec P H E Lf plan tab vb R τ hp)
     (fun _ _ hv => opsTL_of_mem_rdTL P H E Lf plan tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
-
-/-! ## The trial's expectations -/
 
 theorem expect_trialL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ)
     (F : TrialOutL L D Sl → ℝ) :
@@ -333,7 +283,6 @@ theorem cT_nonnegL {t' : ℝ} (ht : 0 ≤ t') (e : TrialOutL L D Sl) : 0 ≤ cTL
     · exact le_rfl
   exact mul_nonneg ht (by linarith)
 
-/-- **A trial costs at most `t'(1 + k)` in expectation**, whatever the acceptance probability. -/
 theorem expect_cT_leL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ) {t' : ℝ}
     (ht : 0 ≤ t') :
     expect (cTL plan R t') (trialGL P H E Lf plan tab vb R τ c k Rw)
@@ -428,8 +377,6 @@ theorem expect_trialValL (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw :
   simp only [Xs]
   ring
 
-/-! ## The link mass at one commit string -/
-
 open Classical in
 /-- **The link event's trace at commit string `c`**: the extraction from the reruns `bs` reads a
 value other than the plurality there. -/
@@ -474,8 +421,6 @@ theorem readsAt_eq_emptyL {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsSample plan ta
   rintro ⟨o, u, hu, hrd, -⟩
   exact h ⟨u, hu, hrd⟩
 
-/-- **The trial's link mass at `c`**, under A2 for the finder: at most
-`2t'(1 + k)/2^256 + 1/(eM)`. -/
 theorem trial_mass_leL (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (P.Ωc plan tab vb L c)]
     (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialGL P H E Lf plan tab vb R τ c k Rw) M)
@@ -508,9 +453,6 @@ theorem trial_mass_leL (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') 
     div_le_div_of_nonneg_right (by linarith) (by positivity)
   linarith
 
-/-- **The ideal link mass at `c`**: the audit extractor's reading of `c` other than the
-plurality, jointly with acceptance and averaged over the sample, is at most `π c` times the trial's
-bound plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_leL (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
     (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (P.Ωc plan tab vb L c), Assumptions.SHA512CRExpected Hc
@@ -530,7 +472,6 @@ theorem ideal_mass_leL (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ}
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
       k / (Real.exp 1 * Rw) := by positivity
-  -- off the samples that read `c`, the trace vanishes
   have hoff : ∀ ω, ¬ P.ReadsSample plan tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : psiL P H E Lf plan tab vb R τ k Rw c ω = fun _ => 0 := funext fun bs => by
@@ -586,11 +527,6 @@ theorem ideal_mass_leL (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ}
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
 
-/-! ## The link theorem -/
-
-/-- **The link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every
-close satisfying message decodes, on `u`'s wires, differently from the value layer, then some commit
-string reads a value other than its plurality. -/
 theorem linkEv_le_psiL (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutCL 𝔽 D Sl))) :
     ind (fun bs => P.LinkEvB plan tab decode (L.draw ω) R u (XplurL P H E Lf plan tab vb R τ k Rw)
@@ -654,13 +590,6 @@ noncomputable def linkBoundCRL (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
-with the expected-time extractor (`analysisBEL`) and the plurality value layer (`XplurL`), given the binding of wires to
-commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRL`),
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the sampled proof blocks read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, the prover's and the verifier's (`cTL`), `M` the finder's further
-trials and `Rw` the waits' length. At any other prover the bound is `⊤` (`linkBoundCRL`). -/
 theorem flock_batched_linkSoundEL
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}

@@ -5,20 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Decode
 public import Proofs.Flock.Soundness.Discharge.Exec.Emit
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The per-Kind decoder, the `dec` that `DecodesAll` asks for
-
-`DecodesAll` asks for a decoder `dec : ℕ → ByteArray → List Msg` from a round's retained bytes to the messages the
-round carries. A round retains the encodings of its chunk's frames (`Exec.RepRounds`), and frames are recoverable from
-their bytes when each one's length fits its header (`encs_inj`). So the decoder recovers the frames, then reads each
-message the round carries off them by its `Wire`: a number of field values (an `.one` frame is one value, a `.vec` frame
-its values), or one `.bytes` frame.
-
-* `Wire`, `readAll`, `framesOf`, `decRound`, `decOf`: the decoder. `decRound_encs`: on a chunk's bytes it reads the
-  chunk's frames.
-* `coinPat`, `groupPat`, `rdChunks`, `Carries`: a phase's frames carry its messages, in the groups its spine cuts them
-  into at its coins, then a tail the proof file carries. `Carries.append` glues two phases.
--/
+/-! The per-Kind decoder `dec` that `DecodesAll` asks for, from a round's retained bytes to the messages it carries. -/
 
 @[expose] public section
 
@@ -104,7 +91,6 @@ theorem framesOf_encs {c : List Frame} (hc : ∀ f ∈ c, f.WF) : framesOf ⟨(e
   rw [dite_eq_left_of_eq_true (eq_true h)]
   exact encs_inj (Classical.choose_spec h).1 hc ((Classical.choose_spec h).2.trans (by simp))
 
-/-- **On a chunk's bytes the decoder reads the chunk's frames**, when they are well formed. -/
 theorem decRound_encs {c : List Frame} (hc : ∀ f ∈ c, f.WF) (w : List Wire) :
     decRound w ⟨(encs c).toArray⟩ = readAll w (valsOf c) (bytesOf c) := by
   unfold decRound; rw [framesOf_encs hc]
@@ -112,12 +98,10 @@ theorem decRound_encs {c : List Frame} (hc : ∀ f ∈ c, f.WF) (w : List Wire) 
 @[simp] theorem decRound_nil (B : ByteArray) : decRound [] B = [] := by
   simp [decRound, readAll]
 
-/-- Whether a spine step is a coin. -/
 def isCoin : Exec.Kind → Bool
   | .msg _ => false
   | .coin _ => true
 
-/-- **A spine's coin pattern**: `true` at each coin, `false` at each message. -/
 def coinPat (σ : List Exec.Kind) : List Bool := σ.map isCoin
 
 /-- **The pattern of message groups**: groups of `ns` messages, each closed by a coin, then `t` trailing messages. -/
@@ -149,7 +133,6 @@ theorem rdChunks_append {W₁ W₂ : List (List Wire)} {F₁ : List Frame} (h : 
   unfold rdChunks
   rw [chunks_append_of_closed h, List.zipWith_append hl]
 
-/-- **Two phases glue**: when the first's messages have no tail. -/
 theorem Carries.append {W₁ W₂ : List (List Wire)} {σ₁ σ₂ : List Exec.Kind} {F₁ F₂ : List Frame} {ms₁ ms₂ t : List Msg}
     (h₁ : Carries W₁ σ₁ F₁ ms₁ []) (h₂ : Carries W₂ σ₂ F₂ ms₂ t) :
     Carries (W₁ ++ W₂) (σ₁ ++ σ₂) (F₁ ++ F₂) (ms₁ ++ ms₂) t := by

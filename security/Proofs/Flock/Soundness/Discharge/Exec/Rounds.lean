@@ -7,25 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# verity-verify-proof's acceptance, round by round (the decoder premise, the executable side)
-
-`rep_rounds` (`FramesRep.lean`) says which bytes each round of a verified rep's stream retained, on a stream whose
-rounds all retained their bytes, and `decode_allRetained` says every stream of an accepted record is such a stream
-when the tags retain rounds. Together, at verity-verify-proof's acceptance:
-
-* `RepRounds`: rep `r` of table `i` has its stream and proof, the stream has one round per chunk of the rep's frames
-  (`repFrames`: its domain, the statement binding and zerocheck, the lincheck, the ring switch and Ligerito), and round
-  `k` retained the bytes of chunk `k`.
-* `rep_rounds_retained`: `rep_rounds` on a session whose streams all retained their bytes.
-* `accepts_rep_rounds`: when verity-verify-proof accepts under tags that retain rounds, both reps of every table of the
-  session satisfy `RepRounds`, at the table's `fast100` schedule and proof files `proofs[2j]` and `proofs[2j + 1]`.
-  Every `hm96Rows` tag pinned today retains rounds (`retainRounds_circuitEb90718f`, `retainRounds_circuit`,
-  `retainRounds_circuit967b8d06`, `retainRounds_circuitTypes`).
-
-The bytes a round retained are the encodings of its chunk's frames, so they determine the frames (`encs_inj`); which of
-`repC`'s messages each chunk carries is the part of `DecodesAll` still open.
--/
+/-! verity-verify-proof's acceptance round by round (`RepRounds`); which of `repC`'s messages each chunk carries is the open part of `DecodesAll`. -/
 
 @[expose] public section
 
@@ -35,8 +17,6 @@ namespace FlockSoundness.Discharge.Exec
 
 open Flock Refine
 
-/-- **Rep `r` of table `i`, round by round**: its stream and proof decode, the stream has one round per chunk of the
-rep's frames, and round `k` retained the bytes of chunk `k`. -/
 def RepRounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) : Prop :=
   ∃ (stream : StreamRec) (p : Proof) (extras : Array Flock.Claim) (T : F128),
@@ -56,9 +36,6 @@ theorem rep_rounds_retained {spec : SessionSpec} {st : Setup} {sch : Flock.Sched
   obtain ⟨hlen, hk⟩ := hR (hret stream (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs)))
   exact ⟨stream, p, extras, T, hs, hex, hp, hlen, hk⟩
 
-/-- **verity-verify-proof's acceptance, round by round** (§6, §9–§13): under tags that retain rounds, the record decodes
-against the session's spec, and for every table `j`, at its `fast100` schedule, both reps satisfy `RepRounds` on their
-proof files. -/
 theorem accepts_rep_rounds {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
     (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧

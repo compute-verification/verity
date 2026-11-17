@@ -18,20 +18,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The `--zk` session of `J` tables at any acceptance
-
-`Composed/DefsJ.lean`'s session and runs pieces read verity-verify-proof `--zk`'s acceptance only as the event a live outcome
-must pass, `AcceptsZK I`, and the record's custody only through its setup, `setupOf (zkInputs I)`. Here they are at any
-event `acc` and setup `setup`, by the same proofs; at `AcceptsZK I` and `setupOf (zkInputs I)` each is the deployed one
-(`decodesOnZKJA_accepts`, `runsOnZCJA_accepts`, `recordsLiveZKJA_accepts`, `simZJA_accepts`). The verifier's public
-inputs (`ZkHidden.AcceptsZKP`) instantiate them.
-
-* `DecodesOnZKJA`, `simZJA`, `execRefinesZK_tablesA`, `zk_headline_exec_tablesA`: `DecodesOnZKJ`, `simZJ`,
-  `execRefinesZK_tables`, `zk_headline_exec_tables`.
-* `RunsOnZCJA`, `decodesOnZKJA_of_runsOnZCJA`: `RunsOnZCJ`, `decodesOnZKJ_of_runsOnZCJ`.
-* `RecordsLiveZKJA`: `RecordsLiveZKJ`.
--/
+/-! `DefsJ`'s session and runs pieces at any acceptance event `acc` and setup, which the verifier's public inputs (`ZkHidden.AcceptsZKP`) instantiate. -/
 
 @[expose] public section
 
@@ -90,7 +77,6 @@ theorem simZJA_accepts (I : Inputs) (hdec : DecodesOnZKJ A Hs planZ I wr opn dec
       simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ :=
   rfl
 
-/-- **The execution refinement at `--zk` for sessions of `J` tables, at `acc`** (`execRefinesZK_tables`). -/
 theorem execRefinesZK_tablesA (hdec : DecodesOnZKJA A Hs planZ acc wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) :
     ExecRefines (auditLive L Reg (liveOfZJ dg planZ N wr)) τ (fun o => acc o.2.2) (fun _ => False)
@@ -116,8 +102,6 @@ theorem execRefinesZK_tablesA (hdec : DecodesOnZKJA A Hs planZ acc wr opn dec on
   classical
   exact propext decide_eq_true_iff.symm
 
-/-- **The `--zk` headline at `acc`, for sessions of `J` tables** (`zk_headline_exec_tables`): a bound on the compiled
-batched audit's acceptance with any event `Q` at `simZJA … τ` bounds `acc`'s acceptance with `Q`. -/
 theorem zk_headline_exec_tablesA (hdec : DecodesOnZKJA A Hs planZ acc wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (Q : Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionZC A Hs planZ))
@@ -139,8 +123,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : SamplingDesign n)
 
-/-- **`RunsOnZCJ` at `acc`**: at the sampling design's samples, on every live outcome `acc` accepts, each table's reps run on their
-streams' rounds and the table's compiled verdict accepts. -/
 def RunsOnZCJA : Prop :=
   ∀ ω R (o : LiveOutJ (planZ (L.draw ω) R).length mPts), acc (wr (L.draw ω) R o) →
     ∀ j, ∃ pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl,
@@ -160,7 +142,6 @@ theorem runsOnZCJA_accepts (I : Inputs) :
   Iff.rfl
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJA`** (`decodesOnZKJ_of_runsOnZCJ`). -/
 theorem decodesOnZKJA_of_runsOnZCJA (h : RunsOnZCJA A Hs planZ acc wr opn dec fin capOf L) :
     DecodesOnZKJA A Hs planZ acc wr opn dec (fun _ _ _ _ => true) fin capOf L := by
   intro ω R j o ho

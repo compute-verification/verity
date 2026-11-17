@@ -20,18 +20,7 @@ import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps
-
-* `parse_ports`, `parse_leaves`, `parse_empty`, `parse_noPorts`: with public input ports, one public leaf map per unit,
-  each as long as the unit's `leaves_in`; without, the empty ports `{}`, with no public leaf map.
-* `parse_leaves_lt`, `parse_leaf_lt`: each public leaf is a public word, below the ports' words.
-* `publicCol_at`: a column `HmIn.publicCol` names is bit `t` of public leaf `jj` of a unit slot `k`, at column
-  `g0.col · WORD + 16 jj + t` of the slot, inside the unit's input rows (16-bit leaves, `CheckFacts.unit_groups`).
-* `keepCol`, `inDelta_toList`, `deltaEntry_inDelta`: `HmIn.delta` is `HmOut.delta` without the pairs into the columns it
-  drops (every column but a public leaf's bits keeps its pairs, and every column without public input ports), so its
-  level-0 entries are `HmOut.delta`'s in every kept row and zero in the others.
--/
+/-! The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps. -/
 
 @[expose] public section
 
@@ -41,7 +30,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Refine
 
-/-- `List.mapM` in `Except` keeps the length. -/
 theorem list_mapM_length {α β ε : Type} {f : α → Except ε β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → l'.length = l.length
   | [], l', h => by
@@ -56,7 +44,6 @@ theorem list_mapM_length {α β ε : Type} {f : α → Except ε β} :
       subst h
       simp [list_mapM_length hbs]
 
-/-- `Array.mapM` in `Except` keeps the size. -/
 theorem mapM_size {α β ε : Type} {f : α → Except ε β} {xs : Array α} {ys : Array β} (h : xs.mapM f = .ok ys) :
     ys.size = xs.size := by
   rw [Array.mapM_eq_mapM_toList] at h
@@ -70,8 +57,6 @@ theorem mapM_size {α β ε : Type} {f : α → Except ε β} {xs : Array α} {y
 
 -- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **What `HmIn.parse` accepted**: the empty ports `{}` (META names no public input), or public input ports with one
-public leaf map per unit, each as long as its `leaves_in`. -/
 theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) :
     pi = {} ∨
       (pi.ports.isEmpty = false ∧ pi.leaves.size = c.upv ∧
@@ -115,30 +100,24 @@ theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) 
         rw [Bool.or_eq_true, bne_iff_ne]
         exact Or.inl hn
 
-/-- **With public input ports, one public leaf map per unit, each as long as its `leaves_in`**. -/
 theorem parse_leaves {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
     pi.leaves.size = c.upv ∧ ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size := by
   rcases parse_ports h with rfl | ⟨-, h1, h2⟩
   · exact absurd hne (by decide)
   · exact ⟨h1, h2⟩
 
-/-- **Without public input ports, `HmIn.parse` returned the empty ports `{}`**: a META naming public inputs names a
-port. -/
 theorem parse_empty {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (he : pi.ports.isEmpty = true) :
     pi = {} := by
   rcases parse_ports h with h0 | ⟨hne, -⟩
   · exact h0
   · rw [he] at hne; cases hne
 
-/-- **Without public input ports, no public leaf map.** -/
 theorem parse_noPorts {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (he : pi.ports.isEmpty = true) :
     pi.leaves = #[] := by
   rw [parse_empty h he]
 
 -- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **Each public leaf is a public word**: with public input ports, every leaf of a unit's public leaf map is below the
-ports' words. -/
 theorem parse_leaves_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
     ∀ u < c.upv, ∀ j < (pi.leaves[u]!).size, (pi.leaves[u]!)[j]! < (pi.words : ℤ) := by
   unfold HmIn.parse at h
@@ -173,7 +152,6 @@ theorem parse_leaves_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok 
       try dsimp only at hn ⊢
       first | exact Or.inr (Or.inl (by omega)) | omega
 
-/-- **A public leaf is below the public input ports' words** (`parse_leaves_lt`, read through `getD`). -/
 theorem parse_leaf_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) {u jj : ℕ} {q : ℤ}
     (hq : (pi.leaves.getD u #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) : q < pi.words := by
   cases he : pi.ports.isEmpty
@@ -196,12 +174,9 @@ theorem parse_leaf_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi
     simp [Array.getD] at hq
     omega
 
-/-- A list of 16s sums to 16 per entry. -/
 theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length := by
   rw [List.eq_replicate_iff.2 ⟨rfl, h⟩, List.sum_replicate, smul_eq_mul, List.length_replicate, Nat.mul_comm]
 
-/-- **A column `HmIn.publicCol` names is a public leaf's bit**: bit `t` of leaf `jj` of unit slot `k`'s leaf group, a
-public leaf of the slot's unit, at a column of the slot inside the unit's input rows. -/
 theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false)
     (C : CheckFacts c)
     (hgr : ∀ g ∈ c.unit.inGroups.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ c.unit.inWords)
@@ -248,13 +223,10 @@ theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi
   rw [hslot]
   omega
 
-/-! ## The rows `HmIn.delta` keeps -/
-
 /-- **Whether `HmIn.delta` keeps Δ's pairs into block column `q`**: every column without public input ports, else every
 column but a public leaf's bits (`HmIn.publicCol`). -/
 def keepCol (c : Circuit) (pi : HmIn.Ports) (q : ℕ) : Bool := pi.ports.isEmpty || !HmIn.publicCol c pi q
 
-/-- **`HmIn.delta` is `HmOut.delta` without the pairs into the columns it drops**, on both sides. -/
 theorem inDelta_toList (c : Circuit) (pi : HmIn.Ports) (pin : ℕ) :
     (HmIn.delta c pi pin).1.toList = (HmOut.delta c pin).1.toList.filter (fun p => keepCol c pi p.1) ∧
       (HmIn.delta c pi pin).2.toList = (HmOut.delta c pin).2.toList.filter (fun p => keepCol c pi p.1) := by
@@ -264,7 +236,6 @@ theorem inDelta_toList (c : Circuit) (pi : HmIn.Ports) (pin : ℕ) :
   dsimp only
   cases he : pi.ports.isEmpty <;> simp
 
-/-- Pairs into the rows a filter keeps: a row's count is the list's, or zero where the filter drops it. -/
 theorem count_filter_fst (l : List (ℕ × ℕ)) (P : ℕ → Bool) (r j : ℕ) :
     (l.filter fun p => P p.1).count (r, j) = if P r then l.count (r, j) else 0 := by
   split
@@ -273,7 +244,6 @@ theorem count_filter_fst (l : List (ℕ × ℕ)) (P : ℕ → Bool) (r j : ℕ) 
   · rename_i h
     exact List.count_eq_zero.2 fun hm => h (List.mem_filter.1 hm).2
 
-/-- **`HmIn.delta`'s level-0 entries**: `HmOut.delta`'s in every row it keeps, zero in the others. -/
 theorem deltaEntry_inDelta (c : Circuit) (pi : HmIn.Ports) (pin r j : ℕ) :
     deltaEntry (HmIn.delta c pi pin).1 r j =
         (if keepCol c pi r then deltaEntry (HmOut.delta c pin).1 r j else 0) ∧
@@ -284,7 +254,6 @@ theorem deltaEntry_inDelta (c : Circuit) (pi : HmIn.Ports) (pin r j : ℕ) :
     count_filter_fst, count_filter_fst]
   constructor <;> split <;> simp
 
-/-- At a kept row, `HmIn.delta`'s entries are `HmOut.delta`'s. -/
 theorem deltaEntry_kept {c : Circuit} {pi : HmIn.Ports} {pin r : ℕ} (hk : keepCol c pi r = true) (j : ℕ) :
     deltaEntry (HmIn.delta c pi pin).1 r j = deltaEntry (HmOut.delta c pin).1 r j ∧
       deltaEntry (HmIn.delta c pi pin).2 r j = deltaEntry (HmOut.delta c pin).2 r j := by
@@ -292,7 +261,6 @@ theorem deltaEntry_kept {c : Circuit} {pi : HmIn.Ports} {pin r : ℕ} (hk : keep
   rw [ite_eq_left hk] at h1 h2
   exact ⟨h1, h2⟩
 
-/-- Without public input ports every column is kept. -/
 theorem keepCol_noPorts {c : Circuit} {pi : HmIn.Ports} (he : pi.ports.isEmpty = true) (q : ℕ) : keepCol c pi q = true := by
   simp [keepCol, he]
 

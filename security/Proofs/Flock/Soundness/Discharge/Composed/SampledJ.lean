@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
-/-!
-# The sampled proof blocks of one `--zk` session of `J` tables, at verity-verify-proof's acceptance
-
-`zk_session_soundJ_custody_reg` is the count curve: it bounds verity-verify-proof's acceptance with "at least `K₀` units wrong",
-an event the prover's strategy fixes before the sample, because `zk_headline_exec_tables` carries only such events. This
-file carries an event of the sample too, and bounds the sampled proof blocks' correctness:
-
-* `execRefinesZK_tables_sampled`: `execRefinesZK_tables` with an event `E` of the sample on both sides. Both audits'
-  outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
-* `ZkLink.zk_flock_sampledC_reg`: `Audit.extraction_audit_sampled` at `analysisZCReg`, so in the compiled batched audit
-  `Pr[accepts ∧ some drawn unit is in incorrectRegZ] ≤ ε_ks + ε_bind`;
-* `zk_session_soundJ_custody_sampled_reg`: the same at verity-verify-proof's acceptance, at the challenger's live-coin part's custody, with
-  `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
--/
+/-! The sampled proof blocks' correctness at verity-verify-proof's acceptance, for one `--zk` session of `J` tables. -/
 
 @[expose] public section
 
@@ -41,9 +28,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
-/-- **The refinement at `--zk` for sessions of `J` tables, with an event of the sample**: verity-verify-proof `--zk` accepts the
-live audit at a sample in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a sample in
-`E`. -/
 theorem execRefinesZK_tables_sampled (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤
@@ -88,8 +72,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) {L : SamplingDesign n}
 
-/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration**: it accepts with a sampled proof block in
-`incorrectRegZ` with probability at most `ε_ks + ε_bind`, `zk_flock_countC_reg`'s terms without the miss term. -/
 theorem zk_flock_sampledC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -104,9 +86,6 @@ theorem zk_flock_sampledC_reg (hlow : LoweringSoundZK A P planZ tab decode) (how
     (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
     (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) σ
 
-/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
-it accepts with a sampled proof block in `incorrectRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
-from the binding errors against `Xv` (`errBoundZC`). -/
 theorem zk_flock_sampledC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw : ℕ}
     (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -132,9 +111,7 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The sampled proof blocks of one `--zk` sampled session of `J` tables, against the public file, at the challenger's live-coin part's
-custody.** For any live prover `τ`, verity-verify-proof `--zk` accepts with some sampled proof block in `incorrectRegZ` with probability at
-most `ε_ks + ε_bind`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
+/-- Its bound has no miss term, so it rests on no A3. -/
 theorem zk_session_soundJ_custody_sampled_reg
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

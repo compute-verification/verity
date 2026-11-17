@@ -23,14 +23,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# verity-verify-proof's acceptance under either tag
-
-`setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
-(`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
-`setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
-`Discharge/Exec`'s do from `setupTables_ok`, with no `hh`.
--/
+/-! verity-verify-proof's acceptance lemmas under either tag, through `setupOne`, with no hypothesis on hidden outputs. -/
 
 @[expose] public section
 
@@ -49,8 +42,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables` sets up each table with `setupHidden`** under a tag with hidden outputs (`Exec.setupTables_ok`'s
-counterpart). -/
 theorem setupTables_okH (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -89,8 +80,6 @@ theorem setupTables_okH (hh : tags.hiddenOutputs = true)
     exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables` refuses pinned outputs** under a tag with hidden outputs: no table it returns has any
-(`HmRow.pinnedCount`). -/
 theorem setupTables_pinnedH (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -144,8 +133,6 @@ theorem setupTables_okAny : SetupTablesOkAny := by
       obtain ⟨d, hd⟩ := hall j hj
       exact ⟨d, (setupOne_public (tags := { tags with identity := tags.tableIdentity count j }) hh).trans hd⟩
 
-/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some sample
-(the session's, for one table): `Exec.setupTables_setupH` without `hh`. -/
 theorem setupTables_setupOne
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -167,7 +154,6 @@ theorem setupTables_setupOne
     rw [ht]
     exact hd
 
-/-- The session's two link points have every table's length: `Exec.setupTables_points` without `hh`. -/
 theorem setupTables_pointsAny
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -192,8 +178,6 @@ theorem accepts_oneAny : AcceptsOneAny := by
   · omega
 
 set_option maxHeartbeats 4000000 in
-/-- The session's spec retains rounds exactly when its tags do, under hidden outputs (`Exec.setupTables_retain`'s
-counterpart). -/
 theorem setupTables_retainH (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -225,7 +209,6 @@ theorem setupTables_retainH (hh : tags.hiddenOutputs = true)
   · exact congrArg Tags.retainRounds (setupHidden_tags (ok_of_refuse (by assumption)))
   all_goals rfl
 
-/-- The session's spec retains rounds exactly when its tags do, for either tag. -/
 theorem setupTables_retainAny
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -279,8 +262,6 @@ theorem accepts_tables_hm96Any : AcceptsTablesHm96Any := by
     (ofCircuit_fold sts[j] hwf _) hms PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points) sess hext
     (decode_roundsWF hsess) schs[j] hf j _ _ c h0 h1
 
-/-- `setupH_tagsAt_hm96` for either tag: a table's statement under tags that implement `hm96-sha512/v1` commits with
-`hm96Sha512`. -/
 theorem setupOne_tagsAt_hm96 {j : ℕ} {st : Flock.Stmt} (hl : tags.merkleLeaf = "hm96-sha512/v1")
     (h : setupOne (tagsAt tags count j) cf pf coins tables draw partition program = .ok st) :
     st.merkle = MerkleScheme.hm96Sha512 := by
@@ -315,8 +296,6 @@ theorem accepts_verdict_hm96Any : AcceptsVerdictHm96Any := by
     (ofCircuit_fold sts[j] hwf _) (setupOne_tagsAt_hm96 hl hset) _ sess hext (decode_roundsWF hsess) schs[j] hf j _ _
     c h0 h1
 
-/-- `setupOne_tagsAt_hm96` for every leaf the non-ZK headlines cover: under `hm96-sha512/v1` leaves a table's statement
-commits with `hm96Sha512`, and under hidden outputs with plain SHA-512 leaves with `MerkleScheme.sha512`. -/
 theorem setupOne_tagsAt_leaf {j : ℕ} {st : Flock.Stmt}
     (hl : tags.merkleLeaf = "hm96-sha512/v1" ∨
       (tags.hiddenOutputs = true ∧ tags.merkleLeaf = "flock-leaf/sha512-unsalted"))
@@ -330,9 +309,6 @@ theorem setupOne_tagsAt_leaf {j : ℕ} {st : Flock.Stmt}
     exact Or.inr ⟨hl, setupHidden_plain ((tagsAt_merkleLeaf tags count j).trans hl)
       ((setupOne_hidden hh').symm.trans h)⟩
 
-/-- **verity-verify-proof's acceptance makes each table's verdict accept, at the model's leaf of the tags' leaf scheme**
-(`leafOfId`): `accepts_verdict_hm96Any` under `hm96-sha512/v1` leaves, and under hidden outputs with plain SHA-512
-leaves the verdict at `leafPlain` (`table_verdict_leaf`). -/
 theorem accepts_verdict_leafAny {I : Exec.Inputs} {t : Exec.Transcript}
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨
       (I.tags.hiddenOutputs = true ∧ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted"))

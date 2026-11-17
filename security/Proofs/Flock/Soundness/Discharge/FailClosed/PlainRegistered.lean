@@ -21,24 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
-/-!
-# The hidden-output headlines without `--zk`, over what `verify --registered F` accepts
-
-`verity-verify-proof verify --registered F` without `--zk` (`VerifiesR`: the verdict `PlainReg.AcceptsR` models and the statement
-check with the verifier's registered reads, `ScopeR`) accepts, at hidden outputs and `hm96-sha512/v1` leaves, a statement
-whose population's public file carries shared rows, which `verify` without `--registered` refuses. Each headline here is
-`FailClosed.Design`'s over `VerifiesR`, at any sample design (`SampleDesign`: the stratified sample or the live subset sample),
-with the registered reads checked:
-
-* `flock_headline_exec_hiddenR`: where the wires feed neither the unit nor the outputs, `HiddenExec.flock_headline_hidden_design`
-  at the unit's layout and `PlainReg.rsAtHS` (the rows with or without shared rows), its decoder discharged as in
-  `FailClosed.flock_headline_exec_hidden_design_dec`, and `PlainReg.checked_of_acceptsRH` at every accepted outcome;
-* `flock_headline_exec_hiddenRG`: where they feed, `HiddenExec.flock_headline_hidden_design` at the template
-  instance's program, as `FailClosed.flock_headline_exec_hiddenG_design` (whose rows never read `pub.tables`), and `PlainReg.checked_of_acceptsRHI` at every accepted outcome.
-
-At public outputs the check with `--registered F` is the check without it (`ScopeR.scope`), so what `verify --registered
-F` accepts there `verify` accepts (`verifies_of_R`), and `FailClosed.Exec`'s public headlines cover it.
--/
+/-! The hidden-output headlines without `--zk` over what `verify --registered F` accepts (`VerifiesR`), with the registered reads checked. -/
 
 @[expose] public section
 
@@ -58,13 +41,10 @@ def VerifiesR (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcr
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- `VerifiesR` at the live session's transcript. -/
 def LiveVerifiesR (I : Inputs) (own : Array Flock.Registered.Port) (o : Reg × Finset (Fin n) × Exec.Transcript) :
     Prop :=
   VerifiesR I own o.2.2
 
-/-- **At public outputs, `--registered F` accepts no more than `verify`**: the registered check only refuses more, and the
-statement check is the same (`ScopeR.scope`). -/
 theorem verifies_of_R {I : Inputs} {own : Array Flock.Registered.Port} {t : Exec.Transcript} (h : VerifiesR I own t)
     (hh : I.tags.hiddenOutputs = false) : Verifies I t :=
   ⟨PlainReg.accepts_of_R h.1, h.2.scope hh⟩
@@ -76,10 +56,6 @@ open FlockSoundness.Discharge.PlainReg (rsAtHS rsAtHS_computes checked_of_accept
 open FlockSoundness.Discharge.ZkReg (OwnReadsH regPathsH)
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 
-/-- **One hidden-output non-ZK sampled session that `verity-verify-proof verify --registered F` accepts is sound, and its
-registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hidden_design_dec`'s bound
-over `VerifiesR` at a sample design, at a public file with or without shared rows (`rsAtHS`); the second, the registered check's consequence at
-every accepted outcome (`PlainReg.checked_of_acceptsRH`). -/
 theorem flock_headline_exec_hiddenR
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false)
     (own : Array Flock.Registered.Port)
@@ -160,10 +136,6 @@ theorem flock_headline_exec_hiddenR
       checked_of_acceptsRH I hs.typed own dj x₀ (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh) hh hs.count o
         hv.1 rd hown⟩
 
-/-- **One hidden-output non-ZK sampled session that `verity-verify-proof verify --registered F` accepts, where the wires feed,
-is sound, and its registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hiddenG_design`'s
-bound over `VerifiesR` at a sample design (its rows `rsAtG` read no `pub.tables`); the second, the registered check's consequence at every
-accepted outcome (`PlainReg.checked_of_acceptsRHI`). -/
 theorem flock_headline_exec_hiddenRG
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true)
     (own : Array Flock.Registered.Port)

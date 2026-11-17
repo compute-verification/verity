@@ -6,14 +6,7 @@ public import Proofs.Flock.Soundness.SessionBatchAcc
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Several salted tables in one batched session, from accepted reruns
-
-`SessionBatchAcc.lean` over a leaf scheme `Lf`: the extractor of table `j` fills it from `k` reruns after `Commit` in
-which the salted session accepts (`extractProbAccBL`, `failProbAccBL`), and
-`joint_le_accBL`: `Pr[the session accepts] · failProbAccBL ≤ ksBoundAccBL + rateB · Pr[accepts]`, with `ksBoundAccBL`
-table `j`'s `ε_c⁻ + √(k·adv₀)` (`session_knowledge_sound_accL`); `one_le_fail_add_accBL` is the audit's `cover`.
--/
+/-! Several salted tables in one batched session, each extracted from accepted reruns (`joint_le_accBL`). -/
 
 @[expose] public section
 
@@ -67,9 +60,6 @@ theorem ksBoundAccB_nonnegL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : Li
   add_nonneg (epsS_nonnegL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) (Real.sqrt_nonneg _)
 
 open Classical in
-/-- **Knowledge soundness of table `j` in a batched session, from accepted reruns**, in the product
-form: `Pr[the session accepts] · Pr[table j's extraction fails] ≤ ε_c⁻ + √(k·adv₀L) + N₀/(ek) ·
-Pr[the session accepts]`, over `k ≥ 1` reruns in which the session accepts. -/
 theorem joint_le_accBL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (k : ℕ) (hk : 1 ≤ k) (τ : Strategy (sessionBL A H E Lf ts)) :
@@ -97,9 +87,6 @@ theorem joint_le_accBL (A : Arith F K) (hA : A.Correct)
 
 omit [Fintype K] in
 open Classical in
-/-- **The audit's `cover`, per table, from accepted reruns.** If commitment implies `G` and the
-session accepts with positive probability, every extracted table is uncommitted or satisfies `G`,
-so table `j`'s failure and `G` have probabilities adding up to at least `1`. -/
 theorem one_le_fail_add_accBL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionBL A H E Lf ts)) (G : Oracle F → Prop)

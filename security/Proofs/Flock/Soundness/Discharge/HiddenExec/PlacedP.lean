@@ -5,23 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
 public import Proofs.Flock.Soundness.Discharge.Hidden.UnrolledP
 
-/-!
-# `ProgPlaces` and `hConst` from `Stmt.setupHidden`'s accept at public inputs
-
-`Placed.lean` at the verifier's public inputs (`Hidden.SpecP`):
-
-* `AcceptedHP T`: a run of `Stmt.setupHidden` that accepted at public inputs `own`, on its committed circuit (flat, or a
-  templated statement's), with the circuit's public input ports `pi`, a layout `L` whose kept unit slot rows are its flat
-  twin's (`UnitRowsFlatP`, which `unitRowsFlatP` gives), and regions `regs` holding the statement's, its block R1CS
-  `L.model regs` `T`. Its rows and public input ports are its statement circuit's (`HmOut.unrolled`; `rows_eqU`,
-  `pi_eqU`), and its aliasing comes from the keys with public inputs (`AcceptedHP.aliased_of_key`, through
-  `aliased_of_keyP`).
-* `SitesHP plan tab`: each sampled proof block's acceptance, template instance and block, as `SitesH`.
-* `SitesHP.progPlaces_keyProgP`: `ProgPlaces` for the circuit's program on the keys with public inputs
-  (`Placed.keyProgP`) at the session's statement circuit `c`, from the sites alone, each site's committed circuit
-  unrolling to `c` (`Hidden.srcKeyP_eq_commit`); `constCols_keyProgHP` and `zeroCols_keyProgHP` are its
-  `hConst` and `hZero` (a stacked input on the zero gate is off a public leaf, `AcceptedHP.zero_block`).
--/
+/-! `ProgPlaces`, `hConst` and `hZero` from `Stmt.setupHidden`'s accept at the verifier's public inputs (`AcceptedHP`, `SitesHP`). -/
 
 @[expose] public section
 
@@ -33,10 +17,6 @@ open Flock FlockLevel3
 open Model Audit
 open FlockSoundness.Discharge.Zero (ZeroIn)
 
-/-! ## An accepted hidden-output statement at public inputs -/
-
-/-- **A stacked input off a public leaf that reads the zero carries 0** at public inputs, at template instance `g`'s
-place, in every block of a satisfying witness (`stack_zero_blockH`, through `copyPos_blockHP`). -/
 theorem stack_zero_blockHP {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layout st)
     (Lf : Layout (Hidden.flatTwin st)) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hp : HmIn.parse st.c = .ok pi) (hR : UnitRowsFlatP st pi)
@@ -82,13 +62,10 @@ namespace AcceptedHP
 
 variable {T : Model.Statement} (a : AcceptedHP T)
 
-/-- The flat twin's layout (`flat_layoutP`). -/
 theorem flatLayout : Layout (Hidden.flatTwin a.st) := flat_layoutP a.ht a.s
 
-/-- The flat twin's unit facts (`flat_unitFactsP`). -/
 theorem unitFacts : Aliased.UnitFacts a.tags (Hidden.flatTwin a.st) := flat_unitFactsP a.ht a.s
 
-/-- The accepted statement's circuit is committed: `HmOut.parse`'s or `HmOut.parseTmpl`'s. -/
 theorem committed : Hidden.Committed a.tags a.cf a.tables a.st.c := Hidden.committed_of_commit a.s.parse
 
 /-- **The accepted statement's template instance rows**: the unit net's rows, stacked `units_per_vu` times. -/
@@ -104,12 +81,9 @@ theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
   Fin.cast a.kLog_eq (a.L.col a.regs hg c)
 
-/-- **The accepted statement places its template instance rows at every template instance**, in every block. -/
 theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
   Placed.Accepted.placement_cast a.hT (a.L.placement a.regs hg)
 
-/-- **The template instance rows are the statement circuit's** (`HmOut.unrolled` of the committed one; W6 on the
-untyped path, by definition). -/
 theorem rows_eqU {c : Flock.Circuit} (hp : HmOut.unrolled a.st.c = c) (hU : Built c.unit) :
     a.rows = Placed.circuitRows c hU := by
   obtain ⟨hu, -, hv⟩ := Hidden.Committed.unrolled_unit a.ht a.committed
@@ -117,15 +91,12 @@ theorem rows_eqU {c : Flock.Circuit} (hp : HmOut.unrolled a.st.c = c) (hU : Buil
   unfold rows Placed.circuitRows unitRows
   rw [Placed.ofNet_eq hu.symm a.L.unit_built hU, hv]
 
-/-- **An accepted statement's public input ports are its statement circuit's** (`HmIn.parse`, which unrolling doesn't
-change: `Hidden.parseIn_commit`). -/
 theorem pi_eqU {c : Flock.Circuit} {pi : HmIn.Ports} (hp : HmOut.unrolled a.st.c = c) (hpi : HmIn.parse c = .ok pi) :
     a.pi = pi := by
   have := a.s.ports
   rw [← Hidden.parseIn_commit a.ht a.committed, hp, hpi] at this
   exact (Except.ok.inj this).symm
 
-/-- **`Layout.Aliased` in `ProgPlaces`' form**, as `AcceptedH.aliased_of_layout`. -/
 theorem aliased_of_layout {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.L.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
@@ -137,8 +108,6 @@ theorem aliased_of_layout {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Part
   subst hT
   exact hal
 
-/-- **Aliasing from keys with public inputs**: an instance that puts template instance `g`'s stacked unit inputs on one
-gate only when they have one key (`Aliased.srcKeyP`) is aliased in the accepted statement (`aliased_of_keyP`). -/
 theorem aliased_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows a.st a.L.unit_built).stack a.st.c.upv))
     (o : Fin (2 ^ (a.L.model a.regs).nbl)) {g : ℕ} (hg : g < a.st.c.g)
@@ -153,8 +122,6 @@ theorem aliased_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partiti
   exact aliased_of_keyP a.L a.flatLayout a.regs a.unitFacts a.s.ports C a.hR a.hregs hRi
     (fun r hr' => by rw [hr, Array.toList_append]; exact List.mem_append_right _ hr') inst hg hk o
 
-/-- **A template instance's stacked input off a public leaf that reads the zero carries 0**, at the template instance's
-columns, in every block of a satisfying witness (`stack_zero_blockHP`). -/
 theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn)
     (hneg : Aliased.pubLeaf a.st.c a.pi x.val < 0) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
     (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
@@ -164,8 +131,6 @@ theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val 
   exact stack_zero_blockHP L (flat_layoutP ht s) regs (flat_unitFactsP ht s) s.ports hR hg x hx hneg hz hsat o
 
 end AcceptedHP
-
-/-! ## Each sampled proof block's place -/
 
 section SitesP
 
@@ -194,7 +159,6 @@ noncomputable def SitesHP.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u 
     Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun c => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) c)
 
-/-- **W6's placement** at public inputs. -/
 theorem SitesHP.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
@@ -215,8 +179,6 @@ noncomputable def SitesHP.progPlaces_of_layout (outs : Finset (Fin N))
 
 end SitesP
 
-/-! ## The circuit's program on the keys with public inputs -/
-
 section keyedP
 
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
@@ -226,23 +188,18 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   (hpi : HmIn.parse c = .ok pi)
 
 include hparse in
-/-- W6 for the circuit's program on any input gates, from the sites' statement circuit. -/
 theorem SitesHP.rowsOf_circuitProg (B : ℕ) (src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)) :
     si.RowsOf (Placed.circuitProg c hU n B src) :=
   fun S R u h => (Placed.rows_uniform _ (Placed.circuitRows c hU) (Placed.insOf n B src) (Placed.oneGate n B)
     (Placed.insOf_ne_one n B src) n u).trans ((si.acc S R u h).rows_eqU (hparse S R u h) hU).symm
 
 include hparse in
-/-- W6 for `keyProgP`, from the sites' statement circuit. -/
 theorem SitesHP.rowsOf_keyProgP : si.RowsOf (Placed.keyProgP c pi hU n) :=
   SitesHP.rowsOf_circuitProg hU hparse _ _
 
 variable (outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n)))
 
 include hpi in
-/-- **`aliased` at each sampled proof block's site at public inputs**: in the layout of the table the unit is sampled into, the
-program's own instance of the unit puts on one gate only inputs with one key with public inputs at the statement
-circuit, so at the committed one (`Placed.keyProgP_wire_key`, `Hidden.srcKeyP_eq_commit`, `AcceptedHP.aliased_of_key`). -/
 theorem SitesHP.aliased_keyProgP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (si.acc S R u h).L.Aliased (si.acc S R u h).regs
       (SitesHP.rowsOf_keyProgP hU hparse S R u h ▸ Const.Prog.instC (Placed.keyProgP c pi hU n) outs u)
@@ -268,12 +225,10 @@ noncomputable def SitesHP.progPlaces_keyProgP : ProgPlaces (Placed.keyProgP c pi
   si.progPlaces_of_layout (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse) outs (Const.Prog.instC _ outs)
     (SitesHP.aliased_keyProgP hU hparse hpi outs)
 
-/-- `progPlaces_keyProgP`'s instance is the program's own. -/
 theorem SitesHP.progPlaces_keyProgP_inst (u : Fin n) :
     (SitesHP.progPlaces_keyProgP hU hparse hpi outs).inst u = Const.Prog.instC (Placed.keyProgP c pi hU n) outs u :=
   rfl
 
-/-- **`hConst` at `SitesHP.progPlaces_keyProgP`**: only a unit's constant column sits on the one gate. -/
 theorem constCols_keyProgHP :
     ((Placed.keyProgP c pi hU n).partition outs).ConstCols plan tab
       (SitesHP.progPlaces_keyProgP hU hparse hpi outs).derived.place
@@ -283,8 +238,6 @@ theorem constCols_keyProgHP :
 end keyedP
 
 
-/-! ## `hZero` at the circuit's program on the keys with public inputs -/
-
 section circuitP
 
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
@@ -292,9 +245,6 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   {k : ℕ} {c : Flock.Circuit} {hU : Built c.unit} {pi : HmIn.Ports} {ins : ℕ → Fin (Placed.circuitRows c hU).nIn → Fin k}
   {one : Fin k} {hone : ∀ u x, ins u x ≠ one}
 
-/-- **`hZero` for the circuit's program at hidden-output sites at public inputs**, as `zeroCols_uniformH`: every column
-on the zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate is off a
-public leaf and reads the zero. -/
 theorem zeroCols_uniformHP (si : SitesHP plan tab)
     (hrows : si.RowsOf (Placed.uniform k (Placed.circuitRows c hU) ins one hone n))
     (hparse : ∀ S R u (h : u ∈ S), HmOut.unrolled (si.acc S R u h).st.c = c)
@@ -329,8 +279,6 @@ theorem zeroCols_uniformHP (si : SitesHP plan tab)
     exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hna hza
       hsat _
 
-/-- **`hZero` for the circuit's program on source-indexed input gates at public inputs**, as
-`zeroCols_circuitProgH`. -/
 theorem zeroCols_circuitProgHP {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)}
     (si : SitesHP plan tab) (hrows : si.RowsOf (Placed.circuitProg c hU n B src))
     (hparse : ∀ S R u (h : u ∈ S), HmOut.unrolled (si.acc S R u h).st.c = c)
@@ -346,8 +294,6 @@ theorem zeroCols_circuitProgHP {B : ℕ} {src : Fin (Placed.circuitRows c hU).nI
     (fun h => by simp [Placed.zeroGate, Placed.oneGate, Fin.ext_iff] at h)
     fun u x hx => hsrc x ((Placed.insOf_eq_zero_iff u.isLt x).1 hx)
 
-/-- **`hZero` at `SitesHP.progPlaces_keyProgP`**: every column on the zero gate carries 0 in every satisfying witness,
-since an input on it is off a public leaf and reads the zero (`Aliased.srcKeyP_eq_zero`). -/
 theorem zeroCols_keyProgHP (hU : Built c.unit) {si : SitesHP plan tab}
     (hparse : ∀ S R u (h : u ∈ S), HmOut.unrolled (si.acc S R u h).st.c = c)
     (hpi : HmIn.parse c = .ok pi)

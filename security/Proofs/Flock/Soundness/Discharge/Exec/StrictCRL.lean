@@ -5,21 +5,7 @@ public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The salted compiled and knowledge terms under strict-time collision resistance
-
-`StrictCR.lean`'s finders over a leaf scheme `Lf`: the rewinding finders (`twoRuns`, `forkFinder`) and the self-clash
-finder (`oneRun`) run the salted prover, and every pair they count is two verifying salted openings of one position to
-different rows, whose pair (`op₀LPair`, `opRLPair`, `selfCandsL`) the finder outputs: a collision of `H`
-(`op₀L_conflict_collision`, `opRL_conflict_collision`, `selfCandsL_spec`). So:
-
-* `table_sound_compiled_strictL`: the salted compiled theorem at its finders' budgets;
-* `ksBoundAccB_le_strictL`: a salted table's knowledge bound in a session is at most `StrictCR.ksStrict`;
-* `ksAvgBE_le_strictL`: the salted audit's knowledge term is at most `StrictCR.ksAvgStrict`, the same closed form as
-  the unsalted one: it reads only the plan, the sampling design and the budgets.
-
-The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
--/
+/-! The salted compiled and knowledge terms under strict-time collision resistance; the finders' budgets are the hypotheses' to state, since Lean counts no evaluations. -/
 
 @[expose] public section
 
@@ -28,10 +14,7 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting StrictCR
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## The compiled theorem -/
 
 section Compiled
 
@@ -104,11 +87,6 @@ theorem self_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
   (expect_one_le H _ σ (SelfClashL H E Lf sch) (selfCandsL H E Lf sch) (fun _ h => h.cand)
     fun _ _ hc h => selfCandsL_spec hc h).trans h.le
 
-/-- **The compiled theorem under `SHA512CRStrict`** (`table_sound_compiledL` at its finders). If the rewinding finders
-each satisfy `SHA512CRStrict` at budget `qF` and the self-clash finder at `qS`, a compiled run accepts while the table
-`P*` committed to is not a codeword of the statement with probability at most
-$$\text{tableError}+\sqrt{2^{\log N_0}\cdot 2Q_0\cdot\frac{q_F^2}{2^{513}}}+\sum_{r<2}\sum_{\ell}
-\sqrt{2^{\log N_\ell}Q_\ell\cdot\frac{q_F^2}{2^{513}}}+\frac{q_S^2}{2^{513}}.$$ -/
 theorem table_sound_compiled_strictL (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -135,8 +113,6 @@ theorem table_sound_compiled_strictL (A : Arith F K) (hA : A.Correct) [Inhabited
       (self_le_strictL A H E Lf S _ hm ptLocal mPts σ hCR.self))
 
 end Compiled
-
-/-! ## The knowledge term -/
 
 section Session
 
@@ -223,7 +199,6 @@ theorem selfS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (fun outs : List (OutCL F D Sl) => selfCandsL H E Lf sch (outs.getD pre.length dfltOutL)) (fun _ h => h.cand)
     fun _ _ hc h => selfCandsL_spec hc h).trans h.le
 
-/-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
@@ -261,9 +236,6 @@ theorem ksBoundAccB_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
 
 end Session
 
-/-- **The knowledge term with the expected-time extractor, under `SHA512CRStrict`**: `ksAvgBEL` is at most `ksAvgStrict`
-at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
-(`TableCRL`). -/
 theorem ksAvgBE_le_strictL {n : ℕ} {Reg D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
     {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
     (τ : Audit.Cont L Reg (batchedSessionL H E Lf plan) R)

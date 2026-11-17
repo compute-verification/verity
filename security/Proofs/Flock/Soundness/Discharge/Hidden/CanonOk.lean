@@ -5,14 +5,7 @@ public import Std.Data.TreeMap.Raw.Lemmas
 public import Std.Data.TreeMap.Raw.WF
 import all Lean.Data.Json.Basic
 
-/-!
-# Canonical text that exists
-
-`canon` and `canonUtf8` refuse only a number that is not an integer, so each returns on an object exactly when it
-returns on each of the object's values (`canon_obj`, `canonUtf8_obj`). So a value put into an object keeps the
-object's canonical text when the value has one (`canonUtf8_insert`), an object built from a list has one when each
-value of the list has (`canonUtf8_mkObj`), and the hello has one at every statement (`helloOf_isOk`).
--/
+/-! `canon` and `canonUtf8` refuse only a number that is not an integer, so the hello has canonical text at every statement (`helloOf_isOk`). -/
 
 @[expose] public section
 
@@ -65,7 +58,6 @@ theorem mapM_array_isOk {α β ε : Type} (f : α → Except ε β) (a : Array �
     revert this
     cases a.toList.mapM f <;> intro h <;> first | rfl | cases h
 
-/-- **`canonUtf8` of an object returns exactly when it returns on each member.** -/
 theorem canonUtf8_obj (kvs : Std.TreeMap.Raw String Json) :
     (canonUtf8 (.obj kvs)).isOk = true ↔ ∀ p ∈ kvs.toArray, (canonUtf8 p.2).isOk = true := by
   rw [canonUtf8, Array.mapM_subtype (g := fun p => do pure (p.1, ← canonUtf8 p.2)) (fun _ _ => rfl),
@@ -85,7 +77,6 @@ theorem canonUtf8_obj (kvs : Std.TreeMap.Raw String Json) :
     | error e => rw [hm] at this; cases this
     | ok vals => exact ⟨vals, rfl, rfl⟩
 
-/-- **`canon` of an object returns exactly when it returns on each member.** -/
 theorem canon_obj (kvs : Std.TreeMap.Raw String Json) :
     (canon (.obj kvs)).isOk = true ↔ ∀ p ∈ kvs.toArray, (canon p.2).isOk = true := by
   rw [canon, Array.mapM_subtype (g := fun p => do pure (p.1, ← canon p.2)) (fun _ _ => rfl),
@@ -105,7 +96,6 @@ theorem canon_obj (kvs : Std.TreeMap.Raw String Json) :
     | error e => rw [hm] at this; cases this
     | ok vals => exact ⟨vals, rfl, rfl⟩
 
-/-- A member of an object with one key set is the value set or a member of the object. -/
 theorem mem_insert_toArray {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
     {p : String × Json} (hp : p ∈ (m.insert k v).toArray) : p.2 = v ∨ p ∈ m.toArray := by
   have h := (Std.TreeMap.Raw.toArray_insert_perm hm (k := k) (v := v)).mem_iff.1 hp
@@ -113,7 +103,6 @@ theorem mem_insert_toArray {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
   · exact .inr (Array.mem_filter.1 h).1
   · exact .inl (by rw [h])
 
-/-- **`canonUtf8` returns on an object with one key set** when it returned on the object and returns on the value. -/
 theorem canonUtf8_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
     (h : (canonUtf8 (.obj m)).isOk = true) (hv : (canonUtf8 v).isOk = true) :
     (canonUtf8 (.obj (m.insert k v))).isOk = true :=
@@ -138,7 +127,6 @@ theorem canonUtf8_arr {a : Array Json} (h : ∀ x ∈ a, (canonUtf8 x).isOk = tr
   | error e => rw [hm] at this; cases this
   | ok parts => rfl
 
-/-- A member of a list's object is a member of the list. -/
 theorem mem_insertMany {l : List (String × Json)} : ∀ {m : Std.TreeMap.Raw String Json compare}, m.WF →
     ∀ {p : String × Json}, p ∈ (m.insertMany l).toArray → p ∈ m.toArray ∨ p.2 ∈ l.map Prod.snd := by
   induction l with
@@ -152,7 +140,6 @@ theorem mem_insertMany {l : List (String × Json)} : ∀ {m : Std.TreeMap.Raw St
       · exact .inl h
     · exact .inr (by simp only [List.map_cons, List.mem_cons]; exact .inr h)
 
-/-- **`canonUtf8` returns on a list's object** when it returns on each value of the list. -/
 theorem canonUtf8_mkObj {l : List (String × Json)} (h : ∀ v ∈ l.map Prod.snd, (canonUtf8 v).isOk = true) :
     (canonUtf8 (Json.mkObj l)).isOk = true := by
   refine (canonUtf8_obj _).2 fun p hp => ?_
@@ -163,8 +150,6 @@ theorem canonUtf8_mkObj {l : List (String × Json)} (h : ∀ v ∈ l.map Prod.sn
     rw [he] at h'
     exact absurd h' (Array.not_mem_empty _)
   · exact h _ h'
-
-/-! ## The hello always exists -/
 
 theorem canon_nat (n : Nat) : (canon (Lean.toJson n)).isOk = true := by
   rw [show Lean.toJson n = Json.num (Lean.JsonNumber.fromNat n) from rfl, canon]
@@ -216,8 +201,6 @@ theorem canon_coins (s : CoinTree.Spec) (nonce : String) : (canon (s.coins nonce
   unfold CoinTree.Spec.toJson at hj ⊢
   exact canon_insert Std.TreeMap.Raw.WF.ofList hj (canon_str _)
 
-/-- **`helloOf` returns** at every tags, Σ, count of link points, coins and tables: its object holds strings, natural
-numbers and the coin tree's spec, and `canon` refuses only a number that is not an integer. -/
 theorem helloOf_isOk (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String) :
     (helloOf tags sigma mPts coins tables).isOk = true := by
   have hl : (canon (Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts),

@@ -6,36 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The Flock audit at the compiled layer, several tables per session
-
-The protocol's session (`Flock.Record`, `SessionBatch.lean`): the verifier plans the tables from the
-sample and the registration (`plan`), `Commit` sends every table's level-0 cap, one link-point sample
-serves all of them, and then they run concurrently; the session accepts when every table accepts
-(`batchedSessionL`). Each sampled proof block is read from one table of the plan (`tab S R u`), with its own
-decoder (`DecoderB`): two sampled proof blocks that share a wire hold it in their own columns.
-
-**The analysis** (`analysisBL`) reads the extractor of the unit's table, over `Kr` reruns of
-everything after `Commit`:
-
-* `ks`: `Pr[the session accepts] · Pr[the unit's table extracts to no satisfying witness]`
-  (`failProbBL`), the joint probability, since the fresh run and the reruns are independent
-  (`expect_mul_expectN`);
-* `link`: likewise with the link event on the extracted table (`LinkEvB`): it is committed, but
-  every close message packing a satisfying witness decodes, on the unit's committed wires, to values
-  other than the committed transcript's.
-
-`cover` is `one_le_fail_add_BL'`: by **the lowering** (`LoweringSoundB`, named, per table), a
-committed table gives the link event for an incorrect proof block. `loweringSoundB_of_place` discharges it from
-each sampled proof block's place in its table (`UnitPlace`), with `C` the rows the verifier parses.
-
-**The discharge** (`flock_batched_knowledgeSoundL`): per sample, the unit's table's
-`ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_BL'`, from `session_knowledge_soundL`),
-bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgBL`), with no
-named assumption; `ε_bind` stays named (`BindSound`).
-
-`flock_batched_countL`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
--/
+/-! The Flock audit at the compiled layer with several tables per session (`batchedSessionL`), its knowledge term discharged with no named assumption and `ε_bind` named (`BindSound`). -/
 
 @[expose] public section
 
@@ -44,7 +15,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Audit Audit.Partition
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 
@@ -100,7 +70,6 @@ noncomputable def ksAvgBL (Kr : ℕ) (R : Reg) (τ : Cont L Reg (batchedSessionL
   avg fun ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksBoundBL execArith H E Lf (plan (L.draw ω) R) j Kr (batchStratL H E Lf plan (τ ω)))
 
-/-- **`ε_ks` is discharged for sessions of several tables.** -/
 theorem flock_batched_knowledgeSoundL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}
@@ -113,7 +82,6 @@ theorem flock_batched_knowledgeSoundL
       ENNReal.ofReal (ksBoundBL execArith H E Lf (plan (L.draw ω) R) j Kr (batchStratL H E Lf plan (τ ω))))
       (tab (L.draw ω) R u))
 
-/-- **The batched Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_countL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}
@@ -127,7 +95,6 @@ theorem flock_batched_countL
   extraction_audit_count (analysisBL P H E Lf plan tab decode Xc Kr hlow)
     (flock_batched_knowledgeSoundL P H E Lf plan tab decode Xc hK hlow) hlink K σ
 
-/-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_sampledL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}

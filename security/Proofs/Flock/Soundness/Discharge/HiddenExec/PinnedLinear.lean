@@ -19,17 +19,7 @@ import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.ExecLookup
 
-/-!
-# Every pinned bit of an accepted statement is a linear row
-
-`HmOut.checkPinned` holds each pinned output word's net to a slot of a net past the rows' circuits and each of its 16
-bits' rows to `HmOut.linearRow`: past the net's input rows, below its constant, outside a lookup's product rows, its `B`
-the constant alone. A net `HmRow.parse` accepted is built by `Net.ofRows` or `Lookup.build`, whose `B` entry is the
-count of the column in its row (`sparseEntry_ofRows`), so such a row's local `B` (`entB`, the table side included) is
-the constant alone. With `HmOut.outCol` the column of `outRow`'s row in `outSlot`'s slot (`outCol_slot`), every pinned
-column is a `LinearBit` (`pinned_linear`), which `sat_pinned` reads. Nothing here reads a row size, a `G` or a producer
-family.
--/
+/-! Every pinned bit of a statement `HmOut.checkPinned` accepts is a linear row (`pinned_linear`). -/
 
 @[expose] public section
 
@@ -39,14 +29,12 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 FlockSoundness.Discharge.Inst
 
-/-- **An untyped circuit's output column is `outRow`'s row in `outSlot`'s slot.** -/
 theorem outCol_slot {c : Circuit} (ht : c.typed = none) (g o : ℕ) :
     HmOut.outCol c g o = c.slotCol (HmOut.outRow c o).1 g (HmOut.outSlot c o) + (HmOut.outRow c o).2 := by
   unfold HmOut.outCol HmOut.outRow HmOut.outSlot
   simp only [ht, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   split_ifs <;> rfl
 
-/-- **What `HmOut.linearRow` checks.** -/
 theorem linearRow_spec {net : Net} {i : ℕ} (h : HmOut.linearRow net i = true) :
     net.b.row i = #[net.constPos] ∧ net.inWords * WORD ≤ i ∧ i < net.constPos ∧
       ∀ j, lookupEntry net.lookup i j = 0 := by
@@ -66,7 +54,6 @@ theorem linearRow_spec {net : Net} {i : ℕ} (h : HmOut.linearRow net i = true) 
     · exact absurd ⟨hc.1, hc.2.1⟩ hn
     · rfl
 
-/-- **A linear row's local `B` is the constant alone**, at a net `Net.ofRows` or `Lookup.build` built. -/
 theorem entB_linear {c : Circuit} {n i : ℕ}
     (hk : Built (netOf c n) ∨ ∃ nm tb nb lo bits, Lookup.build nm tb nb lo bits = .ok (netOf c n))
     (h : HmOut.linearRow (netOf c n) i = true) (j : ℕ) :
@@ -80,8 +67,6 @@ theorem entB_linear {c : Circuit} {n i : ℕ}
   unfold entB
   rw [hlk, add_zero, hs, hb, count_singleton_zmod]
 
-/-- **What `HmOut.checkPinned` checks of each pinned output word**: its net past the rows' circuits, its slot one of the
-net's, and each of its 16 bits' rows a linear row. -/
 theorem pinned_word {c : Circuit} (h : HmOut.checkPinned c = .ok ()) {o : ℕ} (h1 : HmOut.pinnedFrom c ≤ o)
     (h2 : o < HmOut.pinnedFrom c + HmOut.pinnedWords c) :
     (HmOut.outRow c o).1 < c.nets.size ∧ (HmOut.outRow c o).1 ≠ c.shaNet ∧ (HmOut.outRow c o).1 ≠ c.hmNet ∧
@@ -114,8 +99,6 @@ theorem pinned_word {c : Circuit} (h : HmOut.checkPinned c = .ok ()) {o : ℕ} (
           have := List.any_eq_false.1 hrow t (List.mem_range.2 ht)
           simpa [FlockSoundness.Discharge.Inst.netOf] using this
 
-/-- **Every pinned bit of a statement `HmOut.checkPinned` accepts is a linear row**, at an untyped circuit whose nets
-`Net.ofRows` or `Lookup.build` built (`ParseFacts.nets`). -/
 theorem pinned_linear {c : Circuit} (h : HmOut.checkPinned c = .ok ()) (ht : c.typed = none)
     (hnets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) :
     ∀ x ∈ Hidden.pinnedCols c, LinearBit c x := by
