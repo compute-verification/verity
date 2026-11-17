@@ -1,6 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
-- `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
+- `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -31,9 +31,11 @@ model or stated figures no run measured, or scaled past what a run covered; ``"p
 name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
 `mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
-`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
-says which as `member`, a non-empty string, held only where given. The writer appends: every
-writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+`OVER` (the world's compute or one datacenter's). A measurement of one of a metric's lines says which as `member`, a
+non-empty string held only where given: whatever tells it from the metric's other lines, a guarantee, a lead, an area, or
+a configuration as a slug of lower-case words joined by hyphens, model, card, then arm where arms differ
+(`llama-3.2-1b-h200`). The writer appends: every writer of a research run, whatever its `out`, appends to the run's one
+result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 
@@ -103,16 +105,18 @@ KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
 
-def lease(gpus: int, minutes: float) -> list[str]:
-    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node, held for the job's bound of
-    `minutes` (gpu-lease's `--max-min`, in whole minutes). The job takes the lease itself, since `research run --gpus` is
-    refused on a node whose GPUs gpu-lease doesn't hand out."""
+def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None = None) -> list[str]:
+    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node (only those `on` lists, and the
+    job pinned to the CPUs `cores` lists, where given), held for the job's bound of `minutes` (gpu-lease's `--max-min`, in
+    whole minutes). The job takes the lease itself, since `research run --gpus` is refused on a node whose GPUs gpu-lease
+    doesn't hand out."""
 
     if isinstance(gpus, bool) or not isinstance(gpus, int) or gpus < 1:
         raise ValueError(f"a lease holds one GPU or more, not {gpus!r}")
     if not (isinstance(minutes, numbers.Real) and math.isfinite(minutes) and minutes > 0):
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
-    return ["gpu-lease", str(gpus), "--wait", "--max-min", str(math.ceil(minutes)), "--"]
+    return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
+            "--max-min", str(math.ceil(minutes)), "--"]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------

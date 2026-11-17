@@ -105,6 +105,27 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     assert "**below**" in (tmp_path / "tensor_kinds.md").read_text()
 
 
+def test_record_writes_the_eight_bit_forms_issue_cost_and_a_failed_gate_writes_none(tmp_path: Path, no_gpu):
+    imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    good, bad = tmp_path / "good", tmp_path / "bad"
+    good.mkdir(), bad.mkdir()
+    _write(good, [_opalone(1000, 8 * 67 / 0.98),
+                  _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, imma, lane)])
+    assert TK.main(["tensor_kinds.py", str(good), "--record"]) == 0
+    doc = json.loads((good / "result.json").read_text())
+    [m] = doc["measurements"]
+    assert doc["validation"]["status"] == "passed"
+    assert (m["name"], m["unit"], m["mark"], m["form"], m["host"]["card"]) == (
+        TK.METRIC, "issue cycles a MMA", "measured", "imma_s8_m16n8k32", "none")
+    assert abs(m["value"] - 8.115) < 1e-9
+    _write(bad, [_opalone(1000, 8 * 67 / 0.52)])
+    assert TK.main(["tensor_kinds.py", str(bad), "--record"]) == 3
+    doc = json.loads((bad / "result.json").read_text())
+    assert doc["validation"]["status"] == "failed" and "below 0.9" in doc["validation"]["detail"]
+    assert doc["measurements"] == []
+
+
 def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):
     # a measured IMMA.16816 + IADD3 x8 (spec): 17.563 SMSP-cycles a MMA at 9.125 others a MMA, where
     # JI3e_1 (15.030 + 0.317 a other) asks at least 17.92
