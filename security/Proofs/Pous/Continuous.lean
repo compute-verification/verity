@@ -39,7 +39,7 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
 * `Continuous/Verdict.lean`: the verdict as one proof block, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
   `contAccepts M` holds on the records its openings determine (`PousVerdict.verdictProg_accepts`,
   `PousVerdict.verdict_accepts`), not pinned.
-* `Continuous/VerdictCode.lean`: the unit's executable code (`PousVerifier.Verdict`, which the difftest runs against the
+* `Continuous/VerdictCode.lean`: the unit's executable code (`PousCheck.Verdict`, which the difftest runs against the
   Definition's circuit) is `verdictProg` gate for gate, so `VerdictIs` holds of it (`PousVerdict.Code.prog_eq`,
   `PousVerdict.Code.verdictIs_prog`), and its run, verdicts and acceptance are the analysis's, not pinned.
 -/

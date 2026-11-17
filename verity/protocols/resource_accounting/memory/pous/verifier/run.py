@@ -22,11 +22,11 @@ for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of
 5. `memory_attester.verdict` accepts the session against the table, signed under a key in `trusted`.
 
 The first refusal is the reason (`Refused`), word for word the Lean's.  `check_at` takes another point and other schemes, for tests.
-`PousVerifier.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
+`PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
 acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.lean`), proved.
 
 `check_signed` (`check_signed_at` at another point) is the run on the memory attester's signed setup
-(`PousVerifier.SignedRun`): in place of the table it reads the setup record the session's key signed under the session's id
+(`PousCheck.SignedRun`): in place of the table it reads the setup record the session's key signed under the session's id
 (`memory_attester.SetupRecord`) and one `Opening` per round, the row of the block the round asks for and its path to
 the published root.  It checks step 1 and steps 3 to 4 above, then that each opening's row is under the root, then the
 verdict against the rows the openings opened (an answer that is not its block is wrong), then that the setup record is
@@ -71,7 +71,7 @@ DEPLOYED = Point(P2Params(*POINT, segments=CERT_BLOCKS // POINT[2]), CERT_K, DEL
 
 @dataclass(frozen=True, slots=True)
 class Setup:
-    """The setup's public outputs (`PousVerifier.SetupProtocol.Public`)."""
+    """The setup's public outputs (`PousCheck.SetupProtocol.Public`)."""
 
     blocks: int
     commitment: bytes
@@ -190,7 +190,7 @@ def check_signed_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Col
 
 def check_signed(trusted: Collection[bytes], setup: Setup, session: ChallengePhaseRecord,
                  signed_setup: mc.SignedSetupRecord, openings: Sequence[Opening], session_id: bytes) -> None:
-    """Accept the run on the memory attester's signed setup (`PousVerifier.SignedRun`), or raise `Refused` with the first
+    """Accept the run on the memory attester's signed setup (`PousCheck.SignedRun`), or raise `Refused` with the first
     reason, at `DEPLOYED` under S1's LMS: in place of the table, the setup record the session's key signed under the
     session's id, and one opening per round, its row under the published root.  Its guarantee is not proved."""
     check_signed_at(DEPLOYED, mc.SCHEMES, trusted, setup, session, signed_setup, openings, session_id)

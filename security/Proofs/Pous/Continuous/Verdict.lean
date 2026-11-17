@@ -62,7 +62,7 @@ builder.
 Composing this with sampling's knowledge soundness into the proof layer's soundness for the continuous audit
 (`Pous.ProofSound`, the hypothesis of `Pous.Guarantees.ContinuousAuditProved`) needs more, none of it about the unit:
 
-1. `VerdictIs` at the deployed unit. The unit's code, `PousVerifier.Verdict.prog`, is `verdictProg` gate for gate
+1. `VerdictIs` at the deployed unit. The unit's code, `PousCheck.Verdict.prog`, is `verdictProg` gate for gate
    (`VerdictCode.lean`, `PousVerdict.Code.verdictIs_prog`), and the difftest `test_verdict_difftest.py` holds the
    Definition's compiled circuit to that code at the statics it runs; no Lean reads the deployed descriptor into gates.
 2. The openings are what the audit committed. The records must sit under a hiding commitment that the memory
@@ -202,7 +202,7 @@ def verdictProg (K M LIMIT : ℕ) : Claims.Sampling.Prog :=
       (countGates K M LIMIT).2 (inputs K + 1)).2.2.getLastD 0]⟩
 
 /-- **The deployed verdict unit is the Definition's**: on every input of its width it computes what `verdictProg` does.
-It holds of the unit's code, `PousVerifier.Verdict.prog` (`PousVerdict.Code.verdictIs_prog`), which the difftest
+It holds of the unit's code, `PousCheck.Verdict.prog` (`PousVerdict.Code.verdictIs_prog`), which the difftest
 `test_verdict_difftest.py` holds to the Definition's compiled circuit. -/
 def VerdictIs (P : Claims.Sampling.Prog) (K M LIMIT : ℕ) : Prop :=
   ∀ y : List Bool, y.length = inputs K → P.eval y = (verdictProg K M LIMIT).eval y

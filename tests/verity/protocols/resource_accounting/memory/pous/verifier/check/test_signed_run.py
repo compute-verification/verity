@@ -1,4 +1,4 @@
-"""`pous-signed-run serve` (`PousVerifier.SignedRun`) against the Python verifier of the same case (`answer_of`: the case
+"""`pous-signed-run serve` (`PousCheck.SignedRun`) against the Python verifier of the same case (`answer_of`: the case
 decoded as the Lean decodes it, then `period.answer_signed`, which is `run.check_signed_at` and the signed run's profile):
 every field of the answer, and the reason of each refusal of the check.
 
@@ -85,7 +85,7 @@ def _evidence(b: bytes) -> tuple:
 
 
 def answer_of(protocol: str, schemes: dict):
-    """`PousVerifier.SignedRun.mkProtocol protocol schemes`'s answer in Python."""
+    """`PousCheck.SignedRun.mkProtocol protocol schemes`'s answer in Python."""
     def check(p, published, e) -> tuple:
         (point, sid, trusted), (session, setup, openings) = p, e
         a = period.answer_signed(point, schemes, trusted, published, session, setup, openings, sid, protocol)

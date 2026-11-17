@@ -5,7 +5,7 @@ public import Flock.Hash
 public import PousVerifier.Verdict
 
 /-!
-# The verdict unit's difftest: `PousVerifier.Verdict`'s functions on JSON
+# The verdict unit's difftest: `PousCheck.Verdict`'s functions on JSON
 
 `pous-verdict-difftest` serves them to the core difftest harness, whose Python half (`tests/test_verdict_difftest.py`)
 holds each one's output to the Definition `verdict_circuit.PousVerdict`, compiled:

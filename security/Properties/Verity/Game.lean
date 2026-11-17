@@ -45,7 +45,7 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
 | | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
-| PoUS | `.pous` | `PousVerifier.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
+| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
 | PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
 | the network attester | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | | |
