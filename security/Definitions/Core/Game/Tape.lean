@@ -4,14 +4,7 @@ public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
 
-/-!
-# A play's coins as one uniform coin
-
-At a fixed strategy a play's coins are a tree: each coin's value picks the play after it. `Tape g s` holds, at each
-coin, a value and the coins of the play after every value: a finite type (`Tape.instFintype`). A finder or a forger
-built from a strategy samples one tape and reads the play on it (`Tape.out`). That a uniform tape gives the play's
-output the sampling design `prob` reads is proved in `Proofs.Core.Game.Tape`.
--/
+/-! A play's coins at a fixed strategy as one uniform coin (`Tape`). -/
 
 @[expose] public section
 

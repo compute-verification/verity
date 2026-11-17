@@ -3,41 +3,8 @@ module
 public import Definitions.Poub.Assumptions.RateAudit
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The rate audit with partial completion: what an accepted device held and read (trusted)
-
-The game is `security/Definitions/Poub/RateAuditPartial.lean`: `RateAudit`'s, with `rebuild` replaced by
-`complete j x g`, which obtains any `x` of word `j`'s `b` bits at `cost x`. Proofs are in
-`security/Proofs/Poub/RateAudit/Partial*.lean`. The rebuild term rests on the named assumption
-`ResourceAccounting.Assumptions.WorkHardness b rounds c_root cost` (`rate-codec-work` in partial-completion form: `x` bits
-cost at least `x/b` of a word's `rounds · c_root`, `Definitions/Poub/Assumptions/RateAudit.lean`), and in a joint run
-on `ResourceAccounting.Assumptions.RateComputeAdditive` (W: the compute account's work and the game's completions share no
-work).
-
-* `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
-  may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
-  (`security/Proofs/Poub/Lemmas/RateAudit.lean`).
-* `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (PoUB's route
-  `ResourceAccounting.Remote.Run.Rebuild` at `δ = 0`).
-* `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
-  W, so a compute account that did `W` of work leaves `F·T − W` for them.
-* `RateOfAuditPartialPasses`: the same with the rebuild term in passes,
-  `μ_rebuild ≤ (1 − τ)·d/(rounds·x₁) ≤ d/(rounds·x₁)`.
-
-`rounds` is the codec's round count, the `k` of `WorkHardness(p, k)` and of `μ_rebuild ≤ d/(k·x₁)` in the claims; the
-statements' `k` is `RateAudit`'s, the `⌈(1 − ε_s)·N⌉` words the sample needs.
-
-**At one round (`rounds = 1`) these say nothing about a deployed codec.** They hold at every `rounds`, but their
-hypothesis `WorkHardness b 1 c_root cost` is false for Sloth at one round with the payload known, at every width (a
-2-dimensional lattice completes a word's bottom third at 0.003–0.025 of a root against the per-bit 0.32–0.33). They
-carry a deployed codec at `k ≥ 2` rounds, where `WorkHardness` is the residual conjecture.
-
-**The price is a parameter, and `k = 3` is the stated instance** (`WorkHardness b 3 c_root cost`), the deployed codec's:
-Sloth over `p = 2^1024 − 105`, masked with a public XOR `σ_K` between rounds (as
-ruled), its price justified by no completion skipping the inner root. The mask changes no statement:
-`WorkHardness` reads the codec only through `b`, `rounds` and `c_root`. Unmasked at `k = 2`, 512 bits rest on the
-reduction's operation-count floor, an estimate, not a measurement.
--/
+/-! The rate audit with partial completion, on `WorkHardness`, whose one-round form is false for Sloth, so it carries a
+deployed codec only at `k ≥ 2` rounds. -/
 
 @[expose] public section
 

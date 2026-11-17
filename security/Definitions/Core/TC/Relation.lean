@@ -2,24 +2,7 @@ module
 
 public import Definitions.Core.TC.Pipeline
 
-/-!
-# The step relation
-
-The tensor-core step relation, the definition of record: its tables (`tBf16`, `tPcls`, `tPow`, `tNorm`, `tExp`, `tShift`,
-`tAny`), its predicate kinds (`MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`, `ISZERO`) and `StepHolds`, over the integers. It
-reads nothing from `Verity.TC.Spec`: the relation and the semantics are independent definitions, and
-`Verity.SecurityProofs.TC.Sound` proves them equivalent.
-
-* **The witness has a fixed shape**: `k` product rows, one group row per group, `size + 1` term rows per group
-  (`Witness.Shaped`), the columns the census counts.
-* **The operands and the input state are arguments**, not witness fields.
-* **`RANGE` and `ISZERO` are their meaning**: `RANGE x bits` is `0 ≤ x < 2^bits`, which the census's range gadget
-  accepts (one `T_range` lookup when `bits ≤ 16`; otherwise non-negativity, the 16-bit chunk split and a lookup per
-  chunk), and `ISZERO x bits z` is `x` in range with `z = [x = 0]`, which the census's 12-bit chunks, lookups and muls
-  accept. `Verity.SecurityProofs.TC.Gadgets` proves the chunked forms equivalent.
-* **Products the checker computes itself** (`both`, `fin_inf`, `any_inf * any_ninf`, `inf_out * neg_inf`, the running
-  product of the "attained" chain) appear as those products, and the `MUL`s that check them against themselves are kept.
--/
+/-! The tensor-core step relation, the definition of record, over the integers and independent of `Verity.TC.Spec`. -/
 
 @[expose] public section
 
@@ -106,8 +89,6 @@ def tShift (p : Params) (key : Int × Int) : Option Int :=
 def tAny (n : Nat) (s : Int) : Option Int :=
   if 0 ≤ s ∧ s ≤ n then some (if s ≠ 0 then 1 else 0) else none
 
-/-! ## Predicate kinds -/
-
 /-- `Census.MUL`: `a * b = c`. -/
 def MUL (a b c : Int) : Prop := a * b = c
 
@@ -125,8 +106,6 @@ def RANGE (x : Int) (bits : Nat) : Prop := 0 ≤ x ∧ x < 2 ^ bits
 
 /-- `Census.ISZERO`: `x ∈ [0, 2^bits)` and `z = [x = 0]`. -/
 def ISZERO (x : Int) (bits : Nat) (z : Int) : Prop := RANGE x bits ∧ z = if x = 0 then 1 else 0
-
-/-! ## State and witness -/
 
 /-- `relation.State`: the decoded accumulator. -/
 structure State where
@@ -250,8 +229,6 @@ def Witness.Shaped (pipe : Pipeline) (w : Witness) : Prop :=
   w.prod.length = pipe.k ∧ w.groups.length = pipe.groups.length ∧
     ∀ i (h : i < w.groups.length) (h' : i < pipe.groups.length), (w.groups[i]).terms.length = pipe.groups[i] + 1
 
-/-! ## The predicates of `check_step` -/
-
 /-- One term of a group as `_terms` lists it: (sign, masked exponent, scaled magnitude). -/
 structure TermIn where
   neg : Int
@@ -283,15 +260,12 @@ def termHolds (p : Params) (align : Align) (Estar : Int) (i : Nat) (Pprev : Int)
 /-- The predicates of one group of `check_step`, on its input state `st` and its `size` product rows. -/
 def groupHolds (p : Params) (align : Align) (size : Nat) (st : State) (prods : List ProdCols) (g : GroupCols) : Prop :=
   let ins := terms p st prods
-  -- E*: at least every masked exponent and the floor (d in [0, 512) via T_pow), and attained
   (∀ i (h : i < ins.length) (h' : i < g.terms.length),
     termHolds p align g.Estar i (if i = 0 then 0 else (prods[i - 1]!).P) ins[i] g.terms[i]) ∧
   (∀ i (h : i < ins.length), MUL (ins.take i |>.foldl (fun c x => c * (g.Estar - x.e)) (g.Estar - p.Z))
       (g.Estar - ins[i].e) ((ins.take (i + 1)).foldl (fun c x => c * (g.Estar - x.e)) (g.Estar - p.Z))) ∧
   LIN (ins.foldl (fun c x => c * (g.Estar - x.e)) (g.Estar - p.Z)) ∧
-  -- truncating alignment, signed sum
   LIN (g.total - (g.terms.map (fun t => t.aligned - 2 * t.signed)).sum) ∧
-  -- magnitude and sign of the total; normalisation to W bits; subnormal shift and rescale
   BOOL g.neg_t ∧
   MUL (1 - 2 * g.neg_t) g.total g.mag_t ∧
   RANGE g.mag_t p.B ∧
@@ -307,7 +281,6 @@ def groupHolds (p : Params) (align : Align) (size : Nat) (st : State) (prods : L
   MUL g.r_s g.invpow_s g.rsinv ∧
   RANGE g.rsinv p.K ∧
   ISZERO g.mag24 24 g.z_out ∧
-  -- special values and the output state
   MUL st.inf (1 - st.neg) g.pinf0 ∧
   MUL st.inf st.neg g.ninf0 ∧
   LIN (g.S_nan - st.nan - (prods.map (·.nan)).sum) ∧

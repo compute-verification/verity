@@ -1,25 +1,7 @@
 module
 
-/-!
-# Naive tiled against Strassen in the tensor-core model (trusted)
-
-Exact int8 matrix products, priced by the tensor core alone (G2's tensor resource over P1's exact domains), additions
-free.
-
-**Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
-s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the
-instruction's `k` and the width `w` within which its dot of `k` products is exact (`k · ⌊d_A/2⌋ · ⌊d_B/2⌋ ≤ 2^w`).
-These are the card files' numbers (`hardware/cards/<sku>.toml`): each card's `weight`, the formats' integer runs,
-and the widths within which a dot is exact (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float
-dot as exact as FP32 allows and accumulation across MMAs as exact only adds atoms. `b1` is at the H200's weight 1/8;
-costs are monotone in the weights, so a lower bound here holds at every weight at least these.
-
-**Schedules** (`Sched`) multiply two `2^l × 2^l` block matrices whose entries range over `a` and `b` consecutive
-integers: an atom; a digit split of one operand, `x - c = x₀ + d·x₁` with `2 ≤ d < a`, `x₀` over `d` values and `x₁`
-over `⌈a/d⌉`; or a 2 × 2 scheme from a given list, each product on the combination its coefficients make, which
-ranges over `(a - 1)·‖u‖₁ + 1` values, reduced mod `m` when `m > 0` (a CRT residue). An atom at depth budget `l`
-multiplies `2^l`-leaf blocks, so it costs `8^l · weight8`; naive tiled, the s8 atom at `(256, 256)`, costs `8^(l+1)`.
--/
+/-! Naive tiled against Strassen in the tensor-core model: exact int8 matrix products priced by the tensor core alone,
+additions free. -/
 
 @[expose] public section
 
@@ -56,7 +38,6 @@ def Scheme.R (s : Scheme) : Nat := s.u.length
 /-- The `ℓ₁` norm of an integer vector. -/
 def l1 (c : List Int) : Nat := (c.map Int.natAbs).foldl (· + ·) 0
 
-/-- The scheme computes `C = A·B` (Brent's equations over the 2 × 2 blocks). -/
 def Scheme.correct (s : Scheme) : Bool :=
   s.v.length == s.R && (s.u ++ s.v).all (·.length == 4) && s.w.length == 4 && s.w.all (·.length == s.R) &&
     (List.range 4).all fun p => (List.range 4).all fun q => (List.range 4).all fun r =>
@@ -93,13 +74,10 @@ def range (m a ν : Nat) : Nat :=
 
 /-- A recursion tree. -/
 inductive Sched where
-  /-- one MMA format for the whole sub-product -/
   | atom (f : Atom)
   /-- `A`'s digit split at `d`: the low digit's subtree, then the high digit's -/
   | splitA (d : Nat) (lo hi : Sched)
-  /-- `B`'s digit split at `d` -/
   | splitB (d : Nat) (lo hi : Sched)
-  /-- a scheme, a subtree for each product -/
   | scheme (s : Scheme) (kids : Fin s.R → Sched)
 
 namespace Sched
@@ -131,8 +109,6 @@ def fast : Sched → Bool
 
 end Sched
 
-/-! ## The cards' atoms (`b1` at the H200's weight 1/8) -/
-
 /-- INT8 MMA, s32 accumulate: weight 1, all 256 values. -/
 def s8 : Atom := ⟨8, 256, none⟩
 /-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`weight.b1` in `h200-sxm-141gb.toml`). -/
@@ -152,11 +128,8 @@ def rtx6000Sheet : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (8, 24)⟩, ⟨16, 513, some (8, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
 
-/-! ## The tables the statements cover
-
-The statements hold on every atom table that `rtx6000Sheet` dominates (`Packed.Dom`). That reference table is fixed
-here, not a parameter. It and `h200Sheet` are written by hand: a card file gives each format's weight, and neither its
-instruction `k` nor the width `w` within which its dot is exact. -/
+/-! `rtx6000Sheet` and `h200Sheet` are written by hand: a card file gives neither a format's instruction `k` nor the width
+`w` within which its dot is exact. -/
 
 namespace Packed
 
@@ -174,8 +147,6 @@ def Dom (fs : List Atom) : Prop :=
   ∀ f ∈ fs, ∀ a b, f.holds a b = true → atomMin rtx6000Sheet a b ≤ f.weight8
 
 end Packed
-
-/-! ## The statements -/
 
 /-- **Theorem 1**: at every depth budget `l ≤ L`, every schedule over `fs` for int8 operands that applies Strassen
 or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive.
@@ -209,7 +180,6 @@ def NaiveBeatsStrassenUpTo (fs : List Atom) (c : Nat) : Prop :=
     n ≤ c * b →
     8 * n ^ 3 < b ^ 3 * S.cost l
 
-/-- Pairwise coprime. -/
 def coprime : List Nat → Bool
   | [] => true
   | m :: ms => ms.all (Nat.gcd m · == 1) && coprime ms
@@ -227,8 +197,6 @@ H200; at `n = 1` the count `128·(255K − 381)` is vacuous). -/
 def NaiveBeatsCrtStrassen (fs : List Atom) (N : Nat) : Prop :=
   ∀ (l b n : Nat) (rs : List (Nat × Sched)), 2 ≤ n → n ≤ N → n ≤ 2 ^ l * b → crtValid fs n l rs = true →
     (2 ≤ rs.length ∨ rs.any (·.2.fast) = true) → 8 * n ^ 3 < b ^ 3 * (rs.map fun r => r.2.cost l).foldl (· + ·) 0
-
-/-! ## The non-vacuity witness -/
 
 /-- One Winograd at depth 1: `M₁` and `M₂` on s8, the other five on f16 (their ranges up to `1021 × 256`). It costs
 `8 + 8 + 5·16 = 96 = 8^2 + 32`, so Theorem 1's bound is attained at `l = 1`. -/

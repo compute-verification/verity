@@ -6,28 +6,7 @@ public import Mathlib.Data.Finset.Card
 public import Mathlib.Data.Fintype.Basic
 public import Mathlib.Data.Fintype.Card
 
-/-!
-# Circuits
-
-A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates
-and some are output gates. Gate `g` holds one value of `w g` bits (`verity.circuits`' `Value<w>`). An input gate's
-value is given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile,
-which Flock proves, is `w = 1` (`Boolean.lean`).
-
-For a set `S` of gates, in the Glossary's notation (`GLOSSARY.md`):
-* `size S`: the number of gates in `S`. The size of a circuit is `size computed`, its number of non-input gates;
-* `width S`: the total width of their values;
-* `into S`: in(S), the gates outside `S` with a wire into `S`;
-* `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`.
-
-A trace is one run's data, a value for every gate. `eval a` is the honest trace on the inputs `a`, and
-`run fix` evaluates with the gates that `fix` names held at the values it gives (how a proof block is recomputed,
-`Partition.localEval`).
-
-`D` implements `C` (`Implements C D`, written `C ≼ D`) when every input gate of `C` is an input gate of `D` and, on
-every assignment to `D`'s inputs, `D` produces the values of `C`'s output gates among its own outputs. `D` contains `C`
-(`Contains C D`) when, besides, `D` computes every non-input gate of `C` from the same wires.
--/
+/-! Circuits (gates in topological order, each a value of its width), traces, and implementation and containment. -/
 
 @[expose] public section
 
@@ -41,11 +20,9 @@ structure Circuit where
   /-- The width of each gate's value, in bits. -/
   w : Fin N → ℕ
   isInput : Fin N → Bool
-  /-- The gates `g` reads: the wires into `g`. -/
   reads : Fin N → Finset (Fin N)
   reads_lt : ∀ g, ∀ a ∈ reads g, a < g
   input_reads : ∀ g, isInput g = true → reads g = ∅
-  /-- What a computed gate does: its value, from the values of the gates it reads. -/
   op : (g : Fin N) → ((a : Fin N) → BitVec (w a)) → BitVec (w g)
   op_congr : ∀ g (v v' : (a : Fin N) → BitVec (w a)), (∀ a ∈ reads g, v a = v' a) → op g v = op g v'
   outputs : Finset (Fin N)
@@ -129,7 +106,6 @@ structure Containment (C D : Circuit) where
     (D.op (emb g) v).cast (emb_w g) = C.op g fun a => (v (emb a)).cast (emb_w a)
   outputs_emb : ∀ o ∈ C.outputs, emb o ∈ D.outputs
 
-/-- `D` contains `C`: `C ≼ D`, and `D` computes every non-input gate of `C` from the same wires. -/
 def Contains (C D : Circuit) : Prop := Nonempty (Containment C D)
 
 end Verity

@@ -2,19 +2,7 @@ module
 
 public import Definitions.Core.Circuit
 
-/-!
-# Partitions, committed wires, and the correctness of a unit
-
-A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof blocks,
-replay blocks and inference blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
-blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
-unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
-
-Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
-it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
-(`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `incorrect X` is the set
-of units that are not correct.
--/
+/-! Partitions, the committed wires they derive, and when a unit is correct in a trace (`Correct`). -/
 
 @[expose] public section
 

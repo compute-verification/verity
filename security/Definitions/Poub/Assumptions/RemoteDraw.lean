@@ -34,34 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What PoUB's opening sample assumes (trusted)
-
-The premises of `ResourceAccounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
-verifier's opening sample (`ResourceAccounting.Remote.Sample`), each a named `Prop` on a session and the trace over its coins:
-
-* `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
-  the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
-  window's roots arrived (`Poub.verifyWindow`), and a receipt is correct when the row its root holds
-  (`Receipts.held`, the plurality of what the receipt shows over the window's continuations, read only off what
-  precedes the coin) is: the roots bind the receipts only up to a collision, which is `Refused`'s and the guarantees'
-  binding term (`Receipts.binding`), not this premise. The guarantees take it of the session the prover plays: the
-  challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last
-  root, with the outcome (`coins.Released`, `audit.Session.disclose`), so nothing the prover holds before window `t`'s
-  coin reads that coin. A prover that held the commitment from the start could size a window off its bits, and that
-  session is not `Live` (red team RD-12).
-* `Refused`: the verifier refuses a window one of whose opened receipts is wrong as presented
-  (`Poub.checkOpening`): on an accepted session each receipt a window's sample opens is correct, or moved
-  (`Receipts.Moved`: accepted at its root and rank with a row other than the one the root holds). The guarantees
-  charge a move as `Receipts.binding`, which `ReceiptsBindingOfFork` bounds by two runs from the window's cut that
-  hash a SHA-512 collision (`Hash.Guarantees.RowBinding`) or split the receipt's roots.
-* `Counted`: the trace's wrong receipts are among the windows': each credited pass's wrong registered blocks are wrong
-  receipts of the window it ran in.
-
-The sample is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin
-gives (`Run.opened`), the sampler exact on each sample's first block and the rest free. The openings coins are uniform
-and independent of the other coins, as the challenger flips them (the trace's uniform measure on `SampleCoins`).
--/
+/-! What PoUB's opening sample assumes (`Live`, `Refused`, `Counted`); the sample itself is the deployed one, not a
+premise. -/
 
 @[expose] public section
 

@@ -3,23 +3,8 @@ module
 public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditJoint
 
-/-!
-# The rate audit with interactive side sources (trusted)
-
-`RateAudit.lean`'s game, except that the chip may also send bits to the side sources, and a side source answers each
-read as a function of the store, the certified stream, the oracle and every bit the chip has sent so far.
-`RateAudit.lean`'s side source already answers any function of the store and of what the chip sent, through the address
-the chip picks; what this game adds is answers that also depend on the certified stream and the oracle. This is the
-rest of the prover as the chip sees it in the actual-circuit model: a peer, the host or a network that sees what the chip sends (the seed, partial tags, which words it wants)
-and answers adaptively, as the table localization lays out, read bit by bit. Sends are not bounded, so the chip may send
-any number `e` of bits that depend on the seed. Every bit the chip reads from a side source still comes in over the
-side link and counts against `L`, with the certified stream's `ρ`. Its on-chip state and device memory are still laid
-out from the store before the seed and the stream, device memory hears only the chip's reads, rebuilding is still the
-codec's inverse at `c_enc` a word, and the sample is still sampled after the output.
-
-`RealizesRateInteractive` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit such a device
-plays.
--/
+/-! The rate audit with side sources whose answers may also depend on the certified stream and the oracle, every bit
+read still counted against `L`. -/
 
 @[expose] public section
 
@@ -169,14 +154,10 @@ namespace ResourceAccounting
 the bandwidth window, at each value of the other audits' coins. -/
 structure RealizesRateInteractive (p : Price) (cTag cEnc : ℕ) {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
-  /-- the interactive device of the game at the other audits' coins -/
   dev : ΩW × ΩS → Rate.InteractiveProver N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
-  /-- the bandwidth audit's verdict is the game's -/
   accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1.1 y.2.1.2 y.2.2
-  /-- the bandwidth account's reads from device memory cover the game's ingress -/
   ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1.1 y.2.1.2 ≤ r.read (x, y, s')
-  /-- the work of the accounts other than the compute account covers the game's tags and rebuilds -/
   compute_le : ∀ x y s', (dev (x, s')).compute cTag cEnc y.1 y.2.1.1 y.2.1.2 ≤ r.othersWork p (x, y, s')
 
 end ResourceAccounting

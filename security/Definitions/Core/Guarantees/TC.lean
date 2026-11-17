@@ -5,16 +5,8 @@ public import Definitions.Core.TC
 public import Definitions.Core.TC.Bridge
 public import Definitions.Core.TC.Gadgets
 
-/-!
-# The tensor-core guarantees
-
-The step relation (`Verity.Protocol.TC.Relation`, `verity.ml.tc.relation`) against the step semantics
-(`Verity.Protocol.TC.Spec`, `verity.ml.tc.total.tc_dot_total`) on the Hopper pipeline (`HOPPER_BF16_WGMMA_K16`, whose
-parameters `HOPPER_BF16_M16N8K16` shares) and the Ampere/Ada pipeline (`AMPERE_BF16_M16N8K16`, whose parameters
-`ADA_BF16_M16N8K16` shares), in either alignment mode, over the integers: each step, each proof block and the BF16
-word it commits, and the range and is-zero gadgets. Under `gemm-hopper-step` and `gemm-ampere-step`
-(`Verity.Assumptions`), the semantics is the device's.
--/
+/-! The tensor-core guarantees: the step relation against the step semantics on the Hopper and Ampere/Ada pipelines,
+which is the device's under `gemm-hopper-step` and `gemm-ampere-step`. -/
 
 @[expose] public section
 

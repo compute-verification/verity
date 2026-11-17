@@ -2,21 +2,8 @@ module
 
 public import Definitions.Flock.Merkle
 
-/-!
-# The two colliding inputs of two Merkle openings
-
-Two openings of one position that verify against one tree top from different leaves go up through a node where the two
-walks first agree, and the two inputs hashed at that node (`upIn`) differ. `walkPair` returns those two inputs.
-`openCollPair` and `openCollPairL` return the pair for two openings to different columns: the leaf's own pair when the
-two leaves agree, the walk's pair otherwise. Each is a function of the two openings alone, so a collision finder can
-output it.
-
-That each pair is a collision of `H` is proved in `Proofs.Flock.Soundness.MerklePair` (`walkPair_spec`,
-`openCollPair_spec`, `openCollPairL_spec`).
-
-Two digests are compared by their bytes (`Enc.dig`, which is injective), so no function here needs equality on the
-digest type to be decidable.
--/
+/-! The two colliding inputs of two Merkle openings of one position from different leaves, a function of the openings
+alone. -/
 
 @[expose] public section
 
@@ -34,8 +21,6 @@ def walkPair : List D → List D → ℕ → D → D → List UInt8 × List UInt
       else walkPair rest rest' (idx / 2) (up H E idx a s) (up H E idx a' s')
   | _, _, _, _, _ => ([], [])
 
-/-- **The pair of two openings of position `pos` to the columns `c` and `c'`**, under the leaf `H (encode column)`: the
-two columns' encodings when their leaves agree, the walk's pair from the two leaves otherwise. -/
 def openCollPair (pos : ℕ) (c c' : Col) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
   if E.dig (H (E.col c)) = E.dig (H (E.col c')) then (E.col c, E.col c')
   else walkPair H E sibs sibs' pos (H (E.col c)) (H (E.col c'))

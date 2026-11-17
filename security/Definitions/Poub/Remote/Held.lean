@@ -5,38 +5,7 @@ public import Mathlib.Algebra.Order.Archimedean.Real.Basic
 public import Mathlib.Order.Interval.Finset.Nat
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
-/-!
-# What a PoUB session shows held: the node's memory as a trace (trusted)
-
-A PoUB session over a registered store of `N` blocks, at each outcome `ω` of the audit's coins `Ω` (uniform,
-`Pouw.pr`), seen as a trace of where each registered block is, tick by tick on the verifier's clock:
-
-* `mem ω t`: the registered blocks in node memory (every GPU's HBM and the host's DRAM) at tick `t`;
-* `chip ω t`: those on the node's chips (every GPU's on-chip storage and the host's caches), not in node memory;
-* a block in neither is absent: on the node's disks, outside the node, or nowhere, and it comes back only as one of
-  `rebuilt ω t` (re-encoded from its payload by the node's compute), `disk ω t` (read from the node's disks) or
-  `link ω t` (carried in over the node's boundary links), the blocks each route brings in at tick `t`.
-
-The session's credited passes are `p < P`. Pass `p` is `[tick ω p, tick ω (p + 1))`: `tick ω p` is the tick its seed
-could first be computed, from its window's challenge and the root before it, and `tick ω (p + 1)` the tick its own root
-left, so by the chain its correct receipts are computed inside it. `plan ω p` is the registered blocks its plan holds and
-`correct ω p` those whose receipts are correct.
-
-A paced session (`Pace`) groups the passes: group `g`'s passes are `[first ω g, first ω (g + 1))`, its coin left at
-`released ω g` (`s_g`) and `ended ω g` is `e_g = max(its last root's arrival, s_(g + 1))`. Groups `g < C` are credited
-and group `C` closes them.
-
-What the session shows read, at an outcome, the bandwidth audit's claim (`ResourceAccounting.PeriodRun.Holds` at `.poub`):
-
-* `read ω p`: the registered blocks pass `p` read on the node, those of its plan whose receipts are correct, each in
-  node memory or on a chip at a tick of the pass;
-* `reads ω P`: `Σ_{p < P} |read ω p|`, those of the first `P` passes.
-
-What the session shows held, at an outcome:
-
-* `held ω`, the snapshot: `Σ_p |mem ω (tick ω p)|`, the registered blocks in node memory at each credited pass's start;
-* `heldOver ω u v`, held over time: `Σ_{t ∈ [u, v)} |mem ω t|`, the registered blocks in node memory at each tick.
--/
+/-! A PoUB session's view of the node's memory, as a trace of where each registered block is, tick by tick. -/
 
 @[expose] public section
 
@@ -46,34 +15,25 @@ open Finset
 
 /-- A PoUB session's registered store as a trace of the node's memory, over coins `Ω`. -/
 structure Trace (Ω : Type) where
-  /-- `N`, the registered blocks -/
   blocks : ℕ
-  /-- `P`, the credited passes -/
   passes : ℕ
-  /-- the verifier's verdict -/
   accepts : Ω → Prop
   /-- `t_p`: pass `p` is `[t_p, t_(p+1))` -/
   tick : Ω → ℕ → ℕ
-  /-- the registered blocks pass `p`'s plan holds -/
   plan : Ω → ℕ → Finset (Fin blocks)
-  /-- the registered blocks of pass `p` whose receipts are correct -/
   correct : Ω → ℕ → Finset (Fin blocks)
-  /-- the registered blocks in node memory at tick `t` -/
   mem : Ω → ℕ → Finset (Fin blocks)
   /-- the registered blocks on the node's chips at tick `t` -/
   chip : Ω → ℕ → Finset (Fin blocks)
   /-- the blocks the node's compute re-encodes from their payloads at tick `t` -/
   rebuilt : Ω → ℕ → ℕ
-  /-- the blocks read from the node's disks at tick `t` -/
   disk : Ω → ℕ → ℕ
   /-- the blocks carried in over the node's boundary links at tick `t` -/
   link : Ω → ℕ → ℕ
 
 /-- A paced session's groups of passes on the verifier's clock: `C` credited groups and the closing group `C`. -/
 structure Pace (Ω : Type) where
-  /-- `C`, the credited groups -/
   credited : ℕ
-  /-- group `g`'s first pass -/
   first : Ω → ℕ → ℕ
   /-- `s_g`: group `g`'s coin's release -/
   released : Ω → ℕ → ℕ

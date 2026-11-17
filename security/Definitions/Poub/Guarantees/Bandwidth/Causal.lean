@@ -3,27 +3,7 @@ module
 public import Definitions.Poub.Bandwidth.Causal
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# B3 and Mbw on a strategy's runs (trusted)
-
-The actual-circuit model's rows B3 and Mbw, stated over the runs of a strategy causal from every tick (`CausalFrom`)
-rather than over an abstract device of the bandwidth audit's game. The strategy maps the store (for Mbw, the store and
-`z`) and the oracle to a run; the chip is the location `X`, the window is `[t₀, t₀ + T)`, and the chip commits to `τ` of
-what it did in the window, the tags the verifier checks at `s` blocks sampled uniformly. The hypotheses are the model's
-constraints on such a strategy:
-- the chip's state at `t₀` is at most `M` bits (memory) and fixed by the store, or by the store and `z`, before the
-  seed (`hpre`: the oracle doesn't reach it);
-- every wire into the chip runs on a port of HBM, of the rest or of the oracle, and the links are alphabets
-  (`Alphabet`), so the rest's ports carry at most `βs` bits a tick, their capacities summed: `c_side = βs·T`;
-- HBM's ports are passive memory of the widths `wd` the chip's requests fix (`PassiveMemory`), or in the capacity forms
-  HBM hears only the chip (`HearsChip`) and every tick's HBM signal counts at `βm` bits, HBM's ports' capacities summed;
-- the oracle is a location the chip asks at most `qt` queries a tick (`OracleLocation`).
-
-The chip's state is charged `M + 1` bits, its length included, so at `e = 0` the row's floor is
-`k·b − M_chip − 1 − c_side − λ`. The proofs are in `security/Proofs/Poub/Bandwidth/Causal.lean` and
-`CausalJoint.lean`: the chip of such a run is the tick transducer `Ticked.Chip`, whose bounds are the game's
-`AuditInteractive`, `AuditInteractiveRO` and `AuditJoint`.
--/
+/-! B3 and Mbw stated over the runs of a strategy causal from every tick. -/
 
 @[expose] public section
 

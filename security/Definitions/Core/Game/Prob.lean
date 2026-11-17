@@ -2,13 +2,7 @@ module
 
 public import Definitions.Core.Game
 
-/-!
-# Strategies of a relabelled or composed game
-
-A strategy for `g.map f` is one for `g` (`Strategy.ofMap`), and a strategy for `g.bind f` restricts
-to `g` (`Strategy.ofBind`). The strategy-level probability tools that use them (`prob_map`,
-`prob_bind_le`, the union bound) are in `Proofs.Core.Game.Prob`.
--/
+/-! Strategies of a relabelled or composed game (`Strategy.ofMap`, `Strategy.ofBind`). -/
 
 @[expose] public section
 

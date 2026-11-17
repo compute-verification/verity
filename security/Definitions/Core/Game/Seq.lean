@@ -2,14 +2,7 @@ module
 
 public import Definitions.Core.Game.Expect
 
-/-!
-# Sequencing strategies, and runs as a game
-
-A procedure that plays several games in a row, such as a collision finder that reruns the prover, is
-itself a game with a fixed strategy: `Strategy.bind` plays `s` in `g` and then `t a` in `f a` after
-`g` ends with `a`. `runsG g n` plays `g` `n` times in a row, and `runsStrat g s n` plays `s` in
-each run. Their expectations (`expect_bind`, `expect_runsG`) are in `Proofs.Core.Game.Seq`.
--/
+/-! Sequencing strategies (`Strategy.bind`), and repeated runs of a game as a game (`runsG`). -/
 
 @[expose] public section
 

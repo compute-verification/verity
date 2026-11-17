@@ -4,21 +4,7 @@ public import Definitions.Poub.RateAuditPartial
 public import Definitions.Assumptions.ResourceAccounting
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The rate audit's named assumptions (trusted)
-
-What the rate audit with partial completion (`Definitions/Poub/RateAuditPartial.lean`) assumes, each a named
-`Prop`, taken as a hypothesis by the guarantees that use it, never an `axiom`:
-
-* `WorkHardness b rounds c_root cost` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module re-exports):
-  completing `x` of a word's `b` bits costs at least `x/b` of a word's price
-  `rounds · c_root` (claim `rate-codec-work`, `WorkHardness(p, k)` in partial-completion form, at `k = rounds`). The
-  price is a parameter. PoUB's route `ResourceAccounting.Remote.Run.Rebuild` (`rebuilt · c_word ≤ b · rebuildWork`)
-  is what it gives a run (`ResourceAccounting.Guarantees.RatePartialRebuild`).
-* `RateComputeAdditive`: a joint run's compute account and its bandwidth game share no work (the actual-circuit
-  model's compute additivity, W), PoUB's `ResourceAccounting.Remote.Assumptions.ComputeAdditive` for the device
-  model's joint run.
--/
+/-! The rate audit's named assumptions, `WorkHardness` and `RateComputeAdditive`. -/
 
 @[expose] public section
 

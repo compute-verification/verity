@@ -2,16 +2,7 @@ module
 
 public import Definitions.Core.Game
 
-/-!
-# The transport's vocabulary: roles, channels, and what a coalition sees of them
-
-The channels between an auditor party and the prover (`verity.commitments.crypto.transport`), as the zero-knowledge statement
-reads them. `Roles` says which nodes are the prover's own machines and which auditor parties are under `Confined p`, the
-per-party premise beside `Faithful p` and `Secret p`; a `Channel` names its auditor end and who can read its bytes in
-transit. `ViewIsRecord` is what zero knowledge needs of the transport, for one test, with its probabilities `Game.value`
-over uniform samples (`Game.draw`). The premises on a channel are in `Assumptions/Transport`: `WitnessPathPrivate c` (the
-per-channel premise), `ImprintPathPrivate c`, `ChannelHides` and `ChannelAuthentic`.
--/
+/-! The transport's vocabulary: roles, channels and what a coalition sees of them (`ViewIsRecord`). -/
 
 @[expose] public section
 

@@ -2,18 +2,7 @@ module
 
 public import Definitions.Poub.RateAuditSketch
 
-/-!
-# The sketch rate audit with interactive side sources, verbatim (trusted)
-
-`RateAuditSketch.lean`'s game, except that the chip may also send bits to the side sources, and a side source answers
-each read with one whole sector of the store or of the certified stream, as it is, at an address it picks from every
-bit the chip has sent so far. Sends are not bounded, so the chip may send any number `e` of bits that depend on the
-signs and on what it has read. Every sector that comes in over the side link still counts `w` bits against `L`, with
-the certified stream's `ρ` sectors, and the device class is still `rate-sketch-verbatim`'s: nothing on chip, read,
-taken in or rebuilt is a function of several sectors. A source that picked its address from the store, the stream or
-the oracle itself, rather than from what the chip sent, would tell the chip about sectors it never took in, or relay
-tags, which this game leaves out.
--/
+/-! The sketch rate audit with side sources that answer whole sectors at addresses picked from what the chip sent. -/
 
 @[expose] public section
 

@@ -2,36 +2,13 @@ module
 
 public import Definitions.Core.Interaction
 
-/-!
-# Composing provers and simulators: sessions in turn, a run in parts, a public stop
-
-The vocabulary a composition of zero knowledge is stated in (`Definitions/Core/Rec.lean`): how provers run in turn on
-one tape, and how their simulators run in turn against one black-box verifier. It keeps the namespace `Claims.ZKMal`
-its proofs are written in (`Proofs/Flock/Claims/ZK/`).
-
-* Simulator programs in turn (`spBind`), an oracle program run by a simulator (`ocSP`), and the simulator's own run of a
-  prover's next message against the verifier (`spRun`).
-* **Two protocols in turn** (`Seq`): `A` for `kA x` rounds, then `B` at a statement read from `A`'s history. Its
-  simulator runs `A`'s, then, where a test `go` of `A`'s transcript holds, `B`'s program after `A`'s messages
-  (`Seq.simG`).
-* **`n + 1` sessions in turn**: their tape (`SeqTape.iter`: a session adds a guess, its own tape and a second rest for
-  the sessions before it, which `forkTape` reads) and their simulator (`iterSimG`).
-* **A run in parts** (`Layout`): a first part, then sessions back to back at statements and witnesses the history before
-  each gives (`Layout.start`), on a flat tape (`Layout.prover`); the nested tape read flat (`Layout.flatten`), and each
-  session after the parts before it as `Seq` (`Layout.seq`). A session's simulator on a slot's coin type, through a
-  bijection with its own coins (`progOf`).
-* **A public stop**: a test of the history at the first part's rounds (`fired`); once it holds the prover sends the
-  empty message (`stopP`). The simulator cuts its transcript where the stop fires (`stopIdx`, `censorSim`), and a session
-  after the stop is at the empty statement and silent (`Layout.stopped`, `stopProgB`, `silentSP`).
--/
+/-! The vocabulary a composition of zero knowledge is stated in: sessions in turn, a run in parts and a public stop. -/
 
 @[expose] public section
 
 namespace Claims.ZKMal
 
 open Claims
-
-/-! ## Simulator programs -/
 
 def spBind {α β : Type} : SP α → (α → SP β) → SP β
   | .ret a, f => f a
@@ -58,8 +35,6 @@ def spUnder {α : Type} (pre : List Msg) : SP α → SP α
   | .ret a => .ret a
   | .hash q k => .hash q fun r => spUnder pre (k r)
   | .ask as k => .ask (pre ++ as) fun b => spUnder pre (k b)
-
-/-! ## Two protocols in turn -/
 
 /-- The answer is a message, not a decision. -/
 def isMsg : Out → Bool
@@ -90,8 +65,6 @@ def Seq.simG {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg →
     if go x τA then
       spBind (spUnder (τA.map Prod.fst) (progB x (Q.sel x (histOf τA)) c.2)) fun τB => .ret (τA ++ τB)
     else .ret τA
-
-/-! ## `n` sessions in turn -/
 
 /-- **The composed tape**: the guess `j`, `A`'s and `B`'s nonces, and `A`'s first rest, with `A`'s second rest and
 `B`'s rest as the rest. `A` reads its second rest when `j < a`, so `Fork`'s two runs differ in `A`, and its first when
@@ -133,8 +106,6 @@ def iterSimG {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype 
     (go : ℕ → Msg → List (Msg × Out) → Bool) : ℕ → Simulator
   | 0 => S₀
   | n + 1 => (Q n).simG (iterSimG T₀ c NB ΩB Q S₀ CB progB go n) (CB n) (progB n) (go n)
-
-/-! ## A run in parts -/
 
 /-- **A run in parts** at each statement: a first part of `k₀ x` rounds, then sessions back to back, session `j` of
 `n x j` rounds at the statement `xs x j h`, with the witness `ws j w t₀ x h`, from the history `h` before it and the
@@ -186,8 +157,6 @@ open Classical in
 /-- **A simulator's program on coins of another type**: `S`'s at `xS` through a bijection, where there is one. -/
 noncomputable def progOf (S : Simulator) (C : Type) (xS : Msg) (c : C) : SP (List (Msg × Out)) :=
   if h : Nonempty (C ≃ S.C xS) then S.prog xS (h.some c) else .ret []
-
-/-! ## A public stop -/
 
 /-- **The stop has fired** at the history `h`: `s` holds at one of `h`'s prefixes of at most `k` rounds. -/
 def fired (s : List (Msg × Msg) → Bool) (k : ℕ) (h : List (Msg × Msg)) : Bool :=

@@ -9,24 +9,7 @@ public import Mathlib.Data.Matrix.Mul
 public import Mathlib.LinearAlgebra.Matrix.Defs
 import Mathlib.Data.Rat.Floor
 
-/-!
-# Exact integer ±1 sketches (trusted definitions)
-
-The down-projection tag: `k` rows of uniform signs, each row's inner product with the block's elements computed exactly.
-
-* **The projection** (`project`): coordinate `i` of the sketch of an integer vector `x` is `Σ_j sgn (S i j) · x j`, an
-  integer, with `sgn false = 1` and `sgn true = −1` (`sgn`, the sign bit of an E4M3 code).
-* **On sm_120's tensor cores** (`sketchWord`): one coordinate is a chain of `mma.sync` m16n8k32 E4M3 steps
-  (`Pouw.PearlC.sm120Step`, the `⟨[32], 26, −133⟩` pipeline of `verity.ml.tc`), each adding 32 products to the FP32
-  accumulator, from `+0`. The signs are the A operand, as the E4M3 codes of `±1` (`signCode`: `0x38`, `0xB8`); the data
-  are the B operand, the integers `−16 … 16` (`smallValue`), each as the E4M3 code of its value (`smallCode`). These are
-  the integers E4M3 holds without a gap: every integer it holds above 16 is even.
-* **Commit, then project** (`signMatrix`): a claimed product `C = A·B`, committed before the signs are sampled, is
-  checked as `S·C = (S·A)·B`, with `S` the `k × m` matrix of the signs.
-* **What unread elements decide** (`unreadSum`): with a row fixed, a block whose unread elements each take one of two
-  values `a_j ≠ b_j` (a bit, say) has inner product `c + Σ_j [ε_j] · v_j`, with `v_j = sgn (s j) · (b_j − a_j) ≠ 0` and
-  `ε_j` whether element `j` took `b_j`.
--/
+/-! Exact integer ±1 sketches, and their computation on sm_120's tensor cores. -/
 
 @[expose] public section
 

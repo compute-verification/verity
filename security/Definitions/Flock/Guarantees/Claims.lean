@@ -33,16 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The claims are stated (trusted)
-
-`ClaimsStated` reads every claim of `Definitions.Claims`, the shared forms of `Definitions.Core.Interaction` they
-instantiate, and their named assumptions and trusted base, so the Lean check
-records each one's text (and every definition it reads) under `reads`: a changed claim is a changed record, which
-is reported when it lands. It says nothing about the verifier. A claim leaves it when a guarantee states that claim
-at the deployed verifier, and the guarantee's own record holds the text from then on. `Nontrivial` stays: it is
-established by a test against recorded sessions (`check`'s `lean-agreement` job), not by a Lean proof.
--/
+/-! `ClaimsStated` reads every claim of `Definitions.Claims` so that the Lean check records its text; `Nontrivial`
+rests on a test against recorded sessions, not a Lean proof. -/
 
 @[expose] public section
 

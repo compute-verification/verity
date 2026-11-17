@@ -2,13 +2,7 @@ module
 
 public import Definitions.Core.Assumptions.DeviceFigures
 
-/-!
-# What a registered device can do, against the auditor's estimate
-
-`CapacityWithinEstimate`: under `DeviceWithinRegisteredFigures`, a device registration accepted can do at most the
-tolerance more than the auditor's estimate, clock and peak rate alike. So the capacity an accounting bound charges a
-registered device is the public estimate's up to its public tolerance, whatever figures the prover registered.
--/
+/-! `CapacityWithinEstimate`: a registered device can do at most the tolerance more than the auditor's estimate. -/
 
 @[expose] public section
 

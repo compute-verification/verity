@@ -4,23 +4,7 @@ public import Definitions.Flock.Accounting.Bound
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The bound with a padded level 0 (Flock ZK)
-
-Flock ZK (`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §7) hides level 0 two ways, and both change
-level 0's soundness terms:
-
-* **Per-lane padding.** Every lane's codeword encodes its message and `t` uniform coefficients, so
-  the level-0 code is `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Its radius, list
-  size, queries and mutual-correlated-agreement numerator are the base level's at `ρ'`
-  (`Level.padRadius`, `padListBound`, `padQueryError`, `padMcaA`).
-* **Extra lanes.** Each rep folds `e` extra uniform lanes into its level-0 fold with fresh coins
-  `ρ₁ … ρ_e`, after the lane rounds. Each coin is one more affine line for mutual correlated
-  agreement (`a/2^256`) and one more coin on the restarted claim (`L/2^256`) (`padFoldError`).
-
-Everything else in the rep is unchanged, with the padded list bound for level 0 (`padRepError`).
-The bound is a function of `t` and `e`, so a change to either is a parameter, not a proof.
--/
+/-! The soundness bound with Flock ZK's padded level 0, a function of the padding `t` and the extra lanes `e`. -/
 
 @[expose] public section
 
@@ -68,8 +52,6 @@ noncomputable def padMidLevelError (l l' : Level) (t e : ℕ) : ℝ :=
     + l'.listBound * ceilLog2 l.queries / qF
     + l'.listBound / qF
 
-/-- **Ligerito with the padded level 0**: the level-0 out-of-domain claim's batching coin, the
-padded level 0, then levels 1 on as `ligeritoError`. -/
 noncomputable def padLigeritoError (s : Schedule) (t e : ℕ) : ℝ :=
   match s.levels with
   | l₀ :: l₁ :: rest =>
@@ -89,7 +71,6 @@ noncomputable def padRepError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
 noncomputable def padLinkError (s : Schedule) (st : Stmt) (t : ℕ) : ℝ :=
   ((s.levels.headD default).padListBound t : ℝ) * st.nRegions * ((st.mPts : ℝ) / qF) ^ 2
 
-/-- **One table with the padded level 0**: the link points, then two reps on independent coins. -/
 noncomputable def padTableError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
   padLinkError s st t + padRepError s st t e ^ 2
 

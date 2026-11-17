@@ -3,14 +3,7 @@ module
 public import Definitions.Core.Formalism
 public import Definitions.Slowdown.Covering
 
-/-!
-# Appendix A.1: from a `(c, k)`-partition to a covering
-
-The working draft counts a proof block's operation gates and places its inputs `in(I)` outside it; a covering's
-inference block (`Slowdown.Covering.InferenceBlock`) holds its inputs among its gates. Completing each proof block with its
-inputs, `Î = I ∪ in(I)` with inputs `in(I)`, turns a `(c, k)`-partition into a covering at size `c + max_I |in(I)|` and
-the same read cap `k`, with one inference block per proof block, each computing exactly the gates of its proof block.
--/
+/-! Appendix A.1: a `(c, k)`-partition as a covering, each proof block completed with its inputs. -/
 
 @[expose] public section
 

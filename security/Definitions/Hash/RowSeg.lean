@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `sha512/row-seg/v1` over a hash (trusted)
-
-The row digest of PoUW's A rows (`verity/commitments/frame_v3/PROTOCOL.md` §6, "Segmented bit rows"), with the hash a
-parameter `G` (SHA-512 is the instance of record; the verifier's code is `Flock.HmRow.segDigest`). A row is a string of
-`ℓ` bits (`Row`). Its bytes are eight bits a byte, row bit `i` being bit `i mod 8` of byte `⌊i/8⌋`, the last byte's fill
-zero (`packBits`). It is cut into `s = ⌈ℓ/8192⌉` segments of 8192 bits, the last possibly shorter, and
-
-    Q(ℓ)       = ("verity/sha512-row-seg/v1\0" ‖ u64be ℓ ‖ u64be s ‖ u32be 1024)             zero-padded to 128 bytes
-    S(j, s, m) = ("verity/sha512-row-seg/v1/segment\0" ‖ u64be j ‖ u64be s ‖ u64be m)   zero-padded to 128 bytes
-    d_j        = G(S(j, s, m_j) ‖ segment j's bytes)
-    digest     = G(Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1))
-
-so the digest's messages bind the row's bit length `ℓ` (in `Q(ℓ)`) and each segment's (in `S`). `RowSeg.hashed` lists
-every message the digest hashed: the segments' messages, then the outer one.
--/
+/-! `sha512/row-seg/v1`, the segmented row digest over a hash `G`, which binds the row's and each segment's bit length. -/
 
 @[expose] public section
 

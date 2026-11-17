@@ -2,15 +2,8 @@ module
 
 public import Definitions.Core.TC.Pipeline
 
-/-!
-# The step semantics: `verity.ml.tc.total.tc_dot_total` on BF16 pipelines
-
-A transcription of `term.py` (`Term`, `bf16_product`, `fp32_term`, `pack_fp32`), `models.py` (`group_sum`) and
-`total.py` (`bf16_class`, `fp32_class`, `bf16_product_total`, `fp32_value`, `group_step_total`, `pack_value`,
-`tc_dot_total`), function for function and branch for branch, on the Python functions' domain: FP32 words below `2^32`,
-BF16 words below `2^16`, `k` operand pairs. The Python raises outside it; the theorems take the domain as hypotheses.
-Words are natural numbers and the bit operations are Python's (`>>>` is `>>`, `&&&` is `&`, `|||` is `|`, `^^^` is `^`).
--/
+/-! The step semantics `tc_dot_total` on BF16 pipelines, transcribed branch for branch on the Python's domain, which
+the theorems take as hypotheses. -/
 
 @[expose] public section
 

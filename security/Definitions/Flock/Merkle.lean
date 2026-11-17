@@ -4,22 +4,7 @@ public import Definitions.Hash.Basic
 public import Mathlib.Tactic.Attr.Core
 import Mathlib.Tactic.Push
 
-/-!
-# Merkle trees (`Flock.Merkle`)
-
-A level's commitment is a Merkle cap: the nodes at depth `c` of a binary tree over the columns.
-Leaf `q` is `H(encode(column q))`; a node is `H(left ‖ right)`; an opening of position `pos` is the
-column and the `d − c` siblings from the leaf up to the cap entry `pos >> (d − c)`. The hash is
-one function on byte strings (SHA-512 in the target, `ASSUMPTIONS.md`), so every collision
-is a pair of distinct byte strings with the same hash (`Hash.HasCollision`).
-
-**Salted leaves.** A leaf scheme (`Leaf`) gives each column a leaf under a salt, and binds it: for two columns and
-salts it gives two byte strings (`pair`), which collide under `H` when the columns differ and the leaves agree
-(`pair_spec`). `VerifiesL` is `Verifies` for any leaf scheme, and `Leaf.plain` is the unsalted leaf above. hm96's leaf
-(`Leaf.hm96`) binds its column with no assumption beyond `H`'s collisions: its pair is `hm96LeafPair`, and
-`hm96LeafPair_spec` is its proof field. The pair of two whole openings is in `Definitions.Flock.MerklePair`, and that
-it is a collision in `Proofs.Flock.Soundness.MerklePair`.
--/
+/-! Merkle caps and their openings (`Flock.Merkle`), and leaf schemes that bind a column under a salt (`Leaf`). -/
 
 @[expose] public section
 
@@ -27,7 +12,6 @@ namespace FlockSoundness.Merkle
 
 variable {Col D : Type}
 
-/-- A collision of a hash on byte strings: `Hash.HasCollision`. -/
 abbrev Collision (H : List UInt8 → D) : Prop := Hash.HasCollision H
 
 /-- The byte encodings a tree uses: a column (its elements, 16 bytes each) and a digest. Both are
@@ -53,14 +37,10 @@ def walk : ℕ → D → List D → D
   | _, acc, [] => acc
   | idx, acc, sib :: rest => walk (idx / 2) (up H E idx acc sib) rest
 
-/-- The cap entry an opening of `pos` reaches, starting from the leaf `H(encode column)`. -/
 def reach (pos : ℕ) (column : Col) (sibs : List D) : D := walk H E pos (H (E.col column)) sibs
 
-/-- An opening verifies: it reaches the cap entry `pos >> (d − c)` (`Flock.Merkle`). -/
 def Verifies (cap : ℕ → D) (depth : ℕ) (pos : ℕ) (column : Col) (sibs : List D) : Prop :=
   sibs.length = depth ∧ reach H E pos column sibs = cap (pos / 2 ^ depth)
-
-/-! ## Leaf schemes: salted leaves (hm96) -/
 
 /-- **A leaf scheme**: a column's leaf under a salt of type `S`, and for two columns and salts the two byte strings
 `pair` that collide under `H` when the columns differ and the leaves agree. The pair is a function of the two columns
@@ -115,10 +95,8 @@ def hm96LeafPair (K : Hm96Key) (c : Col) (y : List UInt8) (c' : Col) (y' : List 
     if y = y' then (E.col c, E.col c') else (K.saltPrefix ++ y, K.saltPrefix ++ y')
   else (hm96LeafIn H E K c y, hm96LeafIn H E K c' y')
 
-/-- **hm96's leaf binds its column**, with no assumption beyond `H`'s collisions: when two different columns have one
-leaf, `hm96LeafPair` is a collision. The two outer inputs collide when `b ‖ c` differ, the salt hash's inputs when the
-salts differ, and the inner hash's when the salts agree (then the masks agree, so the `x`s do). It uses only the fixed
-lengths, and that `x ↦ x ⊕ M·y` is injective for a fixed `y`. -/
+/-- hm96's leaf binds its column with no assumption beyond `H`'s collisions. It uses only the fixed lengths, and that
+`x ↦ x ⊕ M·y` is injective for a fixed `y`. -/
 theorem hm96LeafPair_spec (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) (c c' : Col) (y y' : List UInt8)
     (hc : c ≠ c') (h : hm96Leaf (H := H) (E := E) K c y = hm96Leaf (H := H) (E := E) K c' y') :
     Hash.Collision H (hm96LeafPair H E K c y c' y').1 (hm96LeafPair H E K c y c' y').2 := by

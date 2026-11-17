@@ -6,89 +6,8 @@ public import Definitions.ResourceAccounting.Gates.Codec
 public import Definitions.ResourceAccounting.Requirement
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Carriers: device memory whose post-seed contents are a circuit's values (trusted)
-
-A verbatim device (`RateAuditSketch.lean`) obtains a store sector by holding it on chip, reading it from device memory,
-taking it over the side link or rebuilding it. Stacking is a way to rebuild: a carrier, device memory whose contents
-were chosen after the seed (a KV page the audit credits, say), holds other blocks' encodings, and the device decodes
-them from it instead of reading them. In the verbatim class a sector obtained by computing rather than by reading it at
-its position is a `rebuild`, so a carrier's sectors count in a pass's rebuilds. This file is a carrier's vocabulary;
-`Definitions/Poub/Guarantees/Stacking.lean` bounds what carriers hold and charges it in every pass.
-
-**Provenance.** A carrier's contents are values of a circuit (the served model as an exact-integer Program). In the
-ideal encoding model the store's sectors are uniform, they are the blocks' encodings, and the circuit's values depend
-on them in two ways only:
-
-* `input x f`: `x` bits the prover feeds the circuit, any function `f` of the store (the prover knows all of it);
-* `encode t x _ f`: `x ≤ m·256` bits of tile `t`'s encoding, any `x`-bit function `f` of it, which the circuit
-  computes itself (exact-integer ops on the tile's payload, the tile's other bits among what it may hold), at a cost in
-  budgeted gates that depends only on `x`.
-
-A `Provenance` is the circuit seen through those two channels: every other gate is a function of the values so far,
-folded into the continuations, so the gates themselves are not here. It covers every value a carrier's contents
-depend on, back to values that depend on no store sector (a request's start, under the property's isolation).
-
-**A carrier** of the store sectors `carried` is a provenance whose values are those sectors, whole and as they are, at
-every store (the device's decoding is its last step).
-
-**Relayed inputs.** In the general class (`RateAuditDeployed.lean`) the prover may feed a circuit inputs that depend on
-a pass's certified stream and oracle, receipts it computed elsewhere among them: `Rate.PassProvenance` is a provenance
-whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
-sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
-
-**A carrier of a registered circuit's.** A credited KV page's payload is a registered circuit `W`'s values. Its
-carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
-in those windows of the audit, and its encodes are `W`'s nonlinear units there, its budgeted units and its data
-products (`Provenance.OfCircuit`), which `W`'s census and `Gates.productsAt` count per window.
-
-**The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
-device-memory sectors read from those tiles. With `I j` the tiles of a registered circuit's blocks, it is what a pass
-read of that circuit's data.
-
-**A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as
-the prefix: the memory map's schedule when inputs chosen after those coins move it.
-
-**Appended tiles.** The registration is append `0`, whose blocks are keyed under the seed alone, so their keys are fixed
-for the registration: the weights, and the filler a KV pool starts with. Every later append keys its blocks under its
-own coin, and a re-key appends a block again under a fresh one. A pass's appended tiles (`appendedTiles`) are those its
-layout puts at positions of appends after the registration, and `Chip.rebuildsIn` counts a program's rebuilds of
-sectors in a set of tiles. The stacking premise charges carriers with the rebuilds of appended tiles only.
-
-**The lifetime cap.** PoUB refuses a plan holding a block of an append that joined a window `L` or more
-before (its `lifetime`; `Properties.Poub.LifetimeCapped`). An append joins the window being filled at the first
-pass after it, so its coin was flipped after every pass of the windows before. `LifetimeCapped layout joined L` is the
-game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
-to `joined t + L − 1`. The game flips every append's coin with the codec, so `joined` is the game's only record of when.
-
-**A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
-(`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
-the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
-passes' ticks (`Placement.executionPhaseTicks`). On one clock with a placed execution's other windows (compute accounting's
-`region` over ticks), they say which of a device's ticks a pass and a window take. `Placement.Deadlines` asks that no
-device tick be in two windows or in two passes of one window.
-
-**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
-(`Definitions/ResourceAccounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
-computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
-
-**The append-coin rule.** The audit appends blocks during a session (a KV page), and poub's PROTOCOL.md
-(§3–§4) orders each append's choices before its encoding. The append's root commits its blocks' digests `d_j`, and only
-then does the verifier flip the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
-c_a)`. The registration is the first append, and its coin is the codec seed. So the writers' choices for an append
-(its payloads, their padding, the run inputs behind them, how many blocks, the schedule up to it) are a function of the
-codec and the coins of the appends before it, and the codec encodes its blocks from those choices and the coins
-(`appendCoinBlocks`). Which blocks a pass reads, its plan, is a layout of positions that no encoding chooses: the
-memory map's schedule, which may depend on the session's coins before the pass.
-
-**A store per pass.** The store a pass certifies is the one resident going into the step the pass is bound to, and it
-may depend on the session's coins flipped before it. A pass's `SketchPrefix` is those coins: every earlier window's, its
-own window's signs, and the window's earlier passes. Pass `j`'s store is the append-coin rule's at its prefix
-(`coinStore`, `programmed`), and a window's correct receipts and reads are counted pass by pass, each on its own store
-(`correctOn`, `readsOn`). With one store for every pass they are `correctAll` and `reads`. The audit rule behind the
-prefix: a block appended after a pass's seed is in no plan of that pass, so a pass's store doesn't depend on its own
-coins.
--/
+/-! Carriers, device memory whose post-seed contents are a circuit's values, and the vocabulary stacking charges them
+in. -/
 
 @[expose] public section
 
@@ -314,7 +233,6 @@ def inputs (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance 
   | input x f k => (k (f E R O)).inputs E R O + x
   | encode j _ _ f k => (k (f (E j))).inputs E R O
 
-/-- The bits encoded: `x` per `encode` step of `x` bits. -/
 def encoded (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
   | done _ => 0
   | input _ f k => (k (f E R O)).encoded E R O

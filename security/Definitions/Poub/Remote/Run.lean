@@ -3,52 +3,8 @@ module
 public import Definitions.Poub.Remote.Node
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# A run of PoUB, and the routes its guarantees compose (trusted)
-
-A run of PoUB on node `N` with parameters `a`, over the audit's coins `Ω` (the verifier's seeds σ_t, its
-samples and the oracle), uniform (`Pouw.pr`). Each field is a quantity of the actual-circuit model at each outcome, over
-the audited interval `I = [t_0, t_P)`, where `t_j` is the tick of pass `j`'s oracle query `H(σ_t, root_{j−1})`, so that
-by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
-
-* `read ω m`: the bits tier `m`'s port carried to the node's compute (`ingressFrom X_N m I`); `readOut ω`, the bits
-  memory tiers outside the node carried to any compute.
-* `state ω`: `Σ_j (content of X_N at t_j + 1)`, the node's state at each pass boundary with its length bit
-  (`LengthCode`); `stateOut ω`, the same for compute outside the node.
-* `rebuilt ω`: the bits of correct receipts' words the node's compute computed rather than received, a partial
-  completion of `x` of a word's bits counting `x`; `rebuiltOut ω`, the same outside the node.
-* `rebuildWork ω`, `pouwWork ω`: the node compute's priced work at π_r over `I` outside PoUW's account, and PoUW's
-  account's (together at most `π_r(A[X_N, I])`).
-* `inBits ω`, `outBits ω`: the bits of the signals that crossed the node's boundary links, inward and outward;
-  `inBits` counts whatever crosses into `X_N`, wherever it lands (an L2 or a DDIO landing is counted too).
-* `zOut ω`: the bits of bound `z` (the prior PoUW tiles' noised outputs) determined outside the node other than over its
-  boundary; `workOut ω`, the outside compute's priced work at PoUW's pricing over `I`.
-* `other ω`: Mbw's `q`, the bits of data independent of the store, the seeds and the oracle that the node's compute
-  determines from its memory tiers over `I`.
-
-A route is a bound the run meets except with probability `δ` over the coins when the audit accepts (`Run.Holds`); a
-model row that holds on every outcome is a route at `δ = 0`. The compositions (`ResourceAccounting.SecurityProofs.Remote`)
-compose them by a union bound; each route is proved for the runs its game or the actual circuit realizes:
-
-* `Sampled ε`: correct receipts cover `(1 − ε) · C` (μ_sample); the verifier checks `committed · b ≥ C` and samples.
-* `Paid`: each correct receipt's word was paid for, by a read, a held bit or a rebuild, at whatever location computed
-  it (conservation of bits, with two-tier conservation and chained passes).
-* `PaidJoint`: `Paid` with Mbw's independent data counted against the same payment (Mbw at every location).
-* `CoLocated`: the same paid at the node: a word read, held or rebuilt by the node, carried in over its boundary, or
-  computed outside from a `z` carried out (`b / z_b` per bit) or computed there. Only the statement without Identity
-  takes it.
-* `ChipState`: `state ≤ P · (M_N + 1)` (the Memory row and `LengthCode`; B3's charge at each `t_j`).
-* `Rebuild`: `rebuilt · c_word ≤ b · rebuildWork`: rebuilding `x` bits takes at least `x · c_word / b` work at π_r
-  (WorkHardness in partial-completion form).
-* `Fit W_r`: the rebuild fits at π_r beside `W_r`, `W_r + rebuildWork ≤ Φ_r · T`. At `W_r = 0` it is the Compute row
-  alone (`δ = 0`); at `W_r > 0` it needs W (`Assumptions.ComputeAdditive`) and `Certified W_r`.
-* `Certified W_r`: PoUW's account did at least `W_r` at π_r (PoUW's per-run guarantee at π_r, `ComputeSoundPerRun`).
-* `Links`: the boundary's signals are within `β_in · T` and `β_out · T` (the Links row).
-* `Ports`: each tier's port is within `β_m · T` (the Links row at each tier's port).
-
-`Rebuild` and `Fit` are the rebuild's route as a fit at π_r. Sequential speed's rebuild clause, that no word is rebuilt
-within a pass, is the other route; each guarantee names the route it takes.
--/
+/-! A run of PoUB on a node, as the actual-circuit model's quantities over the audited interval, and the routes its
+guarantees compose. -/
 
 @[expose] public section
 
@@ -56,7 +12,6 @@ namespace ResourceAccounting.Remote
 
 /-- A run of PoUB on node `N` with parameters `a` over coins `Ω`. -/
 structure Run {τ : Type} (N : Node τ) (a : Audit) (Ω : Type) where
-  /-- the verifier's verdict -/
   accepts : Ω → Prop
   /-- the receipts the prover committed to, over all passes; the verifier checks `committed · b ≥ C` -/
   committed : Ω → ℕ
@@ -125,8 +80,6 @@ def CoLocated (δ : ℝ) : Prop := r.Holds δ fun ω => (r.correct ω * a.b : �
 share the payments at every location, up to `λ` bits a pass. -/
 def PaidJoint (δ : ℝ) : Prop := r.Holds δ fun ω => r.other ω + r.correct ω * a.b ≤ r.paid ω + a.P * a.lam
 
-/-- **ChipState** (the Memory row, with the length bit): the node's state at the pass boundaries is at most
-`P · (M_N + 1)`. -/
 def ChipState (δ : ℝ) : Prop := r.Holds δ fun ω => r.state ω ≤ a.P * (N.chip + 1)
 
 /-- **Rebuild** (WorkHardness, partial completion): `x` rebuilt bits cost the node `x · c_word / b` at π_r. -/
@@ -139,10 +92,8 @@ def Fit (Wr δ : ℝ) : Prop := r.Holds δ fun ω => Wr + r.rebuildWork ω ≤ N
 /-- **Certified** (PoUW's per-run guarantee at π_r): PoUW's account did at least `W_r` at the rebuild pricing. -/
 def Certified (Wr δ : ℝ) : Prop := r.Holds δ fun ω => Wr ≤ r.pouwWork ω
 
-/-- **Links** (the Links row): the signals over the node's boundary are within its links' capacity. -/
 def Links (δ : ℝ) : Prop := r.Holds δ fun ω => r.inBits ω ≤ N.linkIn * a.T ∧ r.outBits ω ≤ N.linkOut * a.T
 
-/-- **Ports** (the Links row at each tier's port): each tier's reads are within its calibrated ceiling. -/
 def Ports (δ : ℝ) : Prop := r.Holds δ fun ω => ∀ m, r.read ω m ≤ N.ceil m * a.T
 
 end Run

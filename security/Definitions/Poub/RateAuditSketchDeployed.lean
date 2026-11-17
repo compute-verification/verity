@@ -2,22 +2,7 @@ module
 
 public import Definitions.Poub.RateAuditSketch
 
-/-!
-# A deployed session of verbatim sketch receipts (trusted)
-
-This is the session form of `RateSketch.Prover`, the verbatim-sector model. A window samples one tensor-sketch signs
-matrix, then runs `P` causal passes. Each pass may grind among `G` independent oracle candidates; its device may depend
-on the earlier passes' coins and on the candidate, while the pick may also depend on the store, the signs and the whole
-candidate family. After all passes the window samples `d` receipts from its `P·N` receipts. A session has `n` causal
-windows on one store.
-
-The model keeps the restriction proved by `RateAuditTensorSketchRank`: device memory, on-chip state, the side link and
-rebuilding deliver sectors whole and verbatim. A precomputed sketch table is not a device of this type.
-
-A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummaryRun`): one
-session for each value of the summary, a pass told `s` running the devices and the pick of session `s`. A prover that
-steers its passes' layout knows the summary it steered by, and its devices may follow it.
--/
+/-! A deployed session of verbatim sketch receipts; a precomputed sketch table is not a device of this type. -/
 
 @[expose] public section
 

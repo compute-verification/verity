@@ -2,38 +2,8 @@ module
 
 public import Definitions.Poub.Assumptions.RemoteHeld
 
-/-!
-# The memory a PoUB session shows held (trusted)
-
-What an accepted PoUB session certifies about the node's memory, over its registered store of `N` blocks, at
-each outcome of the audit's coins (a per-run reading): the probability that the session is accepted and the bound
-fails is at most the premises' errors summed. These are the protocol's declared memory line (`PROTOCOL.md` §7,
-"Declared outputs"; `poub/ledger.py`), at `X = s/E + β` blocks a tick brought back by rebuilds and the
-node's disks, and `B = B_r + B_d` blocks at once beyond that rate, one maximal rebuild batch and one maximal disk read:
-
-* **Held**, the snapshot: the registered blocks in node memory at the start of each of the `P` credited passes,
-  summed over them, are at least `Σ_p |plan_p| − W − (X·(e − s₀) + B) − P·S`. Every registered block a pass reads
-  correctly was in node memory or on a chip at its start (at most `S` on chips), or came back during the pass (at most
-  `X·(e − s₀) + B` over all of them, the passes running in order inside `[s₀, e]`); the rest are among the `W` wrong.
-* **HeldOverTime**, for a paced session: the registered blocks in node memory at each tick of the credited span
-  `[e_0, s_C)` of length `Σ`, summed over it, are at least `Σ·(N − S) − 2·L·(X·(Σ + 2·L) + B) − fill(W)`. A block
-  absent between two of its correct reads is either brought back, ending an absence of at most `2·L` beyond the groups
-  whose passes read it wrong, or read wrong in every pass of each group it is absent across, each wrong receipt of
-  group `g` accounting for at most `v_g` ticks (`Pace.rate`, `Pace.fill`).
-* **HeldOverTimeLinks**: the same without Identity, the node's boundary links charged at their ceiling `β_l` and one
-  link burst `B_l`, at `X = s/E + β + β_l` and `B = B_r + B_d + B_l`.
-
-Known limits, each a premise a real node may fail rather than a gap in the bound:
-
-* Whole blocks. The trace moves whole blocks: `Routed`, `Disks` and `SquaringCeiling` count blocks, and `SketchBound`
-  needs a block whole in node memory or on a chip at one tick of its pass. A node that keeps part of each block and
-  moves the rest (half of every block read back from its disks, a block's halves streamed in at different ticks) is
-  no instance of the trace, though the bound holds of it in bytes with the same numbers.
-* A fixed `W`. `LiveCoins` takes `W` fixed before the coins, while the openings' pooled bound (`audit.pooled`) is a
-  function of the record: the prover sizes each window after the earlier windows' coins. `HeldSampled` and its
-  time-held forms (`Definitions.Poub.Guarantees.RemoteDraw`) state these lines at the record's own pooled bound, with
-  `LiveCoins` derived from the deployed opening sample.
--/
+/-! The memory an accepted PoUB session shows held (`Held`, `HeldOverTime`, `HeldOverTimeLinks`), for a node that moves
+whole blocks. -/
 
 @[expose] public section
 
