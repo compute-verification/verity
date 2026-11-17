@@ -113,6 +113,13 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
                                   "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof,
-                                  "prover_batch": r.prover_batch,
+                                  "prover_batch": r.prover_batch, "prover_device": prover_device(r.device),
                                   **({"build_cache": r.build_cache} if build else {})}})
     return out
+
+
+def prover_device(device: str) -> str:
+    """The device a point's prover ran on, from the table's device column: ``processors`` where its output states the CPU,
+    else the column's own words. A member's card is the one the workload was served on, not this."""
+
+    return "processors" if device.startswith("CPU") else device

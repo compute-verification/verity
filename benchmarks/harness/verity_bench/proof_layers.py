@@ -52,6 +52,7 @@ from verity_bench.proof_layers_print import (
     document,
     has_number,
     measured,
+    prover_device,
     render,
 )
 from verity_bench.proof_layers_result import (
@@ -104,6 +105,7 @@ __all__ = [
     "locate",
     "measured",
     "per_unit",
+    "prover_device",
     "read",
     "read_a5",
     "read_layers_sh",
