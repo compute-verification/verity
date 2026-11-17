@@ -9,7 +9,7 @@ at a rate. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 theorem num_div_den_nonneg (i : Instance) : (0 : ℝ) ≤ (i.num : ℝ) / i.den :=
   div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
@@ -43,4 +43,4 @@ theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=
     Slowdown.SecurityProofs.ThreadedThrottledDarkSlots_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T σ dd e M
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

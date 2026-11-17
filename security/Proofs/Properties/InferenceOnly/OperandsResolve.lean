@@ -23,7 +23,7 @@ import Mathlib.Tactic.ReduceModChar
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.OperandsResolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.OperandsResolve
 
 open Flock.Program
 
@@ -443,4 +443,4 @@ theorem operandsResolve_of (hB : Resolve.BodiesOk) : Walk.OperandsResolve := by
   rw [hops]
   exact fun h => by cases h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.OperandsResolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.OperandsResolve

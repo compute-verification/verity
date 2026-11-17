@@ -3,7 +3,7 @@ module
 public import Definitions.Slowdown.BitView
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Assumptions.Cover
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import Properties.InferenceOnly.Desc.Verdict
 
 /-! A verdict of compliance of the check of record carries the cover theorem's factor, under named assumptions the
@@ -11,7 +11,7 @@ check does not see. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -40,9 +40,9 @@ def CoverTrained (j out : Json) : Prop :=
 
 /-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
 circuit the declaration contains, under the cover theorem's premises on its bit view and its registered information free
-of the reference training circuit's fresh input. On every verdict of `InferenceOnlyCheck.Theta.evaluate`, the verdict is
+of the reference training circuit's fresh input. On every verdict of `InferenceOnlyVerifier.Theta.evaluate`, the verdict is
 `CoverTrained` on every expansion. -/
 def CheckedCoverTraining : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → OnExpansions CoverTrained j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

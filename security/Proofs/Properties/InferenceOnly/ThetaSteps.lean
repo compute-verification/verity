@@ -2,15 +2,15 @@ module
 
 public import Properties.InferenceOnly.Theta
 
-/-! What each step of `InferenceOnlyCheck.Theta.evaluate` establishes when it returns. -/
+/-! What each step of `InferenceOnlyVerifier.Theta.evaluate` establishes when it returns. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps
 
 open Lean (Json)
 open Flock.Program (Ty)
-open InferenceOnlyCheck.Theta
+open InferenceOnlyVerifier.Theta
 
 theorem list_mapM_ok_get {α β ε : Type} [Inhabited α] [Inhabited β] (f : α → Except ε β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length ∧ ∀ n < l.length, f l[n]! = .ok ys[n]!
@@ -371,4 +371,4 @@ theorem provenanceHeld_of (j tr out : Json) (h : Theta.evaluate j tr = .ok out)
   exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
     by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, e', he', her'⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps
+end InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps

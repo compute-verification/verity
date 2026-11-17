@@ -12,7 +12,7 @@ leaf's width. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
@@ -24,15 +24,15 @@ theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep
   rw [hn]
   exact run_one h n
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row)
-open InferenceOnlyCheck.Record.SecurityProofs (ranges_spec)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Record.SecurityProofs (ranges_spec)
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 theorem read_wide {P : Prog} (hP : ReadProg P) :
     (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧
@@ -76,7 +76,7 @@ theorem extract_get (ws : Array ℕ) (a b l : ℕ) (hl : l < (ws.extract a b).si
   rw [getElem!_pos (ws.extract a b) l hl, getElem!_pos ws (a + l) h2, Array.getElem_extract]
 
 theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyCheck.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -124,7 +124,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
 
 variable {P : Prog} {ts : Array String} {rs : Array TRange} {W : Spot.Wires.Wiring}
 
-theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {l g lo hi : ℕ}
     (h : RowLeaf P rs W r l g lo hi) :
     ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ (P.defs[p]!).ret = .value (hi - lo) := by
@@ -149,7 +149,7 @@ theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
   rw [hhi, Nat.add_sub_cancel_left, he]
   exact hret
 
-theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc out l g lo hi) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo) := by
@@ -208,8 +208,8 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
     rw [hhi, Nat.add_sub_cancel_left]
     exact hret.trans (congrArg Ty.value (hsw.trans (hfl2.trans (LeafWidths.wAt_widths _ _ hl'))))
 
-theorem leafWide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem leafWide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : LeafWide P rs W :=
   ⟨fun _ _ _ _ _ h => rowLeaf_wide hP hO hrs h, fun _ _ _ _ _ _ _ _ hu ho => outLeaf_wide hP hO hrs hu ho⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

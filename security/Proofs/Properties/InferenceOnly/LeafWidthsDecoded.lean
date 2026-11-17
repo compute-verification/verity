@@ -7,7 +7,7 @@ public import Proofs.Properties.InferenceOnly.LeafWidthsBody
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
@@ -37,4 +37,4 @@ theorem decoded_wide (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rw [hrt]
   exact (hc.2 hp).2.1
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

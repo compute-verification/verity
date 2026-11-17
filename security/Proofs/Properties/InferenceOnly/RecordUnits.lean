@@ -6,7 +6,7 @@ public import Proofs.Properties.InferenceOnly.RecordJson
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Flock.TemplateQuery (Desc DDef DNode TRange isInput)
 
@@ -266,4 +266,4 @@ theorem ranges_spec {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.r
     · rfl
     · simp [Form.name] at h2
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

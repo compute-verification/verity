@@ -8,10 +8,10 @@ Definition. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyCheck.Record.SecurityProofs (Passing passOf passing_start passing_down passing_up passing_back passing_exit
+open InferenceOnlyVerifier.Record.SecurityProofs (Passing passOf passing_start passing_down passing_up passing_back passing_exit
   arg_lt)
 
 theorem seq_part (s : Seq) (hs : s = Seq.ofParts s.parts) (t : ℕ) (ht : t < s.count) :
@@ -286,4 +286,4 @@ theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
   · omega
   · exact ⟨i', j', hi', hx⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

@@ -10,7 +10,7 @@ form by its pattern's corners and residues. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0 < L)
@@ -360,4 +360,4 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
       · exact hjp _ _ h
     · exact hjp _ _ h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

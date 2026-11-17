@@ -9,10 +9,10 @@ public import Proofs.Properties.InferenceOnly.RecordServed
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record.SecurityProofs (form form_owns form_laidOut form_rates)
+open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates)
 
 theorem form_complies : Complies form := complies_of form_owns form_laidOut form_counts form_rates
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

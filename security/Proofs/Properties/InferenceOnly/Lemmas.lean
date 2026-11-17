@@ -3,14 +3,14 @@ module
 public import Properties.InferenceOnly
 public import Mathlib.Tactic
 
-/-! Each step of `InferenceOnlyCheck` characterized, from the folds over a range to `parse` and `evaluate`. -/
+/-! Each step of `InferenceOnlyVerifier` characterized, from the folds over a range to `parse` and `evaluate`. -/
 
 @[expose] public section
 
 set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog GateTable)
@@ -1316,4 +1316,4 @@ theorem evaluate_error (j : Json) (k : String) : evaluate j = .error k ↔ parse
   simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
   simp [h2, h3, h4]
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

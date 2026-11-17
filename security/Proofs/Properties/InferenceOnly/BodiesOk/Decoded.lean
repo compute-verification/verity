@@ -26,7 +26,7 @@ import Std.Data.HashMap.Lemmas
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
   Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
@@ -130,4 +130,4 @@ theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rw [((hok P.root hr).1.2 hp).1]
   exact hp0
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

@@ -9,12 +9,12 @@ public import Proofs.Properties.InferenceOnly.RecordWire
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row outerOf)
-open InferenceOnlyCheck.Record.SecurityProofs (mem_of_lookup)
+open InferenceOnlyVerifier.Record.SecurityProofs (mem_of_lookup)
 open Spot.Bits (bitsOf)
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
@@ -49,4 +49,4 @@ theorem outFits (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OutF
   rw [hA]
   exact h2.trans h1
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

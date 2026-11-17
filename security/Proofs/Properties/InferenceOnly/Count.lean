@@ -8,7 +8,7 @@ under (H) and (E). -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -29,4 +29,4 @@ theorem complies_countHE (hD : DescCountsCK) {j : Json}
   Slowdown.Cut.SecurityProofs.CountHE ι V d W val i.c i.k i.n βw βx b hw hx hb hval hshare hH hE
     (hD j hj i P d lw hp hdec hB hθ)
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

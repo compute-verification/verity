@@ -9,7 +9,7 @@ public import Spot.Bits
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record
+namespace InferenceOnlyVerifier.Properties.Record
 
 open Flock.Program (Prog Defn)
 open ResourceAccounting
@@ -67,4 +67,4 @@ noncomputable def portsOf (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock
       (outRowGate (Flock.Desc.tmpl ct).unroll d n un) ro out count words
   else none
 
-end InferenceOnlyCheck.Properties.Record
+end InferenceOnlyVerifier.Properties.Record

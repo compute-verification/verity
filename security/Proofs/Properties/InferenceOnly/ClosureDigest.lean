@@ -7,11 +7,11 @@ public import Proofs.Properties.InferenceOnly.DefinitionDigest
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open InferenceOnlyCheck.DefinitionDigest (isComposite definitionDigest closureDigest)
-open InferenceOnlyCheck.DefinitionDigest.SecurityProofs (isComposite_iff)
+open InferenceOnlyVerifier.DefinitionDigest (isComposite definitionDigest closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest.SecurityProofs (isComposite_iff)
 
 theorem forIn_inv {α β ε : Type} (l : List α) (f : α → β → Except ε (ForInStep β)) (I : β → Prop)
     (hf : ∀ a ∈ l, ∀ b r, I b → f a b = .ok r → I r.value) : ∀ b r, I b → forIn l b f = .ok r → I r := by
@@ -234,4 +234,4 @@ theorem closureDigest_spec {j : Json} {key h : String} (H : closureDigest j key 
     subst this
     exact hin.resolve_right List.not_mem_nil
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

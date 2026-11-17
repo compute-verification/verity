@@ -1,15 +1,15 @@
 module
 
 public import Properties.InferenceOnly
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 import Mathlib.Data.NNRat.Floor
 
 /-! The description-sized inference-only check's property, whose converse is not claimed:
-`InferenceOnlyCheck.Desc.evaluate` refuses some instances whose expansion `InferenceOnlyCheck.evaluate` accepts. -/
+`InferenceOnlyVerifier.Desc.evaluate` refuses some instances whose expansion `InferenceOnlyVerifier.evaluate` accepts. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -28,7 +28,7 @@ def ExpandsOwner (P : Prog) (owner owner' : Array Json) : Prop :=
   owner'.size = gates P ∧ ∀ k < owner.size, ∀ g ∈ nodeGates P k,
     (owner'[g]! = .str "input" ↔ owner[k]! = .str "input") ∧ natOf? owner'[g]! = natOf? owner[k]!
 
-/-- `j'` is the instance `j` of `InferenceOnlyCheck.Desc.evaluate` expanded: the same program, `Γ` and `α`, with θ and the owners
+/-- `j'` is the instance `j` of `InferenceOnlyVerifier.Desc.evaluate` expanded: the same program, `Γ` and `α`, with θ and the owners
 by root node expanded gate by gate. -/
 def Expands (j j' : Json) : Prop :=
   ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ ∃ theta' owner',
@@ -40,8 +40,8 @@ def DescAgreed (j out : Json) : Prop :=
   (∃ j', Expands j j') ∧ ∀ j', Expands j j' → evaluate j' = .ok out
 
 /-- **The check at the size of the description agrees with the check gate by gate.** On every instance with a verdict of
-`InferenceOnlyCheck.Desc.evaluate`, the verdict is `DescAgreed`. -/
+`InferenceOnlyVerifier.Desc.evaluate`, the verdict is `DescAgreed`. -/
 def DescAgrees : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → DescAgreed j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

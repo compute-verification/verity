@@ -9,13 +9,13 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn isInputId fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row outerOf)
-open InferenceOnlyCheck.Record.SecurityProofs (RootFirst ranges_spec)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Record.SecurityProofs (RootFirst ranges_spec)
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
 
@@ -176,7 +176,7 @@ theorem returnsOwn (hP : ReadProg P)
       rw [hbp'] at hi hj
       exact Or.inr (rowLeaf_of_param hT hS hu hi hj hij)
 
-theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
   intro tid u sc g p ops sc' hu hlo hhi hgate o ho
@@ -222,7 +222,7 @@ private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.uni
   cases r'
   simp_all
 
-theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
   obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP
@@ -239,7 +239,7 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows 
       (P.child P.rootScope rs[j]!.node m).off
     have hgx := hg g hres
     obtain ⟨q, base, count, -, hrun, -, -, -⟩ := hleaf
-    obtain ⟨-, -, hinp, -⟩ := InferenceOnlyCheck.Record.SecurityProofs.runOf_some hrun
+    obtain ⟨-, -, hinp, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.runOf_some hrun
     have hinp' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hinp
     have hmono := Resolve.offsets_mono P P.root (hL P.root hr) hrp (n + 1) (P.defs[P.root]!).body.nodes.size
       (by omega) (Nat.le_refl _)
@@ -293,4 +293,4 @@ theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → �
   intro r wt wu out hw
   exact hρ _ _ (Spot.Wires.writerOf_reads hS hw)
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

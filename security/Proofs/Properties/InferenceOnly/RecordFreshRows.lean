@@ -7,7 +7,7 @@ public import Proofs.Properties.InferenceOnly.RecordBlocks
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -51,4 +51,4 @@ def FreshRows : Prop :=
       c.rowKind ⟨x.1, x.2.1, x.2.2.1, x.2.2.2⟩ ≠ Kind.theta) →
     ∑ x ∈ F, rowBits c.f.ts c.W x.1 x.2.2.1 ≤ (summarize c).fresh
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

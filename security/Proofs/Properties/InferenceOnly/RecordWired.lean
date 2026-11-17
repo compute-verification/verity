@@ -7,7 +7,7 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
@@ -212,4 +212,4 @@ theorem laysOut_exists (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S
       exact h
     · exact fun h => ⟨p, ops, sc, hg, h⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

@@ -51,7 +51,7 @@ parts. -/
 namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Scope Ref Node Part Seq resolve resolveStep gateStep)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Properties.SecurityProofs
 open NetworkCheck.Period (ownReturns partNames)
 
 def Own (P : Prog) (d : ℕ) (n : Node) : Prop :=
@@ -99,11 +99,11 @@ theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) 
     · simp at h
   | explicit it => exact h
 
-theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyCheck.Desc.inputsAtRoot P = true) :
+theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) :
     ∀ d < P.defs.size, ∀ n ∈ (P.defs[d]!).body.nodes, n.fn ≠ P.root ∧
-      (d = P.root ∨ InferenceOnlyCheck.Desc.isInputNode P n = false) := by
+      (d = P.root ∨ InferenceOnlyVerifier.Desc.isInputNode P n = false) := by
   intro d hd n hn
-  unfold InferenceOnlyCheck.Desc.inputsAtRoot at h
+  unfold InferenceOnlyVerifier.Desc.inputsAtRoot at h
   have := Array.all_eq_true_iff_forall_mem.1 (List.all_eq_true.1 h d (List.mem_range.2 hd)) n hn
   simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, Bool.or_eq_true, beq_iff_eq, Bool.not_eq_true'] at this
   exact this
@@ -165,7 +165,7 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hL
 
-theorem gate_not_input (hin : InferenceOnlyCheck.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
+theorem gate_not_input (hin : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hkc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
     (h1 : (P.defs[P.root]!).body.offsets[k]! ≤ g) (h2 : g < (P.defs[P.root]!).body.offsets[k + 1]!)
@@ -188,7 +188,7 @@ theorem gate_not_input (hin : InferenceOnlyCheck.Desc.inputsAtRoot P = true) {k 
       rcases hd with hd | hd
       · exact absurd hd ha
       · rw [hb1]
-        simpa [InferenceOnlyCheck.Desc.isInputNode, hp] using hd
+        simpa [InferenceOnlyVerifier.Desc.isInputNode, hp] using hd
     · obtain ⟨k'', hk'', h1', h2', hinl', -⟩ := gateStep_found P g P.rootScope _ hb
       simp only [rootScope_d, rootScope_off, Nat.sub_zero] at hk'' h1' h2' hinl'
       have e : k'' = k := offsets_unique _ _ hmono hk'' hk h1' h2' h1 h2
@@ -269,7 +269,7 @@ def Down (P : Prog) (lo hi : ℕ) (s : Scope × Ref) : Prop :=
 
 section
 variable (P : Prog) (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!)
-  (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (hc : InferenceOnlyCheck.Desc.calleesFirst P = true)
+  (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (hc : InferenceOnlyVerifier.Desc.calleesFirst P = true)
 include hok hL hc
 
 theorem ret_own {d t : ℕ} (hd : d < P.defs.size) (ho : (ownReturns P)[d]! = true)
@@ -292,7 +292,7 @@ theorem ret_own {d t : ℕ} (hd : d < P.defs.size) (ho : (ownReturns P)[d]! = tr
 theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
     (∃ b, resolveStep P s = .ok (.inl b) ∧ lo ≤ b ∧ b < hi) ∨
       ∃ s', resolveStep P s = .ok (.inr s') ∧ Down P lo hi s' ∧
-        (InferenceOnlyCheck.Desc.depths P)[s'.1.d]! < (InferenceOnlyCheck.Desc.depths P)[s.1.d]! := by
+        (InferenceOnlyVerifier.Desc.depths P)[s'.1.d]! < (InferenceOnlyVerifier.Desc.depths P)[s.1.d]! := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
   obtain ⟨hd, hpr, hp, hi, hj, ⟨hns, hcall⟩, hlo, hhi⟩ := hs
   dsimp only at hd hpr hp hi hj hns hcall hlo hhi
@@ -353,17 +353,17 @@ theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
   · exact absurd hf hns
 
 theorem resolve_own {lo hi : ℕ} (sc : Scope) (r : Ref) (hs : Down P lo hi (sc, r))
-    (hdep : (InferenceOnlyCheck.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
+    (hdep : (InferenceOnlyVerifier.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
     ∃ a, resolve P sc r = .ok a ∧ lo ≤ a ∧ a < hi :=
   Walk.run_of_potential (what := "scope resolution") (Down P lo hi)
-    (fun s => (InferenceOnlyCheck.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
+    (fun s => (InferenceOnlyVerifier.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
     Flock.Steps.FUEL (sc, r) hs hdep
 
 theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) {k m j kr c : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size) (hb : ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     (hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
     (ha : (((P.defs[P.root]!).body.nodes[k]!).args[0]!).seq.parts = #[.affine false kr 0 c])
-    (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true)
+    (hin : InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).n)
     (hp0 : 0 < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params.size)
     (hj : j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[0]!).2.leaves) :
@@ -400,7 +400,7 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
   obtain ⟨-, hnokr, -⟩ := (hok P.root hroot.1).2.1 kr hkr
   have hcokr := (hok _ hfsr).1
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[kr]!).fn]!).prim = true := by
-    simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+    simp only [InferenceOnlyVerifier.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
   have hdownr := BodiesOk.down_ok _ _ hcokr hnokr x hlv
   have hlayr := ((hL P.root hroot.1) hroot.2).2.2 kr hkr
   have hs1 : resolveStep P (P.child P.rootScope k m, ⟨true, 0, j⟩) =
@@ -450,7 +450,7 @@ theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.te
   · cases hd
 
 theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkCheck.Period.inputArg P a = some kr) :
-    ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ InferenceOnlyCheck.Desc.isInputNode P (node P kr) = true := by
+    ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ InferenceOnlyVerifier.Desc.isInputNode P (node P kr) = true := by
   unfold NetworkCheck.Period.inputArg at h
   split at h <;> try (cases h; done)
   rename_i k c hl
@@ -464,7 +464,7 @@ theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : Network
     rw [hl] at e
     exact e
   · obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hn
-    show InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true
+    show InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true
     rw [getElem!_pos _ kr hlt, e]
     exact hin
 
@@ -474,11 +474,11 @@ variable {P : Prog} {s : NetworkCheck.Period.Schedule} {C : Claims.Sampling.Prog
 theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s) :
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
-      InferenceOnlyCheck.Desc.calleesFirst P = true := by
+      InferenceOnlyVerifier.Desc.calleesFirst P = true := by
   obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
   obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
   have hw := hA.laid.2.2
-  simp only [InferenceOnlyCheck.Desc.walkable, Bool.and_eq_true] at hw
+  simp only [InferenceOnlyVerifier.Desc.walkable, Bool.and_eq_true] at hw
   exact ⟨by rw [hdefs]; exact hinv.1, ⟨hr, hp⟩, (Walk.bodiesLaidOut_spec P hw.1.2).2.1, hw.1.1⟩
 
 theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
@@ -578,7 +578,7 @@ theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok 
     (by rw [show ((P.defs[P.root]!).body.nodes[k]!).args[0]! = a from ha0]; exact hparts) hin hm hp0 hjr
   have hga : gateAt P (P.child P.rootScope k m) ⟨true, 0, j⟩ = g := by unfold gateAt; rw [hres]; rfl
   rw [hga]
-  simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin
+  simp only [InferenceOnlyVerifier.Desc.isInputNode, Bool.and_eq_true] at hin
   have hlt : g < C.gates.length := by
     rw [hF.1]
     have := hmono (kr + 1) _ hkr' (le_refl _)

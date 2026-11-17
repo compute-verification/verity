@@ -8,7 +8,7 @@ public import Definitions.Slowdown.Assumptions.Threads
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -112,4 +112,4 @@ verdict is `ThrottledDarkSlots`. -/
 def ThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDarkSlots j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

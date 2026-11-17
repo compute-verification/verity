@@ -8,18 +8,18 @@ public import Proofs.Properties.InferenceOnly.RecordTemplates
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
 open Spot.RecordText (Tmpl templatesOf)
-open InferenceOnlyCheck.Record (layoutOf)
-open InferenceOnlyCheck.Record.SecurityProofs (form front_text tmplOf_spec ranges_spec)
+open InferenceOnlyVerifier.Record (layoutOf)
+open InferenceOnlyVerifier.Record.SecurityProofs (form front_text tmplOf_spec ranges_spec)
 
 theorem tmpl_index {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     {t : Tmpl} (ht : t ∈ ts) : P.index[t.tid]? = some t.defn ∧ t.defn < P.defs.size := by
   obtain ⟨tids, rs, hev, -, hmapM⟩ := templatesOf_spec hts
-  obtain ⟨r, hr, htm⟩ := (InferenceOnlyCheck.Record.SecurityProofs.Json.mapM_ok _ _ _ hmapM t).1 ht
+  obtain ⟨r, hr, htm⟩ := (InferenceOnlyVerifier.Record.SecurityProofs.Json.mapM_ok _ _ _ hmapM t).1 ht
   obtain ⟨hnode, htpl, -⟩ := (ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hev).2 r hr
   obtain ⟨hdefn, htid, -⟩ := tmplOf_spec htm
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
@@ -42,7 +42,7 @@ theorem form_layoutReads : LayoutReads form := by
 
 theorem form_provenance : Provenance form := by
   intro j tr c P pj hread hdec hparse
-  have hread' : InferenceOnlyCheck.Record.read j tr = .ok c := hread
+  have hread' : InferenceOnlyVerifier.Record.read j tr = .ok c := hread
   obtain ⟨desc, hdesc, hf, hc⟩ := read_pin hread'
   have hpj : desc = pj := hdesc pj hparse
   subst hpj
@@ -79,4 +79,4 @@ theorem form_provenance : Provenance form := by
 theorem form_pinnedOpens (hpins : DigestPins) : PinnedOpens form :=
   pinnedOpens_of hpins form_provenance form_layoutReads
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

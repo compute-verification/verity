@@ -12,7 +12,7 @@ import all Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json JsonNumber)
 open Flock Flock.Program
@@ -376,4 +376,4 @@ theorem fieldStr_eq {j j' : Json} (hj : Wf j) (hj' : Wf j') (h : JsonEquiv j j')
     (j.getObjValAs? String k).toOption = (j'.getObjValAs? String k).toOption :=
   getStr?_jsonEquiv (fieldD_jsonEquiv hj hj' h k)
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

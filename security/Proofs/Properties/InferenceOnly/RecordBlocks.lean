@@ -6,7 +6,7 @@ public import Proofs.Properties.InferenceOnly.RecordJson
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Lean (Json)
 open Spot.RecordText (Grid gridOf merged gridsOf Tmpl)
@@ -326,4 +326,4 @@ theorem gridsOf_covers {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (Stri
     subst this
     exact tiles_covers gs' 0 t'.units u h1 (Nat.zero_le u) hu
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

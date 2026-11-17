@@ -7,10 +7,10 @@ public import Proofs.Properties.InferenceOnly.ResolveRows
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyCheck.Record.SecurityProofs (batch_dims)
+open InferenceOnlyVerifier.Record.SecurityProofs (batch_dims)
 
 theorem run_one {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a : α} {b : β}
     (h : step a = .ok (.inl b)) (n : ℕ) : Flock.Steps.run what step (n + 1) a = .ok b := by
@@ -116,14 +116,14 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
 
 end
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.Record.SecurityProofs (ranges_spec batch_dims)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Record.SecurityProofs (ranges_spec batch_dims)
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -229,7 +229,7 @@ theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
   exact ⟨rs[j]!.node, m, hk, hnode, hform, hm, fun i hi => Nat.lt_of_lt_of_eq hi hargs.symm, rfl⟩
 
 theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyCheck.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
@@ -242,7 +242,7 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
   exact ⟨g, hg⟩
 
 theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyCheck.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
     {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
@@ -327,4 +327,4 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     rw [Resolve.ret_default P sc _ hbody] at hg
     exact ⟨rfl, rfl, (Except.ok.inj hg).symm, rfl, Nat.zero_add w⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

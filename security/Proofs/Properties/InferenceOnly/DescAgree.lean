@@ -27,7 +27,7 @@ import Std.Data.HashSet.Lemmas
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.DescAgree
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.DescAgree
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -746,4 +746,4 @@ theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgr
     rw [this]
     exact ⟨Iff.rfl, rfl⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

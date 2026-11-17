@@ -31,9 +31,9 @@ path = "../../../proofs/spot/verifier/lean"
 name = "pouw_verifier"
 path = "../../../resource_accounting/compute/pouw/verifier/lean/check"
 
-# The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
+# The inference-only policy: its check as a core protocol (`InferenceOnlyVerifier.Protocol`).
 [[require]]
-name = "inference_only_check"
+name = "inference_only_verifier"
 path = "../../../workload_classification/training_detection/inference_only/verifier/lean"
 
 # Integrity: SPOT in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled

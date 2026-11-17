@@ -1,13 +1,13 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 
 /-! Each part of an argument of a root node that is no input node is a run of one input node's leaves, and
 `Record.ownRows` holds the runs apart. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Flock.Program
 
@@ -255,4 +255,4 @@ theorem runs_apart {P : Prog} (h : ownRows P = true) {k i q k' i' q' : Nat}
     rw [hnk, hnk'] at hout'
     exact hout' (by simp [hu]) (by simp [hu']) _ (hmem _ i q hi hq) _ (hmem _ i' q' hi' hq') r hr r' hr' hp hp'
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

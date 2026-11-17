@@ -7,7 +7,7 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 theorem get_at (ps : Array Part) {i x : ℕ} (hi : i < ps.size) (hx : x < ps[i]!.count) :
@@ -197,4 +197,4 @@ theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Bo
         exact seqBad_sound B B.nodes.size _ ps w₂ w₃ hnn hinner hret hrefs hres
   · exact absurd (m_pure h).1 (by simp)
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

@@ -1,13 +1,13 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Mathlib.Tactic
 
 /-! `slotOf`, a unit's slot by its template's grids, which is the record check's `RecordText.slotIn`. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 
@@ -54,4 +54,4 @@ theorem slotOf_of_mem (S : ℕ) (gs : List Grid) (u : ℕ) (hg : OneGrid gs) (g 
       rw [ite_eq_right (by omega)]
       exact ih hp.2 hmem
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

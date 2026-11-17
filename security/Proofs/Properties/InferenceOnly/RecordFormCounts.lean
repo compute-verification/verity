@@ -11,13 +11,13 @@ its gates or none. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record.SecurityProofs (form FreshRows fresh_rows)
+open InferenceOnlyVerifier.Record.SecurityProofs (form FreshRows fresh_rows)
 
 theorem counts_of_fresh (hFR : FreshRows) : Counts form := fun _ _ _ h _ hd u =>
   ⟨block_fresh hFR h hd u, block_gates h hd u⟩
 
 theorem form_counts : Counts form := counts_of_fresh fresh_rows
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

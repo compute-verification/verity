@@ -7,10 +7,10 @@ public import Proofs.Properties.InferenceOnly.LeafWidthsType
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program
-open InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths (wStep foldl_leaves field_le fold_wAt leaves_tuple leaves_record
+open InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths (wStep foldl_leaves field_le fold_wAt leaves_tuple leaves_record
   wAt_tuple wAt_record)
 
 theorem split_at {α : Type} : ∀ (L : List α) (f : ℕ) (hf : f < L.length), L = L.take f ++ L[f] :: L.drop (f + 1)
@@ -79,4 +79,4 @@ theorem field_leaf (t : Ty) (f l : ℕ) (hf : f < (fieldsOf t).length) (hl : l <
     rw [leaves_record, wAt_record, h2, Option.getD_some]
     exact ⟨h1, rfl⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

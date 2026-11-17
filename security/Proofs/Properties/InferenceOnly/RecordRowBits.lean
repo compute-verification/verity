@@ -9,13 +9,13 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row Grid outerOf)
-open InferenceOnlyCheck.Record (inSlot)
-open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
+open InferenceOnlyVerifier.Record (inSlot)
+open InferenceOnlyVerifier.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
 theorem bitAt_succ (ws : Array ℕ) (l : ℕ) (hl : l < ws.size) : bitAt ws (l + 1) = bitAt ws l + ws[l]! := by
@@ -199,4 +199,4 @@ theorem unitAt_fun (P : Prog) (rs : Array TRange) (tid : String) (u : ℕ) (sc s
   subst hmm
   rfl
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

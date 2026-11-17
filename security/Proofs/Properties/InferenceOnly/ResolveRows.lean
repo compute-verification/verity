@@ -8,10 +8,10 @@ two such leaves are one gate. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyCheck.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
+open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
   axisDims_of_removeAxis)
 
 theorem run_two {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b b' : β}
@@ -327,4 +327,4 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
 
 end
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

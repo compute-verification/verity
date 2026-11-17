@@ -15,12 +15,12 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Grid Tmpl gridsOf templatesOf slotIn)
-open InferenceOnlyCheck.Record.SecurityProofs (form slotOf OneGrid slotOf_of_mem gridsOf_ok gridsOf_period gridsOf_covers
+open InferenceOnlyVerifier.Record.SecurityProofs (form slotOf OneGrid slotOf_of_mem gridsOf_ok gridsOf_period gridsOf_covers
   tiles_ordered tiles_sum mem_of_lookup eq_of_nodup_map read_front finish_text front_text)
 open Lean (Json)
 
@@ -244,7 +244,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     have h3 : u.val = s := Option.some.inj h1
     omega
 
-theorem block_gates {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c)
+theorem block_gates {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) :
     ∀ u, d.D.size (d.𝓘.gates u) = (form.summarize c).gates ∨ d.𝓘.gates u = ∅ := by
   intro u
@@ -258,4 +258,4 @@ theorem block_gates {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : Infe
     d.𝓘.gates u = ∅
   exact block_gates_of (readProg_of_read h) (front_text hf) hgr hrs hO hL hDiv' u
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

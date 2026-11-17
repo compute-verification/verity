@@ -14,7 +14,7 @@ its hypotheses (`PinnedRead`), whose witnesses `PinnedReadHonest` and `PinnedRea
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Defn)
 open ResourceAccounting
@@ -283,4 +283,4 @@ theorem pinnedReadBinds : PinnedReadBinds := by
     unfold Hash.EmbeddingRead.h
     exact (ite_eq_right hlt).trans (ite_eq_right hlt).symm
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

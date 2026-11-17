@@ -7,11 +7,11 @@ public import Proofs.Properties.InferenceOnly.DigestParts
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
 
 def EntriesPin : Prop :=
   ∀ (text text' : String) (j j' : Json) (P P' : Prog) (key : String) (k k' : ℕ),
@@ -29,4 +29,4 @@ theorem digestPins_of_entriesPin (hE : EntriesPin) : DigestPins := by
   · exact .inr hC
   · exact .inl (hE text text' j j' P P' key k k' hP hP' hj hj' hA hk hk')
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

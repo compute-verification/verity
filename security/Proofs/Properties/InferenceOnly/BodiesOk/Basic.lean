@@ -32,7 +32,7 @@ import Proofs.Properties.InferenceOnly.Walk
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
 
@@ -290,4 +290,4 @@ theorem toStream_array {α : Type} (a : Array α) :
   show (a.toSubarray 0 a.size).array = a ∧ (a.toSubarray 0 a.size).start = 0 ∧ (a.toSubarray 0 a.size).stop = a.size
   simp [Array.start_toSubarray, Array.stop_toSubarray, Array.array_toSubarray]
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

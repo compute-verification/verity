@@ -29,7 +29,7 @@ import Std.Data.HashSet.Lemmas
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 def partNames : Part → Array (Bool × ℕ)
@@ -250,4 +250,4 @@ theorem order_closed (P : Prog) (h : P.orderViolation = none) :
     obtain ⟨j, hj, e⟩ := hf k hk
     have := hseen j (by omega); rwa [e] at this
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

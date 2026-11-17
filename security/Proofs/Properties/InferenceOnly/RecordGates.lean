@@ -11,12 +11,12 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope isInputId)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 def ReadProg (P : Prog) : Prop :=
   (∃ bytes, Flock.Program.decode bytes = .ok P) ∧ P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧
@@ -321,4 +321,4 @@ theorem portsNamed {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
   obtain ⟨t, -, htmpl⟩ := unit_template hrs hT hu
   exact htmpl.1 i i' hi hi' hname
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

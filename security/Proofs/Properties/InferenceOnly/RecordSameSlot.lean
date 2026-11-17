@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Mathlib.Tactic
 public import Spot.WiresSpan
 public import Proofs.Properties.InferenceOnly.RecordGrid
@@ -10,7 +10,7 @@ is sound (`sameSlot_sound`). -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Spot.Wires (Wire accum prodR)
@@ -557,4 +557,4 @@ theorem sameSlot_sound (S : ℕ) (gr gw : List Grid) (w : Spot.Wires.Wire) (hr :
       (fun b hb => by rw [List.mem_singleton.1 hb]; exact digitsOf_radix w) _ (List.mem_singleton.2 rfl)
       _ _ (row_digits w hlen hrad hcuts hlast i hi) s s' hs hs'
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

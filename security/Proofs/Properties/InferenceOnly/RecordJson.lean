@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Std.Data.TreeMap.Raw.Lemmas
 public import Std.Data.TreeMap.Raw.WF
 import all Lean.Data.Json.Basic
@@ -10,7 +10,7 @@ import all Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs.Json
+namespace InferenceOnlyVerifier.Record.SecurityProofs.Json
 
 open Lean (Json toJson)
 open Spot.Wires
@@ -339,9 +339,9 @@ theorem wiring_templates {base : Std.TreeMap.Raw String Json} (hb : base.WF) {ts
     obtain ⟨t, ht, -⟩ := hy
     exact ⟨t, ht⟩
 
-end InferenceOnlyCheck.Record.SecurityProofs.Json
+end InferenceOnlyVerifier.Record.SecurityProofs.Json
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Lean (Json toJson)
 open Flock.Program (Prog fieldsOf)
@@ -459,4 +459,4 @@ theorem piece_templates {f : Front} (hd : (f.ts.map (·.tid)).Nodup)
   · obtain ⟨t', ht'⟩ := h2 t.tid _ (List.mem_map.2 ⟨t, ht, rfl⟩)
     exact ⟨t', (h1 _ _).2 ⟨_, List.mem_map.2 ⟨t, ht, rfl⟩, ht'⟩⟩
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

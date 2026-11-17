@@ -48,7 +48,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Node Part Ty Defn)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Properties.SecurityProofs
 open NetworkCheck.Period
 
 abbrev node (P : Prog) (k : ℕ) : Node := (P.defs[P.root]!).body.nodes[k]!
@@ -67,7 +67,7 @@ def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
     ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
 
 structure Accepted (P : Prog) (s : Schedule) : Prop where
-  laid : InferenceOnlyCheck.Desc.rootLaidOut P = true ∧ InferenceOnlyCheck.Desc.inputsAtRoot P = true ∧ InferenceOnlyCheck.Desc.walkable P = true
+  laid : InferenceOnlyVerifier.Desc.rootLaidOut P = true ∧ InferenceOnlyVerifier.Desc.inputsAtRoot P = true ∧ InferenceOnlyVerifier.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P
   egress_batch : (node P (egressNode P)).form = .batch ∧ (node P (egressNode P)).n = s.window
   egress_ret : (callee P (egressNode P)).ret = .tuple #[.array outBits (.value 1), rowTy s]

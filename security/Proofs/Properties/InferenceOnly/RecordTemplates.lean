@@ -8,7 +8,7 @@ public import Proofs.Properties.InferenceOnly.RecordProgram
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -44,9 +44,9 @@ theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h
                 exact hW₀
       · cases h
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog Scope Defn fieldsOf)
@@ -54,9 +54,9 @@ open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
 open Spot.RecordText (Tmpl tmplOf templatesOf outerOf)
-open InferenceOnlyCheck.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
+open InferenceOnlyVerifier.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
   finish_text front_text finish_wiring)
-open InferenceOnlyCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)
+open InferenceOnlyVerifier.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
 theorem forIn_transfer {σ : Type} {f g : ℕ → σ → Except String (ForInStep σ)}
     (hfg : ∀ k s x, f k s = .ok x → g k s = .ok x) :
@@ -325,7 +325,7 @@ theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) 
     rw [hdefn] at hr1 hr2 ho1
     exact templateOf_of hr1 hr2 ho1 (tmplOf_names hr) hrows houts
 
-theorem templates_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
+theorem templates_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     ∃ rs, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
         (c.W.templates.map (·.1)).toArray = .ok rs ∧ Templates c.f.P rs c.W := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
@@ -342,4 +342,4 @@ theorem templates_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h 
     (fun t ht => by rw [hWt]; exact hp2 t ht)
   exact ⟨rs, hrs, templates_of (readProg_of_read h) hts hrs (by rw [hWt]; exact hp1)⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

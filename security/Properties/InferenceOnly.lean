@@ -1,14 +1,14 @@
 module
 
 public import Definitions.InferenceOnly
-public import InferenceOnlyCheck.Check
+public import InferenceOnlyVerifier.Check
 
-/-! The inference-only check's properties, stated against `InferenceOnlyCheck.evaluate`: no statement takes an assumption,
+/-! The inference-only check's properties, stated against `InferenceOnlyVerifier.evaluate`: no statement takes an assumption,
 and they read the decoder, whose `Prog.gate` is `partial`, only through what it returns. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -213,4 +213,4 @@ def Witnessed (j out : Json) : Prop :=
 def Witnesses : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Witnessed j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

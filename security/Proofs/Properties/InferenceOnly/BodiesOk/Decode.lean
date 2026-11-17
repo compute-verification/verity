@@ -27,7 +27,7 @@ import Std.Data.HashMap.Lemmas
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc liftV at_ paramsOf
   from Circuits.Program
@@ -422,4 +422,4 @@ theorem statFns_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : StatSpec (n
       obtain ⟨h1, h2, -⟩ := hg _ _ _ _ _ ha hs
       exact ⟨h1, h2⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

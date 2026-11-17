@@ -7,11 +7,11 @@ sound on. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Lean (Json)
 open Spot.Wires
-open InferenceOnlyCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)
+open InferenceOnlyVerifier.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
 theorem wire_digits {j : Json} {w : Wire} (h : Wire.ofJson j = .ok w) :
     w.step.length = w.radix.length ∧ ∀ r ∈ w.radix, 1 ≤ r := by
@@ -76,4 +76,4 @@ theorem text_digits {doc : Json} {text : Wiring} (h : Spot.RecordText.wiring doc
   obtain ⟨jw, hjw⟩ := wiring_wires h w hw
   exact wire_digits hjw
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

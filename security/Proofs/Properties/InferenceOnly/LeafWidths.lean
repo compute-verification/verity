@@ -7,7 +7,7 @@ read as. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 def srcOf (B : Body) (below : ℕ) : Widths.Src :=
@@ -22,9 +22,9 @@ def BodyWide (B : Body) : Prop :=
       SeqWide (srcOf B k) ((B.nodes[k]!).args[a]!).ty ((B.nodes[k]!).args[a]!).seq) ∧
     SeqWide (srcOf B B.nodes.size) B.retType B.ret
 
-export InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk (PartInner BodyInner)
+export InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk (PartInner BodyInner)
 
 def tyOf (P : Prog) (sc : Scope) (r : Ref) : Ty :=
   if r.p then ((P.defs[sc.d]!).body.params[r.i]!).2 else ((P.defs[sc.d]!).body.nodes[r.i]!).out
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

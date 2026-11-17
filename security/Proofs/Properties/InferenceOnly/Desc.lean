@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Mathlib.Tactic
 
 /-! The arithmetic of the description-sized check's summaries, each step against the function that computes it; not
@@ -8,9 +8,9 @@ proved here: `Fresh.ReadsExact` (in `Agrees`) and `freshWidthExact` (in `Width`)
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Desc
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Desc
 
-open InferenceOnlyCheck.Desc
+open InferenceOnlyVerifier.Desc
 
 private theorem getElem!_modify' {α : Type} [Inhabited α] (xs : Array α) (j : ℕ) (f : α → α) {i : ℕ}
     (hi : i < xs.size) : (xs.modify j f)[i]! = if j = i then f xs[i]! else xs[i]! := by
@@ -115,4 +115,4 @@ theorem sum_copies (S : Finset ℕ) (lo period span cnt : ℕ) (hS : ∀ x ∈ S
   rw [Finset.sum_image fun x _ y _ h => by simpa using h]
   exact Finset.sum_congr rfl fun x hx => hw m (Finset.mem_range.1 hm) x hx
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Desc
+end InferenceOnlyVerifier.Properties.SecurityProofs.Desc

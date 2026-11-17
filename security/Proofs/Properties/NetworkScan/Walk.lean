@@ -1,7 +1,7 @@
 module
 
 public import Properties.NetworkScan
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Proofs.Properties.InferenceOnly.BodiesOk
 public import Proofs.Properties.InferenceOnly.OperandsResolve
 public import Proofs.Properties.InferenceOnly.ReadsExact
@@ -15,7 +15,7 @@ namespace Properties.NetworkScan
 
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    InferenceOnlyCheck.Desc.bodiesLaidOut P = true →
+    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true →
     ∀ k < (P.defs[P.root]!).body.nodes.size, ∀ m < ((P.defs[P.root]!).body.nodes[k]!).members,
       (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
       ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan →
@@ -32,7 +32,7 @@ end Properties.NetworkScan
 namespace Properties.NetworkScan.WalkProof
 
 open Flock.Program
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 inductive Below (A : Scope) : Scope → Prop
   | self : Below A A

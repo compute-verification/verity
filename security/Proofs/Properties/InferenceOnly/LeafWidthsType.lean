@@ -7,7 +7,7 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 theorem ty_induction {motive : Ty → Prop} (value : ∀ w, motive (.value w))
@@ -400,4 +400,4 @@ theorem cover_spec (t : Ty) (lo hi : ℕ) (h : lo < hi) (hh : hi ≤ t.leaves) :
         Widths.wAt t j = Widths.wAt (Widths.cover t lo hi).1 (j - (Widths.cover t lo hi).2) :=
   covers_cover t lo hi h hh
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

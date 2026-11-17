@@ -1,17 +1,17 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 
 /-! What θ's provenance check's acceptance means; what no check sees, because commitments are hiding,
 `ThetaRegistered` still assumes. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open InferenceOnlyCheck.Theta (getD strAt digest lastWith ownersOf)
+open InferenceOnlyVerifier.Theta (getD strAt digest lastWith ownersOf)
 
 /-- `log` is a registration log in R6's chain, oldest first: every record has a digest, the first record's `previous` is
 `null` (it opens the deployment), and each later record's `previous` is the digest of the record before it. -/
@@ -57,8 +57,8 @@ def ProvenanceHeld (j tr : Json) : Prop :=
       strAt run "program" = some (Flock.hexOf P.sha512) ∧ ∀ t < i.theta.size, HeldAtStart j i P log run ps t
 
 /-- **θ holds what the deployment's first record registers.** On every instance `j` and trusted input `tr` that
-`InferenceOnlyCheck.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
+`InferenceOnlyVerifier.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
 def ThetaProvenance : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → ProvenanceHeld j tr
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

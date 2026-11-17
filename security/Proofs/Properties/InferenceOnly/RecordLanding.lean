@@ -9,13 +9,13 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row Grid outerOf)
-open InferenceOnlyCheck.Record (inSlot)
-open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
+open InferenceOnlyVerifier.Record (inSlot)
+open InferenceOnlyVerifier.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
 def LeafHolds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
@@ -403,4 +403,4 @@ theorem landing_le (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : S
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 := by
   exact landing_le_of_holds P rs W S D at_ hO hA hL (leafHolds_of_leafWide hW) hR hU hN hF ρ hρ r sc hsc i hi hp
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

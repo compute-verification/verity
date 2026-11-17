@@ -1,14 +1,14 @@
 module
 
 public import Definitions.InferenceOnly
-public import InferenceOnlyCheck.Count
+public import InferenceOnlyVerifier.Count
 public import Properties.InferenceOnly
 
 /-! What an accepted count of `(c, k)`-inference blocks means; `DescCountsCK` is stated and not yet proved. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -49,4 +49,4 @@ def CountWitnessed (j : Json) : Prop :=
 def DescCountsCK : Prop :=
   ∀ j : Json, (Count.check j).getObjVal? "complies" = .ok (.bool true) → CountWitnessed j
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

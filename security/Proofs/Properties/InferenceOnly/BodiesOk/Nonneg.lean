@@ -27,7 +27,7 @@ import Proofs.Properties.InferenceOnly.Walk
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 def PartNonneg : Part → Prop
@@ -182,4 +182,4 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
     exact parsePartsIn_nonneg_step leaves args hargs n _
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

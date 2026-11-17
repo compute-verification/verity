@@ -3,7 +3,7 @@ module
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.GroupWithZero.Nat
 public import Mathlib.Order.Interval.Finset.Nat
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Proofs.Properties.Poub.Remote.Sort
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.ENatToNat
@@ -30,9 +30,9 @@ widths. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Width
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Width
 
-open InferenceOnlyCheck.Desc
+open InferenceOnlyVerifier.Desc
 
 def ivGates (L : List (ℕ × ℕ × ℕ)) : Finset ℕ := (L.flatMap fun x => List.range' x.1 (x.2.1 - x.1)).toFinset
 
@@ -357,7 +357,7 @@ theorem widthIn_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (frames :
       · rintro ⟨m, hm, b, hb, rfl⟩; exact ⟨m, hm, b, hb, rfl⟩
       · rintro ⟨m, hm, b, hb, rfl⟩; exact ⟨m, hm, b, hb, rfl⟩
     have hag' := agree_frame.1 hag
-    rw [hE, InferenceOnlyCheck.Properties.SecurityProofs.Desc.sum_copies (ivGates x.res.toList) x.lo x.period x.span x.cnt
+    rw [hE, InferenceOnlyVerifier.Properties.SecurityProofs.Desc.sum_copies (ivGates x.res.toList) x.lo x.period x.span x.cnt
       (fun b hb => by obtain ⟨y, hy, -, h2⟩ := mem_ivGates.1 hb; have := hres y hy; omega) hsp W
       (fun m hm b hb => by
         obtain ⟨y, hy, h1, h2⟩ := mem_ivGates.1 hb
@@ -1390,4 +1390,4 @@ theorem freshWidthExact_of_pis (hP : PisExact) : FreshWidthExact :=
 
 theorem freshWidthExact : FreshWidthExact := freshWidthExact_of_pis pisExact
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Width
+end InferenceOnlyVerifier.Properties.SecurityProofs.Width

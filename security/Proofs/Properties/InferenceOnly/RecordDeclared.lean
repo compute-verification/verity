@@ -8,10 +8,10 @@ rows. -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Spot.RecordText (Row Tmpl Decl Fill Inputs TableRead Opening inputsOf fillAt rect)
-open InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps (forIn_list_prefix)
+open InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps (forIn_list_prefix)
 open Lean (Json)
 
 theorem covers_iff (w : Spot.Wires.Wire) (r : Row) :
@@ -255,4 +255,4 @@ theorem opening_of_fill {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x
   obtain ⟨h1, h2, h3, h4, -⟩ := (rect_covers _ _ _ _ _ _).1 hc
   exact ⟨o, ho, h1, h2 ▸ hp, h3, h4⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

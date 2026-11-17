@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly
 public import Properties.InferenceOnly.Theta
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.DefinitionDigest
 public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
@@ -13,15 +13,15 @@ output is 1, that equal roots hold equal rows, or that the data the log's first 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record
+namespace InferenceOnlyVerifier.Properties.Record
 
 open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.Theta (getD strAt digest lastWith)
+open InferenceOnlyVerifier.Theta (getD strAt digest lastWith)
 open Spot.RecordText (Row Held outerOf)
 open Spot.Bits (bitsOf)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-- A table reader's roles, by port: `key` is the parameter that says which row is opened, `root` and `domain` the
 parameters that take the table's root and domain id, `opened` the parameters an opening registers (the row, its salt
@@ -172,7 +172,7 @@ inductive Lands (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot
   | wire (o g a : ℕ) : Feeds P rs W S g o → Lands P rs W S g a → Lands P rs W S o a
 
 /-- `D` is the wired circuit: its gates are the Program's gates no wire covers, gate `x` the Program's `at_ x`, with
-that gate's width and kind, reading where its operands land. As in `InferenceOnlyCheck.Properties.LaysOut`, operations and
+that gate's width and kind, reading where its operands land. As in `InferenceOnlyVerifier.Properties.LaysOut`, operations and
 outputs are free. -/
 def LaysOut (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (D : Verity.Circuit)
     (at_ : Fin D.N → ℕ) : Prop :=
@@ -368,11 +368,11 @@ def PinnedOpens (F : Form) : Prop :=
       (∀ k d, P.index[key]? = some k → P.defs[k]? = some d → Opens P k ∧ F.layout d = F.layout d₀) ∨
         Collides j₀ pj key
 
-end InferenceOnlyCheck.Properties.Record
+end InferenceOnlyVerifier.Properties.Record
 
-namespace InferenceOnlyCheck.Guarantees
+namespace InferenceOnlyVerifier.Guarantees
 
-open InferenceOnlyCheck.Properties.Record
+open InferenceOnlyVerifier.Properties.Record
 
 /-- **Accepting a served record gives the rate rule on its circuit**, of any check that meets the four statements
 about it: a record it reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), its summary
@@ -382,4 +382,4 @@ instance's `Γ` and `α` (`Complies`). The four are premises here, each a statem
 def ServedComplies : Prop :=
   ∀ F : Form, Owns F → LaidOut F → Counts F → Rates F → Complies F
 
-end InferenceOnlyCheck.Guarantees
+end InferenceOnlyVerifier.Guarantees

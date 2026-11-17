@@ -26,7 +26,7 @@ import Std.Data.HashSet.Lemmas
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Fresh
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Fresh
 
 open DescAgree
 open Flock.Program (Prog GateTable)
@@ -319,4 +319,4 @@ theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (
     Properties.DescAgrees :=
   Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (freshExact_of hR)
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Fresh
+end InferenceOnlyVerifier.Properties.SecurityProofs.Fresh

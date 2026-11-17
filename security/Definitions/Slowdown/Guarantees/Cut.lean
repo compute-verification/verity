@@ -48,7 +48,7 @@ def HE : Prop :=
 
 /-- **The bound under (H) and (E) on a count verdict.** A declaration that complies with `CompliesAtMost c k n`, at
 most `n` proof blocks of a `(c, k)`-partition (the verdict a published `complies` of the count of `(c, k)`-inference
-blocks gives, `InferenceOnlyCheck.Properties.DescCountsCK`), has, under `HE`'s premises on its work and no other on its circuit,
+blocks gives, `InferenceOnlyVerifier.Properties.DescCountsCK`), has, under `HE`'s premises on its work and no other on its circuit,
 `N ≤ n (k + α) + (k/2) √(n O / (β_w β_x))` (`workHE`, `α = alphaHE k (β_w β_x) b`), and its size ratio at `n` blocks
 each priced at `c` is at least `(c / |C|) (N / (k + α) - (k/2) √(O N / (β_w β_x)) / (k + α)^{3/2})`. The verdict's
 blocks of at most `c` gates each read at most `k` gates outside `θ` (`ReadsAtMost`), and both bounds grow with the

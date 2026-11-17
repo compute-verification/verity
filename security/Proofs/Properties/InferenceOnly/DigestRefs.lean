@@ -1,7 +1,7 @@
 module
 
 public import Circuits.Program
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.DefinitionDigest
 import Batteries.Tactic.OpenPrivate
 import all Lean.Data.Json.Basic
 
@@ -9,11 +9,11 @@ import all Lean.Data.Json.Basic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json JsonNumber)
 open Flock Flock.Program
-open InferenceOnlyCheck.DefinitionDigest (flatParts written)
+open InferenceOnlyVerifier.DefinitionDigest (flatParts written)
 open private natJ? from Circuits.Program
 
 def parsePart1 (j : Json) (leaves : Bool → Nat → Option Nat) : V (Array Part) :=
@@ -276,4 +276,4 @@ theorem flat_of_parse {leaves : Bool → Nat → Option Nat} {rows : Array (Arra
         refine ⟨#[j], flat_single h1o h2o, ?_⟩
         simpa using PartsRel.cons h1o h2o h .nil
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

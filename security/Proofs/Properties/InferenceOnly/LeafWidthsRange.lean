@@ -8,7 +8,7 @@ public import Mathlib.Tactic
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 theorem m_bind {α β : Type} {x : Widths.M α} {f : α → Widths.M β} {s : ℕ} {y : β} {s' : ℕ}
@@ -370,4 +370,4 @@ theorem eqRange_sound (fuel : ℕ) (t : Ty) (a : ℕ) (S : Ty) (b n w w' : ℕ) 
           exact hjp _ _ h
       · exact hjp _ _ h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

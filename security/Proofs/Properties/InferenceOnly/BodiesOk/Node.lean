@@ -26,7 +26,7 @@ import Mathlib.Tactic.ReduceModChar
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
 open private buildNode from Circuits.Program
@@ -518,4 +518,4 @@ theorem cover_of_nodeOk (c : Defn) (nd : Node) (hn : NodeOk c nd) (hp : c.prim =
           _ = t := by rw [e1, Nat.mul_comm]; exact e2
   · exact absurd (hco (.inr rfl)) (by simp [hp])
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
