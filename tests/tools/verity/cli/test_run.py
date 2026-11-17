@@ -411,14 +411,14 @@ def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
                       functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 
 
-def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None) -> tuple[int, list[dict]]:
+def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None, demo: bool = False) -> tuple[int, list[dict]]:
     path = tmp / "config.toml"
     path.write_text(K.render(cfg or config()))
     s = tmp / "state"
     s.mkdir(exist_ok=True)
     if not (s / "tools.json").exists():
         (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp))}))
-    rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True)
+    rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True, demo=demo)
     lines = (s / "record" / "verdicts.jsonl").read_text().splitlines() if (s / "record" / "verdicts.jsonl").exists() else []
     return rc, [json.loads(x) for x in lines]
 
@@ -688,6 +688,19 @@ def test_verity_run_stops_before_any_party_when_the_verifier_doesnt_build(tmp_pa
     captured = capsys.readouterr()
     assert rc == 2 and lines == [] and said(captured.out) == []
     assert "refused verifier: lake build exited 1" in captured.err
+
+
+@pytest.mark.parametrize("demo", [False, True])
+def test_a_demo_runs_the_trees_commit_and_a_deployments_own_file_names_a_mismatch_unmet(tmp_path, capsys, monkeypatch,
+                                                                                         demo):
+    ran = "b" * 40
+    monkeypatch.setattr(R, "head", lambda: ran)
+    rc, lines = run(tmp_path, registry(), demo=demo)
+    assert R.config_main(["hash", str(tmp_path / "config.toml")], REG) == 0
+    file_hash = capsys.readouterr().out.splitlines()[-1]
+    assert rc == 0 and [(x["configuration"], x["program"]) for x in lines] == [(file_hash, ran)]
+    assert (f"the program is the running tree's {ran}, not the configured {COMMIT}" in lines[0]["simulated"]) is not demo
+    assert json.loads((tmp_path / "state" / "run.json").read_text())["program"] == ran
 
 
 def test_a_dry_run_builds_nothing(tmp_path, capsys, monkeypatch):

@@ -4,8 +4,9 @@ A demo is one file: a configuration (`verity/config/v0`, `verity.config`) that `
 holds no code and is never tuned; the table it runs from is `tools/verity/cli/verity_cli/served_table.py`, which holds each
 file byte for byte (`tests/tools/verity/cli/test_onsite_served.py`), and `tools/verity/cli/verity_cli/configurations.toml`
 holds each file's hash. `verity demo NAME` is `verity run demos/NAME.toml` with an `--on` for each of the file's machines,
-every party on this one host, whose record says coins `simulated`; with no NAME it runs `onsite_compute`. Each file's
-machines are names the deploy bindings bind (`tools/verity/cli/README.md`): `prover-node` holds the developer's parties (workers, the
+every party on this one host, whose record says coins `simulated`, and the running tree's commit as the file's program,
+the record naming the file's hash and that commit; with no NAME it runs `onsite_compute`. Each file's machines are names
+the deploy bindings bind (`tools/verity/cli/README.md`): `prover-node` holds the developer's parties (workers, the
 ZK server, the prover), `gate-host` the challenger and the network attester, `auditor-host` the memory attester, the
 bandwidth verifier and the verifier, and remote's `auditor-remote` the auditor's parties off the site.
 

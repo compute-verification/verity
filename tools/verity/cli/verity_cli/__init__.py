@@ -25,7 +25,8 @@
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
     verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file, with an --on for each of its
-                                    machines unless ARGS give one; NAME defaults to onsite_compute
+                                    machines unless ARGS give one, its program the running tree's commit; NAME defaults
+                                    to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -112,7 +113,8 @@ def _runner(top: str, command: str, args: list[str]) -> int:
 
 def _demo(args: list[str]) -> int:
     """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, with ``--on`` for each of the file's machines
-    unless ``args`` name one, NAME `onsite_compute` when the first of ``args`` is a flag or there is none."""
+    unless ``args`` name one and the running tree's commit as its program, NAME `onsite_compute` when the first of
+    ``args`` is a flag or there is none."""
     name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
     config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
     if not config.is_file():
@@ -123,7 +125,7 @@ def _demo(args: list[str]) -> int:
     if "--on" not in rest:
         machines = dict.fromkeys(p["machine"] for p in tomllib.loads(config.read_text()).get("party", []))
         rest = [*(x for m in machines for x in ("--on", m)), *rest]
-    return run.run_main([str(config), *rest])
+    return run.run_main([str(config), *rest], demo=True)
 
 
 def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:

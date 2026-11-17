@@ -18,7 +18,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity graph run ID --work DIR` | one task of it run here, with its result (`verity-result/v1`) |
 | `verity graph check --local [--family F]` | the graph run serially here, uncached: the reference executor |
 | `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`), with an `--on` for each of its machines unless ARGS give one; NAME defaults to `onsite_compute` |
+| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`), with an `--on` for each of its machines unless ARGS give one, and the running tree's commit as its program; NAME defaults to `onsite_compute` |
 | `verity run CONFIG` | the parties a configuration places on the machines this host stands for, and its verdict |
 | `verity config new\|check\|hash` | write, check or hash a configuration |
 | `verity verify proof [ARGS]` | Flock's Lean verifier, the executable `lake build` writes in `verity/protocols/proofs/flock/verifier`, with ARGS as its own, in the directory you are in |

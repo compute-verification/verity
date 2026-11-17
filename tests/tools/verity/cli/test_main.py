@@ -40,18 +40,18 @@ def test_a_demo_runs_its_file_with_an_on_for_each_of_its_machines(monkeypatch, n
     from verity_cli import run
 
     started: list[list[str]] = []
-    monkeypatch.setattr(run, "run_main", lambda argv: started.append(argv) or 0)
+    monkeypatch.setattr(run, "run_main", lambda argv, demo: started.append((argv, demo)) or 0)
     assert verity_cli.main(["demo", name, "--periods", "2"]) == 0
     config = verity_cli.ROOT / "demos" / f"{name}.toml"
     machines = dict.fromkeys(p["machine"] for p in tomllib.loads(config.read_text())["party"])
     assert len(machines) > 1
-    assert started == [[str(config), *(x for m in machines for x in ("--on", m)), "--periods", "2"]]
+    assert started == [([str(config), *(x for m in machines for x in ("--on", m)), "--periods", "2"], True)]
 
 
 def test_a_demo_whose_args_name_a_machine_runs_only_that_one(monkeypatch):
     from verity_cli import run
 
     started: list[list[str]] = []
-    monkeypatch.setattr(run, "run_main", lambda argv: started.append(argv) or 0)
+    monkeypatch.setattr(run, "run_main", lambda argv, demo: started.append((argv, demo)) or 0)
     assert verity_cli.main(["demo", "remote", "--on", "prover-node"]) == 0
-    assert started == [[str(verity_cli.ROOT / "demos" / "remote.toml"), "--on", "prover-node"]]
+    assert started == [([str(verity_cli.ROOT / "demos" / "remote.toml"), "--on", "prover-node"], True)]
