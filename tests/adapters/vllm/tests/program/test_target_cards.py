@@ -12,7 +12,7 @@ from verity.device import load_card
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS
 from verity_vllm.program.predict import compiled
 
-CARD_FILES = Path(__file__).resolve().parents[5] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[5] / "calibration/hardware/cards"
 
 #: each `config.TARGET_NUM_SMS` class's card: the H200 NVL has the SXM's SM count, and every RTX PRO 6000 edition the Server Edition's
 CARDS = {"rtxpro6000": "rtx-pro-6000-server", "h200": "h200-sxm-141gb"}
