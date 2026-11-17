@@ -3,13 +3,7 @@ module
 public import Definitions.Slowdown.Slowdown
 public import Definitions.Slowdown.Threads
 
-/-!
-# The slowdown: the model's accounting, named
-
-The slowdown's statements (`Slowdown.Guarantees.SlowdownThreaded`, `SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`) take the
-model's accounting of where counted multiplications run, and the shape of the servers' windows, as premises over
-numbers. These name them. None is about the world: each is how the model counts.
--/
+/-! The model's accounting of where counted multiplications run, named as premises over numbers; none is about the world. -/
 
 @[expose] public section
 

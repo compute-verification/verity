@@ -3,36 +3,7 @@ module
 public import Definitions.Slowdown.Covering
 public import Mathlib.Basic.Real.Basic
 
-/-!
-# The covering bound's two assumptions, at one width `b` and one compression rate `r`
-
-The covering bound charges weights and activations at one rate: `b` bits per weight and per
-activation, compressible at most to a fraction `r ∈ (0, 1]` of it, so `c = r · b` bits each. The guarantee needs no
-bound on `r` or `b`: `c D > k` alone makes `c` positive.
-
-* **Parameter-hardness** (`ParameterHard`): a small subcircuit reads `c` bits outside the registered parameters for
-  every updated weight whose multiplications it completes.
-* **Activation-chaining** (`ActivationChained`): a token's activation feeding a multiplication depends, through cuts of
-  at least `c` gates, on the multiplications of many weights at that token. `𝓜*` (`chainedBlocks`) is the set of chained
-  multiplication blocks; the guarantee counts it.
-
-In a transformer each (weight, token) pair is exactly one multiplication of the forward pass, which is what
-`MulBlocks` indexes by `P ⊆ θ' × J`.
-
-**What an updated weight is.** The weight index `i : Fin nw` is abstract, so both readings below are instances of the
-guarantee and it holds under either; only whether `ParameterHard` holds with a useful `c` depends on the reading.
-* (a) `i` is a weight *gate*, each training step's version its own `i`. A block that completes products for consecutive
-  versions is handed version `t` plus small increments, so `ParameterHard` holds only with `c` at most the one-step
-  increment's entropy, a small fraction of the weight's width.
-* (b) `i` is the parameter *slot*: versions share an index, and the products counted are those from a step `t0` after the
-  commitment on. A block pays once per slot, and `c = H(θ'_{t0} | θ)`, which grows with `t0`. These docstrings take (b),
-  as it is what "θ plus what training added since the commitment" means.
-
-**One shared `c`.** With one rate, `c` is at most both a weight's entropy and an activation's width
-(`c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4), so the weights' low entropy caps what an activation is charged. The proof goes through unchanged with `c_w` in
-`ParameterHard` and `c_a` in `ActivationChained`, giving `(k / c_w)(k / c_a) + k` a block; that two-rate form is
-`Slowdown.Guarantees.CoveringBoundTwoCosts`.
--/
+/-! The covering bound's two assumptions, parameter-hardness and activation-chaining, at one width `b` and one compression rate `r`. -/
 
 @[expose] public section
 

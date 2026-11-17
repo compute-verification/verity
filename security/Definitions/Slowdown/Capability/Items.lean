@@ -2,14 +2,7 @@ module
 
 public import Definitions.Core.Formalism
 
-/-!
-# Local bounds: items, what a block holds, and budgets
-
-Information is about **items**: things a block may hold. An item has eligible **cells** (the gates holding one version
-of its value) and a **price** in bits. A **selection** picks some items and one cell each. A block **holds** a selection
-when its cells lie among the block's gates and what they read. Every information premise reaches the counting as a
-**budget**: what each block holds costs at most `h` (`HeldPriceAtMost`).
--/
+/-! Items, what a block may hold, their selections, and the budget every information premise reaches the counting as. -/
 
 @[expose] public section
 
@@ -22,7 +15,6 @@ open Verity Finset
 writes it, each a multi-bit value; an activation occurrence has one), and a **price** `price i ≥ 0`, the bits its value
 costs. -/
 structure Items (C : Circuit) (ι : Type) where
-  /-- The eligible cells of each item. -/
   cells : ι → Finset (Finset (Fin C.N))
   /-- Each item's price, in bits. -/
   price : ι → ℝ

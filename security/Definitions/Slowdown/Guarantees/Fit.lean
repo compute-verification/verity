@@ -2,16 +2,7 @@ module
 
 public import Definitions.Slowdown.Assumptions.Fit
 
-/-!
-# The inference-only policy over windows: the fit bound
-
-A window that reads at most `S` bits uses at most `S / b_w` weights under F1, so when `S < N* b_w` no window holds a
-model that reaches the target loss. Each thread's work then spans several windows, and each window it enters other than
-its start reads `w_e` bits of it under F4. Counting those entries against what the windows read bounds the counted
-multiplications with no `(d, e)`-threading at window scale. At `S ≥ N* b_w` it says nothing. `FitBoundSlots` is the same
-bound with weights counted in parameter slots, so that it applies to windows that span many optimizer steps; `FitBound`
-is its case of one slot per weight gate.
--/
+/-! The fit bound over windows, which says nothing at `S ≥ N* b_w`. -/
 
 @[expose] public section
 

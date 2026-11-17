@@ -34,15 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Proof of the joint period's PoUW guarantee from a credit in words
-
-At each value `ξ` of the other audits' coins, PoUW's coordinate of the coins is the source game's (`coin`), so the
-joint event, PoUW accepting while the compute account did less than `W`, maps into the source's (`pr_le_pr_of_equiv`):
-the verdict is the source's acceptance (`accepts_iff`), and on an accepted period whose fixed words reach the credit,
-`W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit ≤ m·p(tc)·fixed − u·p(tc)·help ≤ work` (`cert_le`, `HelpWithinCertifier`,
-`WordCostsMacs`), since `m·p(tc) ≥ 0` and `u·p(tc) ≥ 0`.
--/
+/-! The joint period's PoUW guarantee, proved from a credit in words. -/
 
 @[expose] public section
 

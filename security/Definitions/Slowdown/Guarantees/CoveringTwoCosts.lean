@@ -2,13 +2,7 @@ module
 
 public import Definitions.Slowdown.Assumptions.CoveringTwoCosts
 
-/-!
-# The covering bound at two costs: `c_w` a weight, `c_a` an activation
-
-`CoveringBound` (`Definitions.Slowdown.Guarantees.Covering`) with the weights' cost and the activations' cost apart: the
-parameter-hardness `c_w` bounds the weights a block completes, the activation-chaining `c_a` bounds its tokens. It is a
-statement beside `CoveringBound`, which is it at `c_w = c_a = r · b`.
--/
+/-! The covering bound at two costs, which is `CoveringBound` at `c_w = c_a = r · b`. -/
 
 @[expose] public section
 

@@ -4,29 +4,7 @@ public import Definitions.Slowdown.Formalism.Runs
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Tactic.FinCases
 
-/-!
-# The training formalism v2: the instances its witnesses are stated at (trusted)
-
-The instances the honest and nontrivial lemmas of `Slowdown.Formalism.Guarantees` are stated at
-(`security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`). Each is a small Boolean declaration whose gate 0 is its
-one registered input, the weight `θ`.
-
-* `Honest`, serving one token: gate 1 is a data bit `x`, gate 2 the new weight `θ' = θ ⊕ x` and gate 3 the token,
-  `θ' ∧ x`. Each gate is a block of one gate: gate 2's reads the data bit beyond `θ`, and gate 3's the data bit and the
-  new weight, its description. Fit's lemmas are stated here.
-* `Chain`, a training step and a token of three gates: gate 1 is the new weight `θ'`, a copy of `θ`, and gates 2, 3 and 4
-  the token, each a copy of the one before, a chain. `blocks` puts each gate in a block of its own, a partition into
-  inference blocks at `(c, k) = (1, 1)`; only gate 2's block computes the token from its inputs, reading the new weight,
-  and gates 3 and 4's each read the token's gate before. `whole` is one block of all four gates, which is no partition
-  into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are set by witness blocks entering the
-  token at `entry`, one entry for every block: `witnesses`, the token's three gates as one block, which reads the new
-  weight alone, one shared bit and none of the token's state; and `skipping`, gates 2 and 4, which read the new weight
-  and gate 3's value, one shared bit and one bit of the token's state, more than gate 3's block reads. The lemmas of
-  the counting lemma, Slowdown and Security are stated here, Security's with a run on the all-zero inputs that is the
-  only one of the methods considered.
-
-`silent` is the decoder that outputs nothing, so every total update is `⊤`, within `D = ⊤` bits.
--/
+/-! The small Boolean instances at which the training formalism v2's honest and nontrivial lemmas are stated. -/
 
 @[expose] public section
 

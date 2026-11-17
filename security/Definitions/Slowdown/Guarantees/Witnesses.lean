@@ -17,27 +17,7 @@ public import Definitions.Slowdown.Guarantees.CoverTraining
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Cut.Toy
 
-/-!
-# The inference-only policy's guarantees: their witnesses
-
-Each guarantee over the inference-only policy that concludes a bound is of the lock's `exclusion` kind, and has two
-witnesses at the toy circuit (`Slowdown.Capability.Toy`, with the instances of `Slowdown.Witness`), listed under the lock's
-`witnesses`. `Inference` concludes the policy at `(c, k)` (`Complies`); every other guarantee takes it at a rate
-(`CompliesRate Γ α`), and its witnesses are at `Γ = 2` and `α = 1/2`, so that the read cap `α Γ` is `1`:
-
-* `X_honest`: the guarantee's premises hold together at the toy declaration `Toy.D`, complying with its one proof block
-  of two gates, every premise a definition states written out (a bare order of numbers, such as `0 ≤ α`, is left out);
-* `X_nontrivial`: at an explicit instance, each other premise holds, one named premise fails, and so does the bound:
-  without that premise the bound says something false.
-
-The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
-reference training algorithm (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
-in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ExecutionPhasesHold`
-for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
-computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
-(`Slowdown.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
-`α₀ > 0` fails.
--/
+/-! The honest and nontrivial witnesses of the inference-only policy's guarantees, listed under the lock's `witnesses`. -/
 
 @[expose] public section
 

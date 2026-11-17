@@ -2,49 +2,7 @@ module
 
 public import Definitions.Assumptions
 
-/-!
-# The training formalism v2: its theorems
-
-The theorems of the training formalism v2 (`Definitions.Slowdown.Formalism`), §5, proved in
-`Slowdown.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
-`Slowdown.Formalism.reconstruction` and `Slowdown.Formalism.reads_split` in `security/Proofs/Slowdown/Formalism/Reconstruction.lean`.
-
-A lower bound on `ρ` is stated, as each is proved, for every partition `𝓘` of `C` into inference blocks:
-`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Slowdown.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds
-of work, its factors explicit, and it reads the upper bounds A1 gives, never best-known values:
-
-* **The counting lemma over kinds** (`Counting`, no assumption): for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K`
-  on the gates of `B_K` an inference block holds (`Caps`), and kinds `J` whose work is amortized over the partition,
-  each with a bound `Λ_J` for the whole partition (`PartitionBound`),
-  `ρ ≥ max(max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`. A cap a block is the special case: it gives the kind's bound
-  for the whole partition (`Slowdown.Formalism.partitionBound_kindBound`). The lemma reads nothing of the circuit beyond the
-  caps and the partition-level bounds. Training's slowdown code's kinds are the unreachable token work, gradient
-  reductions, update application and decoding; the token kind's cap is a theorem here from a named assumption, and the
-  others' caps are premises. The bound is a maximum: kinds whose work shares blocks are not added, which would need a
-  joint cap, `Σ_K |I ∩ B_K| / cap_K ≤ 1` for every block;
-* **the token kind's cap** (`TokenCap`): under A1 at a family `𝒲` of witness blocks and the token-work bound at
-  `cap`, the named assumption `training-token-work` (`TokenWork`: `cap` bounds the token work within A1's budget), an
-  inference block holds at most `cap` gates of a set `X` of token gates: a block with shared bits `u_I` whose work on
-  its tokens begins at the entries `e_T` holds at most the token work reachable from them, and A1 gives
-  `u_I + Σ_T a_T(e_T) ≤ k`, at the values `𝒲` sets. The cap is the assumption's, not A1's: A1 prices a block's reads
-  and says nothing of how much token work they reach. Its clean form (`TokenCapClean`): with at most `r(ν)` gates of
-  token work a bit of state, the token-work bound holds at `max_ν (k - ν) r(ν)`, the bound `(k - u) max (W / a)`;
-* **Slowdown** (`Slowdown`), the one bound: under A1 and the token-work bound,
-  `ρ ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`, the counting lemma over the kinds
-  with the token kind's cap from the token-work bound;
-* **Fit**: a partition whose every block holds at least `c - d` gates and reads within `k` gives `ρ ≤ c / (c - d)`.
-  Running `θ'` (`FitServing`), session blocks with `Δ + s τ ≤ k`; honest serving, `Δ = 0` and no decoder, has exactly
-  `ρ = 1`, one block per session (`FitHonestServing`). Training (`FitTraining`), compute blocks with `Δ + s τ ≤ k`,
-  reduction blocks with `2 Δ_grad ≤ k` and update application blocks with `Δ_t + Δ_grad ≤ k`. Fit counts the blocks'
-  gates in `C`: `c / (c - d)` is `ρ` against a circuit whose blocks each leave `d` of their `c` gates to a decoder;
-* **Security** (`Security`), under A1, the token-work bound and A2: a run of the methods considered that reaches `ℓ*`
-  through a partition into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲`
-  Slowdown's bound for it and `p` A2's floor: reaching `ℓ*` covertly costs at least `ρ̲ p H(ℓ*)`, with at most `n c`
-  available per period.
-
-The counting lemma, the token kind's cap, Slowdown, Fit's bounds and Security each have an honest and a nontrivial
-lemma (`Definitions.Slowdown.Guarantees.Formalism.Witnesses`).
--/
+/-! The theorems of the training formalism v2, §5. -/
 
 @[expose] public section
 

@@ -2,17 +2,7 @@ module
 
 public import Definitions.Slowdown.Capability
 
-/-!
-# Local bounds: caps from dependency
-
-What a block finishes, and what that costs it. Every consumer (`Slowdown.Capability.Consumers`: a use of counted products, an
-output accumulating many of them, and so on) a block finishes is either **imported** (it spends a fresh bit of the
-consumer's region) or **recomputed** (the block contains the consumer's required gates):
-
-* `ImportOrRecompute`: served weight ≤ fresh bits + recomputed weight;
-* `RecomputeByGates`: recomputed weight ≤ gates / `g`, `g` the fewest required gates of a consumer;
-* `RecomputeByState`: no recomputation when it needs more updated state than the budget.
--/
+/-! Caps from dependency: every consumer a block finishes is imported or recomputed. -/
 
 @[expose] public section
 

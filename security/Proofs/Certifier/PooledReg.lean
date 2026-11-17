@@ -7,22 +7,7 @@ public import Proofs.Certifier.PooledRegEvent
 public import Proofs.Certifier.PooledRegLeak
 public import Proofs.Certifier.PooledRegSample
 
-/-!
-# The pooled bound at the trace with the registered openings
-
-`NetTiming.pr_pooled_le` bounds a monitoring period's good event from two inputs at each execution phase. At the
-incorrect sets `WregR` both are proved: the bound on each phase's verdict from the sample and the event at `FregR`
-(`phasesMiss_of_event`), and each accepted phase's leak relation with no error (`phaseLeaks_regR`).
-
-* `pooled_of_event` is the bound from any bound `e i` on each phase's event, the probability that its run accepts with
-  a sampled proof block of its `FregR`. It takes no knowledge soundness of the proof system and no binding: a caller
-  meets the event with its own bound, the square-root form (`Compiled.ksRegR_of_sessionKS`) or one from its own
-  bounds on the three masses (`Compiled.ksRegR_of_masses`). Its event holds, beside each phase's verdict, whatever
-  else `R` says of the phase.
-* `pooledLeakRegistered` is `Guarantees.PooledLeakRegistered`: `pooled_of_event` at the square-root form, the sessions'
-  bound from the proof system's knowledge soundness (`Claims.SamplingGeneric.sessionKSOf`), with `R` the phase
-  registered as the period's and its record complete.
--/
+/-! The pooled bound at the trace with the registered openings. -/
 
 @[expose] public section
 
@@ -33,11 +18,8 @@ open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {m kV : ℕ} {Tp Sec : Type}
 
-/-- **The pooled bound from any bound on each execution phase's event**, the sample's term as `(1 - q)^Fmax`: where
-`e i` bounds the probability that phase `i`'s run accepts with a sampled proof block of its `FregR`, every phase is
-accepted with `R` outside the period's good event with probability at most `(1 - q)^Fmax + Σ e_i`. `R` is what else
-the event says of a phase, under which `hyp` gives the phase's leak relation its inputs. It takes no knowledge
-soundness of the proof system and no binding: a caller meets `hev` with its own bound on the event. -/
+/-- It takes no knowledge soundness of the proof system and no binding: a caller meets `hev` with its own bound on the
+event. -/
 theorem pooled_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A}
     (hS : ∀ y, (D y).Sessions H) {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement)
@@ -80,12 +62,6 @@ theorem pooled_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg �
   refine le_trans (Claims.Pr_mono fun ω hω => ?_) h
   exact ⟨fun i => (hω.1 i).1, fun hg => hω.2 (And.intro hg.1 fun i => hg.2 i (hω.1 i).2)⟩
 
-/-- **The leak through the network attester over a monitoring period, at the trace with the registered openings**:
-`Guarantees.PooledLeakRegistered`. Each phase's event is bounded by the square-root form
-(`Compiled.ksRegR_of_sessionKS`), the sessions' bound from the proof system's knowledge soundness; the registered
-openings give that they pass under each statement's roots and that every registered input has one (`RegOpens`); and a
-phase's layout fits, and its record is complete over its statement's steps, because its statement is registered as the
-period's. Each `e i` is not negative, since it bounds an error that is not. -/
 theorem pooledLeakRegistered : Guarantees.PooledLeakRegistered := by
   intro Coin _ _ _ A H D hA hb hS Lk K S lay k reg Dj m kV Tp Sec _ _ sw Pw ρ op x Pv hk ops obs had hops q hq0 hq1
     hrate e he hfit hcert Fmax z

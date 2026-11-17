@@ -5,12 +5,7 @@ public import Proofs.Core.Accel.Model
 import Mathlib.Data.Nat.SuccPred
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Compute additivity's capacity from the machine model 𝓜: proofs
-
-`ResourceAccounting.Guarantees.AccelRate` and `AccelAdditive`. The one step that reads 𝓜 is that units add over runs back to
-back: a period's stream is its runs' instructions one after another (`stream_cons`, `Machine.units_append`).
--/
+/-! Compute additivity's capacity from the machine model 𝓜, whose one step that reads 𝓜 is that units add over runs back to back. -/
 
 @[expose] public section
 

@@ -16,31 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The integrity audit of a server-time block is Flock's integrity audit of that block (trusted)
-
-A server-time block's SPOT audit (`Audit.sampled` of the block's period, `ResourceAccounting.PeriodRun`) is Flock's
-integrity audit of block `b` of a server's monitoring period of sessions with carried state
-(`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each a sampling block `S.W t`
-(`Flock.Guarantees.SamplingBlock`), a `--zk` session under hidden outputs with a fresh live subset sample, played by one
-adaptive prover over the whole monitoring period (`Flock.Guarantees.CarriedBlocks.run`), the state a block carries across
-a wipe read at its carried leaves, each at one value in every session that shares it.
-`RealizesIntegrityOfIntegrityBlock` ties the block's period to it: the period's sampled audit's own coins drive the
-monitoring period's game at the prover's strategy, as far as block `b`'s sampling blocks' records go, its verdict is
-verity-verify-proof's on every sampling block of the server-time block, and the claim's units and incorrect proof blocks are those
-sampling blocks'.
-
-`IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
-`δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
-guarantee, which the one theorem's SPOT target couples into the causal game (`ResourceAccounting.PeriodLive`).
-
-With no carried leaf the monitoring period's run is `Flock.Guarantees.ServerBlocks.run`
-(`Flock.Guarantees.CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous, so the
-statement reads as it did over `ServerBlocks`.
-
-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityBlockCarried`, this module
-imports them.
--/
+/-! The integrity audit of a server-time block is Flock's integrity audit of that block; this module imports Flock's definitions from its proofs package, where they still are. -/
 
 @[expose] public section
 
@@ -85,13 +61,10 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.SamplingBlockRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value (fun l => E (l.filter fun w => w.idx ∈ S.sessions b)) (S.run (strat ξ))
-  /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the period's incorrect proof blocks are its sampling blocks' (M1, the program-from-circuit correspondence) -/
   wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.SamplingBlockRec.incorrect).sum
-  /-- the partition's units are the block's sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ S.sessions b, (S.W t).n
-  /-- every unit of the partition has at least one gate -/
   gates_nonempty : ∀ u, (r.parts.gates u).Nonempty
 
 namespace Guarantees.Bridge

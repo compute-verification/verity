@@ -35,30 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The period's leak with each failure charged as it happens
-
-`monitoringPeriodLeakFails`, `monitoringPeriodLeakFailsAtMost` and `monitoringPeriodLeakCharged` are `Guarantees.MonitoringPeriodLeakFails`,
-`Guarantees.MonitoringPeriodLeakFailsAtMost` and `Guarantees.MonitoringPeriodLeakCharged`. Each is `monitoringPeriodLeakChecked` applied once a fail
-pattern and summed over the patterns, so each rests on what `Guarantees.MonitoringPeriodLeakChecked` rests on and, for the
-charged form, on the weights' sum.
-
-**At one pattern.** `checked_at_pattern` is `monitoringPeriodLeakChecked` at the secrets of `Zs` whose run has the fail pattern
-`φ`, at the pattern's operator `op φ` and registered values `ρ φ`: both are fixed before the secrets, so the theorem
-reads them as its own operator and registered values. It gives the held clause at that pattern and the count
-`#Θ · executionPhasesCount` of the pattern's secrets.
-
-**Over the patterns.** The fail patterns of exactly `j` connections, each below its bound, are among
-`failPatterns bound j` patterns (`exists_failPatterns`), so a count that holds at each pattern holds, times that
-number, over them (`encard_failsExactly_le`, by `encard_biUnion_le`): `monitoringPeriodLeakFails`. Summed over `0 … j` it is
-`monitoringPeriodLeakFailsAtMost`, whose held clause is `checked_at_pattern`'s at each run's own pattern. Under weights that sum
-to at most one, sets of at most `c j` secrets with `c j ≤ w j · T` wherever one is inhabited hold at most `T` secrets
-together (`encard_weighted_le`): `monitoringPeriodLeakCharged`.
-
-**The factor.** `failPatterns bound 0 = 1` (`failPatterns_zero`), at one bound `c` it is `C(N, j) · c^j`
-(`failPatterns_const`), and over every number of failures it sums to `∏ (bound + 1)` (`failPatterns_sum`). A fail cell
-is one of its lane's cells, so every pattern is below a bound on the schedule's cells (`failsBelow_of_cells_le`).
--/
+/-! The period's leak with each failure charged as it happens, each form `monitoringPeriodLeakChecked` at a fail pattern summed over the patterns. -/
 
 @[expose] public section
 
@@ -230,8 +207,6 @@ theorem checked_at_pattern
   rintro z ⟨hp, hz, hg⟩
   exact ⟨⟨hz, hp⟩, hg⟩
 
-/-- **`Guarantees.MonitoringPeriodLeakFails`**: `monitoringPeriodLeakChecked` at each fail pattern (`checked_at_pattern`), summed over
-the patterns of exactly `j` failures (`encard_failsExactly_le`). Its first clause is `monitoringPeriodLeakChecked`'s. -/
 theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound j
@@ -248,8 +223,6 @@ theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
   rintro z ⟨hz, hj, hb', hg⟩
   exact ⟨hj, hb', hz, hg⟩
 
-/-- **`Guarantees.MonitoringPeriodLeakFailsAtMost`**: held at each run's own pattern (`checked_at_pattern`), and
-`monitoringPeriodLeakFails` summed over `0 … j`. -/
 theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAtMost := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound j
@@ -274,8 +247,6 @@ theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAt
     rw [Nat.cast_sum, Finset.sum_mul]
     exact Finset.sum_le_sum fun i _ => (hi i).2 htap
 
-/-- **`Guarantees.MonitoringPeriodLeakCharged`**: `monitoringPeriodLeakFails` at each number of failures, under the weights
-(`encard_weighted_le`). -/
 theorem monitoringPeriodLeakCharged : Guarantees.MonitoringPeriodLeakCharged := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound w hw T htap

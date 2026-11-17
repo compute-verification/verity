@@ -4,26 +4,7 @@ public import Definitions.Slowdown.Guarantees.Capability.Budgets
 public import Definitions.Slowdown.Guarantees.Capability.Dependency
 public import Definitions.Slowdown.Capability.Toy
 
-/-!
-# Local bounds: their witnesses
-
-Each local bound has two witnesses at the toy instance (`Slowdown.Capability.Toy`), listed under the lock's `witnesses`:
-
-* `XHonest`: the bound's premises, every one, hold together at the toy, at the parameters its conclusion is read at;
-* `XNontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
-
-Each bound over a covering or a partition (the caps from dependency and the three budgets) is of the lock's `exclusion`
-kind: its `XNontrivial` states, at the toy, each of the bound's other premises, the dropped premise's failure and the
-bound's. `HeldBudget` drops description hardness and `StatHeldBudget` min-entropy hardness, at items priced above what
-the toy's values carry.
-
-The structural premises (`HeldPriceAtMost`, `Consumers.Upstream`, `OverlapWeights`, `RequiresState`) are proved at the
-toy. So are the information premises. Description and source hardness hold at deficit `1` for the two-bit value `bb` of
-gates `2` and `3`, the token `b` twice, and the recovery at ambiguity `1`. Each honest witness also proves its parameter
-spent: at deficit or ambiguity `0` the premise fails, because the toy's decoder `M` describes `11`, an honest run's
-value, in one bit, and its recovery program spends one bit picking the source. Min-entropy hardness holds at deficit `0`
-for the product's value, a uniform bit.
--/
+/-! Each local bound's honest and nontrivial witnesses at the toy instance, listed under the lock's `witnesses`. -/
 
 @[expose] public section
 

@@ -4,23 +4,7 @@ public import Definitions.Slowdown.Capability
 public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 public import Mathlib.Probability.Distributions.Uniform
 
-/-!
-# Local bounds: the toy instance their witnesses are stated at
-
-One small Boolean circuit, at which the local bounds' witnesses (`Definitions.Slowdown.Guarantees.Capability.Witnesses`) show
-each bound's premises holding together, and its conclusion failing where a premise is dropped. Four one-bit gates:
-
-* `0`, a registered input: the weight, registered as `1`;
-* `1`, an unregistered input: the token's operand;
-* `2` and `3`, each `0 ∧ 1`: the product, and a second gate computing it again.
-
-The committed declaration `R1` puts the computed gates in one proof block, a `(2, 1)`-partition (two gates, the token
-its one unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight by the token
-at gate `2`; its use is the one consumer of `K`, whose region and required gate are the token. The item `Y p` is the
-product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2` and `3`. The decoder `M` has programs of
-four lengths, and compresses: it describes `11`, the value of gates `2` and `3` when the token is set, in one bit, and
-every other two-bit string in three. The run distribution `μ` samples the token uniformly.
--/
+/-! The small Boolean circuit at which the local bounds' witnesses are stated. -/
 
 @[expose] public section
 

@@ -5,32 +5,7 @@ public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.Slowdown.Assumptions.Slowdown
 public import Definitions.InferenceOnly.Assumptions.Theta
 
-/-!
-# The slowdown: the guarantees
-
-The training-efficiency bound `η ≤ s + min(r, μ) + ν + χ` (`benchmarks/nci/tiers.py`), composed from one bound per
-source of counted multiplications. Each source's bound is a hypothesis over real numbers, the reading of a mechanism's
-guarantee or of the model's accounting:
-
-* unmonitored hardware trains at full efficiency, `M_U ≤ κ U/2`: the model's accounting, which no mechanism bounds;
-* the monitored compute residual trains at full efficiency, `M_r ≤ κ (C − W_cert)/2`: the reading, outside its error,
-  of the compute audit's covert residual (`ResourceAccounting.Guarantees.CovertResidual`, `CovertResidualPerRun`), whose other
-  accounts stay within `F·T − W_cert`;
-* the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only
-  policy's thread bound, `Slowdown.Guarantees.ThreadedThrottled`, which `SlowdownThreaded` takes as proved rather
-  than as a hypothesis;
-* incorrect proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what SPOT's sample
-  establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
-* the memory cap bounds the residual and the declared computation on the monitored servers together,
-  `M_r + M_d ≤ μ κ C/2`: `SlowdownExecutionPhases` derives it, with `μ` the memory cap and one window of rounding, from the
-  servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications: the memory cap over threads
-  (`ResourceAccounting.Guarantees.Actual.ThreadedRuntime`) at a whole-tick window `ω = L`, when one threading of the servers'
-  computation counts the residual and the declared computation together.
-
-`Slowdown` takes all five as hypotheses; `SlowdownExecutionPhases` derives the memory cap's from the windows; `SlowdownThreaded`
-also discharges the declared computation's with `ThreadedThrottled`, and `SlowdownThreadedSlots` with
-`ThreadedThrottledSlots`, weights charged per parameter slot.
--/
+/-! The slowdown's guarantees: the training-efficiency bound `η ≤ s + min(r, μ) + ν + χ`, composed from one bound per source of counted multiplications. -/
 
 @[expose] public section
 

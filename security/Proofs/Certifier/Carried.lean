@@ -41,36 +41,7 @@ import Proofs.Certifier.PooledLeak
 import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledLeak
 
-/-!
-# The leak bounds over a carried pool
-
-**One run's guarantee** (`sampledLeakCarried`). The class's run from the trace (`rLeakChecked_of`: the trace's inputs, and
-its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs and
-leaves the trace run's values at the closing gates (`rLeakCarried_of`), so `KSLinOn` moves to the relation at those rows
-as it moves to `RLeakChecked`. At a fixed opened row, a sequence accepted from it is accepted with the opening gates
-registered at its values, so the class's count there charges none of them (`encard_accSeqsCarried_le`).
-
-**One run's step** (`carried_step`). Two runs accepted with a valid run at one incorrect set, whose inputs agree off the
-checked ones and whose held values and jitter codes agree, see one observation sequence, by the class proof's induction
-over steps, and leave one row at the closing gates (`CheckedClosing`).
-
-**The count** (`encard_carried_le`). A period's observations map injectively to each run's inputs off its checked,
-registered and opening gates, its held values and its jitter code. By induction over the runs, two sequences with one
-code open one row at each run: the row the record rule names, the run before's closing row (one row, by the induction)
-or `genesis`. The opening gates then read one row, so the runs' inputs agree off the checked gates and the step applies.
-
-**The monitoring period** (`encard_pooledCarried_le`, `pooledLeakCarried`). At each pattern of restarts the count is
-`encard_pooledJoint_le` at that joint count, and the secrets whose audits all accept and that meet the good event at the
-pattern serving picked for them are in the union of those sets over the registered patterns. The escape bound is
-`pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which together give rows
-that chain at the pattern picked (`Hash.BindingProofs.rowSeg_bind`).
-
-**The empty pool** (`pooledLeakChecked_of_carried`). With no opening or closing gate, one pattern that restarts no run,
-and every row empty, a run is accepted from its row exactly when it is accepted with a valid run, every run opens the
-empty row's root, and no opening collides (`poolColl_empty`). So the period's bound there is the bound with checked
-inputs over windows that each hold a pool of their own: the escape bound loses its collision term, and the count over
-every secret meeting the good event is `encard_pooledCarried_le` at the one pattern.
--/
+/-! The leak bounds over a carried pool, from one run's guarantee to the monitoring period and the empty pool. -/
 
 @[expose] public section
 
@@ -78,9 +49,6 @@ namespace NetTiming
 
 open Claims Claims.Sampling Finset
 
-/-! ### One run -/
-
-/-- **A free input reads the advice** at an ingress over the horizon. -/
 theorem inputOf_free {L S : ℕ} {C : Prog} {lay : BoundaryGates L S} {k : ℕ} (f : ℕ → List Bool) (a : ℕ → Bool)
     {g : ℕ} (hg : g ∈ freeInputs C lay k) : lay.inputOf k ((List.range k).map f) a g = a g := by
   have hany : (List.range k).any (fun i => (lay.ingress i).contains g) = false := (Finset.mem_filter.1 hg).2.2
@@ -122,9 +90,6 @@ theorem acceptedCarried_iff {L K S : ℕ} {C : Prog} {P : Partition} {lay : Boun
   · rintro ⟨⟨a, free⟩, ha, hfree, hv, hp, hn, hacc⟩
     exact ⟨a, ha, free, hfree, hv, hp, hn, hacc⟩
 
-/-- **One run's step**: two runs accepted with a valid run at one incorrect set `F` of proof blocks of no class sampled
-`all`, whose inputs agree off the checked inputs, whose values at `F`'s committed gates agree, and whose jitter codes
-agree, see one observation sequence and leave one row at the closing gates. -/
 theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (chk : Finset ℕ) (valid : (ℕ → Bool) → Prop) (hchk : CheckedUnique C P d lay n chk valid)
     (nrow : List ℕ) (hcls : CheckedClosing C P d lay n chk valid nrow) (F : Finset ℕ)
@@ -230,11 +195,6 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
   rw [hrun, hrun']
   exact hcls _ p.1 p'.1 hf (by simp) hoff hsupp hv1 hv2
 
-/-! ### One run's guarantee -/
-
-/-- **A valid trace run gives the leak relation from the trace's rows**: `rLeakChecked_of`'s run (the trace's inputs, and
-its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs, and
-leaves the trace run's values at the closing gates. -/
 theorem rLeakCarried_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
     (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
@@ -279,8 +239,6 @@ theorem rLeakCarried_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H :
     rw [hr]
     simp only [circuitProgram, hv']
 
-/-- **The leak relation from the trace's rows gives the leak relation**: a sequence accepted with a valid run from a row
-is accepted. -/
 theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
     {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
     {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop}
@@ -292,9 +250,6 @@ theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
   obtain ⟨F, hF, a, ha, free, hfree, -, -, -, hacc⟩ := h op o hC hCov hl hD
   exact ⟨hl, hD, F, hF, a, ha, free, hfree, hacc⟩
 
-/-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
-on the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`:
-`ksLinOn_rLeakChecked`'s argument at `rLeakCarried_of`. -/
 theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
@@ -356,8 +311,6 @@ theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : D
     _ ≤ _ := encard_accSeqsChecked_le C P d lay n hfits chk valid hchk (reg ∪ prow.toFinset) ρ' δ op D
     _ = _ := by rw [Finset.union_right_comm]
 
-/-- **One carried run's leak bound**: `Guarantees.SampledLeakCarried`, from `ksLinOn_rLeakCarried` at `KSAccepted`'s
-bound (`SecurityProofs.SampledAuditAccepted`) and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
 theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid prow nrow hopen εchk Dj
   refine ⟨ksLinOn_rLeakCarried H D lay k reg valid prow nrow hopen εchk Dj
@@ -367,14 +320,8 @@ theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
   exact encard_accSeqsCarried_le s.prog P s.design (lay s) (k s) hfits (chk s) (valid s) hchk (reg s) ρ (prow s)
     (nrow s) rin δ op Dj
 
-/-! ### The period -/
-
-/-- **The count over a carried pool, at one family of incorrect sets**: the period's observations meeting the carried
-good event at the sets `F i` number at most
-`∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i ∪ prow_i)) · 2^(faultyBits_i (F i)) · Dj^k_i`. A run's code is its inputs off its
-checked, registered and opening gates, its values at its incorrect set's committed gates, and its jitter code. By
-induction over the runs, two sequences with one code open one row at each run (the row the run before left, one row by
-the induction, or `genesis`), so see one observation sequence there and leave one row (`carried_step`). -/
+/-- By induction over the runs, two sequences with one code open one row at each run, so they see one observation sequence
+there and leave one row (`carried_step`). -/
 theorem encard_carried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
@@ -505,9 +452,6 @@ theorem encard_carried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGate
             (Nat.pow_le_pow_right (by norm_num) (card_faultyGateSet_le _ _ _)))
         exact_mod_cast Finset.prod_le_prod h
 
-/-- **The count over a carried pool at one pattern of restarts**: at a sample of the coins, the secrets meeting the
-carried good event at the restarts `chains` and opened rows `genesis` number at most `PooledLeakCarried`'s count. It is
-`encard_pooledJoint_le` at `encard_carried_le`, `b` the most committed bits of one of the period's proof blocks. -/
 theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
@@ -546,13 +490,8 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
     (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
 
-/-- **The leak through the network attester over a monitoring period whose runs carry the pool**:
-`Guarantees.PooledLeakCarried`. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at its
-opening, at the pattern serving picked. Where every audit accepts, the roots the record rule names there
-(`CarriedRoots`) and those two give rows that chain, since equal roots are equal rows or a collision
-(`Hash.BindingProofs.rowSeg_bind`). The secrets whose audits all accept and that meet the good event at the pattern
-picked for them are in the union over `Cs` of those meeting it at each pattern (`Finset.set_encard_biUnion_le`), each
-counted by `encard_pooledCarried_le`. -/
+/-- Equal roots are equal rows or a collision (`Hash.BindingProofs.rowSeg_bind`), so the rows chain where every audit
+accepts. -/
 theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
   intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls Ω _ _ Conn Cell Srv Dev Z _ arr f tap run
     htrust cap Ss Zs schedOf srvOf dec hch Cs chains genesis acc hcs hroot W had rin rout e e' he q hq0 hq1 hesc hleak
@@ -597,8 +536,6 @@ theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
       (nsmul_eq_mul _ _).le)
     exact encard_pooledCarried_le lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls c.1 c.2 arr f tap run htrust
       cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω
-
-/-! ### The empty pool -/
 
 /-- **No collision at an opening of the empty pool**: the digests of the empty row hash one message, twice. -/
 theorem poolColl_empty (G : Hash.Msg → Hash.Digest) {m : ℕ} (chains : Fin m → Bool) (i : Fin m) :
@@ -654,11 +591,7 @@ theorem pooledGoodCarried_of_checked {L K S m : ℕ} {lay : AuditStatement → B
       (fun _ => []) Fmax W o :=
   ⟨h.1, fun _ => [], fun _ => [], fun _ => by simp [poolOpen], fun i => leakAtCarried_of_leakAtChecked (h.2 i)⟩
 
-/-- **The leak through the network attester over a monitoring period, with the checked inputs left out, over windows
-that each hold a pool of their own**: `pooledLeakCarried` at the empty pool, where no run opens or closes a row and the
-one pattern restarts none. There a period's good event with valid runs is its good event over the pool, every run opens
-the empty row's root, and no opening collides (`poolColl_empty`), so the escape bound is `PooledLeakAccepted`'s with
-`(1 - q)^Fmax`; the count over every secret meeting the good event is `encard_pooledCarried_le` at the one pattern. -/
+/-- `pooledLeakCarried` at the empty pool, where the escape bound loses its collision term. -/
 theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {m : ℕ}
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)

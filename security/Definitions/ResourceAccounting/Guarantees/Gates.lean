@@ -7,76 +7,7 @@ public import Definitions.ResourceAccounting.Gates.Registry
 public import Definitions.Core.Prims
 public import Mathlib.Data.Nat.Prime.Defs
 
-/-!
-# The circuit model's window, and its lower bounds: the fooling bound, the carry bound and the encode budget (trusted)
-
-The statements over the circuit model (`Definitions/ResourceAccounting/Gates`) that the stacking property's encode bound rests
-on, from the most general to the one 6a's carrier lemma takes as its `q`:
-
-* `ProvenWindow`: the property's interval analysis is sound. A circuit whose window is proven (`Proven`) is in its
-  window on every input on which its inputs and budgeted gates but gathers hold their declared intervals
-  (`DeclaredHold`; a gather's interval is derived from its column's): the window is a fact of the operand bounds, not
-  a run-time hypothesis.
-* `ClampOrWrap`, its corollary: in the window, an s8-family step's clamp and wrap give the same values, so the census
-  keys the s8·s8 (`.satfinite`) and u8·s8 (wrapped) steps to one class.
-* `Fooling`: a 2-adic fooling bound. Free gates (affine maps and s8-family steps in their window) see only the low `j`
-  bits of their operands when their outputs' low `j` bits are asked for. So if two inputs agree mod `2^j` in every
-  registered and coin input and every charged gate takes one value on both, every gate does mod `2^j`, and a set of
-  inputs that pairwise differ mod `2^j` in some output needs that many joint values of the charged gates:
-  `|F| ≤ volume C`.
-* `SquaringCarry`: the carry bound (workstream G's §(7), made precise). A circuit that computes the `n` canonical bytes
-  of `a² mod p`, in its window, on the members `G` of the sparse fooling family (`sparse`), has `|G| ≤ volume C`. On
-  the whole family (`2^s` members) its charged gates have at least `s` bits: `s = 63` at p1024 (`256^127 ≤ p`). It is a
-  bound in bits, not in gates: a budgeted gate of `b` declared bits carries `b` of them. "Computes" is "on every member
-  of `G`": on the fraction `ε` of the family, `G` has `ε · 2^s` members.
-* `SquaringCarryNibbles`: the same at `j = 4` on the nibble family (`nibbles`), whose bytes are all `8 mod 16` and
-  whose squares first differ mod 16 two bytes above their first differing nibble: `4s` bits, 252 at p1024 (`s = 63`).
-  Four free bits a byte is the most a fooling family of this kind gets (the squares' first difference must land in
-  the low `j` bits of a byte, with `j` bits of each input byte fixed), and with no reduction mod `p` the input has at
-  most `n/16` bytes.
-* `UnitsFooling`: `Fooling` in units. With registered inputs fixed and each budgeted gate but a gather declaring at
-  most `2^w` values, `|F| ≤ 2^(runBits C + w · budgeted C)`: a gate that reads only registered values is one value on
-  all of `F`, a budgeted one that reads a run or coin value is a unit of `w` bits, and a gather's value is fixed by its
-  index's class among its column's words and its fill outside it (a table read's, by its index's low bits), which
-  its index's fresh bits of that kind count.
-* `SquaringUnits`: the two together. A circuit that squares the nibble family, its registered inputs fixed and its
-  coin inputs `a`'s bytes, has `4s ≤ runBits C + w · budgeted C`: at p1024 with no run input, 8 units at `w = 33` (or
-  `w = 32`, s32's window), 32 were each budgeted gate a byte (`w = 8`).
-* `FoolingCap`: why counting stops there. A set of inputs that pairwise differ mod `2^j` in some output of `out` has at
-  most `2^(j·|out|)` members, so a fooling bound in units is at most `j·|out|/w`: one squaring's outputs cap what it
-  can charge (252 nibble bits, about 8 units at `w = 33`), and a chain's intermediate squarings, which are not
-  outputs, add nothing. A floor per squaring and a chain's sum are premises (`SquaringFloor`, `ChainSum`), not counts.
-* `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
-  team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
-  d₀ + log₂(1/ε)/8`, at every `ε` above a floor `2^−t` (claimed at p1024 with `d₀ = 4`, `t = 64`; false with no
-  floor). `SquaringFloor` adds to it at `c = 0` the square's data products, and `ChainSum` composes it over the chain.
-* `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
-  drops, is the Legendre symbol of `x`.
-* `EncodeBudget`: the connection. For a registered circuit `W` that satisfies the stacking property `P` and is in the
-  restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the samples number at most
-  `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
-  budget is the caps (rational nonlinear units per certified byte, data products among them) times the
-  audit's certified reads, summed over the windows, and the run inputs are each window's `R_in` bound, summed over the
-  windows.
-* `EncodeCost`: under the same premises, the encode cost (`encodeCost`, in nonlinear units) of `q` words is at least
-  `q · E` (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
-* `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
-  values (`Definitions/ResourceAccounting/Gates/Ranges`), the intervals `DeclaredHold` asks of those budgeted gates.
-* `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
-  their own intervals: `[lo, lo + w]` for a clamp, `[lo − m, lo + w + m + 1]` for a dither, and the hull of the table
-  and 0 for the LUT.
-* `Bf16ToF32Affine`: the registry's `Bf16ToF32_v1` is free-affine, and on every bf16 word its evaluator is that map,
-  `×2^16` from the s16 reading to the s32 reading, which never wraps.
-* `F32ToS8RziRange`, `Int8ClampRange`, `LutIndexRange`, `Exp2Lut127Range`, `S32LowByteRange`: the exact-int8
-  profile's primitives' intervals: the cast's `[−128, 127]`, the quantizer's clamp chain's `[−127, 127]`, the LUT
-  index's `[0, 255]`, the table's 256 values in `[0, 127]`, and a low byte's `[−128, 127]`, the identity on `[0, 127]`.
-* `DeclaredWindow`: `ProvenWindow` with no hypothesis on a run input's value but its type (`Typed`). A circuit whose
-  declarations are earned (`Declared`: an input declared at its type, a budgeted gate at an interval its evaluator
-  provably keeps) holds them (`DeclaredHold`), and so is in its window.
-* `Int8LinearWindow`, `LutPvWindow`: vLLM's served int8 linear (row quantizer into a satfinite s8·s8 IMMA chain, `K ≤
-  131,040`) and P·V (LUT index, table gather, low byte into the same chain, `32·S ≤ 132,096`) are proven and declared,
-  so they're in their window on every typed input.
--/
+/-! The circuit model's window and its lower bounds, the fooling, carry and encode bounds, with Lemma R (`Renormalization`) stated and unproved. -/
 
 @[expose] public section
 
@@ -169,26 +100,8 @@ def FoolingCap : Prop :=
     F.card ≤ 2 ^ (j * out.length)
 
 /-- **Re-normalization** (Lemma R; unproved): a square's limbs come back to byte format only through budgeted gates,
-about one a limb. Take a circuit whose window is proven, with no run input, whose registered inputs are fixed and whose
-coin inputs are bytes of `a` or fixed (so units count what reads `a`), that on more than `ε ≥ 2^−t` of the `a ∈ [0, p)`
-holds its declared intervals (so is in its window) and outputs `L + c` values (`out l`, `L = n/8`), each within a byte
-format (`fmt l`), whose base-256 sum is `a²` mod `p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is
-`budgeted C ≥ L − c − d(ε)` with `d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed
-digits, extra limbs, unreduced), since the chain's next squaring reads any; for one squaring no cap on operand bits is
-needed. The s8 family forms the column sums of `a²` for free; what it can't do is carry, and `SquaringCarry` proves only
-bits of that (63 at p1024), not units. The claimed instance is p1024 with `d₀ = 4` and `t = 64`.
-
-**`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared `[0, D_l]`,
-`a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry, and such
-families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥ 4.16`),
-`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric distribution;
-`d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most `2^156`). Every one sits at
-`ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a non-carrying `a` has digits below 16
-and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`: the exhaustive toy fields (implied
-`d₀ ≤ 2.18`), the non-carrying sets of the byte fields `L ≤ 10`, counted exactly (`≤ 2.48`), and at p1024 the
-carry-guessing frontier (modeled, 10 to 15 bits a dropped carry: `d = 1 … 5` at `ε = 2^−9.8 … 2^−69.5`, against the
-formula's `5.2 … 12.7`). `t = 64` keeps the claim inside the range that frontier reaches; the bound reads `ε = 2^−40`
-(the headline) and `2^−20` (the property's carrier threshold). -/
+`budgeted C ≥ L − c − d(ε)`. Claimed at p1024 with `d₀ = 4` and `t = 64`; `d₀` is not absolute, so with no floor on
+`ε` it is false. -/
 def Renormalization (F : Field) (d₀ c t εnum εden : ℕ) : Prop :=
   ∀ {ι : Type} (C : IntDag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
     εden ≤ 2 ^ t * εnum →
@@ -242,12 +155,6 @@ def EncodeCost : Prop :=
     SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →
     εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 → 2 ≤ F.n →
       ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
-
-/-! ## Primitives' output intervals
-
-What `DeclaredHold` asks of a budgeted gate, that its value lies in its declared interval, for the primitives whose
-interval property/v1 derives (P's producers) and the ones it reads as declared: each a theorem over the primitive's
-evaluator (`Definitions/ResourceAccounting/Gates/Ranges`). -/
 
 /-- **`F32Fmaxf`'s rule holds.** Where property/v1's rule (`fmaxfRule`, `stacking._fmaxf`) gives an interval `o` for
 operand ranges `a` and `b`, `fmaxf` of any s32 readings in them lies in `o`. -/
@@ -313,11 +220,6 @@ def Exp2Lut127Range : Prop :=
 keep the LUT's `[0, 127]`. -/
 def S32LowByteRange : Prop :=
   (∀ z, Iv.Mem (-128, 127) (s32LowByte z)) ∧ ∀ t : Fin 128, s32LowByte (t.val : ℤ) = t.val
-
-/-! ## Declared bounds, earned
-
-The window from nothing declared on trust: every input at its type's whole range, every budgeted gate's interval a
-theorem over its evaluator on its operands' derived intervals (`Definitions/ResourceAccounting/Gates/Declared`). -/
 
 /-- **Declared bounds, earned, hold.** A circuit whose window is proven and whose every declared bound is earned
 (`Declared`: an input's is its type's whole range, a budgeted gate's holds its evaluator's value on its operands'

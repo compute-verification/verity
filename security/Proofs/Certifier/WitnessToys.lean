@@ -11,30 +11,7 @@ public import Definitions.Certifier.Schedule
 public import Definitions.Certifier.Ingress
 public import Definitions.Certifier.Assumptions
 
-/-!
-# What holds at the instances the network attester's count and period witnesses are stated at
-
-The instances are definitions of `Definitions.Certifier.Witness`, which the witnesses' statements read; this
-module proves what `CountWitnesses` and `MonitoringPeriodWitnesses` conclude from. Each is built by hand, at a positive
-instance where the guarantee allows one: several steps, a non-empty incorrect set at a positive `δ`. `Witnesses` has the
-accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these extend.
-
-* `acceptAll`, the verifier that accepts everything: `AccSeqsAt` at the Program's acceptance is `AccSeqs`
-  (`accSeqs_eq_at`), and over any positive number of steps `AccSeqsAt acceptAll`'s sequences are infinitely many
-  (`accSeqsAt_acceptAll_not_le`).
-* `fxLeakI`, a sender whose secret is its every step's frame length: `fxLeakDec` reads it back from the last step of
-  the wire or the record, so at `acceptAll` every secret is decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
-* `inI`, a certifier recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
-  and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
-* `sampProg`, sampled Bernoulli at rate `1/2` (`sampDesign`), its first input the ingress (`notLay`). At `δ = 1/4`
-  both `∅` and `{0}` are possible incorrect sets (`single_mem_sampFaulty`), each committing at most its three gates'
-  bits (`sampBits`), and one input is free (`sampFree`). The step `obs1`, the empty frame the negation of `false`
-  holds, is accepted (`obs1_sampAcc`).
-* `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
-  whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
-* `fxRows`, a rows format of the Python network attester's fixture `fxQueue` (`fixtureAgrees` checks its egress
-  record): it is well formed (`fxRows_wf`), and over one window of four slots `fxQueueSched` fits it (`fxQueue_fits`).
--/
+/-! What holds at the instances the network attester's count and period witnesses are stated at. -/
 
 @[expose] public section
 
@@ -42,8 +19,6 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.Witness.SamplingGeneric (notStmt notPart)
-
-/-! ## The verifier that accepts everything -/
 
 theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv)
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
@@ -117,8 +92,6 @@ theorem twoContents_encard : ({fun _ => [[true]], fun _ => [[false]]} : Set (Fin
     have := congrFun h 0
     simp at this
 
-/-! ## Ingress -/
-
 theorem oneRow_packed : RowLeftPacked fun s => (oneRow s).isSome := by
   first | decide | (unfold RowLeftPacked oneRow; decide)
 
@@ -130,8 +103,6 @@ theorem statusComplete_inI (n : ℕ) : StatusComplete n (inI.obsRun () n) := by
   refine ⟨by rw [Interaction.length_obsRun]; exact ht, fun κ => ?_⟩
   rw [inI.obsRun_getElem () ht]
   rfl
-
-/-! ## A sampled audit with a possible incorrect proof block -/
 
 theorem sampLay_fits : notLay.Fits sampProg 1 := by
   refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
@@ -221,8 +192,6 @@ theorem obs1_sampAcc :
   rw [hrow, sampProg_val _ hin]
   rfl
 
-/-! ## The monitoring period, pooled -/
-
 /-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at `δ = 1/2` and `e = e' = 0`: one window
 of one step whose incorrect set holds its one unit, which `Fmax = 1` allows none of, so the good event fails on every
 coin. -/
@@ -232,8 +201,6 @@ theorem pooled_bound_fails :
           (fun _ _ => false) (fun _ _ _ _ => ([] : List Bool)) 1 (fun _ => {0}) (fun _ => [obs0])) ≤
       (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
   simp [Pr, Claims.prUniform, PooledGood] <;> norm_num
-
-/-! ## The Python network attester's fixture -/
 
 theorem fxRows_wf : fxRows.Wf := by
   refine ⟨List.nodup_finRange 3, List.mem_finRange, ?_⟩

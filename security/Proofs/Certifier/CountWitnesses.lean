@@ -2,30 +2,12 @@ module
 
 public import Proofs.Certifier.WitnessToys
 
-/-!
-# The sampled and ingress counts' honest and nontrivial lemmas
-
-Each count the lock holds to witnesses has an honest and a nontrivial lemma, each at a positive instance: several
-steps, a possible incorrect set that is not empty.
-
-The count under a sampled audit (`EncardAccSeqsSampledLe`) takes that the layout fits the circuit. Its honest lemma
-concludes that at `sampProg`, with the free inputs' count, the faulty-bits bound at `δ = 1/4`, the incorrect set `{0}`
-possible there, and the acceptance of the step `obs1`; its nontrivial lemma is the same count at `acceptAll`, against
-the bound's value at those parameters (`accSeqsAt_acceptAll_not_le`).
-
-The six ingress counts take that every status is complete (`StatusComplete`, acceptance as it bears on ingress), which
-no claim or verifier reads, so their entries name their kind. Their honest lemma concludes it for `inI`, one frame a
-bucket on its one link, with W2, W4 at allocation `1` below the link's two slots, and J; their nontrivial lemmas decode
-every message of `fxLeakI`, a sender whose secret is its frame's length, from its records or its wire, against two
-content assignments where the bound has them.
--/
+/-! The sampled and ingress counts' honest and nontrivial lemmas, each at a positive instance; the ingress counts take `StatusComplete`, which no claim or verifier reads. -/
 
 @[expose] public section
 
 namespace NetTiming.Witness
 
-
-/-! ## Under a sampled audit -/
 
 /-- **`sampProg`'s audit meets the sampled count's premises and accepts its honest step**: `notLay` fits `sampProg`
 over one step, its one free input admits two values, each possible incorrect set at `δ = 1/4` commits at most three bits,
@@ -45,8 +27,6 @@ theorem EncardAccSeqsSampledLe_nontrivial :
       ((2 ^ 1 * (incorrectSets sampDesign sampPart (1 / 4)).card * 2 ^ 3 * 1 ^ 1 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le (by norm_num) (by norm_num) _
 
-
-/-! ## Into X -/
 
 /-- **`inI`'s run has every status complete, and it meets W4, J and W2**: one frame a bucket on its one link, left
 packed, at allocation `1`, jitter class `0`, the wire its record. -/

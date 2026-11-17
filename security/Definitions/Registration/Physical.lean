@@ -2,45 +2,7 @@ module
 
 public import Definitions.Pouw.Confidence
 
-/-!
-# Physical assumptions (trusted)
-
-The actual-circuit model's physical assumptions.
-A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
-by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
-certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
-constraints on one run (`Feasible`); each guarantee names the ones it uses. Each that fails frees a different covert
-resource:
-
-| Constraint | What it says | What its failure frees |
-| --- | --- | --- |
-| `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
-| `LatencyAtMost X Y ℓ⁺` | a gate in `Y` reads one in `X` at most `ℓ⁺` ticks after it | answers sent before their questions, landing after them |
-| `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
-| `SequentialSpeed ring D span` | a path through more than `D` computed gates at the location of the ring's multiplications spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
-| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` (`MemoryAt 𝒳 M T`: at the ticks `T` only) | hidden storage |
-| `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
-| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
-
-The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
-leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
-(`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
-(`uncertifiedLinkCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
-(`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`ResourceAccounting.SecurityProofs.Actual.ingress_le`,
-`egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
-
-`CausalStrategy`, `DeclaredLinks` and `Secrets` bundle, one named premise each, a constraint's strategy-level and
-per-run forms: causality (`CausalFrom` with each run's `Causal`), links (`Alphabet` with each run's `Links`), and a
-window whose coins reach it only through one location's secret inputs. A guarantee over strategies takes its physical
-hypotheses as these named premises (`shape.premises` in `lean-audit.json`), never as bare hypotheses.
-
-Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), the
-location of the ring's multiplications modulo `p` (`ring`), the certifiers' leaves (`cert`) and record cells
-(`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
-what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
-counted. `Hardware` bundles the parameters that don't depend on `A`, and `Usage A` those of the constraints on one
-run that name its gates; `TrustedUnits` takes each run's `Spec`.
--/
+/-! The actual-circuit model's physical assumptions, each a `Prop` on one run (`TrustedUnits` on a strategy) taken as a hypothesis by what needs it, never a global assumption. -/
 
 @[expose] public section
 
@@ -52,7 +14,6 @@ namespace Placed
 
 variable {L : Type*} (A : Placed L)
 
-/-- **A path of `A`** from `p 0` to `p k`: each gate is read by the next. -/
 def IsPath {k : ℕ} (p : Fin (k + 1) → Fin A.N) : Prop :=
   ∀ i : Fin k, p i.castSucc ∈ A.reads (p i.succ)
 
@@ -60,12 +21,8 @@ def IsPath {k : ℕ} (p : Fin (k + 1) → Fin A.N) : Prop :=
 def Causal (ℓ : L → L → ℕ) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.t a + ℓ (A.x a) (A.x g) ≤ A.t g
 
-/-- **A latency ceiling** (the listed claim `latency-ceiling`) of `ℓ⁺` from `X` to `Y`: a gate placed in `Y` reads a
-gate placed in `X` at most `ℓ⁺` ticks after it. `Causal` bounds latency from below only, so without a ceiling a value
-sent before a tick can be read at any later one, and what a device sees arrive says nothing about when it was sent.
-One physical premise on a run: `X`'s links into `Y` (a server's egress links into the network attester on them, which
-the auditor places) deliver within `ℓ⁺`, measured on those links, and nothing between them holds a value longer: a
-delay outside `X` is a leaf of its own, whose wires into `Y` don't come from `X`. -/
+/-- **A latency ceiling** (`latency-ceiling`). `Causal` bounds latency from below only, so without a ceiling a value
+sent before a tick can be read at any later one. -/
 def LatencyAtMost (X Y : Finset L) (ℓmax : ℕ) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.x a ∈ X → A.x g ∈ Y → A.t g ≤ A.t a + ℓmax
 
@@ -74,11 +31,8 @@ def ComputeRate (𝒳 : Set (Finset L)) (π : Fin A.N → ℕ) (compute : Finset
   ∀ X ∈ 𝒳, ∀ a b, A.work π (A.region X (Set.Ico a b)) ≤ compute X * (b - a)
 
 open Classical in
-/-- **Sequential speed** (v2.7): a path of `A` through more than `D` multiplications modulo `p` spans more than `span`
-(`Δ + RTT`) ticks. `ring` is the location of the ring's multiplications modulo `p`, so the count of a path's computed
-gates at it is v2.7's count of multiplications: a location is the operation class, not a pricing's. The ring's `add`
-and `one` sit at a location of their own and no other gate computes modulo `p` (B2's oracle locations, the ring
-model's idealization). -/
+/-- **Sequential speed**. The ring's `add` and `one` sit at a location of their own and no other gate computes modulo `p`
+(the ring model's idealization). -/
 def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
   ∀ k (p : Fin (k + 1) → Fin A.N), A.IsPath p →
     D < (univ.filter fun i => A.isInput (p i) = false ∧ A.x (p i) ∈ ring).card →
@@ -88,7 +42,6 @@ def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t, A.state X t ≤ M X
 
-/-- **Memory at the ticks `T`**: `Memory` read only at the ticks of `T`; `Memory` is it at every tick. -/
 def MemoryAt (𝒳 : Set (Finset L)) (M : Finset L → ℕ) (T : Set ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t ∈ T, A.state X t ≤ M X
 
@@ -195,12 +148,6 @@ def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
 
 end Links
 
-/-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's
-compute `compute` (`Φ`) and memory `M` (work a tick and bits), the links `E` with their ends and capacities `β` (bits a
-tick), the location `ring` of the ring's multiplications modulo `p` (its `add` and `one` sit elsewhere) with the
-sequential depth `D` and the span `Δ + RTT` (`span`) of `SequentialSpeed` (v2.7), the certifiers' leaves, the trusted
-devices' leaves, the buckets of ticks, each certifier's jitter bits a bucket, and the record cells `record y` each
-certifier's leaf `y` declares (v2.6: its record is its gates in them, `Actual.Run.record`). -/
 structure Hardware (L : Type*) (E : Type*) where
   units : Set (Finset L)
   ℓ : L → L → ℕ
@@ -217,18 +164,13 @@ structure Hardware (L : Type*) (E : Type*) where
   jitter : ℕ
   record : L → Set ℕ
 
-/-- **A spatial unit**: a location all of whose boundary links are certified, `β°_X = 0`. -/
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
   X ∈ H.units ∧ uncertifiedLinkCapacity H.ends H.β H.cert X = 0
 
-/-- **A run's usage**: what the physical assumptions on one run read about `A` that its gates don't carry, what each
-gate uses of its location's compute (`π`, its work) and the link each wire uses (`link`). -/
 structure Usage {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
 
-/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `usage`.
-`TrustedUnits`, on a strategy, is taken beside it. -/
 def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (usage : Usage A E) : Prop :=
   A.Causal H.ℓ ∧ A.ComputeRate H.units usage.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
     A.Memory H.units H.M ∧ A.Links H.ends H.β usage.link

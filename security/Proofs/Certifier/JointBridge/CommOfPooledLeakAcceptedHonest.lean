@@ -36,22 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
 
-/-!
-# The pooled bridge's two inputs hold at an honest run (witness)
-
-`ResourceAccounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest`: the two inputs that
-`ResourceAccounting.Guarantees.Bridge.CommOfPooledLeakAccepted` takes at each execution phase, the miss probability given the
-earlier phases' coins and the leak relation at the witness's incorrect set, hold together at one run that realizes the
-network attester's monitoring period (`ResourceAccounting.NetWitness.honestPooled`, among the definitions).
-
-The run has two execution phases of one step each. Its circuit negates its one ingress bit, the period's operator
-sends `false` whatever the phases closed before it observed, and the network attester's record at each phase is the
-frame the circuit then puts on the link (`frameRecord`), so the record meets the leak relation at that operator with
-no incorrect proof block (`leakAt_honest`). The network audit accepts when both phases' records meet that relation,
-and its claim is the period's good event at the record. No proof block is incorrect, so the miss probability is
-bounded by `1` and the leak relation fails with probability `0`. The network attester sees no connection, and its
-code is run as written.
--/
+/-! The pooled bridge's two inputs hold together at an honest run of two one-step execution phases. -/
 
 @[expose] public section
 
@@ -88,10 +73,6 @@ theorem accepted_obs1 (a : ℕ → Bool) :
   funext ℓ σ
   exact (notProg_row a ℓ σ).symm
 
-/-- **Each execution phase's record meets the leak relation with no incorrect proof block**: the layout fits the
-circuit, the record has the phase's one step and jitter `0`, and the circuit's Program accepts it at the advice
-`false` with no gate held. The registration `negStmt` and the frame `frameObs` are the witnesses' `notStmt` and
-`obs1`, written out among the definitions. -/
 theorem leakAt_honest (i : Fin 2) :
     LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 negStmt negPart (fun _ => false) (fun _ _ => [false]) ∅
       (frameRecord i) := by

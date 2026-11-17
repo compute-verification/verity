@@ -39,23 +39,7 @@ import Proofs.Pouw.PouwWork
 import Proofs.Pouw.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The network attester's per-period guarantee from its period of sampled audits (proof)
-
-`ResourceAccounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted`: `comm_of_monitoringPeriodLeak` at network accounting's proof of
-`MonitoringPeriodLeakAccepted` (`NetTiming.monitoringPeriodLeak`). On a run that realizes the network attester's period of `n` sampled
-audits (`ResourceAccounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
-`n · (δ + ε_ks + ε_bind + ε_tap)`. The network attester accepting with the claim failing means some window fails
-`ExecutionPhaseGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
-verifier's `PrBad` at `RLeakCertifier` (`period_le`), which `MonitoringPeriodLeakAccepted`'s per-window conjunct bounds by
-`κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
-
-The per-window conjunct of `MonitoringPeriodLeakAccepted` reads neither the period's windows nor the network attester device,
-so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
-`K` stands for, and the error doesn't use it. The network attester's trust (`trusted-device`) is the realization's
-`trusted`, which this proof doesn't read: `period_le` is the per-window bound its records give, and deriving it from
-`MonitoringPeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
--/
+/-! The network attester's per-period guarantee from its period of sampled audits, by the union bound over its windows. -/
 
 @[expose] public section
 
@@ -97,7 +81,8 @@ theorem ksLin_of_monitoringPeriodLeak (hsrc : Guarantees.MonitoringPeriodLeakAcc
     (fun _ h => h.elim) (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
     (fun _ h => h.elim) (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1
 
-/-- `Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` from `MonitoringPeriodLeakAccepted`. -/
+/-- This proof doesn't read the realization's `trusted`: `period_le` is the per-window bound the records give, not
+derived from `MonitoringPeriodLeakAccepted` at the deployed period and `trusted`. -/
 theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.MonitoringPeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}

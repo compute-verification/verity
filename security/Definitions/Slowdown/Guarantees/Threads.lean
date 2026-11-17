@@ -5,23 +5,7 @@ public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Dark
 
-/-!
-# The inference-only policy over threads: the guarantees
-
-The thread draft's Theorems 1 and 2. Under the inference-only policy at `(Γ, α)` (`CompliesRate Γ α`) every inference
-block has at most `Γ` gates and reads at most `α` fresh input bits per gate, so at most `α Γ`: the draft's `S*` is `α Γ`
-here.
-
-Theorem 2 also holds when the declaration contains the reference training algorithm only partly (`PartialContainment`): the
-counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
-(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`). Every form through a containment, total or
-partial, takes `ThetaRegistered` for it: no dark value, and no fresh input of the reference training algorithm, is in the
-declaration's registered information θ.
-
-The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per parameter slot, in place of
-`WeightsIncompressible`, with the same bound: a subcircuit that spans several optimizer steps on a parameter is charged
-for it once.
--/
+/-! The thread draft's Theorems 1 and 2 under the inference-only policy, every form through a containment taking `ThetaRegistered`. -/
 
 @[expose] public section
 

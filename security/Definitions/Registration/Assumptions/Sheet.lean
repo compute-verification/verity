@@ -34,22 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The data-sheet axioms A1–A7 (trusted)
-
-Seven physical assumptions, each a `Prop` taken as a hypothesis, never an
-`axiom`, and each a vendor statement (data-sheet constants, no GPU self-attestation). Each docstring opens
-with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
-against its sheet (`ResourceAccounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
-section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
-`Definitions.Pouw.Assumptions.TS`'s are.
-
-What they give (`Definitions.Registration.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
-gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRoute` at `q, q_T ≤ ½`, `b_T ≤ 0`; A7 is
-(I5). With (I6)–(I8) they give Theorem D-ideal (2.7♭) on the data-sheet machine.
-
-Data independence needs no axiom: a peak is a maximum over every operand value, so A3–A5 hold for any data.
--/
+/-! The data-sheet assumptions A1–A7, each a `Prop` taken as a hypothesis, never an `axiom`, and each a vendor statement, never a GPU's self-attestation. -/
 
 @[expose] public section
 
@@ -59,10 +44,8 @@ open ResourceAccounting.TS
 
 section Run
 
-/-! A1–A5 are claimed for a run of the stated device, and which device a run is on is the auditor's to know, not the
-run's: `accounting-declared-device`, per node and per window, says every GPU on the node is declared, each
-is the declared board and vBIOS, and no SM clock exceeds `fmax`, the top of that vBIOS's clock table. A1's clock rests
-on it: nothing checks a clock, an offset or a lock at run time but the prover's own driver. -/
+/-! A1's clock rests on `accounting-declared-device`: nothing checks a clock, an offset or a lock at run time but the
+prover's own driver. -/
 
 variable {K P : Type} [Fintype K] [DecidableEq P]
 

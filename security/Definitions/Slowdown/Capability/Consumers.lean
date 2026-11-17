@@ -3,21 +3,7 @@ module
 public import Definitions.Slowdown.Capability.Items
 public import Definitions.Slowdown.Covering
 
-/-!
-# Local bounds: consumers and their dependencies
-
-A **consumer** is anything a block finishes by computing some set of gates whole, and that depends on an upstream
-computation of its own: a use of the counted products (one token's input to one layer), an output that accumulates many
-products (a weight's gradient summed over tokens), and so on. Each has an upstream **region** that holds no registered
-gate, and **required gates** in it.
-
-The **upstream certificate** (`Upstream`), a property of the wiring checkable on a named circuit, says that every
-required gate reaches, inside the region, a gate the consumer's finishing set reads. So a block that finishes the
-consumer either is handed a gate of its region (an **import**, spending fresh bits) or contains all of its required
-gates (a **recomputation**, spending gates and, possibly, updated state). **Overlap weights** let regions share gates.
-The same three statements bound every kind of consumer (`Slowdown.Guarantees.ImportOrRecompute`, `RecomputeByGates`,
-`RecomputeByState`); a new kind of dependency is a new `Consumers` value, not a new argument.
--/
+/-! Consumers, what a block finishes by computing some set of gates whole, with their upstream regions and the upstream certificate. -/
 
 @[expose] public section
 
@@ -31,9 +17,7 @@ finish `c` without importing from `A c`. -/
 structure Consumers (d : RegisteredCircuit) (κ : Type) where
   /-- The ways to finish each consumer: a block finishes `c` when it computes one of these sets whole. -/
   fins : κ → Finset (Finset (Fin d.D.N))
-  /-- Each consumer's upstream region. -/
   A : κ → Finset (Fin d.D.N)
-  /-- The gates each consumer requires. -/
   G : κ → Finset (Fin d.D.N)
   G_sub : ∀ c, G c ⊆ A c
   A_θ : ∀ c, Disjoint (A c) d.θ
@@ -57,9 +41,6 @@ def ofUses (B : Slowdown.Covering.MulBlocks d) (A G : Fin B.nt → Finset (Fin d
   G_sub := hG
   A_θ := hA
 
-/-- **Outputs as consumers**: output `o` is finished by computing its gate `out o`, with the upstream region `A o` and
-required gates `G o`: for an output that accumulates a sum (a weight's gradient over many tokens), its addends' products
-and the partial sums between them. -/
 def ofOutputs (out : κ → Fin d.D.N) (A G : κ → Finset (Fin d.D.N)) (hG : ∀ c, G c ⊆ A c)
     (hA : ∀ c, Disjoint (A c) d.θ) : Consumers d κ where
   fins c := {{out c}}

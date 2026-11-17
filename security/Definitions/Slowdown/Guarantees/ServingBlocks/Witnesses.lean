@@ -3,28 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.ServingBlocks
 public import Definitions.Slowdown.ServingBlocks.Instances
 
-/-!
-# The serving-block bound: honest and nontrivial lemmas
-
-Each guarantee of `ResourceAccounting.Guarantees.ServingBlocks` has two statements here, at the instances of
-`security/Definitions/Slowdown/ServingBlocks/Instances.lean`. `<Guarantee>_honest`: its premises hold together at
-`Honest`. `<Guarantee>_nontrivial`: at an explicit circuit every premise but one named premise holds, that one fails, and
-the counted weight is above the bound's right-hand side, so the guarantee is false without it, its last
-conjunct the bound's negation `¬ J.total ≤ …`. `ServingBlockBound` has two more lemmas of that form in the proofs, one for
-each premise that bounds its boundary term: `ServingBlockBound_nontrivial_bodies` (`OperationBodies`) and
-`ServingBlockBound_nontrivial_overlap` (`Overlap`, and so the boundary term itself).
-
-`UncertifiedElementary` takes no premise, so it has none to hold or drop. Its honest lemma states that its cap is
-attained at `Honest` with a right-hand side above `0`, and its nontrivial lemma that a tighter cap fails at `Straddle`:
-the cap is attained there too, and fails at the right-hand side `0`.
-
-`Honest` is a small faithful instance of a serving-block layout: a Boolean declaration with a registered input, two
-serving blocks around one wipe, an operation split across the wipe and a dark remainder. It is accepted as the honest
-instance of this structural bound, which is about one circuit: Layer 2's envelopes supply the deployed premises, each
-with its probability.
-
-The proofs are in `security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`.
--/
+/-! The serving-block bound's honest and nontrivial lemmas, at small serving-block layouts. -/
 
 @[expose] public section
 

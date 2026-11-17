@@ -36,17 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Certifier.Checked
 
-/-!
-# The nontrivial lemma of the leak bound with checked inputs
-
-`SampledLeakChecked`'s acceptance conclusion fails at the accepting compiled verifier `leakL`, as `SampledLeakAccepted`'s
-does, at the check every run passes, where the check misses with probability `0` on any runs (`checkedWitness_true`),
-the trace's among them: a witness in `RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`), and none is
-(`leakL_noRLeak`).
-
-Its honest lemma is `SampledAuditAccepted_honest`, at its one stated premise `Compiled.KS`. `CheckedUnique` and
-`CheckedWitness` are open premises, discharged by a deployed check that pins its checked inputs and bounds its miss.
--/
+/-! The nontrivial lemma of the leak bound with checked inputs; its honest lemma is `SampledAuditAccepted_honest`, and `CheckedUnique` and `CheckedWitness` stay open premises. -/
 
 @[expose] public section
 

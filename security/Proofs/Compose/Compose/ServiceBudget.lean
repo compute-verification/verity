@@ -4,22 +4,7 @@ public import Definitions.Compose.Guarantees.Compose
 public import Proofs.Pouw.TS.Stages
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The service's window budget: proof
-
-`ResourceAccounting.Guarantees.Compose.ServiceBudget`, step 4 of `Proofs.Compose.Compose`, in three parts.
-
-* **The miss bound** (`miss_le`): a uniform permutation's `K`-subset (`Pouw.Window.subsetDraw`) misses a set `B` of
-  the `N` tiles with probability at most `(1 − |B|/N)^K`. By induction on `K` through `Equiv.Perm.decomposeFin`: the
-  first image is uniform and must miss `B`, and the rest is a uniform permutation of `N − 1` tiles that must miss a
-  set of at least `|B|` of them (`card_le_rest`).
-* **One path of the stages' coins** (`path_le`): with `U` the work folded or whole whose checked values aren't honest,
-  `ρ·U ≤ |B|/N` for `B` the tiles not honest (`ρ·N·w_v ≤ 1`), and `exp(d/Λ)·(1 − ρU)^K` is at most the product over
-  the stages of `SplitRateAt`'s left side at each stage's work (`factor`), as `1 − ρ(V + U_j) ≤ (1 − ρV)(1 − ρU_j)`.
-* **Backward induction over the stages** (`expect_factor_le`): given the past, `SplitRateAt` bounds the stage's factor
-  by `1 + ν(L_F − p·W_F) + ν₀(L_0 − p0·W_0)`, and `SplitStages.LuckAt` with `lk ≤ p`, `lk0 ≤ p0` on every tile of
-  positive weight gives `E[L_F] ≤ p·E[W_F]` and `E[L_0] ≤ p0·E[W_0]`, so its mean is at most `1`.
--/
+/-! The service's window budget, step 4 of `Proofs.Compose.Compose`: the miss bound, one path of the stages' coins, and backward induction over the stages. -/
 
 @[expose] public section
 
@@ -29,8 +14,6 @@ namespace ResourceAccounting.SecurityProofs.Compose.Budget
 
 open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod sum_le_card_of_expect expect_empty)
-
-/-! ## The miss bound -/
 
 theorem forall_mem_subsetDraw {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N → Prop) :
     (∀ v ∈ Pouw.Window.subsetDraw K π, P v) ↔ ∀ i : Fin N, i.val < K → P (π i) := by
@@ -119,8 +102,6 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
       linarith
     rw [hc, ← hnot, prob_eq_expect]
     exact le_of_eq (congrArg expect (funext fun p => by by_cases hp : p ∈ B <;> simp [hp]))
-
-/-! ## The stages -/
 
 section Stages
 
@@ -424,8 +405,6 @@ theorem expect_factor_le [Fintype C] [Fintype V] (stg : V → ℕ) {w lk lk0 : V
       mul_nonpos_of_nonneg_of_nonpos hν0 (sub_nonpos.mpr h0)]
 
 end Stages
-
-/-! ## The window -/
 
 /-- Tiles of weight at least `ρ` times their share of the `N`: `ρ` times the weight of any set `B` of them is at most
 `|B|/N`. -/

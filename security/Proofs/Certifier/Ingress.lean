@@ -6,14 +6,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Certifier.Counting
 import Proofs.Certifier.Occupancy
 
-/-!
-# The ingress timing bound
-
-`docs/network-transparency/timing-channel.md` §2.5 ("Ingress content") and §3.2. The interaction is read inward
-(`NetTiming.Protocol.Ingress`): the outside holds the message and reacts to every record, and a decoder inside X reads
-the wire. On runs whose statuses are complete and whose frames follow the prescribed content, a record sequence is
-determined by its occupancy counts and its jitter classes.
--/
+/-! The ingress timing bound: on runs with complete statuses and the prescribed content, a record sequence is determined by its occupancy counts and jitter classes. -/
 
 @[expose] public section
 
@@ -22,8 +15,6 @@ namespace NetTiming
 open Finset
 
 variable {L K S : ℕ} {Msg In Act Wire : Type}
-
-/-! ### A left-packed row is its frames -/
 
 theorem getElem_eq_getElem?_filterMap_id {F : Type} : ∀ (l : List (Option F)),
     (∀ i j (hj : j < l.length) (_ : i ≤ j), l[j].isSome → (l[i]'(by omega)).isSome) →
@@ -66,8 +57,6 @@ theorem occ_eq_of_rowCount {F : Type} {R R' : Row S F} (h : RowLeftPacked fun s 
     (fun s => (R s).isSome) = fun s => (R' s).isSome :=
   (eq_prefixRow_of_rowLeftPacked _ h).trans ((congrArg (prefixRow S) hc).trans (eq_prefixRow_of_rowLeftPacked _ h').symm)
 
-/-! ### Frames over a prefix -/
-
 theorem linkFrames_append (o o' : List (Obs L K S)) (ℓ : Fin L) :
     linkFrames (o ++ o') ℓ = linkFrames o ℓ ++ linkFrames o' ℓ := by
   simp only [linkFrames, List.flatMap_append]
@@ -86,8 +75,6 @@ theorem eq_of_append_prefix {α : Type} {p F F' c : List α} (h : p ++ F <+: c) 
     (hl : F.length = F'.length) : F = F' :=
   List.append_cancel_left
     ((List.prefix_of_prefix_length_le h h' (by simp [hl])).eq_of_length (by simp [hl]))
-
-/-! ### The code: occupancy counts and jitter classes -/
 
 /-- The count code of a sequence: each step's real-frame count on each link, `0` past its end. -/
 def countCode {n : ℕ} (o : List (Obs L K S)) : Fin n → Fin L → ℕ :=
@@ -129,10 +116,6 @@ theorem eq_of_ingressCode {n : ℕ} (c : Fin L → List (List Bool)) {o o' : Lis
     obtain ⟨_, hs2⟩ := hs' t ht
     funext κ; rw [hs1 κ, hs2 κ]
 
-/-! ### The bounds -/
-
-/-- **Content plus timing, from the records.** When each message's frames follow some content assignment in `Cs`, a
-decoder inside X that reads the records tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
@@ -185,9 +168,6 @@ theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Ac
     _ = Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
         rw [Set.encard_prod, Set.encard_coe_eq_coe_finsetCard, hcard]
 
-/-- **The ingress timing bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
-each link are a prefix of the prescribed content, a decoder inside X that reads the records tells apart at most
-`(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (c : Fin L → List (List Bool)) (Ms : Set Msg)
@@ -199,9 +179,6 @@ theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (
     (fun m hm => ⟨c, rfl, hc m hm⟩) dec hdec
   rwa [Set.encard_singleton, one_mul] at this
 
-/-- **The ingress timing bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
-prefix of the prescribed content, a decoder inside X that reads the wire tells apart at most
-`(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
     (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
@@ -213,8 +190,6 @@ theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D
   encard_ingress_obsDecodable_le I n D r hW4 hr hJ c Ms hacc hc (fun o => dec (o.mapIdx view))
     (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
 
-/-- **Content plus timing.** When each message's frames follow some content assignment in `Cs`, a decoder inside X
-that reads the wire tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_decodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
     (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)

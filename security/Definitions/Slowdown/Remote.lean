@@ -3,32 +3,7 @@ module
 public import Definitions.Slowdown.Slowdown
 public import Definitions.Core.Prob
 
-/-!
-# The slowdown, remote protocol: the vocabulary
-
-The remote protocol's slowdown (the inference-only policy, PoUW and network accounting, with no memory layer:
-`benchmarks/nci/tiers.py` at tiers T1 and T2, with no wipes and no sampling) is
-`1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past `r̂` come from reading the monitored compute
-residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can do outside it:
-
-* the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
-  correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
-  (`incorrectCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
-* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected incorrect proof block until the halt `Δ` later,
-  its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
-* the escape slack `θ`: under SPOT (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
-  an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
-  probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
-  (`noDetectionBefore`) being detected with probability at least `q`.
-
-PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that isn't wrong may still credit up to `ε_W`
-of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
-residual read there is `r̂ + ε_W W_cert/C`.
-
-`remoteSlowdown` is the hardware multiple the bound gives, as `benchmarks/slowdown`'s
-`theorem.multiple_bound` computes it with `reference_efficiency=False` (the slowdown on
-`benchmarks/nci`'s `tiers.evaluate` terms); `hardwareMultiple` is the one a developer needs.
--/
+/-! The remote protocol's slowdown vocabulary: the residual, the certificate slack, the verdict lag and the escape slack. -/
 
 @[expose] public section
 
