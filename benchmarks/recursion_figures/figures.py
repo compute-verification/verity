@@ -73,7 +73,7 @@ FIGURES = {"cost": "CPU core-years", "ks": "log₂ of the knowledge-soundness er
 KEPT = "out/recursion-figures.json"
 
 FORMAT = "recursion-e2e/figures/v2"
-CENSUS = HERE.parent / "census"
+CENSUS = HERE.parents[1] / "calibration" / "census"
 YEAR_S = dict(MONITORING_PERIODS)["year"]
 #: κ, the per-session term, and ε, the per-SHA-512-call term, log₂ (``RecDeploy.recursiveBitsK_deployed``)
 KAPPA_LOG2 = -167.7
