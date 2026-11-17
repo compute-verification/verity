@@ -678,6 +678,28 @@ v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
 # Step 3's: PP_CHALLENGER's, but local while V3c's audit is live, since both open on the window's run root, which the
 # gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
+# A gate's address given as ${NAME} (placement.toml's form, which keeps it out of the launch's recorded params) is filled
+# from this run's environment (`research run --env-host`, or run.sh settings' from the node's env file); a NAME the
+# environment doesn't set stays as given, for the preflight's refusal (`unfilled`)
+fill_host() {
+  local re='^([^$]*)\$\{([A-Za-z_][A-Za-z0-9_]*)\}(.*)$' v=${!1} out= n
+  while [[ $v =~ $re ]]; do
+    out+=${BASH_REMATCH[1]} n=${BASH_REMATCH[2]} v=${BASH_REMATCH[3]}
+    if [ -n "${!n:-}" ]; then out+=${!n}; else out+="\${$n}"; fi
+  done
+  printf -v "$1" %s "$out$v"
+}
+unfilled() {  # WHAT VALUE: the preflight's refusal of a gate whose ${NAME} this run's environment doesn't set
+  [[ $2 =~ \$\{([A-Za-z_][A-Za-z0-9_]*)\} ]] || return 0
+  local n=${BASH_REMATCH[1]} m
+  m=${n%_HOST} && m=${m,,}
+  say "PREFLIGHT: $1 gives its gate's address as \${$n}, which this run's environment doesn't set: launch the run with $(
+    [ "${n%_HOST}" != "$n" ] && echo "research run --env-host ${m//_/-}" || echo "--env $n=ADDRESS"), or start it with \
+adapters/vllm/tools/served_run/run.sh window, whose settings fill it from the node's env file"
+  return 3
+}
+fill_host V3C_CHALLENGER
+fill_host SP_CHALLENGER
 [ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   if v3c_live; then
@@ -2049,6 +2071,10 @@ if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by s
     || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
 fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
+if [ -z "$COMPOSE" ]; then
+  if [ -n "$V3C" ]; then unfilled "V3C_CHALLENGER (default PP_CHALLENGER)" "$V3C_CHALLENGER" || exit 3; fi
+  unfilled PP_CHALLENGER "$SP_CHALLENGER" || exit 3
+fi
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)

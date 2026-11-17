@@ -4184,6 +4184,39 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
         "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"], [])
 
 
+#: the gate as placement.toml gives it, which no launch's recorded params resolve
+BY_HOST = "gate:research@${VY_CHALLENGER_1_HOST}"
+
+
+@pytest.mark.parametrize("v3c", [True, False], ids=["v3c", "step-3"])
+def test_the_preflight_refuses_a_gate_whose_address_the_runs_environment_does_not_set(tmp_path, v3c):
+    """A gate given as research@${VY_CHALLENGER_1_HOST} takes its address from the run's environment; with that unset
+    the ${...} would reach ssh as it stands, so the run is refused before anything runs, naming the launch that sets it."""
+    extra = {**_live(tmp_path, []), "PP_CHALLENGER": BY_HOST, "VY_CHALLENGER_1_HOST": None}
+    if not v3c:
+        extra |= {**NO_V3C, "HOST": "vy-dc-h200", "PATH": f"{_hosts(tmp_path)}:{extra['PATH']}"}
+    rc, lines, order, _limits = _v3c(tmp_path, ("v3c",) if v3c else (), **extra)
+    what = "V3C_CHALLENGER (default PP_CHALLENGER)" if v3c else "PP_CHALLENGER"
+    assert (rc, lines, order) == (3, [
+        f"PREFLIGHT: {what} gives its gate's address as ${{VY_CHALLENGER_1_HOST}}, which this run's environment doesn't "
+        "set: launch the run with research run --env-host vy-challenger-1, or start it with "
+        "adapters/vllm/tools/served_run/run.sh window, whose settings fill it from the node's env file"], [])
+
+
+def test_a_gate_given_by_its_host_variable_reaches_the_audit_filled_and_no_published_line_or_output_holds_the_address(tmp_path):
+    """The address comes from the run's environment (`--env-host`, redacted in the run's params as a _HOST key) and is
+    filled in on the node: the audit and the gate's ssh reach it, while the verdict lines and the run's outputs name the
+    gate by its kind alone."""
+    rc, lines, order, _limits = _v3c(tmp_path, **{**_live(tmp_path, [LEDGER_LINE]), "PP_CHALLENGER": BY_HOST})
+    assert rc == 0 and "audit" in order and lines[0] == f"COINS V3c's audit: {V3C_LIVE}", (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert audit[audit.index("--challenger") + 1] == f"gate:research@{CHALLENGER_HOST}", audit
+    assert f"research@{CHALLENGER_HOST}" in (tmp_path / "order.ssh").read_text()
+    out = [p for p in (tmp_path / "out").rglob("*") if p.is_file()]
+    assert out and not [p for p in out if CHALLENGER_HOST in p.read_text(errors="replace")], out
+    assert not [x for x in lines if CHALLENGER_HOST in x], lines
+
+
 @pytest.mark.parametrize("extra, other", [
     ({"H1_GATE": GATE, "H1_PEER": "vy-dc-h200-3"}, "H1_PEER"),
     ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),
