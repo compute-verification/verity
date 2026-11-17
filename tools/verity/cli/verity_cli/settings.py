@@ -9,11 +9,6 @@ def run_id() -> str:
     return os.environ.get("RESEARCH_RUN_ID") or "local"
 
 
-#: the setting that restores this week's lifted placement holds (``1``)
-HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
-
-
 def hold_placement() -> bool:
-    """Whether the placement holds stand (``VERITY_HOLD_PLACEMENT=1``): `served_table.onsite_check`'s on a record the
-    workload's node composed. Unset, they are lifted."""
-    return os.environ.get(HOLD_PLACEMENT) == "1"
+    """``VERITY_HOLD_PLACEMENT=1``: the refusals that rest only on where coins are flipped or a composite made hold."""
+    return os.environ.get("VERITY_HOLD_PLACEMENT") == "1"

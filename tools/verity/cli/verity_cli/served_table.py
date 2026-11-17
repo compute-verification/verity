@@ -58,11 +58,11 @@ from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity_cli import settings
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
+from verity_cli import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 SERVED_WINDOW, GATE, RUNTIME, CHECK = "served-window", "gate", "runtime", "check"
@@ -398,10 +398,10 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 
 
 def _spot_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
-    served_verdicts.sh takes only in a development run."""
+    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's,
+    simulated, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
-    return hooks if "gate" in bound else {**hooks, "DEVELOPMENT": "1"}
+    return hooks if "gate" in bound or not settings.hold_placement() else {**hooks, "DEVELOPMENT": "1"}
 
 
 def _pouw(cfg, params, bound):
@@ -688,11 +688,13 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
 
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
-    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
-    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
-    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
-    on the node) keeps what it named."""
-    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+    """The runner's ``COMPOSITE``, set empty where it composes off the served node (``COMPOSE_OFF_NODE=1``, its default
+    under ``PRODUCT=remote`` or ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which reads PoUS's and the wipe's
+    cases that only the node's card writes, can't be made, and it refuses to start. ``env`` is what the runner gets
+    before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
+    held = env.get("VERITY_HOLD_PLACEMENT") == "1" or env.get("PRODUCT") == "remote"
+    off = env.get("COMPOSE_OFF_NODE", "1" if held else "0")
+    return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
@@ -702,7 +704,8 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
     theirs."""
     node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
-    env = {**os.environ, **node, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    env = {**os.environ, **node, **variables(cfg, bindings)}
+    env |= {**composite(env), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -722,7 +725,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
     ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
     ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
-    (`HOLD_PLACEMENT`), since the workload's node composed that record, each of its accepts, each row's and the
+    (`settings.hold_placement`), since the workload's node composed that record, each of its accepts, each row's and the
     combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way. Refused
     (``window``, ``record``) when either file isn't there."""
     out = state / "out"
