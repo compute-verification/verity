@@ -52,7 +52,8 @@ def test_each_gpu_has_one_short_name() -> None:
     bad = sorted(sku for sku, s in short.items() if not isinstance(s, str) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", s))
     assert not bad, f"{bad}: set `short` to lower case letters, digits and hyphens"
     assert len(set(short.values())) == len(short), f"two GPU cards share a `short`: {short}"
-    assert short == {"b200-sxm-180gb": "b200", "h200-sxm-141gb": "h200", "rtx-pro-6000-server": "rtx-pro-6000"}
+    assert short == {"b200-sxm-180gb": "b200", "h100-sxm-80gb": "h100", "h200-sxm-141gb": "h200",
+                     "rtx-pro-6000-server": "rtx-pro-6000"}
 
 
 @pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))

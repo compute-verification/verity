@@ -1,17 +1,22 @@
 # The NVIDIA H100 SXM 80 GB: the one source of its numbers (hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
 # runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
-# "placeholder" (neither, open). Per-SM rates are a SM-clock's. No H100 has been read: every figure is a published
-# document's or derived from one, and none is measured on an H100. The host the card sits in is its own card.
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. Every figure is a published document's or derived from
+# one, and none is measured on an H100; the driver's report of one card is on record. The host the card sits in is its
+# own card.
 
 kind = "gpu"
 sku = "h100-sxm-80gb"
+short = "h100"
 name = "NVIDIA H100 SXM 80 GB"
 die = "GH100"
 arch = "sm_90a"
+driver = [
+  { value = "NVIDIA H100 80GB HBM3", source = "art:6a05f4880c43 (native_peak.json environment.nvidia_smi: nvidia-smi --query-gpu=name,driver_version,clocks.max.sm,clocks.max.memory,power.limit,memory.total, driver 580.173.02, on the one card of an H100 node the run held)" },
+]
 board = "not known: no H100 board has been read"
 vbios = "not known: no H100 board has been read"
-nodes = "none: no H100 node has been read"
+nodes = "an H100 node (art:6a05f4880c43: nvidia-smi --query-gpu on the one card the run held)"
 
 # count: the SMs. warps: the most warps resident on an SM at once.
 [sm]
@@ -23,9 +28,9 @@ warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Pro
 # readings(card) is largest.
 [clock]
 default = "sm"
-sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non-Tensor Core Ops 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous for NVIDIA Data Center GPUs'; no driver report of an H100's clocks has been read" }
+sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non-Tensor Core Ops 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous for NVIDIA Data Center GPUs'; art:6a05f4880c43 (nvidia-smi clocks.max.sm 1980 MHz on one card)" }
 tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds, on two readings, each figure it moves quoted at both; a credit is claimed at the 1980 MHz one, the higher ceiling (clock.default, price.fp32.sm, CMP-438), unless it says it rests on 1830 MHz (price.fp32.tensor). 1830 MHz: H100 whitepaper V1.04 Table 3, H100 SXM5, 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops 1830 MHz', at which its 'Peak INT8 Tensor TOPS 1978.9' is 4096 a SM-clock on 132 SMs, so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's boost clock for its other pipes (the same table), so 1.0705e15 s8 MACs a second. Falsified by any run of benchmarks/tensor_duty above 132 x 4096 x 1830 MHz = 9.894e14 s8 MACs a second over the host's wall clock; no such run has been made on an H100" }
-memory = { value = 2619, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'Memory Data Rate 2619 MHz DDR'; no driver report of an H100's memory clock has been read" }
+memory = { value = 2619, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'Memory Data Rate 2619 MHz DDR', the row footnoted 'Not Finalized for H100' though the cover says 'Includes final GPU / memory clocks'; art:6a05f4880c43 (nvidia-smi clocks.max.memory 2619 MHz on one card)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
 # smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own. dram is
@@ -36,7 +41,7 @@ reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the un
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 page 27, 'Combined L1 Data Cache and Shared Memory': 'The combined capacity of the L1 data cache and shared memory is 256 KB/SM in H100'; CUDA C++ Programming Guide 12.9 section 18.8.1, CC 9.0: 'a unified data cache and shared memory with a total size of 256 KB'; shared memory alone is store.smem_carveout, so the pool is the larger" }
 smem_carveout = { value = 233472, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 9.0, 'Maximum amount of shared memory per SM 228 KB' (the table's KB is 1024 bytes); H100 whitepaper V1.04 Table 3, 'Shared Memory Size / SM Configurable up to 228 KB'" }
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'L2 Cache Size 50 MB', taken as 50 MiB" }
-dram = { value = 85899345920, unit = "B", mark = "ceiling", source = "NVIDIA H100 Tensor Core GPU Datasheet, Technical Specifications, H100 SXM: 'GPU Memory 80GB', taken as 80 GiB; no driver report of an H100's memory has been read" }
+dram = { value = 85899345920, unit = "B", mark = "ceiling", source = "NVIDIA H100 Tensor Core GPU Datasheet, Technical Specifications, H100 SXM: 'GPU Memory 80GB', taken as 80 GiB, above the 81,559 MiB the driver reports (art:6a05f4880c43: nvidia-smi memory.total)" }
 dram_installed = { value = 85899345920, unit = "B", mark = "ceiling", source = "80 GiB, the memory on the board, five HBM3 stacks (memory.bus): H100 whitepaper V1.04, the H100 SXM5 'includes the following units: ... 80 GB HBM3, 5 HBM3 stacks, 10 512-bit Memory Controllers', and 'supporting 80 GB (five stacks) of fast HBM3 memory', taken as 80 GiB; no document read says the board holds any back, so it is store.dram" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
@@ -54,7 +59,7 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 [memory]
 bus = { value = 5120, unit = "bit", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'Memory Interface 5120-bit HBM3', five HBM3 stacks of 1024 bits" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Memory Data Rate 2619 MHz DDR', two transfers a clock" }
-bandwidth = { value = 3.35232e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, at or above the H100 data sheet's 'GPU Memory Bandwidth 3.35TB/s' and the H100 whitepaper V1.04 Table 3's 'Memory Bandwidth 3352 GB/sec' (that row labelled 'Not Finalized for H100'); not measured on an H100" }
+bandwidth = { value = 3.35232e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, at or above the H100 data sheet's 'GPU Memory Bandwidth 3.35TB/s' and the H100 whitepaper V1.04 Table 3's 'Memory Bandwidth 3352 GB/sec' (printed over the 'Not Finalized for H100' footnote of the Memory Data Rate row, though the cover says 'Includes final GPU / memory clocks'); not measured on an H100" }
 read = { value = 3.35232e12, unit = "B/s", mark = "placeholder", source = "no read measured on an H100: memory.bandwidth until a measured read replaces it; the H200's measured read is of HBM3e at 4.8 TB/s and is not the H100's" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
