@@ -23,7 +23,7 @@ MARKER=${POD_SETUP_MARKER:-$HOME/.research/pod-setup.json}
 mkdir -p "$(dirname "$MARKER")"
 rm -f "$MARKER"
 
-# `check.landable` and `research merge` compare trees with `git merge-tree --write-tree` (git 2.38); Ubuntu 22.04 ships 2.34, and
+# `check.landable` and the queue's merges compare trees with `git merge-tree --write-tree` (git 2.38); Ubuntu 22.04 ships 2.34, and
 # its `add-apt-repository` breaks on the pod's python, so the git-core PPA goes in by hand. The image sets LC_ALL=en_US.UTF-8
 # without generating it, and bash's warning about that lands in output the tests compare.
 SUDO=$([ "$(id -u)" = 0 ] || echo sudo)

@@ -1366,7 +1366,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
 
 
 def test_record_asks_for_a_train_slot_only_for_a_trains_tests_circuit_check_or_lean_and_through_the_runs_environment(monkeypatch):
-    """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
+    """`research.merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
     slot.py option; a lane's check, a pooled one, a combine and a train's run of light steps alone (ratchet-gate, the
     preflights) need no train slot, and a train's shard of Lean steps alone does: its builds and replays don't fit a small
     slot such a run takes."""
