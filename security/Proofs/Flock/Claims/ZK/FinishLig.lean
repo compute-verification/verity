@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishPiop
 
-/-!
-# The ZK server's Ligerito is the masked prover's
-
-`Flock.ZkServer.Finish.ligeritoPZk` is `FlockComplete.ligeritoPZk` word for word on the port's own state, commitment
-and sends (`LigState`, `Commit`, `Asks`, each the analysis's fields), its levels ≥ 1 committed by its argument `commit`
-where the analysis's call `FlockComplete.commitP`. Its actions run on the analysis's state through `ligConj`, which
-reads the port's state as the analysis's and writes it back:
-
-* `ligConj_pure`, `ligConj_bind`, `ligConj_lift`, `ligConj_get`, `ligConj_modify`, `ligConj_set`, `ligConj_forIn_range`:
-  `ligConj` goes through each step of a program;
-* `ligConj_forIn_cm`: and through the levels' loop, whose carried commitment is the port's on one side and the
-  analysis's on the other;
-* `ligConj_sendMsg` to `ligConj_queryP`: each of the prover's actions is the analysis's under `ligConj`.
-* **`ligeritoPZk_eq`**: where `commit` is `FlockComplete.commitP hs ms` through `Commit.toC`, the port's Ligerito is
-  the analysis's; at SHA-512 and `hm96-sha512/v1` with `commitFw` (`ligeritoPZk_fw`), as `flock-zk-server finish` runs
-  it.
--/
+/-! The ZK server's Ligerito is the masked prover's. -/
 
 @[expose] public section
 
@@ -26,20 +10,16 @@ namespace Flock.ZkServer.Finish
 
 open Transcript
 
-/-- The port's Ligerito state as the analysis's: the same seven fields. -/
 def LigState.toC (s : LigState) : FlockComplete.LigState := ⟨s.tab, s.w, s.msgs, s.oods, s.qn, s.cn, s.cbn⟩
 
-/-- The analysis's Ligerito state as the port's. -/
 def ligOfC (s : FlockComplete.LigState) : LigState := ⟨s.tab, s.w, s.msgs, s.oods, s.qn, s.cn, s.cbn⟩
 
-/-- The analysis's commitment as the port's. -/
 def cmOfC (c : FlockComplete.Commit) : Commit := ⟨c.rows, c.salts, c.layers, c.cap⟩
 
 theorem cmOfC_toC (c : Commit) : cmOfC c.toC = c := rfl
 
 theorem Commit.toC_cap (c : Commit) : c.toC.cap = c.cap := rfl
 
-/-- A loop step's carried value mapped. -/
 def stepMap {β β' : Type} (g : β → β') : ForInStep β → ForInStep β'
   | .done b => .done (g b)
   | .yield b => .yield (g b)
@@ -52,7 +32,6 @@ section Conj
 
 variable {N : Type → Type} [Monad N] [LawfulMonad N]
 
-/-- **A program on the analysis's Ligerito state, run on the port's.** -/
 def ligConj {α : Type} (x : StateT FlockComplete.LigState N α) : StateT LigState N α :=
   fun s => (fun p => (p.1, ligOfC p.2)) <$> x s.toC
 
@@ -141,8 +120,6 @@ theorem ligConj_forIn_array {α β : Type} (xs : Array α) (b : β)
     ligConj (forIn xs b f) = forIn xs b fun a b => ligConj (f a b) := by
   rw [← Array.forIn_toList, ← Array.forIn_toList, ligConj_forIn_list]
 
-/-- **A loop whose carried value is mapped**: `g` with inverse `gi`, the analysis's loop from `g b` is `g` of the port's
-from `b`. -/
 theorem ligConj_forIn_iso {α β β' : Type} (g : β → β') (gi : β' → β) (hg : ∀ b', g (gi b') = b') (l : List α)
     (b : β) (f : α → β' → StateT FlockComplete.LigState N (ForInStep β')) :
     ligConj (forIn l (g b) f) = g <$> forIn l b (fun a r => stepMap gi <$> ligConj (f a (g r))) := by
@@ -156,7 +133,6 @@ theorem ligConj_forIn_iso {α β β' : Type} (g : β → β') (gi : β' → β) 
     | done b' => simp only [stepMap, map_pure, hg]; exact ligConj_pure b'
     | yield b' => simp only [stepMap]; rw [← ih (gi b'), hg]
 
-/-- **The levels' loop**, which carries the commitment of the level last committed. -/
 theorem ligConj_forIn_cm {γ : Type} (n k : ℕ) (c : Commit) (x : γ)
     (f : ℕ → ℕ × FlockComplete.Commit × γ → StateT FlockComplete.LigState N (ForInStep (ℕ × FlockComplete.Commit × γ))) :
     ligConj (forIn [0:n] (k, c.toC, x) f) = (fun r => (r.1, r.2.1.toC, r.2.2)) <$>
@@ -208,8 +184,6 @@ theorem ligConj_queryP (io : Asks M) (nonce : ℕ → ℕ → UInt64) (ms : Merk
   simp only [FlockComplete.queryP, queryP, ligConj_bind, ligConj_liftT, ligConj_powP, ligConj_pure]
   rfl
 
-/-- **The ZK server's masked Ligerito is the analysis's** where its levels ≥ 1 commit as `FlockComplete.commitP hs ms`
-does. -/
 theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ → ByteArray) → M Commit) (hs : Hashes M)
     (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout)
     (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -229,8 +203,6 @@ theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ →
     map_bind, map_pure, stepMap, cmOfC_toC, map_ite']
   rfl
 
-/-- **As `flock-zk-server finish` runs it**: levels ≥ 1 committed by the FFT (`commitFw`) at SHA-512 and
-`hm96-sha512/v1`. -/
 theorem ligeritoPZk_fw (io : Asks M) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128)
     (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) :

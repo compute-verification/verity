@@ -5,24 +5,7 @@ public import Proofs.Flock.Claims.ZK.FrameSched
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# A rep's scheduled rounds against its plan
-
-The loop requests a rep's rounds at the plan's counts (`Session.repPlan`), and the frame checks the device against the
-rep's schedule so far (`Loop.schedSoFar`): the algebraic phase's rounds (`Skeleton.rounds`, counted in `FrameCount`),
-then the opening's (`Drive.openStep`), fed the coins released so far, with the round it asks for next. This file shows
-that schedule's counts are a prefix of the plan's.
-
-* `NA`, `naLift`, `piop_na`: on the algebraic phase's coins alone (`stepAsks coins false`) the PIOP asks for nothing,
-  through `Sched.repPiop_sim` at a `Sched.Lift` that ignores its right side, and returns the extras and two claims more.
-* `repOpening_ot`, `openStep_sp`: past the PIOP's coin check, `openStep` asks for the ring switch's counts, then
-  Ligerito's (`openList`).
-* `feed_prefix`: fed coins, a step program's rounds and its next ask are a prefix of its asks.
-* `sched_prefix`: the schedule so far squeezes a prefix of `replayCoins` without its zeros, then `openList`.
-* `plan_sched`: at the placeholder at a link of `spec.points` points, each round of the schedule so far squeezes the
-  plan's count for it (`repPlan_list`: the plan is those asks, then the inner proof's; `sched_facts`: every `--zk`
-  schedule has a lane round and counts within a squeeze's, by `decide +kernel`).
--/
+/-! A rep's scheduled rounds against its plan. -/
 
 @[expose] public section
 
@@ -33,7 +16,6 @@ open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
 
 variable {wideLeaf : Bool}
 
-/-- **A step program that asks for nothing**: where it ends, with a value in `Q`. -/
 def NA {α : Type} (Q : α → Prop) : Step α → Prop
   | .done a => Q a
   | .fail _ => True
@@ -52,8 +34,6 @@ theorem na_mono {α : Type} {Q Q' : α → Prop} (h : ∀ a, Q a → Q' a) : ∀
 
 theorem step_pure_bind {α β : Type} (a : α) (f : α → Step β) : (pure a >>= f : Step β) = f a := rfl
 
-/-- **The opening's runs on the algebraic phase's coins alone** (`stepAsks coins false`) as a `Lift`: they ask for
-nothing. -/
 def naLift (coins : Got) : Sched.Lift (M := OpenM) (stepAsks coins false) where
   R S x _ := ∀ got, NA (fun r => ∃ b, S r.1 b) (x.run got)
   pure h := fun _ => ⟨_, h⟩
@@ -75,8 +55,6 @@ def naLift (coins : Got) : Sched.Lift (M := OpenM) (stepAsks coins false) where
       · exact trivial
       · exact ⟨_, rfl⟩
 
-/-- **The PIOP on the algebraic phase's coins asks for nothing**, and where it ends, its claims are the extras and
-two more. -/
 theorem piop_na (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64)
     (hr : root.size < 2 ^ 64) (hm : st.m < 2 ^ 64) (t : Flock.Transcript) (ht : Sched.TrAlike t t) (got : Got) :
@@ -99,7 +77,6 @@ theorem sp_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → List �
     {got : Got} {ns : List ℕ} (h : SP (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) ns) :
     SP (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) ns := h
 
-/-- **A rep's opening past the algebraic phase**: the ring switch's asks, then Ligerito's. -/
 theorem repOpening_ot (coins : Got) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit)
     (claims : Array _root_.Flock.Claim) (h : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -154,13 +131,10 @@ theorem openStep_sp (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : By
     refine sp_bind (fun _ _ _ => ?_) _ _ ho
     exact trivial
 
-/-- The count a step program asks for next, none where it has ended. -/
 def pend {α : Type} : Step α → List ℕ
   | .ask _ n _ => [n]
   | _ => []
 
-/-- **Fed coins, a step program's rounds are its asks so far**: the rounds it sent, and the round it asks for next, are
-a prefix of its asks after the rounds it started with. -/
 theorem feed_prefix {α : Type} {Q : α → List ℕ → Prop} : ∀ (s : Step α) (cs : List (Array F128))
     (rs : Array (ByteArray × ℕ)) (ns : List ℕ), SP Q s ns →
     (s.feed cs rs).2.toList.map Prod.snd ++ pend (s.feed cs rs).1 <+: rs.toList.map Prod.snd ++ ns
@@ -180,13 +154,10 @@ theorem feed_prefix {α : Type} {Q : α → List ℕ → Prop} : ∀ (s : Step �
     rw [e]
     exact this
 
-/-- The opening's asks at `claims` claims and the schedule `sch`: the ring switch's, then Ligerito's. -/
 def openList (claims : ℕ) (sch : _root_.Flock.Schedule) : List ℕ :=
   (List.replicate claims [7]).flatten ++ sq claims ++
     (_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0)
 
-/-- **A rep's scheduled rounds so far squeeze a prefix of its asks**: the algebraic phase's counts (`replayCoins`
-without its zeros), then the opening's (`openList`). -/
 theorem sched_prefix (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ))
     (h : Loop.schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
@@ -249,8 +220,6 @@ theorem tabOfLevel0_ok {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Leve
     subst h
     exact ⟨rfl, tPad, rfl⟩
 
-/-- **The placeholder's table** is the statement's, at its `--zk` schedule, and its extra claims are at the link's
-points. -/
 theorem placeholder_tab {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {k : ℕ} {link : Array F128}
     {c' : _root_.Flock.ZkServer.Frame.Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} (h : Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
@@ -281,14 +250,12 @@ theorem linkPoints_size (st : _root_.Flock.Stmt) (c : Array F128) :
     (_root_.Flock.ZkServer.Drive.linkPoints st c).size = c.size / st.mPts := by
   simp [_root_.Flock.ZkServer.Drive.linkPoints]
 
-/-- A `--zk` schedule's facts the opening's asks read: a lane round before the pair, and its counts within a squeeze's. -/
 def schedOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.k0) && decide (sch.n < 2 ^ 62) &&
       sch.levels.all (fun lv => decide (lv.q < 2 ^ 63)) && decide ((default : _root_.Flock.Level).q < 2 ^ 63)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
 theorem schedOk_lt : ∀ (w : Bool) (m : Fin 36), schedOk w m.val = true := by decide +kernel
 
 theorem sched_facts {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
@@ -316,7 +283,6 @@ theorem flatten_seven (n : ℕ) : (List.replicate n [7]).flatten = List.replicat
   | zero => rfl
   | succ n ih => rw [List.replicate_succ, List.flatten_cons, ih]; rfl
 
-/-- **A rep's plan**, as a list: the algebraic phase's counts, the opening's, then the inner proof's. -/
 theorem repPlan_list {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) :
     (_root_.Flock.ZkServer.Session.repPlan spec st).toList =
@@ -341,8 +307,6 @@ theorem getD_of_prefix {P : Array ℕ} {sched : Array (ByteArray × ℕ)} {i : �
   simp only [Array.getD, hi, hPl, dite_true]
   exact e.symm
 
-/-- **The plan's count is the schedule's**: at a placeholder at the link points of `spec.points` points, each round of
-the rep's schedule so far squeezes the plan's count for it. -/
 theorem plan_sched (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) (k i : ℕ) (link : Array F128)
     (c' : _root_.Flock.ZkServer.Frame.Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ))

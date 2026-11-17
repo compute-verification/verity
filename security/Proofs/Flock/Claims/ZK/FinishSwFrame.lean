@@ -36,26 +36,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 
-/-!
-# `hmk` at the ZK server's own request
-
-`FinishSwMk`'s `swSrcE_hmk` and `swSrcE_l0` read the ZK server's clear values by pad index (`valsFw`) and the pads from
-the session's tape (`padsOf (UE.tapeZk τ)`). The ZK server's `Finish` builds rep `r` of table `j` from its request
-(`Finish.RepIn`): the values that passed the ZK server (`vals`, `zp 64` words) and the frame's samples (`draws`), whose
-pads are `Finish.padsOf`. So where the passed values are the request's, its samples are the release's frame samples on the
-tape (`LeanRelease.samplesAt`), and the session's tape has, at that rep, the pads of the tape of those samples
-(`tapeOfSamples`), `repCut_fw`'s `hmk` holds at the request's own `vals` and `padsOf draws`.
-
-* `Finish.padsOf_h`: a request's pads are its samples' `h`, as `samplesPads` has them.
-* `Masked.pads_frame`: the session's pads are then the request's below `h_ab` (`padsOf_get`, `padsOf_samplesAt`).
-* **`Masked.swSrcE_hmk_frame`**: `hmk` at the switched source, at the ZK server's request: below `zp 64`, rep `r`'s
-  masked values are `q.vals[k]! + (Finish.padsOf q.draws).h[k]!`.
-* **`Masked.swSrcE_l0_frame`**: from `zp 64` to `h_ab` they are level 0's opening's values plus the request's pads.
--/
+/-! `hmk` at the ZK server's own request. -/
 
 @[expose] public section
 
-/-- A request's pads are its samples' `h`. -/
 theorem Flock.ZkServer.Finish.padsOf_h (d : _root_.Flock.ZkServer.Frame.Draws) :
     (_root_.Flock.ZkServer.Finish.padsOf d).h = d.h := rfl
 
@@ -66,10 +50,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The session's pads are the request's below `h_ab`**: where `q`'s samples are the frame's on the tape `ρ` (of
-`sampleBytes` bytes, at table `j`'s layout) for frame rep `rep j r` of the release `L`, and the session's tape has, at that
-rep, the pads of the tape of the frames' samples (`tapeOfSamples`), the session's pad array for table `j`'s rep `r`
-(`padsOf`) is `Finish.padsOf q.draws`'s below `h_ab`. -/
 theorem pads_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.ZkServer.Finish.RepIn)
     (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
@@ -87,10 +67,6 @@ theorem pads_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (
     ← hlay, Claims.ZKServer.padsOf_samplesAt L x ρ t₀ rep j.val r.val hz, hq]
   rfl
 
-/-- **`repCut_fw`'s `hmk` at the switched source, at the ZK server's request `q`** for table `j`'s rep `r`, frame rep
-`rep j r` of the release `L`: where the passed values there are `q`'s and the pads are the request's (`pads_frame`'s
-premises), then where table `j`'s rows hold at its base, rep `r`'s masked values below `zp 64` are
-`q.vals + (Finish.padsOf q.draws).h`. -/
 theorem swSrcE_hmk_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
@@ -109,9 +85,6 @@ theorem swSrcE_hmk_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
   rw [swSrcE_hmk x c w A B τ j r hrows k hk, hA,
     pads_frame L ρ t₀ rep x τ j r q hq hlay hz htape k (lt_trans hk (zp64_lt_hab x j))]
 
-/-- **Level 0's opening at the switched source, at the ZK server's request `q`**: at `pads_frame`'s premises, where table
-`j`'s rows hold at its base, rep `r`'s masked values from `zp 64` to `h_ab` are `B j r` plus
-`(Finish.padsOf q.draws).h`. -/
 theorem swSrcE_l0_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)

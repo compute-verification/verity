@@ -3,27 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.Layout
 public import Proofs.Flock.Claims.ZK.Cut
 
-/-!
-# A run in parts with a public stop
-
-A prover with a public stop reads a test `s` of the history at the start of each of the first part's rounds and
-after its last (`fired`); once it holds, the prover sends the empty message every round left (`stopP`). The stop reads
-only what the verifier has seen, so it leaks nothing: the run with the stop is the run without it cut where the stop
-fires (`interact_censor`), a function of the transcript and the verifier alone, and a simulator cuts its own
-transcript there (`censorSim`).
-
-* `ZKmalAt.post`: `ZKmalAt` at `γ = 0` carries over to a prover and a program whose transcripts are one function of
-  the first ones' at each verifier and tape. So a first part that rewinds nothing is `ZKmalAt` with the stop at its
-  simulator cut, at the same error (`ZKmalAt.censor`).
-* `Layout.stopped`: the parts with the stop. A session at a history where the stop has fired is at the empty
-  statement with no witness, and its prover is silent (`stopPS`), simulated exactly (`zkmalAt_silent`); elsewhere it
-  is at its statement tagged `1 ::`, with its witness, where its zero knowledge is the untagged statement's
-  (`ZKmalAt.tag`). The layout's prover is the prover with the stop (`Layout.prover_stopped`).
-* **`zkmalAt_layout_stop`**: the parts in turn with the stop are `ZKmalAt` at the stopped composition, within the
-  first part's error and the sessions', where the sessions are zero knowledge at the histories where the stop hasn't
-  fired and their relation holds at the honest first parts the stop leaves live. The collision term is `Fork`'s of the
-  prover with the stop.
--/
+/-! A run in parts with a public stop. -/
 
 @[expose] public section
 
@@ -31,9 +11,6 @@ namespace Claims.ZKMal
 
 open Claims Claims.ZKServer
 
-/-! ## A public stop -/
-
-/-- Past the first `k` rounds, the stop reads only them. -/
 theorem fired_take {s : List (Msg × Msg) → Bool} {k j : ℕ} (h : List (Msg × Msg)) (hj : k ≤ j) :
     fired s k (h.take j) = fired s k h := by
   unfold fired
@@ -49,7 +26,6 @@ theorem fired_take {s : List (Msg × Msg) → Bool} {k j : ℕ} (h : List (Msg �
     refine ⟨i, hi, ?_⟩
     rwa [List.take_take, Nat.min_eq_left (by omega)]
 
-/-- A stop fired at a prefix has fired. -/
 theorem fired_of_take {s : List (Msg × Msg) → Bool} {k : ℕ} (h : List (Msg × Msg)) (j : ℕ)
     (hf : fired s k (h.take j) = true) : fired s k h = true := by
   unfold fired at hf ⊢
@@ -58,7 +34,6 @@ theorem fired_of_take {s : List (Msg × Msg) → Bool} {k : ℕ} (h : List (Msg 
   refine ⟨i, by omega, ?_⟩
   rwa [List.take_take, Nat.min_eq_left (by omega)] at h'
 
-/-- The message function `pm` with the stop. -/
 def censor (s : List (Msg × Msg) → Bool) (k : ℕ) (pm : List (Msg × Msg) → Msg) (h : List (Msg × Msg)) : Msg :=
   if fired s k h then [] else pm h
 
@@ -94,9 +69,6 @@ theorem stopIdx_eq {s : List (Msg × Msg) → Bool} {k n : ℕ} {τ : List (Msg 
   · rename_i h
     rw [dif_neg h]
 
-/-- **The run with the stop is the run cut where the stop fires**: against `ask`, the prover with the stop at most
-`k` rounds in sends the run's messages before the first round at whose history the stop holds, then the empty
-message. -/
 theorem interact_censor (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (s : List (Msg × Msg) → Bool)
     (k n : ℕ) :
     interact ask (censor s k pm) n [] =
@@ -144,10 +116,6 @@ theorem interact_censor (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg
     rw [hpre T (by omega) le_rfl]
     exact stopIdx_spec (lt_of_le_of_lt hTi (lt_of_lt_of_le hi hle))
 
-/-! ## The first part with the stop -/
-
-/-- **`ZKmalAt` through a public post-processing**, at `γ = 0`: where at every verifier and tape `f` takes the
-transcripts of `P` and `prog` to those of `P'` and `prog'`. -/
 theorem ZKmalAt.post {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : ℕ}
     {P P' : W → Prover (N × Ω)} {R : W → Prop} {x : Msg} {C : Type} [Fintype C]
     {prog prog' : C → SP (List (Msg × Out))} {ε : ℝ} (h : ZKmalAt H k P R x C prog ε 0)
@@ -174,8 +142,6 @@ theorem censorSim_out {Θ : Type} (H : Msg → Msg) (S : Simulator) (s : Msg →
   simp only [spOut, censorSim, spBind_eval, spRun_eval]
   rfl
 
-/-- **A first part that rewinds nothing is zero knowledge with the stop** at its simulator cut where the stop fires,
-at the same error. -/
 theorem ZKmalAt.censor {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
     {P : W → Prover (N × Ω)} {R : W → Prop} {x : Msg} (S : Simulator) {ε : ℝ} (s : Msg → List (Msg × Msg) → Bool)
     (k : Msg → ℕ) (h : ZKmalAt H (k x) P R x (S.C x) (S.prog x) ε 0) :
@@ -193,20 +159,14 @@ theorem ZKmalAt.censor {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [No
     rfl
   · rw [if_neg hf, if_neg hf]
 
-/-! ## The sessions with the stop -/
-
-/-- **The session prover with the stop**: silent at no witness; at a witness, `PS`'s at the statement untagged. -/
 def stopPS {WS TS : Type} (PS : WS → Prover TS) : Option WS → Prover TS
   | none => ⟨fun _ _ _ => .ret []⟩
   | some w => ⟨fun x h ω => (PS w).next x.tail h ω⟩
 
-/-- **The sessions' relation with the stop**: no witness at the empty statement; a witness of `RB` at a statement
-tagged `1 ::`. -/
 def stopRel {WS : Type} (RB : Rel WS) : Rel (Option WS)
   | xs, none => xs = []
   | xs, some w => ∃ xs₀, xs = 1 :: xs₀ ∧ RB xs₀ w
 
-/-- The run reads the prover only at the statement it is at and its tape. -/
 theorem stepWith_retag {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω)
     (ω' : Ω') (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x' hist ω' = P.next x hist ω) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
@@ -219,8 +179,6 @@ theorem stepWith_retag {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : P
       · rfl
       · rfl
 
-/-- **A session at a tagged statement is the session at the untagged one**: its zero knowledge carries over, against
-the verifier read at the tagged statement. -/
 theorem ZKmalAt.tag {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : ℕ}
     {PS : WS → Prover (N × Ω)} {RB : Rel WS} {xs : Msg} {C : Type} [Fintype C] {prog : C → SP (List (Msg × Out))}
     {ε γ : ℝ} (h : ZKmalAt H k PS (RB xs) xs C prog ε γ) :
@@ -243,7 +201,6 @@ theorem ZKmalAt.tag {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
   simp only [hrun, hf, hs]
   exact h w₀ hw₀ Θ Vs₀ θ hk Ev
 
-/-- **A session with no witness is silent, and simulated exactly** by the empty message every round, on any coins. -/
 theorem zkmalAt_silent {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : ℕ)
     (PS : WS → Prover (N × Ω)) (RB : Rel WS) (C : Type) [Fintype C] [Nonempty C] {ε γ : ℝ} (hε : 0 ≤ ε)
     (hγ : 0 ≤ γ) : ZKmalAt H k (stopPS PS) (stopRel RB []) [] C (fun _ => silentSP k) ε γ := by
@@ -261,7 +218,6 @@ theorem zkmalAt_silent {WS N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
   simp only [e, Pr_const, sub_self, abs_zero]
   exact add_nonneg hε (mul_nonneg hγ (Finder.pr_nonneg H _))
 
-/-- **A run's message is its prover's at the history before it.** -/
 theorem histOf_runStar_getElem {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ)
     (i : ℕ) (hi : i < (histOf (runStar H P Vs x ω θ).msgs).length) :
     (histOf (runStar H P Vs x ω θ).msgs)[i].1 =
@@ -275,8 +231,6 @@ theorem histOf_runStar_getElem {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) 
   rw [← histOf_take, ← hget]
   simp [histOf]
 
-/-! ## The parts with the stop -/
-
 namespace Layout
 
 variable {W WS T TS : Type}
@@ -289,7 +243,6 @@ theorem stopped_start (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Boo
     show (L.stopped s).start x j + L.n x j = L.start x j + L.n x j
     rw [ih]
 
-/-- **The parts with the stop run the prover with the stop.** -/
 theorem prover_stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) (P₀ : W → Prover T)
     (PS : WS → Prover TS) :
     ∀ (m : ℕ) (w : W) (x : Msg) (hist : List (Msg × Msg)) (ω : T × (ℕ → TS)),
@@ -333,12 +286,6 @@ theorem prover_stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bo
 
 end Layout
 
-/-- **`m` sessions after a first part, with a public stop, at one statement**: the prover with the stop `s` (read at
-the first part's rounds) is `ZKmalAt` at the stopped composition (the first part's simulator cut where the stop fires,
-then each session's program where the stop hasn't fired and the silent one where it has), within `ε₀ + Σ_{j < m} eB j`
-and `m·g`, where the first part is `ZKmalAt` with `ε₀` and rewinds nothing; session `j < m` is `ZKmalAt` with `eB j`
-and `g` at every history of its start where the stop hasn't fired; its relation holds there at every honest first
-part (its messages the first part's prover's on the tape `t₀`); and `go j` is `goesOn` at every run of its start. -/
 theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (L : Layout W WS (T₀.N × T₀.Ω)) (s : Msg → List (Msg × Msg) → Bool) (H : Msg → Msg) (x : Msg)
     (m : ℕ) (P₀ : W → Prover (T₀.N × T₀.Ω)) (PS : WS → Prover (NB × ΩB)) (RA : Rel W) (RB : Rel WS)

@@ -37,22 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `FrameAdmits` at the session loop: the tables' side and the frame's
-
-`LeanRelease.FrameAdmits` (every table admits the coins of a live history the frame takes) splits at `Masked.Refused`,
-the coin faults some rep frame refuses at its round:
-
-* `Flock.Guarantees.TablesAdmitUnrefused T`: an obligation on the tables `T`, that where no fault shows by the session's
-  last coin at a `Live` statement every table admits the coins. At the deployed tables it is proved
-  (**`tablesAdmitUnrefused_dataE`**, `Masked.admits_of_not_refused_refK`; off `Live` they have none).
-* `LeanRelease.FrameUnrefused`: at a `Live` statement, on a live history of `refK x` openings whose checks pass and
-  whose last coins the frame takes, no fault shows: the rep frames refuse each fault at its round. Narrower than
-  `FrameAdmits`: it reads no table. At the session loop's own frames it is proved
-  (`LeanRelease.frameUnrefused_ofLoop`).
-* **`LeanRelease.frameAdmits_of_unrefused`**: `FrameAdmits` from the two, and **`LeanRelease.finalRoundEq_ofLoop`**:
-  `FinalRoundEq` at `ofLoop` from them and `FinishIs` (`finalRoundEq_of_finishIs`, `loop_last`).
--/
+/-! `FrameAdmits` at the session loop: the tables' side and the frame's. -/
 
 @[expose] public section
 
@@ -70,8 +55,6 @@ def _root_.Flock.Guarantees.TablesAdmitUnrefused (T : CoinLayer.TableData) : Pro
 
 namespace LeanRelease
 
-/-- **The deployed tables admit unrefused coins** (`Masked.admits_of_not_refused_refK` at a `Live` statement; at any
-other the deployed session has no table). -/
 theorem tablesAdmitUnrefused_dataE : _root_.Flock.Guarantees.TablesAdmitUnrefused Masked.dataE := by
   intro x c hn j
   by_cases hx : Masked.Live x
@@ -82,10 +65,6 @@ theorem tablesAdmitUnrefused_dataE : _root_.Flock.Guarantees.TablesAdmitUnrefuse
       rw [h0]
       exact Nat.not_lt_zero _)
 
-/-- **The frames refuse every coin fault**: at a `Live` statement, after every live history of `refK x` openings
-whose openings pass and whose last coins the frame takes, no coin fault shows at the coins the openings open
-(`Masked.Refused` by `refK x`): each rep frame refuses each fault at its round (`Frame.Masker.answer`,
-`Frame.maskRank`), on the state and coins the transport hands it (`prog`, `coinsOf`). -/
 def FrameUnrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
@@ -96,7 +75,6 @@ def FrameUnrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
     ¬ Masked.Refused x ((CoinLayer.session nr T).pad (ops.map fun p => (CoinLayer.session nr T).decOf p.2)) (refK x)
 
-/-- **`FrameAdmits` from the tables admitting unrefused coins and the frames refusing every fault.** -/
 theorem frameAdmits_of_unrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit)
@@ -104,8 +82,6 @@ theorem frameAdmits_of_unrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.Table
     FrameAdmits (CoinLayer.session nr T) L H wk x w :=
   fun ν t κ m₀ ρ₀ ops hl hlive hok hr => hT x _ fun hx => hU hx ν t κ m₀ ρ₀ ops hl hlive hok hr
 
-/-- **`FinalRoundEq` at the session loop's own frames** from the tables admitting unrefused coins, the frames refusing
-every fault and the ZK server's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/
 theorem finalRoundEq_ofLoop (T : CoinLayer.TableData) (vs : (CoinLayer.session Loop.loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))

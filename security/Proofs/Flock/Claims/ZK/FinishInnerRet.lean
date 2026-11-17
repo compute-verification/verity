@@ -38,17 +38,7 @@ import Proofs.Flock.Claims.ZK.FinishFc
 import Proofs.Flock.Claims.ZK.FinishLigEnd
 import Proofs.Flock.Claims.ZK.L0PinCoins
 
-/-!
-# A returning cut rep, stopped at its inner proof's first round
-
-Where the rep from a source, answered by `asksCut` from the log `l`, returns, the same rep with the history cut after
-`CutEq.innerAt l.size` bodies stops past its Ligerito opening, with no pending bytes, and sends the inner proof's first
-body at the source's `masked lay.fc`: its PIOP's zerocheck proof carries that `finalC` (`piopCut_fc_go`), the PIOP and
-the opening run as before below the cut (`CutPrefix`), the replay and the constraints are pure, and the inner proof's
-first coin is the one the cut refuses (`innerCut_first`). It reads no commitment but the rep's own.
-
-* `repCut_inner_of_ret`: that stop.
--/
+/-! A returning cut rep, stopped at its inner proof's first round. -/
 
 @[expose] public section
 
@@ -58,10 +48,6 @@ open Flock Transcript
 open FlockComplete (PS)
 
 set_option maxHeartbeats 2000000 in
-/-- **A returning cut rep, at its inner proof's first round**: where the rep from `src` at level 0's commitment `cm0`
-and the pads commitment `ic`, answered by `asksCut` from `l`, returns, at a schedule the rep's walk takes
-(`CutEq.SchOk`), the same rep with the history cut after `CutEq.innerAt l.size` bodies stops past its Ligerito opening
-with no pending bytes and sends the inner proof's first body there, at the source's `masked lay.fc`. -/
 theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (sch : Flock.Schedule) (rep : ℕ)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (extras : Array Claim) (ic : FlockComplete.InnerCommit)
     (src : FlockComplete.RepSrc) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript)
@@ -95,7 +81,6 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
   subst t₇ l₇
   try dsimp only at hc
   obtain ⟨inner, t₈, l₈, h₈, -⟩ := run_bind_ok hc
-  -- the inner proof drew its first coin, so that round is below `n`
   have hl₄n : l₄.size < n := by
     unfold FlockComplete.innerCut at h₈
     try dsimp only at h₈
@@ -107,12 +92,10 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
     obtain ⟨hn', -, -, -⟩ :=
       FlockComplete.SimInner.ite_ok ((FlockComplete.SimInner.sampleCut_go coin n _ _).symm.trans h₁₁)
     omega
-  -- the PIOP's zerocheck proof carries the source's `finalC`
   have hPF := piopCut_fc_go _ st _ src src.masked _ _ extras prior words (by exact Nat.le_refl _)
     (fun _ _ => rfl) hPC
   have hrpF := replay_ok_fc (src.masked (Zk.PadLayout.new st.m st.kLog sch.k0).fc) hrp
   obtain ⟨rp', hrpS⟩ := hrpF
-  -- the logs grow, and below the inner proof's first round the cut at it runs as the cut at `n`
   obtain ⟨bs₃, hbs₃, -⟩ := FlockComplete.CutPrefix.go_of_shift
     (FlockComplete.CutPrefix.piopCut_shift coin n st _ src _ _ extras prior words t₀) rfl hPF
   obtain ⟨bs₄, hbs₄, -⟩ := FlockComplete.CutPrefix.go_of_shift
@@ -131,7 +114,6 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
     FlockComplete.CutPrefix.eq_of_agree
       (FlockComplete.CutPrefix.ligeritoCut_cut_agree coin (Nat.le_of_lt hl₄n) st.merkle sch T _ _ _ src t₃)
       hs₄ hL (Nat.le_refl _)
-  -- the stop's place
   obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopCut_at hs.m hPC default
   have hl₄ := ((FlockComplete.CutEq.ligeritoCut_eqAt coin n st.merkle sch T cm0
       (FlockComplete.basisVals sws (st.m - 7)) (Zk.PadLayout.new st.m st.kLog sch.k0) src src hs.n hs.k0 hs.levels
@@ -154,7 +136,6 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
   try dsimp only
   exact FlockComplete.LigLock.bind_go_err (innerCut_first coin _ _ _ src _ t₄ (Nat.le_refl _))
 
-/-- **A returning cut rep's PIOP returns**: the PIOP is the rep's first step. -/
 theorem piopCut_of_repCut (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (sch : Flock.Schedule) (rep : ℕ)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (extras : Array Claim) (ic : FlockComplete.InnerCommit)
     (src : FlockComplete.RepSrc) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript)

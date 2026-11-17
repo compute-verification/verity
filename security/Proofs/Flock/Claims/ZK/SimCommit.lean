@@ -39,21 +39,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The commitments from the cut's leaves (`Masked.SimCommit`)
-
-At a live statement, table `j`'s level-0 commitment built from the cut's leaves by tree position (`commit0Cut` on the
-deployed source `srcE`) is the masked prover's (`commitPZk`) but its rows and salts (`eraseC`), and each rep's pads
-commitment from the cut's pads leaves (`padsTreeCut`) is the masked prover's (`innerCommitP`) but its columns and salts
-(`eraseIC`), as the pure session `PS` runs them from any bodies.
-
-* `FlockComplete.commit0Cut_eq`, `FlockComplete.padsTreeCut_eq`: a tree built from the leaves the prover hashes is the
-  prover's, since under SHA-512 every leaf is a pure value of `PS` and the two build the same levels above them.
-* Level 0's leaves: `leafAt_cutAt` and `exeOf_inl` (Round0) at the executable's layout (`agrees0_exe`).
-* The pads' leaves: `padLeafCut_cutAt` and `exeOf_pads`. `exeOf_pads` and what it reads (`colPAt_tabC`, `sum_padCode`
-  and their lemmas) are private copies of the Round1 pads modules' (`Round1Pads`, `Round1Root`), which `Split`'s
-  closure doesn't hold; once it does, import them and delete the copies.
--/
+/-! The commitments from the cut's leaves (`Masked.SimCommit`), with private copies of the Round1 pads
+modules' lemmas, which `Split`'s closure doesn't hold. -/
 
 @[expose] public section
 
@@ -61,7 +48,6 @@ namespace FlockComplete
 
 open Flock
 
-/-- `hm96-sha512/v1`'s leaf through SHA-512 is a pure value of `PS`. -/
 private theorem hm96Ops_leaf (row : Array F128) (salt : ByteArray) :
     (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 Sha512.hash : Hashes PS)).leaf row salt =
       pure (MerkleScheme.hm96Sha512.leaf row salt) := rfl
@@ -73,8 +59,6 @@ private theorem leafWith_ofSha512 (x salt : ByteArray) :
     Hm96.Default512.leafWith (Hashes.ofSha512 Sha512.hash : Hashes PS) x salt = pure (Hm96.Default512.leaf x salt) :=
   rfl
 
-/-- **Level 0's tree from its leaves is the prover's** but its rows and salts: where the source's leaf at each tree
-position is `hm96-sha512/v1`'s leaf of row `q` under salt `q`, and its rows and salts are empty. -/
 private theorem commit0Cut_eq (lv : Level) (src : TabSrc) (rows : Array (Array F128)) (salt : ℕ → ByteArray)
     (hsz : rows.size = 2 ^ lv.d)
     (hleaf : ∀ q < 2 ^ lv.d, src.leaf0 q = MerkleScheme.hm96Sha512.leaf rows[q]! (fitBytes 192 (salt q)))
@@ -97,9 +81,6 @@ private theorem commit0Cut_eq (lv : Level) (src : TabSrc) (rows : Array (Array F
   simp only [hm96Ops_leaf, Array.mapM_pure, pure_bind, map_bind, map_pure, hL, hR, hS]
   rfl
 
-/-- **A rep's pads tree from its leaves is the prover's** but its columns and salts: where the source's pads leaf at
-each of the `n` tree positions is the leaf of the codes of `h ‖ pad_h` and `μ ‖ pad_μ` there under salt `j`, and its
-columns and salts are zero and empty. -/
 private theorem padsTreeCut_eq (src : RepSrc) (p : PadsZk) (salt : ℕ → ByteArray) {n : ℕ}
     (hn : n = (p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE)
     (hleaf : ∀ j < n, src.padLeaf j = Hm96.Default512.leaf (Sha512.hash ((Zk.codeAt (p.h ++ p.padH) j).toBytes ++
@@ -137,7 +118,6 @@ private theorem padsTreeCut_eq (src : RepSrc) (p : PadsZk) (salt : ℕ → ByteA
   simp only [ofSha512_sha512, leafWith_ofSha512, pure_bind, Array.mapM_pure, map_bind, map_pure, hL, hC, hM, hP]
   rfl
 
-/-- Entry `|a| + k` of `a ++ b` is `b`'s entry `k`. -/
 private theorem get_append_right (a b : Array F128) {k : ℕ} (hk : k < b.size) : (a ++ b)[a.size + k]! = b[k]! := by
   rw [getElem!_pos (a ++ b) _ (by simp; omega), getElem!_pos b k hk, Array.getElem_append_right (by omega)]
   simp
@@ -154,8 +134,6 @@ variable (P : LigProver) {mPts : ℕ}
 
 attribute [local irreducible] treeEquiv
 
-/-- **Each rep's pads tree places every position at its index** at every coin vector of a `--zk` table whose pads code
-has `Q ≤ n ≤ 2^63` positions: the opened ones at `padPos`, the others at `unPos`. -/
 private theorem coinedOf_sP_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63) (r : Fin 2)
     (x : Fin (coinedOf P Tz st).z.nQ ⊕ Fin (coinedOf P Tz st).z.nPU) :
@@ -174,32 +152,23 @@ private theorem coinedOf_sP_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK 
   exact treeEquiv_val_pos (t := Zk.Q) (N := padNOf Tz st) _ (padPos_injective _ hQ')
     (fun i => lt_of_lt_of_eq (padPos_lt _ hQ' i) hL) hQ x
 
-/-- **A `--zk` table's exposed pad `h_fa`** (`coinedOf`'s `ia`), the same at every coin vector. -/
 private theorem coinedOf_ia (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
     ((coinedOf P Tz st).T c).ia = ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩ :=
   rfl
 
-/-- **A `--zk` table's exposed pad `h_fb`** (`coinedOf`'s `ib`), the same at every coin vector. -/
 private theorem coinedOf_ib (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
     ((coinedOf P Tz st).T c).ib = ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb, fa_lt Tz st⟩ :=
   rfl
 
-/-- **A rep's pads at its `h`** (`ZK.Table.hFull` at `ia`, `ib`): `h`'s entries, then `h_x`, `h_y`, `h_ia·h_ib`,
-`h_x·h_y`. -/
 private noncomputable def padH {nE : ℕ} (ia ib : Fin nE) (h : (Fin nE → 𝔽) × 𝔽 × 𝔽) : ZK.PadIdx nE → 𝔽
   | .inl i => h.1 i
   | .inr j => ![h.2.1, h.2.2, h.1 ia * h.1 ib, h.2.1 * h.2.2] j
 
-/-- **Rep `r`'s pads column at the code symbol of position `p`**: `(C_h, C_μ)` at `X = p + 1` (`innerPt`), pad `i`
-(`padH` at `ia`, `ib`) at `X^(padIdx i)` and padding symbol `j` at `X^(len + j)`. -/
 private noncomputable def padColAt {Hi : Type} {z : ZkView.Sizes} (ia ib : Fin z.nE) (padLen : ℕ) (b : ZkView.Base z Hi)
     (r : Fin 2) (p : ℕ) : 𝔽 × 𝔽 :=
   (∑ i, innerPt p ^ padIdx i * padH ia ib (b.2.2.1 r) i + ∑ j : Fin z.nPad, innerPt p ^ (padLen + j.val) * b.2.2.2.1 r j,
     ∑ i, innerPt p ^ padIdx i * b.2.2.2.2.2.1 r i + ∑ j : Fin z.nPad, innerPt p ^ (padLen + j.val) * b.2.2.2.2.1 r j)
 
-/-- **Rep `r`'s pads column at tree position `p` is `padColAt` at `X = p + 1`**, at every coin vector of a `--zk` table
-whose pads code has `Q ≤ n ≤ 2^63` positions (`coinedOf_sP_val`): an opened column and a hidden one are both the code
-there. -/
 private theorem coinedOf_colPAt (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63)
     (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
@@ -275,7 +244,6 @@ open Flock FlockSoundness.Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A pad's layout index is below `n_E + 4`. -/
 private theorem padIdx_lt {nE : ℕ} (p : ZK.PadIdx nE) : padIdx p < nE + 4 := by
   rcases p with k | j
   · show k.val < nE + 4
@@ -290,14 +258,11 @@ private theorem padIdx_injective {nE : ℕ} : Function.Injective (padIdx (nE := 
   · have := b.isLt; fin_cases a <;> simp at h <;> omega
   · fin_cases a <;> fin_cases b <;> simp at h ⊢
 
-/-- **The pads layout's indices**: pad `i` at `padIdx i`, a bijection onto the layout's `n_E + 4` positions. -/
 private noncomputable def padIdxEquiv (nE : ℕ) : ZK.PadIdx nE ≃ Fin (nE + 4) :=
   Equiv.ofBijective (fun p => ⟨padIdx p, padIdx_lt p⟩)
     ((Fintype.bijective_iff_injective_and_card _).2
       ⟨fun a b h => padIdx_injective (congrArg Fin.val h), by simp [ZK.PadIdx]⟩)
 
-/-- **`padColAt`'s sums are a code's sum over its array** `y` of `n_E + 4 + K` symbols, where pad `i` is `y`'s entry
-`padIdx i` and padding symbol `j` is entry `n_E + 4 + j`. -/
 private theorem sum_padCode {nE K padLen : ℕ} (hpl : padLen = nE + 4) (y : Array F128) (ξ : 𝔽) (f : ZK.PadIdx nE → 𝔽)
     (g : Fin K → 𝔽) (hf : ∀ i, fOf y[padIdx i]! = f i) (hg : ∀ j : Fin K, fOf y[nE + 4 + j.val]! = g j) :
     ∑ i, ξ ^ padIdx i * f i + ∑ j : Fin K, ξ ^ (padLen + j.val) * g j =
@@ -321,8 +286,6 @@ section
 
 attribute [local irreducible] Composed.treeEquiv
 
-/-- **A live table's pads code has `Q ≤ n ≤ 2^63` positions**: `n = innerN`, a power of two below `2^64` holding the
-`len + K_PAD ≥ Q` symbols. -/
 private theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
     _root_.Flock.Zk.Q ≤ Composed.padNOf (zkTab x j).table (stAt x j) ∧
       Composed.padNOf (zkTab x j).table (stAt x j) ≤ 2 ^ 63 := by
@@ -338,7 +301,6 @@ private theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
     have := (Nat.pow_lt_pow_iff_right (by norm_num : 1 < 2)).1 h64
     omega)
 
-/-- **Table `j`'s rep `r` pads column at tree position `p`** is `padColAt` at `X = p + 1`, at every coin vector. -/
 private theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
     (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
     (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -351,7 +313,6 @@ private theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x))
         (Composed.padLenOf (zkTab x j).table (stAt x j)) b r p.val :=
   Composed.coinedOf_colPAt P (zkTab x j).table (stAt x j) c (padN_bounds x j).1 (padN_bounds x j).2 w b r p
 
-/-- **A cut's pads leaf at tree position `q` is the leaf at `q`** (`padLeafCut`), whatever the coins' tree. -/
 private theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
@@ -370,9 +331,6 @@ private theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j,
 
 end
 
-/-- **Table `j`'s rep `r` pads leaf at tree position `p` is the masked prover's**: at the executable's layout, the
-executable's leaf of the cut's view (`exeOf`) is `verifyInner`'s leaf of `innerCommitP`'s column `p`, the codes of
-`h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1`, under the tape's pads salt `p`, at every coin vector. -/
 private theorem exeOf_pads (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     (t : Fin Claims.Flock.zkTableCap → ExeCell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -518,9 +476,6 @@ private theorem exeOf_pads (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.
   rw [h1, h2, hs]
   rfl
 
-/-- **`SimCommit`**: at a live statement, table `j`'s level-0 commitment from the cut's leaves is the masked prover's
-but its rows and salts, and each rep's pads commitment from the cut's pads leaves is the masked prover's but its
-columns and salts, as `PS` runs them from any bodies. -/
 theorem simCommit : SimCommit := by
   intro x hx w _ τ c j l
   have hj := lt_of_jOf j

@@ -41,31 +41,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.SentE
 
-/-!
-# The inner proof at the switched source
-
-`repCut_fw`'s `hinner` asks the source for the inner proof's values (`InnerSrc`) at the ZK server's pads. The switched
-pre-final view keeps `ρ_in`, `σ_in` on either branch of `swPre` (`Table.shift` moves `h_tx`, `h_ty` against the exposed
-pads), and `Y₂` (the padding's pads are not moved); where the rows hold its `Y₁` is the honest view's too. The ZK server's
-pads are the request's samples, which are the tape's wherever the tape's pads of table `j`'s rep `r` are the frame's.
-
-* `Table.innerMsg_padShift`: the triple's two messages don't move under `padShift`.
-* `Table.swPre_inner`, `Table.swPre_Y2`: the switched pre-final view's are the honest view's; `Table.swPre_Y1` where the
-  rows hold.
-* `Masked.swSrcE_inner`, `Masked.swSrcE_y`: so the switched source's `ρ_in`, `σ_in` are the honest source's, and its `Y`
-  where table `j`'s rows hold at its base.
-* `Masked.pads_frame_eq`: the ZK server's pads (`Finish.padsOf` of the request's samples) are the honest pads.
-* **`Masked.swSrcE_innerSrc_frame`**: `InnerSrc` at the switched source at the ZK server's pads and the deployed rep's
-  coins, at the inner proof's slot, from the batched constraint (which `repCut_fw` hands `hinner`: the ZK server's own
-  inner proof checked it, `innerP_batched`) and `τ`'s commitment.
--/
+/-! The inner proof at the switched source. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
-/-- The triple's two messages `ρ_in`, `σ_in` are the same on pads moved by `padShift`. -/
 theorem FlockSoundness.ZK.Table.innerMsg_padShift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (V : T.Vis)
     (h : Fin 2 → (Fin T.nE → F) × F × F) (r : Fin 2) :
@@ -75,7 +57,6 @@ theorem FlockSoundness.ZK.Table.innerMsg_padShift {F K W Salt Seed D Hi VL : Typ
   refine Prod.ext ?_ ?_ <;> simp only [] <;> ring
 
 set_option smartUnfolding false in
-/-- The switched pre-final view's `ρ_in`, `σ_in` are the honest view's, on either branch of `swPre`. -/
 theorem FlockSoundness.ZK.Table.swPre_inner {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).inner = (T.preView w ω).inner := by
@@ -87,7 +68,6 @@ theorem FlockSoundness.ZK.Table.swPre_inner {F K W Salt Seed D Hi VL : Type} [Fi
     exact T.onVals.innerMsg_padShift (w, v) (w, T.vals) ω.1 ω.2.1 ω.2.2.1 r
 
 set_option smartUnfolding false in
-/-- The switched pre-final view's `Y₂` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_Y2 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).Y2 = (T.preView w ω).Y2 := by
@@ -98,7 +78,6 @@ theorem FlockSoundness.ZK.Table.swPre_Y2 {F K W Salt Seed D Hi VL : Type} [Field
     rfl
 
 set_option smartUnfolding false in
-/-- Where the rows hold, the switched pre-final view's `Y₁` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_Y1 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand)
     (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1) :
@@ -106,17 +85,14 @@ theorem FlockSoundness.ZK.Table.swPre_Y1 {F K W Salt Seed D Hi VL : Type} [Field
   rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
   rfl
 
-/-- A cut's `ρ_in`, `σ_in` are the view's. -/
 theorem FlockSoundness.ZK.Table.cut_inner {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) (P : T.PreView) :
     (T.cut S P).inner = P.inner := rfl
 
-/-- A cut's `Y₂` is the view's. -/
 theorem FlockSoundness.ZK.Table.cut_Y2 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) (P : T.PreView) :
     (T.cut S P).Y2 = P.Y2 := rfl
 
-/-- A cut's `Y₁` reads the view's `Y₁` alone. -/
 theorem FlockSoundness.ZK.Table.cut_Y1_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) {P P' : T.PreView} (h : P.Y1 = P'.Y1) :
     (T.cut S P).Y1 = (T.cut S P').Y1 := by
@@ -175,7 +151,6 @@ theorem swCutE_Y1 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   unfold swCutE cutE swCutAt cutAt
   exact Table.cut_Y1_congr _ _ (ZkView.Coined.swPreWith_Y1 _ _ _ _ _ _ hrows)
 
-/-- Table `j`'s rep `r` switched source is `repSrcCut` of the switched cut. -/
 theorem swSrcE_rep (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     (swSrcE x c w v τ j.val).rep r.val = repSrcCut PE x (czExe PE x c) (swCutE x c w v τ) j r := by
@@ -183,7 +158,6 @@ theorem swSrcE_rep (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   rw [dite_eq_left j.isLt]
   exact dite_eq_left r.isLt
 
-/-- Table `j`'s rep `r` honest source is `repSrcCut` of the honest cut. -/
 theorem srcE_rep (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) :
     (srcE x c w τ j.val).rep r.val = repSrcCut PE x (czExe PE x c) (cutE x c w τ) j r := by
@@ -191,7 +165,6 @@ theorem srcE_rep (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.F
   rw [dite_eq_left j.isLt]
   exact dite_eq_left r.isLt
 
-/-- **The switched source's `ρ_in`, `σ_in` are the honest source's.** -/
 theorem swSrcE_inner (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     ((swSrcE x c w v τ j.val).rep r.val).rhoIn = ((srcE x c w τ j.val).rep r.val).rhoIn ∧
@@ -200,7 +173,6 @@ theorem swSrcE_inner (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
   rw [swSrcE_rep, srcE_rep]
   refine ⟨?_, ?_⟩ <;> simp only [repSrcCut, h]
 
-/-- **Where table `j`'s rows hold at its base, the switched source's `Y` is the honest source's.** -/
 theorem swSrcE_y (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
@@ -214,7 +186,6 @@ theorem swSrcE_y (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.F
     | (simp only [repSrcCut, h1, h2]; done)
     | (unfold repSrcCut; dsimp only; rw [h1, h2])
 
-/-- Table `j`'s pads layout as the setup's and as the circuit's. -/
 theorem innerLayE_layE (x : Msg) (j : Fin (jOf x)) : innerLayE x j = layE x j := by
   have hj := lt_of_jOf j
   have htab : (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
@@ -226,9 +197,6 @@ theorem innerLayE_layE (x : Msg) (j : Fin (jOf x)) : innerLayE x j = layE x j :=
   rw [htab]
   rfl
 
-/-- **The ZK server's pads are the honest pads**: at frame rep `rep j r` of the release `L`, on samples of `sampleBytes`
-bytes, where the tape's pads of table `j`'s rep `r` are those on the tape of the release's samples, the request's pads
-(`Finish.padsOf` of its samples, as the analysis's) are the tape's at the table's layout. -/
 theorem pads_frame_eq {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.ZkServer.Finish.RepIn)
     (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
@@ -246,7 +214,6 @@ theorem pads_frame_eq {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R
   congr 1
   exact Claims.ZKServer.fitBytes_of_size _ _ hs
 
-/-- The honest cut sends rep `r`'s `Y₁` once `β`'s round is seen. -/
 theorem cutE_Y1_ne {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hn : ¬ Refused x c n)
     {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (h : betaSlot x j.val r.val + 1 ≤ n) :
@@ -256,7 +223,6 @@ theorem cutE_Y1_ne {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coi
   rw [e]
   exact Option.some_ne_none _
 
-/-- `β`'s round is two past the inner proof's slot. -/
 theorem betaSlot_inner {x : Msg} (hx : Live x) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) :
     betaSlot x j.val r.val = repSlot x (2 * j.val + r.val) (innerOff 0) + 2 := by
@@ -273,11 +239,6 @@ theorem betaSlot_inner {x : Msg} (hx : Live x) {s spec} (hs : FlockDeploy.setupO
   simp only [innerOff]
   omega
 
-/-- **`repCut_fw`'s `hinner` at the switched source, at the deployed rep's coins**: at a live statement, a witness, a
-tape, opened coins not refused by round `n` and the session's setup, at table `j`'s rep `r` inner proof begun at its
-slot (`L₀`), where the ZK server's pads are the request's samples and the tape's pads are those samples' (`pads_frame_eq`'s
-premises) and table `j`'s rows hold at its base, the switched source carries the inner proof's values (`InnerSrc`) at
-the ZK server's pads and the constraints `cons`, given the batched constraint and `τ`'s commitment there. -/
 theorem swSrcE_innerSrc_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)

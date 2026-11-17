@@ -37,17 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The rep from a source that misses the ZK server at `final_c`, at its inner proof's first round
-
-`repCut_fw_inner` stops the rep from a source that may differ from the ZK server at `final_c`'s pad at the inner proof's
-first round, after the ZK server's PIOP and Ligerito logs. Here that stop is placed: Ligerito left no pending bytes
-(`ligeritoCut_end`), and the history then holds `CutEq.innerAt` bodies, the PIOP's (`piopCut_at`) and the opening's
-(`ligeritoCut_eqAt`).
-
-* `piopCut_fw_fc`: `piopCut_fw` from a source that may differ at `fc`; its zerocheck proof's `finalC` is the source's.
-* `repCut_fw_inner_at`: the rep from the source, cut at the inner proof's first round, sends that round's body there.
--/
+/-! The rep from a source that misses the ZK server at `final_c`, at its inner proof's first round. -/
 
 @[expose] public section
 
@@ -56,9 +46,6 @@ namespace Flock.ZkServer.Finish
 open Flock Transcript
 open FlockComplete (PS)
 
-/-- **`piopCut_fw` from a source that may differ at `fc`**: where the ZK server's PIOP at `mk` returns, the PIOP from a
-source whose masked values below `zp 64` but at `fc` are `mk`'s returns the same, its zerocheck proof's `finalC` the
-source's `masked lay.fc`. -/
 theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (g : Array F128)
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
     (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
@@ -92,10 +79,6 @@ theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay 
     (fun i hi => by simp only [if_neg hi]) hPC'
 
 set_option maxHeartbeats 1000000 in
-/-- **The rep from a source that misses the ZK server at `fc`, at its inner proof's first round**: at `repCut_fw_inner`'s
-premises and a schedule the rep's walk takes (`CutEq.SchOk`), the rep from the source, answered by `asksCut` from `l`
-with the history cut after `CutEq.innerAt l.size` bodies, stops past its Ligerito opening with no pending bytes and sends
-the inner proof's first body there, at the source's `masked lay.fc`. -/
 theorem repCut_fw_inner_at (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)

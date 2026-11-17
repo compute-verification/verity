@@ -4,70 +4,13 @@ public import Proofs.Flock.Claims.ZK.Reference
 public import Proofs.Flock.Claims.ZK.Cut
 public import Proofs.Flock.Claims.ZK.Rewind
 
-/-!
-# The ZK server: untrusted workers compute, the server releases
-
-The workers are untrusted GPUs: they run the inner proof with zero knowledge off and compute the outer session's
-arithmetic unmasked. The ZK server alone talks to the verifier. Each round it releases one frame (`ZkServer.frame`) of
-values of four kinds (`Kind`), on a public schedule (`ZkServer.sched`):
-
-* `fixed`: a constant of the protocol's structure; the worker's copy must match it;
-* `own`: one of the server's own samples, read from its tape (salts, pads, the masks `h`, `μ`);
-* `recomputed`: a value the server computes from its own copy: the witness, its tape, the history and the round's
-  checked worker values (`ZkServer.copy`): every Merkle root and path, and the fold's row combination `Y = h + βμ`; the
-  worker's copy must match it;
-* `masked`: a worker's value under the server's mask (`ZkServer.mask`), added only once the value passed the server's
-  relation check (`ZkServer.rel`), which reads the server's private check coins `Chk`.
-
-A round in which any check fails, a worker misses its time (`none`), or the server refuses from the witness and its
-tape alone (`ZkServer.refuses`, `false` unless a server says otherwise), releases the stop (`ZkServer.stop`), and so does
-every later round (`ZkServer.live`). The worker is any function of the statement, the witness, the server's tape and
-the history (`ZkServer.Worker`); it never sees the check coins. The inner phase's ZK server, `Flock.ZkServer.run`, is the
-same shape: by `run_resalt` its stop never depends on its salts, and by `run_of_one` what it sends is a fixed template
-filled with the commit strings of fixed digests under its own salts, kinds `fixed` and `recomputed` over `own`.
-
-* `split_exact`: where every masked check along the reference prover's run is faithful (`ZkServer.Faithful`), the
-  server releases the reference prover's run cut at some round `t ≤ k` and then the stop (`cutT`). It needs one
-  obligation of the server's definition, `ZkServer.RefLive`: at honest worker values, after every history on which the
-  run is live, its frame is `P`'s message (`ZkServer.Ref`, the same on every history, gives it).
-* `split`: for every worker, that holds but with probability `∑ ε` over the check coins, the masked checks' soundness
-  `ZkServer.CheckSound ε`, a second obligation of the server's definition (exact recomputation meets it at `ε = 0`,
-  `checkSound_exact`; the server that recomputes everything meets both, `solo_ok`).
-* `zk_server`: zero knowledge carries over from `ZKmalR` of the reference prover with a guessing loss: the released,
-  scheduled transcript is within a factor `k + 1` of `leaky`'s, the simulator that guesses the stop round, plus
-  `(k + 1)·(ε_zk + γ·Fork)` and `∑ ε`. `Flock.zk_server_ref` is it at the masked record's reference prover and
-  `Flock.zk_zkD_ref`.
-* At the worker's own values (`withHonest`, `srcOf`) every round is faithful (`faithful_own`), so for every worker the
-  server releases, with no probability, the run cut at some round of any prover whose message is its frame at the
-  worker's values where the run is live (`split_own`), and zero knowledge carries over from that prover's with no term
-  for the masked checks (`zk_server_own`). At a masked table that prover is `Worker`'s switched prover
-  (`Table.swView`), whose final message has `S_shvzk`'s distribution at any values that don't read the pads
-  (`Table.worker_shvzk`).
-* The workers never see the pads: the server runs a pad-blind worker (`BWorker`), handed its part of the tape (`π`)
-  and the verifier's answers as read (`rd`), never the server's samples or its released messages (`lift`; every `Blind`
-  worker is one, `Blind.eq_lift`), so the values its reference reads (`srcOf_lift`) and its copy (`copy_lift`) are
-  functions of those alone.
-* The stop's leak: `Pr_choice_le`, an event at a stop pattern the worker chooses is within the sum over the patterns
-  of the event at each fixed one; `stream_leak`, on a stream of `m` sessions of which at most `b` stop, each in one of
-  `r` forms, there are at most `∑_{i ≤ b} C(m, i)·r^i` patterns (`card_pattern_le`), so at most that many times the
-  worst fixed one's probability.
-* **Every stop deferred to the last round** (live PROTOCOL.md §10.1: a failed check stops the session at its `Finish`,
-  never before): `nextD` releases, below the last round, the frame at the worker's values with the server's own
-  stand-in `fill` in once a round failed (`wkD`), and at the last round the frame if every round passed, else the stop.
-  Where that frame is `P`'s message wherever it releases one, on the histories it sent itself (`RefDOwn`, which `RefD`
-  gives on every history), the released run is `P`'s run, or it with its
-  last message replaced by the stop (`split_deferred`, no probability), so zero knowledge carries over within a factor
-  `2` of `leaky1`, the simulator that guesses whether the session stops (`zk_deferred`): one bit a session, and over a
-  stream of `m` sessions with at most `b` stops, one stop form, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
--/
+/-! The ZK server: untrusted workers compute, the server releases. -/
 
 @[expose] public section
 
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-
-/-! ## The server -/
 
 /-- What a released value is. -/
 inductive Kind
@@ -115,7 +58,6 @@ def copy {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ :
     ℕ → ℕ → Option S.Val := fun i s =>
   if i ≤ h.length ∧ s < S.nS x i ∧ S.kind x i s = .masked then wk x w ρ (h.take i) s else none
 
-/-- The copy at honest workers. -/
 def hcopy {W R : Type} (S : ZkServer W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) :
     ℕ → ℕ → Option S.Val := fun i s =>
   if i ≤ h.length ∧ s < S.nS x i ∧ S.kind x i s = .masked then some (S.honest x i s w ρ (h.take i)) else none
@@ -140,9 +82,8 @@ def check {W R : Type} (S : ZkServer W R) (x : Msg) (j s : ℕ) (w : W) (ρ : R)
   | .masked, some v => S.rel x j s w ρ h cp κ v
   | .masked, none => false
 
--- `check`'s equation lemmas are made here, on the command thread: Lean names a binder of theirs in the hygiene context
--- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
--- without this, whichever of them asks first decides the module's `.olean`.
+-- `check`'s equation lemmas are made here, on the command thread: the theorems below that unfold it
+-- elaborate in parallel, and whichever asks first would otherwise decide the module's `.olean`.
 example := @check.eq_1
 
 /-- The server does not refuse the round after `h`, and every slot of it passes its check. -/
@@ -151,7 +92,6 @@ def pass {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ :
   !S.refuses x w ρ h &&
     (List.range (S.nS x h.length)).all fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)
 
-/-- A round that passes passes every slot's check. -/
 theorem slots_of_pass {W R : Type} {S : ZkServer W R} {wk : S.Worker} {x : Msg} {w : W} {ρ : R} {κ : S.Chk}
     {h : List (Msg × Msg)} (hp : S.pass wk x w ρ κ h = true) :
     (List.range (S.nS x h.length)).all
@@ -163,18 +103,15 @@ def live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ :
     (h : List (Msg × Msg)) : Bool :=
   (List.range (h.length + 1)).all fun i => S.pass wk x w ρ κ (h.take i)
 
-/-- **What the server releases** after `h`: the round's frame, its masks added after its checks, or the stop. -/
 def next {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Msg :=
   if S.live wk x w ρ κ h then
     S.frame x h.length fun s => S.value x h.length s w ρ h (S.copy wk x w ρ h) (wk x w ρ h s)
   else S.stop
 
-/-- The frame at honest workers. -/
 def refMsg {W R : Type} (S : ZkServer W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) : Msg :=
   S.frame x h.length fun s => S.value x h.length s w ρ h (S.hcopy x w ρ h) (some (S.honest x h.length s w ρ h))
 
-/-- The server with the worker `wk` as a prover: its tape is the server's and the check coins. -/
 def prover {W R : Type} (S : ZkServer W R) (wk : S.Worker) (w : W) : Prover (R × S.Chk) :=
   ⟨fun x h ω => .ret (S.next wk x w ω.1 ω.2 h)⟩
 
@@ -182,12 +119,9 @@ def prover {W R : Type} (S : ZkServer W R) (wk : S.Worker) (w : W) : Prover (R �
 def timed {W R : Type} (S : ZkServer W R) (x : Msg) (τ : List (Msg × Out)) : List ((Msg × Out) × ℕ) :=
   τ.mapIdx fun j e => (e, S.sched x j)
 
-/-- **The server's frame at honest workers is `P`'s message**, at `(x, w)`. -/
 def Ref {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W) : Prop :=
   ∀ ρ h, (((P w).next x h ρ).eval H).1 = S.refMsg x w ρ h
 
-/-- **`Ref` where the worker's run is live**: after every history on which every round so far passed, the frame at
-honest workers is `P`'s message. -/
 def RefLive {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (wk : S.Worker) (x : Msg) (w : W) :
     Prop :=
   ∀ ρ κ h, S.live wk x w ρ κ h = true → (((P w).next x h ρ).eval H).1 = S.refMsg x w ρ h
@@ -196,13 +130,10 @@ theorem Ref.live {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Pr
     (hRef : S.Ref H P x w) (wk : S.Worker) : S.RefLive H P wk x w :=
   fun ρ _ h _ => hRef ρ h
 
-/-- **The masked checks are sound**: over the check coins, a wrong value passes slot `s` of round `j` with probability
-at most `ε x j s`, at every copy. -/
 def CheckSound {W R : Type} (S : ZkServer W R) (ε : Msg → ℕ → ℕ → ℝ) : Prop :=
   ∀ x j s w ρ h cp v, S.kind x j s = .masked → v ≠ S.honest x j s w ρ h →
     Pr (fun κ : S.Chk => S.rel x j s w ρ h cp κ v = true) ≤ ε x j s
 
-/-- **The round after `h` is faithful** at the check coins `κ`: every masked value that passes is the honest one. -/
 def Faithful {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Prop :=
   ∀ s, s < S.nS x h.length → S.kind x h.length s = .masked →
@@ -211,8 +142,6 @@ def Faithful {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (
 
 end ZkServer
 
-/-! ## The split -/
-
 namespace ZkServer
 
 theorem pass_of_live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
@@ -220,7 +149,6 @@ theorem pass_of_live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (
     S.pass wk x w ρ κ (h.take i) = true :=
   List.all_eq_true.mp hl i (List.mem_range.mpr (by omega))
 
-/-- Where every round so far passed and was faithful, the copy is the honest one. -/
 theorem copy_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) (hl : S.live wk x w ρ κ h = true)
     (hf : ∀ i ≤ h.length, S.Faithful wk x w ρ κ (h.take i)) :
@@ -235,7 +163,6 @@ theorem copy_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W
     rw [hf i hi s (by rw [hlen]; exact hs) (by rw [hlen]; exact hm) hcs, hlen]
   · rfl
 
-/-- **Where every round so far passed and was faithful, the server releases the honest frame.** -/
 theorem next_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) (hl : S.live wk x w ρ κ h = true)
     (hf : ∀ i ≤ h.length, S.Faithful wk x w ρ κ (h.take i)) :
@@ -261,8 +188,6 @@ theorem next_stop {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w :
     (h : List (Msg × Msg)) (hl : S.live wk x w ρ κ h = false) : S.next wk x w ρ κ h = S.stop := by
   simp [next, hl]
 
-/-- **The split, exactly**: where every masked check along `P`'s run is faithful, the server releases `P`'s run cut
-at some round `t ≤ n`. -/
 theorem split_exact {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W)
     (wk : S.Worker) (hRef : S.RefLive H P wk x w) (ask : List Msg → Out) (n : ℕ) (ρ : R) (κ : S.Chk)
     (hF : ∀ i < (interact ask (fun h => (((P w).next x h ρ).eval H).1) n []).length,
@@ -331,9 +256,6 @@ theorem split_exact {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W →
 
 end ZkServer
 
-/-! ## Probability -/
-
-/-- **The union bound** over a finite set. -/
 theorem Pr_exists_finset_le {α I : Type} [Fintype α] (F : Finset I) (E : I → α → Prop) :
     Pr (fun a => ∃ i ∈ F, E i a) ≤ ∑ i ∈ F, Pr (E i) := by
   classical
@@ -347,15 +269,12 @@ theorem Pr_exists_finset_le {α I : Type} [Fintype α] (F : Finset I) (E : I →
       · exact Or.inl he
       · exact Or.inr ⟨i, hi, he⟩
 
-/-- An event of two coordinates whose every slice is within `ε`. -/
 theorem Pr_le_of_slices {α β : Type} [Fintype α] [Nonempty α] [Fintype β] (p : α × β → Prop) {ε : ℝ}
     (h : ∀ a, Pr (fun b => p (a, b)) ≤ ε) : Pr p ≤ ε := by
   rw [Pr_prod_left]
   calc _ ≤ Ex (fun _ : α => ε) := Ex_mono h
     _ = ε := Ex_const ε
 
-/-- **An observation at a choice**: an event of `obs` at the choice `τ ω`, made by anyone who sees `ω`, is within the
-sum over the choices of the event at each fixed one. -/
 theorem Pr_choice_le {Ω T α : Type} [Fintype Ω] [Fintype T] (obs : T → Ω → α) (τ : Ω → T) (E : α → Prop) :
     Pr (fun ω => E (obs (τ ω) ω)) ≤ ∑ t, Pr (fun ω => E (obs t ω)) :=
   (Pr_mono fun ω h => ⟨τ ω, Finset.mem_univ _, h⟩).trans
@@ -363,8 +282,6 @@ theorem Pr_choice_le {Ω T α : Type} [Fintype Ω] [Fintype T] (obs : T → Ω �
 
 namespace ZkServer
 
-/-- **The split**: for every worker, the server releases `P`'s run cut at some round, but with probability the masked
-checks' errors summed over the rounds and masked slots. -/
 theorem split {W R : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (x : Msg) (w : W) (hRef : S.Ref H P x w) (ε : Msg → ℕ → ℕ → ℝ) (hε : ∀ j s, 0 ≤ ε x j s)
     (hS : S.CheckSound ε) (wk : S.Worker) (ask : List Msg → Out) (n : ℕ) :
@@ -428,9 +345,6 @@ theorem split {W R : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg 
                 exact hc
         · exact (Pr_mono fun κ (hκ : E i s (ρ, κ)) => absurd hκ.1 hiτ).trans (le_of_eq_of_le Pr_false (hε i s))
 
-/-- **The released transcript against `P`'s, from a split**: if the server's run is `P`'s run cut at some round but
-with probability at most `e`, an event of the server's scheduled transcript is within the sum over the stop rounds
-`t ≤ k` of the event at `P`'s run cut at `t`, plus `e`. -/
 theorem real_le_of_split {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg)
     (P : W → Prover R) (x : Msg) (w : W) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ) (e : ℝ)
     (hsplit : Pr (fun ω : R × S.Chk => ¬ ∃ t ≤ Vs.k x,
@@ -467,9 +381,6 @@ theorem real_le_of_split {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer 
         refine Finset.sum_congr rfl fun t _ => ?_
         exact Pr_fst (fun ρ : R => Ev (S.timed x (cutT ask S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs)))
 
-/-- **The released transcript against `P`'s**: for every worker and every verifier, an event of the server's scheduled
-transcript is within the sum over the stop rounds `t ≤ k` of the event at `P`'s run cut at `t`, plus the masked
-checks' errors. -/
 theorem real_le {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (x : Msg) (w : W) (hRef : S.Ref H P x w) (ε : Msg → ℕ → ℕ → ℝ) (hε : ∀ j s, 0 ≤ ε x j s)
     (hS : S.CheckSound ε) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ) (Ev : List ((Msg × Out) × ℕ) → Prop) :
@@ -482,10 +393,6 @@ theorem real_le {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H :
 
 end ZkServer
 
-/-! ## Zero knowledge, with the stop guessed -/
-
-/-- **The simulator that guesses the stop**: it samples a round `t ≤ k` and `Sim`'s coins, and replays `Sim`'s
-transcript cut at `t` against the verifier. -/
 def leaky (Sim : Simulator) (k : Msg → ℕ) (stop : Msg) : Simulator where
   C x := Fin (k x + 1) × Sim.C x
   prog x c := spBind (Sim.prog x c.2) fun τ => spRun (fun h => .ret (cutMsg stop c.1 τ h)) (k x) []
@@ -500,10 +407,6 @@ theorem leaky_out {Θ : Type} (H : Msg → Msg) (Sim : Simulator) (k : Msg → �
 
 namespace ZkServer
 
-/-- **Zero knowledge of the server from a bound against `P`'s cut runs**: if an event of the server's scheduled
-transcript is within the sum over the stop rounds of the event at `P`'s cut run, plus `e`, and `P` meets `ZKmalR`, it
-has probability at most `k + 1` times its probability at the guessing simulator `leaky` plus `ε_zk + γ·Fork`, plus
-`e`. -/
 theorem zk_of_real {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ)
     (hZK : ZKmalR H k P Rl Sim εzk γ) (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ)
@@ -548,10 +451,7 @@ theorem zk_of_real {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
           ring
   linarith
 
-/-- **Zero knowledge of the server**, from `P`'s: for every worker, if `P` is zero knowledge against a malicious
-verifier (`ZKmalR`), an event of the server's scheduled transcript has probability at most `k + 1` times its
-probability at the guessing simulator `leaky` plus `ε_zk + γ·Fork`, plus the masked checks' errors. The factor `k + 1`
-is the stop's leak: `log₂(k + 1)` bits a session. -/
+/-- The factor `k + 1` is the stop's leak: `log₂(k + 1)` bits a session. -/
 theorem zk_server {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ)
     (hZK : ZKmalR H k P Rl Sim εzk γ) (x : Msg) (w : W) (hR : Rl x w) (hRef : S.Ref H P x w)
@@ -566,7 +466,6 @@ theorem zk_server {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
   have h := S.zk_of_real H k P Rl Sim εzk γ hZK x w hR wk Vs θ hk Ev _ hr
   rwa [hk] at h
 
-/-- **The server that recomputes everything**: one recomputed slot a round, `P`'s message. -/
 def solo {W R : Type} (H : Msg → Msg) (P : W → Prover R) : ZkServer W R where
   Chk := Unit
   Val := Msg
@@ -587,7 +486,6 @@ theorem solo_ok {W R : Type} (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w
     (solo H P).Ref H P x w ∧ (solo H P).CheckSound fun _ _ _ => 0 :=
   ⟨fun _ _ => rfl, fun _ _ _ _ _ _ _ _ hm _ => nomatch hm⟩
 
-/-- **Exact recomputation is sound**: a masked check that compares with the honest value meets `CheckSound` at `0`. -/
 theorem checkSound_exact {W R : Type} (S : ZkServer W R)
     (hrel : ∀ x j s w ρ h cp κ v, S.rel x j s w ρ h cp κ v = decide (v = S.honest x j s w ρ h)) :
     S.CheckSound fun _ _ _ => 0 := by
@@ -596,10 +494,6 @@ theorem checkSound_exact {W R : Type} (S : ZkServer W R)
   rw [hrel]
   simp [hv]
 
-/-! ## At the worker's own values -/
-
-/-- **The worker's values as the honest ones**: slot `s` of round `j` after `h` is the worker's value there, `cst`
-where it misses its time. -/
 def srcOf {W R : Type} (S : ZkServer W R) (wk : S.Worker) : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val :=
   fun x j s w ρ h => (wk x w ρ h s).getD (S.cst x j s)
 
@@ -615,7 +509,6 @@ theorem next_withHonest {W R : Type} (S : ZkServer W R) (src : Msg → ℕ → �
     (S.withHonest src).next wk x w ρ κ = S.next wk x w ρ κ :=
   rfl
 
-/-- **At its own values every round is faithful**: a masked value that passes its check is the worker's. -/
 theorem faithful_own {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : (S.withHonest (S.srcOf wk)).Faithful wk x w ρ κ h := by
   intro s _ hm hc
@@ -626,9 +519,6 @@ theorem faithful_own {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (
   · show some v = some ((wk x w ρ h s).getD (S.cst x h.length s))
     rw [hu, Option.getD_some]
 
-/-- **The split at the worker's own values, exactly**: for every worker, check coins and tape, the server releases the
-run cut at some round `t ≤ n` of any prover whose message is the server's frame at the worker's values where the run
-is live. No masked check needs to be sound. -/
 theorem split_own {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W)
     (wk : S.Worker) (hRef : (S.withHonest (S.srcOf wk)).RefLive H P wk x w) (ask : List Msg → Out) (n : ℕ) (ρ : R)
     (κ : S.Chk) :
@@ -638,10 +528,6 @@ theorem split_own {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → P
   rw [next_withHonest] at h
   exact h
 
-/-- **Zero knowledge of the server at the worker's own values**: for every worker, if a prover `P` whose message is
-the server's frame at the worker's values where the run is live meets `ZKmalR`, an event of the server's scheduled
-transcript has probability at most `k + 1` times its probability at the guessing simulator `leaky` plus
-`ε_zk + γ·Fork`, with no term for the masked checks. -/
 theorem zk_server_own {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ)
     (hZK : ZKmalR H k P Rl Sim εzk γ) (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker)
@@ -661,25 +547,15 @@ theorem zk_server_own {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [
     (S.real_le_of_split H P x w wk Vs θ 0 hsplit Ev)
   rwa [add_zero] at h
 
-/-! ## Workers never see the pads -/
-
-/-- **A pad-blind worker** handed `Rw`, the part of the server's tape the workers are given, never the server's own
-samples (the pads, their masks, the salts the workers don't see), and the verifier's answers so far read as `C`: a
-function of the statement, the witness, those, to each slot's value. -/
 abbrev BWorker {W R : Type} (S : ZkServer W R) (Rw C : Type) : Type := Msg → W → Rw → List C → ℕ → Option S.Val
 
-/-- **The worker the server runs** at a pad-blind one: it is handed its part `π ρ` of the tape and the answers read by
-`rd`, never the rest of the tape or the server's released messages. -/
 def lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) : S.Worker :=
   fun x w ρ h s => bw x w (π ρ) (h.map fun m => rd m.2) s
 
-/-- **A worker never sees the server's samples**: what it returns is the same at two tapes with the same part `π` and
-two histories whose answers read the same by `rd`. -/
 def Blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (wk : S.Worker) : Prop :=
   ∀ x w (ρ ρ' : R) (h h' : List (Msg × Msg)) s, π ρ = π ρ' → h.map (fun m => rd m.2) = h'.map (fun m => rd m.2) →
     wk x w ρ h s = wk x w ρ' h' s
 
-/-- **Every pad-blind worker is one the server runs**, at any tapes `σ r` with part `r` and answers `ε a` read as `a`. -/
 theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
     (hb : S.Blind π rd wk) (σ : Rw → R) (hσ : ∀ r, π (σ r) = r) (ε : C → Msg) (hε : ∀ a, rd (ε a) = a) :
     wk = S.lift π rd fun x w r as s => wk x w (σ r) (as.map fun a => (([] : Msg), ε a)) s := by
@@ -687,7 +563,6 @@ theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd :
   refine hb x w ρ (σ (π ρ)) h _ s (hσ _).symm ?_
   simp only [List.map_map, Function.comp_def, hε]
 
-/-- **Every pad-blind worker is one the server runs** wherever every part is some tape's. -/
 theorem Blind.exists_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
     (hb : S.Blind π rd wk) (hπ : Function.Surjective π) : ∃ bw : S.BWorker Rw C, S.lift π rd bw = wk := by
   refine ⟨fun x w r as s => wk x w (Function.surjInv hπ r) (as.map fun a => (([] : Msg), Function.invFun rd a)) s, ?_⟩
@@ -698,14 +573,11 @@ theorem Blind.exists_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {
   simp only [List.map_map, Function.comp_def]
   exact List.map_congr_left fun m _ => Function.invFun_eq ⟨m.2, rfl⟩
 
-/-- **The values the server's reference reads never read its samples**: at a pad-blind worker, `srcOf` at round `j` is
-the worker's value from `x`, `w`, `π ρ` and the answers alone. -/
 theorem srcOf_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) (x : Msg)
     (j s : ℕ) (w : W) (ρ : R) (h : List (Msg × Msg)) :
     S.srcOf (S.lift π rd bw) x j s w ρ h = (bw x w (π ρ) (h.map fun m => rd m.2) s).getD (S.cst x j s) :=
   rfl
 
-/-- **The server's copy never reads its samples** at a pad-blind worker. -/
 theorem copy_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) (x : Msg)
     (w : W) (ρ ρ' : R) (h h' : List (Msg × Msg)) (hρ : π ρ = π ρ')
     (hh : h.map (fun m => rd m.2) = h'.map (fun m => rd m.2)) :
@@ -716,14 +588,9 @@ theorem copy_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg
 
 end ZkServer
 
-/-! ## The stop's leak over a stream -/
-
-/-- **A stream's stop pattern**: each of `m` sessions runs through (`none`) or stops in one of `r` forms, at most `b`
-of them stopping, the ZK server's per-stream failure budget. -/
 abbrev Pattern (m r b : ℕ) : Type :=
   {f : Fin m → Option (Fin r) // (Finset.univ.filter fun i => (f i).isSome).card ≤ b}
 
-/-- **The number of stop patterns** is at most `∑_{i ≤ b} C(m, i)·r^i`. -/
 theorem card_pattern_le (m r b : ℕ) :
     Fintype.card (Pattern m r b) ≤ ∑ i ∈ Finset.range (b + 1), m.choose i * r ^ i := by
   classical
@@ -763,9 +630,6 @@ theorem card_pattern_le (m r b : ℕ) :
         simp only [Finset.mem_filter, Finset.mem_range] at hi ⊢
         omega
 
-/-- **The stop's leak over a stream**: if every fixed stop pattern makes an event at most `q` likely, the pattern the
-workers choose, from anything they see, makes it at most `∑_{i ≤ b} C(m, i)·r^i` times `q`: the stream leaks at most
-`log₂ ∑_{i ≤ b} C(m, i)·r^i` bits. -/
 theorem stream_leak {Ω α : Type} [Fintype Ω] (m r b : ℕ) (obs : Pattern m r b → Ω → α) (π : Ω → Pattern m r b)
     (E : α → Prop) {q : ℝ} (hq : ∀ p, Pr (fun ω => E (obs p ω)) ≤ q) :
     Pr (fun ω => E (obs (π ω) ω)) ≤ ((∑ i ∈ Finset.range (b + 1), m.choose i * r ^ i : ℕ) : ℝ) * q := by
@@ -774,8 +638,6 @@ theorem stream_leak {Ω α : Type} [Fintype Ω] (m r b : ℕ) (obs : Pattern m r
     _ ≤ ∑ _p : Pattern m r b, q := Finset.sum_le_sum fun p _ => hq p
     _ = (Fintype.card (Pattern m r b) : ℝ) * q := by rw [Finset.sum_const, nsmul_eq_mul, Finset.card_univ]
     _ ≤ _ := mul_le_mul_of_nonneg_right (by exact_mod_cast card_pattern_le m r b) hq0
-
-/-! ## Every stop deferred to the last round -/
 
 namespace ZkServer
 
@@ -802,7 +664,6 @@ def proverD {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W �
     (n : Msg → ℕ) (wk : S.Worker) (w : W) : Prover (R × S.Chk) :=
   ⟨fun x h ω => .ret (S.nextD fill n wk x w ω.1 ω.2 h)⟩
 
-/-- **The deferred server's frame is `P`'s message wherever it releases one**, at `(x, w)`. -/
 def RefD {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (wk : S.Worker) (x : Msg) (w : W) :
     Prop :=
@@ -827,8 +688,6 @@ theorem RefD.own {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Pr
     (hRef : S.RefD H P fill n wk x w) : S.RefDOwn H P fill n wk x w :=
   fun ρ κ h _ hc => hRef ρ κ h hc
 
-/-- **The deferred split**: for every worker, check coins and tape, the deferred server releases `P`'s run, or that
-run with its last message replaced by the stop (cut at `n x - c`, `c : Fin 2`). -/
 theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (x : Msg) (w : W) (wk : S.Worker)
     (hRef : S.RefDOwn H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk) :
@@ -922,10 +781,7 @@ theorem leaky1_out {Θ : Type} (H : Msg → Msg) (Sim : Simulator) (k : Msg → 
 
 namespace ZkServer
 
-/-- **Zero knowledge of the server that defers every stop**: for every worker, if `P` meets `ZKmalR` and the deferred
-server's frame is `P`'s message wherever it releases one (`RefD`), an event of the server's scheduled transcript has
-probability at most twice its probability at the simulator that guesses the stop (`leaky1`) plus `ε_zk + γ·Fork`. The
-factor `2` is the stop's leak: one bit a session, whether it stopped at its last round. -/
+/-- The factor `2` is the stop's leak: one bit a session, whether it stopped at its last round. -/
 theorem zk_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg) (k : Msg → ℕ)
     (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ) (hZK : ZKmalR H k P Rl Sim εzk γ)
@@ -978,27 +834,17 @@ theorem zk_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [No
 
 end ZkServer
 
-/-- **The deferred stop's leak over a stream**: with one stop form (`r = 1`), a stream of `m` sessions of which at
-most `b` stop has at most `∑_{i ≤ b} C(m, i)` stop patterns, so an event at the pattern the workers choose is at most
-that many times the worst fixed pattern's probability: the stream leaks at most `log₂ ∑_{i ≤ b} C(m, i)` bits. -/
 theorem stream_leak_deferred {Ω α : Type} [Fintype Ω] (m b : ℕ) (obs : Pattern m 1 b → Ω → α)
     (π : Ω → Pattern m 1 b) (E : α → Prop) {q : ℝ} (hq : ∀ p, Pr (fun ω => E (obs p ω)) ≤ q) :
     Pr (fun ω => E (obs (π ω) ω)) ≤ ((∑ i ∈ Finset.range (b + 1), m.choose i : ℕ) : ℝ) * q := by
   have h := stream_leak m 1 b obs π E hq
   simpa only [one_pow, mul_one] using h
 
-/-! ## At Flock's reference prover -/
-
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The ZK server at `flock-circuit --zk`'s masked record**: for every worker, the server whose frame at honest workers
-is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestPR` behind
-`refP`'s `Hello` and coin-tree checks) and whose masked checks are sound (`ZkServer.CheckSound`) releases, on every
-event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork` of `Flock.zk_zkD_ref`,
-plus the checks' errors, under `Claims.Hm96Hiding`, the session's five Props and `RefSession.HonestMsgs`. -/
 theorem Flock.zk_server_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg)

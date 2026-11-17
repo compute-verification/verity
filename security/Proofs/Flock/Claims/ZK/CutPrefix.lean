@@ -34,20 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A cut rep stopped at body `n` is the one stopped later, up to its stop (`CutPrefix.repCut_cut_agree`)
-
-`repCut` answered by `asksCut coin n` and by `asksCut coin N`, `n ≤ N`, from a history of at most `n` bodies, are
-coupled (`PrefixAgree.Agree n`): the same end, at no more than `n` bodies, or the run stopped at `n` threw right after
-body `n` and the later run's bodies extend it. Both answer each squeeze below `n` with the same coin, so a squeeze keeps
-the coupling at any size (`squeezeP_cut_agree`) and the walk needs none of `PrefixLive`'s size bounds.
-
-* **`repCut_cut_agree`**: the coupling at a rep.
-* `prefix_of_agree`, `eq_of_agree`: where the later run ends past body `n`, the run stopped at `n` threw with the
-  later run's first `n + 1` bodies; where it returns by body `n`, the two runs are one.
-* **`repCut_shift`**: a cut rep reads only its history's size; from two histories of one size it ends the same way after
-  the same bodies (`Shift`, `go_of_shift`).
--/
+/-! A cut rep stopped at body `n` is the one stopped later, up to its stop (`CutPrefix.repCut_cut_agree`). -/
 
 @[expose] public section
 
@@ -55,10 +42,6 @@ namespace FlockComplete.CutPrefix
 
 open Flock Transcript FlockComplete FlockDeploy With JsonRT PrefixAgree
 
-/-! ## What the coupling gives -/
-
-/-- **Where the later run ends past body `n`**, returned or not, the run stopped at `n` threw, with its bodies the later
-run's first `n + 1`. -/
 theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
     {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     (∃ e, (y.go l).1 = .error e) ∧ (y.go l).2.size = n + 1 ∧ ∀ i < n + 1, (y.go l).2[i]! = l'[i]! := by
@@ -73,14 +56,12 @@ theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l
     subst hbs
     rw [getElem!_pos _ i hi', getElem!_pos _ i (by rw [Array.size_append]; omega), Array.getElem_append_left hi']
 
-/-- `prefix_of_agree` with the stopped run's end named. -/
 theorem prefix_of_agree' {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
     {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     ∃ e L, y.go l = (.error e, L) ∧ L.size = n + 1 ∧ ∀ i < n + 1, L[i]! = l'[i]! := by
   obtain ⟨⟨e, he⟩, hs, hi⟩ := prefix_of_agree h hl hx hn
   exact ⟨e, (y.go l).2, Prod.ext he rfl, hs, hi⟩
 
-/-- **Where the later run returns by body `n`**, the run stopped at `n` is the same run. -/
 theorem eq_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
     {a : α} {l' : Array Claims.Msg} (hx : x.go l = (.ok a, l')) (hn : l'.size ≤ n) : y.go l = (.ok a, l') := by
   rcases h.2 l hl with ⟨he, -⟩ | ⟨-, hs, bs, hbs⟩
@@ -91,15 +72,12 @@ theorem eq_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : A
     rw [Array.size_append] at e
     omega
 
-/-! ## The walk -/
-
 section Walk
 
 variable (coin : ℕ → ℕ → F128) {n N : ℕ} (hnN : n ≤ N)
 
 include hnN
 
-/-- **A squeeze keeps the coupling**: below `n` both answer with `coin`, and at `n` the stopped run throws. -/
 theorem squeezeP_cut_agree {kind : UInt8} {m : ℕ} :
     ((agreeS n).st Transcript).R (squeezeP (asksCut coin N) kind m) (squeezeP (asksCut coin n) kind m) := by
   intro t
@@ -196,7 +174,6 @@ theorem innerCut_cut_agree (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F12
   unfold innerCut sampleVecP
   sim_walk [sampleP_cut_agree coin hnN, squeezeP_cut_agree coin hnN]
 
-/-- **A cut rep stopped at body `n` is coupled with the one stopped at `N ≥ n`.** -/
 theorem repCut_cut_agree (st : Setup) (sch : Schedule) (rep : ℕ) (dm : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) :
     ((agreeS n).st Transcript).R
@@ -207,13 +184,10 @@ theorem repCut_cut_agree (st : Setup) (sch : Schedule) (rep : ℕ) (dm : ByteArr
 
 end Walk
 
-/-! ## The run from another history of the same size -/
-
 section Shift
 
 variable (coin : ℕ → ℕ → F128)
 
-/-- **Two runs from histories of one size**: the same end, after the same bodies. -/
 def Shift {α : Type} (x y : PS α) : Prop :=
   ∀ l l' : Array Claims.Msg, l.size = l'.size → ∃ r bs, x.go l = (r, l ++ bs) ∧ y.go l' = (r, l' ++ bs)
 
@@ -235,7 +209,6 @@ theorem Shift.bind {α β : Type} {x y : PS α} {f g : α → PS β} (hxy : Shif
     · dsimp only
       rw [hy', Array.append_assoc]
 
-/-- **The shift's simulation**: a run of the pure session from two histories of one size. -/
 def shiftS : With.Sim PS PS where
   R x y := Shift x y
   pure a := Shift.still (v := .ok a) fun _ => rfl
@@ -243,7 +216,6 @@ def shiftS : With.Sim PS PS where
   throw e := Shift.still (v := .error e) fun _ => rfl
   lift v := Shift.still (v := v) fun l => monadLift_go v l
 
-/-- **A run from a history of the same size** ends the same way, after the same bodies. -/
 theorem go_of_shift {α : Type} {x : PS α} (h : shiftS.R x x) {l l' L : Array Claims.Msg} (hs : l.size = l'.size)
     {r : Except String α} (hx : x.go l = (r, L)) : ∃ bs, L = l ++ bs ∧ x.go l' = (r, l' ++ bs) := by
   obtain ⟨r', bs, h1, h2⟩ := h l l' hs
@@ -363,7 +335,6 @@ theorem innerCut_shift (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (
   unfold innerCut sampleVecP
   sim_walk [sampleP_shift coin N, squeezeP_shift coin N]
 
-/-- **A cut rep reads only its history's size.** -/
 theorem repCut_shift (st : Setup) (sch : Schedule) (rep : ℕ) (dm : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) :
     (shiftS.st Transcript).R

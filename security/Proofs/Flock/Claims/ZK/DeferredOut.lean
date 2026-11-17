@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The deferred server per outcome
-
-`ZkServer.zk_deferred` bounds the deferred server's transcript within the factor `2` of `leaky1`, the simulator that
-guesses whether the session stopped. Where the session stopped is public: the server defers every stop to the session's
-last round, so it is one bit of the transcript (`stopOf`), and with the verdict (`verdictOf`) it is the session's
-outcome (`outD`). Given the outcome the simulator guesses nothing: it is `leaky1` at the outcome's bit (`simOutD`), and
-the server is zero knowledge per outcome at the factor `1` (`ZkServer.zkOut_deferred`, `Claims.ZKOut`'s form at an
-outcome).
-
-* `stopOf`, `verdictOf`, `outD`: where the session stopped, its verdict, its outcome.
-* `interact_stopAt_self`, `interact_stopAt_last`, `interact_stopAt_last_ne`, `cutT_stopOf`: a run cut at its last
-  round or not at all is the run cut where `stopOf` says it stopped.
-* `simOutD`, `simOutD_out`: `leaky1` given the outcome.
-* `ZkServer.zkOut_deferred`: the deferred server per outcome.
--/
+/-! The deferred server per outcome. -/
 
 @[expose] public section
 
@@ -58,25 +43,18 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 
-/-- **Where the deferred server stopped** in a transcript `τ` of `n` rounds: whether round `n - 1`, the session's last,
-carries the stop. -/
 def stopOf (stop : Msg) (n : ℕ) (τ : List (Msg × Out)) : Bool :=
   decide ((τ[n - 1]?).map Prod.fst = some stop)
 
-/-- **The verdict a transcript ends on**: `some true` at an accept, `some false` at a reject, `none` where it ends on a
-message or is empty. -/
 def verdictOf (τ : List (Msg × Out)) : Option Bool :=
   match τ.getLast? with
   | some (_, .acc) => some true
   | some (_, .rej) => some false
   | _ => none
 
-/-- **The deferred server's outcome** at `x`, of its `k x` rounds: the verdict, and whether the session stopped at its
-last round. -/
 def outD (stop : Msg) (k : Msg → ℕ) (x : Msg) (τ : List (Msg × Out)) : Option Bool × Bool :=
   (verdictOf τ, stopOf stop (k x) τ)
 
-/-- A run stopped at its length is the run. -/
 theorem interact_stopAt_self (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (n : ℕ) :
     interact ask (stopAt pm n stop) n [] = interact ask pm n [] :=
   interact_congr ask pm (stopAt pm n stop) n [] fun i hi => stopAt_of_lt (by
@@ -84,7 +62,6 @@ theorem interact_stopAt_self (ask : List Msg → Out) (pm : List (Msg × Msg) �
     have := interact_length_le ask pm n []
     omega)
 
-/-- A run whose last round carries the stop is the run stopped at its last round. -/
 theorem interact_stopAt_last (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (n : ℕ)
     (hs : ((interact ask pm n [])[n - 1]?).map Prod.fst = some stop) :
     interact ask (stopAt pm (n - 1) stop) n [] = interact ask pm n [] := by
@@ -101,7 +78,6 @@ theorem interact_stopAt_last (ask : List Msg → Out) (pm : List (Msg × Msg) �
     rw [hs] at hg
     exact Option.some.inj hg
 
-/-- A run stopped at its last round whose last round doesn't carry the stop ended before it, so it is the run. -/
 theorem interact_stopAt_last_ne (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (n : ℕ)
     (hs : ¬ ((interact ask (stopAt pm (n - 1) stop) n [])[n - 1]?).map Prod.fst = some stop) :
     interact ask pm n [] = interact ask (stopAt pm (n - 1) stop) n [] := by
@@ -118,8 +94,6 @@ theorem interact_stopAt_last_ne (ask : List Msg → Out) (pm : List (Msg × Msg)
       (by rw [hl]; exact hin), hie] at hg
     exact hs hg
 
-/-- **A run cut at its last round or not at all is the run cut where it stopped**: the run of `pm` cut at `n - c` is
-that run cut at `n - b`, with `b` whether the cut run's last round carries the stop (`stopOf`). -/
 theorem cutT_stopOf (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (n : ℕ) (c : Fin 2) :
     cutT ask stop (n - c) n (interact ask pm n []) =
       cutT ask stop (n - (stopOf stop n (cutT ask stop (n - c) n (interact ask pm n []))).toNat) n
@@ -139,8 +113,6 @@ theorem cutT_stopOf (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (s
       rw [Bool.toNat_false, Nat.sub_zero, hA]
       exact (interact_stopAt_last_ne ask pm stop n (by unfold stopOf at hb; exact of_decide_eq_false hb)).symm
 
-/-- **`leaky1` given the outcome**: `Sim`'s transcript cut where the outcome says the session stopped, at its last
-round or not at all. -/
 def simOutD (Sim : Simulator) (k : Msg → ℕ) (stop : Msg) : SimOut (Option Bool × Bool) where
   C := Sim.C
   prog x o c := (leaky1 Sim k stop).prog x ((⟨o.2.toNat, Bool.toNat_lt _⟩ : Fin 2), c)
@@ -153,11 +125,6 @@ theorem simOutD_out {Θ : Type} (H : Msg → Msg) (Sim : Simulator) (k : Msg →
 
 namespace ZkServer
 
-/-- **The deferred server per outcome**: under `zk_deferred`'s premises, at each outcome `o` (`outD`: the verdict and
-whether the session stopped at its last round), the server's transcript shows `o` and an event with probability at most
-the simulator's given `o` (`simOutD`, `leaky1` at `o`'s bit) of the event, plus `ε_zk + γ·Fork`: `Claims.ZKOut`'s form
-at an outcome, at the factor `1`. The released transcript is `P`'s run cut at its last round or not at all
-(`split_deferred`), and `o`'s bit says which (`cutT_stopOf`), so the event at that cut is one `P` meets `ZKmalR` at. -/
 theorem zkOut_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg) (k : Msg → ℕ)
     (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ) (hZK : ZKmalR H k P Rl Sim εzk γ)

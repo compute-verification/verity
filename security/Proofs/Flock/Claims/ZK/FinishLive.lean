@@ -38,31 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FinishLig
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The live inner rep runs the ZK server's rep
-
-`flock-zk-server finish`'s live inner rep (`innerLive`) runs the ZK server's rep (`repFw`) but for its stop: its PIOP and
-opening (`repCons`) on the request's recorded coins, answered by `liveAsks … false` in `LiveM`, then the constraints
-sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itself, for the proof file, runs in
-`StateT Nat V` on every round's coins (`asksOf`). Here one is held to the other:
-
-* **The state map** (`liveSim C`): a port run from round `k` that returns at round `k'` takes no fewer rounds, and where
-  `k'` is within the recorded coins `C`, the live run from any record of `C`'s first `k` coins returns the same, with no
-  IO, at a record of `C`'s first `k'`.
-* **The sends** (`liveAsks_rel`): `asksOf C'` and `liveAsks ch C live` answer each round below `C.size` alike, wherever
-  `C'` is `C` there.
-* **The ZK server's phases under any simulation** (`repPiop_rel`, `repOpening_rel`, `repCons_rel`), walked once from
-  `FinishBridge`'s.
-* **`repCons_live`**, **`bind_repCons_live`**: where the port's `repCons` returns after `C.size` rounds, the live one
-  returns the same proof, level-0 messages, constraints and transcript, with `C` recorded and no IO, so whatever runs
-  after it runs from there.
-* **`repFw_parts`**: a `repFw` run that returns is its `repCons`, no constraint failing on the pads, then `innerP` on
-  `repCons`'s proof, constraints and transcript.
-* **`innerLive_eq`**, **`innerProg_run`**: `innerLive` is its pads commitment, then `repCons` and the tail
-  (`innerTail`: the round and `final_c` check, the constraints sent, `innerP` live); where the port's `repCons` returns after the
-  request's coins, the live rep runs the tail on `repCons`'s proof and constraints from the port's transcript. So the
-  live inner proof is `repFw`'s `innerP` on the same proof, constraints and transcript, its rounds answered live.
--/
+/-! The live inner rep runs the ZK server's rep but for its stop. -/
 
 @[expose] public section
 
@@ -70,11 +46,6 @@ namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
-/-! ## The state map -/
-
-/-- **The port's rounds as the live rep's**: a port run from round `k` that returns `a` at round `k'` takes no fewer
-rounds, and where `k'` is within `C`, the live run from a record of `C`'s first `k` coins returns `a`, with no IO, at a
-record of `C`'s first `k'`. -/
 def liveSim (C : Array (Array F128)) : Sim (StateT ℕ V) LiveM where
   R x y := ∀ k a k', x.run k = .ok (a, k') → k ≤ k' ∧ (k' ≤ C.size → ∀ got : Array (Array F128), got.size = k →
     (∀ i < k, got[i]? = C[i]?) → ∃ got' : Array (Array F128), y.run got = pure (a, got') ∧ got'.size = k' ∧
@@ -105,9 +76,6 @@ def liveSim (C : Array (Array F128)) : Sim (StateT ℕ V) LiveM where
       rw [StateT.run_monadLift]
       exact pure_bind _ _
 
-/-! ## The sends -/
-
-/-- **The port's sends are the live rep's** below `C.size`, wherever the port's coins `C'` are `C` there. -/
 theorem liveAsks_rel (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i < C.size, C'[i]? = C[i]?)
     (live : Bool) : AsksRel (liveSim C) (asksOf C').toC (liveAsks ch C live).toC where
   link _ _ _ _ _ h := by cases h
@@ -140,8 +108,6 @@ theorem liveAsks_rel (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i <
             exact hCk.symm
           · rename_i hik
             exact hp i (by omega)
-
-/-! ## The ZK server's phases under any simulation -/
 
 section Generic
 
@@ -191,7 +157,6 @@ theorem repOpening_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io.toC i
   rw [hm]
   sim_walk [ringSwitchP_rel S hio, ligeritoFw_rel S hio]
 
-/-- **The ZK server's PIOP and opening under a simulation** that relates its sends. -/
 theorem repCons_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io.toC io'.toC) (st : Setup)
     (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)
@@ -205,11 +170,6 @@ theorem repCons_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io.toC io'.
 
 end Generic
 
-/-! ## The live rep's PIOP and opening -/
-
-/-- **The live rep's `repCons` is the port's**: where `repCons` answered by `asksOf C'` returns `r` and the transcript
-`tr'` at round `k' ≤ C.size`, `C'` being `C` below `C.size`, `repCons` answered by `liveAsks ch C live` from no recorded
-coins returns the same, with no IO, having recorded `C`'s first `k'` coins. -/
 theorem repCons_live (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i < C.size, C'[i]? = C[i]?) (live : Bool)
     (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)
@@ -224,8 +184,6 @@ theorem repCons_live (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i <
   ((repCons_rel (liveSim C) (liveAsks_rel ch C C' hC live) st hm sch tPad rep dom g cm0 extras pads ic vals extra
     lanePad salt tr 0 (r, tr') k' h).2 hk #[] rfl fun i hi => absurd hi (Nat.not_lt_zero i))
 
-/-- **What runs after the live rep's `repCons`** runs from the port's: where the port's `repCons` returns `r` and `tr'`
-after `C.size` rounds, the live `repCons` followed by `K` from no recorded coins is `K r` from `tr'` with `C` recorded. -/
 theorem bind_repCons_live (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i < C.size, C'[i]? = C[i]?)
     (live : Bool) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -245,8 +203,6 @@ theorem bind_repCons_live (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : �
   subst hg
   rw [StateT.run_bind, StateT.run_bind, e, pure_bind]
 
-/-! ## The ZK server's rep in parts -/
-
 theorem sv_bind_ok {α β : Type} {x : StateT ℕ V α} {f : α → StateT ℕ V β} {k : ℕ} {b : β} {k' : ℕ}
     (h : (x >>= f).run k = .ok (b, k')) : ∃ a k₁, x.run k = .ok (a, k₁) ∧ (f a).run k₁ = .ok (b, k') := by
   rw [StateT.run_bind] at h
@@ -262,8 +218,6 @@ theorem tmw_bind_ok {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (
   obtain ⟨⟨a, tr₁⟩, k₁, h1, h2⟩ := sv_bind_ok h
   exact ⟨a, tr₁, k₁, h1, h2⟩
 
-/-- **A ZK server rep that returns, in parts**: its `repCons` returns, no constraint fails on the pads, and its inner
-proof is `innerP` on `repCons`'s proof, constraints and transcript, from `repCons`'s last round. -/
 theorem repFw_parts (C' : Array (Array F128)) (hs : Hashes (StateT ℕ V)) (st : Setup) (sch : Flock.Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -289,11 +243,6 @@ theorem repFw_parts (C' : Array (Array F128)) (hs : Hashes (StateT ℕ V)) (st :
     cases h6
     exact ⟨p, zl, cons, tr₁, k₁, inner, h1, by simpa using hne, h5, rfl⟩
 
-/-! ## The live inner rep -/
-
-/-- **The live inner rep after its `repCons`** (`innerLive`'s): the round and `final_c` check (`consWhy`), the
-constraints sent, then `repFw`'s inner proof on the proof `p` and constraints `cons`, its rounds sent live past
-`sent` and their coins held by `held`. -/
 def innerTail (ch : Frame.Chan) (t : Tab) (q : RepIn) (ic : InnerCommit) (p : Proof)
     (cons : Array (String × Zk.Lin)) (sent : ℕ → ByteArray → IO (Option String))
     (held : ℕ → Array F128 → IO (Option String)) : TMW LiveM Unit := do
@@ -305,8 +254,6 @@ def innerTail (ch : Frame.Chan) (t : Tab) (q : RepIn) (ic : InnerCommit) (p : Pr
   let _ ← innerP (liveAsks ch q.coins true sent held) (Hashes.ofSha512 Sha512.hash)
     (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (padsOf q.draws) ic p.zerocheck.finalC cons
 
-/-- **The live inner rep's program** at the pads commitment `ic`: `repCons` on the request's recorded coins, then
-`innerTail`. -/
 def innerProg (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) (ic : InnerCommit)
     (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String)) :
     TMW LiveM Unit := do
@@ -315,7 +262,6 @@ def innerProg (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : Rep
     (fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))
   innerTail ch t q ic p cons sent held
 
-/-- **`innerLive` is its pads commitment, then `innerProg`.** -/
 theorem innerLive_eq (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn)
     (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String)) :
     innerLive ch t rep dom q sent held = (do
@@ -323,11 +269,6 @@ theorem innerLive_eq (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (
         V InnerCommit) : LiveM InnerCommit)
       let _ ← (innerProg ch t rep dom q ic sent held).run (Transcript.init #[] dom)) := rfl
 
-/-- **The live inner rep runs `repFw`'s inner proof**: where the port's `repCons` (`repFw`'s, answered by `asksOf C'`,
-which is the request's coins `q.coins` below their count) returns the proof `p`, level-0 messages `zl`, constraints
-`cons` and transcript `tr₁` after exactly `q.coins.size` rounds, the live rep's program from no recorded coins is
-`innerTail` on `p` and `cons` from `tr₁`, with `q.coins` recorded: the round check passes, and the inner proof is
-`innerP` on `repFw`'s own inputs (`repFw_parts`). -/
 theorem innerProg_run (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) (ic : InnerCommit)
     (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String))
     (C' : Array (Array F128)) (hC : ∀ i < q.coins.size, C'[i]? = q.coins[i]?)

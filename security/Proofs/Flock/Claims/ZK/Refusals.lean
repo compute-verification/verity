@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.ExeLayout
 
-/-!
-# The masked session's last round where a table refuses its coins
-
-At a stopping round plan (`RoundPlan.stop`, `off = []`), `HonestOffOn` asks that `honestPR`'s last message is `[]`
-wherever some table refuses the coins (`honestOffOn_stop_iff`). `CoinedSetup.Admits` has four conjuncts, and the
-executable refuses at each:
-
-* **an outer coin `1`** (`Masking::refuse_outer`): `honestPR` stops at a history one of whose zerocheck outer coins
-  (`outerSlotsZk`) is `1` (`outerHit`, `honestPR_stop`). At a coin plan reading each rep's outer coins at their slots
-  (`OuterReads`, `outerAt`; any plan with its `rOuter` so read is one, `withOuter`), a refused outer coin is such a hit
-  (`outerHit_of`), so `honestPR` sends `[]`;
-* **`β = 0`** (`innerP`), **a rank-deficient mask slot** (`rankCheckP`), **`ρ₀, ρ₁` dependent** (`ligeritoPZk`): throws
-  that end `sessionPZk` with `.error`, which `ZkTables.prog` sends as `[]` (`FirstRefusal` discharges all three).
-
-`honestOffOn_stop_of` is `HonestOffOn` at a stopping plan from the outer coins' reading and one premise per throw, and
-`Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a stopping plan with it in place of
-`HonestOffOn`.
--/
+/-! The masked session's last round where a table refuses its coins. -/
 
 @[expose] public section
 
@@ -42,8 +25,6 @@ the pre-final rounds. -/
 def outerAt {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j r i : ℕ) : _root_.Flock.F128 :=
   if h : outerSlot x j r < refK x then (c ⟨outerSlot x j r, h⟩).at i else 0
 
-/-- **A coin plan reads each rep's outer coins at the executable's slots**: every coin of table `j`'s rep `r`'s
-`rOuter` is its outer coin `i` (`outerAt`) for some `i < m − 13`. -/
 def OuterReads {P : Composed.LigProver}
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) : Prop :=
   ∀ x c (j : Fin (jOf x)) (r : Fin 2), ∀ y ∈ (tabC P x j).rOuter (cz x c j) r,
@@ -58,12 +39,9 @@ noncomputable def withOuter {P : Composed.LigProver}
     rest := ({ ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) with
       rOuter := fun r i => outerAt c j.val r.val i.val } : Composed.RestOf (zkTab x j).table (stAt x j)) }
 
-/-- **The coins `refK x` openings open**: opening `k`'s, read as its coin (`rd`); the session's `pad`. -/
 def padOps {x : Msg} (ops : List (Msg × Msg)) : Fin (refK x) → FlockDeploy.Coin :=
   fun k => (ops.map fun p => rd p.2).getD k.val default
 
-/-- **An opened outer coin `1` is an outer hit**: after `refK x` openings `ops` whose coins are `c`, outer coin
-`i < m − 13` of table `j`'s rep `r` equal to `1` makes `honestPR` stop (`outerHit`). -/
 theorem outerHit_of {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = refK x)
     (c : Fin (refK x) → FlockDeploy.Coin) (hc : ∀ (k : Fin (refK x)) (hk : k.val < ops.length), c k = rd ops[k.val].2)
     (j : Fin (jOf x)) (r : Fin 2) {i : ℕ} (hi : i < (stAt x j).m - 13) (h1 : outerAt c j.val r.val i = 1) :
@@ -99,9 +77,6 @@ theorem outerHit_of {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = refK 
     rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getElem_map]
     exact h1
 
-/-- **`HonestOffOn` at a stopping round plan, refusal by refusal**: at a coin plan reading each rep's outer coins at
-their slots (`OuterReads`), an outer coin `1` is `honestPR_stop`'s (`outerHit_of`); the other three refusals, `β = 0`,
-a rank-deficient mask slot and `ρ₀, ρ₁` dependent, are each a premise that `honestPR`'s last message is `[]`. -/
 theorem honestOffOn_stop_of {P : Composed.LigProver} {cz enc fin} (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ)
     (A : Msg → Prop) (R : Rel Claims.Flock.Wit) (H : Msg → Msg) (ho : OuterReads cz)
     (hβ : ∀ x, A x → ∀ w, R x w → ∀ t (ops : List (Msg × Msg)), ops.length = refK x → ∀ j r,
@@ -140,10 +115,6 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a stopping round plan**:
-`Flock.zk_deployZk_masked_exe_gap` at `RoundPlan.stop cz enc fin`, its `HonestOffOn` from `honestOffOn_stop_of` (an
-outer coin `1` discharged at a plan reading the outer coins at their slots, `OuterReads`). Left: the plan's `Causal`,
-its round `0` `enc0`, the rounds after the first, the last round where every table admits, and the three throws. -/
 theorem Flock.zk_deployZk_masked_exe_stop_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}

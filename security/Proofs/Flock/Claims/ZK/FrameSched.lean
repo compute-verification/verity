@@ -6,30 +6,7 @@ public import Proofs.Flock.Claims.ZK.FinishLevel0
 import all Init.Data.String.Defs
 import all Init.Data.Array.DecidableEq
 
-/-!
-# Two runs of the ZK server's prover alike in shape
-
-The loop's release runs each rep's frame on the rep's scheduled rounds at placeholder inputs (a zero level 0 of the
-statement's shape, zero salts for levels ≥ 1), and the deployed frame checks the device against the scheduled rounds at
-the tape's. Both are the ZK server's own prover (`Finish.repPiop`,
-`Finish.repOpening`) run at two inputs of one shape, and the frame's state reads a round's shape alone (`FrameShape`), so
-what is left is that the two runs send rounds of one shape. The prover is generic in its monad, so the comparison is
-too:
-
-* `PendAlike`, `TrAlike`, `RoundAlike`: pending bytes that are `encs` of alike frames (`Alike`), mid-frames all and
-  none the inner proof's label (each transcript step's label is the prover's own, `sim_label`);
-  transcripts with such pending bytes; and a squeeze's framed bytes over them, with the squeeze's header as `roundFree`
-  takes it (`roundFree_alike`'s and `passes_frames`' hypotheses).
-* `Lift`: a relation between two runs in a monad `M` that keeps `pure`, `bind`, `throw`, an `ok` lifted from `V`, and
-  the prover's `round` at alike framed bytes (equal coins).
-* `Sim`: two transcript programs over `M` alike: from alike transcripts, related results at alike transcripts. With its
-  `bind`, `pure`, `throw`, `if` and loops over a range (`sim_bind`, `sim_pure`, `sim_throw`, `sim_ite`, `sim_forIn`),
-  and each transcript step (`sim_label`, `sim_absorbF`, `sim_absorbSlice`, `sim_absorbBytes`, `sim_absorbK`, `sim_pow`,
-  `sim_squeezeP`, `sim_sampleP`, `sim_sampleVecP`, `sim_sampleKP`).
-* **The algebraic phase** (`zerocheckFw_sim`, `lincheckFw_sim`, `repPiop_sim`): at two level-0 caps of one size, the
-  PIOP returns the same proof and claims and leaves alike transcripts.
-* **The ring switch** (`ringSwitchP_sim`): at switched vectors of the same sizes, it returns the same switched claims.
--/
+/-! Two runs of the ZK server's prover alike in shape. -/
 
 @[expose] public section
 
@@ -42,19 +19,13 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Sched
 
-/-- Every frame a mid-frame, and none the inner proof's label (`Masker.label`'s start of the inner proof). -/
 def MidAll (fs : List Frame) : Prop := ∀ f ∈ fs, midFrame f ∧ f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8
 
-/-- **Two pending byte strings of one shape**: `encs` of alike frames, all mid-frames and none the inner proof's label
-(`MidAll`). -/
 def PendAlike (p p' : ByteArray) : Prop :=
   ∃ fs fs' : List Frame, p.data.toList = encs fs ∧ p'.data.toList = encs fs' ∧ List.Forall₂ Alike fs fs' ∧ MidAll fs
 
-/-- Two transcripts with pending bytes of one shape. -/
 def TrAlike (t t' : Flock.Transcript) : Prop := PendAlike t.pending t'.pending
 
-/-- **Two rounds of one shape**: a squeeze's framed bytes over pending bytes of one shape, its kind and count as
-`roundFree` takes them. -/
 def RoundAlike (c c' : ByteArray) : Prop :=
   ∃ (p p' : ByteArray) (k : UInt8) (n : ℕ), PendAlike p p' ∧ c = p ++ header 4 k n ∧ c' = p' ++ header 4 k n ∧
     (k = 2 ∨ (k = 1 ∧ n = 1)) ∧ n ≠ 0 ∧ n < 2 ^ 64
@@ -71,7 +42,6 @@ theorem forall₂_snoc {fs fs' : List Frame} {f f' : Frame} (h : List.Forall₂ 
 theorem encs_snoc (fs : List Frame) (f : Frame) : encs (fs ++ [f]) = encs fs ++ f.enc := by
   simp [encs]
 
-/-- **A frame more on each side** keeps the shape. -/
 theorem pendAlike_snoc {p p' q q' : ByteArray} {f f' : Frame} (h : PendAlike p p')
     (hq : q.data.toList = p.data.toList ++ f.enc) (hq' : q'.data.toList = p'.data.toList ++ f'.enc) (hf : Alike f f')
     (hm : midFrame f) (hi : f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8) : PendAlike q q' := by
@@ -86,8 +56,6 @@ theorem pendAlike_snoc {p p' q q' : ByteArray} {f f' : Frame} (h : PendAlike p p
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **Two runs in `M` alike**, for the prover's channel `io`: a relation, for each relation on results, kept by `pure`,
-`bind`, `throw`, an `ok` lifted from `V`, and `io.round` at rounds of one shape (with equal coins). -/
 structure Lift (io : Asks M) where
   R : {α β : Type} → (α → β → Prop) → M α → M β → Prop
   pure : ∀ {α β : Type} {S : α → β → Prop} {a : α} {b : β}, S a b → R S (Pure.pure a) (Pure.pure b)
@@ -100,7 +68,6 @@ structure Lift (io : Asks M) where
 
 variable {io : Asks M} (L : Lift io)
 
-/-- **Two transcript programs alike**: from alike transcripts, results related by `S` at alike transcripts. -/
 def Sim {α β : Type} (S : α → β → Prop) (p : TMW M α) (q : TMW M β) : Prop :=
   ∀ t t', TrAlike t t' → L.R (fun x y => S x.1 y.1 ∧ TrAlike x.2 y.2) (p t) (q t')
 
@@ -126,8 +93,6 @@ theorem sim_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c]
   · rw [if_pos hc, if_pos hc]; exact h1 hc
   · rw [if_neg hc, if_neg hc]; exact h2 hc
 
-/-- **A loop over `[0:n]` alike**: if step `i` from values related by `I i` yields values related by `I (i + 1)`,
-the loops end related by `I n`. -/
 theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInStep σ)) (body' : ℕ → τ → TMW M (ForInStep τ))
     (I : ℕ → σ → τ → Prop)
     (hb : ∀ i < n, ∀ u u', I i u u' →
@@ -151,9 +116,6 @@ theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInSt
     obtain ⟨v, v', rfl, rfl, hv⟩ := hr
     exact ih (a + 1) v v' (by omega) hv
 
-/-! ## The transcript's steps -/
-
-/-- A transcript step that only appends a frame to the pending bytes. -/
 theorem sim_liftTM_mod {x x' : _root_.Flock.Transcript.TM Unit} {F F' : Flock.Transcript → Flock.Transcript}
     (hx : ∀ t, x t = .ok ((), F t)) (hx' : ∀ t, x' t = .ok ((), F' t))
     (hF : ∀ t t', TrAlike t t' → TrAlike (F t) (F' t')) : Sim L (· = ·) (liftTM x : TMW M Unit) (liftTM x') := by
@@ -220,10 +182,6 @@ theorem sim_sampleVecP (n : ℕ) (hn : n < 2 ^ 64) : Sim L (· = ·) (sampleVecP
 theorem sim_sampleKP : Sim L (· = ·) (sampleKP io) (sampleKP io) :=
   sim_bind (sim_squeezeP 2 2 (.inl rfl) (by decide)) fun _ _ h => h ▸ sim_pure rfl
 
-/-! ## The algebraic phase -/
-
-/-- **The masked zerocheck after its first round** (`zerocheckFw` from `rOuter`'s squeeze on), which reads neither
-the digest, the cap nor the pads' root. -/
 def zcRest (io : Asks M) (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
     TMW M (_root_.Flock.ZerocheckProof × _root_.Flock.ZcOut) := do
   let rOuter ← sampleVecP io (m - 13)
@@ -260,7 +218,6 @@ theorem zerocheckFw_split (io : Asks M) (m : ℕ) (digest cap root : ByteArray) 
       zcRest io m lay mk) :=
   rfl
 
-/-- The masked zerocheck after its first round returns the same proof from alike transcripts. -/
 theorem zcRest_sim (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (hm : m < 2 ^ 64) :
     Sim L (· = ·) (zcRest io m lay mk) (zcRest io m lay mk) := by
   unfold zcRest
@@ -282,7 +239,6 @@ theorem zcRest_sim (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F12
     refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
     exact sim_pure rfl
 
-/-- **The masked zerocheck at two caps of one size** returns the same proof and leaves alike transcripts. -/
 theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
     (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64)
     (hm : m < 2 ^ 64) :
@@ -297,7 +253,6 @@ theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _roo
   refine sim_bind (sim_sampleVecP 6 (by decide)) fun _ _ _ => ?_
   exact zcRest_sim m lay mk hm
 
-/-- **The masked lincheck from one coin state** returns the same proof and leaves alike transcripts. -/
 theorem lincheckFw_sim (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
     (zc : _root_.Flock.ZcOut) :
     Sim L (· = ·) (lincheckFw io c lay mk zc) (lincheckFw io c lay mk zc) := by
@@ -325,7 +280,6 @@ theorem lincheckFw_sim (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pad
     subst h
     exact sim_pure rfl
 
-/-- **A rep's PIOP at two caps of one size** returns the same proofs and claims and leaves alike transcripts. -/
 theorem repPiop_sim (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap cap' root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hc : cap.size = cap'.size) (hd : st.digest.size < 2 ^ 64)
     (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
@@ -344,9 +298,6 @@ theorem repPiop_sim (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) 
   rw [Array.size_append, this]
   omega
 
-/-! ## The ring switch -/
-
-/-- **The ring switch at switched vectors of the same sizes** returns the same switched claims. -/
 theorem ringSwitchP_sim (sv sv' : ℕ → Array F128) (claims : Array _root_.Flock.Claim)
     (hs : ∀ k, (sv k).size = (sv' k).size) (hn : ∀ k, (sv k).size < 2 ^ 64) (hc : claims.size < 2 ^ 64) :
     Sim L (fun r r' => r.2.2 = r'.2.2) (ringSwitchP io sv claims) (ringSwitchP io sv' claims) := by
@@ -369,16 +320,12 @@ theorem ringSwitchP_sim (sv sv' : ℕ → Array F128) (claims : Array _root_.Flo
     subst h
     exact sim_pure rfl
 
-/-! ## The Ligerito prover's state -/
-
 open _root_.Flock.ZkServer.Finish (LigState LP liftT sendMsg powP challengeP oodIntroP queryP foldK splitK embedF
   roundPoly liftU addScaled maskMsg dotK ligeritoPZk repOpening Commit flat)
 
-/-- **Two Ligerito states of one shape**: tables of one size, and the same weight (the basis and the coins'). -/
 def LigAlike (s s' : LigState) : Prop := s.tab.size = s'.tab.size ∧ s.w = s'.w
 
 variable (L) in
-/-- **Two Ligerito programs alike**: from states of one shape, results related by `S` at states of one shape. -/
 def SimL {α β : Type} (S : α → β → Prop) (p : LP M α) (q : LP M β) : Prop :=
   ∀ s s', LigAlike s s' → Sim L (fun x y => S x.1 y.1 ∧ LigAlike x.2 y.2) (p.run s) (q.run s')
 
@@ -441,7 +388,6 @@ theorem simL_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → LP M (ForInSt
     obtain ⟨v, v', rfl, rfl, hv⟩ := hr
     exact ih (a + 1) v v' (by omega) hv
 
-/-- **A loop over two lists of one length**, its steps alike from any two elements. -/
 theorem simL_forIn_list {α β σ τ : Type} (body : α → σ → LP M (ForInStep σ)) (body' : β → τ → LP M (ForInStep τ))
     (I : σ → τ → Prop)
     (hb : ∀ x y u u', I u u' →
@@ -457,7 +403,6 @@ theorem simL_forIn_list {α β σ τ : Type} (body : α → σ → LP M (ForInSt
     obtain ⟨v, v', rfl, rfl, hv⟩ := hr
     exact simL_forIn_list body body' I hb xs ys v v' (by simpa using h) hv
 
-/-- **A loop over two arrays of one size**, its steps alike from any two elements. -/
 theorem simL_forIn_array {α β σ τ : Type} (body : α → σ → LP M (ForInStep σ)) (body' : β → τ → LP M (ForInStep τ))
     (I : σ → τ → Prop)
     (hb : ∀ x y u u', I u u' →
@@ -484,8 +429,6 @@ theorem splitK_size (f : Array F256) : (splitK f).size = 2 * f.size := by
 
 theorem foldK_size (r : F256) (a : Array F256) : (foldK r a).size = a.size / 2 := by
   simp [foldK]
-
-/-! ## The Ligerito prover's steps -/
 
 theorem sendMsg_sim (m m' : F256 × F256) : SimL L (· = ·) (sendMsg m : LP M Unit) (sendMsg m') := by
   unfold sendMsg
@@ -547,9 +490,6 @@ theorem queryP_sim (nonce nonce' : ℕ → ℕ → UInt64) (ms : _root_.Flock.Me
   subst h
   exact simL_pure rfl
 
-/-! ## The masked Ligerito and the opening -/
-
-/-- **Two commitments of one shape**: flattened caps of one size, a `u64` length. -/
 def CapAlike (cm cm' : Commit) : Prop := (flat cm.cap).size = (flat cm'.cap).size ∧ (flat cm.cap).size < 2 ^ 64
 
 theorem sim_run {α β : Type} {S : α → β → Prop} {p : LP M α} {q : LP M β} {s s' : LigState} (h : SimL L S p q)
@@ -560,8 +500,6 @@ theorem splitK_size' (f : Array F256) :
     (f.foldl (fun acc v => (acc.push v.c0).push v.c1) #[]).size = 2 * f.size :=
   splitK_size f
 
-/-- **The masked Ligerito at two tables of one size and two level-0 commitments of one shape**, every other input
-the prover's own or of one size, with `commit` taking tables of one size to commitments of one shape: alike runs. -/
 theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
     (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule)
     (hcom : ∀ i (g g' : Array F128) s s', g.size = g'.size →
@@ -694,7 +632,6 @@ theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ →
   obtain ⟨_, _, _, _, _⟩ := u'
   exact simL_pure trivial
 
-/-- **A rep's opening at two tables of one size and two level-0 commitments of one shape**: alike runs. -/
 theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule)
     (hcom : ∀ i (g g' : Array F128) s s', g.size = g'.size →
@@ -717,8 +654,6 @@ theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → 
   obtain ⟨_, _, _⟩ := r
   obtain ⟨_, _, _⟩ := r'
   exact sim_pure trivial
-
-/-! ## Levels ≥ 1's commitments -/
 
 theorem flat_size (A : Array ByteArray) (h : ∀ b ∈ A, b.size = 64) : (flat A).size = 64 * A.size := by
   unfold flat
@@ -755,7 +690,6 @@ theorem layer_mem (d : ℕ) (lf : ℕ → ByteArray) (hl : ∀ q, (lf q).size = 
     obtain ⟨q, -, rfl⟩ := hb
     exact _root_.Flock.Sha512.hash_size _
 
-/-- **A level's commitment has a cap of one shape** whatever its table and salts: `2^cap` digests. -/
 theorem commitRows_capAlike (lv : _root_.Flock.Level) (rows rows' : Array (Array F128)) (s s' : ℕ → ByteArray)
     (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
     CapAlike (_root_.Flock.ZkServer.Finish.commitRows lv rows s) (_root_.Flock.ZkServer.Finish.commitRows lv rows' s') := by
@@ -775,15 +709,10 @@ theorem commitFw_capAlike (lv : _root_.Flock.Level) (g g' : Array F128) (s s' : 
     CapAlike (_root_.Flock.ZkServer.Finish.commitFw lv g s) (_root_.Flock.ZkServer.Finish.commitFw lv g' s') :=
   commitRows_capAlike lv _ _ s s' hd
 
-/-! ## Rounds of one shape, with their coin counts -/
-
-/-- **Two scheduled rounds of one shape**: their framed bytes alike (`RoundAlike`) at one coin count, the count their
-squeeze headers hold. -/
 def RoundAt (r r' : ByteArray × ℕ) : Prop :=
   r.2 = r'.2 ∧ ∃ (p p' : ByteArray) (k : UInt8), PendAlike p p' ∧ r.1 = p ++ header 4 k r.2 ∧
     r'.1 = p' ++ header 4 k r.2 ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ r.2 ≠ 0 ∧ r.2 < 2 ^ 64
 
-/-- Two schedules of one shape, round by round. -/
 def RoundsAt (rs rs' : Array (ByteArray × ℕ)) : Prop := List.Forall₂ RoundAt rs.toList rs'.toList
 
 theorem forall₂_push {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} {a : α} {b : β}
@@ -792,7 +721,6 @@ theorem forall₂_push {α β : Type} {R : α → β → Prop} {l : List α} {l'
   | nil => exact .cons hab .nil
   | cons h1 _ ih => exact .cons h1 ih
 
-/-- A squeeze's framed bytes hold its coin count in their last eight bytes. -/
 theorem count_header (p : ByteArray) (k : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
     (_root_.Flock.u64OfLE (p ++ header 4 k n) ((p ++ header 4 k n).size - 8)).toNat = n := by
   have hL : (p ++ header 4 k n).data.toList = p.data.toList ++ (Frame.sq k n).enc := by
@@ -812,19 +740,14 @@ theorem count_header (p : ByteArray) (k : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
   rw [e] at h
   exact h
 
-/-- Alike framed bytes, at their coin count. -/
 theorem roundAt_of_alike {c c' : ByteArray} (h : RoundAlike c c') :
     ∃ n, (_root_.Flock.u64OfLE c (c.size - 8)).toNat = n ∧ (_root_.Flock.u64OfLE c' (c'.size - 8)).toNat = n ∧
       RoundAt (c, n) (c', n) := by
   obtain ⟨p, p', k, n, hp, rfl, rfl, hk, h0, hn⟩ := h
   exact ⟨n, count_header p k n hn, count_header p' k n hn, rfl, p, p', k, hp, rfl, rfl, hk, h0, hn⟩
 
-/-! ## The opening's resumptions -/
-
 open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks openStep)
 
-/-- **Two resumptions of one shape**: both end at related results, both stop, or both ask for rounds of one shape at
-one count and go on alike from the same coins. -/
 inductive StepRel {α β : Type} (S : α → β → Prop) : Step α → Step β → Prop
   | done {a : α} {b : β} : S a b → StepRel S (.done a) (.done b)
   | fail (e e' : String) : StepRel S (.fail e) (.fail e')
@@ -839,7 +762,6 @@ theorem stepRel_bind {α β γ δ : Type} {S : α → β → Prop} {T : γ → �
   | fail e e' => exact .fail e e'
   | ask hr _ ih => exact .ask hr fun cs => ih cs
 
-/-- **Alike resumptions fed the same coins** end alike, having sent rounds of one shape. -/
 theorem stepRel_feed {α β : Type} {S : α → β → Prop} :
     ∀ {p : Step α} {q : Step β} (cs : List (Array F128)) {rs rs' : Array (ByteArray × ℕ)},
       StepRel S p q → RoundsAt rs rs' →
@@ -856,7 +778,6 @@ theorem stepRel_feed {α β : Type} {S : α → β → Prop} :
     | ask hc hk =>
       exact stepRel_feed cs (hk x) (by unfold RoundsAt; rw [Array.toList_push, Array.toList_push]; exact forall₂_push hr hc)
 
-/-- The opening's runs, related: at one state, results related by `S` at one state. -/
 def ORel {α β : Type} (S : α → β → Prop) (x : OpenM α) (y : OpenM β) : Prop :=
   ∀ s, StepRel (fun a b => S a.1 b.1 ∧ a.2 = b.2) (x s) (y s)
 
@@ -895,7 +816,6 @@ theorem orel_ask {c c' : ByteArray} {n : ℕ} (h : RoundAt (c, n) (c', n)) :
     ORel (· = ·) (StateT.lift (Step.ask c n .done) : OpenM (Array F128)) (StateT.lift (Step.ask c' n .done)) :=
   fun _ => .ask h fun _ => .done ⟨rfl, rfl⟩
 
-/-- **The opening's runs as a `Lift`**: at one state of coins taken, `stepAsks` asks for rounds of one shape. -/
 def openLift (coins : Array (Array F128)) (live : Bool) : Lift (M := OpenM) (stepAsks coins live) where
   R := ORel
   pure := orel_pure
@@ -925,12 +845,10 @@ theorem sim_getThe (coins : Array (Array F128)) (live : Bool) :
     Sim (openLift coins live) (· = ·) (getThe (Array (Array F128)) : TMW OpenM _) (getThe _) :=
   fun _ _ ht _ => .done ⟨⟨rfl, ht⟩, rfl⟩
 
-/-- Every opening lift relates programs by `ORel`, whatever its coins are for. -/
 theorem sim_relift (coins : Array (Array F128)) (live live' : Bool) {α β : Type} {S : α → β → Prop}
     {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) : Sim (openLift coins live') S p q :=
   h
 
-/-- A stream's transcript at its start, its domain a `u64` length. -/
 theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
     TrAlike (Flock.Transcript.init #[] dom) (Flock.Transcript.init #[] dom) :=
   ⟨[.dom dom], [.dom dom], by simp [encs, FlockSoundness.Refine.init_enc],
@@ -939,7 +857,6 @@ theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
       subst hf
       exact ⟨hd, nofun⟩⟩
 
-/-- **Two opening programs alike, run** from alike transcripts at one state: alike resumptions. -/
 theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S : α → β → Prop}
     {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Flock.Transcript}
     (ht : TrAlike t t') (s : Array (Array F128)) :
@@ -948,8 +865,6 @@ theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S
     fun _ _ _ => .done trivial
   exact .done trivial
 
-/-- **A rep's opening at two tables of one shape**, the same statement, schedule and `t_pad`, packed tables of one
-size and level-0 commitments of one shape, on the same coins: alike resumptions, whatever the salts for levels ≥ 1. -/
 theorem openStep_alike (t t' : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi hi' : Array ByteArray)
     (coins : Array (Array F128)) (hst : t.st = t'.st) (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad)
     (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0) (hdom : dom.size < 2 ^ 64)
@@ -984,9 +899,6 @@ theorem openStep_alike (t t' : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (do
     (fun i g g' s s' _ => orel_pure (commitFw_capAlike _ g g' s s' (hd i))) _ tPad rep g g' cm0 cm0' r.2.2 _ extra
     extra' lanePad lanePad' _ _ hcm hg hc hn hq hp) fun _ _ _ => sim_pure trivial
 
-/-! ## The algebraic phase's schedule -/
-
-/-- **Two `V` results alike**: both refused, or both values, related by `S`. -/
 def RelV {α β : Type} (S : α → β → Prop) : V α → V β → Prop
   | .ok a, .ok b => S a b
   | .error _, .error _ => True
@@ -1026,11 +938,9 @@ open _root_.Flock.ZkServer.Skeleton (RecM recAsks padsFrames)
 
 variable {wideLeaf : Bool}
 
-/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins flipped, rounds of one shape. -/
 def RecP (h h' : ByteArray × ℕ) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ RoundsAt s.1 s'.1 ∧ s.1[0]? = some h ∧ s'.1[0]? = some h'
 
-/-- Two recording programs alike from recordings pinned at `h` and `h'`. -/
 def RecR (h h' : ByteArray × ℕ) {α β : Type} (S : α → β → Prop) (x : RecM α) (y : RecM β) : Prop :=
   ∀ s s', RecP h h' s s' → RelV (fun a b => S a.1 b.1 ∧ RecP h h' a.2 b.2) (x s) (y s')
 
@@ -1039,7 +949,6 @@ theorem getElem?_push_zero {α : Type} {a : Array α} {x y : α} (h : a[0]? = so
   rw [Array.getElem?_push, if_neg (Nat.ne_of_lt hs)]
   exact h
 
-/-- **The recording's lift**, from recordings pinned at their first rounds `h` and `h'`. -/
 def recLift (h h' : ByteArray × ℕ) : Lift (M := RecM) recAsks where
   R := RecR h h'
   pure hab := fun _ _ hs => And.intro hab hs
@@ -1062,31 +971,26 @@ def recLift (h h' : ByteArray × ℕ) : Lift (M := RecM) recAsks where
     rw [Array.toList_push, Array.toList_push]
     exact forall₂_push hR hr
 
-/-- What the masked zerocheck frames before its first squeeze, up to its label, at `dom`, `digest` and `cap`. -/
 def zcPre (digest cap dom : ByteArray) : ByteArray :=
   (Flock.Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
     _root_.Flock.Transcript.padded "flock-r1cs-v0".toUTF8 ++ header 5 0 digest.size ++
     _root_.Flock.Transcript.padded digest ++ header 5 0 cap.size ++ _root_.Flock.Transcript.padded cap ++
     header 2 0 "flock-zerocheck-v0".toUTF8.size ++ _root_.Flock.Transcript.padded "flock-zerocheck-v0".toUTF8
 
-/-- What the masked zerocheck frames before its first squeeze, the pads' label and root `root` included. -/
 def zcPend (digest cap root dom : ByteArray) : ByteArray :=
   zcPre digest cap dom ++ header 2 0 _root_.Flock.Zk.LABEL_PADS.toUTF8.size ++
     _root_.Flock.Transcript.padded _root_.Flock.Zk.LABEL_PADS.toUTF8 ++ header 5 0 root.size ++
     _root_.Flock.Transcript.padded root
 
-/-- The transcript after the masked zerocheck's first round `c`, the recording's coins. -/
 def skelT8 (c : ByteArray) : Flock.Transcript :=
   { rounds := (#[] : Array _root_.Flock.Round).push
       ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.ZkServer.Skeleton.coin (0 + i + 1), some c⟩,
     k := 0 + 1, pending := ByteArray.empty }
 
-/-- The recording after the masked zerocheck's first round `c`. -/
 def skelS1 (c : ByteArray) : Array (ByteArray × ℕ) × ℕ :=
   ((#[] : Array (ByteArray × ℕ)).push (c, (_root_.Flock.u64OfLE c (c.size - 8)).toNat),
     0 + (_root_.Flock.u64OfLE c (c.size - 8)).toNat)
 
-/-- **The recorded zerocheck up to its first round**, from a rep's start: the rest at that round recorded. -/
 theorem zerocheckFw_head (m : ℕ) (digest cap root dom : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) :
     zerocheckFw recAsks m digest cap root lay mk (Flock.Transcript.init #[] dom) (#[], 0) =
@@ -1135,8 +1039,6 @@ theorem forall₂_set0 {α β : Type} {R : α → β → Prop} {l : List α} {l'
   | nil => exact .nil
   | cons _ ht => exact .cons hab ht
 
-/-- **The recorded PIOP at two caps of one size**, from a rep's start: recordings of one shape, pinned at their first
-rounds. -/
 theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap cap' root dom : ByteArray)
     (hc : cap.size = cap'.size) (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64)
     (hdom : dom.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
@@ -1179,8 +1081,6 @@ theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     (lincheckFw_sim st.fold lay (fun _ => 0) zc) (fun u v h => by subst h; exact sim_pure rfl)
     t1 t1' ht s1 s1' hs) fun _ _ h => h.2
 
-/-- **The algebraic phase's scheduled rounds at two level-0 caps of one size** are rounds of one shape, or both
-refused. -/
 theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteArray) (hc : cap.size = cap'.size)
     (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
     RelV RoundsAt (_root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom)
@@ -1245,13 +1145,9 @@ theorem relV_refl {α : Type} (x : V α) : RelV (· = ·) x x := by
   · exact True.intro
   · exact (rfl : _ = _)
 
-/-- **Two tables of one shape**: the same statement, schedule and `t_pad`, packed tables of one size and level-0
-commitments of one shape. -/
 def TabAlike (t t' : _root_.Flock.ZkServer.Finish.Tab) : Prop :=
   t.st = t'.st ∧ t.sch = t'.sch ∧ t.tPad = t'.tPad ∧ t.g.size = t'.g.size ∧ CapAlike t.cm0 t'.cm0
 
-/-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
-refused. -/
 theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {wideLeaf : Bool} {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
     {l l' : _root_.Flock.ZkServer.Level0.Level0} (h : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l)
     (h' : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g' d' = .ok l') (hg : g.size = g'.size)
@@ -1292,8 +1188,6 @@ theorem roundsAt_append {rs rs' qs qs' : Array (ByteArray × ℕ)} (h : RoundsAt
   rw [Array.toList_append, Array.toList_append]
   exact forall₂_append h hq
 
-/-- **A rep's scheduled rounds so far at two tables of one shape**, on the same coins: rounds of one shape, or both
-refused, whatever the salts for levels ≥ 1. -/
 theorem schedSoFar_alike (t t' : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi hi' : Array ByteArray) (cr : Array (Array F128)) (hst : t.st = t'.st)
     (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad) (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0)
@@ -1338,9 +1232,6 @@ end Sched
 
 namespace Loop
 
-/-! ## The loop's bookkeeping -/
-
-/-- **The next rep round, in the same rep stream, is the stream's next round.** -/
 theorem locate_succ : ∀ (rs : List ℕ) (k i : ℕ),
     (ZKMal.CoinLayer.locate rs k (i + 1)).1 = (ZKMal.CoinLayer.locate rs k i).1 →
     (ZKMal.CoinLayer.locate rs k (i + 1)).2 = (ZKMal.CoinLayer.locate rs k i).2 + 1
@@ -1373,7 +1264,6 @@ theorem flatMap_range_length {α : Type} (f : ℕ → List α) (hf : ∀ k, (f k
       hf]
     omega
 
-/-- The first `2 i + 1` requests of rounds of two requests each: the first `i` rounds' and the first of round `i`'s. -/
 theorem flatMap_range_take {α : Type} (f : ℕ → List α) (hf : ∀ k, (f k).length = 2) {i n : ℕ} (h : i < n) :
     ((List.range n).flatMap f).take (2 * i + 1) = (List.range i).flatMap f ++ (f i).take 1 := by
   obtain ⟨d, rfl⟩ : ∃ d, n = (i + 1) + d := ⟨n - (i + 1), by omega⟩
@@ -1386,8 +1276,6 @@ theorem flatMap_range_congr {α : Type} {f g : ℕ → List α} {i : ℕ} (h : �
     (List.range i).flatMap f = (List.range i).flatMap g :=
   List.flatMap_congr fun k hk => h k (List.mem_range.1 hk)
 
-/-- **The drive's requests up to round `i`'s**, a scheduled round: the earlier rep's coins, the rounds before it with
-their coins, then round `i` without its coins. -/
 theorem reqs_take (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
     (coins : Array (Array F128)) {i : ℕ} (hi : i < sched.size) :
     (_root_.Flock.ZkServer.Drive.reqs prior sched own dev coins).take ((if prior.isEmpty then 0 else 1) + 2 * i + 1) =
@@ -1423,7 +1311,6 @@ theorem feed_nil {α : Type} (s : _root_.Flock.ZkServer.Drive.Step α) (rs : Arr
     s.feed [] rs = (s, rs) := by
   cases s <;> rfl
 
-/-- **The schedule so far only grows**: one more round's coins keep every round scheduled so far. -/
 theorem schedSoFar_snoc (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s)
@@ -1496,7 +1383,6 @@ theorem schedSoFar_snoc (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom 
         exact ⟨#[], by rw [← h', Array.append_empty]⟩
       | fail _ => cases h
 
-/-- A step still asking after the coins `l` sent a round for each. -/
 theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.ZkServer.Drive.Step α) (l : List (Array F128))
     (rs : Array (ByteArray × ℕ)) {c n k rs'}, s.feed l rs = (.ask c n k, rs') → rs'.size = rs.size + l.length
   | s, [], rs, _, _, _, _, h => by rw [feed_nil] at h; cases h; rfl
@@ -1507,8 +1393,6 @@ theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.ZkServer.Drive.Step α
   | .done _, _ :: _, _, _, _, _, _, h => by cases h
   | .fail _, _ :: _, _, _, _, _, _, h => by cases h
 
-/-- **A schedule that has stopped growing**: where the schedule so far holds no round past its coins, the opening has
-ended, and one more round's coins schedule nothing more. -/
 theorem schedSoFar_snoc_done (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s) (hle : s.size ≤ cr.size)
@@ -1557,8 +1441,6 @@ theorem schedSoFar_snoc_done (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) 
         exact h'.symm
       | fail _ => cases h
 
-/-- **The schedule on one more round's coins reaches one round further**: where the schedule on the coins `cr` has
-round `j + 1` and the coins before the last (`cr.pop`, `j` of them) schedule `sched`, `sched` has round `j`. -/
 theorem schedSoFar_pop_lt (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) {cr : Array (Array F128)} {j : ℕ}
     {sched sched' : Array (ByteArray × ℕ)} (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched)
@@ -1580,8 +1462,6 @@ theorem schedSoFar_ok_rounds {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} 
   | error e => rw [hal] at h; cases h
   | ok alg => exact ⟨alg, rfl⟩
 
-/-- **The schedule on fewer coins is not refused** where the schedule on one more round's is not: a refused opening
-stays refused. -/
 theorem schedSoFar_push_ok (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi (cr.push a) = .ok s) :

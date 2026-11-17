@@ -5,25 +5,7 @@ public import Proofs.Flock.Claims.ZK.FramePoints
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
-
-A rep's frame runs the rank check at the opening's label (`Masker.label`), on the algebraic phase's coins as the stream
-answered them, after the earlier rep's claim points. Along the loop's requests for a rep:
-
-* `Ranked.Good`: before the opening's label (`done`) the frame is in the algebraic phase, outside level 0 and the inner
-  proof; past it, in a masked phase only at level 0, and the rank check held at its coins and the earlier reps' points
-  (`RankHeld`). Every label keeps that (`label_good`), and so does every round (`roundFree_keep`, `step_round`) and
-  every answer (`answer_keep`), which before the label appends the round's coins and after it keeps the coins.
-* `Ranked.Inv`, `run_head`: from a rep's start past its first round (the zerocheck's head) and then each round's coins
-  and the next (`pairs`), the frame holds rounds `0 … d − 1`'s coins, each answered the round's count, `d` every round
-  answered before the opening's label.
-* **`Ranked.ownReqs_rank`**: so where a rep's requests up to an inner proof's round (`ownReqs`) run on into the inner
-  proof, the rank check held at the rounds' coins, after the earlier rep's claim points (`run_prior_eq`).
-* `Ranked.label_pcs_of_rank`, **`Ranked.label_pcs_of_answered`**: the release refuses the coins where they leave the
-  mask slot short of full rank (`LeanRelease.rankStop`), so wherever the frame takes the coins the opening's label
-  passes its rank check.
--/
+/-! The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame). -/
 
 @[expose] public section
 
@@ -38,18 +20,14 @@ namespace Ranked
 
 open Loop
 
-/-- **The rank check held** at the frame's coins and earlier reps' claim points, at the rep's mask slot if it has one. -/
 def RankHeld (c : Cfg) (s : Masker) : Prop :=
   ∀ ms, c.mask = some ms → ∃ P, claimPoints c.lay s.coins = .ok P ∧
     maskRank (s.prior ++ P) ms (c.lay.nLc + K_SKIP) = 128 * (s.prior ++ P).size
 
-/-- **The frame's phase and rank**: before the opening's label (`done`) it is in the algebraic phase, outside level 0
-and the inner proof; past it, in a masked phase only at level 0, with the rank check held. -/
 def Good (c : Cfg) (s : Masker) : Prop :=
   (s.done = false → s.on = true ∧ s.l0 = false ∧ s.inner = none) ∧
     (s.done = true → (s.on = true → s.l0 = true) ∧ RankHeld c s)
 
-/-- Two states alike in what `Good` reads. -/
 def Same (s s' : Masker) : Prop :=
   s'.done = s.done ∧ s'.on = s.on ∧ s'.l0 = s.l0 ∧ s'.inner = s.inner ∧ s'.coins = s.coins ∧ s'.prior = s.prior
 
@@ -111,9 +89,6 @@ theorem rankHeld_of {c : Cfg} {s s' : Masker} (h : RankHeld c s) (hc : s'.coins 
   rw [hc, hp]
   exact h ms hms
 
-/-- **Where the rank stop passes, the opening's label passes its rank check**: in the algebraic phase at its last
-position, with the coins its claim points read (`claimPoints`), the opening's label takes a state the rank stop passed
-(`LeanRelease.rankFails`). -/
 theorem label_pcs_of_rank {c : Cfg} {s : Masker} (hon : s.on = true) (hd : s.done = false) (hl : s.l0 = false)
     (hp : s.pos = c.nPiop) (hc : ∀ ms, c.mask = some ms → ∃ P, claimPoints c.lay s.coins = .ok P)
     (hr : LeanRelease.rankFails c s = false) : ∃ q, s.label c LABEL_PCS.toUTF8 = .ok q := by
@@ -138,11 +113,6 @@ theorem label_pcs_of_rank {c : Cfg} {s : Masker} (hon : s.on = true) (hd : s.don
       · rename_i hne
         exact hne (by simpa [Array.size_append] using hk)
 
-/-- **The opening's label passes its rank check wherever the frame takes the coins**: where the frame takes the coins
-after `h` (`answered`) for a later round of the same rep, at a state in the algebraic phase at its last position with
-the coins its claim points read, the opening's label takes that state, at any `stopped` (`LeanRelease.answered_rank`,
-`label_pcs_of_rank`). So the release's coin refusal (`refusesCoins`) holds every coin-decided stop of the label's
-round, and a completeness premise over the histories whose coins the frame takes asks nothing of the rank. -/
 theorem label_pcs_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
     {m : Masker} (hA : L.answered x ρ h = .ok m) (hn : 3 ≤ h.length) (hs : L.rep x h.length = L.rep x (h.length - 1))
     (hon : m.on = true) (hd : m.done = false) (hl : m.l0 = false) (hp : m.pos = (L.cfg x ρ h).nPiop)
@@ -151,7 +121,6 @@ theorem label_pcs_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ :
   have hr := LeanRelease.answered_rank hA hn hs
   exact label_pcs_of_rank (s := { m with stopped := st }) hon hd hl hp hc hr
 
-/-- **A label keeps the frame's phase and rank**, its coins and earlier reps' points. -/
 theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (hg : Good c s)
     (h : s.label c l = .ok q) :
     Good c q.1 ∧ q.1.coins = s.coins ∧ q.1.prior = s.prior ∧ (s.done = true → q.1.done = true) := by
@@ -254,7 +223,6 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
   cases h
   exact ⟨⟨g1, g2⟩, rfl, rfl, id⟩
 
-/-- A state `s'` keeps `s`'s phase and rank: `Good`, at `s`'s coins and earlier reps' points. -/
 def Keep (c : Cfg) (s s' : Masker) : Prop :=
   Good c s' ∧ s'.coins = s.coins ∧ s'.prior = s.prior ∧ (s.done = true → s'.done = true)
 
@@ -313,8 +281,6 @@ theorem squeeze_pos {len n : ℕ} {kind : UInt8} (h5 : ¬ (len == 0 && kind == 2
   · exact hp
 
 open _root_.Flock.ZkServer.Frame (roundFree INNER_ROUNDS) in
-/-- **A round keeps the frame's phase and rank**, its coins and earlier reps' points, whatever its bytes; it owes its
-coins, at least one. -/
 theorem roundFree_keep {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q : ByteArray × Masker × Array Nat}
     (hg : Good c s) (h : roundFree c s content n = .ok q) :
     Keep c s q.2.1 ∧ q.2.1.owed = some n ∧ 1 ≤ n := by
@@ -420,7 +386,6 @@ theorem good_congr {c : Cfg} {s s' : Masker} (hg : Good c s) (hd : s'.done = s.d
     obtain ⟨a, b⟩ := g2 h'
     exact ⟨fun h'' => hl ▸ a (hon ▸ h''), rankHeld_of b (hc h') hp⟩
 
-/-- Coins the frame takes at level 0 or in the inner proof keep its phase, coins and earlier reps' points. -/
 theorem answer_proj {c : Cfg} {s s' : Masker} {cs : Array F128} (hx : s.inner.isSome = true ∨ s.l0 = true)
     (h : s.answer c cs = .ok s') :
     s'.done = s.done ∧ s'.on = s.on ∧ s'.l0 = s.l0 ∧ s'.coins = s.coins ∧ s'.prior = s.prior := by
@@ -455,8 +420,6 @@ theorem answer_proj {c : Cfg} {s s' : Masker} {cs : Array F128} (hx : s.inner.is
         subst h
         exact ⟨rfl, rfl, hl.symm, rfl, rfl⟩
 
-/-- **Coins the frame takes keep its phase and rank**: before the opening's label they are the coins so far and the
-round's; past it, the coins so far. -/
 theorem answer_keep {c : Cfg} {s s' : Masker} {cs : Array F128} (hg : Good c s) (h : s.answer c cs = .ok s') :
     Good c s' ∧ s'.prior = s.prior ∧ s'.done = s.done ∧ (s.done = false → s'.coins = s.coins ++ cs) ∧
       (s.done = true → s'.coins = s.coins) := by
@@ -501,8 +464,6 @@ theorem good_stopped {c : Cfg} {s : Masker} (hg : Good c s) : Good c { s with st
   good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 open _root_.Flock.ZkServer.Frame (Reply check) in
-/-- **A round the frame takes or refuses keeps its phase and rank**, where the rep runs on: it owes the round's coins,
-or, refused, none. -/
 theorem step_round {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {n : ℕ} {r : ByteArray}
     {pl : _root_.Flock.ZkServer.Frame.Place} (hg : Good c st.m) (ho : st.m.owed = none)
     (he : (_root_.Flock.ZkServer.Frame.step c st (.round n r pl)).1.ends = false) :
@@ -585,15 +546,11 @@ theorem run_cons_of {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {q : _roo
   rw [hs] at h
   simp only [h, Bool.false_eq_true, ↓reduceIte]
 
-/-! ## Along a rep's requests -/
-
-/-- Rounds `0 … d − 1`'s coins `cs`, flattened. -/
 def flatR (cs : ℕ → Array F128) (d : ℕ) : List F128 := (List.range d).flatMap fun i => (cs i).toList
 
 theorem flatR_succ (cs : ℕ → Array F128) (d : ℕ) : flatR cs (d + 1) = flatR cs d ++ (cs d).toList := by
   simp [flatR, List.range_succ, List.flatMap_append]
 
-/-- **A rep's requests after its first round**: round `k`'s coins `cs k`, then round `k + 1` (`q`), for `k < J`. -/
 def pairs (cs : ℕ → Array F128) (q : ℕ → _root_.Flock.ZkServer.Frame.Req) (J : ℕ) :
     List _root_.Flock.ZkServer.Frame.Req :=
   (List.range J).flatMap fun k => [.coins (.ok (cs k)), q (k + 1)]
@@ -612,9 +569,6 @@ theorem pairs_head (cs : ℕ → Array F128) (q : ℕ → _root_.Flock.ZkServer.
     · obtain ⟨L, hL⟩ := pairs_head cs q J hJ
       exact ⟨L ++ [.coins (.ok (cs J)), q (J + 1)], by rw [hL]; rfl⟩
 
-/-- **The frame after round `k`**, round `i` squeezing `nn i` and answered `cs i`: its phase and rank (`Good`), the
-earlier reps' points `p`, the coins answered so far each the round's count, the round's coins owed (or none, the round
-refused), and the coins it holds those of the rounds up to the opening's label, all of them before it. -/
 def Inv (c : Cfg) (p : Array (Array F128)) (cs : ℕ → Array F128) (nn : ℕ → ℕ) (k : ℕ) (s : Masker) : Prop :=
   Good c s ∧ s.prior = p ∧ (∀ i < k, (cs i).size = nn i ∧ 1 ≤ nn i) ∧
     (s.owed = none ∨ (s.owed = some (nn k) ∧ 1 ≤ nn k)) ∧
@@ -672,9 +626,6 @@ theorem run_pairs {c : Cfg} {p : Array (Array F128)} {cs : ℕ → Array F128} {
       exact pair_inv hq hI' h2
     · simp [hb] at h2
 
-/-- **A rep's frame from its start along its requests**: from the earlier reps' points `p`, past the zerocheck's head
-(round `0`, `roundFree_zcHead`) and then each round's coins and the next round, where the rep runs on, the frame keeps
-its phase and rank (`Inv`). -/
 theorem run_head {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (p : Array (Array F128))
     {digest cap dom : ByteArray} (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     {cs : ℕ → Array F128} {nn : ℕ → ℕ} {q : ℕ → _root_.Flock.ZkServer.Frame.Req}
@@ -712,13 +663,9 @@ theorem run_head {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
     obtain ⟨s1, ha, -⟩ := run_coins_cons c _ _ _ h2
     exact absurd ha (answer_owed_none _ rfl)
 
-/-- Round `k`'s count in a rep's requests up to the inner proof (`ownReqs`): a scheduled round's, then the inner
-proof's. -/
 def nnOf (sched own : Array (ByteArray × ℕ)) (k : ℕ) : ℕ :=
   if k < sched.size then (sched.getD k (.empty, 0)).2 else (own.getD (k - sched.size) (.empty, 0)).2
 
-/-- Round `k` of a rep's requests up to the inner proof (`ownReqs`): a scheduled round, with itself in the device's
-place, then the inner proof's. -/
 def qOf (sched own : Array (ByteArray × ℕ)) (k : ℕ) : _root_.Flock.ZkServer.Frame.Req :=
   if k < sched.size then
     .round (sched.getD k (.empty, 0)).2 (sched.getD k (.empty, 0)).1 (.sched (sched.getD k (.empty, 0)).1)
@@ -741,7 +688,6 @@ theorem schedReqs_pairs (P : Array F128) (sched own : Array (ByteArray × ℕ)) 
     rw [schedReqs_succ, schedReqs_pairs P sched own cr j (by omega), pairs_succ]
     simp [qOf, h]
 
-/-- **A rep's requests up to the inner proof's round `i`** are its first round, then each round's coins and the next. -/
 theorem ownReqs_pairs (P : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128))
     (hS : 0 < sched.size) : ∀ i, ownReqs P sched own cr i =
       (if P.isEmpty then [] else [.prior P.size (_root_.Flock.ZkServer.Frame.wordBytes P)]) ++
@@ -756,7 +702,6 @@ theorem ownReqs_pairs (P : Array F128) (sched own : Array (ByteArray × ℕ)) (c
     have h2 : sched.size + i + 1 - sched.size = i + 1 := by omega
     simp [qOf, h1, h2]
 
-/-- An earlier rep's coins, past which the rep runs on, are its claim points. -/
 theorem run_prior_eq (c : Cfg) (P : Array F128) (rs : List _root_.Flock.ZkServer.Frame.Req)
     (h2 : (_root_.Flock.ZkServer.Frame.run c {} ((if P.isEmpty then [] else
       [.prior P.size (_root_.Flock.ZkServer.Frame.wordBytes P)]) ++ rs)).2 = false) :
@@ -780,10 +725,6 @@ theorem run_prior_eq (c : Cfg) (P : Array F128) (rs : List _root_.Flock.ZkServer
       simp
   · exact ⟨#[], fun _ => rfl, (fun h => by cases h), by simp⟩
 
-/-- **Past the opening's label the rank check held at the coins answered**: where a rep's requests up to the inner
-proof's round `i` (`ownReqs`) run on, the rounds answered `cr`, into the inner proof, the frame took the opening's
-label: it holds rounds `0 … d − 1`'s coins, each answered the round's count, and the rank check held there after the
-earlier rep's claim points. -/
 theorem ownReqs_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)

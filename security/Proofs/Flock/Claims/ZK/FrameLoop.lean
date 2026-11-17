@@ -34,30 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The release at the session loop's own frames
-
-`LeanRelease.ProgReads` and `LeanRelease.ProgChecks` take the transport's frame state (`prog`) as given: the state Rust's
-requests leave the compiled frame in. The session loop drives each rep's frame itself, on one schedule of requests
-(`Flock.ZkServer.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
-placeholder samples, and the release whose transport state it is:
-
-* `Loop.placeholder`: a rep stream's frame at zero samples, its table at a zero level 0 of the statement's shape, and zero
-  salts for levels ≥ 1, none of them the tape's.
-* `Loop.schedSoFar`, `Loop.ownRounds`: the rep's scheduled rounds so far (the algebraic phase's, then the opening's fed
-  the coins in) and the inner proof's own rounds (`ownRound`).
-* `Loop.repState`, `Loop.progOf`: `Frame.run` over the drive's requests (`Drive.reqs`, the deployed schedule) with the
-  scheduled rounds themselves in the device's place, up to the last released round, of the rep that released it, at
-  the coins the history opened.
-* `Loop.freshOf`: a rep's state at its first round, after rep 0's algebraic-phase coins at rep 1 (`Frame.step`'s
-  `prior`, as `Frames.roundPlace` hands them), or the loop's refusal there.
-* `Loop.schedOf`: the round in a scheduled round's place, the loop's own on the rep's table and salts (`Frames.placeOf`).
-* `LeanRelease.ofLoop`: `LeanRelease.loop` with that state and those rounds, each round's rep its rep stream
-  (`Loop.repOf`) started as the loop starts it (`Drive.start`), each round's coin count its request's (`Loop.loopNr`).
-* `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf` and `Loop.freshOf`, with no salt. What `ProgReads` took as given is
-  now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
-  round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
--/
+/-! The release at the session loop's own frames. -/
 
 @[expose] public section
 
@@ -267,8 +244,6 @@ noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
   loop Loop.loopNr T (withFrames T L₀ real)
 
-/-- **The loop's frame state reads the history only through the decoded coins**, at `Loop.progOf` and
-`Loop.freshOf`: by definition, on every history past `Hello`, and with no salt. -/
 theorem ofLoop_progReads (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))

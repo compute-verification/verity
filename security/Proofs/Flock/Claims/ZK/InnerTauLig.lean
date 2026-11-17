@@ -45,20 +45,7 @@ import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
-/-!
-# `TauLig`: level 0's two lane rows, and `InnerTauVal`
-
-At `InnerAt`, `cons`' last two rows are `ligeritoConstraints`' two limbs of level 0's lane claim (`Replay.lanes_eq`):
-the out-of-domain claim folded through `k₀` lane rounds, plus the masked evaluations `e₀`, `e₁` under `ρ`, and `T'`.
-The model's `laneRow` builds the same claim over `GF256`, so the two rows are `limbRows` of it by coefficient, once
-level 0's record holds `czExe`'s coins (`ligeritoPZk_lanes`, at the rep's slots `repSlot`).
-
-* **`Rel2A`**: a `K`-form's coefficients are a `Lin2`'s (`Rel2` without the constant), through the claim's steps
-  (`rel2A_add`, `rel2A_scale`, `rel2A_masked`, `rel2A_konst`, `claim0A`).
-* **`laneRunA`**, **`laneRowA`**, **`lanesA`**: `laneRun`, `laneRow` and level 0's two rows by coefficient, at coins
-  that are the model's.
-* **`tauLig`**: `TauLig`; **`innerTauVal`**: `InnerTauVal` (`innerTauVal_of_tauLig`).
--/
+/-! `TauLig`: level 0's two lane rows, and `InnerTauVal`. -/
 
 @[expose] public section
 
@@ -73,7 +60,6 @@ open FlockSoundness (execArith)
 
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- A `K`-form's coefficients `f` are a `Lin2`'s, coordinate by coordinate (`Rel2` without the constant). -/
 def Rel2A {np : ℕ} (f : Fin np → 𝕂) (x : _root_.Flock.Zk.Lin2) : Prop :=
   x.1.a.size = np ∧ x.2.a.size = np ∧
     ∀ i : Fin np, f i = execArith.ofLimbs (fOf x.1.a[i.val]!) (fOf x.2.a[i.val]!)
@@ -110,7 +96,6 @@ theorem rel2A_konst {np s : ℕ} (hs : s = np) (w : _root_.Flock.F256) :
   subst hs
   exact rel2A_of (ZkExec.rel2_konst w)
 
-/-- Level 0's out-of-domain claim `T + β·(y + h_ood)`: its coefficients are `β` at the pad. -/
 theorem claim0A {np s : ℕ} (hs : s = np) (i : Fin np) {idx : ℕ} (hi : i.val = idx) (T y β : _root_.Flock.F128) :
     Rel2A (fun j => FlockLevel3.embed (fOf β) * (Pi.single i 1 : Fin np → 𝕂) j)
       ((_root_.Flock.Zk.Lin.konst T s).add ((_root_.Flock.Zk.Lin.masked y idx s).scale β),
@@ -134,8 +119,6 @@ theorem ix_val (hlen : (Composed.layOf Tz st).len = nE + 4) {k : ℕ} (hk : k < 
     (Composed.ix nE k).val = k :=
   Nat.mod_eq_of_lt (hlen ▸ hk)
 
-/-- **The model's lane rounds are the executable's** by coefficient: after `k ≤ k₀` lane rounds, `laneRun`'s
-coefficients are the folded claim's (`laneStepE`), at lane coins and an out-of-domain coin that are the model's. -/
 theorem laneRunA {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (hlen : (Composed.layOf Tz st).len = nE + 4)
     (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (hβ : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i))
@@ -187,7 +170,6 @@ theorem laneRunA {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (hle
     simp only [Composed.laneRun, ZkSession.QuadL.eval, ZkSession.fromMsgL, Composed.mkK, ZkSession.cK, Prod.fst_add,
       Prod.smul_fst, zero_add, hc, FlockSoundness.Refine.gOf_mul, pow_two]
 
-/-- **The model's lane row is the executable's `laneLhs`** by coefficient, at the model's coins. -/
 theorem laneRowA {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
     (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (zl : _root_.Flock.Zk.Level0Msgs) (hβ : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i))
@@ -215,7 +197,6 @@ theorem laneRowA {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' 
   rw [ite_eq_left trivial, ite_eq_right (by decide), add_assoc]
   rfl
 
-/-- **Level 0's two lane rows are `limbRows` of the model's lane row** by coefficient. -/
 theorem lanesA {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
     (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
     (zl : _root_.Flock.Zk.Level0Msgs) (hβ : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i))
@@ -241,9 +222,6 @@ end Lane
 
 open FlockComplete Flock.With
 
-/-- **`TauLig`**: at `InnerAt`, `cons` has seven rows, and rows 5 and 6 are `rowsOf`'s lane limbs, each of the
-layout's length. The run splits as in `tauRep`; level 0's record holds the transcript's coins at the rep's slots
-(`ligeritoPZk_lanes`), which are `czExe`'s (`repSlot_eq`), so `lanesA` gives the rows. -/
 theorem tauLig : TauLig := by
   intro x w τ c n j r cons L hA hn
   obtain ⟨hL, hw, hnr, s, spec, hsx, dom, cm0, ic, extras, hex, l, hl, o, t', l', hrun, rfl, -⟩ := hA
@@ -322,7 +300,6 @@ theorem tauLig : TauLig := by
     refine ⟨hs.trans (innerLayE_len x j).symm, fun i => (hc i).trans ?_⟩
     fin_cases k' <;> rfl
 
-/-- **`τ`'s value**: the session's `τ` over the shared phases' constraints is the real view's. -/
 theorem innerTauVal : InnerTauVal :=
   innerTauVal_of_tauLig tauLig
 
