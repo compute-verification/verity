@@ -32,7 +32,7 @@ D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
 ONSITE = ("sampled-proofs", "certifier", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
 #: onsite with H1's period as its work, which no composite takes
-ONSITE_H1 = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE_H1 = tuple("pouw" if p == "pearl-plus" else p for p in ONSITE)
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 

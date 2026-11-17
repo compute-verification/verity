@@ -124,7 +124,7 @@ product is one:
   either form, the one-stage audit's).
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's network
-certification names one record a window, in their evidence and their period commitment, so they join the check
+attestation names one record a window, in their evidence and their period commitment, so they join the check
 when each window's record names the registration log's head (`Core.Registration`, `../../../interface`), which then is the one
 every subprotocol names.
 
