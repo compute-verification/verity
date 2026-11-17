@@ -126,6 +126,9 @@ BIT_AT = re.compile(r"BitAtx([1-9][0-9]*)_v1")
 #: the kinds of a block's fresh bits (``k_by_kind``): ``linears``, the outputs of the linears a PoUW cut leaves outside
 #: the circuit, and ``scan_state``, the scan state row
 KINDS = ("linears", "scan_state")
+#: the kinds of a block's fresh bits on a wired Program (`wired_k`): `KINDS` and ``openings``, the rows a pinned table's
+#: reads and openings fill, which the count reads as fresh there
+WIRED_KINDS = (*KINDS, "openings")
 
 
 class Undecided(Exception):
@@ -476,6 +479,64 @@ def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, 
     text = codec.canonical_json(codec.encode_program(program)).decode()
     return {"program": text, "theta": sorted(program.annotations.get("theta", [])), "blocks": [codec.descriptor_id(fn)],
             "table": dict(table), "c": c, "k": k, "n": n}
+
+
+def opened(record: Mapping[str, Any]) -> set[str]:
+    """The root parameters a wired Program (`population.wired_population_program`) names for ``record``'s table reads
+    (``<param>/<root or domain>``) and openings' ports (``<table>/<port>``): the rows a pinned table fills, which no
+    registered read binds, so the count reads them as fresh."""
+    reg = record.get("registered") or {}
+    tables = {t["name"]: t["param"] for t in reg.get("tables", ())}
+    return ({f"{tables[r['table']]}/{r['of']}" for r in reg.get("roots", ())}
+            | {f"{o['table']}/{p}" for o in reg.get("openings", ()) for p in o["ports"]})
+
+
+def wired_kind(param: str, record: Mapping[str, Any]) -> str | None:
+    """The kind (`WIRED_KINDS`) of a wired Program's root parameter: `kind_of`'s, else ``openings`` for one `opened`
+    names."""
+    return kind_of(param) or ("openings" if param in opened(record) else None)
+
+
+def wired_instance(fn: Any, slots: Sequence[str], table: Mapping[str, int], c: int, k: int, n: int,
+                   held: Sequence[str] = (), registered: Sequence[str] | None = None) -> dict[str, Any]:
+    """`InferenceOnlyCheck.Count`'s instance on a wired Program whose root calls one Definition a slot (``slots``, by
+    descriptor key), each holding its slot's template batches and the wires between them: a block is one activation of a
+    slot Definition, so a row a wire inside the slot fills is computed in the block and only a wire between slots is a
+    fresh input. ``held`` are the root parameters bound at registration and named in θ; ``registered`` (default
+    ``held``) those bound at registration."""
+    from verity.circuits import codec
+    from verity.circuits.program import Program
+
+    program = Program(fn, registered=tuple(held if registered is None else registered), theta=tuple(held))
+    return {"program": codec.canonical_json(codec.encode_program(program)).decode(),
+            "theta": sorted(program.annotations.get("theta", [])), "blocks": list(slots), "table": dict(table),
+            "c": c, "k": k, "n": n}
+
+
+def wired_fresh(fn: Any, slots: Sequence[str], table: Mapping[str, int], held: Sequence[str] = (),
+                registered: Sequence[str] | None = None) -> int:
+    """A block's fresh bits on the wired Program by the count's own rule (`inference_only_reference.evaluate_count`, which
+    the Lean's difftest holds to `InferenceOnlyCheck.Count`): the most over the slot Definitions' rows."""
+    got = _reference().evaluate_count(wired_instance(fn, slots, table, 0, 0, 0, held, registered))
+    if "blocks" not in got:
+        raise Undecided(f"the count refuses the wired Program: {got}")
+    return max(x for _, _, x, _ in got["blocks"])
+
+
+def wired_k(fn: Any, slots: Sequence[str], table: Mapping[str, int], held: Sequence[str],
+            kinds: Mapping[str, str | None]) -> dict[str, Any]:
+    """The policy's k on the wired Program: a block's fresh bits with ``held`` in θ (`wired_fresh`), and those by kind
+    (``kinds``, a root parameter's `WIRED_KINDS` entry or None): what the fresh bits drop by when that kind's parameters
+    are held too. Refused (ValueError) unless the kinds sum to k, so no fresh bit is of no kind."""
+    k = wired_fresh(fn, slots, table, held)
+    by_kind = {}
+    for kind in WIRED_KINDS:
+        mine = [p for p, x in kinds.items() if x == kind]
+        by_kind[kind] = k - wired_fresh(fn, slots, table, (*held, *mine)) if mine else 0
+    if sum(by_kind.values()) != k:
+        raise ValueError(f"the wired block's {k} fresh bits are not its kinds' {by_kind}: a fresh bit of no kind of "
+                         f"{', '.join(WIRED_KINDS)} has no k_by_kind to state it")
+    return {"fresh": k, "k_by_kind": by_kind}
 
 
 def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
