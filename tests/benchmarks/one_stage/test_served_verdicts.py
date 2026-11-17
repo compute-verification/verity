@@ -1504,6 +1504,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     if why == "no-scope":
         monkeypatch.delenv("CHECK_SCOPE")
         monkeypatch.setattr(SC, "scope_here", lambda: False)
+        monkeypatch.setattr(SC, "address_space_here", lambda: False)
         said = SC.NO_SCOPE_HERE
     if why == "per-member":
         case = json.loads((w / "case-v2.json").read_text())
@@ -6207,6 +6208,9 @@ def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_
 ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
 
 
+PRLIMIT = 'echo "$1" >> {seen}; shift 2; exec "$@"'
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -6576,6 +6580,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     out.mkdir()
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     _script(bin_ / "gpu-lease", f'echo "$@" >> {tmp_path}/card')
     for w, protocol in (("pous/w0", "verity/pous/p2/v4/run"), ("other", "verity/certifier/v9")):
         (d / "private" / w).mkdir(parents=True)
@@ -6662,6 +6667,14 @@ sys.exit(1)
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         on]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
+    assert (tmp_path / "prlimit.seen").read_text().splitlines()[-2:] == [f"--as={1 << 30}", f"--as={170 << 30}"]
+    _script(bin_ / "prlimit", "exit 1")
+    (out / "verdicts.txt").unlink()
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text().splitlines() == [dev, (
+        "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
+        "memory limit of its own")]
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (d / "sampled-proofs-served" / "window").mkdir(parents=True)
     (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
@@ -6766,6 +6779,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
@@ -6830,6 +6844,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
