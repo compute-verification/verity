@@ -17,7 +17,7 @@ egress argument reads, and a gate lies in one root node's gates (`DescAgree.node
 what `scanOf` checks (`Facts`).
 
 `ScanCausal` is part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`: `scanOf` takes each template's row, state
-and egress argument to be one input node's leaves (`NetworkCheck.Period.inputArg`) and no egress argument to be an
+and egress argument to be one input node's leaves (`NetworkVerifier.Period.inputArg`) and no egress argument to be an
 ingress row's input node, so an egress member reads only its activation's gates and its arguments' input gates, and a
 bucket's ingress gates are its row's input node's, which no egress argument names. The ingress template's entry
 ports, which read the slot entries' input node, are no step's ingress, so the proof doesn't read them. The walk lemma
@@ -30,7 +30,7 @@ reads it from there.
 
 namespace Properties.NetworkScan
 
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 /-- **The scan is causal** (`NetTiming.BoundaryGates.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical
 text `c` decodes to `P` and `P` is topological, then in every flattening `C` of `P` no egress gate of a step depends on an
@@ -49,7 +49,7 @@ namespace Properties.NetworkScan.CausalProof
 
 open Flock.Program
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period
+open NetworkVerifier.Period
 open Properties.NetworkScan.WalkProof
 
 theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
