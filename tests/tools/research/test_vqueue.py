@@ -995,15 +995,31 @@ def test_a_pr_set_aside_waits_behind_a_staged_batch_as_behind_any_pr_waiting():
     assert decide(replace(s, candidates=(), ready=(pr(5),))) == [Build((5,), MAIN, 2)]
 
 
-def test_a_staged_batch_whose_base_left_main_s_chain_stays_staged_and_a_candidate_on_it_is_dropped():
-    """Its records were regenerated on its tree, whatever becomes of its base: `main` moving elsewhere or its base failing
-    drops the chain and leaves it staged.  None is built on it, but should a log hold one, it is off main's chain."""
-    s = snap(cand("c0", MAIN, 3, state=FAIL, failed=(task("t", "pkg3/"),)), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)],
-             depth=3, records=True)
-    assert decide(s) == [Eject(3, "h3", "t failed, and its changed files meet their inputs, no other member's", (task("t", "pkg3/"),)),
-                         Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Build((2,), MAIN, 3)]
+def test_a_staged_batch_whose_base_is_dropped_is_dropped_and_staged_again_on_the_chain_whatever_its_records_run_s_state():
+    """Its base failing, going stale or leaving main's chain drops it with that base, never judged on a commit no longer in
+    the chain: in the same tick it is staged again on what is left of the chain, first, its records run first, unless another
+    batch stays staged, when its members wait.  Its base landing leaves it staged.  None is built on it, but should a log
+    hold one, it is off main's chain."""
+    failed = (task("t", "pkg3/"),)
+    eject = Eject(3, "h3", "t failed, and its changed files meet their inputs, no other member's", failed)
+    for records in (RecordsRun(), RecordsRun(PASS)):
+        s = snap(cand("c0", MAIN, 3, state=FAIL, failed=failed), waiting("c1", "c0", 1, records=records),
+                 ready=[lean(1), *prs(2, 3)], depth=3, records=True)
+        assert decide(s) == [eject, Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Drop("c1", BASE_DROPPED),
+                             Build((1,), MAIN, 3, records=True, replaces="c1"), Build((2,), MAIN, 3)]
     assert decide(replace(s, main="m1")) == [Drop("c0", "not on main's chain: its base m0 is neither main nor a chain member"),
+                                             Drop("c1", BASE_DROPPED), Build((1,), "m1", 3, records=True, replaces="c1"),
                                              Build((2, 3), "m1", 3)]
+    s = snap(cand("c0", MAIN, 3), cand("c2", "c0", 2), waiting("c1", "c0", 1, records=RecordsRun(PASS)), ready=[lean(1), pr(2)],
+             depth=3, records=True, left=((3, "h3", "held by review"),), pulled=frozenset({3}))
+    assert decide(s) == [Drop("c0", "#3 isn't taken now: held by review"), Drop("c2", BASE_DROPPED), Drop("c1", BASE_DROPPED),
+                         Build((1,), MAIN, 3, records=True, replaces="c1"), Build((2,), MAIN, 3, replaces="c2")]
+    s = snap(cand("c0", MAIN, 3, state=FAIL, failed=failed), waiting("c1", "c0", 1), waiting("c2", MAIN, 4),
+             ready=[lean(1), *prs(2, 3), lean(4)], depth=3, records=True, lean=2)
+    assert decide(s) == [eject, Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Drop("c1", BASE_DROPPED),
+                         Build((2,), MAIN, 3)]
+    s = snap(cand("c0", MAIN, 3, state=PASS), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)], depth=3, records=True)
+    assert decide(s) == [Advance("c0"), Drop("c0", ON_MAIN, Outcome((3,), heads(3), PASS)), Build((2,), "c0", 3)]
     s = snap(waiting("c1", MAIN, 1), cand("c2", "c1", 2), ready=[lean(1), pr(2)], records=True)
     assert decide(s) == [Drop("c2", "not on main's chain: its base c1 is neither main nor a chain member"), Build((2,), MAIN, 2)]
 
@@ -2162,6 +2178,7 @@ class World:
             assert kept <= live, (f"seed {self.seed} tick {self.tick}: {a.sha}, dropped ({a.why}), takes "
                                   f"{sorted(kept - live)} out of the chain: {acts}")
             left = set(c.members) - kept - out
+            self.seen["a staged batch staged again for its dropped base"] += c.waits and a.why == BASE_DROPPED and bool(kept)
             self.seen["a red's others rebuilt in its tick" if a.outcome is not None else
                       "a leaver's others rebuilt in its tick" if left else "others rebuilt above a drop in its tick"] += bool(kept)
             self.seen["a leaver subtracted"] += bool(left & s.pulled)
@@ -2822,7 +2839,7 @@ def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_sta
                  "a PR set aside waited behind a staged batch", "a pinned Lean batch built",
                  "an unpinned Lean PR built beside pins",
                  "a rebuild staged off the chain", "a staged batch rebuilt without a leaver",
-                 "a Lean rebuild waited for the batch staged"):
+                 "a Lean rebuild waited for the batch staged", "a staged batch staged again for its dropped base"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -2895,7 +2912,7 @@ PARTS: dict[str, tuple[Callable[[Snapshot], list], str]] = {
         _without(lambda a, acts: a.after is not None),
         "no batch of PRs with no Lean change built while|no Lean batch opened while"),
     "a Lean batch waits for the PRs with no Lean change": (
-        _without(lambda a, acts: a.records and any(isinstance(b, Build) and not b.records for b in acts)),
+        _without(lambda a, acts: a.records and a.replaces is None and any(isinstance(b, Build) and not b.records for b in acts)),
         "no Lean batch opened while"),
     "no Lean PR is admitted without a pin": (_without(lambda a, acts: False, lambda s: replace(s, lean=0)),
                                              "no Lean batch opened while"),
