@@ -16,6 +16,14 @@ uv run tools/check/suites.py benchmarks/dsa_topk
 It tests the definition, the torch reference, the wrappers' dispatch on stand-in ops and the kept counters on the CPU;
 the kernels' tests run where Triton is importable and are skipped otherwise.
 
+`VERITY_DSA_TOPK_STEPS=DIR` keeps each step's counters on each card in `DIR/dsa_topk_steps.PID.jsonl`: a header naming
+the counters, then a line a card a step, `{"step", "tokens", "device", "rows_long", ...}`, each count the step's own,
+the step numbered as the step trace numbers it (a step that scheduled tokens, outside a capture and a dummy run) by a
+wrapper of the model runner's `execute_model`; the drafter's forwards count in their step. At a step's start and end
+the counters are copied into pinned host memory on the device's stream and the line is written once the end's copy has
+landed, at a later step's end; nothing waits on the device but the process's exit.
+`serve_tax` sets it beside each arm's step traces and joins the two by step (`serve_tax.topk_counts`).
+
 ## Using it
 
 Any vLLM command at the integration's pin (a server, a replay, an in-process engine), from the pin's venv, with the
