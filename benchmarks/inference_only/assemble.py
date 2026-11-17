@@ -28,7 +28,8 @@ commits, the `circuit.json` window-commit writes beside it. It writes (`record.R
   (`interface.input_count`), so every weight read counts as fresh bits against k, the most a block can be charged,
   and the step's line says so.
 
-A refusal of the serve's files exits 2 with its reason, before anything is written."""
+A refusal of the serve's files exits 2 with its reason, before anything is written, but for the count's own refusal,
+which comes after the Program, the circuit record, the log and the limits are written."""
 from __future__ import annotations
 
 import argparse
@@ -101,9 +102,9 @@ def count(circuit: Path, roots: Path | None, pins: Path | None, policy: Path, da
         raise Refused(f"the count wrote no judgment of {circuit}")
 
 
-def _json(path: Path) -> Any:
+def _json(path: Path, data: bytes | None = None) -> Any:
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_bytes() if data is None else data)
     except (OSError, ValueError) as e:
         raise Refused(f"{path}: can't be read as JSON ({type(e).__name__}: {e})") from None
 
@@ -130,7 +131,7 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
         if not path.is_file():
             raise Refused(f"the serve wrote no {what} ({path}): this assembles a serve under the Pearl+ tie")
     policy_bytes = files["policy"].read_bytes()
-    policy, body = json.loads(policy_bytes), files["circuit"].read_bytes()
+    policy, body = _json(files["policy"], policy_bytes), files["circuit"].read_bytes()
     try:
         cls = tuple(int(policy["class"][x]) for x in ("slots", "prompt", "outputs"))
         scheme = policy["pearl_tables"]
@@ -138,7 +139,9 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
         raise Refused(f"{SERVED['policy']}: no {e}") from None
     if not isinstance(scheme, str) or not scheme:
         raise Refused(f"{SERVED['policy']}: pearl_tables names no Pearl+ scheme, so the class isn't cut at its linears")
-    want = json.loads(body).get("program")
+    if not isinstance(circuit := _json(files["circuit"], body), dict):
+        raise Refused(f"{files['circuit']}: not a circuit record, which is a JSON object")
+    want = circuit.get("program")
     w = _json(files["window"])
     log = [*(_json(p) for p in first), w]
     if registration is not None:

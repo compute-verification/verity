@@ -51,6 +51,9 @@ uv run python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...
 `out/record/`. With `--registration`, the circuit record is the one R commits: the `circuit.json` that window-commit
 writes beside it.
 
+`served_verdicts.sh`'s off-node compose step runs it under `PEARLPLUS_TIE`, on the hand-off's copy, into the record's
+`out/`. Each of the six files it names there is one the hand-off lists, and the policy and limits come with it.
+
 - **The Program** (`registered/program.json`) is rebuilt from the serve's `record/serve-phi.json`, the policy's class
   and its `pearl_tables` scheme. The call is the one the serve's circuit record was written by
   (`prove_path.py class-circuit`: `window_circuit.class_circuit`). It is refused unless its digest is the circuit
@@ -67,7 +70,8 @@ writes beside it.
   the policy, at `--pins`. With no `--pins` no weight is held, so every weight read counts as fresh bits, and the step
   says so. Its exact counts go to the run directory's `private/`.
 
-A refusal exits 2 before anything is written.
+A refusal exits 2 before anything is written, but for the count's own, which comes after the Program, the circuit
+record, the log and the limits are written.
 
 Two more forms:
 

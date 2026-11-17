@@ -239,6 +239,19 @@ def test_main_exits_2_with_the_refusal(case, tmp_path, capsys) -> None:
     assert "assemble: refused: the serve wrote no phi" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("what, body, why", [("policy", b"{", "can't be read as JSON"),
+                                             ("circuit", b"\xff", "can't be read as JSON"),
+                                             ("circuit", b"[1]", "not a circuit record")])
+def test_a_policy_or_circuit_record_that_isnt_json_exits_2_before_anything_is_written(case, tmp_path, capsys, what,
+                                                                                     body, why) -> None:
+    tied(case, tmp_path)
+    out = tmp_path / "out"
+    (out / A.SERVED[what]).write_bytes(body)
+    assert A.main(["--from", str(tmp_path)]) == 2
+    assert f"assemble: refused: {out / A.SERVED[what]}: {why}" in capsys.readouterr().err
+    assert not (out / R.REGISTERED["program"]).exists() and not (out / A.LIMITS).exists()
+
+
 def test_the_report_reads_what_assemble_wrote_by_record_REGISTERED() -> None:
     assert set(R.REGISTERED) == {"program", "circuit", "log"} and report.R is R
 

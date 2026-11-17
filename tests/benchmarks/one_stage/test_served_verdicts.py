@@ -5432,6 +5432,12 @@ def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only
     assert line or lines[0].startswith("PREFLIGHT passed")
 
 
+FAKE_ASSEMBLE = '''import json, os, sys
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write("assemble\\n")
+open(os.environ["ORDER"] + ".assemble", "w").write(json.dumps(a))
+print("block-counts-2-2-2.json: judged")
+'''
 FAKE_COMPOSE_COMPOSITE = FAKE_SERVED_COMPOSITE.replace('"$SERVED_NODE" "$@"', '"$SERVED_NODE" "$COMPOSE_HANDOFF" "$@"')
 
 
@@ -5458,6 +5464,8 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
                        (tree / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_COMPOSE_COMPOSITE)):
         _script(path, body)
     (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
+    (tree / "benchmarks" / "inference_only").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "inference_only" / "assemble.py").write_text(FAKE_ASSEMBLE)
     env = {"PATH": f"{_hosts(tmp_path)}:{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(d), "OUT": str(tmp_path / "compose-out"), "SERVE_ROOT": str(tmp_path / "root"),
            "FLOCK_WORK": str(tmp_path / "fw"), "ORDER": str(tmp_path / "order"), "HOST": "vy-auditor-2",
@@ -5505,6 +5513,50 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
+
+
+#: the files `assemble.py` reads of a tied serve dir, by its option: the six the hand-off's list must name
+ASSEMBLED = {"--first": "deployment-registration.json", "--window": "pearlplus/w7/registration.json",
+             "--registration": "pearlplus/w7/tie/window/registration.json",
+             "--circuit": "pearlplus/w7/tie/circuit-record.json", "--phi": "pearlplus/serve-phi.json",
+             "--pins": "weights_registration.json"}
+
+
+@pytest.mark.parametrize("limits", [False, True])
+def test_the_compose_assembles_a_tied_serve_from_the_hand_off_alone(tmp_path, limits):
+    """Under PEARLPLUS_TIE the compose runs `assemble.py` on the copy, after the record and leaving its exit as it is:
+    each of the six files it reads is one the hand-off lists, the copy holding nothing else, and the policy and the
+    limits the run fixed before its serve come through the hand-off into the record's out/, where the step writes."""
+    policy = {"format": "toy-policy", "c": 14, "k": 6}
+    (out := tmp_path / "served-out").mkdir()
+    (out / "inference-only-policy.json").write_text(json.dumps(policy))
+    if limits:
+        (out / "inference-only-limits.json").write_text(json.dumps({"alpha": [3, 7], "gamma": 14}))
+    run = _handed(tmp_path, files={f: {"format": "toy"} for f in ASSEMBLED.values()}, H1_TIE=None, PEARLPLUS_TIE="1",
+                  POUW="pearlplus", V3C_LAW=TIED_RULE)
+    assert run.returncode == 0, run.stderr
+    d, comp = tmp_path / "serve", tmp_path / "compose-out"
+    listed = (d / "private" / "compose" / "inputs.txt").read_text().splitlines()
+    assert {*ASSEMBLED.values(), "private/compose/inference-only-policy.json"} <= set(listed) and S.witness(listed) == []
+    assert ("private/compose/inference-only-limits.json" in listed) == limits
+    rc, lines, order = _compose(tmp_path)
+    assert rc == 2 and order == ["composite", "record", "assemble"], (lines, order)
+    assert lines[-1] == ("ASSEMBLE: the tied serve's registered files, limits and count in this record's out/, from the "
+                         "hand-off (block-counts-2-2-2.json: judged)")
+    argv = json.loads((tmp_path / "order.assemble").read_text())
+    assert argv[:2] == ["--from", str(comp)]
+    given = dict(zip(argv[2::2], argv[3::2], strict=True))
+    assert given == {k: str(d / f) for k, f in ASSEMBLED.items()}
+    assert json.loads((comp / "inference-only-policy.json").read_text()) == policy
+    assert (comp / "inference-only-limits.json").exists() == limits
+
+
+def test_the_compose_of_an_untied_serve_assembles_nothing(tmp_path):
+    (out := tmp_path / "served-out").mkdir()
+    (out / "inference-only-policy.json").write_text("{}")
+    assert _handed(tmp_path).returncode == 0
+    rc, lines, order = _compose(tmp_path)
+    assert order == ["composite", "record"] and not any(x.startswith("ASSEMBLE") for x in lines)
 
 
 COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settings (the serve dir's "
