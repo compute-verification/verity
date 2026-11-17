@@ -537,13 +537,21 @@ def test_two_sandboxes_at_once_each_read_their_own_tree_at_the_fixed_path(tmp_pa
     """FIXED is made in each sandbox's private /var/tmp, so two builds on one node, each of its own tree, never meet
     there: each reads its own source while the other is bound at the same path."""
     trees = [linked_tree(tmp_path / n)[0] for n in ("one", "two") if not (tmp_path / n).mkdir()]
+    holds = [os.pipe() for _ in trees]                  # the command's stdin is /dev/null, so it waits on a pipe of its own
     ps = [subprocess.Popen([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(t), str(t / "pkg" / ".lake"), "--",
-                            "bash", "-c", 'cat src/M.lean; read -r _; cat src/M.lean'], cwd=t / "pkg",
-                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for t in trees]
+                            "bash", "-c", f'cat src/M.lean; read -r _ <&{r}; cat src/M.lean'], cwd=t / "pkg",
+                           pass_fds=(r,), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+          for t, (r, _) in zip(trees, holds)]
     try:
+        for r, _ in holds:
+            os.close(r)
         first = [p.stdout.readline() for p in ps]       # both are bound at FIXED now, and stay so until told
-        rest = [p.communicate("\n") for p in ps]
+        for _, w in holds:
+            os.write(w, b"\n")
+        rest = [p.communicate() for p in ps]
     finally:
+        for _, w in holds:
+            os.close(w)
         for p in ps:
             p.kill()
     assert first == ["source of one\n", "source of two\n"], [err for _, err in rest]
