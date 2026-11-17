@@ -31,3 +31,15 @@ axis = "The 99th percentile of how late the network attester's ticks run at the 
 better = "lower"
 command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- gpu-lease 1 --wait --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
 every = "7d"
+
+# CPU only: a stored stock serving run's requests replayed under each schedule of `pacing.py`, modeled until a run measures it
+[[metric]]
+id = "network-accounting/serving-slowdown-under-pacing"
+title = "Serving slowdown under pacing"
+owner = "network-accounting"
+unit = "percent"
+axis = "The time a network attester's release schedule adds to serving a load, as a percent of stock's serving time for the same load, per schedule, model and card: pacing's own cost, never added to serving cost, and none where a request fails under the schedule."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/attester_load/pacing.py --from r20261116-122320-c688 --card h200x8"
+every = "7d"
+goal = "network/pacing-slowdown-own-number"
