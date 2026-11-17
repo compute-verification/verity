@@ -131,6 +131,12 @@ def test_an_unknown_verity_variable_is_refused_by_name() -> None:
     assert not S.ELSEWHERE & set(S.SETTINGS) and not S.NOT_SETTINGS & (set(S.SETTINGS) | S.ELSEWHERE)
 
 
+def test_the_names_verity_run_gives_every_piece_are_known() -> None:
+    """`verity run` puts the configuration's digest and pins in every listed piece's environment, the served window's
+    included, for the memory attesters' pieces to read; verity-vllm, started under it, takes them."""
+    assert S.unknown({"VERITY_CONFIGURATION": "0" * 128, "VERITY_PINS": "[]"}) == []
+
+
 def test_verity_vllm_refuses_an_unknown_setting_at_startup(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
     monkeypatch.setenv("VERITY_WINDOW_MBB", "256")
     monkeypatch.setattr(sys, "argv", ["verity-vllm", "target-family", "--help"])

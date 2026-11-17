@@ -45,7 +45,8 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
-    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace")} == {"compiled"}
+    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace",
+                                                  "prod-record-bisect")} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
     # the recipe is one model's; its arms serve at the job's context limit, the same for the three
     for arm in ("prod", "prod-again", "prod-record"):
@@ -75,6 +76,13 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     assert env["prod-trace"][S.PLUGIN_ENV] == env["prod-record"][S.PLUGIN_ENV]
     assert [env[n].get("VERITY_DSA_TOPK") for n in names] == [None, None, None, "canonical"]
     assert replace(S.ARMS["prod-trace"], what="", env=S.TOPK_ENV, general=S.TOPK) == replace(S.ARMS["prod-record"], what="")
+    # prod-record-bisect is prod-record with its top-k's other pass, which writes the same rows: against it, what the
+    # refinement saves
+    bisect = S.server_env(S.ARMS["prod-record-bisect"], tmp_path, tmp_path / "site", None, 600.0, 600.0,
+                          private=tmp_path / "private")
+    assert {k: v for k, v in bisect.items() if env["prod-record"].get(k) != v} == {"VERITY_DSA_TOPK": "canonical-bisect"}
+    assert S.changes_of("prod-record-bisect") == S.changes_of("prod-record")
+    assert replace(S.ARMS["prod-record-bisect"], what="", env=S.TOPK_ENV) == replace(S.ARMS["prod-record"], what="")
     # a cost over prod takes prod-again alone for prod's second lifetime: prod-seeded's server is prod's, but what it is
     # sent is not, so its seconds are no reading of the noise between two of prod's starts
     assert S.same_engine("prod-again", "prod") and not S.same_engine("prod-seeded", "prod")

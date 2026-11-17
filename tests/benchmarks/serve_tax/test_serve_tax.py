@@ -300,7 +300,7 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
         S.server_env(tick, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
     assert S.changes_of("two-stage-tick") == [*S.changes_of("two-stage"), "admission on the certified tick"]
     assert [(x["name"], x["off"]) for x in S.target_parts(glm, "two-stage-tick")] == [
-        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", ["the edge snapshot"]),
+        ("the certified tick", []), ("the canonical top-k", []), ("the snapshot bundle", ["the edge snapshot"]),
         ("the step record", []), ("the boundary commitment", []), ("the history tables", [])]
     with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
         S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
@@ -589,7 +589,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     with pytest.raises(SystemExit, match="need a context of 16384"):
         S.context_of({"long": (1,)}, 4096)
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
-        with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
+        with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53, glm53-standin's\)"):
             S.published_context("published", model_id, None)
     # the line of a model with no recipe, which a job never starts, adds nothing to stock's
     plain = S.server_argv(S.ARMS["compiled"], S.MODELS["moonlight"], Path("/ck"), 8000)
@@ -613,8 +613,47 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace"]
+                                                             "prod-trace", "prod-record-bisect"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
+
+
+def test_glm53s_stand_in_is_its_recipe_on_one_card_from_random_weights(tmp_path, monkeypatch):
+    """The stand-in's line is GLM-5.3's recipe line but for its served name, one card in place of eight and vLLM's random
+    weights; its checkpoint directory holds the adapter's cut config and GLM-5.3's tokenizer and no weight; a record
+    names its cut; it has no metric id, and its runs write no measurement into result.json."""
+    glm, std = S.MODELS["glm53"], S.MODELS["glm53-standin"]
+    context = S.published_context("prod", "glm53-standin", None)
+    assert context == glm.published_context and S.tp_size(std) == 1 and S.tp_size(glm) == 8
+    real = S.server_argv(S.ARMS["prod-record"], glm, Path("/ck"), 8000, max_model_len=context)
+    line = S.server_argv(S.ARMS["prod-record"], std, Path("/ck"), 8000, max_model_len=context)
+    swap = {"glm-5.3": "glm-5.3-stand-in", "8": "1"}
+    assert [x for x in line if x not in ("--load-format", "dummy")] == [swap.get(x, x) for x in real]
+    assert line[line.index("--load-format") + 1] == "dummy"
+    assert (std.repo, std.revision, std.check, std.metric, std.target) == (glm.repo, glm.revision, glm.check, None, None)
+    assert glm.ref == f"{glm.repo}@{glm.revision}"
+    assert std.ref == f"{glm.ref} stand-in (7 layers, 16 experts, 8 heads, random weights)"
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    assert S.hardware(std) == "1 × NVIDIA H200"
+    written = {}
+    monkeypatch.setattr(S, "kit", lambda: (None, NS(write_result=lambda *a: written.update(m=a[-1]))))
+    monkeypatch.setattr(S, "result_of", lambda r: (True, "line", {}, [{"name": "agentic", "value": 2.6}]))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    for model, kept in ((std, []), (glm, [{"name": "agentic", "value": 2.6}])):
+        S.write_result({"model": model.served, "arm": "prod-record", "reference": "prod"}, tmp_path)
+        assert written["m"] == kept
+    ck, out = tmp_path / "glm53", tmp_path / "standin"
+    ck.mkdir()
+    for name in ("tokenizer.json", "tokenizer_config.json", "config.json", "model-00001-of-00282.safetensors"):
+        (ck / name).write_text("{}")
+    assert S.main(["standin", "--model-id", "glm53-standin", "--tokenizer-from", str(ck), "--out", str(out)]) == 0
+    assert sorted(p.name for p in out.iterdir()) == ["config.json", "tokenizer.json", "tokenizer_config.json"]
+    cfg = json.loads((out / "config.json").read_text())
+    assert (cfg["num_hidden_layers"], cfg["n_routed_experts"], cfg["num_attention_heads"], cfg["vocab_size"]) == (7, 16, 8, 154880)
+    with pytest.raises(SystemExit, match="holds no tokenizer.json"):
+        S.main(["standin", "--model-id", "glm53-standin", "--tokenizer-from", str(tmp_path / "none"), "--out", str(out)])
+    with pytest.raises(SystemExit):
+        S.main(["standin", "--model-id", "glm53", "--tokenizer-from", str(ck), "--out", str(out)])
 
 
 def test_an_added_seed_takes_the_place_of_the_lines_seed():
@@ -1497,6 +1536,8 @@ def cost_arms() -> list[dict]:
             repeats(both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93]), [0.0101, 0.01, 0.0102] * 2, 0.0, 90.0, 0.051)]
 
 
+#: the canonical top-k's part as the cost model priced it, before it was measured
+MODELED_TOPK = S.Part("the tie order", 0.25, ("the canonical top-k",))
 #: an arm with every change the model's target has a part for and no other: stock with the tick, the canonical top-k
 #: and the edge snapshot
 WHOLE = "whole"
@@ -1505,7 +1546,11 @@ WHOLE = "whole"
 @pytest.fixture
 def whole(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     """`cost_arms` with the measured arm's passes under an arm that has every part of the target on and no change the
-    target has no part for."""
+    target has no part for, against GLM-5.3's target with its top-k part the cost model's (`MODELED_TOPK`), the scale
+    these costs were made for: a test of what a verdict says reads it, and the model's own parts are tested apart."""
+    glm = S.MODELS["glm53"]
+    monkeypatch.setitem(S.MODELS, "glm53", replace(glm, target=2.13, target_parts=tuple(
+        MODELED_TOPK if p.name == "the canonical top-k" else p for p in glm.target_parts)))
     monkeypatch.setitem(S.ARMS, WHOLE, replace(S.ARMS["compiled"], parent="compiled", what="every part of the target",
                                                plugin=("record", "boundary_rows"), rows={**S.ROWS, "tables": S.TABLES},
                                                env={"VERITY_DSA_TOPK": "canonical"}, tick=True, edges=True))
@@ -1519,20 +1564,20 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
     glm = S.MODELS["glm53"]
     assert [(p.name, p.points, p.changes, p.basis) for p in glm.target_parts] == [
         ("the certified tick", 1.63, ("admission on the certified tick",), "simulated"),
-        ("the tie order", 0.25, ("the canonical top-k",), "modeled"),
+        ("the canonical top-k", 8.37, ("the canonical top-k",), "measured"),
         ("the snapshot bundle", 0.17, ("the edge snapshot",), "modeled"),
         ("the step record", 0.067, ("the step record",), "modeled"),
         ("the boundary commitment", 0.0098, ("the two-stage boundary commitment",), "modeled"),
         ("the history tables", 0.004, ("the history tables",), "modeled")]
-    assert glm.target == 2.13 == round(sum(p.points for p in glm.target_parts), 2) and glm.target_basis == "modeled"
+    assert glm.target == 10.25 == round(sum(p.points for p in glm.target_parts), 2) and glm.target_basis == "modeled"
     assert all(p.basis in S.PART_BASES == ("modeled", "simulated", "measured") for m in S.MODELS.values()
                for p in m.target_parts)
     assert all(not m.target_parts for m in S.MODELS.values() if m.target is None)
     # every change the served engine turns on has a part but prefix caching off
     assert {c for p in glm.target_parts for c in p.changes} >= set(S.changes_of("two-stage-tick")) - {"prefix caching off"}
-    with pytest.raises(ValueError, match="the target's parts sum to 1.88, and the target is 2.13"):
+    with pytest.raises(ValueError, match="the target's parts sum to 10.0, and the target is 10.25"):
         replace(glm, target_parts=glm.target_parts[:2])
-    with pytest.raises(ValueError, match="the target's parts sum to 2.05, and the target is 2.13"):
+    with pytest.raises(ValueError, match="the target's parts sum to 10.17, and the target is 10.25"):
         replace(glm, target_parts=glm.target_parts[:3])
     with pytest.raises(ValueError, match="names no change of CHANGES: the tick"):
         replace(glm, target_parts=(S.Part("all", 2.13, ("the tick",)),))
@@ -1549,7 +1594,7 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
     assert S.changes_of("boundary")[-1] == "the edge snapshot"
     # the launch line leaves off the tick and the edge snapshot, which the snapshot bundle is of
     assert [(p["name"], p["points"], p["off"]) for p in S.target_parts(glm, "two-stage")] == [
-        ("the certified tick", 1.63, ["admission on the certified tick"]), ("the tie order", 0.25, []),
+        ("the certified tick", 1.63, ["admission on the certified tick"]), ("the canonical top-k", 8.37, []),
         ("the snapshot bundle", 0.17, ["the edge snapshot"]), ("the step record", 0.067, []),
         ("the boundary commitment", 0.0098, []), ("the history tables", 0.004, [])]
     assert all(p["off"] == list(p["changes"]) for p in S.target_parts(glm, "no such arm"))
@@ -1612,8 +1657,8 @@ def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_is_of
 def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it():
     r = S.cost_report(cost_arms())
     rows = {x["arm"]: x["in_target"] for x in r["arms"]}
-    # the tie order alone is one part, whole: its points are beside the step that measures it
-    assert rows["canonical-topk"] == [{"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25,
+    # the canonical top-k alone is one part, whole: its points are beside the step that measures it
+    assert rows["canonical-topk"] == [{"changes": ["the canonical top-k"], "part": "the canonical top-k", "points": 8.37,
                                        "whole": True}]
     # and so are the step record and the boundary commitment, each the step of its own arm
     assert rows["record"] == [{"changes": ["the step record"], "part": "the step record", "points": 0.067,
@@ -1623,7 +1668,7 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     # the cost model has no part for prefix caching off
     assert rows["no-prefix-cache"] == [{"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
     assert rows["two-stage"] == [
-        {"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25, "whole": True},
+        {"changes": ["the canonical top-k"], "part": "the canonical top-k", "points": 8.37, "whole": True},
         {"changes": ["the history tables"], "part": "the history tables", "points": 0.004, "whole": True},
         {"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
     text = S.cost_text(r)
@@ -1635,8 +1680,8 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
             "in the model |\n") in text
     assert "| 3.14% [3.12%, 3.16%] | 45% | the two-stage boundary commitment: the boundary commitment, 0.0098% |\n" in text
     assert "| canonical-topk | 2.56% [2.04%, 3.09%] | compiled | 2.56% [2.04%, 3.09%] | — | the canonical top-k: the " \
-           "tie order, 0.25% |\n" in text
-    assert "| 31% | the canonical top-k: the tie order, 0.25%; the history tables: the history tables, 0.004%; prefix " \
+           "canonical top-k, 8.37% |\n" in text
+    assert "| 31% | the canonical top-k: the canonical top-k, 8.37%; the history tables: the history tables, 0.004%; prefix " \
            "caching off: not in the model |\n" in text
 
     # each part's measurement beside its points: the step of the arm that turns on its changes and nothing else, at
@@ -1644,7 +1689,7 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     # the top-k and the cache off)
     measured = {p["name"]: p["measured"] for p in r["target_parts"]}
     assert measured == {
-        "the certified tick": None, "the tie order": {"arm": "canonical-topk", "over": "compiled",
+        "the certified tick": None, "the canonical top-k": {"arm": "canonical-topk", "over": "compiled",
                                                       "value": 2.56, "ci95": [2.04, 3.09]},
         "the snapshot bundle": None,
         "the step record": {"arm": "record", "over": "compiled", "value": 1.52, "ci95": [1.01, 2.04]},
@@ -1653,7 +1698,7 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     steps = {x["arm"]: x["step"] for x in r["arms"]}
     assert all(m == {"arm": m["arm"], "over": m["over"], **steps[m["arm"]]} for m in measured.values() if m)
     assert ("  each part measured, as the step of the arm that turns on its changes alone over the arm above it: the "
-            "certified tick 1.63%: not measured, no arm here turns on its changes alone; the tie order 0.25%: 2.56% "
+            "certified tick 1.63%: not measured, no arm here turns on its changes alone; the canonical top-k 8.37%: 2.56% "
             "[2.04%, 3.09%] (canonical-topk over compiled); the snapshot bundle 0.17%: not measured, no arm here turns "
             "on its changes alone; the step record 0.067%: 1.52% [1.01%, 2.04%] (record over compiled); the boundary "
             "commitment 0.0098%: 3.14% [3.12%, 3.16%] (boundary-rows over record); the history tables 0.004%: not "
@@ -2050,7 +2095,7 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
     # what was saved is against the model's target, whose parts the arm leaves off: the same costs, not comparable
     saved = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
     assert (saved["target"], saved["target_basis"], saved["verdict"], saved["loads"][0]["verdict"]) == (
-        2.13, "modeled", "not comparable", "not comparable")
+        10.25, "modeled", "not comparable", "not comparable")
     assert r["target_parts"] == [] and [p["name"] for p in saved["target_parts"] if p["off"]] == [
         "the certified tick", "the snapshot bundle"]
     assert r["not_in_target"] == [] and saved["not_in_target"] == ["prefix caching off"]
