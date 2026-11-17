@@ -85,10 +85,10 @@ def test_the_slowest_and_fastest_timed_session_give_the_lowest_and_highest_rate(
     record["live"]["prove_total_s_runs"] = [5.0, 6.0, 7.0]
     doc = point(record, hardware, LEAN)
     assert contract.validate(doc) == []
-    assert RS.value(doc, "vu.per_second_lowest") == pytest.approx(16 / 7.6)
-    assert RS.value(doc, "vu.per_second_highest") == pytest.approx(16 / 5.6)
+    assert RS.value(doc, "prove.vu_per_second_lowest") == pytest.approx(16 / 7.6)
+    assert RS.value(doc, "prove.vu_per_second_highest") == pytest.approx(16 / 5.6)
     del record["live"]["prove_total_s_runs"]
-    assert RS.value(point(record, hardware, LEAN), "vu.per_second_lowest") is None
+    assert RS.value(point(record, hardware, LEAN), "prove.vu_per_second_lowest") is None
 
 
 def test_statement_seconds_takes_the_pipelined_witness_when_it_is_slower():

@@ -13,7 +13,7 @@ MODEL = {"bf16-k6144": "glm-5.3", "bf16-k2048": "llama-3.2-1b"}
 VALUES = "stand-in: the workload's frozen population of uniform 16-bit words, not served values"
 PORT = 7710
 #: a prover's rate over its timed sessions: their median's, and its slowest and fastest session's
-SESSIONS = {"median": "", "lowest": "_lowest", "highest": "_highest"}
+SESSIONS = {"median": "vu.per_second", "lowest": "prove.vu_per_second_lowest", "highest": "prove.vu_per_second_highest"}
 
 
 def card_slug(card: str) -> str:
@@ -109,7 +109,7 @@ def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) ->
         results = [rel(p) for p in group if p.get("result")]
         extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results,
                  "leases": [{"card": p["card"], "cores": p["cores"]} for p in group],
-                 "sessions": [{k: rate(p, f"vu.per_second{s}") for k, s in SESSIONS.items()} for p in group]}
+                 "sessions": [{k: rate(p, name) for k, name in SESSIONS.items()} for p in group]}
         for k in ("lowest", "highest"):
             each = [s[k] for s in extra["sessions"]]
             extra[k] = float(sum(each)) if each and None not in each else None

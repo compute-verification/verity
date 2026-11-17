@@ -78,7 +78,7 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
     runs = [statement_seconds({**lv, "prove_total_s": t}) for t in lv.get("prove_total_s_runs") or []]
     if runs:
         unit = contract.unit_of("vu.per_second")
-        ms += [m("vu.per_second_lowest", B / max(runs), unit), m("vu.per_second_highest", B / min(runs), unit)]
+        ms += [m("prove.vu_per_second_lowest", B / max(runs), unit), m("prove.vu_per_second_highest", B / min(runs), unit)]
     if lv.get("e2e_s"):
         ms.append(m("t.total_live", max(total, lv["e2e_s"])))
     for name in PHASES:

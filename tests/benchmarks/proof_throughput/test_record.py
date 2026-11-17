@@ -9,8 +9,8 @@ from verity_proof_throughput import record as REC
 
 
 def verifier_result(status="passed", rate=10.0):
-    return {"validation": {"status": status}, "measurements": [{"name": f"vu.per_second{s}", "value": rate + d, "unit": "VU/s"}
-                                                               for s, d in (("", 0), ("_lowest", -1), ("_highest", 1))]}
+    return {"validation": {"status": status}, "measurements": [{"name": n, "value": rate + d, "unit": "VU/s"}
+                                                               for n, d in zip(REC.SESSIONS.values(), (0, -1, 1))]}
 
 
 def point(d, status="passed", rate=10.0, span=(0.0, 5.0)):
