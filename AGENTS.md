@@ -2,8 +2,8 @@
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives compute,
 memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary,
-whose terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings
-say what it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+whose terms code, docs and output use. This file states what holds on `main` now; what a package contains is read from
+its code. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
@@ -387,6 +387,22 @@ and its parameters). What a run measured, what happened and who decided live out
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
+
+## Comments and docstrings
+
+The default is none. A reader has this file, `ARCHITECTURE.md` and the Glossary, and can read code. Write one only for:
+
+- **A file:** at most one sentence saying what it is, where its path doesn't.
+- **A function, class or declaration:** what a caller must know that its name and signature don't say (a unit, an
+  invariant, when it refuses), in one to three lines. No `Args:` or `Returns:` that restates the signature.
+- **A line:** why it is the way it is, where a careful reader would otherwise "fix" it, in one or two lines at that
+  line.
+
+Each is in the present tense, about the code as it is, in the Glossary's words. None restates the code or another file,
+or says what the code used to be, what changed, or anything "Where writing goes" keeps out of the tree. Text a program
+reads keeps its form: a tool's directive (`# noqa`, `# type:`, a licence line), a docstring printed as `--help`, text a
+test pins, and the docstring of a Lean declaration a lock lists (the lean-proofs skill). When unsure whether something
+is surprising, leave it out.
 
 ## Skills
 

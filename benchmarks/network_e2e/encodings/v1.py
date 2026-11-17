@@ -60,7 +60,7 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
     ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
     record is in release order, and the trace's release buckets. A run under the certified tick (`Trace.releases`) has
     its releases certified: each request's `end` is its release bucket and its ordinal its release number, and its
-    outputs' buckets are on the certifier run's grid, none before its release; all count from the run's first release
+    outputs' buckets are on the attester run's grid, none before its release; all count from the run's first release
     bucket."""
     if not trace.clocked():
         raise AdviceCodeError("the trace has no clock, so no certified buckets")
@@ -297,7 +297,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
                                                           "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
-                    help="the certified order's stand-in: the client's send (client; on a .released view, the network certifier's "
+                    help="the certified order's stand-in: the client's send (client; on a .released view, the network attester's "
                          "release), or the engine's own arrival stamp (network_attester: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
