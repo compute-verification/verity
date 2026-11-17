@@ -622,12 +622,10 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
     """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
     (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
-    ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
-    is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
-    theirs. It runs under the node's settings for the workload's model (`SETTINGS`), which give only what neither the
-    caller's environment nor a hook sets; where it can't read them it refuses, and the runner never starts."""
-    node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
-    env = {**os.environ, **node, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    ``D`` and ``SERVE_ROOT``, from the environment). It runs under the node's settings for the workload's model
+    (`SETTINGS`), which give only what neither the caller's environment nor a hook sets; where it can't read them it
+    refuses, and the runner never starts."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     model = cfg["workload"]["params"]["model"]
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:

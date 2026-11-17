@@ -695,10 +695,11 @@ def test_the_runner_runs_under_the_nodes_settings_for_the_workloads_model_and_th
     assert "adapters/vllm/tools/served_run/run.sh" in T.SERVE.scripts
 
 
-def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n'))
-    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312", "SLOTS": "9"}}}
+def test_the_node_s_settings_are_never_bindings(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
+    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312"}}}
     state = tmp_path / "state"
     assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
-                       "--state", str(state)], REG) == 0, capsys.readouterr().err
-    assert (state / "out" / "node.txt").read_text() == "/workspace/venv312|4\n"
+                       "--state", str(state)], REG) == 2
+    assert "binds workers for served-window" in capsys.readouterr().err
+    assert not (state / "out.started").exists()
