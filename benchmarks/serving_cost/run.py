@@ -19,34 +19,51 @@ from verity_bench.kit_report import RUN_ID  # noqa: E402
 
 STAGES = ("minify", "exact", "capture", "price", "confirm")
 KINDS = {stage: f"serving-cost-{stage}/v1" for stage in STAGES}
+UNITS_KIND = "dsa-topk-units/v1"
+REPLAY_KIND = "serve-tax-replay/v1"
+KINDS |= {"units": UNITS_KIND, "replay": REPLAY_KIND}
 UNITS = "out/units.jsonl"
+EXACT = "out/exact.json"
+CIRCUIT_CHECK = "out/circuit-check.json"
+CIRCUIT_CHECK_SCHEMA = "verity-circuit-check/v1"
+SHAPES = ("decode", "prefill")
 METRIC = "benchmarks/serving-cost-priced"
 UNIT = "percent"
 MEASURED = "vllm/prod-serving-cost-glm53"
 DIFFERENCE = "serving-cost-measured-less-priced"
-# priced.py has no device times at prefill shapes, so every price is partial until a minify record holds them
-UNPRICED = (("top-k", "prefill steps"),)
 MAKERS = {
     "minify": "vllm's stand-in (`benchmarks/prod_repro/run.sh --model glm53-standin`), which stores it",
-    "exact": "nothing yet: no command stores an exact record (`verity bench serving_cost exact` says what is missing)",
+    "units": "proofs' `benchmarks/dsa_topk/stress.py units --shapes decode|prefill`, which is to store it",
+    "replay": "proofs' `benchmarks/serve_tax/replay.py --result RUN_DIR` on a record arm of the copy, which stores it",
+    "exact": "`verity bench serving_cost exact` under research run --store-read",
     "capture": "vllm's `benchmarks/prod_repro/run.sh` on the real model, which stores it",
     "price": "`verity bench serving_cost price` under research run --store-read",
 }
 HOLDS = {
     "minify": f"{UNITS} in the form `priced.units` reads",
-    "exact": "the verdicts of circuit-check on the bindings and of the replay on the copy",
+    "units": f"{UNITS} in the form `priced.units` reads",
+    "replay": "out/replay.json, passed only where the replay is bit-exact",
+    "exact": f"{EXACT}: the replay's verdict on the copy and circuit-check's on the real model's bindings",
     "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/), topk_counters.json and "
                "prod_repro.json",
     "price": f"its figure under {METRIC}",
 }
 FINGERPRINT = {
-    "minify": "",
-    "exact": "; its fingerprint names the minify run under `minify`",
+    "minify": "; its units are at decode shapes unless its fingerprint's `shapes` says `prefill`",
+    "units": "; its fingerprint names the shapes it timed under `shapes`: `decode` or `prefill`",
+    "replay": "",
+    "exact": "; its fingerprint names the minify, replay and circuit-check runs under `minify`, `replay` and "
+             "`circuit_check`, the bindings under `bindings`, and the replay under `replay_kind`: `python`, or `lean` "
+             "for a proof the Lean verifier accepted",
     "capture": "; its fingerprint names the minify run under `minify`, the exact run under `exact` once an exact "
                "record exists, and the member's model and card under `served` and `card` (as `serve_tax.member` gives "
                "them: `glm-5.3`, `h200`)",
-    "price": "; its fingerprint names the capture and minify runs under `capture` and `minify`",
+    "price": "; its fingerprint names the capture, minify and units runs under `capture`, `minify` and `units`",
 }
+CIRCUIT_CHECK_RUN = (f"a stored run whose {CIRCUIT_CHECK} is circuit-check's report (schema {CIRCUIT_CHECK_SCHEMA}), "
+                     "as `research run --on auto --source . --cwd source -- bash -lc 'uv run circuit-check TARGET... "
+                     "--out \"$OUT/circuit-check.json\"'` stores it")
+WHICH = {"base": "no row failed", "failed": "every row failed, over the base"}
 SLUG = re.compile(r"[a-z0-9.]+(?:-[a-z0-9.]+)*")
 LIFETIME = re.compile(r"(.+)\.(\d+)")
 
@@ -102,36 +119,129 @@ def place(out: Path | None) -> Path:
     return Path(settings.OUT) if settings.OUT else Path(settings.RESEARCH_RUN_DIR) / "out"
 
 
-def units_of(run: str | None, by: str) -> dict:
-    d, _ = stored("minify", run, by, "RUN" if by == "minify" else None)
+def table_of(d: Path, run: str, stage: str, by: str) -> dict:
     if not (d / UNITS).is_file():
-        refuse(by, f"minify run {run} holds no {UNITS}; the record: {contract('minify')}")
+        refuse(by, f"{stage} run {run} holds no {UNITS}; the record: {contract(stage)}")
     try:
         return priced.units(d / UNITS)
     except SystemExit as e:
-        refuse(by, f"minify run {run}'s {UNITS} is not in the form `priced.units` reads: {e}")
+        refuse(by, f"{stage} run {run}'s {UNITS} is not in the form `priced.units` reads: {e}")
     except (ValueError, KeyError, TypeError, AttributeError) as e:
-        refuse(by, f"minify run {run}'s {UNITS} is not in the form `priced.units` reads ({type(e).__name__}: {e})")
+        refuse(by, f"{stage} run {run}'s {UNITS} is not in the form `priced.units` reads ({type(e).__name__}: {e})")
+
+
+def sources(minify_run: str | None, units_runs: list[str] | None, by: str) -> list[tuple[str, str, dict]]:
+    out = []
+    for stage, run in (("minify", minify_run), *(("units", r) for r in units_runs or ())):
+        d, doc = stored(stage, run, by, "RUN" if (by, stage) == ("minify", "minify") else None)
+        assert run is not None
+        shapes = (doc.get("workload_fingerprint") or {}).get("shapes", "decode" if stage == "minify" else None)
+        if shapes not in SHAPES:
+            refuse(by, f"{stage} run {run}'s fingerprint names no shapes it timed (`shapes`: {shapes!r}); the record: "
+                       f"{contract(stage)}")
+        out.append((run, shapes, table_of(d, run, stage, by)))
+    return out
+
+
+def merged(srcs: list[tuple[str, str, dict]], by: str) -> tuple[dict, dict]:
+    tables: dict = {}
+    came: dict = {}
+    for run, shapes, u in srcs:
+        for p, t in u.items():
+            for which, table in t.items():
+                into = tables.setdefault(shapes, {}).setdefault(p, {}).setdefault(which, {})
+                for (rows, keys), cost in table.items():
+                    first = came.get((shapes, p, which, rows, keys))
+                    if first and into[(rows, keys)] != cost:
+                        refuse(by, f"runs {first[0]} and {run} both give top-k's {p} pass, {WHICH[which]}, at {rows} "
+                                   f"rows of {keys} keys on {shapes} steps a unit cost, and they differ "
+                                   f"({into[(rows, keys)]} and {cost} µs)")
+                    into[(rows, keys)] = cost
+                    came.setdefault((shapes, p, which, rows, keys), []).append(run)
+    for shapes, u in tables.items():
+        for p, t in u.items():
+            for which, table in t.items():
+                rs, ks = sorted({r for r, _ in table}), sorted({k for _, k in table})
+                if gaps := [f"{r} rows of {k} keys" for r in rs for k in ks if (r, k) not in table]:
+                    runs = sorted({x for key, v in came.items() if key[:3] == (shapes, p, which) for x in v})
+                    refuse(by, f"runs {', '.join(runs)} together time top-k's {p} pass, {WHICH[which]}, on {shapes} "
+                               f"steps at no rows × keys grid, which pricing reads: none at {', '.join(gaps)}")
+    return tables, came
+
+
+def priced_by(came: dict) -> list[dict]:
+    paths: dict = {}
+    for (shapes, p, which, _, _), runs in came.items():
+        paths.setdefault((shapes, p, which), set()).update(runs)
+    return [{"part": "top-k", "path": f"{shapes} steps, {p} pass, {WHICH[which]}", "runs": sorted(runs)}
+            for (shapes, p, which), runs in paths.items()]
 
 
 def minify(a: argparse.Namespace) -> int:
-    u = units_of(a.run, "minify")
+    tables, came = merged(sources(a.run, a.units, "minify"), "minify")
     print(f"minify run {a.run}: a passed minify record; top-k's device time a call over the fast kernel's, µs")
-    for p, t in u.items():
-        for path, table in (("no row failed", t["base"]), ("every row failed, over the base", t["failed"])):
-            for (rows, keys), (lo, hi) in sorted(table.items()):
-                print(f"  top-k, {p} pass, {path}, {rows} rows of {keys} keys: {lo:.1f} to {hi:.1f}")
-    print("  unpriced: " + "; ".join(f"{part}, {path}" for part, path in UNPRICED))
+    for (shapes, p, which, rows, keys), runs in sorted(came.items()):
+        lo, hi = tables[shapes][p][which][(rows, keys)]
+        print(f"  top-k, {shapes} steps, {p} pass, {WHICH[which]}, {rows} rows of {keys} keys: {lo:.1f} to {hi:.1f} "
+              f"({', '.join(runs)})")
+    print("  prefill shapes: " + ("covered" if "prefill" in tables else
+                                  "no source covers them, so a price leaves the top-k at prefill steps unpriced"))
     return 0
+
+
+def circuit_verdict(run: str | None, bindings: list[str] | None) -> dict:
+    if not run or not bindings:
+        refuse("exact", "no circuit-check verdict on the real model's bindings: give --circuit-check RUN, "
+                        f"{CIRCUIT_CHECK_RUN}, and --bindings NAME..., the bindings it must hold. No set in the tree "
+                        "names GLM-5.3's served bindings for circuit-check (they are bindings of the sidecars under "
+                        "adapters/vllm/verity_vllm/definitions/registry/), and no command stores circuit-check's "
+                        "report as a result of its own: both are circuits'")
+    if not RUN_ID.fullmatch(run):
+        refuse("exact", f"--circuit-check {run!r} is not a run id: give {CIRCUIT_CHECK_RUN}")
+    doc = read(fetch(run, [CIRCUIT_CHECK]) / CIRCUIT_CHECK)
+    if doc.get("schema") != CIRCUIT_CHECK_SCHEMA:
+        refuse("exact", f"run {run} holds no circuit-check report at {CIRCUIT_CHECK} (schema {doc.get('schema')!r}): "
+                        f"give {CIRCUIT_CHECK_RUN}")
+    names = {e.get("definition") or e.get("target") or e.get("subcircuit") or e.get("row")
+             for e in doc.get("targets") or ()}
+    summary = doc.get("summary") or {}
+    missing = [b for b in bindings if b not in names]
+    return {"run": run, "ok": bool(summary.get("ok")) and not missing, "targets": len(names), "missing": missing,
+            "failures": summary.get("failure_names") or []}
 
 
 def exact(a: argparse.Namespace) -> int:
     stored("minify", a.minify, "exact")
-    refuse("exact", "no command makes its record yet. Its two checks run today without storing one: circuit-check on "
-                    "the full model's bindings (circuits' `uv run circuit-check`) keeps its verdicts in its own cache, "
-                    "and the replay on the copy is benchmarks/serve_tax/replay.py's (proofs'), on a record arm of the "
-                    f"copy minify serves. Its record: {contract('exact')}, saying whether the replay was the Python "
-                    "replay or a proof the Lean verifier accepted")
+    _, rep = stored("replay", a.replay, "exact")
+    fp = rep.get("workload_fingerprint") or {}
+    if fp.get("minify") is not None and fp["minify"] != a.minify:
+        refuse("exact", f"replay run {a.replay} replayed minify run {fp['minify']!r}'s copy, not {a.minify}'s")
+    held = fp.get("minify") == a.minify
+    held_why = ("its result names the minify run" if held else
+                f"its result names what it replayed only by a path on the node (`arm_dir` {fp.get('arm_dir')!r}), not "
+                f"by a run, so it could not be held to minify run {a.minify}'s copy")
+    lean = fp.get("replay") == "lean"
+    replay_kind = "lean" if lean else "python"
+    kind_why = ("its result says a proof the Lean verifier accepted" if lean else
+                "replay.py is the Python replay, and its result says no other")
+    cc = circuit_verdict(a.circuit_check, a.bindings)
+    detail = (f"replay run {a.replay} passed ({replay_kind}: {kind_why}; {held_why}); circuit-check run {cc['run']} "
+              + ("passed" if cc["ok"] else "failed")
+              + f" over {cc['targets']} targets"
+              + (f", failing {', '.join(cc['failures'])}" if cc["failures"] else "")
+              + (f", holding none of {', '.join(cc['missing'])}" if cc["missing"] else ""))
+    out = place(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / Path(EXACT).name).write_text(json.dumps({
+        "replay": {"run": a.replay, "kind": replay_kind, "why": kind_why, "held_to_minify": held, "held": held_why},
+        "circuit_check": cc, "bindings": a.bindings}, indent=1) + "\n")
+    w = kit.writer(out, KINDS["exact"])
+    w.fingerprint(minify=a.minify, replay=a.replay, circuit_check=a.circuit_check, bindings=a.bindings,
+                  replay_kind=replay_kind, held_to_minify=held)
+    rel = (out / Path(EXACT).name).resolve().relative_to(w.out.resolve()).as_posix()
+    w.validation("passed" if cc["ok"] else "failed", command("exact"), detail, [w.measurement_file(rel)])
+    print(f"exact: {'passed' if cc['ok'] else 'failed'}: {detail}")
+    return 0 if cc["ok"] else 1
 
 
 def captured(run: str | None, by: str) -> tuple[Path, dict, dict]:
@@ -162,7 +272,7 @@ def capture(a: argparse.Namespace) -> int:
     layers = (read(d / "out/prod_repro.json").get("layers") or {}).get("each") or []
     print(f"capture run {a.run}: a passed capture record of {fp['served']} on {fp['card']}")
     print(f"  minify run {fp['minify']} (passed); exact run "
-          + (f"{fp['exact']} (passed)" if fp.get("exact") is not None else "none named: no command stores one yet"))
+          + (f"{fp['exact']} (passed)" if fp.get("exact") is not None else "none named"))
     print("  lifetimes: " + ", ".join(f"{arm} ×{n}" for arm, n in arms.items()))
     print("  top-k counters: " + (", ".join(sorted(counters)) or "none"))
     print("  measured layers: " + (", ".join(f"{x.get('arm')} over {x.get('over')} {100 * x['value']:+.2f}%"
@@ -170,27 +280,30 @@ def capture(a: argparse.Namespace) -> int:
     return 0
 
 
-def priced_point(out: Path, u: dict, a: argparse.Namespace, fp: dict) -> dict[str, Any]:
+def priced_point(out: Path, tables: dict, a: argparse.Namespace, fp: dict, units_from: str) -> dict[str, Any]:
+    u, pu = tables["decode"], tables.get("prefill")
     layers = []
     for ours in a.ours:
         if not priced.lifetimes(out, ours):
             continue
-        layer = priced.layer(out, ours, a.reference, u)
+        layer = priced.layer(out, ours, a.reference, u, pu)
         layer["measured"] = priced.measured(out, ours, a.reference)
         layers.append(layer)
     if not layers:
         refuse("price", f"the capture served none of {', '.join(a.ours)}: give --ours an arm it served")
     first = layers[0]
     member = f"{fp['served']}-{fp['card']}-{first['ours']}"
+    unpriced = ([["top-k", "prefill steps"]]
+                if not first["prefill_priced"] and any(x["prefill_steps"] for x in first["each"]) else [])
     below = priced.measured(out, a.reference, a.stock)
     why = ("no lifetime pair was priced" if not first["cost"] else
            "the counters hold no failed rows, so only the pass's base is priced" if not first["failed_priced"] else
            f"the capture measured no {a.reference} over {a.stock} with an interval"
            if not (below and below.get("ci95")) else None)
-    r: dict[str, Any] = {"layers": layers, "member": member, "why": why}
+    r: dict[str, Any] = {"layers": layers, "member": member, "why": why, "unpriced": unpriced}
     if not why:
         assert below is not None
-        r["point"] = priced.point(first, below, a.capture, a.minify, member)
+        r["point"] = priced.point(first, below, a.capture, units_from, member)
     return r
 
 
@@ -201,17 +314,22 @@ def price(a: argparse.Namespace) -> int:
     if fp["minify"] != a.minify:
         refuse("price", f"capture run {a.capture} was taken against minify run {fp['minify']!r}, not {a.minify}: "
                         "give the minify run its capture names")
-    r = priced_point(capture_dir / "out", units_of(a.minify, "price"), a, fp)
-    unpriced = [list(x) for x in UNPRICED]
+    units = list(dict.fromkeys(a.units or ()))
+    tables, came = merged(sources(a.minify, units, "price"), "price")
+    if "decode" not in tables:
+        refuse("price", f"no source gives top-k's unit costs at decode shapes; the minify record: {contract('minify')}")
+    runs = [a.minify, *units]
+    r = priced_point(capture_dir / "out", tables, a, fp, " and ".join(runs))
+    unpriced, by = r["unpriced"], priced_by(came)
     out = place(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "priced.json").write_text(json.dumps(r | {"unpriced": unpriced}, indent=1) + "\n")
+    (out / "priced.json").write_text(json.dumps(r | {"priced_by": by}, indent=1) + "\n")
     w = kit.writer(out, KINDS["price"])
-    w.fingerprint(capture=a.capture, minify=a.minify)
+    w.fingerprint(capture=a.capture, minify=a.minify, units=units)
     evidence = [w.measurement_file((out / "priced.json").resolve().relative_to(w.out.resolve()).as_posix())]
     mark = "partial" if unpriced else "modeled"
-    inputs = [a.capture, a.minify]
-    extra = {"unpriced": unpriced, "stock": a.stock}
+    inputs = [a.capture, *runs]
+    extra = {"unpriced": unpriced, "priced_by": by, "stock": a.stock}
     if r.get("point"):
         p = r["point"]
         w.measurement(METRIC, p["value"], UNIT, p["ci95"], inputs=inputs, mark=mark, member=r["member"],
@@ -261,14 +379,20 @@ def confirm(a: argparse.Namespace) -> int:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog=command("STAGE").replace(" STAGE", ""), description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="stage", required=True)
+    units_help = f"a stored units run, the run of {MAKERS['units']}; repeatable"
     for stage in ("minify", "capture"):
         sub.add_parser(stage, help=f"check that a run is a passed {stage} record, and print what it holds") \
             .add_argument("run", nargs="?", metavar="RUN", help=f"the run of {MAKERS[stage]}")
+    sub.choices["minify"].add_argument("--units", metavar="RUN", action="append", help=units_help)
     ex = sub.add_parser("exact")
     ex.add_argument("--minify", metavar="RUN")
+    ex.add_argument("--replay", metavar="RUN", help=f"the run of {MAKERS['replay']}")
+    ex.add_argument("--circuit-check", metavar="RUN", help=CIRCUIT_CHECK_RUN)
+    ex.add_argument("--bindings", metavar="NAME", nargs="+", help="the real model's bindings the report must hold")
     pr = sub.add_parser("price")
     pr.add_argument("--capture", metavar="RUN", help=f"the run of {MAKERS['capture']}")
     pr.add_argument("--minify", metavar="RUN", help="the minify run the capture names")
+    pr.add_argument("--units", metavar="RUN", action="append", help=units_help)
     pr.add_argument("--reference", default="prod-trace")
     pr.add_argument("--stock", default="prod")
     pr.add_argument("--ours", nargs="+", default=["prod-record", "prod-record-bisect"])
@@ -276,7 +400,7 @@ def parser() -> argparse.ArgumentParser:
     co.add_argument("--price", metavar="RUN", help=f"the run of {MAKERS['price']}")
     co.add_argument("--measured", metavar="RUN", help="the stored full-size run that measured the serving cost")
     co.add_argument("--member", help="the measured figure's member in that run; by default the price's over its stock")
-    for p in (pr, co):
+    for p in (ex, pr, co):
         p.add_argument("--out", type=Path, help="where to store the record outside a research run")
     return ap
 

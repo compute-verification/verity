@@ -13,10 +13,13 @@ sys.path.insert(0, str(ROOT))
 from benchmarks.serving_cost import run as S  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
-MINIFY, EXACT, CAPTURE, PRICE, MEASURED = (f"r20261118-0000{i}0-000{i}" for i in range(1, 6))
+MINIFY, EXACT, CAPTURE, PRICE, MEASURED, UNITS, REPLAY, CC = (f"r20261118-0000{i}0-000{i}" for i in range(1, 9))
 #: (rows, keys): (base present, base cut, a call with every row failed, present then cut), µs over the fast kernel
 SHAPES = {(6, 20000): (7.0, 12.0, 100.0, 22.0), (6, 131072): (12.0, 16.0, 1000.0, 50.0),
           (24, 20000): (10.0, 15.0, 100.0, 34.0), (24, 131072): (24.0, 28.0, 1000.0, 110.0)}
+PREFILL = {(1024, 4096): (90.0, 95.0, 400.0, 120.0), (1024, 8192): (150.0, 160.0, 700.0, 210.0),
+           (4096, 4096): (300.0, 320.0, 900.0, 400.0), (4096, 8192): (500.0, 520.0, 1500.0, 650.0)}
+BINDINGS = ["DsaLatentRowDsMla_v1/glm53"]
 MEMBER = "glm-5.3-h200-prod-record"
 MEASURED_MEMBER = "glm-5.3-h200-prod-record-over-prod"
 
@@ -41,9 +44,13 @@ def record(tmp: Path, run: str, kind: str | None, *, status: str = "passed", fin
 
 
 def minify_record(tmp: Path, units: bool = True) -> Path:
-    d = record(tmp, MINIFY, S.KINDS["minify"])
+    return units_record(tmp, MINIFY, S.KINDS["minify"], SHAPES, units=units)
+
+
+def units_record(tmp: Path, run: str, kind: str, table: dict, *, units: bool = True, **fingerprint) -> Path:
+    d = record(tmp, run, kind, fingerprint=fingerprint)
     lines: list[dict] = [{"K": 2048}]
-    for (rows, keys), (bp, bc, fp, fc) in SHAPES.items():
+    for (rows, keys), (bp, bc, fp, fc) in table.items():
         for dist, e in (("randn", 0.0), ("indexer", 0.5)):
             lines.append({"dist": dist, "rows": rows, "keys": keys,
                           "present": {"added_us": bp + e, "per_call": {"rows_long": rows}},
@@ -55,7 +62,8 @@ def minify_record(tmp: Path, units: bool = True) -> Path:
     return d
 
 
-def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tuple[tuple[int, int], ...] = ()) -> None:
+def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tuple[tuple[int, int], ...] = (),
+             prefill: bool = True) -> None:
     d = out / name
     for rep, t0 in ((1, 0.0), (2, 100.0)):
         p = d / "agentic@4" / f"rep-{rep}"
@@ -65,7 +73,7 @@ def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tup
     (d / "meta.json").write_text(json.dumps({"left_out": 1, "env": {"VERITY_DSA_TOPK": mode} if mode else {},
                                              "server_argv": ["--tensor-parallel-size", "8"]}))
     steps = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}},
-             {"kind": "step", "step": 0, "rows": [["p", 0, 4000]], "t": 101.0}]
+             {"kind": "step", "step": 0, "rows": [["p", 0, 4000]] if prefill else [], "t": 101.0}]
     steps += [{"kind": "step", "step": i + 1, "rows": [[f"r{j}", start, 6] for j in range(n)], "t": 102.0 + i}
               for i, (n, start) in enumerate(decode)]
     (d / "server").mkdir()
@@ -73,13 +81,14 @@ def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tup
         f.write("".join(json.dumps(r) + "\n" for r in steps))
 
 
-def capture_record(tmp: Path, *, below: bool = True, lifetimes: bool = True, **fingerprint) -> Path:
+def capture_record(tmp: Path, *, below: bool = True, lifetimes: bool = True, prefill: bool = True,
+                   **fingerprint) -> Path:
     fp = {"minify": MINIFY, "served": "glm-5.3", "card": "h200"} | fingerprint
     d = record(tmp, CAPTURE, S.KINDS["capture"], fingerprint={k: v for k, v in fp.items() if v is not None})
     out = d / "out"
     for k in (1, 2) if lifetimes else ():
-        lifetime(out, f"prod-trace.{k}", 50.0, None)
-        lifetime(out, f"prod-record.{k}", 52.0, "canonical", ((4, 131066), (1, 19994)))
+        lifetime(out, f"prod-trace.{k}", 50.0, None, prefill=prefill)
+        lifetime(out, f"prod-record.{k}", 52.0, "canonical", ((4, 131066), (1, 19994)), prefill)
     counters = {"rows_long": 1, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1, "calls": 1}
     (out / "topk_counters.json").write_text(json.dumps({"dirs": {f"prod-record.{k}": counters for k in (1, 2)}}))
     layers = [{"arm": "prod-record", "over": "prod-trace", "value": 0.02, "ci95": [0.01, 0.03], "pairs": 2}]
@@ -93,8 +102,27 @@ def result(out: Path) -> dict:
     return json.loads((out / kit.RESULT).read_text())
 
 
-def price(out: Path) -> int:
-    return S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record", "--out", str(out)])
+def price(out: Path, *units: str) -> int:
+    return S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record", "--out", str(out),
+                   *(x for u in units for x in ("--units", u))])
+
+
+def replay_record(tmp: Path, status: str = "passed", **fingerprint) -> Path:
+    return record(tmp, REPLAY, S.REPLAY_KIND, status=status,
+                  fingerprint={"arm_dir": "/data/prod-record.1", "load": "agentic@4", "rep": 2} | fingerprint)
+
+
+def circuit_check_record(tmp: Path, ok: bool = True, rows: tuple[str, ...] = tuple(BINDINGS)) -> Path:
+    d = record(tmp, CC, None)
+    (d / S.CIRCUIT_CHECK).write_text(json.dumps({
+        "schema": S.CIRCUIT_CHECK_SCHEMA, "options": {},
+        "summary": {"ok": ok, "failures": 0 if ok else 1, "failure_names": [] if ok else ["exhaustive"]},
+        "targets": [{"row": r} for r in rows]}))
+    return d
+
+
+def exact(out: Path, *extra: str) -> int:
+    return S.main(["exact", "--minify", MINIFY, "--replay", REPLAY, "--out", str(out), *extra])
 
 
 @pytest.mark.parametrize("argv, names", [
@@ -126,9 +154,19 @@ def test_minify_prints_each_part_and_code_path_with_its_unit_cost(store, tmp_pat
     assert S.main(["minify", MINIFY]) == 0
     said = capsys.readouterr().out
     assert f"minify run {MINIFY}: a passed minify record" in said
-    assert "top-k, present pass, no row failed, 6 rows of 20000 keys: 7.0 to 7.5" in said
-    assert "top-k, cut pass, every row failed, over the base, 24 rows of 131072 keys: 81.5 to 82.0" in said
-    assert "unpriced: top-k, prefill steps" in said
+    assert f"top-k, decode steps, present pass, no row failed, 6 rows of 20000 keys: 7.0 to 7.5 ({MINIFY})" in said
+    assert ("top-k, decode steps, cut pass, every row failed, over the base, 24 rows of 131072 keys: 81.5 to 82.0"
+            in said)
+    assert "prefill shapes: no source covers them" in said
+
+
+def test_minify_prints_a_units_run_s_costs_beside_its_own(store, tmp_path, capsys):
+    store[MINIFY] = minify_record(tmp_path)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, PREFILL, shapes="prefill")
+    assert S.main(["minify", MINIFY, "--units", UNITS]) == 0
+    said = capsys.readouterr().out
+    assert f"top-k, prefill steps, present pass, no row failed, 1024 rows of 4096 keys: 90.0 to 90.5 ({UNITS})" in said
+    assert "prefill shapes: covered" in said
 
 
 def test_minify_refuses_a_record_without_units_in_priced_s_form(store, tmp_path):
@@ -140,10 +178,62 @@ def test_minify_refuses_a_record_without_units_in_priced_s_form(store, tmp_path)
         S.main(["minify", MINIFY])
 
 
-def test_exact_refuses_past_minify_saying_what_has_no_command(store, tmp_path):
+def test_exact_passes_on_a_passed_replay_and_circuit_check_saying_what_it_could_not_hold(store, tmp_path, capsys):
+    store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
+    store[CC] = circuit_check_record(tmp_path)
+    out = tmp_path / "exact"
+    assert exact(out, "--circuit-check", CC, "--bindings", *BINDINGS) == 0
+    r = result(out)
+    assert r["kind"] == "serving-cost-exact/v1" and r["validation"]["status"] == "passed"
+    assert r["workload_fingerprint"].items() >= {"minify": MINIFY, "replay": REPLAY, "circuit_check": CC,
+                                                 "replay_kind": "python", "held_to_minify": False}.items()
+    assert r["workload_fingerprint"]["bindings"] == BINDINGS
+    assert "`arm_dir` '/data/prod-record.1'" in r["validation"]["detail"]
+    assert "could not be held to minify run" in capsys.readouterr().out
+    assert json.loads((out / "exact.json").read_text())["replay"]["kind"] == "python"
+
+
+def test_exact_holds_a_replay_that_names_its_minify_run(store, tmp_path):
+    store[MINIFY], store[CC] = minify_record(tmp_path), circuit_check_record(tmp_path)
+    store[REPLAY] = replay_record(tmp_path, minify=MINIFY, replay="lean")
+    assert exact(tmp_path / "exact", "--circuit-check", CC, "--bindings", *BINDINGS) == 0
+    fp = result(tmp_path / "exact")["workload_fingerprint"]
+    assert fp["held_to_minify"] is True and fp["replay_kind"] == "lean"
+    store[REPLAY] = replay_record(tmp_path / "other", minify="r20261118-000000-ffff")
+    with pytest.raises(SystemExit, match=f"replayed minify run 'r20261118-000000-ffff''s copy, not {MINIFY}'s"):
+        exact(tmp_path / "again", "--circuit-check", CC, "--bindings", *BINDINGS)
+
+
+@pytest.mark.parametrize("ok, rows, why", [
+    (False, tuple(BINDINGS), "failed over 1 targets, failing exhaustive"),
+    (True, ("Other_v1/glm53",), f"failed over 1 targets, holding none of {BINDINGS[0]}"),
+])
+def test_exact_fails_where_circuit_check_fails_or_misses_a_binding(store, tmp_path, ok, rows, why):
+    store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
+    store[CC] = circuit_check_record(tmp_path, ok, rows)
+    assert exact(tmp_path / "exact", "--circuit-check", CC, "--bindings", *BINDINGS) == 1
+    v = result(tmp_path / "exact")["validation"]
+    assert v["status"] == "failed" and why in v["detail"]
+
+
+def test_exact_refuses_without_a_circuit_check_report_naming_circuits(store, tmp_path):
+    store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
+    with pytest.raises(SystemExit, match="no circuit-check verdict on the real model's bindings.*both are circuits'"):
+        exact(tmp_path / "exact")
+    with pytest.raises(SystemExit, match="no circuit-check verdict"):
+        exact(tmp_path / "exact", "--circuit-check", CC)
+    store[CC] = record(tmp_path, CC, None)
+    with pytest.raises(SystemExit, match=f"run {CC} holds no circuit-check report at out/circuit-check.json"):
+        exact(tmp_path / "exact", "--circuit-check", CC, "--bindings", *BINDINGS)
+
+
+def test_exact_refuses_a_replay_that_is_not_a_passed_replay_record(store, tmp_path):
     store[MINIFY] = minify_record(tmp_path)
-    with pytest.raises(SystemExit, match="exact: no command makes its record yet.*circuit-check.*replay.py"):
+    with pytest.raises(SystemExit, match="no replay record: give --replay RUN, the run of proofs' "):
         S.main(["exact", "--minify", MINIFY])
+    store[REPLAY] = replay_record(tmp_path, status="failed")
+    with pytest.raises(SystemExit, match=f"run {REPLAY}'s replay record did not pass"):
+        exact(tmp_path / "exact")
 
 
 def test_capture_prints_what_a_passed_capture_record_holds(store, tmp_path, capsys):
@@ -213,17 +303,66 @@ def test_price_writes_its_own_metric_partial_with_both_runs_and_the_unpriced_pat
     assert m["name"] == "benchmarks/serving-cost-priced" and m["unit"] == "percent" and m["member"] == MEMBER
     assert m["mark"] == "partial" and m["inputs"] == ["partial", CAPTURE, MINIFY]
     assert m["unpriced"] == [["top-k", "prefill steps"]] and m["stock"] == "prod"
+    assert {x["path"]: x["runs"] for x in m["priced_by"]}["decode steps, cut pass, no row failed"] == [MINIFY]
     priced = json.loads((out / "priced.json").read_text())
-    assert m["value"] == pytest.approx(100 * (priced["layers"][0]["cost"]["mid"] + 0.006))
+    layer = priced["layers"][0]
+    assert m["value"] == pytest.approx(100 * (layer["cost"]["mid"] + layer["prefill_measured"]["value"] + 0.006))
     assert r["validation"]["evidence"] == ["priced.json"]
 
 
-def test_price_with_nothing_unpriced_is_modeled(store, tmp_path, monkeypatch):
-    monkeypatch.setattr(S, "UNPRICED", ())
-    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+def test_price_of_a_capture_with_no_prefill_steps_is_modeled(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path, prefill=False)
     assert price(tmp_path / "price") == 0
     (m,) = result(tmp_path / "price")["measurements"]
     assert m["mark"] == "modeled" and m["unpriced"] == []
+
+
+def test_price_with_a_units_run_at_prefill_shapes_prices_them_and_is_modeled(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, PREFILL, shapes="prefill")
+    out = tmp_path / "price"
+    assert price(out, UNITS) == 0
+    r = result(out)
+    (m,) = r["measurements"]
+    assert m["mark"] == "modeled" and m["unpriced"] == [] and m["inputs"] == ["modeled", CAPTURE, MINIFY, UNITS]
+    assert r["workload_fingerprint"]["units"] == [UNITS]
+    by = {x["path"]: x["runs"] for x in m["priced_by"]}
+    assert by["prefill steps, present pass, no row failed"] == [UNITS]
+    assert by["decode steps, present pass, no row failed"] == [MINIFY]
+    layer = json.loads((out / "priced.json").read_text())["layers"][0]
+    assert layer["prefill_priced"] and layer["each"][0]["prefill_s"]["mid"] > 0
+    assert m["value"] == pytest.approx(100 * (layer["cost"]["mid"] + 0.006))
+
+
+def test_price_merges_two_sources_at_decode_shapes_and_refuses_where_they_differ(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, SHAPES, shapes="decode")
+    assert price(tmp_path / "price", UNITS) == 0
+    (m,) = result(tmp_path / "price")["measurements"]
+    assert {x["path"]: x["runs"] for x in m["priced_by"]}["decode steps, cut pass, no row failed"] == [MINIFY, UNITS]
+    other = dict(SHAPES) | {(6, 20000): (8.0, 12.0, 100.0, 22.0)}
+    store[UNITS] = units_record(tmp_path / "other", UNITS, S.UNITS_KIND, other, shapes="decode")
+    with pytest.raises(SystemExit, match=f"runs {MINIFY} and {UNITS} both give top-k's present pass, no row failed, "
+                                         "at 6 rows of 20000 keys on decode steps a unit cost, and they differ"):
+        price(tmp_path / "again", UNITS)
+
+
+def test_price_refuses_sources_that_together_time_no_grid(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, {(6, 50000): (9.0, 14.0, 300.0, 30.0)}, shapes="decode")
+    with pytest.raises(SystemExit, match=f"runs {MINIFY}, {UNITS} together time .* at no rows × keys grid, which "
+                                         "pricing reads: none at 24 rows of 50000 keys"):
+        price(tmp_path / "price", UNITS)
+
+
+def test_price_refuses_a_units_run_that_names_no_shapes(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, PREFILL)
+    with pytest.raises(SystemExit, match=f"units run {UNITS}'s fingerprint names no shapes it timed"):
+        price(tmp_path / "price", UNITS)
+    store[UNITS] = units_record(tmp_path / "other", UNITS, S.KINDS["minify"], PREFILL, shapes="prefill")
+    with pytest.raises(SystemExit, match=f"run {UNITS} holds no units record .*kind {S.UNITS_KIND}"):
+        price(tmp_path / "again", UNITS)
 
 
 def test_price_with_no_measured_layer_below_stores_no_figure_and_fails(store, tmp_path):
