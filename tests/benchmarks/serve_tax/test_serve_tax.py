@@ -328,7 +328,7 @@ def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says
     assert S.changes_of("prod-all-on") == [*S.changes_of("prod-record"), "admission on the certified tick",
                                            "the edge snapshot"]
     assert [(x["name"], x["off"]) for x in S.target_parts(glm, "prod-all-on")] == [
-        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", []), ("the step record", []),
+        ("the certified tick", []), ("the canonical top-k", []), ("the snapshot bundle", []), ("the step record", []),
         ("the boundary commitment", ["the two-stage boundary commitment"]), ("the history tables", ["the history tables"])]
     assert S.not_in_target(glm, "prod-all-on") == ["the served ids"]
     assert S.parts_of("prod-all-on")[3:] == [

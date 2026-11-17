@@ -107,8 +107,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   canonical top-k, and ``prod-trace`` against ``prod-seeded`` the record and its ids. Neither is an arm a replay is
   promised for.
 - ``prod-all-on``: ``prod-record`` with admission on the certified tick and the edge snapshot, in one server, sent by
-  vLLM's client: what the serving cost's target counts for the tick, the tie order, the snapshot and the step record,
-  on together. A stand-in release front on the node stands in for the network attester's release side
+  vLLM's client: what the serving cost's target counts for the tick, the canonical top-k, the snapshot and the step
+  record, on together. A stand-in release front on the node stands in for the network attester's release side
   (`release_front`): it numbers each request as it comes and streams the watermark of its buckets, so admission is the
   certified tick's while no answer is paced; the plugin empties the prefix cache for each pass after `IDLE_S` idle
   (``idle_reset``). Each edge, every ``--edges-every-s`` seconds, drains, hashes every rank's KV cache where it lies
