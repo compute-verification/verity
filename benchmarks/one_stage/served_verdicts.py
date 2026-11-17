@@ -768,7 +768,7 @@ def challenger_coins(challenger: str) -> str:
     if challenger.startswith("gate:"):
         return "the gate's, the auditor's challenger"
     if challenger.startswith("command:"):
-        return f"simulated: a gate this machine runs ({os.environ.get(NODE_NAME) or 'unnamed'}), not the auditor's challenger"
+        return f"simulated: a gate this machine runs ({this_node()}), not the auditor's challenger"
     return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
 
 
