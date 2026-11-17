@@ -19,7 +19,7 @@ import wipe_cases as W
 import wipe_verdict as V
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

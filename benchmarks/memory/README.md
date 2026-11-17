@@ -131,9 +131,9 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
+  (`verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu`, `benchmarks/poub_session/node.py`);
 - how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
-  how the engine serves from it (`benchmarks/remote_session/engine.py`);
+  how the engine serves from it (`benchmarks/poub_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
 - the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A shortens the span only

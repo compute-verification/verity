@@ -1,5 +1,5 @@
 """The arm behind the network attester (`serve_tax.certified`): its data, its schedule, each side's commands, what
-ends the server's side, and the client's side from the certifier's start to its record, with stand-ins for the
+ends the server's side, and the client's side from the network attester's start to its record, with stand-ins for the
 processes it starts."""
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ ARM = "tick-certifier"
 def test_the_arm_is_the_tick_arm_with_the_certifier_in_front(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The arm's engine is the tick arm's, with the two changes of the plugin that an id request and the tick's
     server make necessary: each request held to its length, and the prefix cache emptied by the engine. Its tick's
-    bucket is the certifier's. Its cost holds a change no part of the target counts, so it has no verdict against
+    bucket is the network attester's. Its cost holds a change no part of the target counts, so it has no verdict against
     it."""
     glm, tick, arm = S.MODELS["glm53"], S.ARMS["tick"], S.ARMS[ARM]
     assert replace(arm, parent=tick.parent, what=tick.what, plugin=tick.plugin, certifier=False) == tick
@@ -184,8 +184,8 @@ COUNTERS = dict.fromkeys(S.SCHEDULE, 0.0)
 @pytest.mark.parametrize(("ends", "exits"), [("certifier", 0), ("stop-at", 0), ("front", 1)])
 def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
         ends: str, exits: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
-    """From the engine's start to the side's record: the engine under the arm's plugins and the certifier's bucket,
-    the id front before it once it answers, both held while the certifier's run goes on, and stopped at its end or at
+    """From the engine's start to the side's record: the engine under the arm's plugins and the network attester's bucket,
+    the id front before it once it answers, both held while the network attester's run goes on, and stopped at its end or at
     --stop-at, the engine's counters read first. An id front that ends first fails the side."""
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
@@ -215,7 +215,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
         return procs[name]
 
     def sleep(s: float) -> None:
-        # the engine empties its prefix cache, the certifier's watermark goes on, and at the third look the hold ends
+        # the engine empties its prefix cache, the network attester's watermark goes on, and at the third look the hold ends
         t[0] += s
         events.append(("waited", s))
         if len([e for e in events if e[0] == "waited"]) == 1:
@@ -265,9 +265,9 @@ def result(sends: int, tok: float, duration: float = 300.0) -> dict:
 def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_certifier_found(
         windows: int, short: int, exits: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture):
-    """From the certifier's start to its record: the certifier before the id front and the shim to it are started in
+    """From the network attester's start to its record: the network attester before the id front and the shim to it are started in
     that order, each pass is sent at the shim after the engine's idle time, with the engine's counters around it, a
-    pass that would outlast the certifier's windows is not started, and once the certifier has ended its check reads
+    pass that would outlast the network attester's windows is not started, and once the network attester has ended its check reads
     the shim's record of the connections. The side exits 0 only where every pass was sent and no answer is short of
     its length."""
     data = b'[{"id": "a", "conversations": [{"value": "hello"}, {"value": "hi there"}]}]'
@@ -328,7 +328,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         lifetime=None, leave_out=0, out=str(out), side=S.CLIENT)
     rc = S.certified_client(a, run=run, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
-    # the certifier runs windows of 10 s from its origin, and a pass takes 300 s: of 130 windows the warm-up and two
+    # the network attester runs windows of 10 s from its origin, and a pass takes 300 s: of 130 windows the warm-up and two
     # reps fit and the third is not sent, of 200 all three are
     reps, end = (2, 2305.0) if windows == 130 else (3, 3005.0)
     key = events[1][2]
@@ -383,7 +383,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
 
 def test_the_cost_of_an_arm_behind_the_certifier_says_what_it_is_of():
     """The report's text never calls such an arm's cost GPU time a token: it names the schedule's ceiling on its
-    tokens a second, and what the certifier's check found of the run."""
+    tokens a second, and what the network attester's check found of the run."""
     cells = S.certifier_cells(None, {"chat": (96,)})
     k = {"cells": cells, "windows": 16, "ceiling_tok_per_s": S.ceiling(cells)}
     assert S.certifier_text(ARM, None) == []

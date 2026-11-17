@@ -406,7 +406,7 @@ readers = [
 
 [[message]]
 type = "PoUSStore"
-today = "PoUS's store, the answer to PoUS's Setup: `comp.get(\"pous\").store` (its commitment, salt, root, segments, published point) and `opt.prover(())`, which answers the memory challenger's rounds"
+today = "PoUS's store, the answer to PoUS's Setup: `comp.get(\"pous\").store` (its commitment, salt, root, segments, published point) and `opt.prover(())`, which answers the memory attester's rounds"
 writers = [
     { lane = "memory-accounting", file = "adapters/vllm/verity_vllm/protocols/pous.py", find = "^    def prover\\(|^    def segments\\(|^    def published\\(" },
 ]

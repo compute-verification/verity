@@ -1061,7 +1061,7 @@ def of_record(argv: list[str]) -> list[str]:
 
 #: the fixture's detail before its coins: its sample size, δ and scheme
 DETAIL = "sample size 459, delta 1/100, scheme pearl-c-h100-v1-h3"
-#: the edits that make the fixture's coins live: a challenger's sample and salt coins, and the Lean verifier of record
+#: the edits that make the fixture's coins live: a challenger's sample and salt coins, and the Lean verifier
 LIVE = {"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger"),
         "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))}
 
@@ -1212,7 +1212,7 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
     assert "was withdrawn" in capsys.readouterr().err
 
 
-def test_each_metric_row_is_the_run_that_measures_it_and_no_reprint_is_rerun():
+def test_each_benchmark_result_is_the_run_that_measures_it_and_no_reprint_is_rerun():
     """`metrics.toml`: every metric `run.py` writes has a row whose command is the served run (`serve.sh`), which
     writes them under its own run, and never `run.py --from`, a reprint of a stored run that the weekly rerun loop
     would record as a new reading. A row that reads a stored run (the h200 row) takes it as the placeholder

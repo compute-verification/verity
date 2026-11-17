@@ -69,7 +69,7 @@ SPIN_S = 0.003
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
-#: the socket priority of a certifier's client connections under a launch gate (`run.py --launch`): one no type of
+#: the socket priority of a network attester's client connections under a launch gate (`run.py --launch`): one no type of
 #: service maps to, so the gate's class holds the attester's packets and no other of the host's
 LAUNCH_PRIORITY = 5
 #: Linux's SO_TIMESTAMPNS and the ancillary message it adds to a read, SCM_TIMESTAMPNS (one number on x86-64 and
@@ -85,7 +85,7 @@ STAMP_TRIES = 20000
 @dataclass(frozen=True)
 class Plan:
     """The schedule and the attack, all public: τ and the release's offset `paced_s` after each boundary (0 for a
-    certifier that writes on its loop, and for the relay; a launch gate's opening where there is one), in seconds."""
+    network attester that writes on its loop, and for the relay; a launch gate's opening where there is one), in seconds."""
 
     attack: str
     interval_s: float
@@ -422,14 +422,14 @@ def awake(cfg: dict) -> dict:
 
 
 def gated(writer: asyncio.StreamWriter, cfg: dict) -> None:
-    """Under a launch gate, put a certifier's client connection at `LAUNCH_PRIORITY`, whoever then writes to it. Each
+    """Under a launch gate, put a network attester's client connection at `LAUNCH_PRIORITY`, whoever then writes to it. Each
     connection is set: one takes no priority from the socket it was accepted on."""
     if cfg.get("launch"):
         writer.get_extra_info("socket").setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, LAUNCH_PRIORITY)
 
 
 def _listener(cfg: dict) -> socket.socket:
-    """Where a certifier takes the observer: loopback, or `listen` and `port`."""
+    """Where a network attester takes the observer: loopback, or `listen` and `port`."""
     return socket.create_server((cfg.get("listen", LOOPBACK), int(cfg.get("port", 0))))
 
 

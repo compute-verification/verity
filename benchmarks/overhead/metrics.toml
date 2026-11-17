@@ -2,13 +2,13 @@
 # enforces it.
 
 # `table` reads the labelled runs of record from the evidence store, so any CPU node with a --store-read key runs it; a γ
-# changes only when a new run of record is labelled
+# changes only when a new run of record is labelled (`verity bench overhead run --record RUN`)
 [[metric]]
 id = "benchmarks/pearl-plus-gamma-c-h200"
 title = "Pearl+ overhead, compute-bound point"
 owner = "benchmarks"
 unit = "fraction over stock"
-axis = "Pearl+'s busy SM-time over stock FP8's, less one, on the H200 at its compute-bound point, from the run of record and without each layer's output hash."
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, over one Llama 3.1 70B layer's linears on the H200 at its compute-bound point, from the run of record and without each layer's output hash, with Llama 3.2 1B's listed beside it as a member."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
 every = "7d"
@@ -20,7 +20,7 @@ id = "benchmarks/pearl-plus-gamma-l-h200"
 title = "Pearl+ overhead, memory-bound point"
 owner = "benchmarks"
 unit = "fraction over stock"
-axis = "Pearl+'s busy SM-time over stock FP8's, less one, on the H200 at its memory-bound point, from the run of record and without each layer's output hash."
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, over one Llama 3.1 70B layer's linears on the H200 at its memory-bound point, from the run of record and without each layer's output hash, with Llama 3.2 1B's listed beside it as a member."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
 every = "7d"

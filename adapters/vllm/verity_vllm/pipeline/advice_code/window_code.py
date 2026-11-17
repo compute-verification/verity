@@ -2,7 +2,7 @@
 
 The advice code (`codec`) charges nothing for what is certified (the network attester's admission order, the request
 records, the release buckets), replayed (the scheduler replay, `replay`) or derived (`derived`'s rules), and sends only the
-residual, one `Window` (network certification's `window_charge.Advice`) per sampling block, each field's values in the
+residual, one `Window` (network attestation's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`codec.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
@@ -14,7 +14,7 @@ order its reader asks for them:
 - `lag`: async mode's bit per request (`Residual.lag`).
 
 Which window a value is charged to is the caller's, by I1's rule: no later than the first window whose rows it can change
-(network certification's PROTOCOL.md, A5).
+(network attestation's PROTOCOL.md, A5).
 
 **The code.** Each window's part is one segment of `arith`'s 32-bit arithmetic coder: the window's count of each field,
 then the field's values, under the registered `Book`. Each count and integer is coded with an Exp-Golomb bin table
@@ -31,7 +31,7 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   final interval. Distinct messages have disjoint final intervals, so no encoder output is a prefix of another's, and
   Kraft's sum over them is at most 1. A run's string is its windows' segments in order, each prefix-free given the earlier
   ones, so the whole string is too.
-- The WNC decoder alone takes 2 to 4 strings for one message (network certification's PROTOCOL.md, attack 10): any whose interval
+- The WNC decoder alone takes 2 to 4 strings for one message (network attestation's PROTOCOL.md, attack 10): any whose interval
   meets the final interval, after reading 32 bits past the segment. `arith.ArithDecoder.finish` makes it canonical. It
   re-encodes each segment's decoded intervals and refuses the segment unless the bits are the encoder's, bit for bit.
   `Decoder` also refuses:
@@ -42,7 +42,7 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   the bits read past it decide nothing in an accepted string.
 - Delimiting costs the termination's 2 bits per window that codes anything (`Encoded.lens`). A window whose message is
   the only one possible costs nothing.
-- A window's charge is under 2^20 bits, its tail and its second segment counted: network certification counts it in
+- A window's charge is under 2^20 bits, its tail and its second segment counted: network attestation counts it in
   `arith_encode.CW` bits, and `Encoder` and `Decoder` refuse a charge that count does not hold, where they sum it
   (`_charge`).
 - A window may carry a tail after its segment: plain fixed-width fields whose widths the reader knows before it reads
@@ -57,7 +57,7 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
 
 **The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces, never on the
 run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
-registered with the codec, `compile` and the cap c before the audit's first window (network certification's PROTOCOL.md, A7). The
+registered with the codec, `compile` and the cap c before the audit's first window (network attestation's PROTOCOL.md, A7). The
 decoder reads the book that digest names. It is integer only and uses no hash.
 """
 
@@ -204,7 +204,7 @@ def capped(bits: Sequence[int], lens: Sequence[int], most: int) -> bytes:
 
 
 def _charge(lens: list[int], w: int | None, n: int) -> None:
-    """Adds n bits to window w's charge, a new window's where w is None. Refuses (ValueError) a charge network certification's
+    """Adds n bits to window w's charge, a new window's where w is None. Refuses (ValueError) a charge network attestation's
     count of it, `CW` bits wide, does not hold."""
     if w is None:
         w = len(lens)

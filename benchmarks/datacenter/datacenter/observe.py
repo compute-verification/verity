@@ -26,7 +26,7 @@ from .plan import Plan
 
 @dataclass(frozen=True)
 class PortRecord:
-    """A certifier's signed record of one port for one window: frames per bucket, and the digest of their content."""
+    """A network attester's signed record of one port for one window: frames per bucket, and the digest of their content."""
 
     port: Port
     window: int
@@ -79,7 +79,7 @@ class Trace:
 
 
 def digest(content: list[tuple[int, int]]) -> bytes:
-    """The digest a certifier signs over a window's frames: their values, in order."""
+    """The digest a network attester signs over a window's frames: their values, in order."""
     h = hashlib.sha512(b"datacenter/frames/v1\0")
     for vid, val in sorted(content):
         n = (val.bit_length() + 7) // 8
