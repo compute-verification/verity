@@ -2,7 +2,7 @@
 `remote-v1 check`).
 
     composite.py onsite|remote|remote-v1 --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
-                 [--development WHY]
+                 [--development WHY] [--configuration HASH]
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
@@ -44,6 +44,14 @@ naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming wha
 ``--development WHY`` labels a composite that claims no record (one composed on the served node, which the prover
 controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
 line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
+
+A memory case (`TRUSTING`) lists in its params the keys its Lean trusts, and the developer's node wrote that list. With
+``--configuration HASH`` of a configuration committed in ``--tree`` (`COMMITTED`), each key it lists must be one whose
+SHA-512 that configuration pins for the case's party and protocol; a case listing any other key is refused by name (exit
+67, ``REFUSED``), before the check runs and with nothing written. This script refuses, not the Lean verifier, which
+accepts any key a case lists. No composite vouches for the keys: one that lists any is ``key_pin: run``, its
+``key_pin_why`` and ``KEY_PIN`` line say so and why, and it is a development check, as ``--development`` makes it. A
+product with no memory case listing a key has no ``key_pin``.
 """
 from __future__ import annotations
 
@@ -55,6 +63,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
@@ -86,6 +95,26 @@ USAGE = 64
 LEAK = 65
 #: An accept whose cited guarantee the lock at the tree's commit doesn't list.
 UNCITED = 66
+#: A memory case that trusts a key the configuration doesn't pin.
+UNPINNED = 67
+#: The subprotocols whose params' ``trusted`` lists the keys their Lean trusts, each with the party and protocol of the
+#: configuration's pins that may give them.
+TRUSTING = {"verity/pous/p2/v4/run": ("memory-challenger", "pous"),
+            "verity/remote-bandwidth/p2/v0": ("bandwidth-verifier", "bandwidth"),
+            "verity/wipe/v0": ("memory-challenger", "wipe")}
+#: The committed configurations' hashes by path, in the tree.
+COMMITTED = "tools/verity/cli/verity_cli/configurations.toml"
+RUN_KEYS = "no committed configuration was given, so nothing refused the memory cases' keys"
+CHECKED = ("each key a memory case lists is one {path} (hash {hash}) pins for that case's party and protocol, and those "
+           "pins were used only to refuse, by the composing script (composite.py), not by the Lean verifier, which accepts "
+           "any key a case lists")
+UNVOUCHED = ("this composite does not vouch for the keys: a composite that does needs a signal only the auditor's "
+             "compose gate can give, which does not exist yet")
+
+
+def run_keys(why: str) -> str:
+    """The development reason of a composite whose memory cases list keys, for `why`."""
+    return f"key_pin: run: {why}, so this composite claims no record"
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
 #: looked up among every window of the public bytes, find any such run.
 WINDOW = 32
@@ -161,6 +190,42 @@ def missing(product: str, pieces: Sequence[dict[str, Any]]) -> list[str]:
     """The product's subprotocols with no piece that ran."""
     ids = {p["id"] for p in pieces}
     return [i for i in COMPONENTS[product] if i not in ids]
+
+
+def listed(p: dict[str, Any]) -> list:
+    """The keys memory case `p` (`TRUSTING`) lists as trusted; none for any other case."""
+    keys = p["params"].get("trusted") if p["id"] in TRUSTING and isinstance(p["params"], dict) else None
+    return keys if isinstance(keys, list) else [keys] if keys else []
+
+
+def committed_pins(tree: Path, configuration: str | None) -> tuple[str, list[dict[str, Any]]] | None:
+    """The path and ``[[pin]]`` entries of the configuration `tree` commits (`COMMITTED`) under hash `configuration`,
+    as `tree` holds it; None when it commits none under that hash."""
+    if configuration is None or not (tree / COMMITTED).is_file():
+        return None
+    paths = [p for p, h in tomllib.loads((tree / COMMITTED).read_text()).items() if h == configuration]
+    return (paths[0], tomllib.loads((tree / paths[0]).read_text()).get("pin", [])) if paths else None
+
+
+def unpinned(pieces: Sequence[dict[str, Any]], path: str, pins: Sequence[dict[str, Any]]) -> list[str]:
+    """Each memory case listing a key whose SHA-512 `pins` (configuration `path`'s) don't give its party for its
+    protocol, as its ``REFUSED`` line."""
+    out = []
+    for p in pieces:
+        party, protocol = TRUSTING.get(p["id"], (None, None))
+        pinned = {x.get("key-sha512") for x in pins if (x.get("party"), x.get("protocol")) == (party, protocol)}
+        bad = 0
+        for k in listed(p):
+            try:
+                bad += hashlib.sha512(bytes.fromhex(k)).hexdigest() not in pinned
+            except (TypeError, ValueError):
+                bad += 1
+        if bad:
+            out.append(f"REFUSED {p['id']}: its case trusts {bad} key(s) {path} pins for no {party} {protocol} "
+                       f"session, and only a pinned key's sessions count: sign them under the key {path} pins for "
+                       f"{party}'s {protocol} sessions, or compose with no --configuration, a development check "
+                       "(key_pin: run)")
+    return out
 
 
 def outcome(id: str, answer: str | None) -> dict[str, str]:
@@ -254,11 +319,13 @@ def unestablished(p: dict[str, Any]) -> str | None:
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
                   verdict: dict[str, str] | None, development: str | None = None,
-                  ran: dict[str, Any] | None = None) -> dict[str, Any]:
+                  ran: dict[str, Any] | None = None, key_pin_why: str | None = None) -> dict[str, Any]:
     """What ``--public-out`` may hold: no evidence, no params bodies, no answer bodies and no case's commitment, only the
-    digest its answer names; with ``ran``, what ran the check (`provenance`)."""
+    digest its answer names; with ``ran``, what ran the check (`provenance`); with ``key_pin_why``, why the memory
+    cases' keys are the run's."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
             "exceptions": exceptions(product), **({"development": development} if development else {}),
+            **({"key_pin": "run", "key_pin_why": key_pin_why} if key_pin_why else {}),
             **({"ran": ran} if ran is not None else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["named"]} | outcome(p["id"], p["answer"]) for p in cases]}
@@ -299,6 +366,15 @@ def run(a: argparse.Namespace) -> int:
         print("composite.py: --private-out may not be or lie inside --public-out", file=sys.stderr)
         return USAGE
     found = [piece(d) for d in case_dirs(a.cases)]
+    key_pin_why, development = None, a.development
+    if any(listed(p) for p in found):
+        got = committed_pins(a.tree, a.configuration)
+        if got is not None and (refused := unpinned(found, *got)):
+            for ln in refused:
+                print(ln, flush=True)
+            return UNPINNED
+        key_pin_why = f"{RUN_KEYS if got is None else CHECKED.format(path=got[0], hash=a.configuration)}; {UNVOUCHED}"
+        development = "; ".join(filter(None, (development, run_keys(key_pin_why))))
     params, commitment, evidence, blobs = compose(a.product, found)
     files = {"params.json": canonical(params), "commitment.bin": commitment, "evidence.json": evidence,
              "blobs.txt": "".join(f"{b}\n" for b in blobs).encode()}
@@ -306,7 +382,8 @@ def run(a: argparse.Namespace) -> int:
     write_private(priv, files)
     cases = sorted(found, key=lambda p: p["id"])
     gone = missing(a.product, found)
-    lines = [f"DEVELOPMENT {a.development}"] if a.development else []
+    lines = [f"DEVELOPMENT {development}"] if development else []
+    lines += [f"KEY_PIN run: {key_pin_why}"] if key_pin_why else []
     lines += [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
@@ -329,7 +406,7 @@ def run(a: argparse.Namespace) -> int:
             lines.append(f"UNCITED {why}")
             rc = UNCITED
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development, ran))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, development, ran, key_pin_why))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
@@ -357,6 +434,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitment digests and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
+    ap.add_argument("--configuration", metavar="HASH",
+                    help="the hash of a committed configuration: a memory case listing a key it doesn't pin is refused")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))

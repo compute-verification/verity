@@ -57,8 +57,11 @@
 # refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its first line COMPOSITE
 # DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py --development), and the
 # follow-on sets COMPOSE_DEVELOPMENT. COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its
-# reason. The cases under the serve dir's private/compose and
-# private/deferred (a hand-off's or a deferral's copies) are no product's.
+# reason.
+# The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
+# product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
+# --configuration: a memory case listing a key that committed configuration doesn't pin is refused (exit 67), and a
+# composite whose memory cases list keys is a development check (key_pin: run) either way. No hand-off carries it.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -178,16 +181,18 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
+    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(DEVELOPMENT|KEY_PIN|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
+    67) say "COMPOSITE $x: composite.py ran no check (exit 67: a memory case trusts a key the configuration doesn't pin)"; bad=1 ;;
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ "${SERVED_NODE:-${PP_PEER:-}}" = "${PP_PEER:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
