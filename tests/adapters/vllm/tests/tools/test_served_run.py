@@ -336,3 +336,27 @@ def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_pa
 @pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
+
+
+def window_exit(tmp_path: Path, rc: int, off_node: str, deferred: bool = False) -> tuple[int, str]:
+    d, out = tmp_path / "serve", tmp_path / "out"
+    out.mkdir(exist_ok=True)
+    if deferred:
+        (d / "private" / "deferred").mkdir(parents=True)
+        (d / "private" / "deferred" / "deferred.env").write_text("K=0\n")
+    got = subprocess.run(["bash", "-c", f'log() {{ echo "$*"; }}; . {shlex.quote(str(HERE / "handoff.sh"))}; window_exit {rc}'],
+                         capture_output=True, text=True, check=False, cwd=tmp_path,
+                         env={**os.environ, "D": str(d), "OUT": str(out), "COMPOSE_OFF_NODE": off_node, "RESEARCH_RUN_ID": "r1"})
+    return got.returncode, got.stdout
+
+
+@pytest.mark.parametrize(("rc", "off_node", "want"), [(0, "0", 0), (1, "0", 1), (2, "0", 2), (0, "1", 4), (1, "1", 1), (2, "1", 2)])
+def test_an_on_node_record_with_nothing_to_pack_exits_by_its_verdict_and_an_off_node_one_without_its_hand_off_exits_4(
+        tmp_path, rc, off_node, want):
+    assert window_exit(tmp_path, rc, off_node)[0] == want
+
+
+@pytest.mark.parametrize("off_node", ["0", "1"])
+def test_a_pending_record_deferred_off_the_node_exits_0_and_says_what_is_left(tmp_path, off_node):
+    rc, said = window_exit(tmp_path, 2, off_node, deferred=True)
+    assert rc == 0 and "pending: audited and composed off this node: `run.sh copy` and `run.sh audit` with SERVED_RUN=r1" in said

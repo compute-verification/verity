@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
-for v in CARD CORES END COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
+for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
@@ -44,13 +44,4 @@ if [ "${PREFLIGHT_ONLY:-}" = 1 ] && [ "$rc" = 0 ]; then
   log "the preflight passed, nothing served: $(grep -h -m1 'PREFLIGHT passed' "$OUT/served_verdicts.log" | cut -c1-300)"; exit 0
 fi
 . adapters/vllm/tools/served_run/handoff.sh
-pack_handoff
-h=$? pending=
-if [ "$h" = 4 ]; then exit 4
-elif [ "$h" = 0 ]; then pending="composed off this node: \`run.sh compose\` with this run's out/handoff/"
-elif [ -f "$D/private/deferred/deferred.env" ]; then
-  pending="audited and composed off this node: \`run.sh copy\` and \`run.sh audit\` with SERVED_RUN=$RESEARCH_RUN_ID, then \`run.sh compose\`"
-else [ "$rc" != 0 ] || rc=4
-fi
-[ "$rc" = 2 ] && [ -n "$pending" ] && { log "pending: $pending"; exit 0; }
-exit "$rc"
+window_exit "$rc"
