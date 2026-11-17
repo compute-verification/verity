@@ -5,12 +5,12 @@ is encoded. The session needs the card (`held`); its answer needs none, and is m
 (`decide`).
 
 **The registration** is the auditor's, never the prover's: the bandwidth party (the auditor gate's ``bw_party
---pous-session SID``) builds it from the memory challenger's own record of PoUS session SID on its host
+--pous-session SID``) builds it from the memory attester's own record of PoUS session SID on its host
 (`challenger_party.keep`, `p2_parties.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
 declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
 which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
-memory challenger claims in its session log before the first coin and under which it signs the case's close of the
+memory attester claims in its session log before the first coin and under which it signs the case's close of the
 verifier's log (`p2_parties.Closer`), under the key ``--trusted-sha512`` pins (`key_of`). `decide` trusts that key
 and never one the case lists, since the case is kept in the developer's private directory.
 
@@ -244,7 +244,7 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
          private: Path, trusted_sha512: str | None = None) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
     ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
-    which the memory challenger signs the case's close; without `trusted_sha512`, no session has a case; its port reached
+    which the memory attester signs the case's close; without `trusted_sha512`, no session has a case; its port reached
     at `party_host`), under `request_`:
     the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
     opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to

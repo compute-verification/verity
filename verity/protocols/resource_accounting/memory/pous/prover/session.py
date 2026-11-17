@@ -1,4 +1,4 @@
-"""PoUS's session staged for proofs: the ``k + 2`` statements whose proofs stand for the memory challenger's signed record
+"""PoUS's session staged for proofs: the ``k + 2`` statements whose proofs stand for the memory attester's signed record
 (`session_circuit`): unit 0 the signature (`PousSessionSig_v1`), unit 1 the signed digest (`PousSessionDigest_v1`), unit
 j + 2 round j (`PousRound_v1`). A unit's rows are its parameters' values in order, each of a kind: ``own`` (the prover's,
 committed under a hiding leaf), ``registered`` (a row of C as the setup registered it) or ``known`` (a value the verifier
@@ -50,7 +50,7 @@ def session_statements(head: bytes, session: bytes, records: Sequence[bytes], m:
                        signature: bytes, indices: Sequence[int], rows: Sequence[bytes], *, limit_ns: int,
                        params: R.Params = R.DEPLOYED) -> SessionStatements:
     """The statements of a session of k = len(records) rounds: ``head`` the signed header, ``session`` the session id, ``records`` each round's 92-byte record, ``m`` the digest the signature signs,
-    ``key`` the memory challenger's public key (``I ‖ root``), ``signature`` its LMS signature, ``indices`` each round's
+    ``key`` the memory attester's public key (``I ‖ root``), ``signature`` its LMS signature, ``indices`` each round's
     opened index and ``rows`` the registered row of C at each. Each unit's outputs are its reference's
     (`session_circuit`); a session whose signed digest is not ``m`` is refused, since unit 0 reads unit 1's."""
     k = len(records)

@@ -85,8 +85,8 @@ IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
     the lock's layers hold to itself and Mathlib) and their lifted statements
-    (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them
-    (`security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
+    (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them.
+    The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
     two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
@@ -744,7 +744,7 @@ def _one_stage_sample():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_sample() is None,
-                    reason="no Lean toolchain or no stratified law in core")
+                    reason="no Lean toolchain or no stratified sampling design in core")
 def test_stratified_sample_agrees_with_core(tmp_path):
     lake_build(LEAN)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),

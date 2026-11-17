@@ -181,7 +181,7 @@ OWN_CAPS = {
                      "security/Proofs/ResourceAccounting/Gates"),
                     "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
     **dict.fromkeys(tuple(f"benchmarks/{b}/"
-                          for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
+                          for b in ("pous", "poub_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",

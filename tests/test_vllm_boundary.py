@@ -44,7 +44,7 @@ ALLOWED = {
                     "vllm.LLM beside it"),
     "benchmarks/kv_filler/serve.py": "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
-    **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
+    **dict.fromkeys(("benchmarks/poub_session/engine.py", "benchmarks/poub_session/serve.py"),
                     "memory-accounting: an in-process LLMEngine under PoUB's binder"),
     "benchmarks/network_traces/record.py": "network-accounting: per-token timing of served requests (SamplingParams)",
     # the stock kernels a benchmark times or gates against

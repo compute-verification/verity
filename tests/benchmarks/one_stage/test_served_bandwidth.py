@@ -30,7 +30,7 @@ from p2_v1 import bandwidth_toy as BT  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2, p2_parties  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -57,7 +57,7 @@ for line in sys.stdin:
 SIGNER = ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py"
 CLOSER = b"served-bandwidth-test/memory-challenger"
 
-#: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
+#: `p2_parties` as the gate starts it, its memory attester's key the test signer at S1's deployed parameters
 #: (`pous_test_signer.AtLeaf`) handed to `main` in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
 PARTY_EXE = f"""import importlib.util, sys
 sys.path.insert(0, {str(ROOT)!r})
@@ -77,7 +77,7 @@ def _pin() -> str:
 
 
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
-    """The piece's environment; its party signs the session's close as the memory challenger, under a session id of
+    """The piece's environment; its party signs the session's close as the memory attester, under a session id of
     its own (`cheat`'s), since the challenger's session log refuses an id twice."""
     toy = tmp / "toy"
     challenger = tmp / f"challenger-{cheat or 'honest'}"

@@ -213,7 +213,7 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     whole = {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/compose/verifier/live_challenger/auditor.py",
              "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
              "benchmarks/one_stage/a5.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
-             "benchmarks/remote_session/auditor_line.py", "tools/move/restack.py"}
+             "benchmarks/poub_session/auditor_line.py", "tools/move/restack.py"}
     quick = {"GLOSSARY.md", "benchmarks/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
     assert whole | quick <= set(files) and not whole & plain and quick <= plain
 

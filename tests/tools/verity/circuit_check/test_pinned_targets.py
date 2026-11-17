@@ -70,8 +70,8 @@ def test_the_pinned_ids_are_every_pin_held_for_a_definition(monkeypatch):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("sidecar, family", [("arith_encode", "ChargeCount_v1"), ("charge_chain", "ChargeLink_v1")])
-def test_the_certifiers_pinned_n14_bindings_are_their_sidecars_targets(sidecar, family):
-    """``{N=14}`` of the certifier's charge units is over `MAX_GATES` beside ``{N=2}`` under it; both are pinned, so both are
+def test_network_accountings_pinned_n14_bindings_are_their_sidecars_targets(sidecar, family):
+    """``{N=14}`` of network accounting's charge units is over `MAX_GATES` beside ``{N=2}`` under it; both are pinned, so both are
     their sidecar's targets, which ``--all`` keeps the same way (`select`)."""
     path = str(REPO / f"verity/protocols/resource_accounting/network/verifier/{sidecar}.circuit-check.py")
     n2, n14 = f"{family}{{N=2}}", f"{family}{{N=14}}"

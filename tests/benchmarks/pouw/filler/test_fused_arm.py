@@ -1,4 +1,4 @@
-"""FILL's fused arm (benchmarks/pouw/filler/fused_arm.py) against what runs it: the filler-arm/v1 contract and the
+"""FILL's fused arms (benchmarks/pouw/filler/fused_arm.py) against what runs it: the filler-arm/v1 contract and the
 ledger's record limits, its placements, fused_score.py's fscore arguments in fscore.cu's order, and every table row's
 flin and attention filler configurations among those flin.cuh builds (a row naming an unbuilt one fails on the GPU only
 after the build and the lease)."""
@@ -18,9 +18,7 @@ KERNEL = DCAP.parents[2] / "verity/protocols/resource_accounting/compute/pouw/pr
 
 
 A = F.A  # the arms module fused_arm imported
-ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK(), F.FusedPumpBU(), F.FusedPumpBUXin13(),
-        F.FusedPumpBULi()]
-V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
+ARMS = [F.FusedPumpK(), F.FusedWarpK(), F.FusedPumpBU(), F.FusedPumpBUXin13(), F.FusedPumpBULi()]
 
 
 def _built() -> tuple[dict[str, set], set]:
@@ -40,28 +38,25 @@ def _flin_key(b):
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_contract_and_record(arm):
     assert A.check_arm(arm, record=True) == []
-    if arm in V1:  # FILL v1's chains, and flin's and attention's filler warps; dcap.cu's filler is pfill otherwise
-        assert arm.filler.noise == F.CO_PREFILL.noise == "chained"
-    else:  # pfill-k's {0,1} tile or pfill-bU's, the settings filler-scorer/v3's Theorem K entry reads
-        kind = {"-DPFILL_BITS": "bits01", "-DPFILL_BU": "bitsU"}[arm.nvcc_flags.split()[0]]
-        assert arm.filler.noise == kind
-        assert arm.filler.W == 8 and arm.filler.S % 32 == 0  # pfill's 8-warp blocks; S a multiple of 32
-        # the fold filler-scorer/v5 reads, declared as the NC and build make it (pf_absorb): duo at NC 2; at NC 4 ram,
-        # or the r9 XOR-in (13, 19) or LOP3+IMAD
-        flags = arm.nvcc_flags.split()
-        r9 = [f for f in ("-DPFILL_XIN13", "-DPFILL_LI") if f in flags]
-        assert len(r9) <= 1 and "-DPFILL_XIN" not in flags  # pfill.cuh refuses both pairs (#error)
-        nc4 = {"-DPFILL_XIN13": "xor-in-13", "-DPFILL_LI": "lop3-imad"}[r9[0]] if r9 else "ram"
-        assert arm.filler.fold == {2: "duo", 4: nc4}[arm.filler.NC]
-        assert kind == "bits01" or arm.filler.fold != "ram"  # bU's pump arms bind every word
+    # pfill-k's {0,1} tile or pfill-bU's, the settings filler-scorer/v3's Theorem K entry reads
+    kind = {"-DPFILL_BITS": "bits01", "-DPFILL_BU": "bitsU"}[arm.nvcc_flags.split()[0]]
+    assert arm.filler.noise == kind
+    assert arm.filler.W == 8 and arm.filler.S % 32 == 0  # pfill's 8-warp blocks; S a multiple of 32
+    # the fold filler-scorer/v5 reads, declared as the NC and build make it (pf_absorb): duo at NC 2; at NC 4 ram,
+    # or the r9 XOR-in (13, 19) or LOP3+IMAD
+    flags = arm.nvcc_flags.split()
+    r9 = [f for f in ("-DPFILL_XIN13", "-DPFILL_LI") if f in flags]
+    assert len(r9) <= 1 and "-DPFILL_XIN" not in flags  # pfill.cuh refuses both pairs (#error)
+    nc4 = {"-DPFILL_XIN13": "xor-in-13", "-DPFILL_LI": "lop3-imad"}[r9[0]] if r9 else "ram"
+    assert arm.filler.fold == {2: "duo", 4: nc4}[arm.filler.NC]
+    assert kind == "bits01" or arm.filler.fold != "ram"  # bU's pump arms bind every word
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_placements(arm):
-    pre = A.Colocation("co") if arm in V1 else A.Colocation("split", 4)
-    assert A.placed(arm, "prefill", 8192, 0) == pre
+    assert A.placed(arm, "prefill", 8192, 0) == A.Colocation("split", 4)
     assert arm.fused("prefill", 8192, 0) is None
-    assert arm.filler_at("prefill", 8192, 0) == (F.CO_PREFILL if arm in V1 else arm.filler)
+    assert arm.filler_at("prefill", 8192, 0) == arm.filler
     for (b, l), (sms, q) in arm.table.items():
         assert A.placed(arm, "decode", b, l) == A.Colocation("split", sms)
         assert arm.fused("decode", b, l) == q and arm.filler_at("decode", b, l) == arm.filler
@@ -87,11 +82,10 @@ def test_table_configurations_are_built(arm):
 
 
 def test_pump_arm_has_no_fixed_work():
-    """filler-scorer/v3 reads no theorem for a filler with an arm-side driver's fixed work, so FusedPump's rows carry no
+    """filler-scorer/v3 reads no theorem for a filler with an arm-side driver's fixed work, so TABLE_PUMP's rows carry no
     filler warps."""
-    assert all(q.FW == 0 and q.AFW == 0 for _, q in F.FusedPump().table.values())
-    assert all(a().table == F.FusedPump().table
-               for a in (F.FusedPumpK, F.FusedPumpBU, F.FusedPumpBUXin13, F.FusedPumpBULi))
+    assert all(q.FW == 0 and q.AFW == 0 for _, q in F.TABLE_PUMP.values())
+    assert all(a().table == F.TABLE_PUMP for a in (F.FusedPumpK, F.FusedPumpBU, F.FusedPumpBUXin13, F.FusedPumpBULi))
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
