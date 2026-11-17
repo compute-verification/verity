@@ -28,3 +28,11 @@ def _population_roots() -> list[Any]:
     return [population_program(shard, 2).fn, mixed_population_program([(shard, 1), (match, 2)]).fn,
             mixed_population_program([(shard, 1), (match, 2)], values=values).fn,
             wired_population_program([(shard, 1), (match, 2)], wired)[0].fn]
+
+
+def _wiring_roots() -> list[Any]:
+    """`WordBits_v1` and `BitsWord_v1` at the word widths a served window's wires and reads change: 16 and 32."""
+    from verity.circuits.defs import bind
+    from verity.circuits.population import BitsWord, WordBits
+
+    return [bind(d, W=w) for d in (WordBits, BitsWord) for w in (16, 32)]

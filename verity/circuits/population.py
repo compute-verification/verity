@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from collections.abc import Iterator, Mapping
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
-from .codec import canonical_json, descriptor_id
-from .defs import CompositeDefinition, SpecializedDefinition, bind
+from .codec import canonical_json, descriptor_id, register_lazy_family
+from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
@@ -112,6 +113,67 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
 #: the circuit record's fields `wired_population_program`'s ``record`` binding holds
 WIRED_FIELDS = ("wires", "cuts", "registered", "order", "ingress", "boundary_reads", "free", "external")
 
+BIT = Value(1)
+BIT_OF_ID = re.compile(r"^BitOf([1-9][0-9]*)x(0|[1-9][0-9]*)_v1$")
+WORD_OF_ID = re.compile(r"^WordOf([1-9][0-9]*)_v1$")
+_WIRING: dict[tuple[int, ...], PrimitiveDefinition] = {}
+
+
+def bit_of(w: int, i: int) -> PrimitiveDefinition:
+    """`BitOf{W}x{I}_v1`: (word: Value<W>) -> bit I of the word, least significant first."""
+    if not (_natural(w) and isinstance(i, int) and 0 <= i < w):
+        raise ValueError(f"bit {i!r} of a {w!r}-bit word")
+    p = _WIRING.get((w, i))
+    if p is None:
+        p = _WIRING[(w, i)] = PrimitiveDefinition(
+            f"BitOf{w}x{i}", 1, (("word", Value(w)),), BIT, lambda x, _i=i: (x >> _i) & 1, doc=bit_of.__doc__ or "",
+            conformance="protocol-defined")
+    return p
+
+
+def word_of(w: int) -> PrimitiveDefinition:
+    """`WordOf{W}_v1`: (bits: Array<W, Value<1>>) -> the W-bit word whose bit i is bits[i]."""
+    if not _natural(w):
+        raise ValueError(f"a {w!r}-bit word")
+    p = _WIRING.get((w,))
+    if p is None:
+        p = _WIRING[(w,)] = PrimitiveDefinition(
+            f"WordOf{w}", 1, (("bits", Array(w, BIT)),), Value(w), lambda *b: sum((x & 1) << i for i, x in enumerate(b)),
+            doc=word_of.__doc__ or "", conformance="protocol-defined")
+    return p
+
+
+register_lazy_family(BIT_OF_ID, lambda m: bit_of(int(m[1]), int(m[2])))
+register_lazy_family(WORD_OF_ID, lambda m: word_of(int(m[1])))
+
+
+def _word_bits(B: Any, S: Any, x: Coll) -> Coll:
+    """A W-bit word as its W one-bit leaves, bit i = leaf i, least significant first."""
+    return Coll(Array(S.W, BIT), concat([B.call(bit_of(S.W, i), x).refs for i in range(S.W)]))
+
+
+def _bits_word(B: Any, S: Any, bits: Coll) -> Coll:
+    """W one-bit leaves as the W-bit word whose bit i is leaf i."""
+    return B.call(word_of(S.W), bits)
+
+
+WordBits = CompositeDefinition("WordBits", 1, ("W",), lambda S: ((("x", Value(S.W)),), Array(S.W, BIT)), _word_bits,
+                               doc=_word_bits.__doc__ or "", conformance="protocol-defined")
+BitsWord = CompositeDefinition("BitsWord", 1, ("W",), lambda S: ((("bits", Array(S.W, BIT)),), Value(S.W)), _bits_word,
+                               doc=_bits_word.__doc__ or "", conformance="protocol-defined")
+
+
+def _converts(src: Any, dst: Any) -> int | None:
+    """The word width W when leaves of type ``src`` reach a row of type ``dst`` through `WordBits` or `BitsWord`, the same
+    bits in W-bit words on one side and one-bit leaves on the other; None when they need no conversion."""
+    if src.leaf_widths() == dst.leaf_widths():
+        return None
+    a, b = src.homogeneous_width(), dst.homogeneous_width()
+    if not a or not b or 1 not in (a, b) or a * src.leaves != b * dst.leaves:
+        raise ValueError(f"leaves of {src!r} into a row of {dst!r}: a wire or read changes width only between W-bit words and "
+                         f"their one-bit leaves")
+    return max(a, b)
+
 
 def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, int]], record: Mapping[str, Any]
                              ) -> tuple[Program, dict[str, Any]]:
@@ -121,10 +183,13 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     `mixed_population_program`'s. An input row is its wire's writer's output row; a registered or boundary read's, the root
     parameter named for the value it reads; a table read's, ``<param>/<root or domain>``; an opening's port,
     ``<table>/<port>`` over the opening's units; any other row, the population's own ``<j>.<port>``. The registered values
-    are the first parameters, in order, the rest sorted by name. The Program's ``annotations["free"]`` are the rows no
+    are the first parameters, in order, the rest sorted by name. A wire or read from W-bit words into a row of one-bit
+    leaves passes through a batch of `WordBits{W}` just before its reader's, one from bits into words through
+    `BitsWord{W}`, and the query lists each after the templates. The Program's ``annotations["free"]`` are the rows no
     wire, read, table read, opening or ingress fills, as the record's ``free`` entries state rows. ``record`` is the
     binding's by the SHA-512 of the canonical JSON of its `WIRED_FIELDS`. Refused (ValueError), by name: a row two fill, a
-    wire or read between leaves of two widths, a wire whose writer the order puts at or after its reader."""
+    wire or read between leaves of two widths neither of them one bit, a wire whose writer the order puts at or after its
+    reader."""
     ids = [descriptor_id(t) for t, _ in templates]
     if [list(x) for x in record.get("templates", ())] != [[tid, n] for tid, (_, n) in zip(ids, templates)]:
         raise ValueError(f"record templates {record.get('templates')}: the templates' ids and units, {ids}")
@@ -142,6 +207,7 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         raise ValueError(f"order {record.get('order')}: its ranges tile every template's units")
     roots: dict[str, Any] = {}
     fills: dict[tuple[int, str], dict[tuple[int, int], tuple]] = {}
+    need: set[tuple[bool, int]] = set()
 
     def cut(j: int, port: str) -> int:
         return int(cuts.get(ids[j], {}).get(port, 1))
@@ -167,10 +233,15 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         if not inp:
             return
         rt = row(j, p["port"])
+        n = rt.leaves
         if rt.width_set() != {width}:
-            raise ValueError(f"{p}: rows of {rt!r} read {name!r} in leaves of {width} bits")
+            r = rt.homogeneous_width()
+            if not width or not r or rt.leaves * r % width:
+                raise ValueError(f"{p}: rows of {rt!r} read {name!r} in leaves of {width} bits")
+            n = rt.leaves * r // width
+            need.add((r == 1, _converts(Array(n, Value(width)), rt)))
         cover = [(u, c, s * 16 // width) for u, c, s in _cover(p)]
-        end = max(s for _, _, s in cover) + rt.leaves
+        end = max(s for _, _, s in cover) + n
         if name not in bits:
             root(name, Array(roots[name].n if name in roots else 1, Value(width)))
             roots[name] = Array(max(end, roots[name].n), Value(width))
@@ -185,8 +256,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     for w in record.get("wires", ()):
         j, k, f = index[w["reader"]], index[w["writer"]], int(w["out"][1:])
         ft, rt = _fields(sigs[k][1])[f], row(j, w["port"])
-        if ft.leaf_widths() != rt.leaf_widths():
-            raise ValueError(f"wire {w}: a row of {rt!r} from an output of {ft!r}: one leaf width each side")
+        if ww := _converts(ft, rt):
+            need.add((rt.homogeneous_width() == 1, ww))
         for u, c, s in _cover(w):
             if rank[(k, s)] >= rank[(j, u)]:
                 raise ValueError(f"wire {w}: its order puts writer unit {s} at or after reader unit {u}")
@@ -251,19 +322,32 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             argv = []
             for p, t in sigs[j][0]:
                 k, rt = cut(j, p), row(j, p)
-                parts = []
+                r = rt.homogeneous_width()
+                parts, widths = [], []
                 for u in range(lo, lo + n):
                     for c in range(k):
                         kind, a, b, *f = fills[(j, p)][(u, c)]
+                        w = r
                         if kind == "wire":
                             wlo, out = next(x for x in made[a] if x[0] <= b < x[0] + len(x[1]))
                             e = out[b - wlo]
                             parts.append((e[f[0]] if isinstance(sigs[a][1], (Tuple, RecordType)) else e).refs)
+                            w = _fields(sigs[a][1])[f[0]].homogeneous_width()
                         elif kind == "leaf":
-                            parts.append(coll[a].refs.slice(b, b + rt.leaves))
+                            w = roots[a].elem.w
+                            parts.append(coll[a].refs.slice(b, b + rt.leaves * (r or w) // w))
                         else:
                             v = coll[a] if kind == "whole" and b is None else coll[a][u if kind == "own" else b]
                             parts.append(v.refs.slice(c * rt.leaves, (c + 1) * rt.leaves))
+                        widths.append(w)
+                for w in sorted({w for w in widths if w != r}):
+                    at = [i for i, x in enumerate(widths) if x == w]
+                    bits = concat([parts[i] for i in at])
+                    out = (B.batch(bind(WordBits, W=w), Coll(Array(len(at) * rt.leaves // w, Value(w)), bits), axes=(0,))
+                           if r == 1 else
+                           B.batch(bind(BitsWord, W=r), Coll(Array(len(at) * rt.leaves, Array(r, BIT)), bits), axes=(0,)))
+                    for q, i in enumerate(at):
+                        parts[i] = out.refs.slice(q * rt.leaves, (q + 1) * rt.leaves)
                 argv.append(Coll(Array(n, t), concat(parts)))
             made[j].append((lo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
         return coll_concat(rets, [coll_concat(Array(n, sigs[j][1]), [o for _, o in sorted(made[j], key=lambda x: x[0])])
@@ -275,7 +359,9 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
                  for t, p, at, n, rows in free]
-    return Program(bind(defn, **named), annotations={"free": free_rows}), template_instances_query([t for t, _ in templates])
+    wiring = [bind(WordBits if to_bits else BitsWord, W=w) for to_bits, w in sorted(need)]
+    return (Program(bind(defn, **named), annotations={"free": free_rows}),
+            template_instances_query([t for t, _ in templates] + wiring))
 
 
 def _cover(p: Mapping[str, Any]) -> Iterator[tuple[int, int, int]]:
@@ -349,5 +435,5 @@ def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> 
     return bind(defn, **named, N=n)
 
 
-__all__ = ["POPULATION_VERSIONS", "WIRED_FIELDS", "leaf_type", "mixed_population_program", "population", "population_program",
-           "wired_population_program"]
+__all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "leaf_type", "mixed_population_program",
+           "population", "population_program", "wired_population_program", "word_of"]

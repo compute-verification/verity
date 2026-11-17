@@ -626,6 +626,19 @@ PIECES = {
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
+def word_of(C, *bits):
+    """``WordOf{W}_v1``: the word of W one-bit leaves, a wiring."""
+    return [b[0] for b in bits]
+
+
+def bit_of(m):
+    """``BitOf{W}x{I}_v1``: bit I of a W-bit word, a wiring."""
+    i = int(m[2])
+    return lambda C, word: [word[i]]
+
+
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32,
-            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16}
+            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16, r"WordOf\d+_v1": word_of}
+#: primitive families whose piece reads its id: pattern -> (match -> piece)
+MADE = {r"BitOf(\d+)x(\d+)_v1": bit_of}
