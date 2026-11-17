@@ -109,3 +109,34 @@ def test_a_served_windows_member_stages_as_the_inner_statement_over_its_own_byte
                         "--partition", str(out / "partition.json"), "--program", str(out / "program.json")],
                        capture_output=True, text=True)
     assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v2", p.stderr
+
+
+@pytest.mark.slow
+def test_a_subset_of_a_members_instances_stages_over_their_own_bytes_under_its_own_partition(tmp_path):
+    """``units`` stages those instances of the member alone: their rows, salts and ``b || c`` as the window holds them,
+    under the partition of a population of that many instances, not the window's, and no registration."""
+    ri, sub, n, units = _rec_inner(), "silu-mul-v2/i256/bf16", 4, [1, 3]
+    src, sets = tmp_path / "src", tmp_path / "sets"
+    ri.stage(n, sets, src, plain_leaves=True, subcircuit=sub)
+    part = json.loads((src / "partition.json").read_text())
+    _window(src, n, part, tmp_path / "window")
+    public = (tmp_path / "window" / "m0-public.bin").read_bytes()
+    row = len(public) // n
+    out = tmp_path / "stage"
+    res = ri.stage_window(tmp_path / "window", 0, sub, sets, out, units=units)
+    body = (out / "pub-2.bin").read_bytes().split(b"\n", 1)[1]
+    assert body == b"".join(public[u * row:(u + 1) * row] for u in units)
+    assert res["n"] == len(units) and res["partition_digest"] != P.digest(part)
+    assert res["window"]["registration_digest"] is None
+    assert res["subset"] == {"run": "r-test", "registration_digest": "0" * 128, "partition_digest": P.digest(part), "member": 0,
+                             "n": n, "units": units, "public_sha512": hashlib.sha512(public).hexdigest()}
+    assert ri.units_arg("0-2,5") == [0, 1, 2, 5]
+    for bad in ([3, 1], [1, 1], [n]):
+        with pytest.raises(ValueError, match="distinct ascending"):
+            ri.subset_window(tmp_path / "window", 0, bad, sub, sets, tmp_path / "bad")
+    if not BIN.exists():
+        pytest.skip("the Lean verifier is not built")
+    p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(out / "circuit.txt"), "--public", str(out / "pub-2.bin"),
+                        "--partition", str(out / "partition.json"), "--program", str(out / "program.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v2", p.stderr
