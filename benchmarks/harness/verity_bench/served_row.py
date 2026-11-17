@@ -164,7 +164,7 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
              "open_premises": list(theorem["open_premises"]) if theorem.get("name") else None,
              PROVED: theorem.get("name") is not None and not theorem["open_premises"]}
     out = {**{k: entry[k] for k in ("what", "verifier", "decided_by")}, "proved_by": proof, "held": shown.get("held"),
-           "codes": [], "withheld": None, "why": None, "complete": None, PROVED: False}
+           "codes": [], "withheld": None, "why": None, "complete": None, "not_covered": None, PROVED: False}
     if not isinstance(o, Mapping):
         refused = shown.get("refused")
         return out | {"final": "none",
@@ -173,7 +173,7 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
     accepted, held = o.get("accepted") is True, shown.get("held") is True
     if accepted and held:
         complete = o.get("complete") is True
-        return out | {"final": "given", "complete": complete,
+        return out | {"final": "given", "complete": complete, "not_covered": o.get("not_covered"),
                       PROVED: complete and entry["decided_by"] == LEAN and proof[PROVED]}
     reasons = kinds.get("withheld") or {}
     if held and len(out["codes"]) == 1 and out["codes"][0] in reasons:
@@ -195,7 +195,8 @@ def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
         said = f"{proofs['accepted']} of {proofs['of']} sampled proof blocks' proofs accepted by the Lean verifier"
     if final["final"] == "given":
         return (f"{said}; the final accept given by `{final['verifier']}`"
-                + ("" if final["complete"] else f", and {GIVEN_NOT_COMPLETE}"))
+                + ("" if final["complete"] else f", and {GIVEN_NOT_COMPLETE}")
+                + (f"; {final['not_covered']}" if final["not_covered"] else ""))
     if final["final"] == "withheld":
         return f"{said}; the final accept withheld, reason `{final['withheld']['code']}` ({final['withheld']['why']})"
     if final["final"] == "refused":
@@ -261,6 +262,7 @@ def verdict_record(doc: Mapping) -> dict | None:
         opened = [h for h in spot_status.HOLES if reads["holes"].get(h) != spot_status.CLOSED]
         word, waits = ACCEPT if final["complete"] else NOT_COMPLETE, None if proved else "; ".join(filter(None, (
             "no Lean theorem is cited for its verifier" if reads["theorem"] is None else
+            final["not_covered"],
             n and f"{reads['theorem']} takes {n} open premise{'s' * (n != 1)}",
             f"not closed at the run's commit: {', '.join(opened)}" if opened else None,
             *(item["said"] for item in doc["to_fully_proved"]))))

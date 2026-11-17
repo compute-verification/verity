@@ -118,6 +118,26 @@ def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path
     assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
 
 
+def test_a_two_stage_accept_says_the_cite_does_not_cover_it_and_its_form_is_not_yet_proved(tmp_path):
+    product = next(iter(C.CITES))
+    tree = git_tree(tmp_path / "tree", [C.CITES[product]])
+    for form in ("one-stage", "two-stage"):
+        d, cases = tmp_path / form, []
+        for n, id in enumerate(C.COMPONENTS[product]):
+            p = put(d / f"p{n}", id, {"form": form} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
+                    verdict="accept")
+            cases += ["--cases", str(p)]
+        assert C.main([product, *cases, *outs(d, tree=tree), "--exe", lean(d, {"verdict": "accept"}, 0)]) == 0
+        ran = json.loads((d / "public" / "composite.json").read_bytes())["ran"]
+        lines = (d / "public" / "verdicts.txt").read_text().splitlines()
+        assert ran["cites"] == C.CITES[product]
+        said = f"NOT_COVERED {SAMPLED} two-stage form: {C.CITES[product]} does not cover it, its form is not yet proved"
+        if form == "two-stage":
+            assert ran["not_covered"] == {"id": SAMPLED, "form": "two-stage"} and said in lines
+        else:
+            assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
+
+
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     put(tmp_path / "cases" / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     put(tmp_path / "cases" / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)

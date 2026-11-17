@@ -94,6 +94,8 @@ VERDICTS = ("accept", "reject", "undecided")
 #: carries no value.
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_./ -]{0,63}")
 VALUE = re.compile(r"[0-9A-Fa-f]{16}")
+SAMPLED = "verity/sampled-proofs/v1"
+TWO_STAGE = "two-stage"
 
 
 class Parser(argparse.ArgumentParser):
@@ -215,6 +217,12 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
 
 
+def two_stage_accepted(cases: Sequence[dict[str, Any]]) -> bool:
+    """Whether the sampled-proofs case is in the two-stage form and its verifier accepted it."""
+    return any(p["id"] == SAMPLED and p["params"].get("form") == TWO_STAGE
+               and outcome(p["id"], p["answer"])["verdict"] == "accept" for p in cases)
+
+
 def uncited(p: dict[str, Any]) -> str | None:
     """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
     if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
@@ -304,6 +312,9 @@ def run(a: argparse.Namespace) -> int:
         rc = p.returncode
         ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
         lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
+        if ran["cites"] is not None and two_stage_accepted(cases):
+            ran["not_covered"] = {"id": SAMPLED, "form": TWO_STAGE}
+            lines.append(f"NOT_COVERED {SAMPLED} {TWO_STAGE} form: {ran['cites']} does not cover it, its form is not yet proved")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")

@@ -180,6 +180,10 @@ CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 FIRST_STAGE = "stage1.json"
 #: what round 2 refused every two-stage run by while the form's switch was off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
+#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof (`second_stage.FORM`),
+#: and no guarantee is quoted for a two-stage run
+NOT_COVERED = ("the two-stage form is not yet proved: the verifier accepts it ahead of its proof, and no guarantee "
+               "covers a two-stage run")
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
 #: docstring), so no outcome here is complete (`second_stage.complete`), whatever its audit records say of themselves
 REQUEST_DEFINITION = False
@@ -1147,6 +1151,7 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
             "complete": o.accepted is True and complete(list(audits.values())),
+            "not_covered": NOT_COVERED if o.accepted is True else None,
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
             "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
