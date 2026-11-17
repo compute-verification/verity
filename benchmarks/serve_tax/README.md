@@ -33,6 +33,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `prod-seeded` | nothing on the server: `prod`, a sampled pass's client sending each user's seed as `prod-record`'s does | `prod` |
 | `prod-trace` | the step trace and each request's ids on that server: `prod-record` with the canonical top-k off; its client sends seeds, as `prod-record`'s does | `prod` |
 | `prod-all-on` | admission on the certified tick fed by a stand-in release front on the node (the network attester's egress pacing: off), and the edge snapshot, every rank's KV cache hashed and copied; useful-work kernels: off; commitment of values: off (below) | `prod-record` |
+| `prod-tick` | admission on the certified tick fed by the stand-in release front: `prod-all-on`'s tick with nothing recorded and no edge, its client sending each user's seed | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -448,6 +449,13 @@ reads as more than it is:
 - **τ.** The tick's bucket is the network attester's 100 ms; τ_sat and τ_free are 0.9 and 1.1 times the mean engine
   cycle of a `prod-record` step trace on the agentic load at four users (`serve_tax.py tick OUT/prod-record.1 --load
   agentic@4`, which prints them), given as `TICK_MS`.
+- **The chosen rule, measured beside the registered one** (`TICK_RULE='{"token_ns": N}'`, with `TICK_MS=B,B`): at
+  each engine step the tick's clock advances by a fixed amount plus a fixed amount for each non-draft token the step
+  schedules, and that token count is the one the replay's own step computes from its state and the inputs it already
+  holds, never a number the engine reports. The gate counts it as the step's scheduled tokens less its draft tokens
+  (`tick_plugin.non_draft_tokens`), the sum of the rows' n that `replay_step.reference` forms as the batch's token
+  limit less the budget left, on a clock of nanoseconds. `serve_tax.py tick` prints the two amounts fitted to the
+  trace's busy cycles (`per_token`: `base_us`, `token_ns`).
 - **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of a load's serving, counted on through the load's
   passes and users (`servetax_plugin.edge_load`) and again from a new load: the engine drains, every rank's KV
   cache is hashed where it lies (its root is part of the snapshot) and copied to host memory on every rank

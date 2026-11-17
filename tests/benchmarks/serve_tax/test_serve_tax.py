@@ -68,7 +68,20 @@ def test_busy_cycle_counts_only_cycles_with_a_request_in_the_engine():
             {"kind": "step", "t": 6.0, "finished": {}}, {"kind": "step", "t": 6.4, "finished": {"b": {}}}]
     c = S.busy_cycle(recs)
     assert c["cycles"] == 2 and c["idle"] == 1
-    assert c["mean_us"] == pytest.approx(0.3e6)
+    assert c["mean_us"] == pytest.approx(0.3e6) and c["per_token"] is None
+
+
+def test_busy_cycle_fits_a_fixed_amount_and_one_for_each_non_draft_token_a_row_past_its_prompt_being_one():
+    rows = [[["a", 0, 4]], [["a", 4, 6]], [["a", 5, 6], ["b", 0, 4]], [["a", 6, 6], ["b", 4, 6]], [["a", 7, 6], ["b", 0, 9]]]
+    recs = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}},
+            {"kind": "arrive", "request": "a", "prompt_len": 4}, {"kind": "arrive", "request": "b", "prompt_len": 4}]
+    t = 0.0
+    for r in rows:
+        t += 0.006 + 20e-6 * sum(1 if s >= 4 else n for _, s, n in r)
+        recs.append({"kind": "step", "t": t, "rows": r, "finished": {}})
+    assert S.busy_cycle(recs)["per_token"] == {"base_us": 6000, "token_ns": 20000}
+    recs[0] = {"kind": "header", "config": {}}
+    assert S.busy_cycle(recs)["per_token"] != {"base_us": 6000, "token_ns": 20000}
 
 
 def test_window_trace_keeps_the_header_and_the_load():

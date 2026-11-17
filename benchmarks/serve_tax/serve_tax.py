@@ -2429,20 +2429,31 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
 def busy_cycle(recs: list[dict]) -> dict:
     """The engine's mean busy cycle over a step trace with times (`StepTrace` with a clock): from one step's output to the
     next's, between consecutive steps that scheduled tokens, where a request was in the engine (arrived, not yet finished)
-    once the first's output was back, as `summary.busy_cycle` reads the corpus's traces."""
+    once the first's output was back,     as `summary.busy_cycle` reads the corpus's traces. ``per_token``: the least-squares fit of each cycle to a fixed
+    amount and an amount for each non-draft token of the step it ends, a row past its prompt being one token and its
+    drafts where the engine drafts."""
     flight: set[str] = set()
-    outs: list[tuple[float, bool]] = []
+    prompt: dict[str, int] = {}
+    drafts = any(r.get("kind") == "header" and (r.get("config") or {}).get("speculative") for r in recs)
+    outs: list[tuple[float, bool, int]] = []
     for r in recs:
         if r.get("kind") == "arrive":
             flight.add(r["request"])
+            prompt[r["request"]] = r.get("prompt_len", 0)
         elif r.get("kind") == "step":
             flight -= set(r.get("finished") or ())
-            outs.append((float(r["t"]), bool(flight)))
+            n = sum(1 if drafts and s >= prompt.get(q, 0) else k for q, s, k in r.get("rows") or ())
+            outs.append((float(r["t"]), bool(flight), n))
         elif r.get("kind") == "finish":
             flight.discard(r["request"])
-    cycles = [b[0] - a[0] for a, b in zip(outs, outs[1:]) if a[1]]
+    pairs = [(b[0] - a[0], b[2]) for a, b in zip(outs, outs[1:]) if a[1]]
+    cycles = [c for c, _ in pairs]
+    fit = None
+    if len(pairs) > 1 and len({n for _, n in pairs}) > 1:
+        slope, base = statistics.linear_regression([n for _, n in pairs], cycles)
+        fit = {"base_us": round(base * 1e6), "token_ns": round(slope * 1e9)}
     return {"cycles": len(cycles), "idle": max(0, len(outs) - 1 - len(cycles)),
-            "mean_us": round(statistics.fmean(cycles) * 1e6, 1) if cycles else None}
+            "mean_us": round(statistics.fmean(cycles) * 1e6, 1) if cycles else None, "per_token": fit}
 
 
 def tick_args(source: str | None, given_ms: str | None, load: str = "saturated", bucket_ms: int | None = None) -> dict:
