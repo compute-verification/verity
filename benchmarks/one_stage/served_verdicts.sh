@@ -599,6 +599,8 @@ esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 [[ -z ${V3C_GPUS:-} || $V3C_GPUS =~ ^[0-9]+(,[0-9]+)*$ ]] \
   || { say "PREFLIGHT: V3C_GPUS is the cards V3c's audit proves on, their indices comma-separated (0,1), not $V3C_GPUS"; exit 3; }
+[ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
+  || { say "PREFLIGHT: V3C_GPUS's cards are held under gpu-lease while V3c's audit proves on them, and this node has no gpu-lease"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
@@ -905,14 +907,16 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
   fi
   V3C_AUDITED=$(hostname -s)
-  local link=() gpus=() ld=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
+  local link=() gpus=() ld=() lease=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit n
   [ "${V3C_ARCHIVE_LINK:-}" != 1 ] || link=(--archive-link)
   if [ -n "${V3C_GPUS:-}" ]; then
     tk=$(v3c_cuda) || { say "V3C-AUDIT: V3C_GPUS=$V3C_GPUS, and this node has no CUDA 13.3 toolkit for its prover"; return 1; }
     gpus=(--gpus "$V3C_GPUS") ld=(LD_LIBRARY_PATH="$tk/compat:$tk/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
     bin=$FW/gpu/flock-gpu-link/flock/target/release/flock-circuit
+    n=${V3C_GPUS//[^,]/}
+    lease=(gpu-lease "$((${#n} + 1))" --wait --on "$V3C_GPUS" --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES)
   fi
-  (cd "$TREE" && env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+  (cd "$TREE" && "${lease[@]}" env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
     "${pool[@]}" "${gpus[@]}" \
