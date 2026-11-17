@@ -1,4 +1,4 @@
-"""stage_window.py's choice of a served window's member (`pick`: the first member of a projection's fused block on the kernel
+"""stage_window.py's choice of a workload's member (`pick`: the first member of a projection's fused block on the kernel
 asked, or of its scale read, at the size asked; a refusal names the sizes there are) and its public-body check (`public_body`:
 the staged public file's body must be the window's member file, with the digest its record states)."""
 from __future__ import annotations

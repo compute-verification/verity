@@ -17,7 +17,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   the expanded sampling design and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
-  1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
+  1 to 10⁶ instances under `Q_template_instance`, as a workload registers one. A template query must apply.
 
 ~~~sh
 verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
@@ -175,7 +175,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
 an audit's `window/case-v2.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
 two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
-template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
+template's circuit file unsampled), audited as a workload's audit step runs it, on Flock's prover, the Lean
 verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
 `members_files/Main.lean`, built in a scratch Lake package against the checkout's verifier, takes the case's first N
 members of one circuit file (`all`: every member of the case) and times `OneStageZk.membersFiles` as the compiled

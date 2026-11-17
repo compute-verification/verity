@@ -1,6 +1,6 @@
 """run.sh's single-GPU Commit (``PP_LLAMA``) is of the row ``LROW`` names, the bf16 RTX PRO 6000 B4 row unless it names
 another, and its workload is the stored one of that name, in whichever stored-workload directory's SHA256SUMS lists it:
-the served run's for the bf16 row, the integration's for the int8 H200 row `a5_llama1b_h200.sh` leaves. A name neither
+the workload's for the bf16 row, the integration's for the int8 H200 row `a5_llama1b_h200.sh` leaves. A name neither
 lists is refused before anything is written, as an art: row dir is."""
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def _lines(first: str, last: str) -> list[str]:
 
 
 def test_the_served_arms_forged_partition_is_settled_before_any_build(tmp_path):
-    """A served window of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
+    """A workload of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
     one, or a given one outside its steps is refused (exit 8, the fix named), after the install and before the builds,
     where its commit would raise only after the honest arm ran. The single-GPU arm's defaults are unchanged."""
     text = RUN_SH.read_text()

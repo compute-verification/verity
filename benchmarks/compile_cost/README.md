@@ -1,4 +1,4 @@
-# compile_cost: what compiling a served window's advice costs
+# compile_cost: what compiling a workload's advice costs
 
 `run.py` compiles one class-G window's advice into its Programs (`verity_vllm.program.predict.steps.compile_steps`), as
 `adapters/vllm/tools/advice_compile.py` runs it, and records wall seconds and peak memory by phase. Its docstring has

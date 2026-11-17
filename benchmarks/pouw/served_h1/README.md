@@ -38,7 +38,7 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 |---|---|---|
 | `serve` | `serve.py`'s window on one leased GPU for at most 28 minutes, after `noise.cu` is built for the card and the Lean verifier's coins are built; extra arguments go to `serve.py` | `serve.py`'s record (`manifest.json` and the window's files), `tree.txt`, `nvcc.txt`, `lean-coins-build.log`, `prover-put.txt` (the prover's data put in the store, or `prover.tar` and `prover.sha256` beside it when the put fails) |
 | `producer_gpu` | the receipt producer's GPU tests (`tests/benchmarks/pouw/test_served_h1_producer.py`'s units-kernel tests) for each `h1u.cu` build in `BUILDS`, then `step_time.py` at each of `STEP_ROWS` | `builds.txt`, `build-*.log`, `junit-*.xml`, `pytest-*.log`, `step-*.json` |
-| `j10r_gpu` | by `JOB`: `tests`, J10-R's GPU tests and `j10r_time.py` (J10-R's noise and receipts against v1's, interleaved), or `window`, a served window over J10-R's tile proof block through `pouw_h1_gpu.py` | `builds.txt`, `build-*.log`, `gpu.txt`, `junit.xml`, `pytest.log`, `j10r_time.json`, `j10r_time.log`, `window.log` |
+| `j10r_gpu` | by `JOB`: `tests`, J10-R's GPU tests and `j10r_time.py` (J10-R's noise and receipts against v1's, interleaved), or `window`, a workload over J10-R's tile proof block through `pouw_h1_gpu.py` | `builds.txt`, `build-*.log`, `gpu.txt`, `junit.xml`, `pytest.log`, `j10r_time.json`, `j10r_time.log`, `window.log` |
 | `preflight` | a CPU check of the node: the imports `serve.py` makes, the int8 pin's path, the `research` command and one receipt against its reference | its standard output only |
 
 One more job has no row, because its name holds a term the Glossary retires; `run.sh` with no argument lists every job.

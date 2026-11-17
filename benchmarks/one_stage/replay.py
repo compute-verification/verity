@@ -1623,7 +1623,7 @@ print(json.dumps(out))
 #: served_zk's registered scheme before the proof system (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
 SERVED_ZK_SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
 SERVED_ZK_W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
-#: served windows' recorded refusals that are not the protocol's, by name, with why
+#: workloads' recorded refusals that are not the protocol's, by name, with why
 SERVED_OUTSIDE = (
     (r"register-extra", "the service's public-items rule at registration (`public_problem`), before any record exists"),
     (r"receive-extra", "the service's public-items rule (`public_problem`): one-stage's record carries the window's items "

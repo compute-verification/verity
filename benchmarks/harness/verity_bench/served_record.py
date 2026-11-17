@@ -8,7 +8,7 @@ nothing stands in for a time, a count of GPUs or a verdict no run wrote.
                                          [--serving-cost C --serving-cost-source S] > record.json
     verity bench exfiltration --served-run record.json
 
-A served run is four runs, and each ``DIR`` is one's directory as `research fetch --all RUN` leaves it, or as its run
+A workload is four runs, and each ``DIR`` is one's directory as `research fetch --all RUN` leaves it, or as its run
 record is fetched from the store: its ``job.json`` beside its ``out/`` (a run's ``out/``, or the file itself, is
 taken too, and then the run's id and commit are not read). Only the second stage is required.
 
@@ -402,7 +402,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--serve", type=Path, metavar="DIR", help="the serve's run directory (or the class's `commit.json`)")
     ap.add_argument("--replay", type=Path, metavar="DIR",
                     help="the run directory of the replay of the sampled spans (or its own `replay.json`)")
-    ap.add_argument("--run", help="the served run's id, where the second stage's directory does not name it")
+    ap.add_argument("--run", help="the workload's id, where the second stage's directory does not name it")
     ap.add_argument("--serving", type=Path, metavar="META", help="the served load's `meta.json` (`verity bench serve_tax`)")
     ap.add_argument("--stock", type=Path, metavar="META", help="stock vLLM's `meta.json` on the same load")
     ap.add_argument("--serving-cost", type=float, metavar="C",

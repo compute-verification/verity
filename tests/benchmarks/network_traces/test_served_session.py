@@ -45,7 +45,7 @@ SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 #: the network attester's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
-#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
+#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a workload
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
 

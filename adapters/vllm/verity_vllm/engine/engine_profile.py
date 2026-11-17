@@ -284,7 +284,7 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
 
 def cache_info(llm: Any) -> dict[str, Any]:
     """Effective KV-cache flags (§15.8: 'prefix caching enabled' is recorded as the effective
-    value, and whether the recorded workload hit it is the served run's `workload_exercised.json`)."""
+    value, and whether the recorded workload hit it is the workload's `workload_exercised.json`)."""
     vc = handle.engine_of(llm).vllm_config
     cc = vc.cache_config
     return {

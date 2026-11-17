@@ -72,7 +72,7 @@ VALUES = (("row-table/0/k8", 4, 16), ("input-ids/0", 2, 16))
 
 @pytest.mark.parametrize("population", [[(XOR8, 1)], [(XOR8, 3), (AND8, 1)]], ids=["one-unit", "three-and-one"])
 def test_r2s_partition_takes_the_windows_values(population):
-    """A window whose program takes values (a served window's tables, ahead of its templates' parameters): R2's other
+    """A window whose program takes values (a workload's tables, ahead of its templates' parameters): R2's other
     partition takes the same values as the same parameters, and its partition is still another."""
     own = P.mixed_population_program(population, values=VALUES)
     query = P.template_instances_query([d for d, _ in population])

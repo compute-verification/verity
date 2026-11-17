@@ -7,7 +7,7 @@
 // is a function of the step's tensors. Its versions start above every version a dropped plan had, so a (key, version) the worker may still
 // hold never names a plan learned after the drop. Torch- and CUDA-free, so the CPU tests compile it on its own.
 //
-// `end_run` runs in the committer's reset, which the served engine waits for, and a served window drops every plan of the window before
+// `end_run` runs in the committer's reset, which the served engine waits for, and a workload drops every plan of the window before
 // it: freeing them there costs one free per committed tensor of a window. So `end_run` only takes the dropped plans out of the book (their
 // map nodes, into `pending_`), and each step frees RELEASE_PER_STEP of them in `use`, twice the rate a run of new plans drops them. What a
 // run too short to free them leaves is freed by the next `end_run`, so a dropped plan is freed by the end of the run after the drop, and

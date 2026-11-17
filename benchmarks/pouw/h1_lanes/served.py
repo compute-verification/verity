@@ -35,7 +35,7 @@ registered tables at the rows the verifier reads them.
   lane's opened roots are the window's.
 * **smoke**: a stand-in window at a small K in extract's form (`smoke`), the harness's own check.
 
-No combine: a served window commits no CP-W receipt for it to check; the 32 lanes' ok bits cover every cell of the unit's
+No combine: a workload commits no CP-W receipt for it to check; the 32 lanes' ok bits cover every cell of the unit's
 record (z = A Bᵀ exactly, y = its dequant).
 """
 from __future__ import annotations
@@ -84,10 +84,10 @@ def _descriptor(path: str) -> bytes:
 
 
 def _window(path: str):
-    """The served window's Program rebuilt from its descriptor (`credit.layout_of`'s layout, `credit.shape_of`'s prefix),
+    """The workload's Program rebuilt from its descriptor (`credit.layout_of`'s layout, `credit.shape_of`'s prefix),
     each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
-    the template at K, as a served window's verifier derives it."""
+    the template at K, as a workload's verifier derives it."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
     from verity.circuits.codec import descriptor_id
@@ -217,8 +217,7 @@ def extract(a: argparse.Namespace) -> None:
 
 
 def smoke(a: argparse.Namespace) -> None:
-    """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
-    window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
+    """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a workload's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
     sampled: the harness's own check, never a served result."""
     rng = np.random.default_rng(a.seed)
     k, rb, cb, t, u = a.k, 1, 1, 3, 7

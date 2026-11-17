@@ -237,8 +237,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   count an accepted run served. Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
-  the rehearsals): the network attester's relay kept up here, as the auditor's device, for a served run's own load.
-  The gate sends no request and runs no client: the clients are the served run's, on the peer, and a connection's
+  the rehearsals): the network attester's relay kept up here, as the auditor's device, for a workload's own load.
+  The gate sends no request and runs no client: the clients are the workload's, on the peer, and a connection's
   path is client ──cells──▶ the peer's 127.0.0.1:CLIENT_PORT ──tunnel──▶ the relay (here) ──tunnel──▶ the peer's
   127.0.0.1:PORT. What follows is the contract a runner of another lane reads.
   - *The verb.* `relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS]

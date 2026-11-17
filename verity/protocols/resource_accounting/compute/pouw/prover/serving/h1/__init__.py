@@ -114,7 +114,7 @@ SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-#: a served window's calls record's schema, `CALLS_FILE`, which `H1Run.finish` writes
+#: a workload's calls record's schema, `CALLS_FILE`, which `H1Run.finish` writes
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and

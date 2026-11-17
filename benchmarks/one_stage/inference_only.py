@@ -1,4 +1,4 @@
-"""A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
+"""A workload's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
 by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 

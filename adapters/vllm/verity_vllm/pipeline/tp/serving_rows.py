@@ -15,7 +15,7 @@ roots under the form the record's ``root_tag`` names, `tp.run_root.combine`), an
 (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of record for the rank in ``versions.json`` and the rank's) for the
 workload the record served.  Neither side evaluates a row, so the Definitions the Build bound are not held to this tree's here: the
 one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
-SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
+SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A workload names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
 record under the SHA-256 v1 root (an old record) passes no window as served (``sha512``).
 

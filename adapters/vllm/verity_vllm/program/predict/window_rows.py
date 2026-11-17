@@ -1,4 +1,4 @@
-"""A window's rows: every unit of a class circuit (`window_circuit.lower`) given its output rows from a served window's
+"""A window's rows: every unit of a class circuit (`window_circuit.lower`) given its output rows from a workload's
 values, ready for `interface.Window.record`.
 
 A node of a slot's class Program has one value, its return fields: the served value where the engine computed it (its

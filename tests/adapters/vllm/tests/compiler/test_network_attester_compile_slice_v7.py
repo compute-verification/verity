@@ -1,7 +1,7 @@
 """The compile slice charging the length terms (`compile_slice_v7.CompileSlice_v7`): CompileSlice_v1 with
 ChargeLink_v2{D, 0, 0, K} in place of ChargeLink_v1{D}. Its charge is v1's for the window's decisions plus each certified
 arrival's length term, bitlen(max_tokens) + 1 bits, read from ``cert``'s certified output length and max_tokens. On both
-demonstration slices and on window 212 of the served run the circuit accepts that charge and refuses one bit less, and a
+demonstration slices and on window 212 of the workload the circuit accepts that charge and refuses one bit less, and a
 max_tokens the certified output length doesn't fit is refused by ``code``, at each power of two. The circuit bounds
 max_tokens only from above: a lower one the output still fits is another ``cert`` row, which only ``cert``'s binding to the
 certified record can refuse, and that binding is a stand-in (`compile_slice_v7`'s docstring)."""

@@ -1,4 +1,4 @@
-"""A MoE layer's expert GEMMs cut per expert in a served window (`serving_templates.EXPERTS`, ``FUSED``, ``SLOTS`` and ``READ``):
+"""A MoE layer's expert GEMMs cut per expert in a workload (`serving_templates.EXPERTS`, ``FUSED``, ``SLOTS`` and ``READ``):
 a (token, slot) pair's GEMM over its expert's rows alone, a block of n rows at a time, each block's rows and its G-block's scale
 row read at the pair's expert from a table registered one expert a row, so no proof block holds another expert's weights.  Four
 layouts:

@@ -132,7 +132,7 @@ def test_an_unknown_verity_variable_is_refused_by_name() -> None:
 
 
 def test_the_names_verity_run_gives_every_piece_are_known() -> None:
-    """`verity run` puts the configuration's digest and pins in every listed piece's environment, the served window's
+    """`verity run` puts the configuration's digest and pins in every listed piece's environment, the workload's
     included, for the memory attesters' pieces to read; verity-vllm, started under it, takes them."""
     assert S.unknown({"VERITY_CONFIGURATION": "0" * 128, "VERITY_PINS": "[]"}) == []
 

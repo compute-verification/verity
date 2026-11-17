@@ -14,7 +14,7 @@ soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refu
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``, and for NAME each
 of the application's machines), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state
 ``--state`` (default a new directory under the system's temporary one). The parties are those of the static table
-`REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
+`REGISTRY` names: the workload's (`tools/verity/cli/verity_cli/served_table.py`);
 `verity_cli`'s tests also run the toy's (`tests/tools/verity/cli/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 
@@ -71,7 +71,7 @@ as a line and written to ``STATE/record/verdicts.jsonl``:
 sender's, or the workload's when this host stands for both, unless the table's line names that machine itself (onsite's
 memory attesters, whose bindings say where they ran).
 
-onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
+onsite's ``block`` is its execution phase's seal digest, the one the workload publishes (`served_table.PHASE`).
 onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
 ``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the

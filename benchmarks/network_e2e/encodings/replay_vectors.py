@@ -348,7 +348,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `BlockPool.hit`")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definition on the fitting steps too")
     ap.add_argument("--fixture", type=int, default=0, help="keep the first N fitting steps of each trace")
-    ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this served window of "
+    ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this workload of "
                     "the one trace (`served_window`, `slice_inputs`)")
     ap.add_argument("--served", type=Path, help="with --slice: the Commit's seal, whose rows for the window go in `served`")
     ap.add_argument("--max-model-len", type=int, help="with --slice: the engine's, where the trace's header lacks it")

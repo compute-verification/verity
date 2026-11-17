@@ -6,7 +6,7 @@ verifier, the Lean verifier's sample checks, and the audit record with its integ
       [--k 16] [--delta 0.01] [--port 7511]
 
 * **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
-  OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
+  OS salts). The values were read under the workload's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the docket says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
 * **The verifier.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public

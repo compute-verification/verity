@@ -76,7 +76,7 @@
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
 #     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
-#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
+#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own workload, below), PoUS, the bandwidth audit and the network
 #     attester: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the network attester's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
@@ -188,7 +188,7 @@
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
 # the serve's first registration record and each window's Pearl+ record W and audit's record R, PoUW's period case,
 # SPOT's summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
-# holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
+# holding a workload's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
 # (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
@@ -1324,7 +1324,7 @@ print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + 
       + held)
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case is at the run's ALPHA and" \
-           "GAMMA, or at what it reads off the served window's division:" \
+           "GAMMA, or at what it reads off the workload's division:" \
            "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
   say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and signed by no" \
       "auditor's device (inference-only-limits.json)"
@@ -1624,7 +1624,7 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "HANDOFF refused: it would carry the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
+    || { say "HANDOFF refused: it would carry the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
   (cd "$D" && tr '\n' '\0' < "$COMPOSE_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$COMPOSE_DIR/inputs.sha256" || return 1
   echo private/compose/inputs.sha256 >> "$COMPOSE_DIR/inputs.txt"
   say "HANDOFF $HANDED_WHAT, composed off this node: on COMPOSE_NODE ($COMPOSE_NODE), from the serve dir's verifier-side" \
@@ -1699,7 +1699,7 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
     [ "${host%%.*}" != "$served" ] \
       || { say "COPY refused: $host is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE ($composer)"; return 3; }
     why=$("$SAY_PY" "$SV" witness < "$dir/inputs.txt") \
-      || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+      || { say "COPY refused: the hand-off's list names the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
   n=$(count "$dir/inputs.txt")
   if [[ $2 == *:* ]]; then
@@ -1723,7 +1723,7 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: t
   local rc why answer=$OUT/compose/answer.json
   handoff "$1" "${2:-}" || return 1
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "GATE-COMPOSE refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+    || { say "GATE-COMPOSE refused: the hand-off's list names the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   mkdir -p "$OUT/compose" && rm -f "$answer"
   # shellcheck disable=SC2086
   (cd "$D" && tar --create --dereference --no-recursion --file=- --files-from="$COMPOSE_DIR/inputs.txt") \
@@ -2001,7 +2001,7 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
   [ -n "$COMPOSE_TREE" ] && { [ "$sha" = "$COMPOSE_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the compose follow-on composes with the served node's tree ${COMPOSE_TREE:-(unknown)}, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
   held=$(cd "$D" && find . -type f -printf '%P\n' | "$SAY_PY" "$SV" witness) \
-    || { say "PREFLIGHT: the compose follow-on holds no witness of the served run, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
+    || { say "PREFLIGHT: the compose follow-on holds no witness of the workload, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no $PY (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else

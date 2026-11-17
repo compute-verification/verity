@@ -19,14 +19,14 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
-* A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
+* A workload's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
   (a compiler without the cap, a root that isn't rows-sha512, a carried request that doesn't follow from the last window's
-  close) and its negatives, and the CLI's served run.
+  close) and its negatives, and the CLI's workload.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
-* A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
+* A workload's circuit record states its window ingress at each step, so the leak count prints a window figure, the
   advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
 * The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
   engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
@@ -1176,7 +1176,7 @@ ENGINE = {"execution": "bi-eager", "env_flags": {},
 
 
 def _advice_compile() -> Any:
-    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
+    """vllm's ``tools/advice_compile.py``, which writes a workload's row dir's Builds, loaded by its file."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("advice_compile",
@@ -1188,7 +1188,7 @@ def _advice_compile() -> Any:
 
 @pytest.mark.parametrize("label", ["serve.json's", "its engine record's"])
 def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(tmp_path, label):
-    """`advice_compile` writes a served window's row dir's Builds and I2 reads each by the digest of the Program it compiles,
+    """`advice_compile` writes a workload's row dir's Builds and I2 reads each by the digest of the Program it compiles,
     so the two read one φ of one ``serve.json`` (`predict.phi.served_phi`), its engine's args and world included, wherever
     it states its execution: a request Program's length rule reads the engine's ``max_model_len``, so under a φ stating
     none I2 compiles, for an engine serving below its model's length, a Program no Build holds. A launch that left the
@@ -1272,7 +1272,7 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
 
 
 def test_the_served_forged_partition_forges_at_the_honest_partitions_steps_and_refuses_one_outside_them(tmp_path, capsys):
-    """A served window of steps 1 to 2 has no unit at step 24: the forged partition is by default the honest one's templates
+    """A workload of steps 1 to 2 has no unit at step 24: the forged partition is by default the honest one's templates
     and scope with every unit sampled (for steps 1 to 2, the step-1 `_all` files under each design), and a given one at
     steps the honest partition doesn't hold is refused, naming the fix, where its commit would raise after the honest arm."""
     part = HERE.parents[2] / "benchmarks" / "prove_path"
@@ -1317,7 +1317,7 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
     assert len(digests) == len(others) and one.digest not in digests
 
 
-#: a served run's ``serve.json`` edited after its advice was registered, in each field the compile reads of it (`phi_of_serve`,
+#: a workload's ``serve.json`` edited after its advice was registered, in each field the compile reads of it (`phi_of_serve`,
 #: `registered_of_serve`, `served_gates`), and the verifier's own ``--hf-config`` other than the pin's config of record
 SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
                "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
@@ -1364,7 +1364,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's docket fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
+    """A workload's docket fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -1493,7 +1493,7 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
 
 
 def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
-    """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
+    """``weights-registration``, the committer's: the workload's weights (`window_weights.weights_registration` under the
     φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
     file sampled there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
@@ -1822,7 +1822,7 @@ def _carried(tmp_path: Path, monkeypatch, w1: WA.Advice, w0: WA.Advice = W0) -> 
 
 
 def test_a_served_window_s_carried_requests_follow_from_the_last_window_s_close(tmp_path, monkeypatch):
-    """The verifier reads a served window's advice as `window_advice`'s, so a window may carry requests in, and holds them to
+    """The verifier reads a workload's advice as `window_advice`'s, so a window may carry requests in, and holds them to
     the close of the window before it, opened under that window's docket: each carried request at its field in each of
     that window's edge ports (`edge.carried`)."""
     c = _carried(tmp_path, monkeypatch, W1)
@@ -1982,7 +1982,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
 def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
                                                                                                       capsys):
-    """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
+    """TINY's workload over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
     writes its record from the advice alone: each unit reads the gate and up projection's output, a row before the window, so
     the record declares that port window ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1;
     r1, arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit is other
@@ -2182,7 +2182,7 @@ OPT_IN = pytest.mark.skipif(opt.get("VERITY_SLOW") != "1", reason="over five min
 @pytest.mark.slow
 @OPT_IN
 def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
-    """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
+    """`commit1` on the sealed workload, the per-expert tables read under the committer's key and the expert weights
     composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
     committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
     its docket walks them at each write, so it runs where VERITY_SLOW=1 asks: by name in the nightly cold check, and in

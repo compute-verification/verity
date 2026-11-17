@@ -17,7 +17,7 @@ testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The suite also tests PoUW's pieces of composite's cases (`pouw_piece.py`, on PoUW's difftest cases and a served H1
-# window's line), and v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
+# window's line), and v2's case (`v2_case.py`, on a workload's compose.log), and the two-stage audit's second stage on
 # a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
 # `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
 

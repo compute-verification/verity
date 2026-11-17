@@ -338,7 +338,7 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
 def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
     """The DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same per-request /
     sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S of record from each request
-    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload's `max_tokens`: horizon =
+    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the workload.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload's `max_tokens`: horizon =
     min(max_tokens, Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
     from verity_vllm.check.replay import driver as SR

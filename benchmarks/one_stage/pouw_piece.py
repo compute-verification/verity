@@ -29,7 +29,7 @@ Python reference's (`period_check.case_twin`, which the difftests hold to the Le
 `core_check.case`'s, which is the Lean's too (`pouw-check serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
 undecided, as the check does.
 
-``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
+``--serve-run SERVE_DIR --window K`` takes the inputs from a workload (`served_verdicts.sh`'s serve dir, or its
 ``out/serve``), and names its piece MISSING, with why, wherever the run doesn't hold them (`v1_missing`,
 `period_missing`): the directory then holds only ``missing.json`` saying why, no case and no answer, so `composite.py`
 leaves the protocol out and Lean's verdict on the product names it missing. It prints one ``MISSING`` line and exits
@@ -71,7 +71,7 @@ CASE_FILES = ("params.json", "commitment.bin", "evidence.json", "case.json", "an
 
 
 class Missing(Exception):
-    """Why a served run holds no piece of the protocol."""
+    """Why a workload holds no piece of the protocol."""
 
 
 def canonical(x: Any) -> bytes:
@@ -134,7 +134,7 @@ def _window(serve_dir: Path, k: int) -> dict:
 
 
 def v1_missing(serve_dir: Path, k: int) -> str:
-    """Why served window `k` has no `verity/pouw/v1` case: v1 checks a tile window the proof system registered and
+    """Why workload `k` has no `verity/pouw/v1` case: v1 checks a tile window the proof system registered and
     answered, and a served vLLM window is H1's, or serves no PoUW."""
     try:
         h1 = _window(serve_dir, k).get("pouw_h1")
@@ -149,7 +149,7 @@ def v1_missing(serve_dir: Path, k: int) -> str:
 
 
 def period_missing(serve_dir: Path, k: int) -> str:
-    """Why served window `k` has no `verity/pouw/period/v1` case: the first of its period, its record and its sampled
+    """Why workload `k` has no `verity/pouw/period/v1` case: the first of its period, its record and its sampled
     proof blocks' proof outcomes it lacks."""
     try:
         h1 = _window(serve_dir, k).get("pouw_h1")
@@ -229,7 +229,7 @@ def proved(key: Any, ledger: list[str], pins: list[str], main: list[str], name: 
 def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Path, statements: Path | None,
                   live: Path | None) -> tuple[dict, list[str], list[str], list[dict]]:
     """Period ``verity/pouw/period/v1``'s params (with the close's sessions), ledger, pins log and windows
-    (`credit.PERIOD_KEYS`, statements) from a served run's kept records (module docstring), or Missing naming the
+    (`credit.PERIOD_KEYS`, statements) from a workload's kept records (module docstring), or Missing naming the
     first record or leg it lacks: the closed period ``period.json`` names holding window `k` alone, its record, the
     session, ledger and pins PoUW's served piece fetched (`pouw`), the declared Program, and the sampled calls'
     `statements` and the `live` evidence."""
@@ -266,7 +266,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     listed = close_sessions(ledger, name)
     if listed != [sid, dsid]:
         raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
-                      f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
+                      f"period of one workload, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
     program = serve_dir / "h1/window-program.json.gz"
     if not program.is_file():
         raise Missing(f"no declared window Program (h1/window-program.json.gz) in {serve_dir}, the circuit the "

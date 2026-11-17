@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
+# The workload on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
 for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }

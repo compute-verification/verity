@@ -89,7 +89,7 @@ def test_async_scheduling_serves_with_the_commit_on_or_off(tmp_path):
 
 
 def test_under_the_flag_the_served_target_declares_async_scheduling_and_lag_1(monkeypatch):
-    """``serve.json``'s target (`serve_seal.target_of`), which a served window's φ is read from, declares async scheduling under
+    """``serve.json``'s target (`serve_seal.target_of`), which a workload's φ is read from, declares async scheduling under
     the flag, so the Programs predicted for it are specialized for LAG 1 by declaration; without the flag it declares none,
     as every serve.json before the flag."""
     fake_vllm.install(monkeypatch)["vllm.envs"].VLLM_BATCH_INVARIANT = True

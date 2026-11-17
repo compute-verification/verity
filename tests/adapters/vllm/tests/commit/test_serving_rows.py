@@ -162,7 +162,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
 
 
 def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
-    """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
+    """``index.json`` names what the workload served (a request, its engine step, its token row), so the registration binds its
     hiding leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
     another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
     a rewrite over a world-readable index included."""
