@@ -3809,8 +3809,14 @@ def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_el
     (pod / "cuda-13.3.sh").write_text("export CUDA_TK=/tk\n")
     _script(tmp_path / "bin" / "flock",
             f'echo "$FLOCK_WORK GPU=$GPU CUDA_TK=${{CUDA_TK:-}}" >> {tmp_path}/builds\nshift\nexec "$@"')
-    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards)
+    _script(tmp_path / "bin" / "gpu-lease", f'echo "$@" >> {tmp_path}/leases\nwhile [ "$1" != -- ]; do shift; done\nshift\n'
+                                            'CUDA_VISIBLE_DEVICES=0 exec "$@"')
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards, lease=False)
     assert rc == 0 and "audit" in order, (lines, order)
+    leases = (tmp_path / "leases").read_text().splitlines() if (tmp_path / "leases").exists() else []
+    assert [x.split(" RAYON_NUM_THREADS=")[0] for x in leases] == ([
+        f"1 --wait --on {cards} --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES env -u PYTHONPATH LD_LIBRARY_PATH=/tk/compat:/tk/lib64"]
+        if cards else []), leases
     fw = tmp_path / "fw"
     builds = (tmp_path / "builds").read_text().splitlines()
     assert builds == [f"{fw} GPU=0 CUDA_TK="] + ([f"{fw / 'gpu'} GPU=1 CUDA_TK=/tk"] if cards else [])
@@ -3821,6 +3827,11 @@ def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_el
 def test_the_preflight_refuses_v3c_gpus_that_names_no_cards(tmp_path):
     rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="cuda:0")
     assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS is the cards"), lines
+
+
+def test_the_preflight_refuses_v3c_gpus_on_a_node_without_gpu_lease(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="3", lease=False)
+    assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS's cards are held under gpu-lease"), lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [

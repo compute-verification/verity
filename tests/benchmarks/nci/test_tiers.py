@@ -15,6 +15,7 @@ import kappa  # noqa: E402
 import tiers as T  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
+CARD_FILES = ROOT / "hardware/cards"
 
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
@@ -34,7 +35,7 @@ def test_the_gpus_read_the_card_file():
     """`CARD` is the RTX PRO 6000 Server Edition's card file's SMs, tensor rate and tensor clock ceiling (its sheet-form
     `f_max`), and PoUW credits the card file's `clock.sm`: so the clock term is 0, the server's peak is 8 cards at the
     card's FP8 rate (7.485e15 FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    card = load_card("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server", directory=CARD_FILES)
     assert T.CARD == {"sms": number(card["sm"]["count"]), "tensor": number(card["rate"]["tensor"]),
                       "clock_hz": number(card["clock"]["tensor"]) * 10**6}
     sm = card["clock"]["sm"]
