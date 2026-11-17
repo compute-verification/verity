@@ -704,7 +704,7 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
                                             "inference-only": "absent",
                                             **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
-    assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
+    assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
                                 **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
     assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
@@ -1012,20 +1012,30 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
     assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
 
 
-@pytest.mark.parametrize("rows, source, verdict, reason", [
-    ({}, None, "undecided", written("certifier", "sampled-proofs", "wipe")),
-    ({}, NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe")),
-    ({"communication": "reject"}, None, "reject", "certifier reject"),
-    ({"wipe": "missing"}, None, "undecided", "wipe missing; " + written("certifier", "sampled-proofs")),
+@pytest.mark.parametrize("rows, composed, source, verdict, reason", [
+    ({}, "accept", None, "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({}, "accept", NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", None, "reject", "certifier reject"),
 ])
-def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows, source,
-                                                                                verdict, reason):
+def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, rows, composed,
+                                                                                      source, verdict, reason):
     state = tmp_path / "state"
-    published(state, rows, source=source)
+    published(state, rows, composed, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
     assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
-    assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")
-    assert line["combined_by"].endswith("not a Lean verifier's")
+    assert "combined_by" not in line
+
+
+@pytest.mark.parametrize("rows, composed, reason", [
+    ({}, "accept", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", "certifier reject"),
+])
+def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, rows, composed, reason):
+    state = tmp_path / "state"
+    published(state, rows, composed)
+    assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["product"], line["verdict"], line["reason"]) == ("verity/onsite-network/v0", "undecided", reason)
 
 
 def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
