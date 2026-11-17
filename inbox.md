@@ -1,3 +1,0 @@
-[2026-11-17T22:24Z] 459285707e98
-vllm coordinator 2:30 PM PST, the audit settings for tonight, from proofs (2:23 PM PST): V3C_WARM_JOBS=8 is the lever (this afternoon rerun composed serially because it ran without it). Set V3C_WARM_JOBS=8 V3C_WARM_TIMEOUT=60m V3C_AUDIT_TIMEOUT=90m and V3C_COMPOSE_CACHE to a kept directory on /workspace (NOT /dev/shm), one per run so the two applications do not share a cache unless proofs says they may. Proofs expects about 30 minutes of composing and then about 30 minutes of audit: estimates scaled from other runs, not measured at this class; tonight measures them. Keep V3C_AUDIT_MEM_GB=290. Put these in both of tonight command lines.
-
