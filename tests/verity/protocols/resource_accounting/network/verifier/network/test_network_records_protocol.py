@@ -1,4 +1,4 @@
-"""The audit over every published record (`NetworkVerifier.Records`, `network-records serve` and `network-records verdicts`,
+"""The audit over every published record (`NetworkCheck.Records`, `network-records serve` and `network-records verdicts`,
 with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
@@ -7,7 +7,7 @@ sampled
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
 changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the
-commitment with its own decoder (`records`, from `NetworkVerifier/Records.lean`'s module docstring), not with
+commitment with its own decoder (`records`, from `NetworkCheck/Records.lean`'s module docstring), not with
 `lean_audit.encode`, which writes the cases, and runs the real `Audit`."""
 
 from __future__ import annotations

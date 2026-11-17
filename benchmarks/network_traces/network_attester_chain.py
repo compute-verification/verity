@@ -32,7 +32,7 @@ the refusal stays with the form that reads them.
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
-* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkVerifier.RowsAudit`,
+* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
   `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
   each execution phase's three records (`network_attester_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
   and then certified. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer

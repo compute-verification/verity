@@ -1,7 +1,7 @@
 import NetworkVerifier.Registered
 
 /-!
-What `NetworkVerifier.Registered` answers on a file of vectors, for `test_network_certifier_registered.py`, which holds
+What `NetworkCheck.Registered` answers on a file of vectors, for `test_network_certifier_registered.py`, which holds
 `registered.py` to it.
 
     lake env lean --run RegisteredVectors.lean VECTORS

@@ -10,7 +10,7 @@ import Mathlib.Data.Nat.Choose.Basic
 /-!
 # The period check's `K` at the terms of the failure forms
 
-`NetworkVerifier.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and again in `schedules`.
+`NetworkCheck.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and again in `schedules`.
 `MonitoringPeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
 patterns of the period's failed connections. These lemmas say what the check's `K` bounds at the terms that count:
 

@@ -23,9 +23,9 @@ meta import InferenceOnlyVerifier.DefinitionDigest
 meta import NetworkVerifier.Period.ConnectionRows
 meta import NetworkVerifier.Period.Start
 
-/-! The period check's structures and their decoding, which `NetworkVerifier.Period` reads: its parameters, commitment,
+/-! The period check's structures and their decoding, which `NetworkCheck.Period` reads: its parameters, commitment,
 evidence, facts and public, and the decoding of each from its JSON. The check and its bound are in
-`NetworkVerifier.Period`, whose module docstring describes both. -/
+`NetworkCheck.Period`, whose module docstring describes both. -/
 
 @[expose] public section
 set_option backward.privateInPublic true

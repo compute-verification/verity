@@ -104,9 +104,9 @@ certifier's parameters carry key entries (each a key, its session and its start)
 key pinned for its link in the prefix that entry's head names.
 
 No theorem reads it, and the certifier's check doesn't read the registration: its link names and key are its
-parameters. The code reads both off the registered Site (`NetworkVerifier.Registered.registered`), but nothing holds the
+parameters. The code reads both off the registered Site (`NetworkCheck.Registered.registered`), but nothing holds the
 check's parameters to that reading. It becomes a lemma when the certifier's parameters are the ones
-`NetworkVerifier.Registered.registered` returns at an accepted log's view, with a property that this reading is
+`NetworkCheck.Registered.registered` returns at an accepted log's view, with a property that this reading is
 `certifiedKeys`. -/
 def CertifiedIn (p : NetworkVerifier.Check.Params) (v : View) : Prop :=
   certifiedKeys v = (fun l => (l, Flock.hexOf p.key)) '' {l | l ∈ p.egress.toList ++ p.ingress.toList}
