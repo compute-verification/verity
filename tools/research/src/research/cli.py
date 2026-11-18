@@ -178,6 +178,20 @@ def _harness_parser(prog: str) -> argparse.ArgumentParser:
     return ap
 
 
+def _unknown_harness_opts(harness_opts: list[str]) -> list[str]:
+    """What `research run` passes on to its runner that the runner's parser doesn't take. A run sent to a machine is parsed
+    there, after its tree is shipped, so the launch names these before it ships anything."""
+    known = _harness_parser("research run")._option_string_actions
+    unknown, i = [], 0
+    while i < len(harness_opts):
+        o = harness_opts[i]
+        act = known.get(o.split("=", 1)[0]) if o.startswith("-") else None
+        if act is None:
+            unknown.append(o)
+        i += 1 if act is None or act.nargs == 0 or "=" in o else 2
+    return unknown
+
+
 def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
     """Mirror of the job the harness would build for this namespace (telemetry.run.run), so that pre-writing job.json changes
     nothing the harness records.  Kept in one place; if the harness's call changes upstream, change this."""
@@ -408,6 +422,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if not ns.claimed and (unknown := _unknown_harness_opts(harness_opts)):
+        print(f"research run: unrecognized arguments: {' '.join(unknown)}: neither `research run` nor the runner it starts takes "
+              "them, here or on a machine (`research run --help`; the runner's are research/telemetry/run.py's add_args)",
+              file=sys.stderr)
+        return 2
     if ns.env_host:
         from .pods import registry
 
@@ -615,7 +634,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
                                            ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
-        print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue", file=sys.stderr)
+        print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue"
+              + ("; without it a run's longest time is --timeout (`--timeout 2h`)" if ns.max_min is not None else ""), file=sys.stderr)
         return 2
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
@@ -1446,8 +1466,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     `auto.closed`). ``docs`` keeps what it read of the machines (`auto.read`): given them again, it places the job from
     them and asks no machine."""
     from . import auto
+    from .telemetry.run import RAISE_LIMIT
 
     docs = {} if docs is None else docs
+    untimed = ([f"it is stopped {AUTO_MAX_MIN} min after it starts, the default time limit: {RAISE_LIMIT}"]
+              if ns.max_min is None and remote.flag_value(harness_opts, "--timeout") is None else [])
     cpus = ns.cpus or AUTO_CPUS
     budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
     mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
@@ -1481,7 +1504,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             told = f"warning: {told}" + (f". {cut}" if cut else "")
     if target is None:
         ns.placed = {"machine": auto.AUTO_NODE, "pool": None,
-                     "said": [f"queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", *([told] if told else [])]}
+                     "said": [f"queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", *([told] if told else []),
+                              *untimed]}
         for line in ns.placed["said"]:
             print(f"research run --on auto: {line}", file=sys.stderr)
         return harness_opts
@@ -1493,7 +1517,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
-    ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
+    ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told, *untimed]}
     ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)

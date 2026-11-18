@@ -333,6 +333,9 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
     assert main([*plain, "--gpu-host", "--", "true"]) == 2
     assert "--gpu-host declare a job to the queue" in capsys.readouterr().err
+    assert main([*plain, "--max-min", "120", "--", "true"]) == 2
+    assert capsys.readouterr().err.strip().endswith("--max-min declare a job to the queue and mean nothing without --queue; "
+                                                    "without it a run's longest time is --timeout (`--timeout 2h`)")
 
 
 def test_gpu_host_reaches_the_queue_as_its_flag(tmp_path, monkeypatch, capsys):
