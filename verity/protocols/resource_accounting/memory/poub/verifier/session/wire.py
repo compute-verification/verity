@@ -183,8 +183,8 @@ def registration_of(d: dict) -> audit.Registration:
 
 
 def origin_json(origin: audit.Origin) -> dict:
-    """A re-key's origin as an append message names it: {"registered": a} or {"append": k, "at": o}."""
-    return {"registered": origin[1]} if origin[0] == "registered" else {"append": origin[1], "at": origin[2]}
+    """A re-key's origin as an append message names it: {"registered": lo} or {"append": k}, k a slot."""
+    return {origin[0]: origin[1]}
 
 
 def origin_of(d: object) -> audit.Origin | None:
@@ -193,9 +193,9 @@ def origin_of(d: object) -> audit.Origin | None:
         return None
     if type(d) is dict and d.keys() == {"registered"}:
         return ("registered", d["registered"])
-    if type(d) is dict and d.keys() == {"append", "at"}:
-        return ("append", d["append"], d["at"])
-    raise ValueError(f"an append's origin is {{'registered': a}} or {{'append': k, 'at': o}}, not {d!r}")
+    if type(d) is dict and d.keys() == {"append"}:
+        return ("append", d["append"])
+    raise ValueError(f"an append's origin is {{'registered': lo}} or {{'append': k}}, not {d!r}")
 
 
 def commitment_of(d: dict) -> coins.LiveCommitment:
