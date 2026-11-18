@@ -23,7 +23,7 @@ sys.path[:0] = [str(HERE.parents[2] / "benchmarks" / "prove_path"), str(HERE.par
 import a8 as A8  # noqa: E402
 import served_statics_zk as Z  # noqa: E402
 
-FIXTURE = HERE.parents[2] / "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json"
+FIXTURE = HERE.parents[2] / "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json"
 WINDOW = [((0, 1, 0, 0, 5), (1, 2, 0, 0, 3)), ((0, 1, 1, 5, 1), (1, 2, 1, 3, 1)), ((0, 1, 1, 6, 1), (1, 2, 1, 4, 1))]
 RUN_ROOT = bytes(range(64))
 COUNT, POS = 1 << SS.FLAGS.index("count"), 1 << SS.FLAGS.index("pos")

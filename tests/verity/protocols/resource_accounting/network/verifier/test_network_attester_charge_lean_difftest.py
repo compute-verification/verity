@@ -20,7 +20,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode
+from verity.protocols.interface.charge import arith_encode
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "resource_accounting" / "network" / "attester" / "program" / "lean"
 SCRIPT = LEAN / "scripts" / "charge_vectors.py"
