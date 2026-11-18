@@ -290,6 +290,54 @@ def orderedWire (o : List UnitRange) (w : Wire) : Bool :=
       let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
       (ranksIn o w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
 
+/-- The order's ranges by template, each template's sorted by first unit, with their ranks. -/
+def orderIndex (o : List UnitRange) : Std.HashMap String (Array (Nat × Nat × Nat)) :=
+  let m := o.zipIdx.foldl (fun (m : Std.HashMap String (Array (Nat × Nat × Nat))) ((t, p0, n), a) =>
+    m.insert t ((m.getD t #[]).push (p0, n, a))) {}
+  m.map fun _ rs => rs.qsort fun x y => x.1 < y.1
+
+/-- Of ranges `rs` sorted by first unit and tiling their template's units (`orderOk`), those meeting units `[lo, hi)`:
+the first ending past `lo` by a binary search, then those from it starting below `hi`. -/
+def meetsAt (rs : Array (Nat × Nat × Nat)) (lo hi : Nat) : List (Nat × Nat × Nat) := Id.run do
+  let mut l := 0
+  let mut h := rs.size
+  for _ in [0:64] do
+    if l < h then
+      let m := (l + h) / 2
+      if rs[m]!.1 + rs[m]!.2.1 ≤ lo then l := m + 1 else h := m
+  let mut out := []
+  for i in [l:rs.size] do
+    let (p0, n, a) := rs[i]!
+    if hi ≤ p0 then break
+    if max p0 lo < min (p0 + n) hi then out := (p0, n, a) :: out
+  return out
+
+/-- `orderedWire` over the index: the ranges of the wire's reader meeting its reader units, and for each the ranges
+of its writer meeting the bounds on the writers it reads there (`meetsAt`), ranked below it. -/
+def orderedWireAt (ix : Std.HashMap String (Array (Nat × Nat × Nat))) (w : Wire) : Bool :=
+  (meetsAt (ix.getD w.reader #[]) w.start (w.start + w.readerUnits)).all fun (p0, n, a) =>
+    let s := w.box (w.indicesIn p0 n).1 (w.indicesIn p0 n).2
+    (meetsAt (ix.getD w.writer #[]) s.1.toNat (s.2.toNat + 1)).all (·.2.2 < a)
+
+/-- `orderCode c orderedWire`, with the order indexed once (`orderIndex`, `orderedWireAt`). -/
+def orderCodeAt (c : Wiring) : Option Refusal :=
+  match orderOf c with
+  | .error r => some r
+  | .ok o =>
+    let ix := orderIndex o
+    firstWire c fun w => if orderedWireAt ix w then none else some .order
+
+private def toyOrders : List (List UnitRange) :=
+  [[("W", 0, 4), ("R", 0, 4)], [("R", 0, 4), ("W", 0, 4)], [("W", 0, 2), ("R", 0, 2), ("W", 2, 2), ("R", 2, 2)],
+   [("R", 0, 1), ("W", 0, 4), ("R", 1, 3)], [("W", 2, 2), ("R", 2, 2), ("W", 0, 2), ("R", 0, 2)]]
+
+private def toyOrdered : List Wire :=
+  (List.range 4).flatMap fun s => (List.range 4).filterMap fun n =>
+    if 0 < n && s + n ≤ 4 then some (toyWire "x" s n 0) else none
+
+#guard toyOrders.all fun o => toyOrdered.all fun w => orderedWireAt (orderIndex o) w == orderedWire o w
+#guard (toyOrders.map fun o => toyOrdered.all (orderedWire o)) == [true, false, true, false, false]
+
 /-- The order's refusal (`orderOf`), else the first wire `f` doesn't put in it, by index. -/
 def orderCode (c : Wiring) (f : List UnitRange → Wire → Bool) : Option Refusal :=
   match orderOf c with
@@ -303,7 +351,7 @@ def check (c : Wiring) : Except Refusal Summary :=
     | some r => .error r
     | none =>
       if !pairwiseDisjointSorted c.wires then .error ⟨.overlap, none⟩
-      else match orderCode c orderedWire with
+      else match orderCodeAt c with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
