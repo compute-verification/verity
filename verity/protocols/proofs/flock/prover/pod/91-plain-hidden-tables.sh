@@ -57,16 +57,15 @@ LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 LP=$!
 
 # the CPU prover, cached per pod under its sources' key (91-plain-hidden.sh's)
-SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protocols/proofs/flock/prover/pod/60-circuit.sh verity/protocols/proofs/flock/prover/*.patch verity/protocols/proofs/flock/prover/cuda_*_patch.py \
   $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
+BIN=$W/bin-$KEY-g0; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
   rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
 fi
 if [ ! -x $BIN/flock-circuit ]; then
-  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 SM=$SM bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
   mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
 fi
 exec 8>&-

@@ -2,8 +2,8 @@
 
 Each twin follows its kernel's carry chains (`mad.lo.cc`, `madc.hi.cc`, `addc`, the funnel-shift doubling) and asserts
 every carry the kernel drops is zero, which is where a form's bound fails (FOLD 3's first build carried 2^37 out of
-2^512 where it assumed < 570). The device is gated on the node (`sq.sh`: `sq gate` against `sq_gate.py` before any
-timing); these catch a carry-bound slip before a GPU is leased.
+2^512 where it assumed < 570). The device is gated on the node (`verity calibrate rate_squaring sq`: `sq gate` against
+`sq_gate.py` before any timing); these catch a carry-bound slip before a GPU is leased.
 """
 
 from __future__ import annotations

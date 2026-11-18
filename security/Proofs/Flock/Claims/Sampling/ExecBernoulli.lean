@@ -16,10 +16,10 @@ exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rej
 * `bernLoop_streamOf`, `bernL_le`: on a stream of uniform bytes the loop reads, unit by unit, `uniformL` on the rest of
   the stream (`SampleExec.uniformL_le`), so a unit of `B` is missed with probability `(den − num)/den` independently of
   what came before, and `B` with at most `((den − num)/den)^|B|`.
-* `SamplingDesign.bernoulli_exec_escape_le`: over a uniform stream of `L` bytes, the executable returns a sample missing `B` with
-  probability at most `Verity.SamplingDesign.bernoulli`'s missProb, `((den − num)/den)^|B|` (`SamplingDesign.bernoulli_escape`).
+* `SamplingDesign.bernoulli_exec_missProb_le`: over a uniform stream of `L` bytes, the executable returns a sample missing `B` with
+  probability at most `Verity.SamplingDesign.bernoulli`'s missProb, `((den − num)/den)^|B|` (`SamplingDesign.bernoulli_missProb`).
 * `SamplingDesign.bernoulli_append`: a sample that succeeds is the same on a longer stream, so `Flock.Draw.onWith`'s extend-and-rerun
-  never changes it; `SamplingDesign.sampleOS_bernoulli_escape_le`, `SamplingDesign.execOS_bernoulli_escape_le`: the live sample
+  never changes it; `SamplingDesign.sampleOS_bernoulli_missProb_le`, `SamplingDesign.execOS_bernoulli_missProb_le`: the live sample
   (`Flock.Draw.drawWith`, `SamplingDesign.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecSampleOS.lean` proves
   for the other three sampling designs.
 -/
@@ -242,22 +242,22 @@ theorem bernoulli_append (num den n : ℕ) (a b : ByteArray) (D : Array ℕ)
   rw [SampleExec.bernoulli_eq num den n _ h0 h1] at h ⊢
   exact SampleExec.bernLoop_append num den a b _ _ _ D h
 
-theorem bernoulli_escape_empty {n num den : ℕ} [NeZero den] (h : num ≤ den) : (Verity.SamplingDesign.bernoulli n num den).missProb ∅ = 1 := by
-  rw [bernoulli_escape h, Finset.card_empty, pow_zero]
+theorem bernoulli_missProb_empty {n num den : ℕ} [NeZero den] (h : num ≤ den) : (Verity.SamplingDesign.bernoulli n num den).missProb ∅ = 1 := by
+  rw [bernoulli_missProb h, Finset.card_empty, pow_zero]
 
 /-- **The executable Bernoulli sample escapes no more often than the model's** (`Verity.SamplingDesign.bernoulli`), on a uniform stream of
 `L` bytes. -/
-theorem bernoulli_exec_escape_le (n num den L : ℕ) [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
+theorem bernoulli_exec_missProb_le (n num den L : ℕ) [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.bernoulli num den n (streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
       (Verity.SamplingDesign.bernoulli n num den).missProb B := by
   classical
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
-  · rw [bernoulli_escape_empty h]; exact SampleExec.prCoin_le_one _
+  · rw [bernoulli_missProb_empty h]; exact SampleExec.prCoin_le_one _
   by_cases h0 : num = 0
   · subst h0
-    rw [bernoulli_escape h]
+    rw [bernoulli_missProb h]
     refine (SampleExec.prCoin_le_one _).trans (le_of_eq ?_)
     rw [bernFactor, Nat.cast_zero, zero_mul, zero_add, Nat.sub_zero,
       ENNReal.div_self (by exact_mod_cast hden.ne') (ENNReal.natCast_ne_top _), one_pow]
@@ -286,7 +286,7 @@ theorem bernoulli_exec_escape_le (n num den L : ℕ) [NeZero den] (h : num ≤ d
     _ ≤ (((den - num : ℕ) : ℝ≥0∞) / den) ^ ((List.range' 0 n).filter (· ∈ B')).length :=
         SampleExec.bernL_le num den (L + 1) hden B' _ L
     _ = (Verity.SamplingDesign.bernoulli n num den).missProb B := by
-        rw [SampleExec.length_filter_range' n B' hB'n, hcard, bernoulli_escape h, bernFactor, mul_zero, zero_add]
+        rw [SampleExec.length_filter_range' n B' hB'n, hcard, bernoulli_missProb h, bernFactor, mul_zero, zero_add]
 
 theorem sampleWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Option ByteArray) (num den pop : ℕ) (s : ℕ → ℕ) :
     (Flock.Draw.drawWith get (.bernoulli num den) pop).run s =
@@ -300,7 +300,7 @@ theorem sampleWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Opt
 
 /-- **The live Bernoulli sample escapes no more often than the model's** (`Verity.SamplingDesign.bernoulli`), extend-and-rerun included, on a
 uniform byte source (A3). -/
-theorem sampleOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
+theorem sampleOS_bernoulli_missProb_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ d, runOS (t ω) (.bernoulli num den) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤
       (Verity.SamplingDesign.bernoulli n num den).missProb B := by
@@ -337,14 +337,14 @@ theorem sampleOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤
           ∃ D, Flock.Draw.bernoulli num den n (streamOf g) = some D ∧ ∀ u ∈ B, u.val ∉ D)
     _ ≤ (Verity.SamplingDesign.bernoulli n num den).missProb B := by
         rw [Fin.prod_univ_one]
-        exact bernoulli_exec_escape_le n num den (L 0) h B
+        exact bernoulli_exec_missProb_le n num den (L 0) h B
 
 /-- **The live Bernoulli sample, as a sampling design, escapes no more often than `Verity.SamplingDesign.bernoulli`**, on a uniform byte source (A3). -/
-theorem execOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+theorem execOS_bernoulli_missProb_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (L : Fin 1 → ℕ) (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t)
     (B : Finset (Fin n)) :
     (execOS (n := n) t (.bernoulli num den) n).missProb B ≤ (Verity.SamplingDesign.bernoulli n num den).missProb B :=
-  execOS_escape_le_of t _ n B _ (fun hB => by rw [hB, bernoulli_escape_empty h])
-    (sampleOS_bernoulli_escape_le n num den h L t ht B)
+  execOS_missProb_le_of t _ n B _ (fun hB => by rw [hB, bernoulli_missProb_empty h])
+    (sampleOS_bernoulli_missProb_le n num den h L t ht B)
 
 end Spot.Sampling.SamplingDesign
