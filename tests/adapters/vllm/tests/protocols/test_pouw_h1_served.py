@@ -45,7 +45,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR

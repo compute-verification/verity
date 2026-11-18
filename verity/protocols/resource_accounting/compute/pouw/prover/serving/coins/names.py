@@ -10,7 +10,7 @@ import hashlib
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
 #: the window Program's parameter prefix, the same for every window of a period
 PREFIX = "h1/"
