@@ -4390,12 +4390,15 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
 @pytest.mark.parametrize("challenger", ["local", "loopback:127.0.0.1:7000"])
 def test_a_run_of_record_takes_a_development_sessions_coins_as_simulated_unless_placement_is_held(tmp_path, challenger):
     """With VERITY_HOLD_PLACEMENT unset, a run of record (DEVELOPMENT unset) on a local or loopback session passes the
-    preflight: V3c's audit runs on it and its COINS line says the coins are simulated, not the auditor's challenger's,
-    and step 3's audit of record with V3c off is let through too."""
+    preflight: V3c's audit runs on it and its COINS line, which is published, names the session's form alone (no
+    loopback host) and says the coins are simulated, not the auditor's challenger's, and step 3's audit of record with
+    V3c off is let through too."""
     rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, VERITY_HOLD_PLACEMENT=None, V3C_CHALLENGER=challenger)
     assert rc == 0 and "audit" in order, (lines, order)
-    assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {challenger}), "
+    form = challenger.split(":")[0]
+    assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {form}), "
                         "simulated: not the auditor's challenger"), lines[0]
+    assert "127.0.0.1" not in (tmp_path / "out" / "verdicts.txt").read_text()
     rc, lines, order, _limits = _v3c(tmp_path / "step-3", (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None,
                                      VERITY_HOLD_PLACEMENT=None, PP_CHALLENGER=challenger, PREFLIGHT_ONLY="1",
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'step-3' / 'bin'}:{os.defpath}", **NO_V3C)
@@ -8310,3 +8313,54 @@ def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_th
                                        ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
 def test_hold_placement_holds_only_under_exactly_1(env, held):
     assert S.hold_placement(env) is held
+
+
+def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):
+    """The launcher's call to the path prover's runner names its keep under the serve dir's private logs; the runner,
+    failing at its first tool, leaves that tool's error log there and nothing of it under the published output."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    call = next(line for line in script.splitlines() if "bash benchmarks/prove_path/run.sh" in line)
+    keep = re.search(r'PP_KEEP="([^"]+)"', call)
+    assert keep and keep[1].startswith("$LOGS/sampled-proofs"), call
+    assert re.search(r'^LOGS=\$D/private/logs$', script, re.M)
+    tree, home, serve, out = (tmp_path / n for n in ("tree", "home", "serve", "out"))
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "prove_path" / "run.sh", tree / "benchmarks" / "prove_path" / "run.sh")
+    bin_ = home / ".local" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "uv").write_text("#!/bin/sh\necho 'uv sync: resolution failed' >&2\nexit 1\n")
+    (bin_ / "lake").write_text("#!/bin/sh\nexit 0\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    (serve / "windows" / "w0").mkdir(parents=True)
+    logs = serve / "private" / "logs"
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "HOME": str(home), "PP_SERVE_RUN": str(serve),
+           "PP_SERVE_ROWS": str(serve / "windows" / "w0"), "PP_KEEP": keep[1].replace("$LOGS", str(logs)),
+           "OUT": str(out / "sampled-proofs")}
+    r = subprocess.run(["bash", "benchmarks/prove_path/run.sh"], cwd=tree, env=env, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL)
+    assert r.returncode == 5, r.stdout + r.stderr
+    kept = Path(env["PP_KEEP"])
+    assert "resolution failed" in (kept / "sync.log").read_text()
+    assert kept.stat().st_mode & 0o777 == 0o700
+    assert not any("resolution failed" in f.read_text() for f in out.rglob("*") if f.is_file())
+    assert not list(out.rglob("*.log"))
+
+
+UNCHECKED = {
+    "attester-attended-each-block": "not checked by any auditor-side entry: the grader verifies one signature of the memory attester per session (storage: the session's id, coin root, parameters and round times; the wipe: its header, fill times and batch records; the bandwidth audit: one closing signature over its log), which names no period or block; no served path writes a liveness record, and verify_liveness has no caller",
+    "attester-key-pinned-outside-the-case": "not checked by any auditor-side entry: the grader takes the attester's key from the trusted list the case itself carries, which the developer's node fills, and the pins are compared on the served node: the developer's check, built and not yet in force as the auditor's"}
+
+
+@pytest.mark.parametrize("premise", [None, "unmet: the memory attester ran on vy-auditor-2, not the developer's n"])
+def test_a_placements_unchecked_premises_follow_its_trusted_device_by_name(premise):
+    """Each premise a placement's ``unchecked`` names is a term of its own, its name and then its sentence, after the
+    `trusted-device` premise where the placement has one (storage's and the wipe's) and alone where it has none (the
+    bandwidth audit's)."""
+    place = {"links": [], "unchecked": UNCHECKED, **({"trusted-device": premise} if premise else {})}
+    got = S.terms({"answer": {"profile": {"placement": place}}}, None)
+    assert got[:3 if premise else 2] == [*([f"trusted-device {premise}"] if premise else []),
+                                        f"attester-attended-each-block {UNCHECKED['attester-attended-each-block']}",
+                                        "attester-key-pinned-outside-the-case "
+                                        f"{UNCHECKED['attester-key-pinned-outside-the-case']}"]
+    assert S.terms({"answer": {"profile": {"placement": {"links": []}}}}, None) == []
