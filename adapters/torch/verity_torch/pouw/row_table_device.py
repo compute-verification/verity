@@ -10,7 +10,21 @@ from typing import Any
 import numpy as np
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.row_table_kernels import device_lib, hm_tables, leaf_prefixes
 
-__all__ = ["DeviceLibrary", "side_stream"]
+__all__ = ["ARCHS", "DeviceLibrary", "arch", "side_stream"]
+
+#: each compute capability a library is built for and its arch-specific target, the ones `sass_pins.json` pins a ptxas for
+#: (``-arch sm_90a``, ``-arch sm_120a``): the SASS gate passes ptxas's integer-division and div.rn sequences only in a cubin
+#: of a pinned ptxas with its arguments, and a plain sm_90 or sm_120 build has none
+ARCHS = {(9, 0): "90a", (12, 0): "120a"}
+
+
+def arch(major: int, minor: int) -> str:
+    """The target a library is built for on a device of compute capability ``major.minor`` (`ARCHS`); refused for any other."""
+    if (major, minor) not in ARCHS:
+        raise RuntimeError(f"compute capability {major}.{minor} has no arch-specific target the SASS gate's pins cover "
+                           f"(those are {', '.join(f'sm_{a}' for a in ARCHS.values())}): pin its ptxas in sass_pins.json "
+                           "with a numeric run, then add the capability to row_table_device.ARCHS")
+    return ARCHS[major, minor]
 
 
 class DeviceLibrary:
@@ -22,8 +36,7 @@ class DeviceLibrary:
     _of: dict[tuple[Callable[[str], ctypes.CDLL], int], DeviceLibrary] = {}
 
     def __init__(self, torch: Any, device: Any, lib: Callable[[str], ctypes.CDLL], midstates: str, streams: int) -> None:
-        major, minor = torch.cuda.get_device_capability(device)
-        self.lib = lib(f"{major}{minor}")
+        self.lib = lib(arch(*torch.cuda.get_device_capability(device)))
         self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(streams)], 0
         self.stream = self.streams[0]
         with torch.cuda.stream(self.stream):
