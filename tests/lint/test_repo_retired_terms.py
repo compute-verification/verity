@@ -196,6 +196,21 @@ OWN_CAPS = {
     "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     "security/Definitions/Claims/": "the bound on an extractor's reruns that Flock's claims state (`Deploy.cap`, `Arg.cap`)",
+    **dict.fromkeys(("verity/protocols/resource_accounting/network/", "tests/verity/protocols/resource_accounting/network/",
+                     *(f"{t}benchmarks/{b}/" for t in ("", "tests/")
+                       for b in ("network_traces", "network_e2e", "attester_load", "scan_cost"))),
+                    "the network attester's caps (the response cap, a table's cap, a connection's cap on its cells, a "
+                    "statement's members); Pearl's is PoUW's"),
+    **dict.fromkeys(tuple(f"security/{tree}/{area}" for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
+                          for area in ("Certifier", "Network", "ResourceAccounting/Network/")),
+                    "the network attester's caps in its Lean (a period's cap c on each connection's cells, a fail cell "
+                    "below its cap); Pearl's is PoUW's"),
+    **dict.fromkeys(tuple(f"{d}{f}" for d, fs in (("benchmarks/prove_path/", ("run.sh", "public_log.py", "records_audit.py")),
+                                                  ("tests/benchmarks/prove_path/", ("test_records_audit.py",
+                                                                                    "test_run_request_values.py")))
+                          for f in fs),
+                    "a window's cap, the units its members hold, and a registered compiler's public cap on the "
+                    "advice's length; Pearl's is PoUW's"),
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
     **dict.fromkeys(SOFTCAP_CAPS, "a logit soft cap, the softcapped attention chain's `CAP`"),
