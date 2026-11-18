@@ -345,10 +345,10 @@ def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
 
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/
-def sha512Msg (m : _root_.Claims.Msg) : _root_.Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
+def sha512Msg (m : _root_.Hash.Msg) : _root_.Hash.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
 /-- A pair of byte strings as a pair of messages, as `Claims.Finder` outputs one. -/
-def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.Msg := (xy.1.data.toList, xy.2.data.toList)
+def msgPair (xy : ByteArray × ByteArray) : _root_.Hash.Msg × _root_.Hash.Msg := (xy.1.data.toList, xy.2.data.toList)
 
 /-- The run a verdict's input is, with its loaded passes, the registration record it names and a table. -/
 def runOf (i : Input) (passes : List Pass) (w : Lean.Json) (T : Table) : Run :=

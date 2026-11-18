@@ -31,7 +31,7 @@ open Finset
 (`breakPr`) rather than through `ecr/sha-512`: each slice's bound is at most 1 and at most
 `ε + R (δb + δz) + βb Σ_w Pr[fb … w] + βz Σ_w Pr[fz … w]`, and the slices average. -/
 theorem serviceFloorPerProver_breakPr_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
-    {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
       (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
       ∃ Bind ZK : Fin R → Paths Ω R → Prop,
@@ -71,7 +71,7 @@ theorem serviceFloorPerProver_breakPr_of_slices {Mc : Machine} {S : Service} {Ω
 /-- **The fork finders' error read through `ecr/sha-512`**: at any budget constants, an adversary's error at its
 finders' collision probabilities is at most its `breakBound`, which reads each finder through `Claims.ecrBound` at
 `cb · time M + db` (binding) and `cz · time M + dz` (zero knowledge): `ofReal (Pr) ≤ ecrBound` at every budget. -/
-theorem breakPr_le_breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+theorem breakPr_le_breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Hash.Msg → Hash.Msg)
     (fb fz : Finders Mc S R) (cb db cz dz ε δb βb δz βz : ℝ) (hβb : 0 ≤ βb) (hβz : 0 ≤ βz) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) :
     breakPr sha fb fz ε δb βb δz βz Ω M ≤ breakBound sha fb fz cb db cz dz ε δb βb δz βz Ω M := by
@@ -354,7 +354,7 @@ theorem card_ojSpot : Fintype.card (Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) 
 end Honest
 
 /-- `StagedFloorPerProverHonest` at every `sha` and `kz`: the honest verifier hashes nothing. -/
-theorem StagedFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+theorem StagedFloorPerProverHonest_at (sha : Hash.Msg → Hash.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (DStage 1 1 1 7 1 1) 1)
       (run : RunMap funMachine S.toService 1 1 1 1 7 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
       ServiceSoundStagedPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -384,7 +384,7 @@ theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloo
   StagedFloorPerProverHonest_at id 1
 
 /-- `OverlapFloorPerProverHonest` at every `sha` and `kz`. -/
-theorem OverlapFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+theorem OverlapFloorPerProverHonest_at (sha : Hash.Msg → Hash.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1)
       (run : ORunMap funMachine S.toService 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
       (c : S.Com) (a a' : S.Ans),
@@ -423,7 +423,7 @@ theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFl
   OverlapFloorPerProverHonest_at id 1
 
 /-- `StagedFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
-theorem StagedFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+theorem StagedFloorJ10RPerProverHonest_at (sha : Hash.Msg → Hash.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
       (run : JRunMap funMachine S.toService 1 1 1 1 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
       ServiceSoundStagedJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
@@ -448,7 +448,7 @@ theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.Staged
   StagedFloorJ10RPerProverHonest_at id 1
 
 /-- `OverlapFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
-theorem OverlapFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+theorem OverlapFloorJ10RPerProverHonest_at (sha : Hash.Msg → Hash.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1)
       (run : JORunMap funMachine S.toService 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
       (c : S.Com) (a a' : S.Ans),
@@ -483,7 +483,7 @@ every commitment, seed and answer, every coin map onto `R` rounds, every `sha` a
 `ServiceFloorPerProver` at `breakPr` with the luck `2^{−40}` and zero break terms fails in `funMachine`: a constant
 adversary is accepted at every seed and charged nothing, below `F`, while its error is `2^{−40}`. -/
 theorem floorPerProver_acceptAll (S : HashedService) [Nonempty S.Com] [Nonempty S.Ans] (Ω : Type) (R : ℕ)
-    (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (kz : ℕ) (F : ℝ)
+    (e : S.Seed ≃ Paths Ω R) (sha : Hash.Msg → Hash.Msg) (kz : ℕ) (F : ℝ)
     (hacc : ∀ c σ a, S.verify c σ a = true) (hF : 0 < F) :
     ¬ ServiceFloorPerProver funMachine S.toService F
       (breakPr sha (forkFinders (Mc := funMachine) S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ 0 0 0 0) := by

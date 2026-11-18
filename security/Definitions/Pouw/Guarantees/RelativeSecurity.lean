@@ -181,7 +181,7 @@ runs charged below `(R − 160 ln 2) · St · κ L n n' B − Vmax` with probabi
 `breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
-    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundStagedPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -198,7 +198,7 @@ commits first has its accepted runs charged below `(R − 274 ln 2) · St · κ 
 `breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
-    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundStagedPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -216,7 +216,7 @@ has its accepted runs charged below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t 
 def OverlapFloorKPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
     (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
-    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundOverlapPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -235,7 +235,7 @@ below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at 
 def OverlapFloorKOneSidedPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
     (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
-    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundOverlapPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -329,7 +329,7 @@ first having its accepted runs charged below `(R − 274 ln 2) · St · κ L n n
 `breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedJ10RPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
-    (run : JRunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : JRunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundStagedJ10RPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
@@ -345,7 +345,7 @@ first having its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t 
 def OverlapFloorKOneSidedJ10RPerProver : Prop :=
   ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
-    (run : JORunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (run : JORunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Hash.Msg → Hash.Msg) (kz : ℕ)
     (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     ServiceSoundOverlapJ10RPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)

@@ -129,10 +129,10 @@ a decoder recovers from the client's view of the server side (`MonitoringPeriodC
     `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i` (`executionPhasesCount`). -/
 def MonitoringPeriodLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
-    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
+    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Hash.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
     (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
@@ -147,7 +147,7 @@ def MonitoringPeriodLeakChecked : Prop :=
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
+    (x : Z → Fin n → Hash.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H),
     (∀ m, ScopeAcc D lay k m →
         CheckedWitness H D (certifierRun H D.commit L K S lay k tops) valid₁ ε₁ m →

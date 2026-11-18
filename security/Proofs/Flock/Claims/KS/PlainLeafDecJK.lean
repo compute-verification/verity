@@ -289,7 +289,7 @@ open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_ofJ` at `LeafFormJ.plain`. -/
 theorem plain_hdecHUAtK_ofJ (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -321,7 +321,7 @@ open Classical Discharge.Tables Claims.Bridge.PlainSample in
 SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtJK keep` for `plainVerdictAt` (`plain_hdecHUAtK_ofJ` at
 `wrPDJK`). -/
 theorem plain_hdecHUAtJK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")

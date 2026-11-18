@@ -70,7 +70,7 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
 
 open Classical in
 /-- **The plain bound at one tape and table, from salted sessions after `Commit`, at any escapes, at `leafPlain`**: `plain_le_sessionsE`'s proof, by `session_sound_of_table_accL_sc` at `leafPlain`. -/
-theorem plain_le_sessionsEUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
+theorem plain_le_sessionsEUK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -165,7 +165,7 @@ theorem plain_le_sessionsEUK (keep : Bool → Bool) {x : Claims.Msg} {spec : Ses
   exact key
 
 /-- `plain_le_sessionsEUK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_le_sessionsEU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
+theorem plain_le_sessionsEU {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -204,7 +204,7 @@ open Lean (Json)
 
 open Classical in
 /-- **A simulator of each prover at the verdict at the sample, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
-def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+def PlainSimWrPAtDU {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -225,7 +225,7 @@ def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : table
           (fun r ℓ (i : Fin ((V false).k x)) =>
             Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
-    ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
+    ∀ ω : Ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
       (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
       (_ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -253,7 +253,7 @@ def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : table
 
 open Classical in
 /-- **A simulator at the verdict at the sample gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
-theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plain_tableBoundθAt_of_simDU {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -310,7 +310,7 @@ theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : Sessi
 
 open Classical in
 /-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
-theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plainSimWrPAtD_of_partsU {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     (h : tables false x = [(spec, st)]) {d : Json} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
@@ -355,7 +355,7 @@ theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 /-- **An in-scope plain statement's hidden outputs not under hm96 leaves are under plain SHA-512 leaves**: the
 deployed scope's leaf rule (`Claims.Flock.InScope`, `ProvedScope.leafOk`). -/
-theorem plain_leafU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_leafU {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (hl : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1") :
     ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted" := by
@@ -374,7 +374,7 @@ theorem plain_leafU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
 /-- **The concrete simulator at a plain-leaf statement**: at a plain statement in scope with hidden outputs under
 `flock-leaf/sha512-unsalted` leaves, `PlainSimWrPAtDU` at the hidden openings and decoders (`plainOpnH`,
 `plain_hdecHUAt`), from the live self-clash's clash (`plainSimClashHU`) and the fork bound (`plainAdv_leU`). -/
-theorem plainSimWrPAtDU_at {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainSimWrPAtDU_at {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -392,7 +392,7 @@ theorem plainSimWrPAtDU_at {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
 /-- **The concrete simulator where the outputs are public or hidden under hm96 leaves**, at every statement: E14's
 `plainSimWD_of_parts` at the clash (`plainSimClashAt_of_later`, `plainSimLaterClashAt`) and the fork bound
 (`plainSimForkLe_of` at `plainSchedAlign` and `plainForkClash`). -/
-theorem plainSimWD_all (x : Claims.Msg) : PlainSimWD x :=
+theorem plainSimWD_all (x : Hash.Msg) : PlainSimWD x :=
   plainSimWD_of_parts (plainSimClashAt_of_later (plainSimLaterClashAt x))
     (plainSimForkLe_of (plainForkAlign_of_slot (plainSlotAlign_of_sched (plainSchedAlign x))) (plainForkClash x))
 
@@ -401,7 +401,7 @@ theorem plainSimWD_all (x : Claims.Msg) : PlainSimWD x :=
 `plain_tableBoundθAt_of_simD` at `plainSimWD_all` where the outputs are public or hidden under hm96 leaves, and
 `plain_tableBoundθAt_of_simDU` at `plainSimWrPAtDU_at` where they are hidden under the one other leaf the scope admits
 (`plain_leafU`). -/
-theorem plain_tableBoundθAt_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
+theorem plain_tableBoundθAt_all {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
   obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno

@@ -464,15 +464,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         return (x.float() @ W.float().T).to(torch.bfloat16)
 
     run = Run(exact_y)
-    exact = _pearl_c_gate(run)
+    exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
-    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
@@ -500,6 +500,34 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
                                                    "lane": "benchmarks", "peer": "node-1"}})
     own = option_settings(entry, protocols_config(live, environ))
     assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
+
+
+def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found(monkeypatch):
+    """A guard never fails open: an arm serving a declared useful-work scheme whose engine exposes no device run is
+    refused, naming the scheme, and not passed as ``provided`` False; the run Pearl+'s attach holds (``llm.scheme.run``)
+    is the one gated; an arm that serves no declared scheme keeps its unprovided gate."""
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+
+    def engine(arm, scheme):
+        got = object.__new__(E._VllmEngine)
+        got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+        got.llm = SimpleNamespace(protocols=None, scheme=scheme)
+        return got
+
+    for attached in (None, SimpleNamespace(run=None)):
+        gate = engine(arm, attached).custom_gate()
+        assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
+        assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
+    run = object.__new__(PearlCDeviceRun)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: {"passed": r is run and s == "pearl-plus", "provided": True})
+    assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
+    h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
+    assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

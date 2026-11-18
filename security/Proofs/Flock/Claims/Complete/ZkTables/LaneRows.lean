@@ -211,10 +211,10 @@ theorem foldKs_size_pow (ch : List F256) (a : Array F256) {n j : ℕ} (ha : a.si
     (hjn : j ≤ n) : (Lg.foldKs (ch.take j) a).size = 2 ^ (n - j) := by
   rw [Lg.foldKs_size, ha, List.length_take, Nat.min_eq_left hj, Nat.pow_div hjn (by norm_num)]
 
-theorem laneCh_length (resp : ℕ → Claims.Msg) (k0 L : ℕ) : (ZkTables.Level0.laneCh resp k0 L).length = k0 := by
+theorem laneCh_length (resp : ℕ → Hash.Msg) (k0 L : ℕ) : (ZkTables.Level0.laneCh resp k0 L).length = k0 := by
   simp [ZkTables.Level0.laneCh]
 
-theorem laneW0_size (resp : ℕ → Claims.Msg) (n L : ℕ) (b : Array F128) :
+theorem laneW0_size (resp : ℕ → Hash.Msg) (n L : ℕ) (b : Array F128) :
     (ZkTables.Level0.laneW0 resp n L b).size = b.size := by
   simp [ZkTables.Level0.laneW0, Lg.addScaled_size, Lg.embedF_size]
 
@@ -303,7 +303,7 @@ section Lanes
 
 open ZkTables.Level0
 
-variable {resp : ℕ → Claims.Msg} {sch : Schedule} {T : F128} {tb b : Array F128} {lay : Zk.PadLayout}
+variable {resp : ℕ → Hash.Msg} {sch : Schedule} {T : F128} {tb b : Array F128} {lay : Zk.PadLayout}
   {hv : Array F128} {rep : ℕ} {extra : ℕ → ℕ → F128} {L : ℕ} {P : LigeritoProof} {zl : Zk.Level0Msgs}
   {rc : Zk.L0Rec}
 

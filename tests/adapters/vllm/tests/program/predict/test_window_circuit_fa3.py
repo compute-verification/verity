@@ -41,6 +41,7 @@ from verity_vllm.program.predict.window_circuit import (
     Grain,
     PearlTables,
     WindowClass,
+    check_provable,
     class_circuit,
     window_circuit,
 )
@@ -85,8 +86,8 @@ def test_an_fa3_head_is_v20s_calls_reading_a_key_and_a_value_row_a_position():
     windows of the class are one circuit, blocks included, with the weights and the scan state pinned no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered()
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN, provable=False)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n: Counter[str] = Counter()
     for fn, k in circuit.templates:
@@ -124,8 +125,8 @@ def test_an_attention_with_no_cut_is_its_heads_each_reading_a_key_and_a_value_ro
     v20's first block reads (`_reads_its_keys_and_values`). Two windows of the class are one circuit, no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered(GUARDED)
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN, provable=False)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n = {_label(fn): k for fn, k in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Attention", "AttnBlock", "AttnHeadEnd"))} == {
@@ -158,6 +159,7 @@ def test_bf16_llama_3_2_1b_on_sm_90_lowers_wired_at_4_27_2(tied):
     and 64 rows, a template each. Cut at Pearl+'s linears, every norm's x is `LinearOut_v3` rows and no norm is cut."""
     reg = _registered(config=json.loads(LLAMA_1B.read_text()))
     circuit = class_circuit(reg, WindowClass(4, 27, 2), tables=PearlTables(PEARL) if tied else None)
+    check_provable(circuit)
     n = {_label(fn): k for fn, k in circuit.templates}
     norms = {lab: k for lab, k in n.items() if lab.startswith("RMSNormFused")}
     if tied:
@@ -177,7 +179,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     grain and 4,32,4 lowers with every unit within 256 rows: each first block reads its values a slice a row of the value
     projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 256 rows where
     o_proj's write 64, is cut at its residual add (8 parts of 256, each 32 rows, and the tail). Every unit is a proof block Flock's
-    composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
+    composer takes (`check_provable`): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
     block). Its numbers (units, templates, registered reads, the heads' census, the most rows and k_log of a proof block,
@@ -185,6 +187,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
     circuit = class_circuit(reg, cls)
+    check_provable(circuit)
     heads: Counter[str]
     heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
     for fn, k in circuit.templates:

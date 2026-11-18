@@ -163,9 +163,9 @@ theorem eq_singleton_of {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[x
 /-- A computation that leaves the sends as they were. -/
 def Still {α : Type} (y : PS α) : Prop := ∀ l, (y.go l).2 = l
 
-theorem go_pure {α : Type} (a : α) (l : Array Claims.Msg) : (Pure.pure a : PS α).go l = (.ok a, l) := rfl
+theorem go_pure {α : Type} (a : α) (l : Array Hash.Msg) : (Pure.pure a : PS α).go l = (.ok a, l) := rfl
 
-theorem go_bind_ok {α β : Type} {y : PS α} {g : α → PS β} {l l'' : Array Claims.Msg} {b : β}
+theorem go_bind_ok {α β : Type} {y : PS α} {g : α → PS β} {l l'' : Array Hash.Msg} {b : β}
     (h : (y >>= g).go l = (.ok b, l'')) : ∃ a l', y.go l = (.ok a, l') ∧ (g a).go l' = (.ok b, l'') := by
   rw [go_bind] at h
   rcases e : y.go l with ⟨r, l'⟩
@@ -200,13 +200,13 @@ theorem Still.mapM_array {α β : Type} {f : α → PS β} (hf : ∀ a, Still (f
   rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
   exact Still.bind (Still.mapM_list hf _) fun _ => Still.pure _
 
-theorem Still.go {α : Type} {y : PS α} (hy : Still y) {l l' : Array Claims.Msg} {r : Except String α}
+theorem Still.go {α : Type} {y : PS α} (hy : Still y) {l l' : Array Hash.Msg} {r : Except String α}
     (h : y.go l = (r, l')) : l' = l := by
   have := hy l
   rw [h] at this
   exact this
 
-theorem Ret.go {α : Type} {y : PS α} {P : α → Prop} (hy : Ret y P) {l l' : Array Claims.Msg} {a : α}
+theorem Ret.go {α : Type} {y : PS α} {P : α → Prop} (hy : Ret y P) {l l' : Array Hash.Msg} {a : α}
     (h : y.go l = (.ok a, l')) : P a := hy l a l' h
 
 /-- The pure computations of `V`, run in `PS`: each leaves the sends as they were. -/
@@ -235,7 +235,7 @@ theorem commitP_pureS (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Le
   unfold commitP
   sim_walk [ho.leaf, ho.node]
 
-theorem link_go (resp : ℕ → Claims.Msg) (a b : Array ByteArray) (l : Array Claims.Msg) :
+theorem link_go (resp : ℕ → Hash.Msg) (a b : Array ByteArray) (l : Array Hash.Msg) :
     ((asksS resp).link a b).go l = (.ok (coinOf (resp l.size)), l.push (linkBody a.toList b.toList)) := rfl
 
 theorem Ret.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) {P : α → Prop} (hp : ∀ a, x = .ok a → P a) :
@@ -243,11 +243,11 @@ theorem Ret.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) {P : �
 
 theorem Still.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) : Still y := fun l => by rw [h l]
 
-theorem monadLift_go {α : Type} (v : V α) (l : Array Claims.Msg) : (monadLift v : PS α).go l = (v, l) := by
+theorem monadLift_go {α : Type} (v : V α) (l : Array Hash.Msg) : (monadLift v : PS α).go l = (v, l) := by
   cases v <;> rfl
 
 /-- A `for` loop over a list in `s`, with an invariant of the steps taken, the loop's state and the sends. -/
-theorem forIn_list_inv {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
+theorem forIn_list_inv {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Hash.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', a ∈ s → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
     ∀ (xs : List α), (∀ a ∈ xs, a ∈ s) → ∀ k b l b' l', inv k b l → (forIn xs b f).go l = (.ok b', l') →
@@ -265,9 +265,9 @@ theorem forIn_list_inv {α β : Type} (f : α → β → PS (ForInStep β)) (inv
 
 /-- A `for` loop over an array, with an invariant of the steps taken, the loop's state and the sends. -/
 theorem forIn_array_inv {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
-    (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', a ∈ xs → inv k b l → (f a b).go l = (.ok r, l') →
+    (inv : ℕ → β → Array Hash.Msg → Prop) (hs : ∀ k a b l r l', a ∈ xs → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
-    {b : β} {l : Array Claims.Msg} {b' : β} {l' : Array Claims.Msg} (h0 : inv 0 b l)
+    {b : β} {l : Array Hash.Msg} {b' : β} {l' : Array Hash.Msg} (h0 : inv 0 b l)
     (e : (forIn xs b f).go l = (.ok b', l')) : inv xs.size b' l' := by
   rw [← Array.forIn_toList] at e
   have := forIn_list_inv f inv xs.toList (fun k a b l r l' ha => hs k a b l r l' (Array.mem_toList_iff.1 ha))
@@ -278,24 +278,24 @@ theorem forIn_array_inv {α β : Type} (xs : Array α) (f : α → β → PS (Fo
 
 /-- Round `r` is the send `b` at index `i`: its retained bytes are the send's body, and its coins, at least one, the
 first `n` of the coin `resp i` reads back as. -/
-def RoundIs (resp : ℕ → Claims.Msg) (i : ℕ) (b : Claims.Msg) (r : Round) : Prop :=
+def RoundIs (resp : ℕ → Hash.Msg) (i : ℕ) (b : Hash.Msg) (r : Round) : Prop :=
   ∃ c, r.bytes = some c ∧ b = Claims.toMsg c ∧ 0 < r.n ∧ r.coins = (Array.range r.n).map (coinOf (resp i))
 
 /-- The rounds `rs` are the sends `bs` from index `i` on. -/
-def Recs (resp : ℕ → Claims.Msg) : ℕ → List Round → List Claims.Msg → Prop
+def Recs (resp : ℕ → Hash.Msg) : ℕ → List Round → List Hash.Msg → Prop
   | _, [], [] => True
   | i, r :: rs, b :: bs => RoundIs resp i b r ∧ Recs resp (i + 1) rs bs
   | _, _, _ => False
 
-theorem Recs.length_eq {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → rs.length = bs.length
+theorem Recs.length_eq {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg}, Recs resp i rs bs → rs.length = bs.length
   | _, [], [], _ => rfl
   | _, _ :: _, _ :: _, h => by simp [Recs.length_eq h.2]
   | _, [], _ :: _, h => h.elim
   | _, _ :: _, [], h => h.elim
 
-theorem Recs.mem {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → ∀ r ∈ rs, 0 < r.n ∧ r.coins.size = r.n
+theorem Recs.mem {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg}, Recs resp i rs bs → ∀ r ∈ rs, 0 < r.n ∧ r.coins.size = r.n
   | _, [], [], _, _, hr => by simp at hr
   | _, _ :: _, _ :: _, h, r, hr => by
     rcases List.mem_cons.1 hr with rfl | hr
@@ -305,8 +305,8 @@ theorem Recs.mem {resp : ℕ → Claims.Msg} :
   | _, [], _ :: _, h, _, _ => h.elim
   | _, _ :: _, [], h, _, _ => h.elim
 
-theorem Recs.append {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg} {rs' : List Round} {bs' : List Claims.Msg},
+theorem Recs.append {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg} {rs' : List Round} {bs' : List Hash.Msg},
       Recs resp i rs bs → Recs resp (i + rs.length) rs' bs' → Recs resp i (rs ++ rs') (bs ++ bs')
   | _, [], [], _, _, _, h => by simpa using h
   | i, _ :: rs, _ :: _, _, _, h, h' =>
@@ -315,18 +315,18 @@ theorem Recs.append {resp : ℕ → Claims.Msg} :
   | _, _ :: _, [], _, _, h, _ => h.elim
 
 /-- A transcript computation of the pure session that adds, on every run, rounds that are the sends it adds. -/
-def Rec (resp : ℕ → Claims.Msg) {α : Type} (y : TMW PS α) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+def Rec (resp : ℕ → Hash.Msg) {α : Type} (y : TMW PS α) : Prop :=
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') →
       ∃ rs bs, t'.rounds.toList = t.rounds.toList ++ rs ∧ l'.toList = l.toList ++ bs ∧ Recs resp l.size rs bs
 
-theorem Rec.same {resp : ℕ → Claims.Msg} {t t' : Transcript} {l l' : Array Claims.Msg} (ht : t'.rounds = t.rounds)
+theorem Rec.same {resp : ℕ → Hash.Msg} {t t' : Transcript} {l l' : Array Hash.Msg} (ht : t'.rounds = t.rounds)
     (hl : l' = l) :
     ∃ rs bs, t'.rounds.toList = t.rounds.toList ++ rs ∧ l'.toList = l.toList ++ bs ∧ Recs resp l.size rs bs :=
   ⟨[], [], by simp [ht], by simp [hl], trivial⟩
 
 /-- **The simulation of `Rec`**: a transcript computation of the pure session is related to itself when it is `Rec`. -/
-def recS (resp : ℕ → Claims.Msg) : With.Sim (TMW PS) (TMW PS) where
+def recS (resp : ℕ → Hash.Msg) : With.Sim (TMW PS) (TMW PS) where
   R _ y := Rec resp y
   pure a t l a' t' l' h := by
     simp only [StateT.run_pure, go_pure, Prod.mk.injEq, Except.ok.injEq] at h
@@ -357,10 +357,10 @@ def recS (resp : ℕ → Claims.Msg) : With.Sim (TMW PS) (TMW PS) where
       cases h2
       exact Rec.same rfl rfl
 
-theorem round_go (resp : ℕ → Claims.Msg) (c : ByteArray) (l : Array Claims.Msg) :
+theorem round_go (resp : ℕ → Hash.Msg) (c : ByteArray) (l : Array Hash.Msg) :
     ((asksS resp).round c).go l = (.ok (coinOf (resp l.size)), l.push (Claims.toMsg c)) := rfl
 
-theorem squeezeP_rec (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
+theorem squeezeP_rec (resp : ℕ → Hash.Msg) (kind : UInt8) (n : ℕ) :
     (recS resp).R (squeezeP (asksS resp) kind n) (squeezeP (asksS resp) kind n) := by
   intro t l a t' l' h
   change (squeezeP (asksS resp) kind n t).go l = _ at h
@@ -381,7 +381,7 @@ theorem squeezeP_rec (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
       trivial⟩
 
 /-- A verifier action that keeps the rounds. -/
-theorem liftTM_rec (resp : ℕ → Claims.Msg) {α : Type} (x : TM α)
+theorem liftTM_rec (resp : ℕ → Hash.Msg) {α : Type} (x : TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds) : (recS resp).R (liftTM x : TMW PS α) (liftTM x) := by
   intro t l a t' l' h
   change (monadLift (x t) : PS _).go l = _ at h
@@ -391,31 +391,31 @@ theorem liftTM_rec (resp : ℕ → Claims.Msg) {α : Type} (x : TM α)
     cases h
     exact Rec.same (hx t _ _ e) rfl
 
-theorem label_rec (resp : ℕ → Claims.Msg) (s : String) :
+theorem label_rec (resp : ℕ → Hash.Msg) (s : String) :
     (recS resp).R (liftTM (label s) : TMW PS Unit) (liftTM (label s)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem absorbF_rec (resp : ℕ → Claims.Msg) (v : F128) :
+theorem absorbF_rec (resp : ℕ → Hash.Msg) (v : F128) :
     (recS resp).R (liftTM (absorbF v) : TMW PS Unit) (liftTM (absorbF v)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem absorbSlice_rec (resp : ℕ → Claims.Msg) (vs : Array F128) :
+theorem absorbSlice_rec (resp : ℕ → Hash.Msg) (vs : Array F128) :
     (recS resp).R (liftTM (absorbSlice vs) : TMW PS Unit) (liftTM (absorbSlice vs)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem absorbK_rec (resp : ℕ → Claims.Msg) (v : F256) :
+theorem absorbK_rec (resp : ℕ → Hash.Msg) (v : F256) :
     (recS resp).R (liftTM (absorbK v) : TMW PS Unit) (liftTM (absorbK v)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem absorbBytes_rec (resp : ℕ → Claims.Msg) (b : ByteArray) :
+theorem absorbBytes_rec (resp : ℕ → Hash.Msg) (b : ByteArray) :
     (recS resp).R (liftTM (absorbBytes b) : TMW PS Unit) (liftTM (absorbBytes b)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem pow_rec (resp : ℕ → Claims.Msg) (v : UInt64) :
+theorem pow_rec (resp : ℕ → Hash.Msg) (v : UInt64) :
     (recS resp).R (liftTM (pow v) : TMW PS Unit) (liftTM (pow v)) :=
   liftTM_rec resp _ fun _ _ _ h => by cases h; rfl
 
-theorem commitP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level)
+theorem commitP_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level)
     (g : Array F128) (salt : ℕ → ByteArray) :
     (recS resp).R (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt) : TMW PS Commit)
       (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt)) := by
@@ -427,60 +427,60 @@ theorem commitP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m
   cases e2
   exact Rec.same rfl rfl
 
-theorem liftT_rec (resp : ℕ → Claims.Msg) {α : Type} {x y : TMW PS α} (h : (recS resp).R x y) :
+theorem liftT_rec (resp : ℕ → Hash.Msg) {α : Type} {x y : TMW PS α} (h : (recS resp).R x y) :
     ((recS resp).st LigState).R (liftT x) (liftT y) :=
   With.Sim.lift_st _ h
 
-theorem sampleP_rec (resp : ℕ → Claims.Msg) : (recS resp).R (sampleP (asksS resp)) (sampleP (asksS resp)) := by
+theorem sampleP_rec (resp : ℕ → Hash.Msg) : (recS resp).R (sampleP (asksS resp)) (sampleP (asksS resp)) := by
   unfold sampleP
   sim_walk [squeezeP_rec resp]
 
-theorem sampleKP_rec (resp : ℕ → Claims.Msg) : (recS resp).R (sampleKP (asksS resp)) (sampleKP (asksS resp)) := by
+theorem sampleKP_rec (resp : ℕ → Hash.Msg) : (recS resp).R (sampleKP (asksS resp)) (sampleKP (asksS resp)) := by
   unfold sampleKP
   sim_walk [squeezeP_rec resp]
 
-theorem zerocheckP_rec (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
+theorem zerocheckP_rec (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
     (recS resp).R (zerocheckP (asksS resp) m digest cap tr) (zerocheckP (asksS resp) m digest cap tr) := by
   unfold zerocheckP sampleVecP
   sim_walk [squeezeP_rec resp, sampleP_rec resp, label_rec resp, absorbBytes_rec resp, absorbSlice_rec resp,
     absorbF_rec resp]
 
-theorem lincheckP_rec (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) :
+theorem lincheckP_rec (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) :
     (recS resp).R (lincheckP (asksS resp) c m tr zc) (lincheckP (asksS resp) c m tr zc) := by
   unfold lincheckP
   sim_walk [sampleP_rec resp, label_rec resp, absorbSlice_rec resp, absorbF_rec resp]
 
-theorem ringSwitchP_rec (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) :
+theorem ringSwitchP_rec (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) :
     (recS resp).R (ringSwitchP (asksS resp) tr claims) (ringSwitchP (asksS resp) tr claims) := by
   unfold ringSwitchP sampleVecP
   sim_walk [squeezeP_rec resp, label_rec resp, absorbSlice_rec resp]
 
-theorem sendMsg_rec (resp : ℕ → Claims.Msg) (m : F256 × F256) :
+theorem sendMsg_rec (resp : ℕ → Hash.Msg) (m : F256 × F256) :
     ((recS resp).st LigState).R (sendMsg m : LP PS Unit) (sendMsg m) := by
   unfold sendMsg
   sim_walk [liftT_rec resp, absorbK_rec resp]
 
-theorem powP_rec (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (kind : ℕ) :
+theorem powP_rec (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (kind : ℕ) :
     ((recS resp).st LigState).R (powP nonce kind : LP PS Unit) (powP nonce kind) := by
   unfold powP
   sim_walk [liftT_rec resp, pow_rec resp]
 
-theorem challengeP_rec (resp : ℕ → Claims.Msg) (split : Bool) :
+theorem challengeP_rec (resp : ℕ → Hash.Msg) (split : Bool) :
     ((recS resp).st LigState).R (challengeP (asksS resp) split) (challengeP (asksS resp) split) := by
   unfold challengeP
   sim_walk [liftT_rec resp, sampleKP_rec resp, sendMsg_rec resp]
 
-theorem oodIntroP_rec (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
+theorem oodIntroP_rec (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
     ((recS resp).st LigState).R (oodIntroP (asksS resp) nonce g dim) (oodIntroP (asksS resp) nonce g dim) := by
   unfold oodIntroP sampleVecP
   sim_walk [liftT_rec resp, squeezeP_rec resp, sampleP_rec resp, sendMsg_rec resp, powP_rec resp, absorbF_rec resp]
 
-theorem queryP_rec (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+theorem queryP_rec (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
     ((recS resp).st LigState).R (queryP (asksS resp) nonce ms lv cm) (queryP (asksS resp) nonce ms lv cm) := by
   unfold queryP sampleVecP
   sim_walk [liftT_rec resp, squeezeP_rec resp, powP_rec resp]
 
-theorem ligeritoP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoP_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (recS resp).R (ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 t b salt nonce)
       (ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 t b salt nonce) := by
@@ -490,15 +490,15 @@ theorem ligeritoP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
     absorbBytes_rec resp]
 
 /-- **A rep's new rounds are its new sends.** -/
-theorem repP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (recS resp).R (repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce)
       (repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce) := by
   unfold repP
   sim_walk [zerocheckP_rec resp, lincheckP_rec resp, ringSwitchP_rec resp, ligeritoP_rec resp h]
 
-theorem Rec.go {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (recS resp).R y y) {t : Transcript}
-    {l : Array Claims.Msg} {a : α} {t' : Transcript} {l' : Array Claims.Msg} (h : (y.run t).go l = (.ok (a, t'), l')) :
+theorem Rec.go {resp : ℕ → Hash.Msg} {α : Type} {y : TMW PS α} (hy : (recS resp).R y y) {t : Transcript}
+    {l : Array Hash.Msg} {a : α} {t' : Transcript} {l' : Array Hash.Msg} (h : (y.run t).go l = (.ok (a, t'), l')) :
     ∃ rs bs, t'.rounds.toList = t.rounds.toList ++ rs ∧ l'.toList = l.toList ++ bs ∧ Recs resp l.size rs bs :=
   hy t l a t' l' h
 
@@ -506,15 +506,15 @@ theorem Rec.go {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (re
 link's points off the first reply's coin, and one well-formed stream per rep stream; the table's extra claims evaluate
 at those points; and its sends are the link of that `root_B` and no public words, then the streams' rounds in order,
 each from index `1` on (`Recs`). -/
-def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
-    (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
+def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Hash.Msg) (spec : SessionSpec) (st : Setup)
+    (r : String × Array ByteArray) (bodies : Array Hash.Msg) : Prop :=
   ∃ rb streams, r.1 = printJ (recordObj spec h #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
     0 < rb.size ∧ rb.size < 2 ^ 64 ∧ streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs
 
 /-- **The one-table session's facts**, given a non-empty commitment cap under `2^64` bytes and well-formed rep rounds. -/
-theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionP_facts (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
     (hC : ∀ sch, fast100 st.m = some sch → ∀ g salt cm,
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (sch.levels.getD 0 default) g salt = .ok cm →
@@ -523,7 +523,7 @@ theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st sch tr tb cm₀ extras salt nonce).run
         (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
     SessionFacts (Claims.hOf H) resp spec st r bodies := by
   unfold sessionP at hrun
@@ -561,7 +561,7 @@ theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
   obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
         ∃ bs, l.toList = linkBody [flat cm.cap] [ByteArray.empty] :: bs ∧

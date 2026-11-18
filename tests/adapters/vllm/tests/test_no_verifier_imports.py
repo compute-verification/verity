@@ -67,19 +67,14 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.registered",
         ),
         # The compiler's served rows (`verity_vllm/compiler/served_rows.py`): the Lean verifier's `--registered` port form
-        # (`produced.port`, `registered.READS_FROM`), until SPOT's workload side offers the registered-port format.
+        # (`produced.port`, `registered_value.READS_FROM`), until SPOT's workload side offers the registered-port format.
         "verity_vllm/compiler/served_rows.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
-    "network-accounting": {
-        # Needs: PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/protocols/poub/remote.py": (
-            "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
-        ),
-    },
+    "network-accounting": {},
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
         # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).

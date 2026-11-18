@@ -14,6 +14,7 @@ import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     served as SV,
 )
@@ -46,7 +47,7 @@ FIXED = ([(4, 2, G2), (4, 2, G2)], [[(0, 0, 4), (1, 0, 4)], [(0, 4, 1), (1, 4, 1
 
 
 def _lowered(tables: Tables | None = TABLES, cls: WindowClass = CLASS):
-    return WC.lower(_registered(), cls, None, GRAIN, provable=False, tables=tables)
+    return WC.lower(_registered(), cls, None, GRAIN, tables=tables)
 
 
 def _held_rows(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -134,13 +135,13 @@ def test_a_fixed_load_window_is_the_class_circuit_with_the_tables_and_any_other_
     with H1's tables, wired; `test_window_circuit`'s WINDOW (a prompt of 3 chunked across two steps) is refused by name,
     since its rows aren't the public rows the tables are read at."""
     reg = _registered()
-    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, provable=False, tables=TABLES)
+    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, tables=TABLES)
     assert IF.circuit_bytes(fixed.description()) == IF.circuit_bytes(
-        WC.class_circuit(reg, CLASS, None, GRAIN, provable=False, tables=TABLES).description())
+        WC.class_circuit(reg, CLASS, None, GRAIN, tables=TABLES).description())
     assert fixed.wires and {r.param for r in fixed.registered.reads} >= {"row-table/1/k64", "input-ids/1"}
     with pytest.raises(Unexpressible, match=r"not its class's fixed load \[\[\(0, 0, 4\), \(1, 0, 4\)\], \[\(0, 4, 1\), "
                                             r"\(1, 4, 1\)\]\], the rows H1's tables are read at"):
-        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False, tables=TABLES)
+        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, tables=TABLES)
 
 
 @pytest.fixture(scope="module")
@@ -148,11 +149,11 @@ def filled():
     """The class circuit with H1's tables filled from a window's values (`window_rows.Rows`: `test_window_rows`' random
     weights, a scan state whose row at bucket 0 carries two prompts of 4): its lowering, its slots and its rows."""
     reg = _registered()
-    low = WC.lower(reg, CLASS, None, GRAIN, provable=False, tables=TABLES)
+    low = WC.lower(reg, CLASS, None, GRAIN, tables=TABLES)
     fields = _weights(low.fn)
     lanes = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
     rows_ = [state_row(CLASS.scan, lanes)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]
