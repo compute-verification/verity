@@ -14,6 +14,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # fetches by its art id
 # `adapters/torch/verity_torch`: the PyTorch adapter, which the vLLM DSA rules `step_needs.StepNeeds` loads import
 inputs = [
+    "calibration/hardware/cards",
     "artifacts.json",
     "tools/config/verity_config",
     "verity/__init__.py",

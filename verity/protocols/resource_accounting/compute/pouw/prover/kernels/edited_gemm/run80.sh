@@ -11,7 +11,7 @@
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CUDA=${CUDA_HOME:-/usr/local/cuda-12.4}
+CUDA=$(python3 benchmarks/kernels/machine.py toolkit 12.4) || exit 2  # CUDA_HOME, else the run's machine's
 M=${EG80_M:-8192} N=${EG80_N:-8192} K=${EG80_K:-4096} HOLD=${EG80_HOLD:-40} FLAGS=${EG80_NVCC:-}
 mkdir -p "$OUT/sass" "$OUT/gate"
 echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$("$CUDA/bin/nvcc" --version | tail -2 | head -1)\",\"M\":$M,\"N\":$N,\"K\":$K,\"nvcc_flags\":\"$FLAGS\"}" >"$OUT/meta.json"

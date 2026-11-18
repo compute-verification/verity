@@ -24,7 +24,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, option
+from verity_vllm.engine.profiles.devices import cuda_arch
 from verity_vllm.log import write
 
 NAME = "verity_norm_tap"
@@ -89,9 +91,9 @@ def nvcc_flags() -> list[str]:
     return ["-O3", "-DNDEBUG", "-std=c++17", "--expt-relaxed-constexpr", "--expt-extended-lambda", f"-DVERITY_NORM_TAP_VERSION={TAP_VERSION}"]
 
 
-def build(vllm_src: str, build_dir: str) -> dict:
+def build(vllm_src: str, build_dir: str, card: str) -> dict:
     import torch
-    from torch.utils.cpp_extension import CUDA_HOME, load
+    from torch.utils.cpp_extension import load
 
     srcs = pinned_sources(vllm_src)
     out = Path(build_dir)
@@ -99,12 +101,14 @@ def build(vllm_src: str, build_dir: str) -> dict:
     header = tapped_kernel(srcs[KERNEL_FILE].decode())
     (out / "norm_tap_kernel.cuh").write_text(header)
     cu = HERE / "norm_tap.cu"
-    cc = torch.cuda.get_device_capability(0)
-    nvcc = os.path.join(CUDA_HOME or "", "bin", "nvcc")
+    cuda_home = settings.cuda_home()
+    arch = cuda_arch(card)
+    settings.put("TORCH_CUDA_ARCH_LIST", arch)
+    nvcc = os.path.join(cuda_home, "bin", "nvcc")
     info = {"name": NAME, "tap_version": TAP_VERSION, "vllm": PIN, "sources": {k: sha256(v) for k, v in srcs.items()},
             "launcher": {"file": str(cu), "sha256": sha256(cu.read_bytes())}, "kernel_header_sha256": sha256(header.encode()),
-            "nvcc_flags": nvcc_flags(), "arch": f"{cc[0]}.{cc[1]}", "device": torch.cuda.get_device_name(0), "torch": torch.__version__,
-            "torch_cuda": torch.version.cuda, "cuda_home": CUDA_HOME,
+            "nvcc_flags": nvcc_flags(), "arch": arch, "card": card, "torch": torch.__version__,
+            "torch_cuda": torch.version.cuda, "cuda_home": cuda_home,
             "nvcc_version": subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]}
     t0 = time.time()
     load(name=NAME, sources=[str(cu)], extra_cuda_cflags=nvcc_flags(), extra_cflags=["-O3", "-DNDEBUG"],
@@ -133,6 +137,7 @@ class Options:
     vllm_src: str | None = option("--vllm-src", default=None, help=f"a vLLM tree holding the pinned sources ({', '.join(PINNED_SOURCES)})")
     build_dir: str | None = option("--build-dir", default=None, help=f"where the build and {NAME}.so go")
     check: str | None = option("--check", default=None, help="check a built .so (its ops and tap version) instead of building")
+    card: str | None = option("--card", default=None, help="the SKU of the card file whose arch a build compiles to (calibration/hardware/cards)")
 
 
 def main(a: Options) -> int:
@@ -140,8 +145,8 @@ def main(a: Options) -> int:
         r = check(a.check)
         write(("NORM-TAP-OK " if r["ok"] else "NORM-TAP-FAIL ") + json.dumps(r))
         return 0 if r["ok"] else 1
-    if not (a.vllm_src and a.build_dir):
-        raise UsageError("give --vllm-src and --build-dir (build) or --check SO")
-    info = build(a.vllm_src, a.build_dir)
+    if not (a.vllm_src and a.build_dir and a.card):
+        raise UsageError("give --vllm-src, --build-dir and --card (build) or --check SO")
+    info = build(a.vllm_src, a.build_dir, a.card)
     write(f"BUILD-OK {info['so']} {info['so_sha256']} arch={info['arch']} ({info['compile_seconds']} s)")
     return 0

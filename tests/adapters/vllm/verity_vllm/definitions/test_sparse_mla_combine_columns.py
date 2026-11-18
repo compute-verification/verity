@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.registry import sparse_mla_split as SM
 
 NEG_INF, NAN, INF, NEG_ZERO, TINY = 0xFF800000, 0x7FC00001, 0x7F800000, 0x80000000, 0x00000001
