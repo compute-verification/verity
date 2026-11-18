@@ -70,10 +70,13 @@ The file also holds the build gate every kernel family's build.sh runs on ptxas'
 the kernels the family wants, compiled for its arch with no ptxas warning, serialization, spill or local memory, and no
 tensor-core form but the ones it allows. Each family's own sass_gate.py keeps its WANT table, its SASS pins and its CLI.
 
-  python sass_gate.py BINARY... [--json OUT]     # exit 0: every binary passes; 7: one fails (named, with its instructions)
-  python sass_gate.py --pin CUBIN...             # each cubin's tool notes and subroutine signatures
-  python sass_gate.py --pin CUBIN... --toolkit NAME   # pin them in sass_pins.json as NAME (its numeric run kept while the
-                                                      # subroutines are unchanged)
+  python sass_gate.py --cuda-bin DIR BINARY... [--json OUT]   # exit 0: every binary passes; 7: one fails (named, with its
+                                                              # instructions)
+  python sass_gate.py --cuda-bin DIR --pin CUBIN...           # each cubin's tool notes and subroutine signatures
+  python sass_gate.py --cuda-bin DIR --pin CUBIN... --toolkit NAME   # pin them in sass_pins.json as NAME (its numeric run
+                                                                     # kept while the subroutines are unchanged)
+
+DIR is the bin directory of the toolkit whose cuobjdump and nvdisasm read the SASS, the one the caller resolved.
 """
 
 from __future__ import annotations
@@ -86,7 +89,6 @@ import json
 import math
 import os
 import re
-import shutil
 import struct
 import subprocess
 import sys
@@ -1519,15 +1521,13 @@ def _run(cmd: list[str]) -> str:
     return r.stdout
 
 
-def find_tools() -> dict[str, dict[str, str]]:
-    """cuobjdump and nvdisasm: from POUW_CUDA_BIN, CUDA_HOME/bin, then the PATH."""
-    dirs = [os.environ.get("POUW_CUDA_BIN"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin")]
+def find_tools(bin_dir: str | os.PathLike) -> dict[str, dict[str, str]]:
+    """cuobjdump and nvdisasm in `bin_dir`, the bin directory of the toolkit the caller resolved, taken as given."""
     out = {}
     for t in ("cuobjdump", "nvdisasm"):
-        cands = [os.path.join(d, t) for d in dirs if d] + [shutil.which(t) or ""]
-        path = next((c for c in cands if c and os.access(c, os.X_OK)), None)
-        if path is None:
-            raise SassGateFailed(f"no {t} (set POUW_CUDA_BIN or CUDA_HOME): the gate can't read SASS")
+        path = os.path.join(bin_dir, t)
+        if not os.access(path, os.X_OK):
+            raise SassGateFailed(f"no {t} in {bin_dir}: the gate can't read SASS")
         out[t] = {"path": path, "version": _run([path, "--version"]).strip().splitlines()[-1]}
     return out
 
@@ -1647,7 +1647,7 @@ class SassChecker:
     """The run's gate: every binary it has checked, and the mapped ones it didn't scan (NVIDIA's). `check` raises
     SassGateFailed naming the first failing binary, its function and instruction; `report` goes into the run's JSON."""
 
-    def __init__(self, log=None, tools: dict | None = None, cache: Path | None | str = "default", pins: Path = PINS):
+    def __init__(self, log=None, *, tools: dict, cache: Path | None | str = "default", pins: Path = PINS):
         self.log = log or (lambda s: None)
         self.tools = tools
         self.cache = _cache_dir() if cache == "default" else cache
@@ -1656,8 +1656,6 @@ class SassChecker:
         self.not_scanned: dict[str, str] = {}
 
     def check(self, paths: list[str], source: str) -> None:
-        if self.tools is None:
-            self.tools = find_tools()
         failed = []
         for p in paths:
             real = os.path.realpath(p)
@@ -1868,16 +1866,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path, help="write every binary's record here")
     ap.add_argument("--pin", action="store_true", help="print each cubin's tool notes and subroutine signatures")
     ap.add_argument("--toolkit", help="with --pin: write the builds' ptxas and signatures into sass_pins.json as this")
+    ap.add_argument("--cuda-bin", type=Path, required=True,
+                    help="the bin directory of the toolkit whose cuobjdump and nvdisasm read the SASS")
     args = ap.parse_args(argv)
+    tools = find_tools(args.cuda_bin)
     if args.pin:
-        rec = pin_record(args.binaries, find_tools())
+        rec = pin_record(args.binaries, tools)
         if args.toolkit:
             print(json.dumps(update_pins(rec, args.toolkit), indent=1))
             return 0
         text = json.dumps(rec, indent=1)
         (args.json.write_text(text) if args.json else print(text))
         return 0
-    g = SassChecker(log=lambda s: print(s, file=sys.stderr))
+    g = SassChecker(log=lambda s: print(s, file=sys.stderr), tools=tools)
     code, error = 0, None
     for b in args.binaries:
         try:

@@ -831,7 +831,7 @@ LIVE_SALT_EXPECT = {
     "h1-layout": ("salt", "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"),
     "not-salt-only": ("salt", "the coin commitment's "), "no-reserve": ("salt", CC.NO_RESERVE),
     "reserve-layout": ("salt", CC.RESERVE_LAYOUT), "incomplete": ("salt", CC.INCOMPLETE),
-    "received": ("salt", CC.LIVE_NOT_RECEIVED), "coins-form": ("coin", "the pass's coins are malformed: "),
+    "unclosed": ("coin", "unclosed: its client didn't close it"), "received": ("salt", CC.LIVE_NOT_RECEIVED), "coins-form": ("coin", "the pass's coins are malformed: "),
     "not-signed": ("coin", CC.LIVE_NOT_SIGNED), "opening-form": ("coin", "the salt's a live coin opening is"),
     "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
     "index": ("coin", ", not its pouw/salt coin 0"), "label": ("coin", ", not its pouw/salt coin 0"),

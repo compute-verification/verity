@@ -55,18 +55,22 @@ class _Job:
         return self.rc
 
 
-def _ran(tmp_path: Path, monkeypatch, result: dict | None, rc: int = 0, out: bool = False) -> tuple[int, dict, _Job]:
+def _ran(tmp_path: Path, monkeypatch, result: dict | None, rc: int = 0, out: bool = False,
+         args: tuple[str, ...] = ("K=4096", "N=2"), files: dict[str, bytes] | None = None) -> tuple[int, dict, _Job]:
     """`record.py job` in a research run whose job.sh is `_Job`; `out`: OUT set to the run's out/, as research run sets it,
-    else unset (the run's out/ by default)."""
+    else unset (the run's out/ by default); `files`: what the job leaves in out/ beside its result."""
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
     if out:
         monkeypatch.setenv("OUT", str(run_dir / "out"))
     fake = _Job(run_dir / "out", result, rc)
+    for rel, data in (files or {}).items():
+        (run_dir / "out" / rel).parent.mkdir(parents=True, exist_ok=True)
+        (run_dir / "out" / rel).write_bytes(data)
     monkeypatch.setattr(REC.subprocess, "Popen", fake)
     monkeypatch.setattr(REC.signal, "signal", lambda sig, handler: handler(sig, None))
-    got = REC.main(["job", "K=4096", "N=2"])
+    got = REC.main(["job", *args])
     return got, json.loads((run_dir / kit.RESULT).read_text()), fake
 
 
@@ -118,3 +122,36 @@ def test_outside_a_research_run_the_job_records_nothing(tmp_path: Path, monkeypa
     monkeypatch.setattr(REC.signal, "signal", lambda sig, handler: None)
     monkeypatch.chdir(tmp_path)
     assert REC.main(["job"]) == 0 and not list(tmp_path.rglob(kit.RESULT))
+
+
+def test_a_window_run_names_its_member_and_its_out_holds_no_file_of_the_windows_private_set(tmp_path: Path, monkeypatch) -> None:
+    """With WINDOW the job is stage.sh, and its measurements' member is the served workload's and N from the staging's
+    `subset`. Every file under out/ that holds a private file of the window (a copy under any name, a member's rows,
+    the instance file, the prover's record) is deleted before the run's records are taken, and the validation fails
+    naming each; the window's public files and the job's own stay."""
+    window = tmp_path / "serving-rows"
+    window.mkdir()
+    rows, salt, public = b"rows and salts" * 64, b"index salt" * 8, b"b || c" * 32
+    (window / "m0-private.bin").write_bytes(rows)
+    (window / "index-salt.bin").write_bytes(salt)
+    (window / "m0-public.bin").write_bytes(public)
+    (window / "window.json").write_text("{}")
+    doc = RP.read(job(tmp_path / "a"))
+    doc["staged"] = {"subcircuit": "rope-head/d64/neox-bf16", "n": 16, "m": 25, "k_log": 22,
+                     "subset": {"member": 0, "n": 880, "units": list(range(16))}}
+    args = (f"WINDOW={window}", "MEMBER=0", "UNITS=0-15", "SUBCIRCUIT=rope-head/d64/neox-bf16", "SERVES=llama-3.2-1b-h200")
+    leaked = {"steps/inner/r1/out/copy.tar": rows, "steps/a/m0-private.bin": b"subset rows", "steps/a/inst-16.bin": b"x",
+              "steps/a/private.json": b"{}", "steps/b/salt": salt}
+    kept = {"steps/a/pub-16.bin": public, "steps/a/public.json": b"{}"}
+    rc, got, fake = _ran(tmp_path / "leak", monkeypatch, doc, args=args, files={**leaked, **kept})
+    out = tmp_path / "leak" / "run" / "out"
+    assert rc == 1 and fake.argv[1] == str(REC.HERE / "stage.sh")
+    assert sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file()) == sorted([*kept, REC.RESULT])
+    assert got["validation"]["status"] == "failed" and got["validation"]["checker"] == "record.private_in"
+    assert all(f"out/{rel}" in got["validation"]["detail"] for rel in leaked)
+    assert {m["member"] for m in got["measurements"]} == {"llama-3.2-1b-h200-n16"}
+
+    rc, got, _ = _ran(tmp_path / "clean", monkeypatch, doc, args=args, files=kept)
+    assert rc == 0 and got["validation"]["checker"] == "rec_profile.headline"
+    assert {m["member"] for m in got["measurements"]} == {"llama-3.2-1b-h200-n16"}
+    assert REC.member({**doc, "staged": {**doc["staged"], "subset": None}}, "llama-3.2-1b-h200") is None

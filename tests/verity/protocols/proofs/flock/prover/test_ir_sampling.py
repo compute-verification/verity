@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import os
 import random
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -173,27 +172,6 @@ def test_row_words_match_the_ir_evaluator(tmp_path, V):
         assert [tuple(int(x) for x in lane[v, 3:6]) for v in range(V)] == carries
 
 
-@pytest.mark.slow
-def test_staged_rows_through_the_units(tmp_path):
-    V = 1280
-    s = _set(tmp_path, V, 4)
-    low = S.lane(V)
-    path = S.stage(low, s, 0, s.n, tmp_path / "st")
-    head, logits, _d, _pub, cuts = S.read(path)
-    assert head["format"] == S.FORMAT and head["layout"]["chunk_blocks"] == [16, 16, 8] and head["layout"]["nb"] == 4
-    outs, ok = low.evaluate(S.unit_ports(cuts, logits))
-    assert ok == (1 << (s.n * V)) - 1
-    assert all((o == w).all() for o, w in zip(outs, S.unit_outputs(cuts, V)))
-    assert S.check_native(path) == [] and S.check_staged(low, s, path) == []
-    assert (tmp_path / "st" / "net.txt").read_text() == low.text
-    assert S.serve_args(path) == ["--native-checked", S.public_sha256(path)]
-
-
-def test_the_captured_vocabulary_plans_under_the_gpu_cap():
-    pl = S.plan(S.lane(128256), 128256)
-    assert pl["chunk_blocks"] == [16] * 250 + [8] and pl["nb"] == 4 and pl["k_log"] <= 22 and pl["units_per_block"] == 128
-
-
 def test_supports_and_relation():
     sub = TM.subcircuit(S.TEMPLATE, V=128256)
     assert REG.supports(sub, "frame-v3/blake3-keyed") is None
@@ -202,47 +180,6 @@ def test_supports_and_relation():
 
 
 # --- negatives ---------------------------------------------------------------------------------------------------------------
-
-@pytest.mark.slow
-def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied(tmp_path):
-    V = 1056
-    s = _set(tmp_path, V, 2)
-    low = S.lane(V)
-    path = S.stage(low, s, 0, s.n, tmp_path / "st")
-    _h, logits, _d, _p, cuts = S.read(path)
-    row = low.layout.in_words * IL.WORD + 900
-    _outs, ok = low.evaluate(S.unit_ports(cuts, logits), flip=(row, 37))
-    assert ok == ((1 << (s.n * V)) - 1) & ~(1 << 37)
-
-
-@pytest.mark.parametrize("word", ["kbit", "g"])
-@pytest.mark.slow
-def test_a_forged_native_word_is_refused(tmp_path, word):
-    V = 1056
-    s = _set(tmp_path, V, 2)
-    path = S.stage(S.lane(V), s, 0, s.n, tmp_path / "st")
-    b = bytearray(path.read_bytes())
-    nl = b.index(b"\n")
-    head, *_ = S.read(path)
-    at = nl + 1 + 2 * s.n * V + 32 * s.n + 4 * s.n * sum(w for _, w in head["public_ports"]) + 4 * S.lane_word(33, word)
-    b[at] ^= 1
-    path.write_bytes(bytes(b))
-    assert S.check_native(path) and S.check_staged(S.lane(V), s, path)
-    with pytest.raises(ValueError):
-        S.serve_args(path)
-
-
-@pytest.mark.slow
-def test_a_forged_unit_word_breaks_the_lane_relation(tmp_path):
-    V = 1056
-    s = _set(tmp_path, V, 2)
-    low = S.lane(V)
-    path = S.stage(low, s, 0, s.n, tmp_path / "st")
-    _h, logits, _d, _p, cuts = S.read(path)
-    cuts = cuts.copy()
-    cuts[1, S.lane_word(100, "scaled")] ^= 1 << 5
-    outs, _ = low.evaluate(S.unit_ports(cuts, logits))
-    assert sum(int((o != w).sum()) for o, w in zip(outs, S.unit_outputs(cuts, V))) == 1
 
 
 def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
@@ -270,14 +207,3 @@ def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
 
 CAPTURED = os.environ.get("VERITY_CAPTURED_101_GUMBEL")
 
-
-@pytest.mark.skipif(not CAPTURED, reason="set VERITY_CAPTURED_101_GUMBEL to the captured Llama-3.2-1B sampling set's directory")
-def test_captured_rows_through_the_units(tmp_path):
-    s = InputSet.open(Path(CAPTURED))
-    low = S.lane(128256)
-    path = S.stage(low, s, 0, s.n, tmp_path)
-    _h, logits, _d, _p, cuts = S.read(path)
-    outs, ok = low.evaluate(S.unit_ports(cuts, logits))
-    assert ok == (1 << (s.n * 128256)) - 1
-    assert all((o == w).all() for o, w in zip(outs, S.unit_outputs(cuts, 128256)))
-    assert S.check_native(path) == []

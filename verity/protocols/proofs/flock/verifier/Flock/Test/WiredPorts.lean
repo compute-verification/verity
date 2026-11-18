@@ -90,6 +90,13 @@ def ok? (r : V Unit) : Bool := r.toOption.isSome
 #guard !ok? (checkLinked linked #[{ x with tree := none }])
 #guard !ok? (checkLinked linked #[{ x with name := "y" }])
 #guard ok? (checkLinked { linked with metaJ := Json.null } #[])
+-- without registered reads, a statement that declares links is refused, and one that declares none is not
+#guard !ok? (Registered.check linked default none false)
+#guard ok? (Registered.check { linked with metaJ := Json.null } default none false)
+-- a link row reads its writer's whole output row: a tree port of another field is refused by name
+#guard match treeReads linked prog #[] { x with tree := some ("rope", "aux") } with
+  | .error e => e.startsWith "registered reads: tree port x reads rope's aux tree"
+  | .ok _ => false
 
 def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)
 def val (k : UInt8) : ByteArray := ByteArray.mk (Array.replicate 32 k)

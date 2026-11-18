@@ -50,7 +50,7 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
-from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
@@ -58,7 +58,6 @@ from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.scheme import POUS as POUS_SCHEME
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.commitments.randomness import parse_rate, parse_strata_rate
@@ -133,7 +132,7 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
     try:
-        own = settings(PEARL_PLUS, own)
+        own = settings(schemes.get("pearl-plus"), own)
     except ValueError as e:
         raise Refused("params", str(e)) from None
     return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
@@ -192,7 +191,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params=dict(POUS_SCHEME.settings)),
+              needs=frozenset({"store"}), params=_pous, default_params=dict(schemes.get("pous").settings)),
     Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
               channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
