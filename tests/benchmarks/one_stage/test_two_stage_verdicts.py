@@ -22,8 +22,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.population import BitsWord, WordBits
+from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
@@ -43,14 +45,24 @@ PARAMS = tuple(f"weights/model.layers.0.mlp.experts.{p}@{H}/b0/table" for p in (
 AT = tuple(j // W for j in range(CELLS))
 
 
-def _read_signature(S_):
-    return EMB.read(S_.V, S_.H).signature()[0], Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+def _bits_signature(S_):
+    params = EMB.read(S_.V, S_.H).signature()[0]
+    return (("tok", EMB.TOKEN), *params[1:]), Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+
+
+_READ_BITS = TR.part("TwoStageVerdictsTestReadBits", ("V", "H"), _bits_signature,
+                     lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's bits with none of its hashes",
+                     version=0)
+
+
+def _read_body(B_, S_, tok, *rest):
+    h, ok = B_.call(bind(_READ_BITS, V=S_.V, H=S_.H), B_.call(bind(WordBits, W=32), tok), *rest)
+    return coll_concat(EMB.read(S_.V, S_.H).signature()[1], [B_.batch(bind(BitsWord, W=16), h, axes=(0,)), ok])
 
 
 #: registered, so the adapter's served templates resolve the block by its id: SPOT's test holds none of them itself
-READ = TR.part("TwoStageVerdictsTestRead", ("V", "H"), _read_signature,
-               lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's ports with none of its hashes",
-               version=0)
+READ = CompositeDefinition("TwoStageVerdictsTestRead", 0, ("V", "H"), lambda S_: EMB.read(S_.V, S_.H).signature(),
+                           _read_body, doc="h = row, ok = 1: a read's ports with none of its hashes")
 FUSED = bind(BM.MoeExpertFp8ReadGemmV1, READ=bind(READ, V=E, H=H), K=K, N=1, G=K, KB=K, SWAP=False,
              DOT=BG.HopperE4m3MmaV2Dot32)
 TID = descriptor_id(FUSED)
