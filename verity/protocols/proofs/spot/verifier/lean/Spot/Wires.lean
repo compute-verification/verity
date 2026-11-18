@@ -367,6 +367,18 @@ def orderOk (c : Wiring) (o : List UnitRange) : Bool :=
     c.templates.all fun (t, tt) =>
       tiles (((o.filter (·.1 == t)).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
 
+/-- `orderOk` with the templates and the order's ranges by template found once (`mapOf`, `groupBy`): the code compiled in
+its place (`orderOk_eq_fast`). -/
+def orderOkFast (c : Wiring) (o : List UnitRange) : Bool :=
+  let tm := mapOf c.templates
+  let g := groupBy (·.1) o
+  o.all (fun b => tm[b.1]?.isSome) &&
+    c.templates.all fun (t, tt) => tiles (((g.getD t []).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
+
+@[csimp] theorem orderOk_eq_fast : @orderOk = @orderOkFast := by
+  funext c o
+  simp only [orderOk, orderOkFast, mapOf_get?, groupBy_getD]
+
 /-- From template `t`, `n` steps back along the first wire (by index) of each template from a template not `done`
 (`ins`: each template's wires, as their index and writer). -/
 def kahnWalk (ins : Array (List (Nat × Nat))) (done : Array Bool) : Nat → Nat → Nat
