@@ -30,7 +30,7 @@ from verity_vllm.pipeline.tp.grain import GROUP
 from . import scan_state as SS
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word
-from .window_class import FixedLoad, PearlTables, Tables, WindowClass
+from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
@@ -61,12 +61,15 @@ class _Program:
     ``entry`` (`io_shell.SlotEntry_v1`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
-    (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`)."""
+    (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`). With ``at``,
+    a served request's Program instead, at the request's anchor and lane and of its positions."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
-                 tables: FixedLoad | None = None, cut: Linears | None = None) -> None:
+                 tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None) -> None:
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
-        self.anchor, self.lane, self.scan, self.entry = cls.anchor(slot), cls.lane(slot), scan, entry
+        self.anchor, self.lane = (cls.anchor(slot), cls.lane(slot)) if at is None else (at.anchor, at.lane)
+        self.positions = cls.positions if at is None else at.positions
+        self.scan, self.entry = scan, entry
         self.tables, self.cut = tables, cut
         if isinstance(tables, PearlTables) != (cut is not None):
             raise ValueError(f"{name}: a cut's layout goes with Pearl+'s tables, and only with them")
@@ -184,7 +187,7 @@ class _Program:
         step = self.position - (family != "Embedding")
         if step < 0:
             raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) comes before its first position's embedding")
-        self.b.label = (self.slot_index, step)
+        self.b.label, self.b.node = (self.slot_index, step), j
         lower(j, node)
 
     def _Embedding(self, j: int, node: Any) -> None:
@@ -534,18 +537,22 @@ class _Program:
         """The position's combine unit, the slot's outputs collected on with its select (`io_shell.SelectCollect_v1`, its
         state the next position's ``state``: the first's reads its lane's head), and at the last position the slot's entry
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
-        H1's tables, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`)."""
+        H1's tables, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`).
+        Its slots are the node's (`_Builder.among`) that end here or, for a collector, that go on."""
         p, KO = self.position - 1, self.cls.outputs
         at = {"V": V, "C": GROUP, "KO": KO, "FIRST": p == 0}
         e = self.entry.bindings
-        last = p == self.cls.positions - 1
+        last = p == self.positions - 1
         if last:
             fn = bind(IO.SelectEntry, **at, IDB=e["IDB"], NP=e["NP"], STOP=e["STOP"])
         elif isinstance(self.tables, Tables) and p + 1 >= self.cls.prompt:
             fn = bind(IO.SelectCollectV2, **at, ROUND=self.tables.at(self.cls, self.slot_index, p + 1)[0])
         else:
             fn = bind(IO.SelectCollect, **at)
-        ctid, cu = self.b.unit(fn)
+        among = self.b.among
+        if among is not None and self.b.ending is not None:
+            among = (self.b.ending, among[1]) if last else (among[0], self.b.ending)
+        ctid, cu = self.b.unit(fn, among=among)
         state = head if p == 0 else self.collect
         assert state is not None, f"{self.name}: position {p}'s select before position {p - 1}'s, which collects on to it"
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (state,))

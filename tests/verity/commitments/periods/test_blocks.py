@@ -88,15 +88,33 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
                            ((replace(e, step=1),), r"steps \[1, 3\), each below the class's 2")]:
         with pytest.raises(ValueError, match=why):
             blocked(chain_blocks(inference=inference))
-    with pytest.raises(ValueError, match="radix is the class's 4 slots"):
+    with pytest.raises(ValueError, match="slot 2 is in no inference entry: each of the class's 4 slots"):
         blocked(chain_blocks(slots=4))
+    with pytest.raises(ValueError, match=r"slots \[1, 3\), each below the circuit's 2"):
+        blocked(chain_blocks(inference=(replace(e, slot=1), replace(e, at=8))))
     for edit, why in [(dict(axes=("-", "-", "-")), "one of them the slot"), (dict(axes=("slot", "step", "slot")), "one of them"),
                       (dict(axes=("step", "step", "slot")), "at most one the step"), (dict(axes=("x", "step", "slot")), "one axis"),
                       (dict(axes=("step", "slot")), "one axis"), (dict(step=-1), "naturals"), (dict(radix=(2, 0, 2)), "radix 1")]:
         with pytest.raises(ValueError, match=why):
             replace(e, **edit)
-    with pytest.raises(ValueError, match="an inference entry is"):
-        I.InferenceEntry.of({**e.doc(), "extra": 0})
+    for bad in ({**e.doc(), "extra": 0}, {**e.doc(), "slot": 0}):
+        with pytest.raises(ValueError, match="an inference entry is"):
+            I.InferenceEntry.of(bad)
+
+
+def test_an_entry_from_a_later_slot_puts_its_units_at_its_slots():
+    """A served window's Programs of their own positions need not all lower a template's units at a step, so an entry covers
+    the slots from its ``slot`` on: the chain's layer-0 units at both slots and its layer-1 units at slot 1 alone tile its
+    units, unit 6 at (slot 1, step 0), and the record carries ``slot`` only where it isn't 0, so a class circuit's
+    entries are as they were."""
+    e = chain_blocks().inference[0]
+    four = replace(e, radix=(TI.STEPS, TI.REQUESTS), axes=("step", "slot"))
+    late = [replace(four, at=4, radix=(TI.STEPS, 1), slot=1), replace(four, at=6, radix=(TI.STEPS, 1))]
+    b = chain_blocks(inference=(four, *late))
+    blocked(b)
+    assert late[0].doc()["slot"] == 1 and "slot" not in late[1].doc() and "slot" not in e.doc()
+    assert I.InferenceEntry.of(late[0].doc()) == late[0] and not b.uniform and chain_blocks().uniform
+    assert [tuple(map(list, b.slots_steps(GID, u, u + 1))) for u in (4, 6)] == [([1], [0]), ([0], [0])]
     with pytest.raises(ValueError, match="at least one"):
         chain_blocks(steps=0)
     with pytest.raises(ValueError, match="are `Blocks`"):

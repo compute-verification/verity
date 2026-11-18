@@ -1,12 +1,13 @@
-"""verity_vllm.program.predict.window_circuit (at its fixed slots): a served window is its class's one Circuit of the
-catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row or a registered read
-of the weights or the network attester's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
-Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
-enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
-in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
-bounds, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
-once a writer row. A head is `AttentionHead_v19`'s Calls, a unit each: a key block reads a key's row and a value's a key,
-so past 126 keys it holds more than a unit's 256 rows, and TINY at 129 positions is refused by name.
+"""verity_vllm.program.predict.window_circuit: a served window is one Circuit of the catalog's units, a Program a request
+of the request's own positions, every input row wired from its writer's row or a registered read of the weights or the
+network attester's scan state rows, and nothing free; a request's outputs leave as its entry of the scan's Programs' row.
+Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program at most), at a grain small enough to
+slice TINY's GEMMs and cut its ports; the circuit is its requests' lengths and never their arrival steps, and the fixed
+load (every slot the class's whole prompt and outputs) is the class's circuit, which the lowering tests pin. At the class
+of record's slots (8, 4 at each of buckets 0 and 16) with TINY's bounds, a window is its requests at their lanes. Every
+reader reads its writers' rows as they are, a port cut once a writer row. A head is `AttentionHead_v19`'s Calls, a unit
+each: a key block reads a key's row and a value's a key, so past 126 keys it holds more than a unit's 256 rows, and TINY at
+129 positions is refused by name.
 """
 from __future__ import annotations
 
@@ -60,6 +61,13 @@ SLOTS = WindowClass(8, 4, 2, lanes=4, every=16)
 G2 = {**S.GREEDY, "max_tokens": 2}
 #: q0's prompt of 4 at step 0, q1's prompt of 3 chunked 2 then 1 across steps 0 and 1; each keeps two outputs
 WINDOW = ([(4, 2, G2), (3, 2, G2)], [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 1)], [(1, 3, 1)]])
+#: WINDOW's requests' lengths with q1's prompt whole at step 0
+WHOLE = ([(4, 2, G2), (3, 2, G2)], [[(0, 0, 4), (1, 0, 3)], [(0, 4, 1), (1, 3, 1)]])
+#: two requests of the class's whole prompt and outputs (the fixed load), and the same with q1's prompt chunked across steps
+FULL = ([(4, 2, G2), (4, 2, G2)], [[(0, 0, 4), (1, 0, 4)], [(0, 4, 1), (1, 4, 1)]])
+FULL_LATER = ([(4, 2, G2), (4, 2, G2)], [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 2)], [(1, 4, 1)]])
+#: q1's prompt of 3 alone
+SHORT = ([(3, 2, G2)], [[(0, 0, 3)], [(0, 3, 1)]])
 #: another window of the class: q0's prompt of 3 at step 0 keeps two outputs, q1's prompt of 2 arrives at step 1 and keeps one
 OTHER = ([(3, 2, G2), (2, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 0, 3)], [(0, 3, 1), (1, 0, 2)]])
 ONE = ([(4, 2, G2)], [[(0, 0, 4)], [(0, 4, 1)]])
@@ -108,8 +116,9 @@ def _blocks(circuit) -> bytes:
 
 @pytest.fixture(scope="module")
 def window():
-    """The window's Circuit and its templates' ids by label."""
-    circuit = _circuit(WINDOW)
+    """The fixed load's Circuit (the class circuit's, `test_the_fixed_load_is_the_class_circuit_byte_for_byte`) and its
+    templates' ids by label."""
+    circuit = _circuit(FULL)
     return circuit, {_label(fn): tid for fn, _ in circuit.templates for tid in [IF.descriptor_id(fn)]}
 
 
@@ -120,89 +129,155 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
     return w.writer, int(w.writers(unit, 1, row)[0]), w.out
 
 
-def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window):
-    """The privacy property (only the slot count is public): WINDOW and OTHER differ in their requests' arrival
-    steps, prompt lengths (4 and 3 against 3 and 2) and output lengths, and a window of one request in its request count too,
-    and their circuits' descriptions (units, wires, cuts, registered reads), blocks, templates and external ports are
-    byte for byte the class's circuit: the blocks' slots are the class's 2 whatever the window's requests."""
-    circuit, _ = window
+def _counts(circuit) -> Counter:
+    return Counter({_label(fn): k for fn, k in circuit.templates})
+
+
+def _lowered(window, cls: WindowClass = CLASS, placed=None, grain: Grain = GRAIN):
+    reg = S._registered()
+    return WC.lower(reg, cls, None, grain, compiled=S.compile_steps(reg, *S._session(*window)), placed=placed)
+
+
+def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
+    """A served window's circuit is a Program a request of the request's own positions (prompt + outputs - 1), longest
+    first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone, template by template, 9 embeddings
+    against the class's 10, and its blocks are its 2 Programs over 5 steps. The second's last position makes its entry
+    (`SelectEntry_v1`) beside the first's collector at that step, an inference entry from slot 1."""
+    low = _lowered(WINDOW)
+    circuit = low.circuit
+    alone = [_circuit(ONE), _circuit(SHORT)]
+    assert _counts(circuit) == _counts(alone[0]) + _counts(alone[1])
+    assert ([p.positions for p in low.programs], low.requests) == ([5, 4], (0, 1))
+    n = _counts(circuit)
+    assert (n[EMB], n[FEED], n[COLLECT0], n[COLLECT], n[ENTRY]) == (9, 6, 2, 3 + 2, 2)
+    assert _counts(class_circuit(S._registered(), CLASS, None, GRAIN))[EMB] == 10
+    assert (circuit.blocks.slots, circuit.blocks.steps) == (2, 5) and not circuit.blocks.uniform
+    entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}[ENTRY]
+    assert [(e.slot, e.radix, e.step) for e in circuit.blocks.inference if e.template == entry] == [(1, (1,), 3), (0, (1,), 4)]
+    IF.Blocks.of(json.loads(json.dumps(circuit.blocks.doc(sum(circuit.units.values()), ""))), circuit.units, "")
+    assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
+
+
+def test_a_served_windows_circuit_is_its_requests_lengths_not_their_arrival_steps():
+    """The circuit is public (its size and shape): two windows of the same requests' lengths are one circuit whatever their
+    arrival steps (WINDOW's q1 chunked across two steps, WHOLE's prefilled at one), and windows of other lengths
+    (OTHER, ONE) are other circuits."""
+    circuit = _circuit(WINDOW)
+    assert _bytes(_circuit(WHOLE)) == _bytes(circuit) and _blocks(_circuit(WHOLE)) == _blocks(circuit)
+    for other in (_circuit(OTHER), _circuit(ONE)):
+        assert _bytes(other) != _bytes(circuit)
+
+
+def test_the_fixed_load_is_the_class_circuit_byte_for_byte():
+    """A window of the class's whole prompt and outputs in every slot (the fixed load PoUW's tables are read at) is the class
+    circuit, byte for byte and blocks included, at either arrival: its digest (SHA-512 of its description's bytes) is the
+    class circuit's."""
     cls = class_circuit(S._registered(), CLASS, None, GRAIN)
-    for other in (_circuit(OTHER), _circuit(ONE), cls):
-        assert _bytes(other) == _bytes(circuit) and _blocks(other) == _blocks(circuit)
-        assert (other.ids, other.external) == (circuit.ids, circuit.external)
-        assert (other.blocks.slots, other.blocks.steps) == (2, 5)
+    for window in (FULL, FULL_LATER):
+        c = _circuit(window)
+        assert hashlib.sha512(_bytes(c)).hexdigest() == hashlib.sha512(_bytes(cls)).hexdigest()
+        assert _blocks(c) == _blocks(cls) and (c.ids, c.external) == (cls.ids, cls.external) and c.blocks.uniform
 
 
-def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_one_circuit():
+def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_their_requests():
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
-    window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
-    same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
-    each slot's `ScanSlots_v3` unit reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane
-    scan's 9,090 words) and its last position making its entry of the scan's Programs' row."""
-    eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
-    three = _circuit(THREE, cls=SLOTS, placed=[(0, 1), (16, 18), (16, 31)])
-    assert hashlib.sha512(_bytes(three)).hexdigest() == hashlib.sha512(_bytes(eight)).hexdigest()
-    assert (three.ids, three.external, _blocks(three)) == (eight.ids, eight.external, _blocks(eight))
-    assert (eight.blocks.slots, eight.blocks.steps) == (8, 5)
-    n = {_label(fn): k for fn, k in eight.templates}
+    window of eight requests is 8 Programs and one of three 3, each reading its lane of the scan's state row before its
+    anchor (a boundary's requests its lanes in request order) and its last position making its entry; their embeddings
+    are their positions (28 and 11), and the scan state they read is the class's 32 rows."""
+    eight = _lowered(EIGHT, SLOTS, [(0, 1)] * 4 + [(16, 17)] * 4)
+    three = _lowered(THREE, SLOTS, [(0, 1), (16, 18), (16, 31)])
+    assert [(p.anchor, p.lane, p.positions) for p in three.programs] == [(0, 0, 5), (16, 0, 3), (16, 1, 3)]
+    assert three.requests == (0, 1, 2)
+    assert sorted((p.anchor, p.lane) for p in eight.programs) == [(16 * b, j) for b in (0, 1) for j in range(4)]
     scan = SCAN.replace("NS=4548", "NS=9090")
-    assert (n[scan], n[FEED], n[EMB], n[ENTRY]) == (8, 8 * 3, 8 * SLOTS.positions, 8)
-    assert [(r.at, r.radix, r.base, r.step) for r in eight.registered.reads if r.param == SS.SCAN_STATE] == [
-        (0, (4, 2), 0, (0, 16 * 9090))]
-    assert eight.registered.params[SS.SCAN_STATE] == 32 * 9090 and not eight.ingress
+    for low, slots, positions in ((eight, 8, 28), (three, 3, 11)):
+        n = _counts(low.circuit)
+        assert (n[scan], n[EMB], low.circuit.blocks.slots, low.circuit.blocks.steps) == (slots, positions, slots, 5)
+        assert low.circuit.registered.params[SS.SCAN_STATE] == 32 * 9090 and not low.circuit.ingress
+        assert IF.input_count(low.circuit.description(), **held(low.circuit))["free"] == 0
 
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
-    """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, so `interface.members` (which cuts a template's batch only there and at a statement's unit bound) makes the entry
-    template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
+    """At the class of record's slots, the class circuit's wires into the slots' entries begin and end at every lane's
+    nb = 2 slots and nowhere else, so `interface.members` (which cuts a template's batch only there and at a statement's
+    unit bound) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
     network attester's scan reads as lane j's Programs."""
-    eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
+    eight = class_circuit(S._registered(), SLOTS, None, GRAIN)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
     ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
     assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
-def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
+def test_the_class_of_record_takes_both_windows_to_their_requests(monkeypatch):
     """The class of record (`CLASS_OF_RECORD`: EVERY 16, 4 slots a boundary, 8 a 32-bucket window) is 8 slots of 1,024
     prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at bucket 16b. A 3-request and an 8-request
-    window are each taken to the one class circuit, every slot's Program, with the same arguments (its lowering, at heads of
-    up to 1,087 keys, is refused past a key block's 126: `test_past_126_keys_a_key_block_is_refused_by_name`)."""
+    window are each taken (`takes`) to their requests at their anchors and lanes, and lowered with the same arguments (at
+    the class's heads of up to 1,087 keys the class circuit is refused past a key block's 126:
+    `test_past_126_keys_a_key_block_is_refused_by_name`)."""
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
     assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
     calls: list[tuple] = []
 
-    def class_circuit(*a):
-        calls.append(a[1:])
-        return "the class circuit"
+    def class_circuit(*a, **k):
+        calls.append((a[1:], k["placed"]))
+        return "the circuit"
 
     monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
-    for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
-        assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, None)] * 2
+    windows = ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4))
+    for window, placed in windows:
+        compiled = S.compile_steps(reg, *S._session(*window))
+        assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=placed) == "the circuit"
+        assert [(r.anchor, r.lane) for r in WC.takes(compiled, CLASS_OF_RECORD, placed)] == [
+            (a, sum(1 for b, _ in placed[:i] if b == a)) for i, (a, _) in enumerate(placed)]
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), placed) for _, placed in windows]
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     """A slot's Program hands all its outputs to the scan at its anchor bucket and the scan carries them across
     windows (`SC_GROUP`), so a request at the class of record's second boundary (bucket 16) keeping all 64 outputs, its last
-    at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken to the one class circuit."""
+    at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken, a Program of its 64 positions."""
     calls: list[tuple] = []
 
-    def class_circuit(*a):
-        calls.append(a[1:])
-        return "the class circuit"
+    def class_circuit(*a, **k):
+        calls.append((a[1:], k["placed"]))
+        return "the circuit"
 
     monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     window = ([(1, 64, {**S.GREEDY, "max_tokens": 64})], [[(0, 0, 1)]] + [[(0, p, 1)] for p in range(1, 64)])
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
-    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, None)]
+    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the circuit"
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), [(16, 59)])]
+    assert WC.takes(compiled, CLASS_OF_RECORD, [(16, 59)]) == (WC.Request(16, 0, 1, 64),)
+    assert WC.Request(16, 0, 1, 64).positions == 64
+
+
+def test_a_window_of_no_request_or_a_served_window_with_tables_or_a_program_count_is_refused():
+    """A window of no request has no circuit, and a served window's circuit is every request's Program reading no
+    tables, so a Program count or tables beside it are refused."""
+    reg = S._registered()
+    with pytest.raises(Unexpressible, match="a window of no request has no circuit"):
+        WC.lower(reg, CLASS, None, GRAIN, compiled=type("Compiled", (), {"requests": [None]})())
+    compiled = S.compile_steps(reg, *S._session(*WINDOW))
+    with pytest.raises(Unexpressible, match="a served window's circuit is every request's Program, reading no tables"):
+        WC.lower(reg, CLASS, 1, GRAIN, compiled=compiled)
+
+
+@pytest.mark.slow
+def test_a_served_window_is_one_wired_program_its_members_fed_by_hand():
+    """WINDOW's circuit, Programs of 5 and 4 positions, is one wired Program with no free row, and node by node on made-up
+    parameters it gives each unit the outputs its template gives on the rows the record names: the ragged allocations
+    (the 4-position Program's units beside the 5-position one's, its entry at slot 1) wire as they lower. Slow (about a
+    minute to build, as the class circuit's `tiny_wired`): only a whole window holds every wire kind."""
+    circuit = _circuit(WINDOW)
+    prog, _ = wired(circuit)
+    assert prog.annotations["free"] == []
+    wired_matches_by_hand(circuit, prog)
 
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
@@ -794,7 +869,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     d, man = _checkpoint(tmp_path)
     rec = WW.weights_record(reg, d, man, grain=GRAIN)
     assert (rec["of_record"], rec["complete"], rec["n_fields"], rec["unresolved"]) == (True, True, 23, [])
-    program = WC.class_program(reg, WW.WEIGHTS_CLASS).program
+    program = WC.class_program(reg, WW.WEIGHTS_CLASS.positions).program
     assert [f["field"] for f in rec["fields"]] == [n for n, _ in dict(program.fn.signature()[0])[WC.WEIGHTS].fields]
     every, shapes = class_circuit(reg, WW.WEIGHTS_CLASS, grain=GRAIN).registered.params, rec["registered_entries"]
     params = {p: every[p] for p in WW.weight_params(every)}
@@ -874,13 +949,13 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 
 def test_a_window_its_slots_dont_place_is_refused_by_name():
     """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network attester's
-    scan placed it is the class's circuit, a last output past the window's end included (the scan carries it across
-    windows); refused by name are two requests at one boundary, an anchor that is no boundary and a last output before its
+    scan placed it is its requests' Programs at their anchors, a last output past the window's end included (the scan
+    carries it across windows); refused by name are two requests at one boundary, an anchor that is no boundary and a last output before its
     anchor. A placement that isn't one a request is a caller's error."""
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
     assert (cls.boundaries, cls.buckets, cls.anchor(0), cls.anchor(1)) == ((0, 16), 32, 0, 16)
     ok = _circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 31)])
-    assert _bytes(ok) == _bytes(class_circuit(S._registered(), cls, None, GRAIN))
+    assert [(p.anchor, p.lane) for p in _lowered(WINDOW, cls, [(0, 15), (16, 31)]).programs] == [(0, 0), (16, 0)]
     assert _bytes(_circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 47)])) == _bytes(ok)
     assert [(r.at, r.radix, r.base, r.step) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [
         (0, (2,), 0, (16 * 2277,))]
@@ -917,7 +992,7 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
     assert (rows["SiluMul_v2{I=128}"], rows["AttnBlockFirst_v1{D=16,NVIS=5,BN=128}"], rows["RMSNormFusedCuda_v2{N=64}"],
             rows[SCAN]) == (17, 14, 12, 9)
     assert max(rows.values()) == 17 <= GRAIN.rows
-    small = _circuit(WINDOW, Grain(gemm_words=1024, rows=16, select=64))
+    small = _circuit(FULL, Grain(gemm_words=1024, rows=16, select=64))
     n, rows = {_label(fn): k for fn, k in small.templates if fn.name == "SiluMul"}, _unit_rows(small)
     assert n == {"SiluMul_v2{I=64}": 40} and rows["SiluMul_v2{I=64}"] == 9 and max(rows.values()) == 14
 
@@ -983,7 +1058,7 @@ def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
     `TokenSelectCombine_v2{V=256, C=16}` reading the two units' rows (its position's `SelectCollect_v1` or, at the last,
     `SelectEntry_v1`): the Program's own body (chunks of 64) at groups of 16. A grain whose select isn't whole units of V, or
     whose units aren't whole groups, is refused."""
-    circuit = _circuit(WINDOW, Grain(gemm_words=1024, rows=256, select=128))
+    circuit = _circuit(FULL, Grain(gemm_words=1024, rows=256, select=128))
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     groups, combines = ids["TokenSelectGroups_v1{C=128,G=16}"], [ids[s] for s in (COLLECT0, COLLECT, ENTRY)]
@@ -994,7 +1069,7 @@ def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
     assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
     for select in (96, 8):
         with pytest.raises(Unexpressible, match=rf"256 logits aren't units of {select}, each groups of 16"):
-            _circuit(WINDOW, Grain(gemm_words=1024, rows=256, select=select))
+            _circuit(FULL, Grain(gemm_words=1024, rows=256, select=select))
 
 
 #: TINY at Llama's MLP ratio (intermediate four times hidden) and GEMM slices of 512 weight words: down_proj writes 32 rows of

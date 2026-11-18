@@ -1791,7 +1791,9 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     tables = tie[2] if tie is not None else pearl[3] if pearl is not None else None
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
-        WC.takes(compiled, cls, tables=tables)
+        WC.takes(compiled, cls)
+        if tables is not None:
+            tables.held(compiled, cls)
         low = WC.lower(registered, cls, tables=tables)
         WC.check_provable(low.circuit)
     except Unexpressible as e:
