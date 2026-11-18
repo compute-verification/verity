@@ -213,7 +213,7 @@ def _stand_in(name: str, log: list) -> SimpleNamespace:
         log.append(("attach", name, dict(ctx["settings"])))
         ex.request(name, H.ComputeBlockWith(kernel))
         return SimpleNamespace(release=lambda: log.append(("release", name)))
-    return SimpleNamespace(name=name, option="", settings={"k": 0}, depends=(), resource=Lacks("a stand-in"), check_settings=lambda own: None, attach=attach,
+    return SimpleNamespace(name=name, option="", settings={"k": 0}, depends=(), resource=Lacks("a stand-in"), kernels=Lacks("a stand-in"), check_settings=lambda own: None, attach=attach,
                            requests=lambda ctx: (), messages=())
 
 

@@ -37,7 +37,8 @@ read comes last there, never first. The placement's reason names the Lean pool t
 A Lean try or records run (`lean_package`: `--try FILE`'s package, `--records PKG`'s) builds in a kept tree of that pool, and
 where none of the machine's holds the package built, a try elaborates nothing (the sandbox fetches no dependencies) and a
 records run builds it cold. So `read` also lists each machine's kept trees of the pool and what each holds of the package
-(`lean_built`: its `.olean` files and whether its fetched dependencies are there, by listing directories), and `choose`
+(`lean_built`: its `.olean` files and whether its fetched dependencies are there, by listing directories; a package whose
+manifest there names only packages by path fetches none, so it has them), and `choose`
 takes only a machine that holds it built (`_holds`), saying how many of its trees do; one whose probe said nothing of them
 is taken only while no machine is known to hold it, and the reason says so. With none, the launch is refused with what
 each machine lacks and the two ways on (`_for_package`). A late twin moves only to such a machine too.
@@ -420,6 +421,13 @@ def peers():
     return sorted({f[0] for f in (ln.split("#")[0].split() for ln in lines) if len(f) >= 2})
 
 
+def fetches(pkg):
+    try:
+        return any(d.get("type") != "path" for d in json.loads((pkg / "lake-manifest.json").read_text()).get("packages") or [])
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
 def lean_built():
     pool, pkgs = BUILT
     base = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / RECORDS
@@ -428,7 +436,7 @@ def lean_built():
         if t.name[len(pool) + 1:].isdigit() and t.is_dir():
             trees[t.name] = {p: {"modules": sum(f.endswith(".olean") for _, _, fs in os.walk(t / p / ".lake" / "build" / "lib")
                                                 for f in fs),
-                                 "deps": (t / p / ".lake" / "packages").is_dir()} for p in pkgs}
+                                 "deps": (t / p / ".lake" / "packages").is_dir() or not fetches(t / p)} for p in pkgs}
     return {"dir": str(base), "trees": trees}
 
 
