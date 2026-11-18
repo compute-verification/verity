@@ -732,15 +732,11 @@ def lean(args: argparse.Namespace) -> int:
     if named != doc.get("passes"):
         return done("the retained passes are not the ones the Python verdict read, by name and SHA-256", 2)
     if args.exe == BUILD:
+        from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
         try:
-            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=LEAN_PACKAGE, capture_output=True, text=True,
-                               check=False)
-        except OSError as e:
-            return done(f"pouw-pearlplus can't be built here: {type(e).__name__}: {e}", 2)
-        if b.returncode:
-            return done(f"pouw-pearlplus doesn't build (lake exited {b.returncode}): "
-                        f"{(b.stdout + b.stderr).strip()[-400:]}", 2)
-        exe = LEAN_EXE
+            exe = V.executable(LEAN_EXE.name, LEAN_PACKAGE)
+        except (OSError, V.LeanError) as e:
+            return done(f"pouw-pearlplus doesn't build: {type(e).__name__}: {e}", 2)
         rec["exe"] = str(exe)
     if not exe.is_file():
         return done(f"no Lean executable at {exe}", 2)
