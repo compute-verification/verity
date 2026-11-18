@@ -250,7 +250,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
         if sites and sampled and not has_circuit(entry):
-            if not cuts(name, scheme):
+            if not _asks(mod, "cuts", scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "
                            f"traced_as)")
@@ -261,7 +261,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                            f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
                            f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
                            f"{{\"{CUT}\": \"{entry}\"}}}})")
-        if ctx.scheme("pous") is not None and keeps_weight_copy(name, scheme):
+        if ctx.scheme("pous") is not None and _asks(mod, "keeps_weight_copy", scheme):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
     if cut is not None and cut != cut_at:
@@ -270,21 +270,10 @@ def refusals(ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
-def cuts(protocol: str, scheme: str) -> bool:
-    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
-    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES
-    return protocol == "pouw" and scheme in PEARL_C_SCHEMES
-
-
-def keeps_weight_copy(protocol: str, scheme: str) -> bool:
-    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
-    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
-    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
-    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (LEAD_SCHEME, NCP_CIRCUIT_SCHEMES,
-                                                                                    PEARL_C_SCHEMES)
-    return protocol == "pouw" and scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
+def _asks(mod: ModuleType, question: str, scheme: str) -> bool:
+    """A protocol adapter's answer for ``scheme`` (its ``cuts`` or ``keeps_weight_copy``); False where it has none."""
+    answer = getattr(mod, question, None)
+    return bool(answer(scheme)) if callable(answer) else False
 
 
 def _uncut(ctx: Context) -> list[str]:
