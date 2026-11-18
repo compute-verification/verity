@@ -394,7 +394,7 @@ def gatherRuns (P : Prog) : Part → Option (List (Nat × Nat × Nat))
   | .strided false i base inner os is count =>
     if inputAt P i && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 &&
         (count == inner || (inner : Int) ≤ os) then
-      some ((List.range (count / inner)).map fun j => (i, (base + (j : Int) * os).toNat, inner))
+      some ((List.range (count / inner)).map fun (j : Nat) => (i, (base + (j : Int) * os).toNat, inner))
     else none
   | _ => none
 
