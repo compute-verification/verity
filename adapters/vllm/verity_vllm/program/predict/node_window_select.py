@@ -36,6 +36,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, concat, runs
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.definitions.registry import greedy_stop as GS
