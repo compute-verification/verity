@@ -461,7 +461,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let k := W.cutsOf reader port
     decls := decls.push { w := rect reader port start units k, bits := 16 * words / k, fill := .ingress }
-  if !Spot.Wires.pairwiseDisjoint (decls.toList.map (·.w)) then throw "inputs"
+  if !Spot.Wires.pairwiseDisjointSorted (decls.toList.map (·.w)) then throw "inputs"
   return { params, tables, roots, openings, decls := decls.toList }
 
 /-! ## Blocks -/
