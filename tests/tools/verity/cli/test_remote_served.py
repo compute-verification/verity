@@ -294,6 +294,22 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
 
 
+def test_a_component_that_charges_nothing_reads_why_and_holds_no_verdict_open(tmp_path, monkeypatch):
+    """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line prints its
+    why in place of a verdict, with no row for it in the record, and the composed accept stands."""
+    from verity.protocols.resource_accounting import scheme as S
+    nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
+    standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
+    monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})
+    monkeypatch.setitem(S.SCHEMES, "inference-only", standin)
+    assert T.charges_nothing("inference-only") == nothing.why and T.charges_nothing("pouw") is None
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", YES, ACCEPTED)
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["reason"]) == ("accept", None)
+    assert got["components"] == {**ALL_ACCEPTED, "inference-only": nothing.why}
+
+
 def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):
     cfg = R.load(CONFIG, REG)
     base = tmp_path / "out" / "compose"

@@ -303,12 +303,12 @@ def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     salts and every ``b || c`` stay, and a word the layout does not put there is refused."""
     from test_rec_residuals import S_SMALL, _holding, _rows
     from verity.commitments import hm96
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     g = random.Random(13)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)
     rows0, rows1 = _rows(g, w0), _rows(g, w1)
-    regs = {nm: (RG.Registered.commit("ab" * 64, f"rec-c{i}", [rows0[i], rows1[i]], [hm96.SHA512.fresh_salt() for _ in range(2)]), [0, 1])
+    regs = {nm: (RV.Registered.commit("ab" * 64, f"rec-c{i}", [rows0[i], rows1[i]], [hm96.SHA512.fresh_salt() for _ in range(2)]), [0, 1])
             for i, (nm, _) in enumerate(S_SMALL["ports"])}
     st = RR.statement(S_SMALL, "rec-residuals/small", 2)
     RR.write(st, regs, [v0, v1], tmp_path, evaluate=False)

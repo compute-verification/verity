@@ -85,7 +85,7 @@ theorem vals_getD (c : Coin) {n : ℕ} (hn : n ≠ 0) : (c.vals n).getD 0 0 = c.
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ)
 
 /-- **Rep `r` of table `i`'s coin rounds are the live coins'**: the schedule's round count, round `j` the first `n_j`

@@ -81,7 +81,7 @@ structure Pinned (c : RepCtx) (p : Flock.Proof) : Prop where
 theorem pinned_absorbedFrom (c : RepCtx) (a q : Flock.Proof) : Pinned c (absorbedFrom c a q) :=
   ⟨rfl, rfl, rfl⟩
 
-theorem readRep_pinned {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.Proof} {ms : List Claims.Msg}
+theorem readRep_pinned {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.Proof} {ms : List Hash.Msg}
     (h : readRep c rows q = some (p, ms)) : Pinned c p := by
   by_cases hx : ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2
   · rw [readRep, dif_pos hx] at h
@@ -92,7 +92,7 @@ theorem readRep_pinned {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.
 
 /-- **Every proof `readPs` reads is pinned** at its rep's context. -/
 theorem readPs_pinned {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
     ∀ (k : ℕ) (hk : k < pf.1.size), Pinned (repCtx spec sts c₁ r₀ cs k) pf.1[k] := by
   unfold readPs at h
@@ -112,7 +112,7 @@ theorem readPs_pinned {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
 
 /-- **At a decision, every rep's proof is pinned** at its context, whatever round 0's rows the context reads (the pin
 reads only its setup, schedule and `z`). -/
-theorem decR_pinned {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_pinned {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) (r₀ : List ByteArray) :
     ∀ (k : ℕ) (hk : k < d.f.ps.size), Pinned (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k) d.f.ps[k] := by
   obtain ⟨v, c₁, r₀', rss, fl, link, pf, -, -, -, -, -, h9, rfl⟩ := decR_some h
@@ -178,7 +178,7 @@ local instance lawfulBEqByteArrayL : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- **Rep `r` of table `i`'s proof is pinned** at its context. -/
@@ -271,7 +271,7 @@ theorem rootB_link
 
 /-- **Row L where the rows are asked**: at a dense inner statement's table, from the decision's points, the proof's
 index and shape, the `after` check and the stream's round-2 coin being the live one (`hz`). -/
-theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem rowL_at {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (hpts : D.sess.points = pointsOf D.spec D.d.c₁) (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'hk))
@@ -283,7 +283,7 @@ theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hs
 
 /-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row L from `rowL_at`: in place of `hL`, the
 `after` check passes (`ha`) and each rep stream's round-2 coin is the live one the reader takes `z` from (`hz`). -/
-theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_assembled_L {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -296,8 +296,8 @@ theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.CompiledState
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
     (ha : FlockDeploy.VerdictR.At FlockDeploy.sha512 .after D.d.s x D.d.link D.d.c₁ D.d.mids D.d.f)
     (hz : ∀ r : Fin 2, (((D.files cls i).stream r).rounds[2]!).coins.getD 0 0 = (D.ctx (2 * i + r)).z)
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hholds : ∀ q ∈ pieces, openHolds sideAt posAt q x ms cs)
     (hside : ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,

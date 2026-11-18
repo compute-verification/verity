@@ -305,6 +305,18 @@ def hook_seen(agent: str) -> bool:
     return (INBOX / f"{agent}.polled").exists()
 
 
+def tool_hook_line() -> str:
+    """Whether the tool-call hook has run on this VM, for any agent: EVENT_LOG's `task_hook.py` lines of event `preToolUse`,
+    each a Task or MCP call Cursor handed it. The Task log holds Task calls alone, so an empty one shows nothing."""
+    runs = [e for e in map(parsed, event_lines()) if isinstance(e, dict) and e.get("hook") == "task_hook.py"
+            and e.get("event") == "preToolUse"]
+    if not runs:
+        return (f"no tool-call hook has run on this VM: {settings.EVENT_LOG} has no `task_hook.py` event `preToolUse`. "
+                f"Either no Task or MCP call has been made here, or Cursor runs no preToolUse hook here: {AT_BOOT}")
+    return (f"the tool-call hook has run on this VM: {len(runs)} `preToolUse` event(s) of `task_hook.py` in {settings.EVENT_LOG}, "
+            f"the last for {shown(runs[-1].get('tool_name'))}")
+
+
 def shown(value: object) -> str:
     """One of an event's kept values (`settings.EVENT_VALUES`) as `turns` prints it: its printable characters, cut as the
     hook cuts it, since any process on the VM can write the log; `-` where the event has none."""
@@ -520,6 +532,7 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic, 
         problems = hook_problems(a.agent, a.repo)
         for p in problems:
             print(f"inbox: PROBLEM: {p}")
+        print(f"inbox: {tool_hook_line()}")
         if every != "off" and mark.exists() and time.time() - mark.stat().st_mtime < float(every) + 60:
             print(f"inbox: this VM's hook polls for {a.agent} every {every} s" + (f"; its last pull said: {tail[0]}" if tail else ""))
             return 1 if problems else 0

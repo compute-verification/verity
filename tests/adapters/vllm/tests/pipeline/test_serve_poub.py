@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
@@ -17,15 +18,16 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import poub_session
 from verity_vllm.pipeline import serve_poub as SR
-from verity_vllm.protocols.poub import remote
+from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 
 
 @pytest.fixture(autouse=True)
-def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The adapter's `CommitSession` stands in for the session memory-accounting registers by name."""
-    monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
+def _registered() -> None:
+    """The session memory-accounting registers by name (`POUB.processes`), there once the declarations are loaded."""
+    declarations.load()
+    assert poub_session.SESSION in scheme.PROCESSES
 
 
 def test_without_a_registered_session_the_remote_verifier_is_not_implemented(monkeypatch):
@@ -35,7 +37,7 @@ def test_without_a_registered_session_the_remote_verifier_is_not_implemented(mon
 
 
 def parse(*more: str) -> so.Options:
-    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", *more], environ={})
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", "--out", "/tmp/serve", *more], environ={})
 
 
 def refusal(opts: so.Options) -> str | None:

@@ -51,14 +51,14 @@ as the round units `PousRound_v1` read them), the commitment `c`, the coin openi
 verifier `V` that accepts only outcomes (`outsOf`) that `sessionInProofs` accepts: a fixed extractor `E` recovers, by
 rerunning any prover, a signed session under `c`, `scheme` and `pk` that `verdict` accepts, except
 `(c.k + 2) · (εKs + εBind)` and `Claims.KS`'s collision term at `γ`. -/
-def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
+def RunInProofsDeployed (H : Hash.Msg → Hash.Msg) (UnitOutcome : Type)
     (sessionInProofs : Schemes → List ByteArray → (c : ChallengePhaseCommitment) → Array CoinOpening → String → ByteArray →
       (Fin (c.k + 2) → UnitOutcome) → Bool) (εKs εBind γ : ℝ) : Prop :=
   ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (scheme : String) (pk : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
-    (outsOf : List Claims.Msg → Option (Fin (c.k + 2) → UnitOutcome)),
-    (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
+    (outsOf : List Hash.Msg → Option (Fin (c.k + 2) → UnitOutcome)),
+    (∀ (x : Hash.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ outs, outsOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some outs ∧
           sessionInProofs schemes trusted c openings scheme pk outs = true) →
@@ -106,13 +106,13 @@ that accepts only a claim (`claimOf`) that `SetupInProofs.check` accepts, and th
 `SetupComputesBlockOk` at the circuit record's reading `read`, the supplied rows `supplied` and the decoding `decode`: a
 fixed extractor `E` recovers, by rerunning any prover, a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to
 their slice of `W`, except `εPa + εKs + εBind` and `Claims.KS`'s collision term at `γ`. -/
-def SetupInProofsDeployed (H : Claims.Msg → Claims.Msg) (εPa εKs εBind γ : ℝ) : Prop :=
+def SetupInProofsDeployed (H : Hash.Msg → Hash.Msg) (εPa εKs εBind γ : ℝ) : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (W : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
-    (claimOf : List Claims.Msg → Option _root_.PousVerifier.SetupInProofs.Claim)
+    (claimOf : List Hash.Msg → Option _root_.PousVerifier.SetupInProofs.Claim)
     (read : Option ((C : Verity.Boolean.Circuit) × (String → List (Fin C.N)) × List (Fin C.N)))
     (supplied : Nat → String → List Bool) (decode : (String → List Bool) → ByteArray × ByteArray),
-    (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
+    (∀ (x : Hash.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ cl pub, claimOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some cl ∧
           _root_.PousVerifier.SetupInProofs.check q c cl = .accept pub ()) →

@@ -98,26 +98,26 @@ structure Raw where
   publicInputs : Option ByteArray
 
 /-- A number in 8 bytes, little-endian. -/
-def encNat (n : ℕ) : Claims.Msg := (List.range 8).map fun i => (n / 256 ^ i).toUInt8
+def encNat (n : ℕ) : Hash.Msg := (List.range 8).map fun i => (n / 256 ^ i).toUInt8
 
 /-- Bytes, after their length. -/
-def encBytes (b : ByteArray) : Claims.Msg := encNat b.size ++ b.data.toList
+def encBytes (b : ByteArray) : Hash.Msg := encNat b.size ++ b.data.toList
 
-def encStr (s : String) : Claims.Msg := encBytes s.toUTF8
+def encStr (s : String) : Hash.Msg := encBytes s.toUTF8
 
-def encBool (b : Bool) : Claims.Msg := [if b then 1 else 0]
+def encBool (b : Bool) : Hash.Msg := [if b then 1 else 0]
 
-def encOpt {α : Type} (e : α → Claims.Msg) : Option α → Claims.Msg
+def encOpt {α : Type} (e : α → Hash.Msg) : Option α → Hash.Msg
   | none => [0]
   | some a => 1 :: e a
 
-def encList {α : Type} (e : α → Claims.Msg) (l : List α) : Claims.Msg := encNat l.length ++ l.flatMap e
+def encList {α : Type} (e : α → Hash.Msg) (l : List α) : Hash.Msg := encNat l.length ++ l.flatMap e
 
 /-- The statement encoding's format string, its first field. -/
 def FORMAT : String := "flock-verify-statement/v1"
 
 /-- **The statement's canonical bytes.** -/
-def Raw.encode (w : Raw) : Claims.Msg :=
+def Raw.encode (w : Raw) : Hash.Msg :=
   encStr FORMAT ++ encStr w.statement ++ encBytes w.circuit ++ encBytes w.publicFile ++
     encList (fun p => encStr p.1 ++ encBytes p.2) w.tables ++ encBool w.zk ++ encBool w.osCoins ++ encNat w.count ++
     encOpt encBytes w.draw ++ encOpt encBytes w.partition ++ encOpt encBytes w.program ++ encOpt encNat w.work ++
@@ -125,7 +125,7 @@ def Raw.encode (w : Raw) : Claims.Msg :=
     encOpt encBytes w.registered ++ encOpt encBytes w.publicInputs
 
 /-- A reader of bytes. -/
-abbrev Rd := StateT Claims.Msg Option
+abbrev Rd := StateT Hash.Msg Option
 
 def rdTake (n : ℕ) : Rd (List UInt8) := fun s => if n ≤ s.length then some (s.take n, s.drop n) else none
 
@@ -185,13 +185,13 @@ def Raw.read : Rd Raw := do
     stratified, closure, registered, publicInputs⟩
 
 /-- **The statement's decoder**: `Raw.read` on all of `x`, kept only when its encoding is `x`. -/
-def decode (x : Claims.Msg) : Option Raw :=
+def decode (x : Hash.Msg) : Option Raw :=
   match Raw.read.run x with
   | some (w, []) => if w.encode = x then some w else none
   | _ => none
 
 /-- A decoded statement encodes back to its bytes. -/
-theorem decode_encode {x : Claims.Msg} {w : Raw} (h : decode x = some w) : w.encode = x := by
+theorem decode_encode {x : Hash.Msg} {w : Raw} (h : decode x = some w) : w.encode = x := by
   unfold decode at h
   split at h
   · split_ifs at h with he
@@ -200,7 +200,7 @@ theorem decode_encode {x : Claims.Msg} {w : Raw} (h : decode x = some w) : w.enc
   · cases h
 
 /-- **The decoder is injective.** -/
-theorem decode_injective {x y : Claims.Msg} {w : Raw} (hx : decode x = some w) (hy : decode y = some w) : x = y :=
+theorem decode_injective {x y : Hash.Msg} {w : Raw} (hx : decode x = some w) (hy : decode y = some w) : x = y :=
   (decode_encode hx).symm.trans (decode_encode hy)
 
 /-! ## The verifier's parsers -/
@@ -264,13 +264,13 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not
 parse. -/
-def insOf (zk : Bool) (x : Claims.Msg) : Option Ins := do
+def insOf (zk : Bool) (x : Hash.Msg) : Option Ins := do
   let w ← decode x
   if w.zk ≠ zk then none
   w.ins.toOption
 
 /-- The statement's inputs and its setup. -/
-def setupOf (zk : Bool) (x : Claims.Msg) : Option (Ins × SessionSpec × Array Stmt) := do
+def setupOf (zk : Bool) (x : Hash.Msg) : Option (Ins × SessionSpec × Array Stmt) := do
   let s ← insOf zk x
   let (spec, sts) ← s.setup.toOption
   pure (s, spec, sts)
@@ -283,7 +283,7 @@ theorem Ins.setup_read {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : s.
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
 
-theorem setupOf_some {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem setupOf_some {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) : insOf zk x = some s ∧ s.setup = .ok (spec, sts) := by
   unfold setupOf at h
   cases hi : insOf zk x with
@@ -297,7 +297,7 @@ theorem setupOf_some {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
       exact ⟨rfl, hsu⟩
 
 /-- What the verifier reads of the statement's bytes (`Readable.Read`). -/
-def readOf (zk : Bool) (x : Claims.Msg) : Option Readable.Read := (insOf zk x).map Ins.read
+def readOf (zk : Bool) (x : Hash.Msg) : Option Readable.Read := (insOf zk x).map Ins.read
 
 theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk := by
   unfold Raw.ins at h
@@ -314,7 +314,7 @@ theorem Raw.ins_sample {w : Raw} {s : Ins} (h : w.ins = .ok s) :
   all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl⟩)
 
 /-- A statement of the verifier that is masked exactly when `zk` is read as masked exactly when `zk`. -/
-theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf zk x = some r) : r.zk = zk := by
+theorem readOf_zk {zk : Bool} {x : Hash.Msg} {r : Readable.Read} (h : readOf zk x = some r) : r.zk = zk := by
   unfold readOf insOf at h
   obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
@@ -330,7 +330,7 @@ theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf z
     exact Raw.ins_zk hi
 
 /-- **A statement's sample is rebuilt** (`Flock.norm`, `Raw.ins_sample`). -/
-theorem insOf_sample_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
+theorem insOf_sample_norm {zk : Bool} {x : Hash.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
     (hd : s.read.draw = some d) : Flock.norm d = d ∧ Claims.Json.Wf d := by
   unfold insOf at h
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
@@ -349,16 +349,16 @@ theorem insOf_sample_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x
 
 /-- **The claims' parser**: C's `parseOf` at the verifier's reading of the bytes: `Read.parse` (the verifier's setup of
 the session's statement), read as `Claims.Flock.Stmt` (`toReadable`, with the relation's fields `rel`). -/
-def parse (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Claims.Msg → Option Claims.Flock.Stmt :=
+def parse (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Hash.Msg → Option Claims.Flock.Stmt :=
   Readable.parseOf rel (readOf zk)
 
 /-- **Each table's own statement**: C's `tableOf` at the verifier's reading of the bytes, table `j` of the parsed
 statement alone (`Readable.Parsed.only`), read as `Claims.Flock.Stmt`. -/
-def table (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Claims.Msg → ℕ → Option Claims.Flock.Stmt :=
+def table (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Hash.Msg → ℕ → Option Claims.Flock.Stmt :=
   Readable.tableOf rel (readOf zk)
 
 /-- **The claims' scope check**: C's `scopeCheckOf`, the statement parses and passes the verifier's own scope refusal
 (`Readable.Parsed.scope`: `ProvedScope.check`, then `ProvedScope.sizesOk`). -/
-def scopeCheck (zk : Bool) : Claims.Msg → Bool := Readable.scopeCheckOf (readOf zk)
+def scopeCheck (zk : Bool) : Hash.Msg → Bool := Readable.scopeCheckOf (readOf zk)
 
 end FlockDeploy

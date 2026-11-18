@@ -256,34 +256,34 @@ theorem pr_tape (p : α → Prop) (g : Game α) (s : Strategy g) :
 
 namespace DigestCut
 
-theorem finder_cost {g : Game α} (K : DigestCut Claims.Msg g) (s : Strategy g) (q : ℕ) (x : (K.finder s q).S) :
+theorem finder_cost {g : Game α} (K : DigestCut Hash.Msg g) (s : Strategy g) (q : ℕ) (x : (K.finder s q).S) :
     (K.finder s q).cost x = q := rfl
 
-theorem finder_pr (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (s : Strategy g)
+theorem finder_pr (H : Hash.Msg → Hash.Msg) {g : Game α} (K : DigestCut Hash.Msg g) (s : Strategy g)
     (q : ℕ) : (K.finder s q).Pr H =
       expect (ind fun y => ∃ u v, y = some (u, v) ∧ Claims.Collision H u v) (K.forkG s) (K.forkS s) :=
   pr_tape (fun y => ∃ u v, y = some (u, v) ∧ Claims.Collision H u v) (K.forkG s) (K.forkS s)
 
 /-- **The miss is at most the square root of the two-continuation finder's success**, where every two messages a cut's
 plays reveal have one image under `H` (`Agrees`). -/
-theorem miss_le (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
+theorem miss_le (H : Hash.Msg → Hash.Msg) {g : Game α} (K : DigestCut Hash.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) : K.miss s ≤ Real.sqrt ((K.finder s q).Pr H) := by
   rw [finder_pr]
   exact (le_abs_self _).trans (Real.abs_le_sqrt (sq_miss_le H K hK s))
 
 /-- **The miss at `cr/sha-512`**: where the finder at `q` calls meets the strict birthday bound, the miss is at most
 `√(q²/2^513)`. -/
-theorem miss_le_strict (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
+theorem miss_le_strict (H : Hash.Msg → Hash.Msg) {g : Game α} (K : DigestCut Hash.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) (hCR : Claims.StrictBirthday H (K.finder s q)) :
     K.miss s ≤ Real.sqrt ((q : ℝ) ^ 2 / 2 ^ (513 : ℝ)) :=
   (miss_le H K hK s q).trans (Real.sqrt_le_sqrt (hCR q fun _ => le_rfl))
 
-theorem missP_le (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
+theorem missP_le (H : Hash.Msg → Hash.Msg) {g : Game α} (K : DigestCut Hash.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) : K.missP s ≤ ENNReal.ofReal (Real.sqrt ((K.finder s q).Pr H)) := by
   rw [← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (K.missP_le_one s)), missP_toReal]
   exact ENNReal.ofReal_le_ofReal (miss_le H K hK s q)
 
-theorem missP_le_strict (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
+theorem missP_le_strict (H : Hash.Msg → Hash.Msg) {g : Game α} (K : DigestCut Hash.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) (hCR : Claims.StrictBirthday H (K.finder s q)) :
     K.missP s ≤ ENNReal.ofReal (Real.sqrt ((q : ℝ) ^ 2 / 2 ^ (513 : ℝ))) := by
   rw [← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (K.missP_le_one s)), missP_toReal]

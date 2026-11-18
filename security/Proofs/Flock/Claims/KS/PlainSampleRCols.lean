@@ -75,27 +75,27 @@ open Lean (Json)
 
 /-- **The `nextJ` final a `nextR` decision's verdict reads**: the statement, the value with the read proofs' digests at
 `hOf H` substituted, and those proofs' files. -/
-def finalOfR (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (f : FinalP) :
+def finalOfR (H : Hash.Msg → Hash.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (f : FinalP) :
     FinalJ :=
   ⟨f.stmt, shaSubJ spec ((filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).map (FlockComplete.dgOf spec (Claims.hOf H)))
     f.j, filesAt (tabsOf sts) (pointsOf spec c₁) f.ps⟩
 
-theorem jAt_finalOfR (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalP) :
+theorem jAt_finalOfR (H : Hash.Msg → Hash.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : FinalP) :
     coinSubJ spec c₁ mids (finalOfR H spec sts c₁ f).j = jAt H spec sts c₁ mids f := rfl
 
 /-- **`nextR`'s checks are `checksAtJ` at `finalOfR`** (`checksAtJ_shaSubJ`). -/
-theorem checksAtJ_finalOfR (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem checksAtJ_finalOfR (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : FinalP) (v : Json) :
     checksAtJ s spec x link c₁ mids (finalOfR H spec sts c₁ f) v =
       checksAtJ s spec x link c₁ mids ⟨f.stmt, f.j, #[]⟩ v :=
   checksAtJ_shaSubJ s spec x link c₁ mids f.stmt _ f.j _ v
 
 /-- `nextR` decides only on a statement that sets up plain, at its setup (`actJ_decide`). -/
-theorem actR_setupOf {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem actR_setupOf {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
     setupOf false x = some (s, spec, sts) := by
   obtain ⟨⟨s', spec', sts'⟩, _, _, _, _, _, _, hv, -, -, -, -, -, hd⟩ := decR_some (actR_decide h)
   simp only [DecR.mk.injEq] at hd
@@ -112,9 +112,9 @@ open Lean (Json)
 /-- **An accepting `nextR` step at SHA-512**: the statement sets up at `(spec, sts)`, plain and without
 `--public-inputs`, `verifyJWithMK id` at SHA-512 accepts `jAt sha512` and the read proofs' files there, and `checksAtJ`
 passes there (`nextR_acc_iff`, `decisionAtS_evalJ`; `decideJ_sha512` at `finalOfR sha512`). -/
-theorem decideR_sha512 {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decideR_sha512 {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) :
     verifyJWithMK id With.std spec (tabsOf sts) (jAt sha512 spec sts c₁ mids f)
         (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps) = .ok () ∧
@@ -140,7 +140,7 @@ open Flock
 /-- **What the column reader takes of a `nextR` decision's table `j`** (`runOfJ` at `nextR`'s verdict): the table's
 `m`, `kLog`, claim count and Merkle widths at the link points `liveOfJ` reads at `jAt sha512`, and its two reps' rounds
 there and the read proofs' files. None where the step does not decide. -/
-noncomputable def runOfR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin)
+noncomputable def runOfR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin)
     (j : ℕ) : Option Claims.Flock.ZkRun :=
   match actR rd x as cs with
   | .decide _ spec sts _ c₁ mids f => do
@@ -157,14 +157,14 @@ noncomputable def runOfR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (a
   | _ => none
 
 /-- **The opened level-0 columns of a `nextR` decision's table `j`** (`colsJ` at `nextR`). -/
-noncomputable def colsR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin)
+noncomputable def colsR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin)
     (j : ℕ) : List (ℕ × List FlockLevel3.GF128) :=
   match runOfR rd x as cs j with
   | some r => Claims.Flock.plainRunCols r
   | none => []
 
 /-- **The deployed reader's rounds**: `V false`'s round count, with the steps `nextR rd`. -/
-noncomputable def VR (rd : Claims.Msg → Option FinalP) : Claims.Verifier Coin where
+noncomputable def VR (rd : Hash.Msg → Option FinalP) : Claims.Verifier Coin where
   k := (FlockDeploy.V false).k
   next := nextR rd
 
@@ -182,9 +182,9 @@ local notation "𝔽" => FlockLevel3.GF128
 the step decides at `(spec, sts)` with first table `st` and two link points, `liveOfJ` reads `jAt sha512` and the
 verdict accepts it with the read proofs' files, the reader's table-0 columns are `plainRepColsOf` at `shapeOf` with
 `2 · |regions|` extra claims, on `liveOfJ`'s first two rep streams and those files, below level 0's `2^d`. -/
-theorem colsR_plain {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem colsR_plain {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {st : Stmt} {sch : Schedule}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {lv : Live} {st : Stmt} {sch : Schedule}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hlv : liveOfJ spec (jAt sha512 spec sts c₁ mids f) = .ok lv)
     (hv : verifyJWithMK id With.std spec (tabsOf sts) (jAt sha512 spec sts c₁ mids f)
@@ -229,9 +229,9 @@ theorem colsR_plain {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
 accepting `nextR` step at SHA-512 whose statement carries the sample `d`, if the step's reader looks up no column off
 `C` at table 0 (`colsR … 0`), the deployed plain reader looks up none in the session the verdict reads, `jAt sha512`
 with the read proofs' files, at the setup at `d` (`TxNoOffAtJK id`). -/
-theorem txNoOffAtJK_of_colsR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg}
+theorem txNoOffAtJK_of_colsR {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP} {d : Json} {N : ℕ} (C : Fin N → List 𝔽)
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP} {d : Json} {N : ℕ} (C : Fin N → List 𝔽)
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d)
     (hno : ¬ ∃ (p : Fin N) (u : List 𝔽), Claims.Flock.lookCol (colsR rd x as cs 0) p.val = some u ∧ u ≠ C p) :
@@ -275,9 +275,9 @@ outcome (`viewOfJ` at `jAt sha512` and the read proofs' files, at any `mPts`) an
 accepts that session at the setup at `d` (`decideR_sha512`), which records the outcome (`recordsLiveAtDJK_of_checksJ`
 at `finalOfR sha512`), so it accepts what `wrPDJK` writes, and the reader's premise (`txNoOffAtJK_of_colsR`) moves
 there (`txNoOffAtJK_of_records`). -/
-theorem plainVerdictAtJK_of_nextR_cols (mPts : ℕ) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP} {d : Json}
+theorem plainVerdictAtJK_of_nextR_cols (mPts : ℕ) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP} {d : Json}
     {N : ℕ} (C : Fin N → List 𝔽) (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d)
     (hno : ¬ ∃ (p : Fin N) (u : List 𝔽), Claims.Flock.lookCol (colsR rd x as cs 0) p.val = some u ∧ u ≠ C p) :
@@ -301,8 +301,8 @@ theorem plainVerdictAtJK_of_nextR_cols (mPts : ℕ) {rd : Claims.Msg → Option 
 run of `VR rd` that accepts at SHA-512 decides on its messages and coins (`actR`), and wherever the decided statement
 carries the sample `d` and the step's reader looks up no column off `C` at table 0, `plainVerdictAtJK id` holds at the
 step's live outcome (`plainVerdictAtJK_of_nextR_cols`). -/
-theorem plainVerdictAtJK_of_runR (mPts : ℕ) (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω}
-    {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
+theorem plainVerdictAtJK_of_runR (mPts : ℕ) (rd : Hash.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω}
+    {x : Hash.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
       actR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
           ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
