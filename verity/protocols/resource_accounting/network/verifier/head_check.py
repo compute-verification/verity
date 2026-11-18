@@ -1,6 +1,6 @@
-"""N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
+"""N2's check of one attested record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.TransferBlocks`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
-profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
+profile, its counts are the profile's; and the attestation's signed digest is the head's record digest salted by the
 attester. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
 which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
 names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
@@ -22,7 +22,7 @@ link's name and its grids are, and so is whether an end has a profile.
 (`TransferBlocks.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
-significant bit first, and `signed` the digest the end's certificate signs (`certificate_digest`), which hides the
+significant bit first, and `signed` the digest the end's attestation signs (`certificate_digest`), which hides the
 record digest under the attester's salt and is all of the head the host's signature check reads.
 
 **Witness.** The head's bytes (`RecordHead.encode`, its frames root included), its leaf's hiding salt and its two
@@ -32,14 +32,14 @@ siblings in N2's tree, and `salt_c`, the 64 bytes the attester sampled for the r
 digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
 (`NetworkHeadFields`): its link's length and name, its direction and window, the grid's T, r, B and τ_b, status 0
 (complete) and the grid's parameters digest. (3) When COUNTS, its T counts are the profile's row
-(`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
+(`NetworkHeadCounts`). (4) The attestation signs this head: R, the record digest of the head (`NetworkRecordDigest`,
 `tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
 SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
 proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which
 nothing in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the attester signed under, so the
-certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
+attestation binds the head the check opens, and the head leaf stays the head's bytes alone.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
 32·T − 1 ANDs (19,199 at T = 600), and three ANDs join the four. The opening is SHA-512 of the head's 157 + L + 4T bytes
@@ -233,7 +233,7 @@ NetworkHidingRead = CompositeDefinition(
         "and domain id domain")
 
 
-# --- the circuit: the certificate's digest ----------------------------------------------------------------------------
+# --- the circuit: the attestation's digest ----------------------------------------------------------------------------
 
 def _digest_bytes(d: Coll) -> list[list]:
     """A Digest's 64 bytes, each 8 bits least significant first, from its SHA-512 words (bytes big-endian)."""
@@ -420,7 +420,7 @@ def expand(g: PrimitiveDefinition, d):
 @dataclass(frozen=True)
 class Instance:
     """One head's check: its size class and its arguments as bytes and ints (`profile` None when the end has no
-    profile; `signed` the certificate's signed digest; `path` the head leaf's two siblings; `salt_c` the attester's
+    profile; `signed` the attestation's signed digest; `path` the head leaf's two siblings; `salt_c` the attester's
     salt for the record)."""
 
     record: bytes

@@ -11,7 +11,7 @@ run's result (`record`).
 The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
 stay private, and scales the measurement over them: its cost, its knowledge-soundness error
 and its stop-leak bound, for one window and pooled over the monitoring periods (`verity.protocol`'s `MONITORING_PERIODS`: a week, a month,
-a year), over one datacenter (``benchmarks/census/deployments.json``'s reference) and over the world's compute (the
+a year), over one datacenter (``calibration/census/deployments.json``'s reference) and over the world's compute (the
 adversary resource model, ``adversary.json``'s reference). Every figure says its basis: ``measured`` (this run),
 ``proved`` (a Lean theorem, by name, with what it assumes) or ``scaled`` (and what is scaled).
 
@@ -72,8 +72,9 @@ FIGURES = {"cost": "CPU core-years", "ks": "log₂ of the knowledge-soundness er
 #: the figures a research run keeps beside its result, relative to the run's directory
 KEPT = "out/recursion-figures.json"
 
-FORMAT = "recursion-e2e/figures/v2"
-CENSUS = HERE.parent / "census"
+#: v3: the knowledge-soundness bound's terms are `ks_log2`, which v2 named `levels`
+FORMAT = "recursion-e2e/figures/v3"
+CENSUS = HERE.parents[1] / "calibration" / "census"
 YEAR_S = dict(MONITORING_PERIODS)["year"]
 #: κ, the per-session term, and ε, the per-SHA-512-call term, log₂ (``RecDeploy.recursiveBitsK_deployed``)
 KAPPA_LOG2 = -167.7
@@ -164,8 +165,8 @@ def figures(doc: dict[str, Any], times: Mapping[str, Mapping[str, float] | None]
                 "scaled: a stream a machine, a session a window",
         "scaled": "every machine audited as this run's session audited its window, a session a machine a window; the world "
                   "as machines of the datacenter's size; covered compute is each session's statement's ANDs"},
-        "levels": {"kappa_log2": KAPPA_LOG2, "eps_log2": EPS_LOG2, "knowledge_log2": KNOWLEDGE_LOG2,
-                   "hash_rate_log2": HASH_RATE_LOG2}}
+        "ks_log2": {"kappa_log2": KAPPA_LOG2, "eps_log2": EPS_LOG2, "knowledge_log2": KNOWLEDGE_LOG2,
+                    "hash_rate_log2": HASH_RATE_LOG2}}
     leak_session = math.log2(1 + S) if S else None
     fl = {}
     fs = fleets(census)

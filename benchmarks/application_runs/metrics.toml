@@ -1,0 +1,23 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "vllm/application-verdicts-accepted"
+title = "Application verdicts accepted"
+owner = "vllm"
+unit = "verdicts"
+axis = "Verdicts of one application run that accept, its protocols' and the combined one, by model, card and configuration."
+better = "higher"
+command = "research run --on NODE --project verity --source . --cwd clone -- uv run python benchmarks/application_runs/run.py CONFIG"
+every = "1d"
+
+[[metric]]
+id = "vllm/application-minutes"
+title = "Application run time"
+owner = "vllm"
+unit = "minutes"
+axis = "Minutes from the start of one application run to its verdicts, where every one accepts, by model, card and configuration."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd clone -- uv run python benchmarks/application_runs/run.py CONFIG"
+every = "1d"
+floor = 60

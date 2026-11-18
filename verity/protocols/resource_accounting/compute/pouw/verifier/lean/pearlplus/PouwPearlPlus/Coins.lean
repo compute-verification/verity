@@ -27,7 +27,7 @@ Every JSON comparison here is by a match (`PouwCommit.fieldIs`), never `Lean.Jso
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit
 open Spot.Challenger (LiveCommitment LiveOpening)
@@ -134,4 +134,4 @@ def ofRecordReason (coins : EpochCoins) (source : Option ByteArray) (held : Opti
           "opened on the run commitment: a development draw no verdict of record takes")
       else some s!"the verifier's coin record's draw is from {pyReprJson (src.getD .null)}, not the challenger's"
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

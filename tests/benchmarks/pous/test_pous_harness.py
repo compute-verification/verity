@@ -1,11 +1,12 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
 stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the memory
-challenger is the harness's own `memory_challenger.py` process.  The harness's timer is injected and the memory
-challenger runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
+attester is the harness's own `memory_attester.py` process.  The harness's timer is injected and the memory
+attester runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
 outcome here depends on a clock or on the machine's load: what is checked is that each step runs and each gate and
 control decides, not the numbers."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -29,7 +30,7 @@ BENCH = ROOT / "benchmarks" / "pous"
 BAND = "band-chain/d12/v1"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`memory_challenger.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
+"""`memory_attester.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -260,7 +261,7 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
     format), whose segments round-trip and whose certificate at the frozen point is
-    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
+    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory attester process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
     from verity.protocols.resource_accounting.memory.pous.verifier import band, schemes
 
@@ -393,7 +394,7 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
     assert got[1] == (0, 1_000, c_host[width:2 * width])
 
 
-def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
+def test_the_memory_attester_takes_a_seed_on_the_logical_clock_alone(tmp_path):
     """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real samples fail now
     and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
     _harness()
@@ -479,14 +480,14 @@ def test_every_checkout_of_the_same_native_source_compiles_one_copy_left_untouch
     from band_gpu import native
 
     copy = native._stable_copy(str(tmp_path))
-    assert open(copy, "rb").read() == open(native.SOURCE, "rb").read()
+    assert Path(copy).read_bytes() == Path(native.SOURCE).read_bytes()
     os.utime(copy, ns=(1, 1))
     assert native._stable_copy(str(tmp_path)) == copy and os.stat(copy).st_mtime_ns == 1   # ninja sees nothing to rebuild
     other = tmp_path / "checkout" / "pous_native.cu"
     other.parent.mkdir()
     other.write_bytes(b"// another source\n")
     monkeypatch.setattr(native, "SOURCE", str(other))
-    assert native._stable_copy(str(tmp_path)) == copy and open(copy, "rb").read() == b"// another source\n"
+    assert native._stable_copy(str(tmp_path)) == copy and Path(copy).read_bytes() == b"// another source\n"
 
 
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
@@ -671,7 +672,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
     rc, calls, _ = _pod_sh(tmp_path, "mc", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home))
     assert rc.returncode == 0 and calls == []
     package = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"
-    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-attester-verdict\n"
     rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
     assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
     check = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check"
@@ -686,7 +687,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
 
 def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
     """The pod's venv holds numpy, torch and gmpy2 alone, and pod.sh's PYTHONPATH the rest: with that path and no
-    site-packages at all, the memory challenger's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
+    site-packages at all, the memory attester's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
     unimportable) and `live.py` load.  A run's five arms once signed their sessions and then lost them to
     `No module named 'verity_difftest'`."""
     line = next(s for s in (BENCH / "pod.sh").read_text().splitlines() if s.startswith("export PYTHONPATH="))
@@ -696,7 +697,7 @@ def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
             "spec = importlib.util.spec_from_file_location('v', sys.argv[1])\n"
             "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
             "sys.path.insert(0, sys.argv[2])\n"
-            "from memory_challenger import live\n")
+            "from memory_attester import live\n")
     verdict = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
     rc = subprocess.run([sys.executable, "-S", "-c", code, str(verdict), str(BENCH)], capture_output=True, text=True,
                         env={"PYTHONPATH": path, "PATH": os.environ.get("PATH", "/usr/bin:/bin")})
@@ -736,7 +737,7 @@ def test_the_kernel_settings_and_the_loop_layout():
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
 
 
-def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_and_responders_cpus():
+def test_the_harness_moves_every_one_of_its_threads_off_the_memory_attesters_and_responders_cpus():
     harness = _harness()
     here = sorted(os.sched_getaffinity(0))
     if len(here) < 3:
@@ -758,7 +759,5 @@ def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_a
         stop.set()
         t.join()
         for x in os.listdir("/proc/self/task"):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.sched_setaffinity(int(x), here)
-            except ProcessLookupError:
-                pass

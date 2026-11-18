@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.TransferBlocks
+public import NetworkVerifier.TransferBlocks
 public import Lms.Sign
 
 /-!
@@ -27,7 +27,7 @@ accepting every execution phase has the property.
 
 @[expose] public section
 
-open NetworkCheck NetworkCheck.TransferBlocks
+open NetworkVerifier NetworkVerifier.TransferBlocks
 open Lean (Json toJson)
 
 namespace Properties.Certifier
@@ -56,7 +56,7 @@ def ExecutionPhaseOpened (c : Case) : Prop :=
 /-- Certificate `x` is the certifier's for end `d` (its code: egress 0, ingress 1) of the execution phase: it names the
 link, the end and the window, carries the key's identifier, and its signature decodes and verifies under the key over
 `certificateMessage` of its fields in the certifier session. -/
-def ExecutionPhaseCertificate (c : Case) (d : Nat) (x : NetworkCheck.Check.Certificate) : Prop :=
+def ExecutionPhaseCertificate (c : Case) (d : Nat) (x : NetworkVerifier.Check.Certificate) : Prop :=
   x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = c.key.extract 0 16 ∧
     ∃ m sig, certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
       Lms.Signature.decode c.lms x.signature = .ok sig ∧ Lms.verify c.lms c.key m sig = .ok true

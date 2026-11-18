@@ -65,6 +65,36 @@ def test_the_fetched_packages_take_each_module_a_given_back_copy_adds_and_keep_t
     assert lm.packages(a, work) == home, "an unchanged warm copy isn't walked again"
 
 
+def test_with_no_warm_copy_the_fetched_packages_are_made_as_check_py_makes_them_the_workspace_loaded_in_a_sandbox(
+        tmp_path, monkeypatch):
+    """The worker ran `setup.sh PKG` itself, with the caller's whole environment and no sandbox, so a candidate's
+    lakefiles and Mathlib's `cache get` ran outside every sandbox with the network. It now runs `check.py`'s `setup`:
+    the first half as itself, then the fetch in the fetch sandbox with `fetch_env`, nothing else."""
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("VERITY_CALLER_ONLY", "kept from the fetch")
+    a, c, ran = package(tmp_path, "a"), la.lean_check(), []
+
+    def run(argv, cwd, log=None, timeout=0, on_line=None, env=None):
+        ran.append((argv, env))
+        if "--fetch" in argv:
+            (a / ".lake" / "packages" / "dep").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(c, "run", run)
+    monkeypatch.setattr(c, "sandboxed", lambda: True)
+    monkeypatch.setattr(lm, "call", lambda argv, *rest, **kw: ran.append((argv, None)) or 0)
+    (work := tmp_path / "work").mkdir()
+    home = lm.packages(a, work)
+    assert (home / "dep").is_dir()
+    setup = [(argv[argv.index(str(c.TOOL / "setup.sh")):], argv, env) for argv, env in ran
+             if str(c.TOOL / "setup.sh") in argv]
+    assert [s for s, _, _ in setup] == [[str(c.TOOL / "setup.sh"), "--outside", str(a)],
+                                        [str(c.TOOL / "setup.sh"), "--fetch", str(a)]], ran
+    (_, outside, _), (_, fetch, env) = setup
+    assert outside[0] == "bash" and fetch[:len(c.UNSHARE_NET)] == c.UNSHARE_NET and "--net" in fetch, fetch
+    assert env == c.fetch_env() and "VERITY_CALLER_ONLY" not in env
+
+
 def test_fetched_packages_whose_record_holds_the_key_alone_take_what_they_lack_from_the_warm_copy(tmp_path, monkeypatch):
     """As a worker's are where this runner made them before it topped them up: from a warm copy that lacked modules."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))

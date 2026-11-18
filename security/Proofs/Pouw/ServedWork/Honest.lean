@@ -211,7 +211,7 @@ theorem served_meets (n : ℕ) :
 `served_meets` give it every premise, so except with probability `δ_s` its `N_p` a window of priced work is at least
 `(1 − ε(n))₊` of its `N_p·n` live words. -/
 theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
@@ -309,7 +309,7 @@ the honest inventory, every other premise of `ServedWork` holds, in its order (`
 `SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path is in its event, with no
 work and positive credit (`creditPrefix_pos`), so its probability is 1, past the bound `e^{−1}`. -/
 theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 17 ≤ n) :

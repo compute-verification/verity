@@ -9,8 +9,8 @@ length is no one's choice:
 - the stop record: the count of ids a response releases is the registered stop rule's, on the committed ids and the
   request's three words;
 - the response tie: the ids the network attester released are the committed ids below that count;
-- the certified read: the three words the rule reads (the most ids asked for, the prompt's length and whether the end
-  id is ignored) are the certified request's;
+- the attested read: the three words the rule reads (the most ids asked for, the prompt's length and whether the end
+  id is ignored) are the attested request's;
 - the compute audit: its second stage over the class's sample, that the committed ids are the outputs of the
   request's Program.
 
@@ -92,8 +92,8 @@ from verity.protocols.resource_accounting.network.verifier.connection_rows impor
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 #: the four verdicts a class owes before it is charged below its schedule
-STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
-VERDICTS = (STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT)
+STOP_RECORD, RESPONSE_TIE, ATTESTED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
+VERDICTS = (STOP_RECORD, RESPONSE_TIE, ATTESTED_READ, COMPUTE_AUDIT)
 #: a verdict record's fields, and the fields of its verdict that `charge` reads
 RUN, SERVE, REGISTRATION, VERIFIER, VERDICT, PROVED_BY = FIELDS = (
     "run", "serve", "registration", "verifier", "verdict", "proved_by")

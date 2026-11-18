@@ -25,7 +25,7 @@ Stated here, open, and claims of no one:
 
 @[expose] public section
 
-namespace PousCheck.Properties
+namespace PousVerifier.Properties
 
 /-- The honest case of setup: valid parameters, and a `C*` that decodes to the committed `W`. -/
 def HonestSetup (q : P2.Params) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) : Prop :=
@@ -52,13 +52,13 @@ def DecodeIsModelAt (B w p b : ℕ) [NeZero p] : Prop :=
 
 def DecodeIsModel : Prop := ∀ (B w p b : ℕ) [NeZero p], p ≤ 2 ^ w → DecodeIsModelAt B w p b
 
-end PousCheck.Properties
+end PousVerifier.Properties
 
-namespace PousCheck.Properties.SecurityProofs
+namespace PousVerifier.Properties.SecurityProofs
 
 set_option exponentiation.threshold 20000 in
 theorem deployed : Deployed := by
   unfold Deployed
   exact ⟨rfl, rfl, rfl, by decide, by decide, by decide, rfl, rfl, by decide⟩
 
-end PousCheck.Properties.SecurityProofs
+end PousVerifier.Properties.SecurityProofs

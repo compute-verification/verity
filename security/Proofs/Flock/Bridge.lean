@@ -3,16 +3,14 @@ module
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
-public import Proofs.Flock.Bridge.FilePartTarget
-public import Proofs.Flock.Bridge.FilePart
+public import Properties.Verity.GateARow
+public import Proofs.Flock.Bridge.FilePart.Owned
+public import Proofs.Flock.Bridge.FilePart.Inst
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Slots
-public import Proofs.Flock.Bridge.SlotsKey
-public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.UnitRows
-public import Proofs.Flock.Bridge.GateARow
 public import Proofs.Flock.Bridge.Canon
 public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
@@ -33,8 +31,6 @@ public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
 public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
-public import Proofs.Flock.Bridge.QsRows
-public import Proofs.Flock.Bridge.PublicRows
 public import Proofs.Flock.Bridge.QsRows.FirstReads
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement

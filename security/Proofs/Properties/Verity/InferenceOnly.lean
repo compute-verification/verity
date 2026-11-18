@@ -47,18 +47,18 @@ open ResourceAccounting Core
 /-- **A composite's acceptance holds the policy's case to its check's**: on what composite `k` accepted as a `same`
 composition, every decoding of the policy's case meets `PolicyHeld`. -/
 theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : SameAccepts k s)
-    {p : InferenceOnlyCheck.Protocol.Params} {r : InferenceOnlyCheck.Protocol.Commitment} {e : InferenceOnlyCheck.Protocol.Evidence}
+    {p : InferenceOnlyVerifier.Protocol.Params} {r : InferenceOnlyVerifier.Protocol.Commitment} {e : InferenceOnlyVerifier.Protocol.Evidence}
     (hc : PolicyCase k s p r e) : Properties.Remote.PolicyHeld p r e := by
   obtain ⟨ps, c, ev, ⟨h1, h2, h3⟩, pub, prof, ⟨⟨-, hcases, -⟩, -⟩, -⟩ := h
   obtain ⟨ps', c', ev', ⟨h1', h2', h3'⟩, ⟨P, n, cs⟩, hx, hx1, hp, hr, he⟩ := hc
   obtain rfl : ps' = ps := Except.ok.inj (h1'.symm.trans h1)
   obtain rfl : ev' = ev := Except.ok.inj (h3'.symm.trans h3)
-  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyVerifier.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p', r', e', hp', hr', he', pub', prof', hacc⟩ := hcases _ hx
-  have hp'' : (canonicalJson n.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p' := hp'
-  have hr'' : InferenceOnlyCheck.Protocol.commitmentOf cs.commitment = .ok r' := hr'
-  have he'' : InferenceOnlyCheck.Protocol.evidenceOf cs.evidence = .ok e' := he'
+  have hp'' : (canonicalJson n.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok p' := hp'
+  have hr'' : InferenceOnlyVerifier.Protocol.commitmentOf cs.commitment = .ok r' := hr'
+  have he'' : InferenceOnlyVerifier.Protocol.evidenceOf cs.evidence = .ok e' := he'
   obtain rfl : p' = p := Except.ok.inj (hp''.symm.trans hp)
   obtain rfl : r' = r := Except.ok.inj (hr''.symm.trans hr)
   obtain rfl : e' = e := Except.ok.inj (he''.symm.trans he)
@@ -69,28 +69,28 @@ which doesn't list the rows check, the policy's case decodes. -/
 theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent} (hk : rowsId ∉ k)
     (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
   obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
-  have hQ' : Q = InferenceOnlyCheck.Protocol.protocol := by
+  have hQ' : Q = InferenceOnlyVerifier.Protocol.protocol := by
     rw [(component_eq_some.1 hQ).2]
     simp only [Subprotocol.protocolAt, hk, ↓reduceIte]
   subst hQ'
-  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyVerifier.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p, r, e, hp, hr, he, -⟩ := hacc
   exact ⟨p, r, e, ps, c, ev, hdec, _, hx, rfl, hp, hr, he⟩
 
 /-- **Remote's plain sibling lists no v0**, so `Vocab.inferenceOnlySound`'s hypothesis fails there. -/
-theorem v0_not_mem_plain : InferenceOnlyCheck.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
+theorem v0_not_mem_plain : InferenceOnlyVerifier.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
 
 /-- **Remote's plain sibling has no v0 component**: none of its compiled checks carries v0's id, so no case of its play
 is v0's. -/
-theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ InferenceOnlyCheck.Protocol.protocolId := by
+theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ InferenceOnlyVerifier.Protocol.protocolId := by
   rw [componentsOf_plain]
   decide
 
 /-- **`Vocab.inferenceOnlySound` doesn't reach remote's plain sibling**: its hypotheses fail there, so
 `InferenceOnlySound .plain` stays open. -/
 theorem not_inferenceOnlySound_hyp_plain :
-    ¬ (InferenceOnlyCheck.Protocol.protocolId ∈ Verity.Registration.Composite.plain ∧
+    ¬ (InferenceOnlyVerifier.Protocol.protocolId ∈ Verity.Registration.Composite.plain ∧
       rowsId ∉ Verity.Registration.Composite.plain) :=
   fun h => v0_not_mem_plain h.1
 
@@ -101,7 +101,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 /-- **The inference-only policy's target, at every composite where v0 decides it**: for any names `V` and composite `k`
 that lists v0 and not the rows check, the probability that `k`'s verifier accepts registered files while the policy's
 case fails `PolicyHeld` is `0`, so it is within the policy's error. -/
-theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : InferenceOnlyCheck.Protocol.protocolId ∈ k)
+theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : InferenceOnlyVerifier.Protocol.protocolId ∈ k)
     (hr : rowsId ∉ k) : V.InferenceOnlySound k := by
   intro θ F c σ
   calc Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c σ .inferenceOnly o) (V.game θ F c) σ

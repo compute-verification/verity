@@ -90,7 +90,7 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 
 
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
-    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``: a mix entry's
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``calibration/census/workloads.json``: a mix entry's
     template bound to exactly its parameters), in id order; an attention head's T range is its census ``variable_ranges.T``."""
     bound = {(s.template, json.dumps(vars(s.parameters), sort_keys=True)): s.id for s in census.SUBCIRCUITS.values()}
     sids = sorted({sid for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows for m in w["template_mix"]

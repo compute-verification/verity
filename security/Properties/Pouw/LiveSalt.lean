@@ -1,7 +1,7 @@
 module
 
-public import PouwCheck
-public import PouwCheck.Pass
+public import PouwVerifier
+public import PouwVerifier.Pass
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
@@ -89,7 +89,7 @@ check's.
 namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
-open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
+open PouwVerifier (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   leafOf liveReason pinnedChallengePhase challengePhaseNamed)
 

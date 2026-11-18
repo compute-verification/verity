@@ -1,6 +1,6 @@
 """Retired terms in the tree, held to ``allowlists/repo_retired_terms.json``: no file gains a use of a term that
-``GLOSSARY.md``'s table of older names retires.  The table is the term source, so a row added there is enforced here
-with no change to this module, and its fix is the row's term: ``'X' is retired; say Y (GLOSSARY.md)``.
+``retired_terms.md``'s table of older names retires.  The table is the term source, so a row added there is enforced here
+with no change to this module, and its fix is the row's term: ``'X' is retired; say Y (tests/lint/retired_terms.md)``.
 
 What a row retires:
 
@@ -11,7 +11,7 @@ What a row retires:
   the lint can't tell apart: a quote followed by ``for``, ``meaning``, ``naming``, ``in``, ``as`` or ``of`` narrows every
   quote of its clause (the cell's ``;``-separated part), ``alone`` narrows its own, and one after ``outside`` is the
   exception it names.  A one-word quote followed by a list of senses (``"dark" (compute, fleet, leaves)``) retires
-  each phrase (``dark compute``).  The words that ``GLOSSARY.md``'s narrower senses say still carry two senses
+  each phrase (``dark compute``).  The words that ``retired_terms.md``'s narrower senses say still carry two senses
   (**Row**, **Transcript**, ...) and those ``LIVE`` names are not enforced alone, only in the phrases that retire them;
 * each identifier written in backticks in a clause that says ``until renamed``, when it is one only code spells
   (``Flock.Firewall``, ``FC_FIREWALL*``, ``DrawIsCoin``: a dot, an underscore, a hyphen, an inner capital or a ``*``,
@@ -39,7 +39,7 @@ prose and a longer name still count, and an entry whose key no longer stands in 
 Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
 with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
-base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
+base, so the module imports only the standard library and reads ``retired_terms.md`` from the tree it runs in.
 
     python3 tests/lint/test_repo_retired_terms.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_retired_terms.py --prune          # delete and lower what this tree no longer holds
@@ -61,15 +61,17 @@ NAME = "repo_retired_terms"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 GLOSSARY = "GLOSSARY.md"
+TABLE = "tests/lint/retired_terms.md"
 #: path prefixes this lint leaves to others (the ratchet gate reads it): none
 LEFT_OUT = ()
 #: what isn't read, by path prefix (or a whole path), each with its reason
 SKIP = {
-    GLOSSARY: "the term source: its table of older names says where each old name stays",
+    GLOSSARY: "the current terms, which name an older one only to say it is not the term",
+    TABLE: "the term source: its table of older names says where each old name stays",
     "tools/move/": "the word maps name the words they retire",
     "tests/tools/check/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
     "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
@@ -79,12 +81,12 @@ FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 HISTORY = ("CHANGELOG.md",)
 #: quoted old names the table lists alone that keep another live sense, which the lint can't tell apart
 LIVE = {
-    "session": "the table retires it by sense (a run, a release, a certifier's attachment, a challenge phase)",
+    "session": "the table retires it by sense (a run, a release, a network attester's attachment, a challenge phase)",
     "kind": "the SP1-era kind; every other kind (a Definition's, a record's, a store's) is live",
     "pin": "a digest pin (`TRUSTED.sha256`, circuit-check's pins) is live; only a pinned guarantee is retired",
     "instance": "Lean's `instance`, Python's `isinstance` and a template instance are live",
     "slack": "the table keeps its other senses, Slack among them",
-    "tap": "vLLM's capture taps are live; the certifier's are retired as \"uplink tap\" and \"the auditor's tap\"",
+    "tap": "vLLM's capture taps are live; the network attester's are retired as \"uplink tap\" and \"the auditor's tap\"",
     "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
                     "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
@@ -96,7 +98,7 @@ LIVE = {
 }
 #: words the narrower senses say carry two senses that this lint tells apart itself, so they stay enforced alone: each
 #: kept sense is in ``OTHER_SENSES`` or ``OWN_CAPS``, and the retired one counts everywhere else
-SENSED = {"cap": "SPOT's served cap and the certifier's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
+SENSED = {"cap": "SPOT's served cap and the network attester's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
 #: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
 #: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), the public length ℓ a
@@ -114,10 +116,10 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
                r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
                r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
 #: other senses of "cap" that name none of Pearl's, each by its names: a request's length cap, its ``max_tokens`` (the
-#: certifier's registered response cap); SPOT's served cap S, in prose; a soft
+#: network attester's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
-#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits
+#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits; a machine record's cap on a job's minutes
 CAP_SENSES = {
     "a request's length cap": r"(?<![^\W_])(?:max_tokens_cap|cap_exhausted|stopped_before_cap)(?![^\W_])",
     "a soft cap": r"(?i:(?<!\w)soft[ -]caps?(?!\w))",
@@ -128,6 +130,7 @@ CAP_SENSES = {
                            r"(?![^\W_])|(?<!\w)Rows(?:Ring8|4k|Layer)?CapArm(?!\w)",
     "FA3's split cap": r"(?<![^\W_])(?:split_cap|SPLIT_CAP)(?![^\W_])",
     "SPOT's served cap": r"(?<!\w)served cap(?!\w)",
+    "a job's time cap": r"(?<![^\W_])job_cap_minutes(?![^\W_])",
 }
 OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
@@ -149,12 +152,11 @@ def _vllm(path: str) -> str:
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
 REQUEST_CAPS = tuple(_vllm(p) for p in (
-    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/lifting/lifted_compose.py",
-    "verity_vllm/program/workload.py", "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
+    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/workload.py",
+    "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
     "tests/program/test_continuation.py", "tests/program/test_lifted_request.py",
     "tests/program/test_lifted_request_padrev.py", "tests/program/test_lifted_dense_b1.py",
-    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_mixed.py",
-    "tests/program/test_lifted_workload_padrev.py", "tests/program/test_lifted_tiny.py",
+    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_tiny.py",
     "tests/program/test_lifted_tiny_padrev.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
@@ -181,7 +183,7 @@ OWN_CAPS = {
                      "security/Proofs/ResourceAccounting/Gates"),
                     "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
     **dict.fromkeys(tuple(f"benchmarks/{b}/"
-                          for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
+                          for b in ("pous", "poub_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
@@ -208,30 +210,30 @@ OWN_NAMES = {
         (r"(?<=Pous[./])Period|Period(?:Held(?:Coins|Sha512)?(?:At)?|Held(?:Deployed|Demo|Honest|Nontrivial)|Deployed"
          r"|Game|At|Capacity|Witnesses)",
          "PoUS's `Pous.Period` and its guarantees' names (`PeriodHeld`, `PeriodHeldAt`, `PeriodGame`, ...) are one "
-         "stretch of a joint run: GLOSSARY.md's row of `*Period*` retires the word only as the stretch of time a bound "
+         "stretch of a joint run: retired_terms.md's row of `*Period*` retires the word only as the stretch of time a bound "
          "is about, and its row of \"window\" makes \"period\" the word for a span of time. Open, and lean's: whether "
          "that stretch should read the one shared period type in `Core`; if it should, the names follow by a map with "
          "a moves file", ()),
         (r"B2Period(?:Audit|P2Ring)?",
          "PoUS's responder guarantees' period is the span a location takes to answer one challenge, at most `Δ + RTT` "
-         "ticks: a span of time, which GLOSSARY.md's row of \"window\" calls a period, and not the stretch of time a "
+         "ticks: a span of time, which retired_terms.md's row of \"window\" calls a period, and not the stretch of time a "
          "bound is about that its row of `*Period*` retires", ()),
         (r"(?<=[Aa]ttest[./])Period",
          "an auditor party's attestation period (`Attest.Period`): the stretch whose records one signed root "
-         "commits, a period by GLOSSARY.md's row of \"window\", and not the stretch of time a bound is about that its "
+         "commits, a period by retired_terms.md's row of \"window\", and not the stretch of time a bound is about that its "
          "row of `*Period*` retires", ()),
         (r"Period(?:Signed|Sound|Run)",
          "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
-         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
+         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryAttester/Attest.lean")),
         (r"_PeriodAuditor",
-         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
+         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which retired_terms.md's row "
          "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
          ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py", "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
     ),
     "row of record": (
         (r"row[\s_]+of[\s_]+record",
-         "vLLM's workload of record: GLOSSARY.md's row of \"row\" for a workload keeps \"row of record\" "
+         "vLLM's workload of record: retired_terms.md's row of \"row\" for a workload keeps \"row of record\" "
          "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
          tuple(_vllm(p) for p in (
              "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
@@ -253,18 +255,14 @@ OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in na
 #: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
 #: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
 HELD_KEYS = {
-    "firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock_firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock-firewall": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md"),
-                       "reads a stored recursion run, benchmarks'"),
-    "FIREWALL-REFUSED": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md",
-                          "tests/benchmarks/recursion_e2e/test_recursion_e2e.py"),
-                         "reads a stored recursion run, benchmarks'"),
-    "t.firewall_recheck": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
     "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
-    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -298,7 +296,7 @@ GOAL = re.compile(r'[ \t]*goal[ \t]*=[ \t]*"(?P<id>[\w-]+/[\w-]+)"[ \t]*(?:#.*)?
 ID = re.compile(r"[\w./:-]")
 #: a character of one identifier
 IDENT = re.compile(r"\w")
-FIX = (f"Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) "
+FIX = (f"Say the term the row gives ({TABLE}'s older names). A use the table keeps (a recorded key, a wire format) "
        f"stays only where it already stands. If the file moved, move its entry in the same change: `python3 "
        f"tests/lint/test_{NAME}.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).")
 
@@ -385,7 +383,7 @@ class Term:
 
 
 def terms_of(glossary: str) -> list[Term]:
-    """The retired terms of ``glossary`` (a ``GLOSSARY.md``'s text), longest first."""
+    """The retired terms of ``glossary`` (a ``retired_terms.md``'s text), longest first."""
     table = glossary.split("## Older names", 1)[-1].split("\n## ", 1)[0]
     two = glossary.split("still carry two senses", 1)[-1].split("\n## ", 1)[0] if "still carry two senses" in glossary else ""
     narrow = {w.lower() for w in re.findall(r"^\s*- \*\*([^*]+)\*\*", two, re.M)} - SENSED.keys()
@@ -425,19 +423,19 @@ def terms_of(glossary: str) -> list[Term]:
     return sorted(out.values(), key=lambda t: -len(t.old))
 
 
-def glossary_text() -> str:
-    """``GLOSSARY.md`` of the tree this module stands in, or (loaded alone, as the ratchet gate loads it) of the tree the
+def table_text() -> str:
+    """``TABLE`` of the tree this module stands in, or (loaded alone, as the ratchet gate loads it) of the tree the
     command runs in."""
-    if (ROOT / GLOSSARY).is_file():
-        return (ROOT / GLOSSARY).read_text(encoding="utf-8")
+    if (ROOT / TABLE).is_file():
+        return (ROOT / TABLE).read_text(encoding="utf-8")
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
-    return (Path(top) / GLOSSARY).read_text(encoding="utf-8")
+    return (Path(top) / TABLE).read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=None)
 def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
     """The retired terms, and each by the words it is found by."""
-    found = tuple(terms_of(glossary_text()))
+    found = tuple(terms_of(table_text()))
     by: dict[str, list[Term]] = {}
     for t in found:
         for a in t.anchors:
@@ -470,7 +468,7 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "",
             continue
         end = e
         line, at = line + text.count("\n", at, s), s
-        out.append((line, f"{text[s:e]!r} is retired; say {t.new[:120]} (GLOSSARY.md)"))
+        out.append((line, f"{text[s:e]!r} is retired; say {t.new[:120]} ({TABLE})"))
     return out
 
 
@@ -667,7 +665,7 @@ def test_what_is_a_retired_term() -> None:
     assert olds("DrawIsCoin, Remote.Draw.Session, --draw K, Verity.Window, Verity.Windows") == [
         "DrawIsCoin", "Remote.Draw.Session", "--draw", "Verity.Window"]
     assert olds("the domain verity/flock-firewall/v1 and note:x-draw-law, a session, the window") == []
-    assert sites_of("a\nb C-Flock\n", by) == [(2, "'C-Flock' is retired; say Flock (GLOSSARY.md)")]
+    assert sites_of("a\nb C-Flock\n", by) == [(2, f"'C-Flock' is retired; say Flock ({TABLE})")]
 
 
 SENSES_EXAMPLE = """# Glossary
@@ -984,11 +982,11 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
 
 def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_retired_one() -> None:
     """A word the narrower senses list is enforced only in the phrases that retire it, but one in ``SENSED`` stays
-    enforced alone: "cap" keeps SPOT's served cap and the certifier's response cap, by their names, and Pearl's counts."""
-    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the certifier's.\n"
+    enforced alone: "cap" keeps SPOT's served cap and the network attester's response cap, by their names, and Pearl's counts."""
+    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the network attester's.\n"
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
-    assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
+    assert "cap" in {t.old for t in terms()[0]}, f"{TABLE}'s two-senses list no longer stops Pearl's cap from counting"
     kept = "a served cap S charges each replay block at most F S; `NetworkAttesterParams.max_tokens_cap`\n"
     assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
     assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
@@ -1026,7 +1024,7 @@ def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
             for a in t.anchors:
                 by.setdefault(a, []).append(t)
         said |= set(sites_of("the DampenerRemotePeriod\n", by))
-    assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
+    assert said == {(1, f"'DampenerRemotePeriod' is retired; say monitoring period ({TABLE})")}, sorted(said)
 
 
 def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
@@ -1047,10 +1045,10 @@ def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in
                 by.setdefault(a, []).append(t)
         return sites_of(text, by)
 
-    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]  # second by spelling: the length decides
+    longer = [(1, f"'OldName' is retired; say the longer row's ({TABLE})")]  # second by spelling: the length decides
     assert said("an OldName", (1, "*Name", "the shorter row's"), (2, "OldNa*", "the longer row's")) == longer
     assert said("an OldName", (2, "*Name", "the shorter row's"), (1, "OldNa*", "the longer row's")) == longer
-    first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
+    first = [(1, f"'OldName' is retired; say the first by spelling ({TABLE})")]  # of one length: the spelling decides
     assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
     assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
 
@@ -1137,12 +1135,6 @@ def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_on
     assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
 
 
-RECORDED_KEYS = ('ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"\n'
-                 'LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"\n'
-                 'LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")\n'
-                 "#: a recorded run's ZK server refused as ``FIREWALL-REFUSED``\n"
-                 'STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")\n'
-                 'RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}\n')
 ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'
             'assert build_bound(bound_arm) == ("sampled-proofs:hm96",)\n'
             'live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))\n')
@@ -1157,9 +1149,6 @@ def retired(text: str, path: str) -> list[tuple[int, str]]:
 def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
     """A key is held only in the files its entry names: in a file beside them, and in a file another key's entry names,
     every site of it counts."""
-    recorded = [(1, "firewall"), (2, "firewall"), (3, "flock-firewall"), (4, "FIREWALL"), (5, "FIREWALL"), (6, "firewall")]
-    assert retired(RECORDED_KEYS, RECURSION + "forge_after.py") == recorded
-    assert retired(RECORDED_KEYS, HARNESS + "verity_bench/vllm/runner.py") == recorded
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/runner.py") == [(1, "sampled-proofs"), (2, "sampled-proofs")]
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/commit_arm.py") == [(3, "coin_source")]
     assert retired(ARM_KEYS, "benchmarks/one_stage/run.py") == [(1, "sampled-proofs"), (2, "sampled-proofs"),
@@ -1169,11 +1158,6 @@ def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
 def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> None:
     """In a file its entry names, a key is held only where it stands whole: the bare word, a plain word unquoted or quoted
     with more beside it, another spelling, and a longer name holding the key still count."""
-    recursion = ('# the firewall refused it: mode = firewall, "the firewall", FIREWALL\n'
-                 'firewall_mode, "firewall_v2", flock_firewall_loop, "FIREWALL-REFUSED-AGAIN", "t.firewall_recheck2"\n')
-    assert retired(recursion, RECURSION + "rec_profile.py") == [
-        (1, "firewall"), (1, "firewall"), (1, "firewall"), (1, "FIREWALL"),
-        (2, "firewall"), (2, "firewall"), (2, "firewall"), (2, "FIREWALL"), (2, "firewall")]
     harness = ('# the coin source, coin_source_v2, c["coin_sources"]; the sampled proofs, "sampled-proofs", sampled-proofs:\n')
     assert retired(harness, "tests/" + HARNESS + "test_bench.py") == [
         (1, "coin source"), (1, "coin_source"), (1, "coin_sources"), (1, "sampled proofs"), (1, "sampled-proofs"),
@@ -1183,12 +1167,6 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
 def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
     """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
     Markdown; a site beside it on the same line still counts."""
-    assert retired(RECORDED_KEYS, RECURSION + "rec_profile.py") == []
-    readme = ("  `FIREWALL-REFUSED`) or Lean refused it\n"
-              "  cost is read from `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds\n")
-    assert retired(readme, RECURSION + "README.md") == []
-    stop = '(d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\\n")\n'
-    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', "tests/" + RECURSION + "test_recursion_e2e.py") == []
     assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")
@@ -1210,7 +1188,7 @@ def test_a_held_key_that_no_longer_stands_in_a_file_its_entry_names_is_refused_a
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
-    assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
+    assert not holds("x.json") and not holds(GLOSSARY) and not holds(TABLE) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []
 

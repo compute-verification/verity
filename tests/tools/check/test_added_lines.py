@@ -1,5 +1,5 @@
 """`tools/check/added_lines.py`: what a change's added lines bring of retired terms, issue ids and run ids, counted per file by
-the repository lints as the base has them, on a toy repository holding this tree's two lints and a glossary of its own."""
+the repository lints as the base has them, on a toy repository holding this tree's two lints and a table of older names of its own."""
 from __future__ import annotations
 
 import importlib.util
@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "tools" / "check" / "added_lines.py"
 LINTS = ("tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")
 #: one retired word, which no real row names
+TABLE = "tests/lint/retired_terms.md"
 GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "zorblax" | widget |\n'
 #: an issue id and a run id, built so that no literal one stands in this file
 ISSUE = "-".join(("CI", "4850"))
@@ -40,7 +41,7 @@ class Repo:
         self.path = path
         path.mkdir()
         self.git("init", "-q", "-b", "main")
-        self.base = self.commit({**{p: (ROOT / p).read_text() for p in LINTS}, "GLOSSARY.md": GLOSSARY,
+        self.base = self.commit({**{p: (ROOT / p).read_text() for p in LINTS}, TABLE: GLOSSARY,
                                  "a.py": "X = 1  # a widget\n", "old.py": f"# the zorblax of {ISSUE}\nY = 2\n"})
 
     def git(self, *args: str) -> str:
@@ -81,12 +82,12 @@ def test_an_added_retired_term_in_a_touched_file_is_named_with_its_line_and_the_
     rc, doc = repo.judge(repo.change({"a.py": "X = 1  # a widget\nZ = 'the zorblax'\n"}))
     assert rc == 1 and doc["verdict"] == "failed" and named(doc) == [("a.py", "retired term", 2)], doc
     [f] = doc["failures"]
-    assert f["why"] == ("a.py gains 1 retired term(s), 0 -> 1: a.py:2 'zorblax' is retired; say widget (GLOSSARY.md) in "
+    assert f["why"] == ("a.py gains 1 retired term(s), 0 -> 1: a.py:2 'zorblax' is retired; say widget (tests/lint/retired_terms.md) in "
                         "`Z = 'the zorblax'`"), f
-    assert f["fix"][0].startswith("Say the term the row gives (GLOSSARY.md's older names)"), f
+    assert f["fix"][0].startswith("Say the term the row gives (tests/lint/retired_terms.md's older names)"), f
     text = subprocess.run([sys.executable, str(SCRIPT), repo.base, "HEAD"], cwd=repo.path, env=ENV, capture_output=True,
                           text=True)
-    assert text.returncode == 1 and "    a.py:2 'zorblax' is retired; say widget (GLOSSARY.md)  | Z = 'the zorblax'" in text.stdout
+    assert text.returncode == 1 and "    a.py:2 'zorblax' is retired; say widget (tests/lint/retired_terms.md)  | Z = 'the zorblax'" in text.stdout
 
 
 def test_a_pure_rename_and_an_edited_line_keeping_its_old_word_pass(tmp_path):
@@ -134,12 +135,12 @@ def test_a_move_between_files_is_no_addition_and_a_copy_is(tmp_path):
     assert rc == 1 and sorted(named(doc)) == [("b.py", "issue id", 1), ("b.py", "retired term", 1)], doc
 
 
-def test_a_change_to_the_lints_or_the_glossary_can_t_relax_its_own_judge(tmp_path):
-    """The base's copies judge: a head that empties the lane-text lint's `sites` and drops the glossary's row is judged by the
+def test_a_change_to_the_lints_or_the_table_can_t_relax_its_own_judge(tmp_path):
+    """The base's copies judge: a head that empties the lane-text lint's `sites` and drops the table's row is judged by the
     lints and the row as the base has them."""
     repo = Repo(tmp_path / "r")
     lane = (repo.path / LINTS[0]).read_text() + "\n\ndef sites(text, path):\n    return []\n"
-    head = repo.change({LINTS[0]: lane, "GLOSSARY.md": GLOSSARY.split('| "zorblax"')[0],
+    head = repo.change({LINTS[0]: lane, TABLE: GLOSSARY.split('| "zorblax"')[0],
                         "a.py": f"X = 1  # a widget, {ISSUE}\nZ = 'zorblax'\n"})
     rc, doc = repo.judge(head)
     assert rc == 1 and sorted(named(doc)) == [("a.py", "issue id", 1), ("a.py", "retired term", 2)], doc
@@ -147,9 +148,9 @@ def test_a_change_to_the_lints_or_the_glossary_can_t_relax_its_own_judge(tmp_pat
 
 def test_a_base_without_the_lints_can_t_judge(tmp_path):
     repo = Repo(tmp_path / "r")
-    repo.base = repo.change({"GLOSSARY.md": None, **dict.fromkeys(LINTS)})
+    repo.base = repo.change({TABLE: None, **dict.fromkeys(LINTS)})
     rc, doc = repo.judge(repo.commit({"a.py": f"# {ISSUE}\n"}))
-    assert rc == 2 and doc["verdict"] == "cannot-judge" and "has no GLOSSARY.md" in doc["why"], doc
+    assert rc == 2 and doc["verdict"] == "cannot-judge" and "has no tests/lint/retired_terms.md" in doc["why"], doc
 
 
 def test_it_is_off_the_merge_gate_and_a_warning_wherever_it_runs(tmp_path, monkeypatch):

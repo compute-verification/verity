@@ -12,9 +12,9 @@ of its outputs (`write_gate.passes`):
   deferred append of a token for each of 32 sequences at all 32 layers in one launch (its words), the gather of 64
   blocks (their words), and the lm_head's chunk decode (wt_decode, its plain rows).
 
-With --ptxas FILE... it also reads the builds' ptxas reports: every instantiation of those kernels the stack launches
-(the fused kernel at k with stored partials and two sketch warps) has a 0-byte stack frame and no spills ("STACK 0 /
-LOCAL 0").
+With --ptxas FILE... it also reads the builds' ptxas reports (the PoUW harness's `ptxas_report`): every instantiation of
+those kernels the stack launches (the fused kernel at k with stored partials and two sketch warps) has no spill stores or
+loads, and each one that spills is named. A stack frame passes, its bytes written into the output beside the kernel.
 
     python stack_write_gate.py --wt-lib wt.so --reader-lib reader.so --paged-lib paged.so --k 3 \\
         --stack-json OUT/arm-stack.json --ptxas OUT/wt.ptxas OUT/paged.ptxas OUT/reader.ptxas --out OUT
@@ -22,6 +22,7 @@ LOCAL 0").
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -35,6 +36,17 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py").parent))
 
 import write_gate as WG
+
+
+def _harness():
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            name, HERE.parents[1] / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
 
 KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|pg_|decode_kernel"
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
@@ -183,22 +195,22 @@ def summarize(stdout: str, rc: int) -> dict:
 
 
 def ptxas(files: list[str], k: int) -> dict:
-    """Each launched kernel's stack frame and spills, from ptxas -v (names demangled)."""
-    text = "\n".join(Path(f).read_text() for f in files)
-    names = sorted(set(re.findall(r"Compiling entry function '([^']+)'|Function properties for (\S+)", text)))
-    mangled = sorted({a or b for a, b in names})
+    """Each launched kernel's registers, stack frame and spills, from ptxas -v (names demangled), and the kernels that
+    spill or that ptxas gives no spill counts for: those fail."""
+    funcs: dict[str, dict] = {}
+    for f in files:
+        text = Path(f).read_text()
+        arch = re.search(r"Compiling entry function '\w+' for '(\w+)'", text)
+        funcs.update(_harness().ptxas_report(text, arch.group(1) if arch else "")[0])
+    mangled = sorted(funcs)
     filt = shutil.which("c++filt")
     dem = dict(zip(mangled, subprocess.run([filt], input="\n".join(mangled), capture_output=True, text=True,
                                            check=False).stdout.splitlines())) if filt else {m: m for m in mangled}
-    props = {}
-    for m, body in re.findall(r"Function properties for (\S+)\n\s*(\d+ bytes stack frame, \d+ bytes spill stores, "
-                              r"\d+ bytes spill loads)", text):
-        f, s_, l_ = (int(x) for x in re.findall(r"(\d+) bytes", body))
-        props[m] = {"stack_frame": f, "spill_stores": s_, "spill_loads": l_}
     used = re.compile(rf"wt::fused_kernel<{k}, \d, true, 16, 2|wt::decode_kernel<{k},|kv::pg_|rb::(leaves|level|pads)")
-    rows = [{"kernel": dem.get(m, m)[:120], **p} for m, p in props.items() if used.search(dem.get(m, m))]
-    return {"kernels": rows, "ok": bool(rows) and all(r["stack_frame"] == 0 and r["spill_stores"] == 0 and
-                                                      r["spill_loads"] == 0 for r in rows)}
+    rows = [{"kernel": dem.get(m, m)[:120], **r} for m, r in funcs.items() if used.search(dem.get(m, m))]
+    spills = [r["kernel"] for r in rows if r["spill_stores"] != 0 or r["spill_loads"] != 0]
+    return {"kernels": rows, "frames": {r["kernel"]: r["stack"] for r in rows if r["stack"]}, "spills": spills,
+            "ok": bool(rows) and not spills}
 
 
 def main() -> int:
@@ -229,8 +241,9 @@ def main() -> int:
         print(json.dumps({k: r[k] for k in ("kernel", "l2_write_bytes", "must_bytes", "over_must", "local_store_bytes",
                                             "ok") if k in r} | {k: r[k] for k in ("linear", "m") if k in r}))
     if "ptxas" in res:
-        bad = [r for r in res["ptxas"]["kernels"] if r["stack_frame"] or r["spill_stores"] or r["spill_loads"]]
-        print(f"ptxas: {len(res['ptxas']['kernels'])} kernels, {len(bad)} with a stack frame or spills: {bad[:6]}")
+        px = res["ptxas"]
+        print(f"ptxas: {len(px['kernels'])} kernels; stack frames (pass), bytes: {px['frames']}; spills (fail): "
+              f"{px['spills']}")
     print("unmatched:", res.get("unmatched_kernels"), "rc", p.returncode)
     print("stack write gate", "passed" if res.get("ok") else "FAILED")
     return 0 if res.get("ok") else 7

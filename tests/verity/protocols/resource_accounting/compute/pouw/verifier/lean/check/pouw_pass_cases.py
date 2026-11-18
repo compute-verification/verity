@@ -7,7 +7,7 @@ verifier's `core_check.LIVE` inputs or null), `core_check.live_salt_twin`'s, ``{
 A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under one of
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, a
 certified pass under a stream and a prover, salted by the network attester's reveal for the PoUW execution phase its context
-names, over the weights' root the certifier recorded with the stream and the prover before it sampled that salt, or a live
+names, over the weights' root the network attester recorded with the stream and the prover before it sampled that salt, or a live
 Pearl-C pass of salt execution phase k over its weights' root W, salted by a salt-only challenger session the auditor's ledger
 reserves, opens on the execution phase's root `salt.epoch_open_root(W, k)` and ends complete), then one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A live-salt case is a live
 Pearl-C pass's manifest and its verifier's inputs, then one mutation (`LIVE_SALT_NAMES`) aimed at one refusal of

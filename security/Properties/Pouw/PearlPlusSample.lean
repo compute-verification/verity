@@ -33,7 +33,7 @@ the coin (`after-coin`).
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 /-- The run's ticket total `W`: each sample's uniform integer is below it. -/
 def ticketTotal (tk : List ((ℕ × ℕ) × ℕ)) : ℕ := (tk.map (·.2)).sum

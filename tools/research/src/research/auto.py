@@ -34,6 +34,14 @@ Lean pool is free too, with nobody waiting for one; and the third takes the shor
 per slot of the pool (none where one is free), before the shortest line for a CPU slot. A machine whose Lean slots can't be
 read comes last there, never first. The placement's reason names the Lean pool that decided it.
 
+A Lean try or records run (`lean_package`: `--try FILE`'s package, `--records PKG`'s) builds in a kept tree of that pool, and
+where none of the machine's holds the package built, a try elaborates nothing (the sandbox fetches no dependencies) and a
+records run builds it cold. So `read` also lists each machine's kept trees of the pool and what each holds of the package
+(`lean_built`: its `.olean` files and whether its fetched dependencies are there, by listing directories), and `choose`
+takes only a machine that holds it built (`_holds`), saying how many of its trees do; one whose probe said nothing of them
+is taken only while no machine is known to hold it, and the reason says so. With none, the launch is refused with what
+each machine lacks and the two ways on (`_for_package`). A late twin moves only to such a machine too.
+
 A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
@@ -63,12 +71,15 @@ alone and is refused while it is held, down or starts no run (`closed`).
 """
 from __future__ import annotations
 
+import ast
+import importlib.util
 import json
 import math
 import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -79,6 +90,7 @@ AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
 SPILL_POOL = "research"
 #: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
 CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
+clock = time.time             # what `spill` reads a registry mark's age against
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -125,6 +137,24 @@ PEERS_FILE = "/etc/vy/peers"
 LEAN_SLOT_PY = Path("tools/check/lean_slot.py")
 #: the files of a source tree `read` reads: all a caller that has a commit and no checkout of it need hand it (research.asker)
 READS = (DESCRIPTION, SLOT_PY, LEAN_SLOT_PY)
+#: a machine's kept Lean trees, one per slot of a Lean pool: `<pool>-I` here, under the check cache ($CHECK_CACHE, else
+#: ~/.cache/verity-check) of the user the probe runs as, which is every run's there (lean_changed.py's `records_tree`)
+LEAN_RECORDS = "lean-records"
+#: a kept tree holds a package built (`_holds`) when the package's fetched dependencies (`.lake/packages`) are there and its
+#: `.lake/build/lib` has `.olean` files for at least this share of the package's modules: a try elsewhere is refused at once
+#: where the sandbox can't fetch the dependencies, and builds the rest of the package first where it can
+LEAN_BUILT_SHARE = 0.5
+
+
+def _words(command: list[str]) -> list[str]:
+    """``command``'s words, a word with spaces (`bash -lc "..."`) read as the words a shell makes of it."""
+    words: list[str] = []
+    for w in map(str, command):
+        try:
+            words += shlex.split(w) if " " in w else [w]
+        except ValueError:
+            words.append(w)
+    return words
 
 
 def lean_pool(command: list[str], env: list[str] = ()) -> str | None:
@@ -133,12 +163,7 @@ def lean_pool(command: list[str], env: list[str] = ()) -> str | None:
     which `--records --dev-cache` runs too, takes $LEAN_SLOT_POOL's, else `audit` (pool `any`, which stands in where a machine
     lists no `audit`, isn't counted). ``env`` is the run's --env (`K=V`), and a `K=V` word of the command counts as one; a word
     with spaces (`bash -lc "..."`) is read as the words a shell makes of it."""
-    words: list[str] = []
-    for w in map(str, command):
-        try:
-            words += shlex.split(w) if " " in w else [w]
-        except ValueError:
-            words.append(w)
+    words = _words(command)
     named = dict(kv.split("=", 1) for kv in (*env, *words) if "=" in kv and not kv.startswith("-"))
     opts = {w.split("=", 1)[0] for w in words}
     changed = any(Path(w).name == "lean_changed.py" for w in words) and opts & {"--records", "--build", "--try"}
@@ -147,6 +172,114 @@ def lean_pool(command: list[str], env: list[str] = ()) -> str | None:
     if changed or (any(w.endswith("lean/check.py") for w in words) and "--build" in opts):
         return named.get("LEAN_SLOT_POOL") or "audit"
     return None
+
+
+class LeanNeeds(NamedTuple):
+    """The kept tree a Lean try or records run needs (`lean_package`): one of Lean ``pool``'s on a machine, in which
+    ``package`` is built; ``modules``: the package's own modules in the run's tree, which `_holds` takes for its build."""
+
+    package: str
+    pool: str
+    modules: int
+
+
+def _flag(words: list[str], name: str) -> str | None:
+    for i, w in enumerate(words):
+        if w == name and i + 1 < len(words):
+            return words[i + 1]
+        if w.startswith(name + "="):
+            return w.split("=", 1)[1]
+    return None
+
+
+def lean_package(command: list[str], source: Path | None, env: list[str] = ()) -> LeanNeeds | None:
+    """The package whose build in a kept tree ``command`` needs, as ``source`` (the tree the run ships) has its packages
+    (directories with a tracked `lean-audit.json`, as lean_changed.py lists them): for `--try FILE` or `verity lean try FILE`,
+    the deepest package holding FILE (a path from the tree's root), whose build holds the packages it requires; for
+    `--records PKG`, the package PKG names (its path, its lakefile's `name`, else the one path it is part of). None for any
+    other command, a `--dev-cache` run (it builds in its checkout) and a FILE or PKG the tree's packages don't resolve."""
+    pool = lean_pool(command, env)
+    words = _words(command)
+    if pool is None or source is None or "--dev-cache" in words:
+        return None
+    at = next((i for i in range(len(words)) if words[i:i + 3] == ["verity", "lean", "try"]), None)
+    file = (next((w for w in words[at + 3:] if not w.startswith("-")), None) if at is not None
+            else _flag(words, "--try") if any(Path(w).name == "lean_changed.py" for w in words) else None)
+    name = None if file or not any(Path(w).name == "lean_changed.py" for w in words) else _flag(words, "--records")
+    if not (file or name):
+        return None
+    git = subprocess.run([GIT, "-C", str(source), "ls-files", "-z", "--", "*lean-audit.json", "*.lean"],
+                         capture_output=True, timeout=READ_TIMEOUT_S)
+    if git.returncode:
+        return None
+    listed = git.stdout.decode(errors="replace").split("\0")
+    pkgs = sorted({f.rsplit("/", 1)[0] for f in listed if f.endswith("/lean-audit.json") and not f.startswith(LEAN_FIXTURES)})
+
+    def deepest(f: str) -> str | None:
+        return max((p for p in pkgs if f.startswith(p + "/")), key=len, default=None)
+
+    pkg = deepest(file.removeprefix("./")) if file else _named(pkgs, Path(source), name)
+    if pkg is None:
+        return None
+    return LeanNeeds(pkg, pool, sum(f.endswith(".lean") and deepest(f) == pkg for f in listed))
+
+
+#: the Lean tool's figures and their rules (`reserve.floor`, `reserve.ask`), loaded by path from the shipped tree, and the line
+#: its records run prints below its floor (`check.py`'s BELOW_FLOOR_RUN), read as data: check.py itself loads far more
+LEAN_RESERVE_PY, LEAN_CHECK_PY = Path("tools/verity/lean/reserve.py"), Path("tools/verity/lean/check.py")
+#: what of a package's manifest makes its build heavy (`check.py`'s HEAVY_DEPS), and the Lean tool's fixtures, which hold
+#: locks of no package (`lean_audit.packages`)
+HEAVY_DEPS = frozenset({"mathlib", "Arklib"})
+LEAN_FIXTURES = ("tools/verity/lean/", "tests/tools/verity/lean/")
+
+
+def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float) -> str | None:
+    """Why a records run (`lean_changed.py --records PKG`) asking ``mem_gb`` GB is refused at launch, or None: the node
+    refuses it below the floor of the build of each package it audits (`reserve.floor`), and the launch knows only PKG's,
+    by its manifest in ``source``; a `VERITY_LEAN_MEM_FLOOR_GIB` of ``env`` or the command sets another, as on the node."""
+    words = [x for w in map(str, command) for x in (shlex.split(w) if " " in w else [w])]
+    at = next((i for i, w in enumerate(words) if Path(w).name == "lean_changed.py"), None)
+    if at is None or "--records" not in words[at:-1]:
+        return None
+    name = words[words.index("--records", at) + 1].rstrip("/")
+    listed = subprocess.run([GIT, "-C", str(source), "ls-files", "--", "*/lean-audit.json"], capture_output=True, text=True)
+    pkg = _named(sorted(f.rsplit("/", 1)[0] for f in listed.stdout.splitlines() if not f.startswith(LEAN_FIXTURES)), source, name)
+    if pkg is None or not (source / LEAN_RESERVE_PY).is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("auto_lean_reserve", source / LEAN_RESERVE_PY)
+    reserve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reserve)
+    manifest = source / pkg / "lake-manifest.json"
+    pins = {p.get("name") for p in json.loads(manifest.read_text()).get("packages", [])} & HEAVY_DEPS if manifest.is_file() else set()
+    named = dict(kv.split("=", 1) for kv in (*env, *words) if "=" in kv and not kv.startswith("-"))
+    floor = named.get("VERITY_LEAN_MEM_FLOOR_GIB", str(reserve.floor("build", pins)))
+    if not re.fullmatch(r"[0-9]+(\.[0-9]*)?", floor):
+        return f"VERITY_LEAN_MEM_FLOOR_GIB={floor!r} is no number of GiB: set it to one (0 for none), or unset it for the package's floor"
+    floor = float(floor)
+    if floor <= 0 or reserve.gib(mem_gb) >= floor:
+        return None
+    gb = reserve.ask({pkg: pins}, ("build",))[0]
+    tree = ast.parse((source / LEAN_CHECK_PY).read_text())
+    run = next((n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                and any(getattr(t, "id", None) == "BELOW_FLOOR_RUN" for t in n.targets)), None)
+    if not isinstance(run, str):
+        return None
+    run = run.format(gb=gb, pkg=name) + " --update" * ("--update" in words[at:])
+    return (f"the build of {pkg} needs at least {floor:g} GiB, and --mem-gb {mem_gb:g} is {reserve.gib(mem_gb):.1f} GiB, "
+            f"so its node would refuse it once it took a slot: run it where it asks {gb} GB,\n  {run}")
+
+
+def _named(pkgs: list[str], source: Path, name: str) -> str | None:
+    """The one of ``source``'s packages `--records NAME` names: its path, else its lakefile's `name`, else the one path NAME
+    is part of. None when none or several match."""
+    name = name.rstrip("/")
+    match = [p for p in pkgs if p == name] or [p for p in pkgs if _lake_name(source / p) == name] or [p for p in pkgs if name in p]
+    return match[0] if len(match) == 1 else None
+
+
+def _lake_name(pkg: Path) -> str | None:
+    lakefile = pkg / "lakefile.toml"
+    return tomllib.loads(lakefile.read_text()).get("name") if lakefile.is_file() else None
 
 
 class Unplaceable(Exception):
@@ -287,6 +420,18 @@ def peers():
     return sorted({f[0] for f in (ln.split("#")[0].split() for ln in lines) if len(f) >= 2})
 
 
+def lean_built():
+    pool, pkgs = BUILT
+    base = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / RECORDS
+    trees = {}
+    for t in sorted(base.glob(pool + "-*")):
+        if t.name[len(pool) + 1:].isdigit() and t.is_dir():
+            trees[t.name] = {p: {"modules": sum(f.endswith(".olean") for _, _, fs in os.walk(t / p / ".lake" / "build" / "lib")
+                                                for f in fs),
+                                 "deps": (t / p / ".lake" / "packages").is_dir()} for p in pkgs}
+    return {"dir": str(base), "trees": trees}
+
+
 out = {}
 if PEERS:
     out["peers"] = peers()
@@ -297,6 +442,8 @@ short = disk_short()
 shut = f"{NO_START}: {dead}" if dead else f"disk: {short}" if short else None
 if LEAN_SRC:
     out["lean"] = doc(lean_slots)
+if BUILT:
+    out["lean_built"] = doc(lean_built)
 for pool, slots in POOLS.items():
     out[pool] = {"error": shut} if shut else doc(lambda: pool_doc(pool, slots))
 print(json.dumps(out))
@@ -311,18 +458,24 @@ def cpulist(text: str) -> int:
     return n
 
 
-def spill(machines: dict[str, dict] | None = None) -> tuple[tuple[str, str], ...]:
+def spill(machines: dict[str, dict] | None = None, now: float | None = None) -> tuple[tuple[str, str], ...]:
     """(machine, pool) where `--on auto` may spill: SPILL_POOL on every CPU node (CPU_NODE) of AUTO_PROJECT in the launcher's
     registry of machines (remote.load_machines; ``machines`` stands in for it), by number. No node is listed here, so one
-    registered today is asked today, and a pool left out can't sit idle while the others queue. Which nodes keep the pool
+    registered today is asked today, and a pool left out can't sit idle while the others queue. A node its registry entry
+    marks stopped, or unanswering for long (`registry.left_out` at ``now``, the clock's when None), is not asked: no launch
+    waits out its ssh, and `stranded` expects it in no machine's peers. Which nodes keep the pool
     is the probe's to say: one with no slots file for it, or a file that lists no slot, is skipped (`_pool`) at the cost of
     its probe, which runs beside the others'."""
     if machines is None:
         from . import remote
 
         machines = remote.load_machines()
+    from .pods import registry
+
+    now = clock() if now is None else now
     nodes = sorted((int(m.group(1)), name) for name, entry in machines.items()
-                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")]))
+                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")])
+                   and not registry.left_out(entry, now))
     return tuple((name, SPILL_POOL) for _, name in nodes)
 
 
@@ -348,10 +501,12 @@ def share_cpus(source: Path) -> str | None:
 
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None, lean: bool = False,
-            peers: bool = False) -> bytes:
+            peers: bool = False, needs: LeanNeeds | None = None) -> bytes:
     """The probe a machine runs as `python3 -`; `now` (an epoch) stands in for the machine's clock when HOLD_FILE is read. With
     `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py and the slot.py beside it; with `peers`,
-    the machines PEERS_FILE names there, under "peers" (None where it has no such file)."""
+    the machines PEERS_FILE names there, under "peers" (None where it has no such file); with `needs`, under "lean_built",
+    each of its pool's kept trees (LEAN_RECORDS) with the `.olean` files its package's build holds there and whether its
+    fetched dependencies are there, by listing directories alone."""
     from . import cores, remote
     from .pods.nebius import slot_only
 
@@ -361,7 +516,8 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
             "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START,
-            "NODE_SLOT": slot_only.NODE_SLOT, "PEERS": PEERS_FILE if peers else None}
+            "NODE_SLOT": slot_only.NODE_SLOT, "PEERS": PEERS_FILE if peers else None,
+            "BUILT": [needs.pool, [needs.package]] if needs else None, "RECORDS": LEAN_RECORDS}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -417,12 +573,14 @@ def passed_over(machine: str, why: str) -> dict:
 
 
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
-         now: float | None = None, node_only: bool = False, lean: bool = False, peers: bool = False) -> dict[str, dict | str]:
+         now: float | None = None, node_only: bool = False, lean: bool = False, peers: bool = False,
+         needs: LeanNeeds | None = None) -> dict[str, dict | str]:
     """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be. Node
     2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). A machine that can start no run (the
     probe's `no_start`) says why in place of each: node 2's share is `{"no_start": why}`, a pool's document an error in
     NO_START's words. With `node_only`, node 2 alone is asked; with `lean`, each machine's Lean slots too, under "lean"
-    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them).
+    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them);
+    with `needs`, what its kept Lean trees hold of the package, under "lean_built" (`payload`, `_holds`).
     The probe's slot.py and lean_slot.py and the description are a trusted launcher tree's where there is one
     (research.launcher), never ``source``'s."""
     from . import launcher
@@ -436,13 +594,15 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     def one(item: tuple[str, list[str]]) -> dict | str:
         name, pools = item
         try:
-            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools, now, lean, peers))
+            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools, now, lean, peers, needs))
         except subprocess.TimeoutExpired:
             return f"no answer in {READ_TIMEOUT_S} s"
         except Exception as e:                                       # not listed, not this project's, no source: never chosen
             return str(e) or type(e).__name__
         if r.returncode:
-            err = r.stderr.decode(errors="replace").strip().splitlines()
+            from .remote import name_addresses
+
+            err = name_addresses(r.stderr.decode(errors="replace"), machine=name).strip().splitlines()
             if r.returncode == 255 and err and err[-1].startswith("ssh: connect to host "):
                 return f"{NO_SSH} ({err[-1].rsplit(': ', 1)[-1]})"
             return f"exit {r.returncode}: {err[-1] if err else 'no output'}"
@@ -587,22 +747,97 @@ def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     return (0 if free > waiting else (waiting + 1) / n), f"; Lean `{pool}`: {free} of {n} free, {waiting} waiting"
 
 
-def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
-           ) -> tuple[tuple[str, str] | None, str]:
+def _holds(doc: Any, needs: LeanNeeds) -> tuple[bool | None, str]:
+    """Whether the machine whose `read` document is ``doc`` holds ``needs``' package built in a kept tree of its pool (the
+    package's fetched dependencies there, and `.olean` files for LEAN_BUILT_SHARE of its modules), and how to say it after
+    the machine's name; None where its probe gave no `lean_built` (a probe from before it, or one that failed there). Of a
+    machine whose Lean slots were read, only the trees of the pool's slots count, the ones a run there can be given."""
+    built = doc.get("lean_built") if isinstance(doc, dict) else None
+    if not isinstance(built, dict) or not isinstance(built.get("trees"), dict):
+        why = f"its kept Lean trees weren't read ({built['error']})" if isinstance(built, dict) and built.get("error") else \
+            "its probe said nothing of its kept Lean trees"
+        return None, why
+    pools = (doc.get("lean") or {}).get("pools") if isinstance(doc.get("lean"), dict) else None
+    n = (pools.get(needs.pool) or {}).get("n") if isinstance(pools, dict) else None
+    trees = {name: t.get(needs.package) if isinstance(t, dict) else None for name, t in built["trees"].items()
+             if n is None or int(name.rsplit("-", 1)[-1]) < n}
+    need = max(1, math.ceil(needs.modules * LEAN_BUILT_SHARE))
+    warm = [t for t in trees.values() if isinstance(t, dict) and t.get("deps") and (t.get("modules") or 0) >= need]
+    if warm:
+        return True, f"holds {needs.package} built in {len(warm)} of {len(trees)} `{needs.pool}` trees"
+    if not trees:
+        return False, f"keeps no `{needs.pool}` tree ({built.get('dir')}/{needs.pool}-I)"
+    most = max(trees.values(), key=lambda t: (t or {}).get("modules") or 0) or {}
+    return False, (f"holds {needs.package} built in none of its {len(trees)} `{needs.pool}` trees (at most "
+                   f"{most.get('modules') or 0} of the {need} modules that count as built"
+                   + ("" if any((t or {}).get("deps") for t in trees.values()) else ", and none has its fetched dependencies") + ")")
+
+
+def _sort(docs: dict[str, dict | str], needs: LeanNeeds) -> tuple[dict, dict[str, str], list[str], dict[str, str]]:
+    """``docs``' machines that were read, by `_holds`: each one's answer, those that hold the package, those unknown, and
+    those a Lean run of ``needs`` may not go to, with why (`_for_package`)."""
+    seen = {m: _holds(d, needs) for m, d in docs.items() if isinstance(d, dict)}
+    held = {m: why for m, (ok, why) in seen.items() if ok}
+    unknown = [m for m, (ok, _) in seen.items() if ok is None]
+    lacking = {m: why if ok is False else f"is not known to hold {needs.package} built ({why}), and {', '.join(held)} "
+               f"{'does' if len(held) == 1 else 'do'}" for m, (ok, why) in seen.items() if ok is False or (ok is None and held)}
+    return seen, held, unknown, lacking
+
+
+def _for_package(docs: dict[str, dict | str], needs: LeanNeeds | None) -> tuple[dict[str, str], dict[str, str], str | None]:
+    """The machines a Lean run of ``needs`` may not go to, and why ({machine: what it lacks}); those that hold its package
+    built ({machine: how}); and a note, where machines whose probe said nothing of their trees (`_holds`' None) are taken
+    because no machine is known to hold it. While some machine is known to hold it, the unknown ones are left out too.
+    `Unplaceable` when no machine holds it or may: a run there would build the package cold, or be refused at once."""
+    if needs is None:
+        return {}, {}, None
+    seen, held, unknown, lacking = _sort(docs, needs)
+    if held or not unknown:
+        if not held:
+            each = "; ".join(f"{m}: {seen[m][1] if m in seen else f'not read ({d})'}" for m, d in docs.items())
+            raise Unplaceable(
+                f"no machine holds {needs.package} built in a kept `{needs.pool}` tree, where this run would take it: "
+                f"{each}. A try where none is finds no dependencies kept and elaborates nothing, and a records run builds "
+                f"the package cold. Two ways on: `--on MACHINE` runs it there anyway, building it cold; or warm a machine "
+                f"first with a records run of the package there (`research run --on MACHINE ... -- python3 "
+                f"tools/verity/lean/lean_changed.py --records {needs.package}`), then launch this again")
+        return lacking, held, None
+    return lacking, held, (f"no machine is known to hold {needs.package} built in a kept `{needs.pool}` tree, so "
+                           f"{', '.join(unknown)}, whose probe said nothing of its trees, "
+                           f"{'is' if len(unknown) == 1 else 'are'} taken as unknown")
+
+
+def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None,
+           needs: LeanNeeds | None = None) -> tuple[tuple[str, str] | None, str]:
     """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
-    take it. ``lean_pool``: the Lean pool the job takes a slot of (`lean_pool`), which `read` was asked for (its `lean`)."""
+    take it. ``lean_pool``: the Lean pool the job takes a slot of (`lean_pool`), which `read` was asked for (its `lean`).
+    ``needs``: the package a Lean try or records run needs built (`lean_package`): only a machine that holds it in a kept
+    tree takes the run (`_for_package`), and the reason ends with how the one chosen holds it."""
+    lacking, held, note = _for_package(docs, needs)
+    target, why = _choose(docs, cpus, mem_gb, lean_pool, lacking, note)
+    at = AUTO_NODE if target is None else target[0]
+    return target, why + (f"; {at} {held[at]}" if at in held else "")
+
+
+def _choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None, lacking: dict[str, str],
+            note: str | None) -> tuple[tuple[str, str] | None, str]:
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
     if (said := off(n2)) is not None:
         share = None
+    elif AUTO_NODE in lacking:
+        share, said = None, f"{AUTO_NODE} skipped: it {lacking[AUTO_NODE]}"
     else:
         said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
                 f"{share['waiters']} waiting")
     of = f" of Lean pool `{lean_pool}`" if lean_pool else ""
-    ranked, stalled, notes, most = [], [], [said], None
+    ranked, stalled, notes, most = [], [], [said, *([note] if note else [])], None
     for i, (machine, pool) in enumerate(_pools(docs)):
         doc = docs.get(machine)
+        if machine in lacking:
+            notes.append(f"{machine}'s {pool} pool skipped: it {lacking[machine]}")
+            continue
         try:
             line, lean = _lean(doc, lean_pool)
             if line is None:
@@ -651,11 +886,12 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"
 
 
-def elsewhere(docs: dict[str, dict | str], home: str, cpus: int, mem_gb: float, lean_pool: str | None = None
-              ) -> tuple[tuple[str, str] | None, str]:
+def elsewhere(docs: dict[str, dict | str], home: str, cpus: int, mem_gb: float, lean_pool: str | None = None,
+              needs: LeanNeeds | None = None) -> tuple[tuple[str, str] | None, str]:
     """Where a job that waits in ``home``'s pool would start now: the pool `choose` gives it among the other machines' pools
     alone (node 2's queue takes no twin of a pool run) where `expect` gives it no wait, and why; None, and why, when no other
-    machine's pool starts it now. A machine whose probe read its peers and found ``home`` not among them is left out: a
+    machine's pool starts it now. A Lean run of ``needs`` moves only to a machine `choose` finds holding its package built.
+    A machine whose probe read its peers and found ``home`` not among them is left out: a
     twin there couldn't claim the pair on ``home`` and would leave its line unrun (slot.py's `twin_there`). One whose peers
     weren't read stays, and its twin's own refusal decides."""
     others: dict[str, dict | str] = {AUTO_NODE: "not asked: a late twin takes a pool's slot"}
@@ -666,7 +902,7 @@ def elsewhere(docs: dict[str, dict | str], home: str, cpus: int, mem_gb: float, 
         others[machine] = f"it doesn't name {home} in {PEERS_FILE}, so a twin there couldn't claim on {home}" \
             if isinstance(names, list) and home not in names else doc
     try:
-        target, why = choose(others, cpus, mem_gb, lean_pool=lean_pool)
+        target, why = choose(others, cpus, mem_gb, lean_pool=lean_pool, needs=needs)
     except Unplaceable as e:
         target, why = None, str(e)
     if target is None or expect(others, target, cpus, mem_gb, lean_pool=lean_pool).minutes != 0:
@@ -735,13 +971,16 @@ def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: in
     return Wait(None, cpu + then, minutes > START_WITHIN_MIN)
 
 
-def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
-            ) -> tuple[int, float, tuple[str, str]] | None:
+def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None,
+            needs: LeanNeeds | None = None) -> tuple[int, float, tuple[str, str]] | None:
     """The smallest change of a job's request that starts it now: (CPUs, GB, a pool that takes it), the request cut to a
     slot that is free in some pool and to the memory free on its machine (`_blocked`), where `expect` then gives it no wait
     (the first such pool; `choose` takes the one with the most places for it). Of several, the one that keeps the most of
-    what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts now."""
+    what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts now. A pool
+    of a machine a Lean run of ``needs`` may not go to (`_for_package`) is none."""
     cpus = max(cpus, 1)
+    lacking = _sort(docs, needs)[3] if needs else {}
+    docs = {m: d for m, d in docs.items() if m not in lacking}
     shapes = set()
     for machine, pool in _pools(docs):
         doc = docs.get(machine)

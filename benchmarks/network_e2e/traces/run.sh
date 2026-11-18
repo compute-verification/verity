@@ -17,13 +17,13 @@
 # The hostile-scheduler test serves corpus.HOSTILE's traces, honest first, synchronous and async, e.g.
 #   CORPORA="llama32_1b/greedy:honest,refuse-1,refuse-2,refuse-3,shortest-4;llama32_1b/async-greedy:honest,refuse-5,shortest-6"
 # and the same for seeded; its OUT (corpus/ and compare/) goes in whole as one vllm-adversarial-schedule/v1 tree.
-# The network attester traces (corpus.NETWORK_CERTIFIER) need verity/protocols/resource_accounting/network/attester/network_attester_serve.py and the network attester in the shipped tree:
+# The network attester traces (corpus.NETWORK_ATTESTER) need verity/protocols/resource_accounting/network/attester/network_attester_serve.py and the network attester in the shipped tree:
 #   CORPORA="llama32_1b/async-greedy:warden-heavy,warden-smallkv"
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 VENV=${VENV:-/workspace/jobs/venv312}
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
-export CUDA_DEVICE_ORDER=PCI_BUS_ID FLASHINFER_CUDA_ARCH_LIST=${FLASHINFER_CUDA_ARCH_LIST:-12.0f}
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
 CORPORA=${CORPORA:-llama32_1b/greedy}
 MAX_MIN=${MAX_MIN:-45}
 JOIN=${JOIN:-1}
@@ -31,6 +31,7 @@ C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 [ -f "$C4" ] || { echo "trace-corpus: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 
 if [ -n "${TRACE_CORPUS_END:-}" ]; then                     # inside the lease
+  . benchmarks/harness/flashinfer_arch.sh
   nvidia-smi -q -i "${CUDA_VISIBLE_DEVICES%%,*}" > "$OUT/nvidia-smi.txt" 2>&1
   echo "trace-corpus: GPU ${CUDA_VISIBLE_DEVICES} (${GPU_LEASE_UUID:-}) at $(date -u +%H:%M:%SZ)"
   rc=0

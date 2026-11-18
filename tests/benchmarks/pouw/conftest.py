@@ -29,6 +29,10 @@ NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
+#: the directories of ``benchmarks/pouw/`` that went to ``calibration/pouw/``: this suite still takes their scripts, by the
+#: same names (``theory/run.py``)
+CALIBRATION = POUW.parents[1] / "calibration" / "pouw"
+CALIBRATED = ("dc", "facet_break", "opcode_probe", "sass_census", "tensor_kinds", "theory")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
 #: stayed: `load` reads a file from where it is
 SPLIT = ("filler", "pearl_c_sm120", "pearl_c_sm90", "served_zk")
@@ -40,21 +44,23 @@ AHEAD = ("harness",)
 def scripts() -> list[Path]:
     """Every script under ``benchmarks/pouw/``."""
     here = [p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1])]
-    return sorted(here + [p for d in MOVED + SPLIT for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"])
+    return sorted(here + [p for d in MOVED + SPLIT for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"]
+                  + [p for d in CALIBRATED for p in (CALIBRATION / d).rglob("*.py")])
 
 
 def rel(path: Path) -> Path:
     """`path` as `load` names it: under ``benchmarks/pouw/``, or under `KERNELS` for a directory of `MOVED`; a file of
     this suite's own, under ``tests/benchmarks/pouw/``, from there."""
     here = Path(__file__).resolve().parent
-    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else here if path.is_relative_to(here) else POUW)
+    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else CALIBRATION if path.is_relative_to(CALIBRATION)
+                            else here if path.is_relative_to(here) else POUW)
 
 
 def place(file: str | Path) -> Path:
     """The file `load` reads for ``FILE``: ``benchmarks/pouw/FILE``, or under `KERNELS` for a directory of `MOVED` and
     for a kernel's file of a directory of `SPLIT`."""
     d = Path(file).parts[0]
-    return (KERNELS if d in MOVED or d in SPLIT and not (POUW / file).exists() else POUW) / file
+    return (KERNELS if d in MOVED or d in SPLIT and not (POUW / file).exists() else CALIBRATION if d in CALIBRATED else POUW) / file
 
 
 def script_dirs() -> list[Path]:
@@ -90,6 +96,15 @@ def load_name(file: str | Path) -> str:
     return "_".join(parts if len(parts) > 1 else ("pouw", *parts))
 
 
+@pytest.fixture
+def no_gpu(monkeypatch):
+    """A host whose harness-kit stamp names no card (``"none"``), whatever GPUs the test's host has."""
+    from verity_bench import kit
+
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    monkeypatch.setattr(kit.shutil, "which", lambda name: None)
+
+
 def load(file: str) -> ModuleType:
     """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
     name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its
@@ -116,3 +131,11 @@ def _outside_any_run(monkeypatch):
     run's own result.json, which a test's verdict must never replace."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
+
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
+    where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
+    unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)

@@ -667,12 +667,12 @@ def test_a_window_the_lean_and_its_python_twin_disagree_on_is_refused(tmp_path, 
     assert _disagree(credit(d, statements)[1], "window")
 
     def gone(_v):
-        raise V.LeanError("pouw-check-difftest ended on window")
+        raise V.LeanError("pouw-verifier-difftest ended on window")
 
     asked.say["window"] = gone
     got, refused = credit(d, statements)
     assert got is None and refused == (V.DISAGREE, "the Lean verifier gave no answer to window, so it stands "
-                                                   "refused: pouw-check-difftest ended on window")
+                                                   "refused: pouw-verifier-difftest ended on window")
     del asked.say["window"]
     python = Cr._window
     monkeypatch.setattr(Cr, "_window", lambda *a: (lambda g, w: (g and ([*g[0], len(d["calls"])], *g[1:]), w))(

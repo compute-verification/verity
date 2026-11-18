@@ -3,7 +3,7 @@
 
 # `record.py run` launches `run.py run`'s job as one recorded run on a CPU node (the default behind the ZK server: 85's CPU prover,
 # no GPU), a few hours at K = 4096, with record.py around job.sh, which writes both numbers from job.sh's result. Recursion
-# is rerun monthly. Its two numbers are the proof table's recursion row on the Metrics tab (top/proof-table-recursion-row):
+# is rerun monthly. Its two numbers are the proof benchmarks' recursion result on the Metrics tab (top/proof-table-recursion-row):
 # `verity bench prove layers` prints that row and writes neither, since its seconds are a whole recursive run's, not a
 # proof block's.
 [[metric]]

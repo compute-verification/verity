@@ -47,8 +47,6 @@ sys.path.insert(0, str(HERE))
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
-from verity.device import load_card  # noqa: E402
-
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
 SPIN_CYCLES = 20_000_000
 L2_DEFEAT_BYTES = 1 << 30
@@ -68,7 +66,6 @@ ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
 NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1: x's denominator
 CLOCK_LOCKED_MHZ = 2092  # the nodes' locked SM clock (their clock-locking unit)
-CLOCK_MAX_MHZ = load_card("rtx-pro-6000-server")["clock"]["sm"]["value"]  # the card's max
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
@@ -301,7 +298,7 @@ def gate_bound(lib: Lib, torch, log) -> dict:
 
 
 def gate_coin(lib: Lib, torch, log) -> dict | None:
-    """The append coin's form of the bound key (poub's PROTOCOL.md §3), for a library at
+    """The append coin's form of the bound key (poub's `codec.binding`), for a library at
     PoUB's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
     `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
     back, and don't decode under the form without the coin."""
@@ -350,7 +347,8 @@ def read_rate(lib: Lib, torch, store, sms: int, reps: int) -> dict:
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     best = None
     for mult in (4, 8, 16, 32):
-        ts = timed(torch, lambda: lib.call("kv_read", ptr(store), store.numel(), ptr(xr), sms * mult, stream(torch)), reps)
+        ts = timed(torch, lambda mult=mult: lib.call("kv_read", ptr(store), store.numel(), ptr(xr), sms * mult, stream(torch)),
+                   reps)
         med = statistics.median(ts)
         if best is None or med < best[1]:
             best = (mult, med, ts)
@@ -367,12 +365,13 @@ def chain(lib: Lib, torch, what: int, k: int, ilp: int, sms: int, reps: int, tar
         grid = sms * per_sm
         steps = 4
         while True:
-            t = statistics.median(timed(torch, lambda: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), 1))
+            t = statistics.median(timed(
+                torch, lambda steps=steps, grid=grid: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), 1))
             if t > target_s / 4 or steps > 1 << 24:
                 break
             steps *= 4
         steps = max(1, int(steps * target_s / t))
-        ts = timed(torch, lambda: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), reps)
+        ts = timed(torch, lambda steps=steps, grid=grid: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), reps)
         med = statistics.median(ts)
         items = grid * 128 * steps * (ilp if what == 0 else 1)
         r = {"per_sm": per_sm, "steps": steps, "items": items, "median_s": med, "times_s": ts, "per_s": items / med}
@@ -401,7 +400,7 @@ def rates(lib: Lib, torch, ks, sms: int, reps: int, log) -> dict:
     return out
 
 
-def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
+def frontier_rates(res: dict, libs, run: str | None, clock_max_mhz: float) -> list[dict]:
     """Each field's compute-only rates at each k as `RATES_SCHEMA` records, for the frontier's pooled x: x is the encode
     of 70B's linears (`E_70B` bytes as words) at the measured rate, in `NATIVE_70B_S` steps, at the locked clock;
     `x_max_clock` scales it by the clocks' ratio (not measured: the nodes' clocks are locked)."""
@@ -424,9 +423,9 @@ def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
                         "roots_per_s": e["per_s"] * int(k), "encode_words_per_s": e["per_s"],
                         "root_over_squaring_floor": e["per_s"] * int(k) / r["encode_floor_words_s"],
                         "decode_words_per_s": d["per_s"], "r": d["per_s"] / e["per_s"],
-                        "x": x, "x_boosted": False, "x_max_clock": x * CLOCK_LOCKED_MHZ / CLOCK_MAX_MHZ,
+                        "x": x, "x_boosted": False, "x_max_clock": x * CLOCK_LOCKED_MHZ / clock_max_mhz,
                         "delta": words / d["per_s"] / NATIVE_70B_S, "clock_mhz": CLOCK_LOCKED_MHZ,
-                        "clock_max_mhz": CLOCK_MAX_MHZ, "max_clock_measured": False, "sms": res["sms"],
+                        "clock_max_mhz": clock_max_mhz, "max_clock_measured": False, "sms": res["sms"],
                         "measured": True, "run": run, "art": None})
     return out
 
@@ -441,7 +440,7 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
     out = {}
     for k in ks:
         set_key(lib, lib_key(lib, k))
-        enc = timed(torch, lambda: lib.call("kv_encode", ptr(store), ptr(y), n, 0, k, sms * 8, st), 1, warm=0)[0]
+        enc = timed(torch, lambda k=k: lib.call("kv_encode", ptr(store), ptr(y), n, 0, k, sms * 8, st), 1, warm=0)[0]
         xr.zero_()
         lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * 8, ptr(xr), st)
         torch.cuda.synchronize()
@@ -451,7 +450,8 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
             continue
         best = None
         for mult in (4, 8, 16):
-            ts = timed(torch, lambda: lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * mult, ptr(xr), st), reps)
+            ts = timed(torch, lambda k=k, mult=mult: lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * mult, ptr(xr), st),
+                       reps)
             med = statistics.median(ts)
             if best is None or med < best[1]:
                 best = (mult, med, ts)
@@ -478,7 +478,7 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
         for b in batches:
             n = tw * b
             lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st)
-            ts = [queued(lib, torch, lambda: lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st))
+            ts = [queued(lib, torch, lambda n=n, k=k: lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st))
                   for _ in range(reps)]
             sm = n / enc_rates[k]["per_s"]
             out[k][b] = {"words": n, "bytes": n * f.word_bytes, "latency_s": statistics.median(ts), "times_s": ts,
@@ -536,7 +536,8 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
             o_p = torch.empty(b, 64, K.HEAD_DIM, dtype=torch.float32, device="cuda")
             o_e = torch.empty_like(o_p)
 
-            def run(store, encoded: int, o, layer: int, splits: int) -> None:
+            def run(store, encoded: int, o, layer: int, splits: int, *, q=q, part=part, b=b, ctx=ctx,
+                    layers=layers) -> None:
                 lib.call("kv_attn", ptr(store), encoded, ptr(q), ptr(o), ptr(part), b, ctx, layers, layer, splits, k, st)
 
             kvl = plain.view(b, ctx, layers, 2, K.KV_HEADS, K.HEAD_DIM)
@@ -566,18 +567,21 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
                 spin = ATTN_SPIN_CYCLES
                 per = {}
                 for sp in cands:
-                    tp = [queued(lib, torch, lambda: [run(plain, 0, o_p, l, sp) for l in range(layers)], spin) / layers
+                    tp = [queued(lib, torch, lambda sp=sp, plain=plain, o_p=o_p, layers=layers:
+                                 [run(plain, 0, o_p, layer, sp) for layer in range(layers)], spin) / layers
                           for _ in range(reps)]
                     per[sp] = {"plain_s": statistics.median(tp), "plain_times_s": tp}
                     for form, fname in ATTN_FORMS.items():
-                        te = [queued(lib, torch, lambda: [run(enc, form, o_e, l, sp) for l in range(layers)], spin)
+                        te = [queued(lib, torch, lambda sp=sp, enc=enc, form=form, o_e=o_e, layers=layers:
+                                     [run(enc, form, o_e, layer, sp) for layer in range(layers)], spin)
                               / layers for _ in range(reps)]
                         per[sp].update({f"{fname}_s": statistics.median(te), f"{fname}_times_s": te})
                 kt = kvl.permute(2, 3, 0, 4, 1, 5).contiguous()  # layer, K/V, b, kv head, token, dim
                 qt = (q.float() / scale).to(torch.bfloat16).view(b, 64, 1, K.HEAD_DIM)
                 F.scaled_dot_product_attention(qt, kt[0, 0], kt[0, 1], enable_gqa=True)
-                tt = [queued(lib, torch, lambda: [F.scaled_dot_product_attention(qt, kt[l, 0], kt[l, 1], enable_gqa=True)
-                                                  for l in range(layers)], spin) / layers for _ in range(reps)]
+                tt = [queued(lib, torch, lambda qt=qt, kt=kt, layers=layers:
+                             [F.scaled_dot_product_attention(qt, kt[layer, 0], kt[layer, 1], enable_gqa=True)
+                              for layer in range(layers)], spin) / layers for _ in range(reps)]
                 del kt
                 sp_p = min(per, key=lambda sp: per[sp]["plain_s"])
                 best = {f: min(per, key=lambda sp: per[sp][f"{f}_s"]) for f in ATTN_FORMS.values()}
@@ -622,7 +626,7 @@ def native_70b(torch, batches, reps: int, log) -> dict:
                 xc = torch.zeros(mpad, kd, device="cuda").to(torch.float8_e4m3fn)
                 xc[:b] = x
 
-            def arm():
+            def arm(xc=xc, wts=wts):
                 for wt in wts:
                     torch._scaled_mm(xc, wt, one, one, out_dtype=torch.bfloat16)
             ts = timed(torch, arm, reps)
@@ -708,7 +712,8 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/kv-codec.json", f"{rel}/kv.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+           "workload_fingerprint": {"libs": {lib.name: hashlib.sha256(Path(lib.path).read_bytes()).hexdigest()
+                                             for lib in libs},
                                     "seed": SEED.hex()},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "kv codec gates",
                           "detail": "device encode and decode = kv.py, round trips, checksums", "evidence": files},
@@ -722,6 +727,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS (or FIELD-TAG)")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--clock-max-mhz", type=float, required=True, help="the card's highest SM clock, its `clock.sm`")
     ap.add_argument("--ks", default="1,2,4,6")
     ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
     ap.add_argument("--batches", default="1,8,32")
@@ -754,7 +760,7 @@ def main() -> int:
     sms = props.multi_processor_count
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "seed": SEED.hex(), "ks": ks,
            "batches": batches, "E_70B": E_70B, "token_bytes": K.TOKEN_BYTES, "libs": {}, "ok": True}
-    log(f"{props.name}: {sms} SMs; libs " + ", ".join(f"{l.name} ({l.field.n} bits, kmax {l.kmax})" for l in libs))
+    log(f"{props.name}: {sms} SMs; libs " + ", ".join(f"{lib.name} ({lib.field.n} bits, kmax {lib.kmax})" for lib in libs))
     for lib in libs:
         g = gate(lib, torch, ks, a.gate_ref, a.gate_words, log)
         gb = gate_bound(lib, torch, log)
@@ -788,7 +794,7 @@ def main() -> int:
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
         res["model"] = model(res, libs, batches, contexts, props.total_memory)
-        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"))
+        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"), a.clock_max_mhz)
         (out_dir / "rates.json").write_text(json.dumps(res["frontier_rates"], indent=1) + "\n")
     (out_dir / "kv-codec.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)

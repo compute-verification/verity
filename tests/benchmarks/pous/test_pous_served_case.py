@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
@@ -151,7 +151,7 @@ def test_a_tampered_pous_case_is_answered_otherwise(served, tmp_path, monkeypatc
     ("public commitment", "doesn't open the public answer's commitment"),
     ("published", "the opened row is not the digest of setup's published outputs"),
     ("session", "the run protocol answers the case reject"),
-    ("table", "is not the memory challenger's table"),
+    ("table", "is not the memory attester's table"),
     ("verdict", "is not the run's own answer under a hiding commitment"),
 ])
 def test_a_pous_window_changed_after_the_run_is_refused(served, tmp_path, monkeypatch, tamper, reason):

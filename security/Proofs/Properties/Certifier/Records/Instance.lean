@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import NetworkCheck.RecordsBytes
+import NetworkVerifier.RecordsBytes
 import Proofs.Properties.Hash.Identity
 import Proofs.Properties.Certifier.Check
 import Proofs.Properties.Certifier.Check.Check
@@ -63,8 +63,8 @@ they are taken as given.
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params LinkOpening Evidence)
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params LinkOpening Evidence)
 open NetworkAttester (ClockSync)
 open Properties.Certifier (ParamsDigests Declares programGrid)
 open Properties.Certifier.CheckProofs (declares_unique declares_declared)

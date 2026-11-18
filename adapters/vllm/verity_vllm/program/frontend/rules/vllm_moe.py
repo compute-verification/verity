@@ -50,8 +50,6 @@ from typing import Any
 import torch
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
-
-from verity_vllm.log import init_logger
 from verity_torch.frontend.derive import Alloc
 from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_torch.frontend.rules.common import (
@@ -61,6 +59,8 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+
+from verity_vllm.log import init_logger
 from verity_vllm.program.frontend.rules.triton_iface import (
     launch_meta,
     launch_tensor,

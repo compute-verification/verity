@@ -1,56 +1,33 @@
-"""The write gate for the step's weight GEMM: under Nsight Compute, one launch of each linear's fused
-kernel at the configs the step picked (`step.json`), sketched and untagged, and the reader's commit kernels, and per
-kernel the L2 write sectors from the SMs against what it must write (all sources' are recorded beside them: the
-profiler's own writes come from other units, 15 sectors a launch and up to 2 MB at a KV launch). A sketched launch
-writes its receipts (`tag_bytes` a vector)
+"""The write gate's reading of an Nsight Compute profile and its rule, which the stack's gate
+(`benchmarks/vllm_encoded/stack_write_gate.py`) runs on its own launches: per kernel the L2 write sectors from the SMs
+against what it must write (all sources' are recorded beside them: the profiler's own writes come from other units, 15
+sectors a launch and up to 2 MB at a KV launch). A sketched launch writes its receipts (`tag_bytes` a vector)
 and adds its partial sums into y (L2 reductions, nchunks · M · N · 4 bytes); an untagged one only the adds; anything
 past that (a spill, a stack, a stray store) shows as write sectors over the receipts' bytes and as local stores. A
 launch passes with no local stores and its L2 writes and reductions within 1% (and a 4 KiB floor) of its outputs plus
 partials; a commit (the pass's tree constants from its seed on the device, `chain_kernel`, then the leaves, pads and
 tree) with none and its writes within 1% of its constants and digests.
 
-With --kv-lib (step.cu) the same for the KV side: attention at each k in the form and split count the step picked
-(`kv_attn` over two layers of the step's batch × context), whose outputs are o and its split partials (at most the
-step's partial buffer for that form and split, `step.part_floats`), and the append of a token at every layer, whose
+The same for the KV side: attention, whose outputs are o and its split partials, and the append of a token, whose
 outputs are its words. A partial record's m and l are each a group's GROUP floats from its own warp, half a sector at
 GROUP = 4 (8B), so attention is held to the sectors its records span (`part_sector_bytes`) and its ratio to the bytes
-is recorded beside it. The receipt form (step.RECEIPT_FORM, kv_attn form 13) also stores each token-layer's head shares
+is recorded beside it. The receipt form (kv_attn form 13) also stores each token-layer's head shares
 (64 bytes a slot and KV head, whole sectors), and the KV's receipts kernel after it (`kv_rc_receipts`) its 64-byte
 receipts, whole sectors a lane pair, held to 1% (and a 4 KiB floor) of them.
-
-    python write_gate.py --wt-lib wt.so [--kv-lib step.so] [--reader-lib reader.so] --step-json OUT/step.json --out OUT
 """
 from __future__ import annotations
 
-import argparse
 import csv
-import ctypes
 import io
 import json
 import shutil
 import subprocess
-import sys
-from pathlib import Path
-
-import numpy as np
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
-
-import bench as BW  # noqa: E402  (before kv_bench, as in step.py)
-import sketching as SKT  # noqa: E402
-
-sys.path.insert(0, str(HERE.parent / "word_codec"))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py").parent))
-import kv_bench as BW_KV  # noqa: E402
 
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
 WRITE, ALL = METRICS[1], METRICS[0]   # the SMs' L2 writes, and every source's
 RED, LOCAL = METRICS[2], METRICS[4]   # L2 reductions, and local stores
 MARK = "WRITE-GATE "                  # starts the child's line of its launches
-KERNELS = "regex:fused_kernel|chain_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel|rc_receipt_kernel"
 
 
 def profile(kernels: str, child: list[str]) -> subprocess.CompletedProcess:
@@ -82,121 +59,6 @@ def sector_bytes(kv: dict, metric: str) -> float:
 def passes(written: float, local: float, must: int, kernels: int = 1) -> bool:
     """The gate's rule: no local stores, and L2 writes within 1% of what the kernels must write and 4 KiB a kernel."""
     return local == 0 and written <= 1.01 * must + 4096 * kernels
-
-
-def launches(a) -> list[dict]:
-    """The child: each (linear, k, variant) launched once, in order; returns what each must write."""
-    import torch
-
-    step = json.loads(Path(a.step_json).read_text())
-    lib = BW.Lib(a.wt_lib)
-    t, m = step["args"]["sketch_t"], step["gemm_m"]
-    _, shapes = BW.MODELS[step["model_name"]]
-    shapes = {**shapes, "lm_head": (128256, 4096 if step["model_name"] == "8b" else 8192)}
-    st = BW.stream(torch)
-    BW.set_receipt_prefix(lib)
-    rows = step.get("k_s", BW.SR.ROWS)
-    BW.set_pass(lib, t, rows=rows)
-    bits = BW.sketch_bits(lib, BW.window_seed(lib), rows, SKT.vector_bytes(lib.sb, t))
-    signs = torch.from_numpy(BW.pass_signs(lib, bits, t).view(np.int32)).cuda()
-    frags = BW.sign_frags(lib, torch, signs, t, st)
-    out = []
-    for name in a.linears.split(","):
-        n, kd = shapes[name]
-        store = torch.empty(n * kd, dtype=torch.uint8, device="cuda").random_(0, 256)
-        x = torch.randn(m, kd, device="cuda").to(torch.float8_e4m3fn)
-        y = torch.zeros(m, n, dtype=torch.float32, device="cuda")
-        for k in step["ks"]:
-            key = BW.lib_key(lib, k)
-            BW.set_key(lib, torch, key)
-            for var in ("sketch", "untagged"):
-                cfg = tuple(step["picks"][name]["k"][str(k)][var])
-                launched = ctypes.c_int(0)
-                lib.call("wt_fused_sketch", k, None, None, None, m, n, kd, 0, 0, cfg[0], cfg[1], 0, None, None, 0,
-                         cfg[3], None, None, t, BW.sketch_warps(cfg), ctypes.byref(launched), st)
-                gr = launched.value // (kd // 512)
-                steps = BW.tsteps(lib, torch, key, cfg[0], gr, kd // 512)
-                nvec = lib.so.wt_sketch_vectors(n, kd, gr, t) if cfg[3] else 0
-                tags = torch.empty(max(nvec, 1) * lib.tag_bytes, dtype=torch.uint8, device="cuda")
-                sg = (frags if BW.sketch_warps(cfg) else signs) if cfg[3] else None
-                lib.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), m, n, kd, 0, 0,
-                         cfg[0], cfg[1], gr, BW.ptr(steps), BW.ptr(tags) if cfg[3] else None, lib.jbase, cfg[3],
-                         BW.ptr(sg) if sg is not None else None, None, t, BW.sketch_warps(cfg), None, st)
-                torch.cuda.synchronize()
-                out.append({"kernel": "fused", "linear": name, "k": k, "variant": var, "cfg": list(cfg), "groups": gr,
-                            "receipt_bytes": nvec * lib.tag_bytes, "red_bytes": (kd // 512) * m * n * 4})
-        del store
-    if a.reader_lib and lib.receipt:
-        import reader as RD
-
-        rd = RD.Reader(a.reader_lib, torch)
-        n = 1 << 16
-        plan = BW.SR.rb.Plan.whole(n)
-        seed = torch.frombuffer(bytearray(BW.RECEIPT_SEED), dtype=torch.uint8).cuda()
-        rd.chain_begin(plan, BW.STORE_KEY)
-        rd.chain(BW.ptr(seed))
-        ys = torch.empty((n, 8), dtype=torch.int64, device="cuda").random_()
-        rd.levels(rd.commit(ys, 0, rd.leaves), 0, pad=True)
-        torch.cuda.synchronize()
-        out.append({"kernel": "commit", "blocks": n, "leaves": rd.leaves, "leaf_bytes": 64 * rd.leaves,
-                    "node_bytes": 64 * (rd.leaves - 1), "const_bytes": rd.so.rb_consts_bytes()})
-    if a.kv_lib:
-        out += kv_launches(a, step, torch, st)
-    return out
-
-
-def kv_launches(a, step: dict, torch, st) -> list[dict]:
-    """Attention at each k in the step's form and split count, then the append at every layer at each k."""
-    import step as STEP
-
-    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib, STEP.STEP_KV)
-    sh = BW_KV.attn_shape(kv)
-    b, ctx, layers = step["batch"], step["ctx"], 2
-    slots = b * ctx
-    f, tlw = kv.field, sh["tlw"]
-    cache = torch.empty(b * ctx * layers * sh["tle"], dtype=torch.uint8, device="cuda").random_(0, 256)
-    q = torch.randn(b, sh["heads"], STEP.K.HEAD_DIM, device="cuda").to(torch.bfloat16).contiguous()
-    o = torch.empty(b, sh["heads"], STEP.K.HEAD_DIM, dtype=torch.float32, device="cuda")
-    out = []
-    for k in step["ks"]:
-        BW_KV.set_key(kv, BW_KV.lib_key(kv, k))
-        form = step["splits"][f"k{k}_form"]
-        sp = step["splits"][f"form{form}_k{k}"]["best"]
-        part = torch.empty(STEP.part_floats(sh, b, {form: [sp]}), dtype=torch.float32, device="cuda")
-        rc = form == STEP.RECEIPT_FORM
-        if rc:
-            signs = torch.empty(BW.SR.SIGN_WORDS, dtype=torch.int32, device="cuda").random_()
-            mid = torch.empty(8, dtype=torch.int64, device="cuda").random_()
-            sk = torch.empty(slots * sh["kv_heads"], 16, dtype=torch.int32, device="cuda")
-            tg = torch.empty(slots * layers, 16, dtype=torch.int32, device="cuda")
-            kv.call("kv_rc_pass", BW_KV.ptr(signs), BW_KV.ptr(mid), st)
-            kv.call("kv_rc_buffers", BW_KV.ptr(sk))
-        kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
-                k, st)
-        if rc:
-            kv.call("kv_rc_receipts", BW_KV.ptr(tg), slots, layers, 1, 0, st)
-        torch.cuda.synchronize()
-        group_ml = 32 * -(-4 * (sh["heads"] // sh["kv_heads"]) // 32)
-        out.append({"kernel": "attention", "k": k, "form": form, "splits": sp, "batch": b, "ctx": ctx,
-                    "out_bytes": o.numel() * 4, "part_bytes": part.numel() * 4,
-                    "part_sector_bytes": part.numel() // sh["part"] * (
-                        4 * sh["heads"] * STEP.K.HEAD_DIM + 2 * sh["kv_heads"] * group_ml),
-                    "share_bytes": sk.numel() * 4 if rc else 0})
-        if rc:
-            out.append({"kernel": "kv_receipts", "k": k, "receipts": slots, "receipt_bytes": 64 * slots})
-            kv.call("kv_rc_buffers", None)
-            del sk, tg, signs, mid
-    del cache
-    model_layers = BW.MODELS[step["model_name"]][0]
-    new = BW_KV.random_words(torch, b * model_layers * tlw, f, 23)
-    cache = torch.empty(b * 2 * model_layers * tlw * f.word_bytes, dtype=torch.uint8, device="cuda")
-    for k in step["ks"]:
-        BW_KV.set_key(kv, BW_KV.lib_key(kv, k))
-        kv.call("kv_append", BW_KV.ptr(new), BW_KV.ptr(cache), b, 2, model_layers, 0, model_layers, 1, k, st)
-        torch.cuda.synchronize()
-        out.append({"kernel": "append", "k": k, "batch": b, "layers": model_layers,
-                    "word_bytes": b * model_layers * tlw * f.word_bytes})
-    return out
 
 
 def summarize(stdout: str, rc: int) -> dict:
@@ -271,35 +133,3 @@ def summarize(stdout: str, rc: int) -> dict:
     res["rows"] = rows_out
     res["ok"] = all(r["ok"] for r in rows_out)
     return res
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--wt-lib", default="")
-    ap.add_argument("--kv-lib", default="", help="step.cu: also attention and the append")
-    ap.add_argument("--reader-lib", default="")
-    ap.add_argument("--step-json", default="")
-    ap.add_argument("--linears", default="qkv,down")
-    ap.add_argument("--out", default="")
-    ap.add_argument("--child", action="store_true")
-    ap.add_argument("--parse", default="", help="summarize a captured write-gate.ncu.txt instead of profiling")
-    a = ap.parse_args()
-    if a.child:
-        print(MARK + json.dumps(launches(a)), flush=True)
-        return 0
-    out = Path(a.out)
-    if a.parse:
-        res = summarize(Path(a.parse).read_text().split("\n--- stderr ---\n")[0], 0)
-    else:
-        p = profile(KERNELS, [sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--step-json", a.step_json,
-                              "--linears", a.linears] + (["--reader-lib", a.reader_lib] if a.reader_lib else []) + (
-                                  ["--kv-lib", a.kv_lib] if a.kv_lib else []))
-        (out / "write-gate.ncu.txt").write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
-        res = summarize(p.stdout, p.returncode)
-    (out / "write-gate.json").write_text(json.dumps(res, indent=1))
-    print(json.dumps(res.get("rows", res), indent=1)[:8000])
-    return 0 if res.get("ok") else 7
-
-
-if __name__ == "__main__":
-    sys.exit(main())

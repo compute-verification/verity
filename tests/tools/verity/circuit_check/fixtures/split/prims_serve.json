@@ -1,6 +1,7 @@
 {
  "digests": {
   "Accept_v1{K=2}": "ff4b08e725eba2f184fddbe3db86713795e6f6a4199372be1c5020496bac712e8fe3a222df70cff16d72fcf69c10985fd68f478beea4328dde4b98188281ac87",
+  "Accept_v1{K=5}": "c5ce2140ec2c794b81c532b72bf7166e6c28da4dec6652e19cbbcff5f1beb205d68e5e0c52badbc0b3244af857d6ee10472ee66f31c968b5841ab3432858bb45",
   "AddRef_v1{N=16,DT='bf16'}": "37dec80c71cc6e72a735df1054961d7e236669751d9ad762850c40ebb87b9e14e61bc69a1e4d2963de7e6cdd2e491ea5b66f1808b6b6eba29d3fed4b6ff4d87f",
   "AddRef_v1{N=16,DT='f32'}": "daa7538dc3e84da13454e814823b1d383645e302c3de3a52714ac01da559056b9025c62bdc6a75d553710ba192da7c2c4ee00484eab276bfae71e66f910ce53d",
   "AddScalarBf16_v3{N=16}": "110de145eb958cd0e7e65771a4e1dd53eb980dc5320e1552ed07f74cc458edbacfe8ce8da883557d06cd3b4abc275883257f72a34733722023278cfa0a5814c2",
@@ -8,6 +9,7 @@
   "Advance_v1{K=2}": "e9bed8592ad83f5fab967686568f73b9ae3590aff1fa03d5cbcc3d12bf65b9cb17fdf4afc77b7ff6262cd3aaa6fc10afa7976f5ffabca1d335ca6e781df8e4aa",
   "AllGather2_v1{N=16}": "d65517c2add59aa014abebebc4085526603c225e6312c3db97e8f484c06580212ede9d08e5e7186daa2971ce81809830eed83aae95bd697b86b53617824d913c",
   "AllGather2_v1{N=32}": "85ec63afd68cf56fffd8e67a44d3c9d56f74635c9c67c9710f3dfd73ca42392f90d84cb251db4132308243400c898fbc75a35071b25c375ac1a20097c7fead1d",
+  "AllGatherTail_v1{WORLD=3,N=8,TAIL=5,TN=2}": "c027dac1c38bf27795445647a4f6c37ca5069fb8772bb3cb8ef4131b6a57200c7994c6e994dd1d48db3bc8c7d944248ca336c5a11a89b5f2fe400758aebd7d30",
   "AllGather_v1{WORLD=2,N=16}": "568431c401831b3a5661784ff405c7034e2f67646ce1453850278045d548aea7a43172a35446d9d56665ace091eba3373b27ea7818da9ad05e15d5713ae6900b",
   "AllGather_v1{WORLD=4,N=8}": "21f12bd3b8cccd705f0a78e7b4cb361d573b693b74ec7138fb0a8ae085222abfe08fc5dd7f20a316958b72aaf0472bd7080bff46119d5674c785985b11024411",
   "AllReduce2_v1{N=16}": "b117beccc4967cf5656a2e7c582c6f22d3b89c2875508f54460f5c9733be449f5e569cb8999f8818b5331b7b53c5ee89e07a0b09c487a19c20a06496f913a36b",
@@ -256,6 +258,9 @@
   "Gemm_v1{K=32,N=96}": "4896eba840f1d55a30cbc1248955f3a748508a6f37f9037cdd958b245e8453963c7ac0b6ca43ea3eeb049bbc55e7d9d157f253550ac986fca9b33f6ad49b1947",
   "Gemm_v1{K=48,N=3}": "525ebe90f46b695b8571804bab841e2a84166db86500799e08a06de38933c8ba75604f535d8e69c27e6896b8c5692fd99ccb78e164150f6be2702e14bbae2f09",
   "Gemm_v1{K=64,N=8}": "aaa7460fe126507c08f5b4df47e496902beba824a45ea05d39d8b22331ae4adf7dc999a08dc4f12601ad1bdb9abcdc6539e78b127d9628c2cf6e6c40046be2cd",
+  "GreedyAccept_v1{K=2,V=200}": "9a375c530b721f1becc4614baf0439ada5cb3ce32a07accf643b897af0f10e6d6b8663515b8724287ca3141a84ef7c605bac652bb12ca155d46227d20280dd80",
+  "GreedyAccept_v1{K=2,V=8}": "694dbd53a2f14029aa47169dbc13548b0fd828cb12d70b8463dadd96346fcbd15cf8f5187d06e9d9375d1161a7973866d5a55cfcf17d24a47196502cc73e2156",
+  "GreedyAccept_v1{K=5,V=154880}": "b6c65e5d2368e6efc8e9dc127b7a395981cd2cd2c3dce0f9f875cb47f4d263e310c51987da6986ddea4d53577effb4b803dd9b9a07deeec97e2735bdaceb85e6",
   "I64ToI32_v1": "24ecbd63ddce8333bb2ed3213b62102a39c1d813507d0d79b2621d71757d2707f5dc4c393c84f0c382ea68229bec1c085e7a360bdd647fada5ed1e6215a7ceff",
   "LServe_v2{C={e2f2f43eb046},LP=3,STEPS=2,EOS=(7),GUARD='in',LAG=0,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}": "8851d85c081af7454d566d0c433b58bd6997c26475db9f93706ffc2dc59cbbae0adb5359ca6815e62262cbeb1681a9c216166a6e2d03c4b75dacecce3a34c250",
   "LayerNormRef_v1{N=16,EPS=1e-05,DT='bf16'}": "6c5d6c09f38c29358895dbfecb8eca3fdb677d27db43d47128af4658bb94248757d4fba71389e2f86a55e943462ff29140a34f8d1bc7c1308b81c003eb93f4a4",
@@ -394,6 +399,7 @@
   "AddScalarF32_v3": "value_inputs",
   "Advance_v1": "spec",
   "AllGather2_v1": "b1_tp2",
+  "AllGatherTail_v1": "b1_tp2",
   "AllGather_v1": "b1_tp2",
   "AllReduce2_v1": "b1_tp2",
   "AllReduce_v2": "b1_tp2",
@@ -466,6 +472,7 @@
   "GeluTanhMulBf16_v3": "tables",
   "GemmCoordinate_v1": "b1",
   "Gemm_v1": "b1",
+  "GreedyAccept_v1": "spec",
   "I64ToI32_v1": "ref_prims",
   "LServe_v2": "lifted",
   "LayerNormRef_v1": "ref_prims",
@@ -581,6 +588,7 @@
   "AddScalarF32_v3",
   "Advance_v1",
   "AllGather2_v1",
+  "AllGatherTail_v1",
   "AllGather_v1",
   "AllReduce2_v1",
   "AllReduce_v2",
@@ -653,6 +661,7 @@
   "GeluTanhMulBf16_v3",
   "GemmCoordinate_v1",
   "Gemm_v1",
+  "GreedyAccept_v1",
   "I64ToI32_v1",
   "LServe_v2",
   "LayerNormRef_v1",
@@ -719,6 +728,10 @@
   ],
   [
    "definition",
+   "Accept_v1{K=5}"
+  ],
+  [
+   "definition",
    "AddRef_v1{N=16,DT='bf16'}"
   ],
   [
@@ -744,6 +757,10 @@
   [
    "definition",
    "AllGather2_v1{N=32}"
+  ],
+  [
+   "definition",
+   "AllGatherTail_v1{WORLD=3,N=8,TAIL=5,TN=2}"
   ],
   [
    "definition",
@@ -1736,6 +1753,18 @@
   [
    "definition",
    "Gemm_v1{K=64,N=8}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=2,V=200}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=2,V=8}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=5,V=154880}"
   ],
   [
    "definition",

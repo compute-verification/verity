@@ -1,4 +1,4 @@
-"""Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record):
+"""Pearl-C's tile check as a Program (on the H100, on sm_120, and on the unpromoted sm_120 record):
 forming v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so SPOT can
 establish a sampled tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
 
@@ -12,8 +12,7 @@ The roots are `pc4`'s: `Pc8Weight{K,N,DEV}` holds the B rows; `Pc8Call{M,K,N,TM,
 reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one root.  Down the rows the domain is the
 scheme's (whole 16-row ticket subtiles), so a short last tile row, r = m mod TM rows, is its own batch of `Pc8Tile` at
 r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_instances` over the templates (`query`), and
-every value is computed in exactly one unit.  Forming v0 (Pearl v4's
-port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
+every value is computed in exactly one unit.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
 hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
 `Pc8TileSide`, is `Pc8TileHidden` on the window's side rows, each carrying its index field: `SIDE_PORTS`), and the rows are

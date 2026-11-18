@@ -378,7 +378,7 @@ pub mod unit_draw {
     impl SamplingDesign {
         /// `subset:K` or `bernoulli:NUM/DEN`.
         pub fn parse(s: &str) -> Result<SamplingDesign, String> {
-            let bad = || format!("a draw law is subset:K or bernoulli:NUM/DEN, not {s:?}");
+            let bad = || format!("a sampling design is subset:K or bernoulli:NUM/DEN, not {s:?}");
             match s.split_once(':') {
                 Some(("subset", k)) => Ok(SamplingDesign::Subset { k: k.parse().map_err(|_| bad())? }),
                 Some(("bernoulli", p)) => {
@@ -392,17 +392,17 @@ pub mod unit_draw {
         /// A sampling design object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
         /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
         pub fn of_json(v: &Value) -> Result<SamplingDesign, String> {
-            let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
+            let keys: Vec<&str> = v.as_object().ok_or("a sampling design is an object")?.keys().map(|k| k.as_str()).collect();
             match (v["law"].as_str(), keys.as_slice()) {
                 (Some("stratified"), ["k", "law", "strata"]) => {
-                    let k = v["k"].as_u64().ok_or("a stratified law's k")?;
-                    let strata = v["strata"].as_array().ok_or("a stratified law's strata")?.iter().map(Stratum::of_json)
+                    let k = v["k"].as_u64().ok_or("a stratified sampling design's k")?;
+                    let strata = v["strata"].as_array().ok_or("a stratified sampling design's strata")?.iter().map(Stratum::of_json)
                         .collect::<Result<_, _>>()?;
                     Ok(SamplingDesign::Stratified { k, strata })
                 }
                 (Some("subset"), ["k", "law"]) => Ok(SamplingDesign::Subset { k: v["k"].as_u64().ok_or("a subset law's k")? }),
                 (Some("bernoulli"), ["law", "p"]) => SamplingDesign::parse(&format!("bernoulli:{}", v["p"].as_str().unwrap_or(""))),
-                _ => Err(format!("a draw law object is {{law: stratified, k, strata}}, {{law: subset, k}} or {{law: bernoulli, p}}, not {v}")),
+                _ => Err(format!("a sampling design object is {{law: stratified, k, strata}}, {{law: subset, k}} or {{law: bernoulli, p}}, not {v}")),
             }
         }
 
@@ -1715,7 +1715,7 @@ impl Server {
                     Ok(d) => d,
                     Err(e) => return self.refuse(format!("U: {e}")),
                 };
-                let Some(hook) = self.on_draw.as_mut() else { return self.refuse("U: a draw law without the drawn statement".into()) };
+                let Some(hook) = self.on_draw.as_mut() else { return self.refuse("U: a sampling design without the drawn statement".into()) };
                 match hook(&draw) {
                     Ok((cfg, verifier)) if cfg.unit_draw.as_ref() == Some(&draw) => {
                         self.cfg = cfg;

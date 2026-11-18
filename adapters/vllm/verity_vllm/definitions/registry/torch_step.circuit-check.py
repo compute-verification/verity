@@ -12,6 +12,7 @@ def _boolean_roots() -> list[Any]:
     `targets.select` drops a binding over whenever its family has one under it, so every route `TrainStep_v1`'s calls take
     has a target its by-calls check relies on."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import torch_step as TS
 
     nosplit = {"kernel": "nosplit"}
@@ -29,6 +30,7 @@ def _by_calls_roots() -> list[Any]:
     """The whole step at one layer, B 1 x S 256, checked by its calls: lm_head's three GEMMs alone are past what circuit-check
     builds whole, and `TrainStep_v1` refuses a shape the cuBLAS capture doesn't cover, so no smaller one builds."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import torch_step as TS
 
     return [bind(TS.TrainStep, L=1, B=1, S=256)]

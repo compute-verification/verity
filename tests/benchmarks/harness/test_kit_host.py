@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import math
 import platform
+import re
 
 import pytest
 from kit_standins import CARD, GPU0, GPU1, HEADER, SHA, _host, _row
 from kit_standins import no_gpu as no_gpu
 from verity_bench import kit
+from verity_bench.overhead import CARD_FILES
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
@@ -71,3 +73,18 @@ def test_the_host_stamp_is_of_the_leases_gpus(monkeypatch):
     _host(monkeypatch, {"query": (0, _row(GPU0) + _row(GPU1, name="NVIDIA H200", driver="570.1")), "header": (0, "no version")})
     stamp = kit.host_stamp()
     assert (stamp["card"], stamp["driver"], stamp["cuda"]) == (f"{CARD}, NVIDIA H200", "580.95.05, 570.1", None)
+
+
+# ---- the card's short name ---------------------------------------------------------------------------------------------------
+
+
+def test_a_card_short_is_refused_by_name_unless_one_records_driver_holds_it_exactly(tmp_path):
+    assert kit.card_short("NVIDIA H200", directory=CARD_FILES) == "h200"
+    for name in ("NVIDIA A100-SXM4-80GB", "NVIDIA H100", "nvidia h200", ""):
+        with pytest.raises(SystemExit, match=f"^0 card records under {re.escape(str(CARD_FILES))} have {re.escape(repr(name))}"):
+            kit.card_short(name, directory=CARD_FILES)
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(h200)
+    (tmp_path / "h200-twin.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', 'sku = "h200-twin"'))
+    with pytest.raises(SystemExit, match="^2 card records .* add { value = \"NVIDIA H200\", source = ... }"):
+        kit.card_short("NVIDIA H200", directory=tmp_path)

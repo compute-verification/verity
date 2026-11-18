@@ -91,7 +91,7 @@ def main() -> int:
         kk = (torch.randn(rows, G * D, device="cuda")).to(torch.bfloat16)
         vv = torch.randn_like(kk)
         slots = torch.randperm(blocks * BS, device="cuda")[:rows].to(torch.int64)
-        tab = P.table(torch, [(kk, vv, slots, rows, cache, 0, a.layers, l) for l in range(a.layers)]).cuda()
+        tab = P.table(torch, [(kk, vv, slots, rows, cache, 0, a.layers, layer) for layer in range(a.layers)]).cuda()
         t = timed(P.append_multi, lib, torch, tab, a.layers, rows, lay, 1, a.k)
         res["append"].append({"rows": rows, "layers": a.layers, "ms": t})
         print(f"append_multi {rows} rows x {a.layers} layers: {t:.3f} ms", flush=True)

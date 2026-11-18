@@ -23,7 +23,7 @@ def test_without_lake_the_refusal_names_the_path_it_searched(monkeypatch, tmp_pa
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr(V, "BUILD_LOCK", tmp_path / "build.lock")
     try:
-        V.executable.__wrapped__("pouw-check-difftest")
+        V.executable.__wrapped__("pouw-verifier-difftest")
     except V.LeanError as e:
         assert f"lake is not on the PATH ({tmp_path})" in str(e) and "~/.elan/bin" in str(e)
     else:

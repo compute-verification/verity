@@ -148,9 +148,9 @@ def test_every_caption_names_spots_roles_and_what_its_bounds_rest_on():
     for panel in ("exfiltration", "exfiltration_appendix", "skipped_work"):
         deployment = f.DEPLOYMENT["skipped_work" if panel == "skipped_work" else "exfiltration"]
         assert caps[panel].startswith(f"{deployment} {f.ROLES} {f.TRUST} "), panel
-    assert "no ZK server and no recursion" in f.ROLES and "network certifier" in f.ROLES
+    assert "no ZK server and no recursion" in f.ROLES and "network attester" in f.ROLES
     assert all(x in f.TRUST for x in ("soundness alone", "SHA-512's collision resistance",
-                                       "uniform verifier randomness", "an honest verifier", "certifier's own assumptions"))
+                                       "uniform verifier randomness", "an honest verifier", "network attestation's own assumptions"))
     assert "zero knowledge" not in f.ROLES + f.TRUST
 
 
@@ -585,10 +585,10 @@ def test_a_request_serves_each_token_as_the_token_selects_word():
         f.cards(request="mean")
 
 
-def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
-    """Where the model's certifier card registers a response cap, a request serves at most that many tokens, each the
+def test_a_request_serves_at_most_the_attesters_registered_cap(card_dir):
+    """Where the model's attester card registers a response cap, a request serves at most that many tokens, each the
     token select's 32-bit word, read through the schedule whose digest every record head binds; `served="request"`
-    keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
+    keeps every token.  A schedule without a cap, or no attester card, leaves every token served, and a cap it
     doesn't register is refused."""
     card = cards.load("certifier", "GLM-5.3")
     schedule = NetworkAttesterParams(**card["value"]["schedule"])
@@ -600,7 +600,7 @@ def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
     assert f.served_tokens(c)[:2] == (schedule.max_tokens_cap, 32) and f.CAP_RULE in f.served_tokens(c)[2]
     assert f.served_tokens(every) == (every["tokens_per_request"].value, 32, "every one of the request's tokens")
     assert "max_tokens_cap" not in f.cards("DeepSeek-V4-Pro")
-    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+    with pytest.raises(ValueError, match="has no attester card registering a response cap"):
         f.cards("DeepSeek-V4-Pro", served="cap")
     with pytest.raises(ValueError, match="served tokens are one of"):
         f.cards(served="all")
@@ -608,7 +608,7 @@ def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
     cards.write(card | {"value": {"schedule": uncapped}}, force=True)
     c = f.cards("GLM-5.3")
     assert "max_tokens_cap" not in c and c["served_bits"].value == every["served_bits"].value
-    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+    with pytest.raises(ValueError, match="has no attester card registering a response cap"):
         f.cards("GLM-5.3", served="cap")
 
 

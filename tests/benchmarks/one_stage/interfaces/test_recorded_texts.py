@@ -6,8 +6,6 @@ name and file and the record's subprotocol key keep their bytes. A fault message
 from __future__ import annotations
 
 import hashlib
-import inspect
-import re
 
 import pytest
 
@@ -17,7 +15,7 @@ from verity_e2e_demo import block_record as B
 SITES = {
     "JOINT_HORIZON.name": lambda: B.JOINT_HORIZON["name"],
     "JOINT_HORIZON.file": lambda: B.JOINT_HORIZON["file"],
-    "record.subprotocols.key": lambda: re.findall(r'"([a-z_]+)": subprotocols, "composed"', inspect.getsource(B))[0],
+    "record.subprotocols.key": lambda: B.BY_SUBPROTOCOL,
 }
 
 #: sha256 of each site's text as main's records carry it

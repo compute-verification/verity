@@ -54,21 +54,41 @@ from __future__ import annotations
 from functools import cache
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    and_reduce,
+    compress_columns,
+    const_bits,
+    lzc,
+    mux,
+    or_reduce,
+    shl_window,
+    sub,
+)
+from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
-from verity.circuits.refs import tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import mufu as BM
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce,
-                                              shl_window, sub)
-from verity.circuits.boolean.trace import definition
 from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.refs import tuple_of
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_silu as BSL
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.boolean_moe import _eq_word, _fmaxf, _key, _key_of, _less, _nan
+from verity_vllm.definitions.registry.boolean_moe import (
+    _eq_word,
+    _fmaxf,
+    _key,
+    _key_of,
+    _less,
+    _nan,
+)
 from verity_vllm.definitions.registry.gumbel_boolean import NvLogf
 
 __all__ = ["Dsv4HashWeight", "Dsv4HashWeightIn", "Dsv4HashWeightMid", "Dsv4HashWeightOut", "Dsv4SqrtSoftplus",

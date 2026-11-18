@@ -1,5 +1,5 @@
 """The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at six
-levels: the root, `demos/`, `verity/`, `verity/protocols/`, each group's directory there (a directory of
+levels: the root, `applications/`, `verity/`, `verity/protocols/`, each group's directory there (a directory of
 `verity/protocols/` that holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
 is in the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its
 owner and its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
@@ -71,9 +71,9 @@ def tree(doc: dict) -> set[str]:
 
 
 def entries(doc: dict, tracked: list[str]) -> set[str]:
-    """The tracked entries at the six levels: each file's first component, and the component below `demos/`,
+    """The tracked entries at the six levels: each file's first component, and the component below `applications/`,
     `verity/`, `verity/protocols/`, a group's directory and a protocol's directory."""
-    levels, out = {"demos", "verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
+    levels, out = {"applications", "verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
     for f in tracked:
         parts = f.split("/")
         out.add(parts[0])

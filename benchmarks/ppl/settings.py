@@ -12,7 +12,11 @@ DECLARED: dict[str, tuple[str, str]] = {
     "HF_HOME": ("/workspace/hf", "the Hugging Face cache a model's snapshot is read from"),
     "CUDA_VISIBLE_DEVICES": ("", "the GPUs an eval may use, comma-separated (gpu-lease sets it); empty, every GPU torch sees"),
     "RESEARCH_RUN_ID": ("", "the research run's id (research's runner sets it): a result's `env.run`"),
+    "RESEARCH_SOURCE_SHA": ("", "the commit `research run` shipped, which results.json records"),
     "GPU_LEASE_WHO": ("ppl-bench", "who a submitted run's GPU lease names"),
+    "PEARLC_KERNEL": ("", "the `pearl_c` step's kernel directory (benchmarks/harness/setup/pearl_c_sm90.sh exports it); "
+                          "empty, this tree's pearl_c_sm90"),
+    "PEARLC_CUBIN": ("", "the `pearl_c` step's sm_90a cubin, which benchmarks/harness/setup/pearl_c_sm90.sh builds and exports"),
 }
 
 

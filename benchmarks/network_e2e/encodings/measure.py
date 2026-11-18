@@ -14,7 +14,7 @@ advice there (which checks its meaning) and records the advice module's own layo
 writes `table.json` (per trace and window, and the summary) and `table.md`, which go into the store as one
 `advice-encoding/v1` tree.
 
-The worst case of each code, per window, is reported two ways: at the window's public counts (its certified arrivals
+The worst case of each code, per window, is reported two ways: at the window's public counts (its attested arrivals
 and replayed resumes, with every advice field at its registered cap), and at the caps (`arrivals_per_bucket · T`
 arrivals too).
 """
@@ -203,7 +203,7 @@ def _worst_hit(cb, family: str, name: str, known_max: int) -> float:
 
 
 def worst_residual_window(cb, T: int, family: str, arrivals: int, resumes: int) -> float:
-    """The most bits a window of `arrivals` requests and `resumes` resumes (both public: the certified ingress and the
+    """The most bits a window of `arrivals` requests and `resumes` resumes (both public: the attested ingress and the
     replay) costs under the residual: each field at its cap, each hit with the most sources."""
     caps = cb.caps
     lengths = C.worst_bits([("prompt_len", 0, 1, caps.prompt_max), ("output_len", 0, 1, caps.output_max)], cb, family)

@@ -34,7 +34,6 @@ public import Definitions.Pous.Accounting.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Compose.PeriodBinding
 public import Definitions.Registration.Physical
-public import Definitions.Slowdown.Tasks
 public import Definitions.Pouw.Pouw
 public import Definitions.Pouw.PouwWitness
 public import Definitions.Certifier.NetWitness
@@ -149,8 +148,7 @@ This module imports the area's definitions; the lock's `layers` lists what they 
   block tags, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
   `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes. `Remote.DrawInstances` holds the
   instances its sampled draw's witnesses are stated at.
-* The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown, and `ServingBlocks` server
-  blocks and a training class's counts.
+* The overhead lower bound's inputs. `ServingBlocks` is server blocks and a training class's counts.
 
 ## Where to look
 

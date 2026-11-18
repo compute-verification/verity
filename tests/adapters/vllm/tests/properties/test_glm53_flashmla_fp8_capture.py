@@ -3,16 +3,14 @@ operands, the hand example through the two reads, the listing's split into funct
 words."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.definitions.numerics import flashmla_twin as T
 
 from tests.properties import glm53_flashmla_fp8_capture_gpu as X
+from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
+from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.records.property_record import digest_of
 
 #: a row width the twin runs in a fraction of a second: two blocks a token

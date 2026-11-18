@@ -360,7 +360,7 @@ SAME = ("format", "program", "query", "law", "partition", "population", "scheme"
 
 def same_commitment(a: Path, b: Path) -> None:
     """Windows ``a`` and ``b`` commit one thing, or an AssertionError naming what differs: one population program, partition,
-    law and port domains (which bind the run root), one circuit record and index, the same registered roots, and in every
+    sampling design and port domains (which bind the run root), one circuit record and index, the same registered roots, and in every
     member the same committed rows on the ports its own file holds, among them each unit's opening of its table (the table's
     row, its salt and its path, the committer's under its key).  Each window salts its own rows, so the roots of its members'
     trees are its own."""

@@ -1,8 +1,8 @@
 """A night on a rack: `python -m datacenter.demo`.
 
-Two RTX PRO 6000 nodes, each with a BlueField-3 DPU, behind their own certifiers (`examples.rack`). They serve a
+Two RTX PRO 6000 nodes, each with a BlueField-3 DPU, behind their own attesters (`examples.rack`). They serve a
 two-stage model, a BF16 linear a node (`models.LINEAR`), whose registered inputs are the weights and the container image
-the first node runs, and whose BMC telemetry is delivered out. Each node's certifier releases a salt into it, and each
+the first node runs, and whose BMC telemetry is delivered out. Each node's attester releases a salt into it, and each
 node computes a noised product on it (`models.DOT`, PoUW's proof work in miniature, which never leaves the node). The
 registration also commits the occupancy profiles the night may follow, one for each of 8 ticks its schedule may start
 at. The verifier's plan wipes the first node's DPU and BMC, as far as their links fill them, challenges a KV store and

@@ -9,11 +9,11 @@ from functools import cache
 
 import numpy as np
 import pytest
-
 from verity.circuits import cut
-from verity.circuits.defs import bind
 from verity.circuits import word as W
 from verity.circuits.call_scope import specialization
+from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry.catalog import load
 
 
@@ -31,6 +31,7 @@ def _bound(module: str, name: str, **statics):
 def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+
     from verity_vllm.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
@@ -41,6 +42,7 @@ def _twice():
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Array, Tuple
+
     from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x):
@@ -55,6 +57,7 @@ def _dead_input():
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Array, Tuple
+
     from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x, y):
@@ -64,7 +67,7 @@ def _dead_input():
                                     body, register=False))
 
 
-#: popread's small set (expert gathers, FP8 block scales, a router's top-k, a fused norm, a separable body), registry Definitions
+#: a small set (expert gathers, FP8 block scales, a router's top-k, a fused norm, a separable body), registry Definitions
 #: over every branch of the graph and its check (wiring and constants, a wide gate, a value computed twice in one unit, attention,
 #: the ordered router, the MoE expert FP8 GEMMs over two K tiles and a partial weight block, two Boolean Definitions), and two that
 #: fail the invariant (a value computed in two units; a parameter committed and read by no unit)

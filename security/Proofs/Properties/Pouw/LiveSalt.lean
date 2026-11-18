@@ -37,7 +37,7 @@ open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpeni
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of challengePhaseNamed_root)
 
 /-- The epoch's root is the port's: `PouwCheck.epochOpenRoot`. -/
-theorem epochOpenRoot_eq (w : ByteArray) (k : Nat) : epochOpenRoot w k = PouwCheck.epochOpenRoot w k := rfl
+theorem epochOpenRoot_eq (w : ByteArray) (k : Nat) : epochOpenRoot w k = PouwVerifier.epochOpenRoot w k := rfl
 
 theorem epochRootBinding : EpochRootBinding := by
   intro w w' k k' hw hw' hk hk' h
@@ -89,7 +89,7 @@ theorem oneRoot_of (check : Check) : OneRoot check := by
   subst heq
   exact Properties.NetworkRecords.Bytes.hexOf_inj (Json.str.inj (hr.symm.trans hr'))
 
-theorem oneRoot : OneRoot PouwCheck.liveSaltCheck := oneRoot_of _
+theorem oneRoot : OneRoot PouwVerifier.liveSaltCheck := oneRoot_of _
 
 theorem mapError_spec {ε ε' α : Type} (x : Except ε α) (f : ε → ε') :
     ⦃⌜True⌝⦄ x.mapError f ⦃⇓? a => ⌜x = .ok a⌝⦄ := by
@@ -98,20 +98,20 @@ theorem mapError_spec {ε ε' α : Type} (x : Except ε α) (f : ε → ε') :
   · exact fun _ => rfl
 
 theorem workloadOf_spec (m : Json) :
-    ⦃⌜True⌝⦄ PouwCheck.workloadOf m ⦃⇓? a => ⌜PouwCheck.workloadOf m = .ok a⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ PouwVerifier.workloadOf m ⦃⇓? a => ⌜PouwVerifier.workloadOf m = .ok a⌝⦄ := ok_spec _
 
-theorem checkWorkload_spec (us : List PouwCheck.Matmul) (roots : List (Nat × ByteArray)) :
-    ⦃⌜True⌝⦄ PouwCheck.checkWorkload us roots ⦃⇓? a => ⌜PouwCheck.checkWorkload us roots = .ok a⌝⦄ := ok_spec _
+theorem checkWorkload_spec (us : List PouwVerifier.Matmul) (roots : List (Nat × ByteArray)) :
+    ⦃⌜True⌝⦄ PouwVerifier.checkWorkload us roots ⦃⇓? a => ⌜PouwVerifier.checkWorkload us roots = .ok a⌝⦄ := ok_spec _
 
 theorem saltChallengePhase_spec (key ledger pins main window session : Json) :
-    ⦃⌜True⌝⦄ PouwCheck.saltChallengePhase key ledger pins main window session
-    ⦃⇓? a => ⌜PouwCheck.saltChallengePhase key ledger pins main window session = .ok a⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ PouwVerifier.saltChallengePhase key ledger pins main window session
+    ⦃⇓? a => ⌜PouwVerifier.saltChallengePhase key ledger pins main window session = .ok a⌝⦄ := ok_spec _
 
-theorem port_spec {α : Type} (x : Except String α) : ⦃⌜True⌝⦄ PouwCheck.port x ⦃⇓? a => ⌜x = .ok a⌝⦄ :=
+theorem port_spec {α : Type} (x : Except String α) : ⦃⌜True⌝⦄ PouwVerifier.port x ⦃⇓? a => ⌜x = .ok a⌝⦄ :=
   mapError_spec _ _
 
 theorem throwR_spec {α : Type} (e : String × String) (Q : PostCond α (.except (String × String) .pure)) :
-    ⦃Q.2.1 e⦄ (MonadExceptOf.throw e : PouwCheck.R α) ⦃Q⦄ := fun h => h
+    ⦃Q.2.1 e⦄ (MonadExceptOf.throw e : PouwVerifier.R α) ⦃Q⦄ := fun h => h
 
 theorem mapError_ok {ε ε' α : Type} {x : Except ε α} {f : ε → ε'} {a : α} : x.mapError f = .ok a ↔ x = .ok a := by
   cases x <;> simp [Except.mapError]
@@ -121,10 +121,10 @@ theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} :
   cases x <;> simp [Functor.map, Except.map]
 
 theorem saltChallengePhase_ok {key ledger pins main window session : Json} {res : Audited × LiveCommitment × Roots}
-    (h : PouwCheck.saltChallengePhase key ledger pins main window session = .ok res) :
+    (h : PouwVerifier.saltChallengePhase key ledger pins main window session = .ok res) :
     ∃ ck, ChallengerKey.ofJson key = .ok ck ∧ pinnedChallengePhase ledger window ck pins main = .ok res.1 ∧
       challengePhaseNamed res.1 ck session = .ok res.2 := by
-  unfold PouwCheck.saltChallengePhase at h
+  unfold PouwVerifier.saltChallengePhase at h
   rw [bind_ok] at h
   obtain ⟨ck, hck, h⟩ := h
   rw [mapError_ok] at hck h
@@ -137,11 +137,11 @@ theorem saltChallengePhase_ok {key ledger pins main window session : Json} {res 
 theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = Spot.field? j k := by
   cases j <;> rfl
 
-theorem at_eq (j : Json) (k : String) : PouwCheck.at? j k = Spot.getD j k := by
-  simp only [PouwCheck.at?, Spot.getD, field_eq]
+theorem at_eq (j : Json) (k : String) : PouwVerifier.at? j k = Spot.getD j k := by
+  simp only [PouwVerifier.at?, Spot.getD, field_eq]
 
-theorem jsonStrIs_eq {j : Json} {s : String} (h : PouwCheck.jsonStrIs j s = true) : j = .str s := by
-  cases j <;> simp_all [PouwCheck.jsonStrIs]
+theorem jsonStrIs_eq {j : Json} {s : String} (h : PouwVerifier.jsonStrIs j s = true) : j = .str s := by
+  cases j <;> simp_all [PouwVerifier.jsonStrIs]
 
 theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : Spot.int? j = some n := by
   cases j with
@@ -152,8 +152,8 @@ theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : S
     | succ e => simp [PouwWindow.intOf?] at h
   | _ => simp [PouwWindow.intOf?] at h
 
-theorem sameCommitment_eq {a b : LiveCommitment} (h : PouwCheck.sameCommitment a b = true) : a = b := by
-  simp only [PouwCheck.sameCommitment, Bool.and_eq_true, beq_iff_eq] at h
+theorem sameCommitment_eq {a b : LiveCommitment} (h : PouwVerifier.sameCommitment a b = true) : a = b := by
+  simp only [PouwVerifier.sameCommitment, Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
   cases a; cases b; simp_all
 
@@ -191,13 +191,13 @@ theorem none_of {x : Option String} (h : ∀ why, x = some why → False) : x = 
   | some why => exact absurd rfl (h why)
 
 theorem carries_names {s : Json} {sid : String} {seq : Nat} {root : ByteArray} {cm : String}
-    (h : PouwCheck.carries s sid seq root cm = true) :
+    (h : PouwVerifier.carries s sid seq root cm = true) :
     Spot.getD s "session" = .str sid ∧ Spot.int? (Spot.getD s "seq") = some (seq : Int) ∧
       Spot.getD s "root" = .str (Flock.hexOf root) ∧ Spot.getD s "commitment" = .str cm ∧
       Spot.field? s "secret" = none := by
   cases s with
   | obj kv =>
-    simp only [PouwCheck.carries, Bool.and_eq_true, Option.isNone_iff_eq_none, beq_iff_eq] at h
+    simp only [PouwVerifier.carries, Bool.and_eq_true, Option.isNone_iff_eq_none, beq_iff_eq] at h
     obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := h
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · rw [← at_eq]; exact jsonStrIs_eq h2
@@ -205,48 +205,48 @@ theorem carries_names {s : Json} {sid : String} {seq : Nat} {root : ByteArray} {
     · rw [← at_eq]; exact jsonStrIs_eq h4
     · rw [← at_eq]; exact jsonStrIs_eq h5
     · rw [← field_eq]; exact h1
-  | _ => simp [PouwCheck.carries] at h
+  | _ => simp [PouwVerifier.carries] at h
 
-theorem epochOpenRoot_size (w : ByteArray) (k : Nat) : (PouwCheck.epochOpenRoot w k).size = 64 :=
+theorem epochOpenRoot_size (w : ByteArray) (k : Nat) : (PouwVerifier.epochOpenRoot w k).size = 64 :=
   Properties.Pouw.Commit.sha512_size _
 
 /-- What `PouwCheck.liveSaltCheck` has checked on the path that returns, in the forms it checks them, is `Accepted`. -/
 theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw String Json compare}
-    {us : List PouwCheck.Matmul × List (Nat × ByteArray)} {u : Unit} {k : Nat}
+    {us : List PouwVerifier.Matmul × List (Nat × ByteArray)} {u : Unit} {k : Nat}
     {res : Audited × LiveCommitment × Roots} {reason : Option String} {rv op en : LedgerEntry}
     {claimed : LiveCommitment} {o : LiveOpening} {lr : Option String} {seed : ByteArray}
-    (hschema : PouwCheck.jsonStrIs (PouwCheck.at? (Json.obj kv) "schema") PouwCheck.MANIFEST_SCHEMA = true)
-    (hwork : PouwCheck.workloadOf (Json.obj kv) = .ok us)
-    (hcw : PouwCheck.checkWorkload us.1 us.2 = .ok u)
+    (hschema : PouwVerifier.jsonStrIs (PouwVerifier.at? (Json.obj kv) "schema") PouwVerifier.MANIFEST_SCHEMA = true)
+    (hwork : PouwVerifier.workloadOf (Json.obj kv) = .ok us)
+    (hcw : PouwVerifier.checkWorkload us.1 us.2 = .ok u)
     (hk : Option.filter (fun x => decide (x < 18446744073709551616))
-      (PouwWindow.natOf? (PouwCheck.at? (Json.obj kv) "pass_index")) = some k)
-    (hsess : PouwCheck.saltChallengePhase key ledger pins main (Json.mkObj [("root", Json.str (Flock.hexOf
-      (PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k)))]) session = .ok res)
+      (PouwWindow.natOf? (PouwVerifier.at? (Json.obj kv) "pass_index")) = some k)
+    (hsess : PouwVerifier.saltChallengePhase key ledger pins main (Json.mkObj [("root", Json.str (Flock.hexOf
+      (PouwVerifier.epochOpenRoot (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k)))]) session = .ok res)
     (hre : PouwWindow.saltEpochReason res.2.1 = reason) (hreason : ∀ why, reason = some why → False)
-    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.challengePhaseEntries ledger res.1.session),
-      List.find? (fun x => x.kind == "open") (PouwCheck.challengePhaseEntries ledger res.1.session),
-      List.find? (fun x => x.kind == "end") (PouwCheck.challengePhaseEntries ledger res.1.session)) =
+    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwVerifier.challengePhaseEntries ledger res.1.session),
+      List.find? (fun x => x.kind == "open") (PouwVerifier.challengePhaseEntries ledger res.1.session),
+      List.find? (fun x => x.kind == "end") (PouwVerifier.challengePhaseEntries ledger res.1.session)) =
         (some rv, some op, some en))
     (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
     (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
-    (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
+    (hcomp : (PouwVerifier.jsonTrue (Spot.getD en.body "complete") &&
       Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true)
     (hrecv : (res.2.2 == [(PouwWindow.SALT,
-      [PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k])]) = true)
-    (hcoins : LiveCommitment.ofJson (PouwCheck.at? (Json.obj kv) "coins") = .ok claimed)
-    (hsame : PouwCheck.sameCommitment claimed res.2.1 = true)
-    (hopen : LiveOpening.ofJson (PouwCheck.at? (Json.obj kv) "salt_opening") = .ok o)
+      [PouwVerifier.epochOpenRoot (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k])]) = true)
+    (hcoins : LiveCommitment.ofJson (PouwVerifier.at? (Json.obj kv) "coins") = .ok claimed)
+    (hsame : PouwVerifier.sameCommitment claimed res.2.1 = true)
+    (hopen : LiveOpening.ofJson (PouwVerifier.at? (Json.obj kv) "salt_opening") = .ok o)
     (hlive : liveReason res.2.1 o PouwWindow.SALT 0
-      (PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k) = .ok lr)
+      (PouwVerifier.epochOpenRoot (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k) = .ok lr)
     (hlr : ∀ why, lr = some why → False)
     (hseed : PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
       [("epoch", .int res.2.1.epoch), ("coins", .bytes res.2.1.root),
-        ("weights", .bytes (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2))] = .ok seed)
-    (hsalt : PouwCheck.jsonStrIs (PouwCheck.at? (Json.obj kv) "salt")
+        ("weights", .bytes (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2))] = .ok seed)
+    (hsalt : PouwVerifier.jsonStrIs (PouwVerifier.at? (Json.obj kv) "salt")
       (Flock.hexOf (FlockSoundness.Randomness.stream seed [.str "salt"] 32)) = true)
-    (hcarries : PouwCheck.carries (PouwCheck.at? (Json.obj kv) "session") res.1.session op.seq
-      (PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k) res.1.commitment = true) :
+    (hcarries : PouwVerifier.carries (PouwVerifier.at? (Json.obj kv) "session") res.1.session op.seq
+      (PouwVerifier.epochOpenRoot (PouwVerifier.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k) res.1.commitment = true) :
     ∃ w k a c o, Accepted key ledger pins main session (Json.obj kv) w k a c o
       (FlockSoundness.Randomness.stream seed [.str "salt"] 32) := by
   obtain ⟨ck, hck, hpin, hnamed⟩ := saltChallengePhase_ok hsess
@@ -261,11 +261,11 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
 -- `mvcgen` splits `PouwCheck.liveSaltCheck` into one goal per check, and all but one throw
 set_option maxHeartbeats 4000000 in
 /-- `PouwCheck.liveSaltCheck` accepts only what `Accepted` describes. -/
-theorem acceptMeans : AcceptMeans PouwCheck.liveSaltCheck := by
+theorem acceptMeans : AcceptMeans PouwVerifier.liveSaltCheck := by
   intro key ledger pins main session m salt h
   refine of_triple (Q := fun salt => ∃ w k a c o, Accepted key ledger pins main session m w k a c o salt) ?_ h
   clear h
-  mvcgen [PouwCheck.liveSaltCheck, PouwCheck.manifest, PouwCheck.coin, -Spec.throw_Except, throw_spec, throwR_spec,
+  mvcgen [PouwVerifier.liveSaltCheck, PouwVerifier.manifest, PouwVerifier.coin, -Spec.throw_Except, throw_spec, throwR_spec,
     workloadOf_spec, checkWorkload_spec, saltChallengePhase_spec, port_spec, mapError_spec]
   apply accepted_of <;> assumption
 
@@ -291,7 +291,7 @@ theorem binding_of_root (hb : LiveCoinBinding) {c c' : LiveCommitment} {o o' : L
 /-- `OnePair` for `PouwCheck.liveSaltCheck`, given `LiveCoinBinding`: two accepted passes of one epoch are pinned on one
 root, so they read one session and two commitments with one root; the binding gives one coin, and one coin one salt,
 unless the openings exhibit a collision. -/
-theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCheck := by
+theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwVerifier.liveSaltCheck := by
   intro key ledger pins main session session' m m' salt salt' h h' w k he he'
   obtain ⟨w1, k1, a, c, o, hA⟩ := acceptMeans _ _ _ _ _ _ _ h
   obtain ⟨w2, k2, a', c', o', hA'⟩ := acceptMeans _ _ _ _ _ _ _ h'

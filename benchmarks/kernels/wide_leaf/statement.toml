@@ -1,0 +1,12 @@
+# The statement run.sh times: one served proof-block type's statement as benchmarks/served_units/stage.py stages it
+# (`stage.py UNIT full OUT --unbound`, under the provisional unit cover), in the store at `art` under `path`, its circuit
+# held to `pin` (its SHA-512). `name` is the type's directory where server_rate.py looks (z/NAME/c{n}/stage); `model` is
+# the first part of each measurement's member, the card's short name the second.
+model = "llama-3.2-1b"
+unit = 'census:Gemm_v2{K=2048,N=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
+name = "Gemm_v2_K2048_N16"
+n = 256
+k_log = 27
+pin = "dc4bfbd3beac80550a37ef5c132e58a56b6f5b024691caff44229ce981a9864682cd35338a437313860df9a72c374273f3c5ca8400e927232687c6bb45a3899b"
+art = "art:d4aba8ea6a775276931be2e9d1f0c6b232b674530f042424535056b507ca500f"
+path = "out/stage"

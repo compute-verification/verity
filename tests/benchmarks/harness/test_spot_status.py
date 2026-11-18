@@ -1,6 +1,7 @@
 """`spot_status`: each resampling hole is closed only where its fix's commit is an ancestor of the commit a run's record
 names, decided in a tiny git repository of made-up commits; a run whose code can't be read is not known; the label is
-`SPOT soundness` only when both holes are closed; and the theorem's open premises are the fixture lock's."""
+`SPOT soundness` only when every hole is closed, the wires' hole open with its limit until a commit is declared for it;
+and the theorem's open premises are the fixture lock's."""
 
 from __future__ import annotations
 
@@ -23,7 +24,12 @@ from verity_bench import spot_status as S
 
 #: a lock's shape under a name no Lean tool takes for a package's lock
 LOCK = Path(__file__).parent / "fixtures" / "spot_status" / "lock.json"
-RESAMPLED, RECOMMITTED = S.HOLES
+RESAMPLED, RECOMMITTED, WIRES = S.HOLES
+LIMIT = "each sampled block on its own inputs; the wires between blocks are not held"
+ONSITE = ("Onsite's theorem takes the inference-only policy's claim as an open premise (`InferenceOnlySound`). That "
+          "claim is about the case as the prover sent it; no check and no premise of the theorem ties that case's wires "
+          "to the committed record's wires. So the wires limit applies to onsite's verdict as it does to remote's, and "
+          "onsite's theorem does not name it.")
 BASE, ONE, BOTH = "r20261112-000001-aaaa", "r20261112-000002-bbbb", "r20261112-000003-cccc"
 
 
@@ -78,7 +84,7 @@ def _by_hole(doc: dict) -> dict[str, str]:
 
 def test_both_holes_open_at_the_base(repo):
     doc = _status(repo, **{BASE: {"commit": repo.base, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
     assert "- label: **SPOT**\n- redrawn sample: open\n" in text and "- re-committed execution phase: open\n" in text
     assert f"  - at every commit read: the fix's commit {repo.fix1[:12]} is not an ancestor" in text
@@ -87,56 +93,72 @@ def test_both_holes_open_at_the_base(repo):
 
 def test_one_hole_closed_where_its_fix_is_an_ancestor(repo):
     doc = _status(repo, **{ONE: {"commit": repo.fix1, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     assert "- redrawn sample: closed\n- re-committed execution phase: open\n" in S.render(doc)
 
 
-def test_both_closed_flips_the_label(repo):
+def test_the_wires_hole_holds_the_label_until_its_commit_is_declared(repo):
+    """Both resampling holes closed leave the wires' hole open, printed with its limit, and the label `SPOT`; declaring
+    its commit in the data file alone closes it and flips the label."""
+
     doc = _status(repo, **{BOTH: {"commit": repo.fix2, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "closed"} and doc["label"] == "SPOT soundness"
+    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "closed", WIRES: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
-    assert "- label: **SPOT soundness**\n- redrawn sample: closed\n- re-committed execution phase: closed\n" in text
+    assert ("- label: **SPOT**\n- redrawn sample: closed\n- re-committed execution phase: closed\n"
+            f"- wires between proof blocks: open: {LIMIT}\n  - at every commit read: no fix's commit is declared") in text
+    assert "SPOT soundness**" not in text and S.LIMITS == {WIRES: LIMIT}
+    assert [h["limit"] for h in doc["holes"]] == [None, None, LIMIT]
+    repo.data.write_text(json.dumps({"fixes": {RESAMPLED: repo.fix1, RECOMMITTED: repo.fix2, WIRES: repo.fix2}}))
+    doc = _status(repo, **{BOTH: {"commit": repo.fix2, "dirty": False}})
+    assert _by_hole(doc) == dict.fromkeys(S.HOLES, "closed") and doc["label"] == "SPOT soundness"
+    text = S.render(doc)
+    assert ("- label: **SPOT soundness**\n- redrawn sample: closed\n- re-committed execution phase: closed\n"
+            "- wires between proof blocks: closed\n") in text and LIMIT not in text
     assert f"- runs read: 1, at 1 commit: `{repo.fix2[:12]}` (1 run)" in text
+
+
+def test_the_tree_holds_the_wires_hole_open():
+    assert WIRES not in S.fixes(S.FIXES)
 
 
 def test_a_side_commit_holds_neither_fix(repo):
     """An ancestor, not a later date: a commit off the base after both fixes still has neither."""
 
     doc = _status(repo, **{BOTH: {"commit": repo.side, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open"}
+    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open", WIRES: "open"}
 
 
 def test_one_open_run_holds_the_hole_open_over_the_rest(repo):
     doc = _status(repo, **{BASE: {"commit": repo.base, "dirty": False}, BOTH: {"commit": repo.fix2, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     assert f"  - at `{repo.fix2[:12]}`: closed\n" in S.render(doc)
 
 
 def test_a_commit_this_repository_lacks_is_not_known(repo):
     lost = "d" * 40
     doc = _status(repo, **{BOTH: {"commit": lost, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"} and doc["label"] == "SPOT"
     assert f"doesn't hold the run's commit {lost} (`git fetch origin {lost}`)" in S.render(doc)
 
 
 def test_a_run_whose_code_cant_be_read_is_not_known_and_never_closes(repo):
     doc = _status(repo, **{BOTH: {"commit": repo.fix2, "dirty": False}, ONE: {"commit": repo.fix2, "dirty": True},
                            BASE: None})
-    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
     assert f"  - {ONE}: not known: it ran a dirty tree at {repo.fix2[:12]}" in text
     assert f"  - {BASE}: not known: the store holds no record of it" in text
-    assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {RESAMPLED: "not known", RECOMMITTED: "not known"}
+    assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"}
 
 
 def test_a_hole_with_no_fix_declared_is_open(repo):
     repo.data.write_text(json.dumps({"fixes": {RESAMPLED: repo.fix1}}))
     doc = _status(repo, **{BOTH: {"commit": repo.fix2, "dirty": False}})
-    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     assert "  - at every commit read: no fix's commit is declared" in S.render(doc)
     lost = _status(repo, **{BOTH: {"commit": "d" * 40, "dirty": False}})
-    assert _by_hole(lost) == {RESAMPLED: "not known", RECOMMITTED: "open"}
-    assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {RESAMPLED: "not known", RECOMMITTED: "open"}
+    assert _by_hole(lost) == {RESAMPLED: "not known", RECOMMITTED: "open", WIRES: "open"}
+    assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {RESAMPLED: "not known", RECOMMITTED: "open", WIRES: "open"}
 
 
 #: a line a fix adds that counts toward its presence (8 characters or more, not a comment alone)
@@ -400,6 +422,10 @@ def test_the_theorem_and_its_open_premises_are_the_locks(tmp_path):
     lock["guarantees"]["Verity.Sampled.onsite_soundness_deployedReady"] = {"premises": {"open": ["Verity.Vocab.WipeSound"]}}
     (tmp_path / "lock.json").write_text(json.dumps(lock))
     assert S.theorem(tmp_path, tmp_path / "lock.json")["name"] == "Verity.Sampled.onsite_soundness_deployedReady"
+    onsite = {"holes": [], "runs": 0, "commits": {}, "unread": [], "fixes": "f", "label": "SPOT",
+              "theorem": S.theorem(tmp_path, tmp_path / "lock.json")}
+    assert ("- theorem: `Verity.Sampled.onsite_soundness_deployedReady`, on the 1 open premises its record in "
+            f"`{S.LOCK}` takes: `Verity.Vocab.WipeSound`\n  - {ONSITE}") in S.render(onsite)
     del lock["guarantees"]["Verity.Sampled.onsite_soundness_deployedReady"]
     del lock["guarantees"]["Verity.Sampled.remote_soundness_deployedReady"]
     (tmp_path / "lock.json").write_text(json.dumps(lock))
@@ -410,6 +436,7 @@ def test_the_block_cites_the_theorem_with_its_open_premises(repo):
     text = S.render(_status(repo, **{BASE: {"commit": repo.base, "dirty": False}}))
     assert ("- theorem: `Verity.Sampled.remote_soundness_deployedReady`, on the 2 open premises its record in "
             f"`{LOCK}` takes: `Verity.Sampled.Instance.SessionsReady`, `Verity.Vocab.PouwSound`") in text
+    assert "Onsite's theorem" not in text
 
 
 def _entry(run: str, commit: str | None, **more) -> dict:
@@ -426,11 +453,11 @@ def _served(commit: str | None, **runs: dict | None) -> dict:
 
 def test_a_served_record_is_read_at_its_own_commits(repo):
     """The block over a served run reads the commit its record names and each of its four runs' commits, listed; with
-    all four read, a hole whose fix is an ancestor of every one is closed, and both closed is `SPOT soundness`."""
+    all four read, a hole whose fix is an ancestor of every one is closed, and every hole closed is `SPOT soundness`."""
 
     record = _served(repo.fix1, **{name: _entry(ONE, repo.fix1) for name in S.SERVED_RUNS})
     doc = S.served(record, root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
     assert "is an ancestor of the commit the served run's record names and of each of its runs' commits." in text
     assert "- redrawn sample: closed\n- re-committed execution phase: open\n" in text
@@ -438,30 +465,33 @@ def test_a_served_record_is_read_at_its_own_commits(repo):
             + "".join(f"  - {name}: {ONE} at `{repo.fix1[:12]}` on a-made-up-machine\n" for name in S.SERVED_RUNS)) in text
     assert "- runs read:" not in text and "not given" not in text
     both = _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.SERVED_RUNS})
+    assert S.served(both, root=repo.root)["label"] == "SPOT"
+    repo.data.write_text(json.dumps({"fixes": {RESAMPLED: repo.fix1, RECOMMITTED: repo.fix2, WIRES: repo.fix2}}))
     assert S.served(both, root=repo.root)["label"] == "SPOT soundness"
 
 
 def test_a_hole_never_reads_closed_where_some_of_the_served_runs_were_not_given(repo):
     """The rehearsal's shape: the reader was given only the first and second stages, so the serve and the replay are not
     given and no commit of theirs is read. A hole whose fix is an ancestor of every commit read is closed at the runs
-    read, naming those not given, never bare closed, and the label stays `SPOT` with both holes so."""
+    read, naming those not given, never bare closed, and the label stays `SPOT` with every hole so."""
 
     record = _served(repo.fix2, first=_entry(ONE, repo.fix2), second=_entry(BOTH, repo.fix2))
     doc = S.served(record, root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: S.CLOSED_READ, RECOMMITTED: S.CLOSED_READ} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: S.CLOSED_READ, RECOMMITTED: S.CLOSED_READ, WIRES: "open"} and doc["label"] == "SPOT"
     assert (doc["served"]["read"], doc["served"]["not_given"]) == (["first", "second"], ["serve", "replay"])
     text = S.render(doc)
     assert ("- label: **SPOT**\n"
             "- redrawn sample: closed at the runs read (first, second); serve, replay not given\n"
-            "- re-committed execution phase: closed at the runs read (first, second); serve, replay not given\n") in text
+            "- re-committed execution phase: closed at the runs read (first, second); serve, replay not given\n"
+            f"- wires between proof blocks: open: {LIMIT}\n") in text
     assert (f"  - serve: {S.NOT_GIVEN}\n  - first: {ONE} at `{repo.fix2[:12]}` on a-made-up-machine\n"
             f"  - replay: {S.NOT_GIVEN}\n  - second: {BOTH} at `{repo.fix2[:12]}` on a-made-up-machine\n") in text
     assert ": closed\n" not in text and "SPOT soundness**" not in text
     # an open hole stays open, and one the read commits can't settle stays not known: only closed is qualified
     one = S.served(_served(repo.fix1, first=_entry(ONE, repo.fix1), second=_entry(BOTH, repo.fix1)), root=repo.root)
-    assert _by_hole(one) == {RESAMPLED: S.CLOSED_READ, RECOMMITTED: "open"}
+    assert _by_hole(one) == {RESAMPLED: S.CLOSED_READ, RECOMMITTED: "open", WIRES: "open"}
     lost = S.served(_served("d" * 40, second=_entry(BOTH, "d" * 40)), root=repo.root)
-    assert _by_hole(lost) == {RESAMPLED: "not known", RECOMMITTED: "not known"}
+    assert _by_hole(lost) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"}
 
 
 def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo):
@@ -469,7 +499,7 @@ def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo)
 
     record = _served(repo.fix2, first=_entry(ONE, repo.base), second=_entry(BOTH, repo.fix2))
     doc = S.served(record, root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
     assert (f"  - at `{repo.fix2[:12]}` (second): closed\n" in text
             and f"  - at `{repo.base[:12]}` (first): open: the fix's commit" in text)
@@ -491,7 +521,7 @@ def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(c
     monkeypatch.setattr(S, "LOCK", LOCK)
     record = _served(rewrite, first=_entry(ONE, fix), replay=_entry(BASE, revert), second=_entry(BOTH, rewrite))
     doc = S.served(record, root=changes.root)
-    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "open", RECOMMITTED: "open", WIRES: "open"} and doc["label"] == "SPOT"
     runs = {r["name"]: r["holes"].get(RESAMPLED) for r in doc["served"]["runs"]}
     reverted = f"reverted by {revert[:12]}, which reverts the fix"
     assert runs["serve"] is None and runs["first"] == {"status": "closed", "why": None}
@@ -507,21 +537,21 @@ def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(c
 def test_a_served_commit_this_repository_lacks_or_a_run_with_no_commit_is_not_known(repo):
     lost = "d" * 40
     doc = S.served(_served(lost, second=_entry(BOTH, lost)), root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known"}
+    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"}
     assert f"doesn't hold the run's commit {lost} (`git fetch origin {lost}`)" in S.render(doc)
     nameless = _served(repo.fix2, first=_entry(ONE, None, why="its directory holds no `job.json`"),
                        replay=_entry(BASE, repo.fix2, dirty=True), second=_entry(BOTH, repo.fix2))
     doc = S.served(nameless, root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known"} and doc["label"] == "SPOT"
+    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"} and doc["label"] == "SPOT"
     # a dirty tree's commit names no code it ran: its entry holds no hole, though the second is read at that commit
     runs = {r["name"]: r["holes"] for r in doc["served"]["runs"]}
     assert runs["replay"] == {} and runs["first"] == {} and runs["serve"] == {}
-    assert {h: s["status"] for h, s in runs["second"].items()} == {RESAMPLED: "closed", RECOMMITTED: "closed"}
+    assert {h: s["status"] for h, s in runs["second"].items()} == {RESAMPLED: "closed", RECOMMITTED: "closed", WIRES: "open"}
     text = S.render(doc)
     assert f"  - first: {ONE} on a-made-up-machine: not known: its directory holds no `job.json`\n" in text
     assert f"  - replay: {BASE} at `{repo.fix2[:12]}` on a-made-up-machine: not known: it ran a dirty tree at" in text
     doc = S.served({"run": BOTH, "runs": {"second": _entry(BOTH, repo.fix2)}}, root=repo.root)
-    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known"}
+    assert _by_hole(doc) == {RESAMPLED: "not known", RECOMMITTED: "not known", WIRES: "open"}
     assert ("its record's `commit`, the second stage's, not known: the record names no `commit`, the commit its second "
             "stage ran; its runs:") in S.render(doc)
     for bad, why in (({"runs": {"third": None}}, "an object of serve, first, replay, second, not third"),
@@ -548,12 +578,13 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == name else find_spec(n, *a))
     assert E.main([]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("the figures\n\n## SPOT's resampling holes in the code that ran\n")
+    assert out.startswith("the figures\n\n## SPOT's holes in the code that ran\n")
     assert "- label: **SPOT**\n- redrawn sample: open\n" in out and "- runs read: 1, at 1 commit" in out
     assert E.main(["--served-run", str(served)]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("the figures\n\n## SPOT's resampling holes in the code that ran\n")
-    assert "- label: **SPOT soundness**\n- redrawn sample: closed\n- re-committed execution phase: closed\n" in out
+    assert out.startswith("the figures\n\n## SPOT's holes in the code that ran\n")
+    assert ("- label: **SPOT**\n- redrawn sample: closed\n- re-committed execution phase: closed\n"
+            f"- wires between proof blocks: open: {LIMIT}\n") in out
     assert f"its record's `commit`, the second stage's, `{repo.fix2[:12]}`; its runs:\n" in out
 
     section = types.ModuleType(name)
@@ -565,8 +596,8 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
     monkeypatch.setattr(sys.modules["verity_bench"], "served_row", section, raising=False)
     assert E.main(["--served-run", str(served)]) == 0
     out = capsys.readouterr().out
-    assert out.startswith(f"the figures\n\n## what {BOTH}'s audit showed\n\n## SPOT's resampling holes in the code that ran\n")
-    assert "- label: **SPOT soundness**\n" in out
+    assert out.startswith(f"the figures\n\n## what {BOTH}'s audit showed\n\n## SPOT's holes in the code that ran\n")
+    assert "- label: **SPOT**\n" in out
     assert E.main(["--json", "--served-run", str(served)]) == 0
     held = json.loads(capsys.readouterr().out)
     assert held["served_run"] == {"run": BOTH} and held["spot_holes"]["served"]["commit"] == repo.fix2
@@ -587,7 +618,7 @@ def test_prove_spot_prints_the_block_over_its_input_runs(repo, monkeypatch, caps
                               steady_rows=None, json=False, rows=None)
     assert cli._prove(args) == 0
     out = capsys.readouterr().out
-    assert out.startswith("the table\n\n## SPOT's resampling holes in the code that ran\n")
+    assert out.startswith("the table\n\n## SPOT's holes in the code that ran\n")
     assert "- redrawn sample: closed\n- re-committed execution phase: open\n" in out and "- runs read: 2, at 2 commits" in out
     assert cli._prove(argparse.Namespace(**{**vars(args), "json": True})) == 0
     held = json.loads(capsys.readouterr().out)["spot_holes"]

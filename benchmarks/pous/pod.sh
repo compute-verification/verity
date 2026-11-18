@@ -11,7 +11,7 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer),
 #                                                                               its session ids in $W/pous-mc-session-log (a key that predates
-#                                                                               the log: memory_challenger.SessionLog.create once)
+#                                                                               the log: memory_attester.SessionLog.create once)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
@@ -52,7 +52,7 @@
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
-# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<benchmarks/census/hardware.json id>.
+# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<calibration/census/hardware.json id>.
 #
 # Every nvidia-smi query names the run's own GPU (--id): the lease's (GPU_LEASE_UUID), else CUDA_VISIBLE_DEVICES' first, else
 # the node's only GPU, never GPU 0 by default; a GPU run on a node with more GPUs and neither is refused. The clocks-*.txt
@@ -68,12 +68,12 @@ set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
-# challenger's Lean verdict (its Server and build need only the stdlib)
+# attester's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
 export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
-# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# p2-v3-mc-gpu the memory attester's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, timed_audit.py's judge, which p2_v1/harness.py builds again, a no-op after this) where its lakefile
 # declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
@@ -81,7 +81,7 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
-    p2-v3-mc-gpu) set -- verity/protocols/resource_accounting/memory/pous/attester/lean memory-challenger-verdict ;;
+    p2-v3-mc-gpu) set -- verity/protocols/resource_accounting/memory/pous/attester/lean memory-attester-verdict ;;
     p2-v3-gpu) set -- verity/protocols/resource_accounting/memory/pous/verifier/check pous-timed-audit ;;
     *) exit 0 ;;
   esac
@@ -117,7 +117,7 @@ case "$GPU" in                                            # the census id is the
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
   *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
-  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
+  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<calibration/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-band-chain/d12/v1}
 AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}; P2_ARM=${P2_ARM:-p2-v3-gpu}

@@ -326,7 +326,7 @@ def _binding(label: bytes, program: Program, profiles: Sequence[bytes] = ()) -> 
 
 
 def profile_digest(occupancy: Mapping[Any, Mapping[int, int]], origin: int = 0) -> bytes:
-    """The digest of an occupancy profile (`binding.occupancy`: frames per certifier port and bucket), its buckets
+    """The digest of an occupancy profile (`binding.occupancy`: frames per attester port and bucket), its buckets
     counted from `origin`, the first bucket of the epoch it is chosen for, so one registered profile fits every epoch."""
     h = hashlib.sha512(b"datacenter/occupancy/v1\0")
     for port in sorted(occupancy, key=repr):

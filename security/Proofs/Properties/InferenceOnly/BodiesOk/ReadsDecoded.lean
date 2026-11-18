@@ -43,7 +43,7 @@ shape `ReadsExact.compNodeSet` reads (`compShape_reads`), so `ReadsExact.RootSet
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 theorem partNonneg_iff (q : Part) : ReadsExact.PartNonneg q ↔ PartNonneg q := by
@@ -72,7 +72,7 @@ theorem retParts_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
 
 /-- A scan node of a Program whose Definitions are all `DefOk` outputs its final carry's leaves, then its ys'. -/
 theorem scanOut_of_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!)
-    (memo : Array InferenceOnlyCheck.Desc.Summary) (d : ℕ) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
+    (memo : Array InferenceOnlyVerifier.Desc.Summary) (d : ℕ) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
   intro k node carry y hn hform hret
   have hk := ReadsExact.node_lt hn
   have hg := ReadsExact.node_get hn
@@ -96,7 +96,7 @@ theorem scanOut_of_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.de
 
 /-- **A scan node's output is its final carry's leaves, then its ys'**, in every body of a decoded Program. -/
 theorem scanOut_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (memo : Array InferenceOnlyCheck.Desc.Summary) (d : ℕ) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
+    (memo : Array InferenceOnlyVerifier.Desc.Summary) (d : ℕ) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   exact scanOut_of_ok P hok memo d
@@ -132,11 +132,11 @@ theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.Roo
 gate (`CalleeOk`), every composite's body is laid out (`Walk.bodiesLaidOut_spec`), and its nodes call what `NodeOk`
 lets them. -/
 theorem widthFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hwk : InferenceOnlyCheck.Desc.walkable P = true) : ReadsExact.WidthFacts P := by
+    (hwk : InferenceOnlyVerifier.Desc.walkable P = true) : ReadsExact.WidthFacts P := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   have hwk' := hwk
-  unfold InferenceOnlyCheck.Desc.walkable at hwk'
+  unfold InferenceOnlyVerifier.Desc.walkable at hwk'
   simp only [Bool.and_eq_true] at hwk'
   obtain ⟨-, hlay, -, -⟩ := Walk.bodiesLaidOut_spec P hwk'.1.2
   intro d hd
@@ -317,4 +317,4 @@ theorem rootSet : ReadsExact.RootSet :=
     (fun bytes P hd => cover_reads bytes P hd)
     (fun bytes P hd _ hd' _ hk _ hg hp => compShape_reads bytes P hd hd' hk hg hp)
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

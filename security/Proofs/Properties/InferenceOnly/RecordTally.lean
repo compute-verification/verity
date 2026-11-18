@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Mathlib.Tactic
 public import Proofs.Properties.InferenceOnly.RecordGrid
 
@@ -19,7 +19,7 @@ public import Proofs.Properties.InferenceOnly.RecordGrid
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 
@@ -229,4 +229,4 @@ theorem tally_eq (S : ℕ) (ds : List Counted) (s j : ℕ) (hj : j < 7) :
   have hsize : j < (Array.replicate 7 (0 : ℕ)).size := by rw [Array.size_replicate]; exact hj
   rw [tally_fold S s j ds _ hsize, getElem!_pos _ j hsize, Array.getElem_replicate, Nat.zero_add]
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

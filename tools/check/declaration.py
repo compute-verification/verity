@@ -5,7 +5,7 @@ A job is a `[[job]]` table:
 - `owner`: a handle in the Slack registry (`.agents/skills/using-slack/registry.json`), the agent to ask about the job;
 - `group`: check.py's group, numbered from 1; the groups run at once, and a group's jobs run in file order;
 - `halts_on`: optional, a line in its output that stops the run;
-- `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
+- `merge_requires`: optional, the changed paths for which `research.merge` needs this job to have passed;
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
   stopped if it fails. The job it names has no `after` of its own;
@@ -17,7 +17,7 @@ The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown k
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
 
 Which jobs gate a merge is drive's policy, not this file's: `policy.toml`'s `off_gate` (`POLICY`, `off_gate`) names the jobs off
-the merge gate, each a `Job` with `gate` false (`gated`): a recorded check, whole or a shard, skips it, `research merge` requires
+the merge gate, each a `Job` with `gate` false (`gated`): a recorded check, whole or a shard, skips it, `research.merge` requires
 it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red names its culprit. Such a job has
 no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
@@ -30,7 +30,7 @@ any other it runs whole. Every job on the gate is in exactly one shard, whole or
 plus exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the
 gate in one line); a shard that holds a job whole holds what it `needs` or runs `after`, and one that holds parts of a split
 job runs what that job needs beside them when it doesn't hold it (`check.py`'s `groups`: lean-build beside lean-suites'
-parts), whose verdict `research merge` takes only from the shard that holds it; no two plans have the same N (`plans`). `resolve`
+parts), whose verdict `research.merge` takes only from the shard that holds it; no two plans have the same N (`plans`). `resolve`
 turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named part the tree lacks, so a stale plan
 stops the shard instead of leaving something out. A spec package's audit and its provers' (the packages its `proved_in` names,
 which it audits beside it from one build of theirs) resolve onto one shard, the one the plan names any of them in, so the

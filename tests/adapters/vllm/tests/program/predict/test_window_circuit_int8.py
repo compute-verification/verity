@@ -4,7 +4,7 @@ pinned on `test_window_circuit`'s TINY class and windows, at 512 weight words a 
 
 The norm after the attention and the one after the MLP are one `RMSNormFusedCuda_v2` template, whose ``x`` o_proj's 4 slices
 write as 4 rows and down_proj's 8 as 8, and a port is cut once for every writer. So the window holds the first as that
-template, ``x`` cut 4 ways, and cuts the second at its residual add: one `RMSNormFusedCudaAdd_v1` part, ``x`` cut 8 ways,
+template, ``x`` cut 4 ways, and cuts the second at its residual add: one `RMSNormFusedCudaAdd_v2{R=8}` part, ``x`` cut 8 ways,
 and its tail. The units and registered reads are pinned on its unwired lowering, the one its weights registration commits
 (`window_circuit.lower`, ``wired=False``).
 """
@@ -65,7 +65,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     its unwired lowering registers the weights and the scan state."""
     reg = _registered()
     window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
-    add = "RMSNormFusedCudaAdd_v1{N=64,C=64,AT=0}"
+    add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
         "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
     assert {t: c for t, c in window.cuts.items() if t.startswith("RMSNormFused")} == {NORM: {"x": 4}, add: {"x": 8}}

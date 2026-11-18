@@ -616,13 +616,6 @@ def test_pull_batches_by_count_and_by_bytes():
 
 # ---- item 6: a dead pod is a refusal, not a SystemExit -------------------------------------------------------------------------------------------
 
-def _http_error(code: int, body: bytes = b"") -> Exception:
-    import io
-    import urllib.error
-
-    return urllib.error.HTTPError("https://rest.runpod.io/v1/pods/p1", code, "x", {}, io.BytesIO(body))
-
-
 def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, capsys):
     import urllib.error
 
@@ -632,29 +625,42 @@ def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, ca
 
     monkeypatch.setattr(runpod, "CONFIG", tmp_path / "config.toml")
     (tmp_path / "config.toml").write_text('apikey = "k"\napiurl = "https://api.runpod.io/graphql"\n')
-    calls: list[tuple[str, str]] = []
+    calls: list[str] = []
+
+    class Gone:
+        """GraphQL's answer for a pod it does not know."""
+        status, headers = 200, {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b'{"data": {"pod": null}}'
 
     def urlopen(request, timeout=0):
-        calls.append((request.get_method(), request.full_url))
-        raise _http_error(404, b'{"error":"pod not found"}')
+        calls.append(request.full_url.split("?")[0])
+        return Gone()
 
     monkeypatch.setattr(runpod.urllib.request, "urlopen", urlopen)
     with pytest.raises(runpod.PodError) as ei:
         runpod.get("p1")
-    assert ei.value.code == 404 and ei.value.pod_id == "p1" and "HTTP 404" in str(ei.value) and "terminated" in str(ei.value)
-    assert not isinstance(ei.value, SystemExit) and calls == [("GET", "https://rest.runpod.io/v1/pods/p1")]
+    assert ei.value.code == 404 and ei.value.pod_id == "p1" and "not found (terminated" in str(ei.value)
+    assert not isinstance(ei.value, SystemExit) and calls == ["https://api.runpod.io/graphql"]
 
     machine = {"provider": "runpod", "pod_id": "p1", "name": "pod-x"}
     with pytest.raises(remote.Refused, match=r"pod p1 \(machine pod-x\) no longer exists on runpod \(HTTP 404"):
         remote.pod_target(machine)
-    with pytest.raises(remote.Refused, match=r"pod p1: GET /pods/p1 -> HTTP 404"):
+    with pytest.raises(remote.Refused, match=r"pod p1: GraphQL pod p1: not found"):
         part.check_pod("p1")
 
     def urlopen_down(request, timeout=0):
         raise urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
 
     monkeypatch.setattr(runpod.urllib.request, "urlopen", urlopen_down)
-    with pytest.raises(remote.Refused, match=r"pod p1 \(machine pod-x\): runpod API unavailable: GET /pods/p1: URLError"):
+    with pytest.raises(remote.Refused, match=r"pod p1 \(machine pod-x\): runpod API unavailable: GraphQL: URLError"):
         remote.pod_target(machine)
     monkeypatch.setattr(runpod, "CONFIG", tmp_path / "absent.toml")
     with pytest.raises(remote.Refused, match="no RunPod API config"):
@@ -675,7 +681,7 @@ def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, ca
     monkeypatch.setattr("sys.argv", ["runpod", "get", "p1"])
     with pytest.raises(SystemExit) as se:
         runpod.main()
-    assert "runpod: GET /pods/p1 -> HTTP 404" in str(se.value)
+    assert "runpod: GraphQL pod p1: not found" in str(se.value)
 
 
 # ---- item 7: multipart upload > 5 GiB: the chunking, pure ------------------------------------------------------------------------------------------

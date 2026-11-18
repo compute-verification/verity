@@ -4,8 +4,8 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 Network attestation for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The network
-attester certifies the I/O, and SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is
-the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
+attester certifies the I/O, and SPOT holds the committed values to the compiled circuits and to the attested I/O. v0 is
+the interface the compiler, the encoders and the tie to the attested I/O code against; its schema id is
 `verity/advice/v0`. The module's docstring carries the same layout and its split by execution phase.
 
 **The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
@@ -58,21 +58,21 @@ connectors and external hits (`num_external_computed_tokens`), cascade attention
 `SchedulerOutput`), n > 1 and best_of, stop strings (a finish other than `eos` or `length` is refused), aborts and
 client disconnects, CUDA-graph padding (the advice names the rows that ran, not padding, so either the runner is eager
 or the compiler models the padding), and Mamba or hybrid models. An unseeded stochastic request is in scope: its seed is
-derived from its certified id and the execution phase's seed salt, and its Program's seed rule holds its sampler to it.
+derived from its attested id and the execution phase's seed salt, and its Program's seed rule holds its sampler to it.
 
 **Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
-w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the
+w_src are the least that hold their largest values. A **determined** field is fixed by the attested I/O, the
 committed values or the rest of the advice, and the encoders (ENC-*) remove it. The **free** fields are the real
 `A_c`: what the serving engine, which is the prover, chooses.
 
 | Field | Chosen by | Bits | Determined? |
 |---|---|---|---|
 | version | protocol | 8 | yes: structure |
-| #requests | clients | 6 + L | yes: certified ingress |
+| #requests | clients | 6 + L | yes: attested ingress |
 | #steps | engine | 6 + L | free |
 | w_len, w_rel, w_src | (derived) | 18 | yes: the rest of the advice |
-| `id` | client (the body's `user`) | 6 + L + 8·bytes | yes: certified ingress |
-| `prompt_len` | client | w_len | yes: certified ingress (the precommitted tokenizer) |
+| `id` | client (the body's `user`) | 6 + L + 8·bytes | yes: attested ingress |
+| `prompt_len` | client | w_len | yes: attested ingress (the precommitted tokenizer) |
 | `output_len` | model, or the client's `max_tokens` | w_len | yes: committed outputs, and the egress frame count |
 | `finish` | model (EOS), or the client's limit | 1 | yes: committed outputs (is the last kept token EOS) |
 | a step's rows − 1 | engine | w_req | free |
@@ -83,12 +83,12 @@ committed values or the rest of the advice, and the encoders (ENC-*) remove it. 
 | `Row.cache_hit` | engine (prefix cache state) | w_len per row | free on admitting rows; 0 otherwise |
 | `Row.preempted` | engine | 1 per row | free |
 | `Row.sources` | engine (prefix cache's block map) | w_src + #sources·(w_req + w_len), hit rows only | free; their sum is cache_hit |
-| `release` | engine's timing, inside the sync | w_rel per output | yes: certified egress records and committed frames |
+| `release` | engine's timing, inside the sync | w_rel per output | yes: attested egress records and committed frames |
 
 What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
 preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
 timing term `W·log2 #Σ_sync + n·log2 D` charges it. The advice carries it only so that the compiler and the tie to the
-certified egress know which output each frame is.
+attested egress know which output each frame is.
 
 **Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
 the known tokens and the kept outputs, and refuses:

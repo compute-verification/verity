@@ -170,7 +170,7 @@ def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
     assert year["requests"] == pytest.approx(term().plan()["world_requests"].value, rel=1e-12)
     assert "The row is priced over 1.778e+16 requests, the count the network attester's part is over." in E.render(doc)
-    assert "\n- this is the headline figure: λ times the bound where the row's total is 10% of compute" in E.render(doc)
+    assert "\n- the part is λ times the bound where the row's total is 10% of compute" in E.render(doc)
 
     s = Store(tmp_path / "other")
     s.label(s.ran(ROWS, [as_row(r) for r in rows() if (r["row"], r["h8"]) == (CUT_ROW, "h8")]))

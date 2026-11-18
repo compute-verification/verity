@@ -471,6 +471,7 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
 
 
+@pytest.mark.slow
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
@@ -725,7 +726,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_
 
 def test_the_seeds_derive_from_the_window_salt():
     """The units' salt is PoUW's window salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
-    stand-in reveal (the salt coin's, standing in for the certifier's), and a unit's noise and receipt seeds are of that
+    stand-in reveal (the salt coin's, standing in for the network attester's), and a unit's noise and receipt seeds are of that
     salt; another reveal, window, stream or prover gives another salt and other seeds."""
     import hashlib
 

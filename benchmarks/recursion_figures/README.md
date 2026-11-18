@@ -7,7 +7,7 @@ and how much their stops can leak, over monitoring periods and over all compute.
 One recursive session's figures from a recursion bench result (`benchmarks/recursion_e2e`'s `recursion_e2e.json`, whose
 `session_times` hold each session step's wall and CPU seconds): its cost, its knowledge-soundness error and its stop-leak
 bound, for one window and pooled over a week, a month and a year (`verity.protocol.MONITORING_PERIODS`), over the reference
-datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the Lean
+datacenter and the world's compute (`calibration/census`), each with its basis: measured (the run), proved (the Lean
 theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The
 knowledge-soundness error is κ + t·ε a session (κ and ε proved), pooled by the union bound as sessions·κ + T·ε against the
 SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the sessions and of the ANDs they cover.

@@ -12,7 +12,7 @@ REG = Registry.load()
 
 def test_the_reference_numbers_match_the_spec_arithmetic():
     # one 17 GB SparseLoCo sync takes about 4.3 years through one server's 1 kb/s (the side channel alone; the
-    # certifier's timing channel adds its own); the pretraining run takes about 35 s on the whole fleet unencumbered at
+    # network attester's timing channel adds its own); the pretraining run takes about 35 s on the whole fleet unencumbered at
     # the training MFU, and the unregistered pool takes that over its share (0.1%)
     sync = REG["exfil.sparseloco-sync.bits"]
     alone = evaluate_named(REG.override({"regime.onsite.timing": 0.0}), "reference-onsite-h200")

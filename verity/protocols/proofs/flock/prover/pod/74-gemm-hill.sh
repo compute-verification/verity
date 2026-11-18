@@ -183,7 +183,7 @@ for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
   PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python \
     $PYBIN verity/protocols/proofs/flock/prover/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
     --stamps $R/out/${P}stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
-    --gpu-csv $R/out/gpu.csv --census benchmarks/census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \
+    --gpu-csv $R/out/gpu.csv --census calibration/census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \
     --label "${LABEL:-baseline}" ${QUESTION:+--question "$QUESTION"} --node ${HILL_NODE:-vy-nebius-1} --point $i --points $POINTS --preflight-key $R/out/preflight/key.json \
     --point-key $R/out/${P}key.json --out $R/out/${P}metrics.json --result $RES --hillclimb $HC || ok=0
 done

@@ -5,8 +5,6 @@ Definitions and the H200 capture's models (`bf16_gemm_check.cublas_splitk_rows`,
 (the split-K-off switch's unsplit router) replays unequal, by name."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 import re
 
 import numpy as np

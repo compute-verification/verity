@@ -450,7 +450,7 @@ def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) :
                  innerCoins := ← file (argOf args "--rec-inner-coins")
                  innerSession := ← file ((argOf args "--rec-inner-session").map (· ++ "/session.json"))
                  transcript := ← file (argOf args "--rec-inner-transcript")
-                 registration := ← file (argOf args "--rec-inner-registration")
+                 docket := ← file (argOf args "--rec-inner-registration")
                  innerStatement := statement
                  innerTables := tables.map (·.map fun t => (t.1, RecCompose.digest t.2))
                  innerSample := ← file (argOf args "--rec-inner-draw")
@@ -551,7 +551,7 @@ def innerMeta (f : String) : IO (Except String Lean.Json) := do
 the circuit registration it binds (one-stage `registration.digest`), or none, when META names none or no inner circuit is
 given; and META's `stacked` (`RecVStar.stackedShapeOf`), the shape staging committed R at. Only the circuit's header is
 read, up to its `META` line. -/
-def innerMetaRegistration (args : List String) :
+def innerMetaDocket (args : List String) :
     IO (Except String (Option String × Option RecVStar.StackedShape)) := do
   let some f := argOf args "--rec-inner-circuit" | return .ok (none, none)
   let mj ← innerMeta f
@@ -691,7 +691,7 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln e; return 2
   -- the transcript as the verifier holds it, under the inner shape's covers check alone: R's registration, which a
   -- candidate-3 session needs, is its setup's (`verify`, `statement`)
-  match ← recTranscriptOfSession args (← innerMetaRegistration args) none with
+  match ← recTranscriptOfSession args (← innerMetaDocket args) none with
   | .ok (some ic) =>
     if let some i := inner then
       if let .error e := RecVStar.checkCovers i ic then IO.eprintln e; return 1
@@ -1046,7 +1046,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let recCoins ← match ← RecCoins.filesInput args with
     | .ok f => pure f
     | .error e => IO.eprintln e; return 2
-  let recBound ← innerMetaRegistration args
+  let recBound ← innerMetaDocket args
   let recCommits ← match ← recTranscriptInput args (recCoins.map (·.record)) recBound recInner with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
@@ -1375,7 +1375,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
-  let recBound ← innerMetaRegistration args
+  let recBound ← innerMetaDocket args
   let recCommits ← match ← recTranscriptOfSession args recBound recInner with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
@@ -1620,7 +1620,7 @@ def registeredSamplingDesign (args : List String) : IO (Except String (Option (L
   return .ok (some (samplingDesign, pop))
 
 /-- The sampling design and population sampled are the registration's (`registeredSamplingDesign`), else why not. -/
-def heldToRegistration (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Lean.Json × Nat → Option String
+def heldToDocket (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Lean.Json × Nat → Option String
   | (reg, n) =>
     if samplingDesign.toJson.compress != reg.compress then
       some s!"the law {samplingDesign.toJson.compress} is not the registered law {reg.compress}"
@@ -1675,7 +1675,7 @@ def sampleCmd (args : List String) : IO UInt32 := do
   match ← registeredSamplingDesign args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
     | .ok none => pure ()
-    | .ok (some r) => match heldToRegistration samplingDesign pop r with
+    | .ok (some r) => match heldToDocket samplingDesign pop r with
       | some why => IO.eprintln s!"draw: {why}"; return 2
       | none => pure ()
   match (argOf args "--tables").map String.toNat? with
@@ -1738,7 +1738,7 @@ def sampleTest (path : String) (args : List String) : IO UInt32 := do
         if d.samplingDesign != samplingDesign then throw "U2: the draw's law is not the verifier's own (its program and query)"
       if let (some r, some s) := (reg, side "statement") then
         let d ← Draw.UnitSample.ofJson s
-        if let some why := heldToRegistration d.samplingDesign d.population r then throw s!"U2: {why}"
+        if let some why := heldToDocket d.samplingDesign d.population r then throw s!"U2: {why}"
       if let (some cm, some s) := (closure, side "statement") then
         let d ← Draw.UnitSample.ofJson s
         if d.closure != Draw.closureOf cm d.units then throw "U3: the draw's closure is not the verifier's own (its closure map)"

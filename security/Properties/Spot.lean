@@ -327,9 +327,9 @@ def PinnedHeld (rec : Json) (v : Docket.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Docket.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.samplingDesignOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
-fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
-ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points
+(`LinkPoints.refused`, which refuses a sampling design no sample of which ends); a sample that runs out of coins fails
+the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Docket.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ samplingDesign n, LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable = .ok (samplingDesign, n) ∧
     LinkPoints.refused samplingDesign n v.members = .ok #[]

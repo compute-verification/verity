@@ -1,4 +1,4 @@
-"""The timed audit's verdict of record, two ways: the memory challenger's `timed_audit.verdict` (the Python reference,
+"""The timed audit's verdict of record, two ways: the memory attester's `timed_audit.verdict` (the Python reference,
 `protocol.TimedAudit` replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on
 generated records and on the records of runs.
 
@@ -21,7 +21,7 @@ version than P2 v4; it says which, and counts neither. Where a document kept the
 `judge`'s), each one that ran is held to the replay's of the same name, and `M with recorded verdicts, M recorded as
 replayed` follows; the exit is 0 iff every document replays the same both ways and as recorded.
 
-Lean implements the verdict only: the records are the memory challenger's, which Python's audit wrote.
+Lean implements the verdict only: the records are the memory attester's, which Python's audit wrote.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ EXE = "pous-timed-audit"
 
 
 def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
-    """The memory challenger's `timed_audit.verdict` by `pous-timed-audit READY LEAVES AUDIT`, built here."""
+    """The memory attester's `timed_audit.verdict` by `pous-timed-audit READY LEAVES AUDIT`, built here."""
     return reference.run_lean(build(HERE, EXE), ready, leaves, doc)
 
 
@@ -72,7 +72,7 @@ class Store:
 
 def record(s: Store, rng: random.Random, *, k: int, deadline: int, rtt: int, strict: bool, audits: int,
            elapsed: Callable[[int], int] | None = None) -> dict[str, Any]:
-    """An honest audit document, as `memory_challenger.audit` writes it: each answer the label of the index revealed."""
+    """An honest audit document, as `memory_attester.audit` writes it: each answer the label of the index revealed."""
     limit = deadline + rtt
     elapsed = elapsed or (lambda j: rng.randint(0, limit))
     records = []

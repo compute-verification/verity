@@ -104,8 +104,6 @@ def Rest.view (B : Rest N a h Lz qz) : RelayDevice N a h 0 0 Lz qz where
     rw [Chip.inline_linkBits, Chip.inline_queries]
     exact B.bounded _
 
-theorem Rest.view_world (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
-    { B.view.world z noStream (atE G E) with mem := B.mem } = B.world E z G := rfl
 
 theorem Rest.view_tags (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
     B.view.tags z noStream (atE G E) = B.receipts E z G :=

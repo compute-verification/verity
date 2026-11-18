@@ -17,7 +17,7 @@ from .time import Interval
 
 @dataclass(frozen=True)
 class Maintenance:
-    """Zone `block` out of service during `during`: someone the auditor doesn't control has it in hand. Its certifiers'
+    """Zone `block` out of service during `during`: someone the auditor doesn't control has it in hand. Its network attesters'
     records aren't required then, everything its devices hold may leave with whoever services it, and anything may come
     back in with them, so only a wipe after it bounds what the block holds when it rejoins."""
 

@@ -6,8 +6,6 @@
 function with each value computed once: the selection's order as comparisons, the sum's +0 lanes dropped, the sign as a select."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits import codec
@@ -15,6 +13,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.numerics import moe_twins
 from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import prims as P

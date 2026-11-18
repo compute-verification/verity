@@ -7,7 +7,6 @@ import re
 from typing import Any
 
 from verity_vllm.definitions.registry.lifted import check_lag
-
 from verity_vllm.program.workload import eos_lag_rows_declared
 
 LAG_FIELD = "RunHeader.profile.engine_kwargs.async_scheduling"  # the ONE attested field GP-01's eos_lag_rows and this LAG both read

@@ -1,7 +1,7 @@
 module
 
 public import Properties.InferenceOnly.Record
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 
 /-!
 # The record check's own form
@@ -15,7 +15,7 @@ reads, its rate rule `failure` on that one pair, and its layout `layoutOf`'s. Wh
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -35,4 +35,4 @@ def form : Properties.Record.Form where
   rate Γ num den s := (failure Γ num den #[(s.gates, s.fresh)]).map (·.2)
   layout d := (Record.layoutOf d).map fun l => ⟨l.key, l.root, l.domain, l.ports, l.verdict⟩
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

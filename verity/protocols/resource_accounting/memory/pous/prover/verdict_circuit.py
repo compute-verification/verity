@@ -1,19 +1,19 @@
-"""PoUS's session verdict as one proof block: whether a memory challenger's session passes, from its round records and the
+"""PoUS's session verdict as one proof block: whether a memory attester's session passes, from its round records and the
 expected digests of the labels they challenged.  Its one output bit is the session's public verdict.
 
     PousVerdict_v1{K, M, LIMIT}
         (records: Array<K, Array<736, Value<1>>>, expected: Array<K, Array<512, Value<1>>>) -> Value<1>
 
 Every array is of `Value<1>`, and a byte string is bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋.
-`records[j]` is round j's record as the memory challenger writes it (`memory_challenger.Round.value`, 92 bytes):
+`records[j]` is round j's record as the memory attester writes it (`memory_attester.Round.value`, 92 bytes):
 ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers big-endian.  `expected[j]` is the
-``sha512/row/v2`` digest of label ``index`` of C, what `memory_challenger.verdict`'s ``expected(index)`` returns.
+``sha512/row/v2`` digest of label ``index`` of C, what `memory_attester.verdict`'s ``expected(index)`` returns.
 
 **What it computes.**  Round j *hits* when its record names round j, its receipt is not before its send, ``receipt − send
 ≤ LIMIT`` (Δ + RTT in ns) and its ``H(block)`` is ``expected[j]``; every other round misses (`round_verdict`).  The output
 is 1 iff at most M of the K rounds miss: `Pous.contAccepts M` over the rounds' verdicts
 (`security/Definitions/Pous/Model/Continuous.lean`), the continuous audit's ``max_misses = M`` over ``n = K`` challenges.
-At M = 0 it is the per-round part of `memory_challenger.verdict`: no round wrong, none late, every record its own round.
+At M = 0 it is the per-round part of `memory_attester.verdict`: no round wrong, none late, every record its own round.
 `PousVerdict.verdictProg_accepts` (`security/Proofs/Pous/Continuous/Verdict.lean`) proves it of the gates.
 
 **The gates** (`gates`, which `PousVerdict.verdictProg` restates, and the body is written from gate for gate):
@@ -30,7 +30,7 @@ then a W-bit miss counter, W = bit_length(max(K, M)), incremented per round by t
 and the verdict, the last carry of ``M + ¬cnt + 1``.  Consecutive gates of one kind and width that read only earlier gates
 are one batch.  ANDs: 673 per round (545 in the hit, 64 per chain), W per round in the counter and W in the verdict.
 
-**Why hash-free.**  The record holds ``H(block)``, the memory challenger's own digest of the answer, so the verdict needs
+**Why hash-free.**  The record holds ``H(block)``, the memory attester's own digest of the answer, so the verdict needs
 no SHA-512: it compares digests, and its gates are small enough to prove in Lean gate by gate.  What ties its inputs to
 the session is the rest of the statement: ``records`` are the rows the signed records root commits, and ``expected`` the
 digests of C's labels at the opened coins.

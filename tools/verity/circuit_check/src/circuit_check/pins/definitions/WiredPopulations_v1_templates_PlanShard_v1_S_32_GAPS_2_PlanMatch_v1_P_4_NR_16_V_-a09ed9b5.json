@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "WiredPopulations_v1{templates=('PlanShard_v1{S=32,GAPS=2}','PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}'),record='fa7b0d6ed22f2539c4ecef879f8fb2b6c84f76b7d361b8a55aa9bda8f4fb23f038445b0642eeb60aa985a0691e4c138728f6bb6e3d308093bd91ab322cd67dad',counts=(1,2)}": {
+   "and": 4287,
+   "type": "7b9c73edb21a0dd9c716caef658ddee8279029e508bde08e81f70a1e218253fdad8dcc2b6e14361457ca92abacae0e0576c7a4afacdb02496ec27208679ec42b"
+  }
+ }
+}

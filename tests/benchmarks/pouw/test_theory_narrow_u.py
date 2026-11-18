@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory" / "narrow_u.py"
+SCRIPT = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory" / "narrow_u.py"
 
 
 @pytest.mark.slow

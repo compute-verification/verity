@@ -217,34 +217,6 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     return {**got, "provided": True}
 
 
-def h1_summary(run: Any) -> dict[str, Any]:
-    """One closed H1 window (`pouw_h1.H1Run`): ``ok`` when every call fell inside its S steps and T rows at its public
-    position, in order (``static``), the credit gate passed every served call (its y the GEMM that wrote its z/y
-    records), every admitted request has its entry and the salt opened. Its coins are in-process, so it credits nothing."""
-
-    verdicts = list(run.verdicts.values())
-    passed = sum(bool(v.get("credit")) for v in verdicts)
-    gaps = run.request_gaps()
-    out = {"steps": run.steps, "steps_served": run.details.get("steps_served"), "rows": run.rows, "calls": len(run.calls),
-           "served_calls": len(verdicts), "refused_calls": len(run.refused), "order_ok": bool(run.order_ok),
-           "static": bool(run.details.get("static")), "credit_gate_passed": passed,
-           "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
-           "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
-           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coins": run.coins_from}
-    out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
-                     and not run.refused_requests and out["unopened"] is None)
-    return out
-
-
-def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
-    """An H1 arm's own gate: every window its engine has closed so far is `h1_summary`'s ``ok``."""
-
-    bad = [w for w in windows if not w.get("ok")]
-    return {"passed": bool(windows) and not bad, "provided": True, "windows": len(windows),
-            "failed": [dict(w) for w in bad[:2]],
-            "coins": "in-process: each window credits nothing (pouw_h1.IN_PROCESS); this arm measures cost only"}
-
-
 def _timed_token_gates(
     arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
     tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str, custom: Mapping[str, Mapping[str, Any]],

@@ -13,8 +13,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from verity.circuits.silicon import models as S
+from verity.circuits.silicon import term as T
 from verity.errors import InvalidArtifact
-from verity.circuits.silicon import models as S, term as T
 
 __all__ = [
     "AMPERE_BF16",

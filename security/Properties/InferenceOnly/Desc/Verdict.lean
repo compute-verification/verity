@@ -27,7 +27,7 @@ Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Propertie
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 
@@ -70,4 +70,4 @@ with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledD
 def DescThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDarkSlots j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

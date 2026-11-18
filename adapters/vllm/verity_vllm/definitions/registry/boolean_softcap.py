@@ -14,18 +14,22 @@ The two MUFU operations the word chain calls, stage A' `MufuTanh_v1` and B2/B3's
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import gemm as BG
-from verity.circuits.boolean.trace import word_of
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import fa2_softcap as FS
 from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import value_inputs as VI
 from verity_vllm.definitions.registry.b1 import _lane
 from verity_vllm.definitions.registry.boolean_attention import _Bits, _transpose
-from verity_vllm.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
-from verity_vllm.definitions.registry import value_inputs as VI
+from verity_vllm.definitions.registry.dense import (
+    softcap_mul_bits,
+    softcap_scale_log2_bits,
+)
 
 __all__ = ["AttentionHeadSoftcap", "AttentionHeadSoftcapIn", "AttentionSoftcap", "AttentionSoftcapIn", "AttnBlockSoftcap",
            "AttnBlockSoftcapIn", "WORD_STATICS"]

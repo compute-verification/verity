@@ -1,7 +1,7 @@
 """GPU run: a stand-in for GLM-5.3 served with its multi-token-prediction draft on (vLLM's ``speculative_config`` method
 ``mtp``), then replayed from the scheduler's step trace alone; the replay's steps and every token are held to the served ones.
 
-The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers and `EXPERTS` routed experts, with
+The stand-in is GLM-5.3's registered config cut by the adapter's `stand_in` to its first layers and routed experts, with
 its MTP layer, served tensor-parallel 1 on one card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer.
 ``--weights dummy`` keeps vLLM's values, under which a token depends on little but the token before it; ``--weights scaled``
 resamples every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
@@ -37,9 +37,6 @@ from pathlib import Path
 from typing import Any
 
 ADAPTER = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
-CONFIG = ADAPTER / "verity_vllm/engine/profiles/hf_configs/GLM53.config.json"
-#: the stand-in's decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and experts
-LAYERS, EXPERTS = 7, 16
 #: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight sampled uniform on [-1, 1]
 STD = 0.02
 FP8_SCALE = STD * 3 ** 0.5
@@ -63,14 +60,6 @@ SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512
 REQUESTS = 14
 #: what of a step record the replay must repeat
 STEP_KEYS = ("T", "order", "rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
-
-
-def stand_in(where: Path) -> None:
-    cfg = json.loads(CONFIG.read_text())
-    cut = {**cfg, "num_hidden_layers": LAYERS, "n_routed_experts": EXPERTS}
-    for k in ("indexer_types", "mlp_layer_types"):
-        cut[k] = cfg[k][:LAYERS]
-    (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
 
 
 def plan(default_seed: int) -> list[dict[str, Any]]:
@@ -239,6 +228,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     os.environ["VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"] = "1"
     sys.path.insert(0, str(ADAPTER))
     from verity_vllm.engine import env, served_seed
+    from verity_vllm.engine.profiles.stand_in import stand_in
     from verity_vllm.engine.step_trace import StepTrace, load
 
     env.apply_engine(None)
@@ -362,6 +352,9 @@ def main() -> int:
         return 0
     out = Path(a.out)
     env = {**os.environ, "PYTHONHASHSEED": "0"}
+    sys.path.insert(0, str(ADAPTER))
+    from verity_vllm.engine.profiles.stand_in import EXPERTS, LAYERS
+
     report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
     ok = True
     runs = [tuple(r.split(":")) for r in a.runs.split(",")]

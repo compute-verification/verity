@@ -31,7 +31,6 @@ public import Proofs.Flock.Claims.Sampling.Wait
 public import Proofs.Flock.Claims.Sampling.ZK
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
-public import Proofs.Flock.Claims.Sampling.Select.Refusals
 public import Proofs.Flock.Claims.Sampling.Reference
 public import Proofs.Flock.Claims.Sampling.Select
 

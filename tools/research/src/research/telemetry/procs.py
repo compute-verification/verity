@@ -147,6 +147,31 @@ def descendants(root_pid: int, all_stats: dict[int, dict[str, Any]]) -> set[int]
     return out
 
 
+def foreign_pids(cgroup_dir: str | os.PathLike[str], runner: int, *, read=_read, stat=stat_fields) -> int | None:
+    """How many live processes the cgroup holds (its cgroup.procs) that are neither `runner` and its descendants (the workload,
+    the sampler) nor its ancestors (what started it): another run's or the machine's. None when cgroup.procs can't be read."""
+    raw, _ = read(f"{os.fspath(cgroup_dir)}/cgroup.procs", 1 << 20)
+    if raw is None:
+        return None
+    up: set[int] = set()
+    p = runner
+    while p > 0 and p not in up:
+        up.add(p)
+        st = stat(p)
+        p = st["ppid"] if st else 0
+    n = 0
+    for pid in {int(x) for x in raw.split() if x.isdigit()} - up:
+        if (st := stat(pid)) is None:
+            continue                     # gone since cgroup.procs was read
+        seen = {pid}
+        p = st["ppid"]
+        while p > 0 and p != runner and p not in seen:
+            seen.add(p)
+            p = (stat(p) or {}).get("ppid", 0)
+        n += p != runner
+    return n
+
+
 def snapshot_tree(root_pid: int | None, pgid: int | None, max_pids: int, with_outsiders: bool = True) -> tuple[list[dict[str, Any]], bool, int, list[dict[str, Any]]]:
     """All processes selected by root (descendants incl. root), pgid, or every visible pid.  -> (rows, truncated, total_selected, outsiders).
     `outsiders` = every other visible process (same pod cgroup on RunPod) with pid/comm/starttime/anon+shmem -- what the shared-scope OOM

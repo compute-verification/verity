@@ -16,7 +16,7 @@ three: every composite body of a decoded Program reads every leaf at its width.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 /-- **Every body of a decoded Program is `BodyInner`, and the width check passed it.** -/
@@ -51,4 +51,4 @@ theorem decoded_wide (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rw [hrt]
   exact (hc.2 hp).2.1
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

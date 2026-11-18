@@ -16,7 +16,7 @@ order (in each form with a signed operand; u8 x u8 sums only grow, so there ever
 Without it, D wraps modulo 2^32.  An earlier library-kernel probe (CUTLASS ``i16832gemm_s8``
 through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
 
-The datacenter cards compute the same function (`benchmarks/pouw/dc/s8_mma.py`, the same families at each instruction's tile).
+The datacenter cards compute the same function (`calibration/pouw/dc/s8_mma.py`, the same families at each instruction's tile).
 An H200 (sm_90a) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
 ``mma.sync`` m16n8k32; a B200 (sm_100a) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
 (SASS ``UTCIMMA``, the formats and the saturation in the instruction descriptor, its bit 3 ``.satfinite``) and ``mma.sync``

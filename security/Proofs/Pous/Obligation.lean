@@ -238,7 +238,7 @@ end Pous.SecurityProofs
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

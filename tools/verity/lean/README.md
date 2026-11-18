@@ -8,7 +8,7 @@ names, and new detail goes there: here it gets one line at most.
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data
 (`Facts.lean`), and the kernel replay (`Replay.lean`) loads them the same way. The only package code that runs is the
 build's and, after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox
-where the machine allows one; a test's data generator is the repository's code and runs outside it.
+where the machine allows one; a test's data generator runs in that sandbox too, with no network and the tree read-only.
 
 A weakened definition leaves every proof valid, so the axiom checks and the replay pass it: only the records see it, and
 only a person can judge it. So the lock, `lean-audit.json`, records what each guarantee says and every definition its
@@ -45,6 +45,10 @@ python tools/verity/lean/upstream.py PKG [--lean]
 python tools/verity/lean/unread.py --out DIR --build
   the Lean nothing reads; lean-audit runs its ratchet on the audits' facts (its docstring: the seeds, the limits, the
   Properties gap)
+python tools/verity/lean/lean_changed.py --records security --unread-facts
+  the same with no build of its own: the records run's audits of security and security/Proofs leave the facts, and it
+  ends with lean-audit's ratchet on them, as every records run that audits them does unless --no-unread-count; an area
+  above its cap fails the run, naming the area, its count, its cap and its modules
 uv run tools/verity/lean/claim_ids.py [--write]
   the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
 python tools/verity/lean/merge.py --install
@@ -57,16 +61,15 @@ research run --on auto --mem-gb 133 --max-min 120 --project verity --source . --
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   133 GB is 123.9 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
   `lean_changed.py --ask PKG` prints PKG's ask
-research run --on auto --mem-gb 307 --max-min 180 --project verity --source . --cwd clone -- \
-  python3 tools/verity/lean/check.py --build --update PKG
-  307 GB is 285.9 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
-  `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--program-cache`, `--artifacts`,
 `--regenerate`, `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs'
 own.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
+`check.py --build` without `--artifacts` refuses on a node whose builds are sandboxed and whose artifact cache holds
+modules, naming `lean_changed.py --records PKG` (the line above), which builds on a kept tree and restores from that cache;
+`--no-artifacts` builds cold on purpose, as the uncached check does.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
@@ -302,6 +305,8 @@ The auditor:
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
+- `sockets.py`: what keeps the sandbox's command from every unix socket it did not make (a seccomp filter, the kernel's
+  list of sockets and a probe).
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
   (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
@@ -354,9 +359,9 @@ Lean's job in `check` and the tools around the audit:
 The audit needs the standard library, `lake` and the toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing
 here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`, `Graph.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `olean_graph.py`,
-`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
-own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with
-this repository.
+`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `sockets.py`, `setup.sh`, `cache.py`,
+`tests/`) for its own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they
+stay with this repository.
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
 package (`check.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,

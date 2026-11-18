@@ -55,7 +55,7 @@ def bcs(c, m, port: str) -> list[bytes]:
     return [b[i * AW.CS.BC_BYTES:(i + 1) * AW.CS.BC_BYTES] for i in range(m.n)]
 
 
-def test_each_chunk_opens_one_connections_cells_under_the_network_certifiers_root(run):
+def test_each_chunk_opens_one_connections_cells_under_the_network_attesters_root(run):
     tmp, at = run
     assert {x.head.value for x in at.values()} == {"warden/ingress/0", "warden/egress/0"}
     assert len({x.connection for x in at.values()}) == 1 and all(len(x.reads) == N for x in at.values())
@@ -147,7 +147,7 @@ def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_s
     assert pad.place(x.params, [(g, k)]) == [(tp, jp)] and x.opening.rows[tp][jp * B:(jp + 1) * B] == bytes(B)
 
 
-def test_the_altered_cell_is_committed_under_the_network_certifiers_salt_and_doesnt_open(run):
+def test_the_altered_cell_is_committed_under_the_network_attesters_salt_and_doesnt_open(run):
     tmp, at = run
     mine, c, _rec, win = committed(tmp, at, "altered", altered=True)
     m, x = AW.chunks(mine)[RC.INGRESS], at[RC.INGRESS]

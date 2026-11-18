@@ -16,8 +16,9 @@ Default-kind page still Waiting on Daniel past its Deadline.
 - Approve ticked on a Decided by lane page: Status Approved, and " Endorsed by Daniel." appended to its Decision.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
-- New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
-  page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
+- New text under the bold first line of the yellow "Your reply" callout, or a new comment, that is not an agent's note
+  (`agent_lead`: an @handle, or a registry handle signed with a colon, a bracketed role or a time, `soundness (lead), Tue 17
+  Nov 6:05 PM PST`): quoted (QUOTE_MAX characters). An agent's note rings nobody and logs one line; text never decides.
 Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and top with one line, since top writes the
 decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id), the comment ids
 seen, and the Choose last seen per page (`chosen`; its first pass records every page not open that carries one).
@@ -27,7 +28,8 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+4. main's head unchanged for STALL_S (since the sweep first saw it) while the verified queue has a candidate (a `queue/*`
+   branch on origin): ci. It reads
    GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
    refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
@@ -185,22 +187,31 @@ def page_body(notion, pid: str) -> tuple[list[tuple[str, str]], dict[str, str]]:
     return reply, headings
 
 
-def lane_lead(lane: str) -> re.Pattern:
-    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon or a time, as lanes sign
-    (`proofs:`, `proofs 03:20Z:`, `proofs, <day> <month> 03:20Z:`). `proofs, please …` is still Daniel's."""
-    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*(?::|,?\s+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}})")
+def agent_lead(handles) -> re.Pattern:
+    """How an agent's note starts: an @handle, or a handle (bold or not) followed by a colon, a bracketed role and then a
+    colon, comma, time or the end, or a time with an optional weekday and date (`proofs:`, `proofs (lead):`,
+    `soundness (lead), Tue 17 Nov 6:05 PM PST`, `ci, 5:31 PM PST`, `proofs 03:20Z:`). `proofs, please …` is still Daniel's."""
+    names = "|".join(sorted(map(re.escape, {*handles, "top"}), key=len, reverse=True))
+    when = (r"(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\.?,?\s+)?"
+            r"(?:\d{1,2}\s+[A-Z][a-z]{2,8}\.?,?\s+|[A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+)?"
+            r"(?:\d{1,2}:\d{2}(?:\s*[AaPp]\.?[Mm]\.?)?|\d{1,2}\s*[AP]M)(?:Z|\s*(?:UTC|GMT|[A-Z]{1,4}T)\b)?")
+    after = rf"(?:\s*:|\s*\([^()\n]*\)(?:\*\*|__)?\s*(?:[:,]|$|{when})|\s*,?\s+{when}|,\s*{when})"
+    return re.compile(rf"^\s*(?:\*\*|__)?\s*(?:@[a-z0-9][a-z0-9._-]*|(?i:{names})(?:\*\*|__)?{after})")
 
 
-def daniels(reply: list[tuple[str, str]], seen: set[str], lead: re.Pattern = HANDLE_LEAD) -> list[str]:
-    """The pieces new since `seen` that are Daniel's: a lane answers in the callout starting with `lead`, and each new piece
-    after that one, up to the next piece already seen, is the lane's too."""
+def daniels(reply: list[tuple[str, str]], seen: set[str], lead: re.Pattern = HANDLE_LEAD,
+            agents: list[str] | None = None) -> list[str]:
+    """The pieces new since `seen` that are Daniel's: an agent's note starts with `lead`, and each new piece after it, up to
+    the next piece already seen, is the agent's too (each appended to `agents`)."""
     out, lane = [], False
     for bid, text in reply:
         if bid in seen:
             lane = False
-        elif lead.match(text):
+        elif lane or lead.match(text):
             lane = True
-        elif not lane:
+            if agents is not None:
+                agents.append(text)
+        else:
             out.append(text)
     return out
 
@@ -228,8 +239,8 @@ def decide(p: dict, headings: Callable[[], dict[str, str]], now: float, chose: s
     return None
 
 
-def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry: bool) -> None:
-    """One pass; `ring` None seeds (records and rings nothing)."""
+def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry: bool, handles=()) -> None:
+    """One pass; `ring` None seeds (records and rings nothing). `handles`: the registry's, whose notes are no reply."""
     since = state.get("since")
     edited = {"timestamp": "last_edited_time", "last_edited_time": {"on_or_after": iso((since or now - 2 * 86400) - SINCE_MARGIN_S)}}
     overdue = {"and": [{"property": "Status", "status": {"equals": "Waiting on Daniel"}},
@@ -256,8 +267,8 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
         def tell(what: str, choice: str) -> None:
             if ring is None:
                 return
-            ring(lane, f"{lane}: {what} on \u201c{ask}\u201d: {url}. Act on it, set the page's Status to match, reply under his text "
-                       f"in the callout starting with your handle, and record a decision on the card: research msg ask-daniel "
+            ring(lane, f"{lane}: {what} on \u201c{ask}\u201d: {url}. Act on it, set the page's Status to match, answer in a comment "
+                       f"on the page starting with your handle, and record a decision on the card: research msg ask-daniel "
                        f"resolve {cid} --choice {choice} --note {url}", thread)
             if lane != "top":
                 ring("top", f"{lane}'s ask \u201c{ask[:120]}\u201d: {what[:300]} {url}", thread)
@@ -275,8 +286,8 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             tell(decision, choice)
             decided.add(pid)
         heads()
-        old, lead = set(replies.get(pid) or []), lane_lead(lane)
-        if new := daniels(body["reply"], old, lead):
+        old, notes, lead = set(replies.get(pid) or []), [], agent_lead({*handles, lane})
+        if new := daniels(body["reply"], old, lead, notes):
             tell(f"Daniel replied: \u201c{' '.join(new)[:QUOTE_MAX]}\u201d", "<value>")
         replies[pid] = sorted(old | {bid for bid, _ in body["reply"]})
         try:
@@ -291,8 +302,13 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
                 continue
             seen.add(c["id"])
             text = plain(c.get("rich_text")).strip()
-            if text and not lead.match(text):
+            if text and lead.match(text):
+                notes.append(text)
+            elif text:
                 tell(f"Daniel commented: \u201c{text[:QUOTE_MAX]}\u201d", "<value>")
+        if ring is not None:
+            for text in notes:
+                log(f"agent's note skipped: {lane} {pid} {text[:60]!r}")
     state.update(since=now, decided=sorted(decided), comments=sorted(seen), chosen=chosen)
 
 
@@ -349,7 +365,8 @@ def rules_thread(state, ring, api, reg, now) -> None:
 
 
 MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
-  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
+  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } }
+  refs(refPrefix: "refs/heads/queue/") { totalCount } } }"""
 
 
 class GitHubRefused(Exception):
@@ -370,9 +387,8 @@ def gh_token() -> str:
 
 
 def gh_main(token: Callable[[], str] | None = None) -> dict:
-    """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
-    (`gh_token`)."""
+    """main's head, its commit time and how many candidates the verified queue has, in one small GraphQL read, with the
+    token `token` gives now (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
@@ -386,12 +402,13 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
         raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
-    ref = out["data"]["repository"]["ref"]
-    return {"sha": ref["target"]["oid"], "committed": ref["target"]["committedDate"], "ahead": ref["compare"]["aheadBy"]}
+    repo = out["data"]["repository"]
+    return {"sha": repo["ref"]["target"]["oid"], "committed": repo["ref"]["target"]["committedDate"],
+            "candidates": repo["refs"]["totalCount"]}
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed candidate's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time the queue built it, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
     and again only after a read that worked: until it reads, a stalled main rings nobody."""
     try:
@@ -409,10 +426,10 @@ def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     if seen.get("sha") != head["sha"]:
         seen = state["main_head"] = {"sha": head["sha"], "seen": now}
     at = max(committed, seen["seen"])
-    if now - at >= STALL_S and head["ahead"] > 0:
+    if now - at >= STALL_S and head["candidates"] > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
                   f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {head['ahead']} commits ahead of it: check drive (`research queue status`).", None, now)
+                  f"the verified queue has {head['candidates']} candidate(s): check it (`research queue status`).", None, now)
 
 
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
@@ -669,7 +686,8 @@ def main(argv: list[str] | None = None) -> int:
                 tmp.replace(state_path)
         try:
             if ns.cmd == "asks":
-                asks_pass(state, slack.Notion(), ring, slack.asks_db(reg)["data_source"], now, ns.dry_run)
+                asks_pass(state, slack.Notion(), ring, slack.asks_db(reg)["data_source"], now, ns.dry_run,
+                          [h["handle"] for h in reg.get("handles") or [] if h.get("handle")])
             else:
                 routes = ring.routes if ring else slack.Routes()
                 sweep_pass(state, ring, {

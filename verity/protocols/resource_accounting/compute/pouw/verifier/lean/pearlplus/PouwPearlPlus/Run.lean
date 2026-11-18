@@ -24,7 +24,7 @@ public import PouwPearlPlus.Records
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open PouwCommit
 
@@ -144,4 +144,4 @@ def todo (passes : List Pass) (drawn : List (Nat × Nat)) : List (Nat × Nat) :=
   passes.zipIdx.flatMap fun (p, i) =>
     (drawn.filter (·.1 == i)) ++ p.exclusionTiles.map fun tid => (i, tid)
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

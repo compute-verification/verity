@@ -85,8 +85,8 @@ echo "second rc=$rc" | tee -a "$O/machine.txt"
   "$W/second/summary.json" || true
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO " + json.dumps(s.get("round_two"), sort_keys=True))' \
   "$W/second/summary.json" || true
-for f in summary.json run-input.json coins.json statements.json audit/summary.json audit/case-v2-members.json \
-         audit/case-v2-members-error.txt audit/case-v2-error.txt; do
+for f in summary.json run-input.json coins.json statements.json audit/summary.json audit/case-v2.json \
+         audit/case-v2-error.txt; do
   [ -f "$W/second/$f" ] && { mkdir -p "$O/second/$(dirname "$f")"; cp "$W/second/$f" "$O/second/$f"; }
 done
 [ -f "$W/second/form/params.json" ] || { echo "FORM no case"; exit 2; }

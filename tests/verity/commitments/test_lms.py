@@ -20,7 +20,7 @@ FIXTURE = Path(__file__).with_name("lms_rfc8554_tc2.json")
 SEED = bytes(range(64))
 SMALL = R.Params(64, 1, 4)
 #: SMALL's key from SEED: its public key, and the first 16 bytes of SHA-512 over the encoded signatures sign_at gives at
-#: (q, message) for q = 0 (a certificate) and q = 15 (a memory challenger record)
+#: (q, message) for q = 0 (a certificate) and q = 15 (a memory attester record)
 PUBLIC = "326497cc0d59b0a4b1cebb5b8e7786372ccf46cb21f1a8b37ca0d33c24e43004743eacee9765553fc4097cd7b3e1af1d71c372488ea4bdb6b63bd8d48de09b676f1760513adca36d48ea256bac3edeb6"
 CERTIFICATE = "2938e044ad925de2abad3ecd70b4af8cba031498ffb0e79fee74138a19f130bee81651e4aba07b823d9addde6c039be951ea4172ba38f46275fc9232c2273c37"
 RECORD = "7e50764d622125f1e625bf8af2a01c86545171c2cf8f6d9e20adc9ec41bbb1701ee99c3fc97f57de3c6c7faef614f6b63b94a4acdd5150c5b608948fcd594562"
@@ -77,7 +77,7 @@ def test_the_parameter_table_is_rfc8554s() -> None:
 def test_pinned_vectors(small) -> None:
     assert R.public_key(small).hex() == PUBLIC
     msgs = {0: R.certificate_message(small.I, SESSION, "responses", "egress", 7, b"record"),
-            15: R.memory_challenger_message(small.I, "session-1", b"record")}
+            15: R.memory_attester_message(small.I, "session-1", b"record")}
     assert (msgs[0].hex(), msgs[15].hex()) == (CERTIFICATE, RECORD)
     for q, m in msgs.items():
         s = R.sign_at(small, q, m)
@@ -95,12 +95,12 @@ def test_role_digests_separate_roles_and_contexts(small) -> None:
     base = R.certificate_message(I, S, "l", "egress", 1, b"r")
     others = [R.certificate_message(I, S, "l", "ingress", 1, b"r"), R.certificate_message(I, S, "l", "egress", 2, b"r"),
               R.certificate_message(I, S, "m", "egress", 1, b"r"), R.certificate_message(bytes(16), S, "l", "egress", 1, b"r"),
-              R.certificate_message(I, S, "l", "egress", 1, b"s"), R.memory_challenger_message(I, "l", b"r"),
+              R.certificate_message(I, S, "l", "egress", 1, b"s"), R.memory_attester_message(I, "l", b"r"),
               R.certificate_message(I, S, "l", "egress", 1, b"r\x00"),
               R.certificate_message(I, bytes(32), "l", "egress", 1, b"r")]
     assert len(base) == 64 and len({base, *others}) == 1 + len(others)
     assert R.ROLES["network-certificate"] == "verity/network-certificate-message/v2"
-    assert R.memory_challenger_message(I, "s", b"r") == R.memory_challenger_message(I, b"s", b"r")
+    assert R.memory_attester_message(I, "s", b"r") == R.memory_attester_message(I, b"s", b"r")
     with pytest.raises(ValueError, match="direction"):
         R.certificate_message(I, S, "l", "up", 1, b"r")
     with pytest.raises(ValueError, match="u64"):

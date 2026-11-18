@@ -51,6 +51,14 @@ def test_release_key_reads_the_client_number_inside_the_engine_id():
     assert P.release_key("cmpl-noid-0-0123abcd") is None
 
 
+def test_an_edges_period_counts_a_loads_passes_and_users_as_one_load():
+    """vLLM's client names each pass and each session user in a request's id: the edges' count of a load's serving runs
+    on through them, and restarts only at another load (else no edge falls while users take turns)."""
+    keys = [P.release_key(eid(t, 0)) for t in ("agentic@4-r1-u1", "agentic@4-r2-u3", "chat@8-r1", "saturated2")]
+    assert [P.edge_load(k) for k in keys] == ["agentic@4", "agentic@4", "chat@8", "saturated2"]
+    assert P.edge_load(P.release_key("warm-00003")) == "warm" and P.edge_load(None) is None
+
+
 def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
     sched = Scheduler()
     done = P.install(sched, {"out": str(tmp_path), "record": True, "release_order": True})
@@ -461,7 +469,7 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
 def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_configs_object(tmp_path, monkeypatch):
     """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_windows`, a
     stand-in here), which commit each class under out/boundary/ and write a line each to boundary.<pid>.jsonl. Behind
-    the certifier's release order they also get the gate's key, each request's release; without it, none."""
+    the network attester's release order they also get the gate's key, each request's release; without it, none."""
     got: dict = {}
 
     class Windows:

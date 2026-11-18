@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 
 /-!
 # What each Definition passes on, as the record check computes it
@@ -14,7 +14,7 @@ once pushed, is the fold's.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Flock.Program
 
@@ -328,4 +328,4 @@ theorem arg_lt (args : Array Arg) (i t : Nat) (h : t < (args[i]!).seq.count) : i
 theorem passing_exit (P : Prog) (U : Scope) (i j : Nat) (h : Passing P U (U, ⟨true, i, j⟩)) : i ∈ passOf P U.d :=
   h.2 i (by rw [refOn_param]; exact List.mem_singleton.2 rfl)
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

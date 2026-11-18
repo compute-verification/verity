@@ -77,14 +77,16 @@ def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/c
 def committer_engine(llm: Any) -> SimpleNamespace:
     """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from the public names of the
     harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the harness's stand-in, which has no pin):
-    the ``vllm.LLM``, its in-process model runner, the served model, and the checkpoint's repo and revision (into its
-    geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no revision."""
+    the ``vllm.LLM``, its in-process model runner, the served model, the engine's ``VllmConfig`` and the checkpoint's repo
+    and revision (both into its geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no
+    revision."""
     from verity_vllm.engine import handle
 
     pin = getattr(llm, "pin", None)
-    mc = llm.vllm.llm_engine.vllm_config.model_config
+    vc = llm.vllm.llm_engine.vllm_config
+    mc = vc.model_config
     cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
-    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, vllm_config=vc, cp=cp)
 
 
 class CommitArm:

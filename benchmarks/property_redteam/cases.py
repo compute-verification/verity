@@ -5,8 +5,8 @@ A check is any function from a `verity.circuits.program.Program` to a verdict, a
 {class: units}}`` over `CLASSES`: ``roundings`` (casts, special functions, FP arithmetic, integer floors, mods and wraps, carries
 and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers`` (in fresh runtime index bits), ``products``
 (products of two runtime values) and ``other``.
-`CASES` are the cases, each built at full size by `Case.build()`; `run.py` grades a check against them, and `cases.json` is
-their metadata as data (`run.py --json`).
+`CASES` are the cases, each built at full size by `Case.build()`, and `cases.json` is their metadata as data
+(each case's `to_json()`).
 
 An attack case's ``verdict`` is property/v1's, ``refuse`` or ``budget``, and its ``charge`` the least charge under which
 accepting it is still sound (``{class or "any": units}``, "any" the sum over the classes), or None when no charge is (a type

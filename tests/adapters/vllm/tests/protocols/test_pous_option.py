@@ -3,8 +3,8 @@
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
 segment (`weight_store.geometry`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
-period's audit and the memory challenger are `verity.protocols.resource_accounting.memory.pous.verifier`'s and `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py`'s own; the
-memory challenger's key is the PoUS tests' test signer, its clock a counter.
+period's audit and the memory attester are `verity.protocols.resource_accounting.memory.pous.verifier`'s and `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py`'s own; the
+memory attester's key is the PoUS tests' test signer, its clock a counter.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import (
     challenger_session as CS,
 )
 from verity.protocols.resource_accounting.memory.pous.attester import (
-    memory_challenger as mc,
+    memory_attester as mc,
 )
 from verity.protocols.resource_accounting.memory.pous.prover import (
     challenger_prover as CR,
@@ -276,7 +276,7 @@ def _judges(monkeypatch) -> list:
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
-    """`PousOption.subprotocol`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
+    """`PousOption.subprotocol`: the memory attester at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits, and that its setup
     was checked by the developer, not the auditor. The Lean's tools are stand-ins that answer as the Python
     (`_judges`)."""
@@ -297,7 +297,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-device"] == (   # period.json names no deployment
-                f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
+                f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())
             assert doc["placement"]["kind"] == "own-host" and doc["placement"]["setup"] == CS.SETUP
             assert got["profile"]["placement"]["setup"] == "setup checked by the developer, not the auditor"

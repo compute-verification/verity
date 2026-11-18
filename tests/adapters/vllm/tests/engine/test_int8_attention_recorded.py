@@ -14,8 +14,6 @@ Computes that read it.
 """
 from __future__ import annotations
 
-__models__ = ("unsloth/Llama-3.1-8B",)
-
 import dataclasses
 import functools
 from pathlib import Path

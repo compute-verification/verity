@@ -51,7 +51,7 @@ message, never an edit in their tree.
 ## Where the code goes
 
 - **Exact semantics:** `verity.circuits.silicon`. A newly captured step lands there as a model with a sampled fixture
-  and an `instructions` entry (`benchmarks/tc_probe`, `tc_probe_fp4`), never as a kernel directory's own copy.
+  and an `instructions` entry (`calibration/tc_probe`, `tc_probe_fp4`), never as a kernel directory's own copy.
 - **The scheme and its verifier:** `verity/protocols/resource_accounting/compute/pouw/verifier` (stdlib only; its README, and each scheme's module
   docstring).
 - **The kernel:** a directory under `benchmarks/pouw/` like `pearl_c_sm120/` (`run.py` with `Dev` and `Pipeline`,

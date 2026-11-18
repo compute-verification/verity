@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`StopRule_v1` at small classes (4 outputs and one stop id, 5 outputs and two) and at GLM-5.3's served class (32
     outputs, its three EOS ids), and `StopRule16_v1` at the two small classes."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import stop_rule as X
 
     return [("StopRule_v1:4:1", lambda: bind(X.StopRule, T=4, NSTOP=1)),

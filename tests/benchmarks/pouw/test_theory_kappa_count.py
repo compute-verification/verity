@@ -24,9 +24,8 @@ def test_sm120():
     assert (r["kappa_vector"], r["kappa_lane"], r["kappa_table"]) == (65, 130, 520)
 
 
-def test_sm89_sm90():
-    a, h = kc.count("sm_89"), kc.count("sm_90")
-    assert (a["kappa_vector"], a["kappa_table"]) == (65, 260)
+def test_sm90():
+    h = kc.count("sm_90")
     assert (h["kappa_vector"], h["kappa_table"]) == (65, 260)
     assert h["kinds"]["LDS128"]["kappa"] == 260
     assert h["kinds"]["REDUX"]["class"] == "uniform" and h["kinds"]["REDG32"]["class"] == "none"

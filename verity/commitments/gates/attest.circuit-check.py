@@ -7,7 +7,7 @@ from typing import Any
 
 def _attest_roots() -> list[Any]:
     """The period unit (`verity.commitments.gates.attest`) at `gates.lms`' toy binding, N = 8 (`lms.TOY_N`), W = 1,
-    H = 1, over a memory challenger party's context on a device role of 8 bytes (L = 161): the three compressions of
+    H = 1, over a memory attester party's context on a device role of 8 bytes (L = 161): the three compressions of
     `period_root_message` over the arguments' bits, then the toy verifier, 82 compressions, and the domain id's one
     compression from its constant midstate with its equality. What it catches that the verifier's own binding can't is the
     messages' wiring: the tag, I's bytes, the context's length prefix and bytes, the count's bytes big-endian in both, the

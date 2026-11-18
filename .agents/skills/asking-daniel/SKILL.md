@@ -52,7 +52,7 @@ reply callout if absent; a page made with the Notion MCP needs it too.
 	**If you don't answer.** "<the default option> applies at <time PDT, day>." or, blocking: "Nothing happens; <what waits>."
 </callout>
 <callout icon="✍️" color="yellow_bg">
-	**Your reply.** Write below this line: a decision, a question or a change. Top relays it to the lane, which answers under your text starting with its handle.
+	**Your reply.** Write below this line: a decision, a question or a change. Top relays it to the lane, which answers in a comment starting with its handle.
 </callout>
 ## The problem
 Two to four short paragraphs: what is being decided, why now, what goes wrong without a decision.
@@ -114,9 +114,10 @@ recommendation; when it can't be (say, it would change a guarantee unasked), the
 
 - **Every wake**, `ask-daniel pages --as <you>` lists your asks' pages edited in the last day (`--hours H`) with Status,
   Decision and newest comment; keep a 30-minute timer while an ask is open. Top relays these too; don't wait on it.
-- **A comment**, or his text in "Your reply": revise the page, reply under his text starting with your handle
-  (`@memory-accounting:`; the Notion MCP writes as him), add an "Updates since the card" line, and set Status back to
-  Waiting on Daniel if he set Revising.
+- **A comment**, or his text in "Your reply": revise the page, answer in a comment or the page's body starting with
+  your handle (`memory-accounting (lead), 6:05 PM PST:`), add an "Updates since the card" line, and set Status back to
+  Waiting on Daniel if he set Revising. The Notion MCP writes as him, so the relay tells your note from his only by that
+  opening: never write unsigned text in "Your reply". Nothing an agent writes on the page is a decision.
 - **A decision** is the Status: **Approved** takes the recommendation, **Decided otherwise** his Decision text; a button
   or thread reply on the card counts the same, and you set Status to match. Record it with `resolve` (only the asker may)
   and as a ruling for its class of case where the next asker reads it (friction skill §3). `status` or `resolve` on a

@@ -40,7 +40,7 @@ different salts share an index is not one game's run.
 
 namespace Pouw.PearlPlus.Sample
 
-open PouwCheck.PearlPlus
+open PouwVerifier.PearlPlus
 
 /-! ## Lists -/
 
@@ -656,7 +656,7 @@ theorem wref_one_cast (k n : ℕ) : (wref 1 k n : ℚ) =
     max ((n : ℚ) * k + 32 * n * ((k / 128 : ℕ) : ℚ) - 32 * n) 0 + (k : ℚ) * (32 : ℕ) + 2 * 2 * (32 : ℕ) * n +
       (((64 : ℕ) : ℚ) + ((4 : ℕ) : ℚ)) * k := by
   unfold wref
-  simp only [FADD, WINDOW, PouwCheck.PearlPlus.R, BF16_MAC, PEEL_K, FORMING]
+  simp only [FADD, WINDOW, PouwVerifier.PearlPlus.R, BF16_MAC, PEEL_K, FORMING]
   push_cast [cast_sub_max]
   ring_nf
 
@@ -818,7 +818,7 @@ end Pouw.PearlPlus.Sample
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset Sample
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus Finset Sample
 
 /-- **The declaration a unit's record makes** before the coin: its kept width, and the rows and columns it credits, as
 `UnitRecord.credited`'s band rule filters a tile's (a real, unexcluded A row whose band holds no voluntary A row; a
@@ -852,10 +852,10 @@ whose unit `τ` commits as `c` and declares by its record (`declOf`), whose open
 on its fixed operand's noise or finds only over its inert-work bound, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
 declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
-  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCheck.PearlPlus.EpochCoins)
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwVerifier.PearlPlus.EpochCoins)
     (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ)
     (τ : Pouw.PearlC.Trace) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
-    PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
+    PouwVerifier.PearlPlus.load coins man = .ok p → TileOf p tid U g →
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨

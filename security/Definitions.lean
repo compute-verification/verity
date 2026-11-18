@@ -24,10 +24,7 @@ public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Dark
 public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
-public import Definitions.Slowdown.Capability
 public import Definitions.Slowdown.Cut
-public import Definitions.Slowdown.Formalism
-public import Definitions.Slowdown.Formalism.Instances
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -81,9 +78,6 @@ public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
-public import Definitions.Slowdown.Assumptions.Capability
-public import Definitions.Slowdown.Guarantees.Capability
-public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut
@@ -91,8 +85,6 @@ public import Definitions.Slowdown.Guarantees.CoverTraining
 public import Definitions.InferenceOnly.Guarantees.PartitionCovers
 public import Definitions.InferenceOnly.Guarantees.CompliesCK
 public import Definitions.Slowdown.Guarantees.Witnesses
-public import Definitions.Slowdown.Guarantees.Formalism
-public import Definitions.Slowdown.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions

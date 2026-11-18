@@ -13,22 +13,22 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
-from functools import cache
 import json
 import shutil
 import socket
 import subprocess
 import sys
 import threading
+from functools import cache
 from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_lean, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import setup
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -39,7 +39,7 @@ STEP_NS = 400
 TOY = {"windows": 2, "passes": 2, "samples": 4, "window_ns": 2 * STEP_NS, "deadline_ns": STEP_NS}
 """The auditor's session parameters these sessions are held to (`p2_parties.session`'s `auditor`)."""
 SESSION_ID = hashlib.sha512(b"p2-party-test/session").digest()[:32]
-"""The session id the auditor gives the memory challenger for a session (`p2_parties.Closer`)."""
+"""The session id the auditor gives the memory attester for a session (`p2_parties.Closer`)."""
 
 
 SIGNER = Path(__file__).resolve().parents[8] / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py"
@@ -47,7 +47,7 @@ SIGNER = Path(__file__).resolve().parents[8] / "tests/verity/protocols/resource_
 
 @cache
 def signer(label: bytes = b"p2-party-test/memory-challenger"):
-    """The memory challenger's key at S1's deployed parameters, which the case's check verifies at
+    """The memory attester's key at S1's deployed parameters, which the case's check verifies at
     (`pous_test_signer.AtLeaf`)."""
     spec = importlib.util.spec_from_file_location("pous_test_signer", SIGNER)
     ts = importlib.util.module_from_spec(spec)
@@ -56,7 +56,7 @@ def signer(label: bytes = b"p2-party-test/memory-challenger"):
 
 
 class MemoryLog:
-    """`memory_challenger.SessionLog` in memory: it refuses an id it holds."""
+    """`memory_attester.SessionLog` in memory: it refuses an id it holds."""
 
     def __init__(self) -> None:
         self.ids: set[bytes] = set()
@@ -68,7 +68,7 @@ class MemoryLog:
 
 
 def closer(log=None, session: bytes = SESSION_ID) -> p2_parties.Closer:
-    """The memory challenger signing a session's close: `signer()`, on a fresh log unless `log` is given."""
+    """The memory attester signing a session's close: `signer()`, on a fresh log unless `log` is given."""
     return p2_parties.Closer(signer(), MemoryLog() if log is None else log, session)
 
 
@@ -331,9 +331,8 @@ def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> No
     for lie in (lambda _req, got: got | {"units": got["units"] + 1},
                 lambda _req, got: got | {"session": got["session"] | {"samples": 1}}):
         for auditor in (p2_parties.SESSION, TOY):
-            with p2_lean.Lean(exe) as lean:
-                with pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
-                    p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
+            with p2_lean.Lean(exe) as lean, pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
+                p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
     with p2_lean.Lean(exe) as lean:
         seen = Lying(lean, "p2_hold", lambda _req, got: got)
         p2_parties.hold(seen, data, auditor=TOY)
@@ -349,7 +348,7 @@ def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> No
 
 
 def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names(store, tmp_path) -> None:
-    """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
+    """`--pous-record DIR --pous-session SID`: the registration of the setup the memory attester kept for PoUS session
     SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
     or one without a setup."""
     from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
@@ -378,8 +377,8 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
         p2_parties.pous_record(tmp_path, bare.hex())
 
 
-def test_a_session_id_the_memory_challenger_has_used_is_refused_before_any_coin(exe, store, tmp_path) -> None:
-    """The memory challenger's session log (`memory_challenger.SessionLog`) records the auditor's id before the first
+def test_a_session_id_the_memory_attester_has_used_is_refused_before_any_coin(exe, store, tmp_path) -> None:
+    """The memory attester's session log (`memory_attester.SessionLog`) records the auditor's id before the first
     coin; a second session under that id is refused before the request is read, and no coin is released for it."""
     mc.SessionLog.create(tmp_path / "sessions")
     log = mc.SessionLog(tmp_path / "sessions")
@@ -389,18 +388,24 @@ def test_a_session_id_the_memory_challenger_has_used_is_refused_before_any_coin(
     prover = []
     _, again = run(exe, store, lambda c: prover.append(Prover(store, c)) or prover[-1], request(store),
                    closer_=closer(log))
-    assert again["verdict"] == "refused" and again["reason"].startswith("the memory challenger refuses the session id")
+    assert again["verdict"] == "refused" and again["reason"].startswith("the memory attester refuses the session id")
     assert prover[0].held is None and prover[0].ended is None
 
 
-def test_the_party_takes_a_challenger_and_a_session_id_together_for_one_session(store, tmp_path) -> None:
+def test_the_party_takes_a_challenger_a_session_id_and_the_pin_together_for_one_session(store, tmp_path) -> None:
     path = tmp_path / "registration.json"
     path.write_text(json.dumps(p2_parties.registration_json(store.registration)))
     base = ["--registration", str(path)]
-    for flags, why in ((["--stdio", "--challenger", str(tmp_path)], "--challenger and --session go together"),
-                       (["--stdio", "--session", SESSION_ID.hex()], "--challenger and --session go together"),
-                       (["--stdio", "--challenger", str(tmp_path), "--session", "ab"], "64 lowercase hex"),
+    pin = ["--trusted-sha512", "ab" * 64]
+    together = "--challenger, --session and --trusted-sha512 go together"
+    for flags, why in ((["--stdio", "--challenger", str(tmp_path)], together),
+                       (["--stdio", "--session", SESSION_ID.hex()], together),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", SESSION_ID.hex()], together),
+                       (["--stdio", *pin], together),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", SESSION_ID.hex(), "--trusted-sha512",
+                         "ab"], "128 lowercase hex"),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", "ab", *pin], "64 lowercase hex"),
                        (["--listen", "127.0.0.1:0", "--sessions", "2", "--challenger", str(tmp_path), "--session",
-                         SESSION_ID.hex()], "--sessions 1")):
+                         SESSION_ID.hex(), *pin], "--sessions 1")):
         p = subprocess.run([sys.executable, "-m", p2_parties.MODULE, *base, *flags], capture_output=True, text=True)
         assert p.returncode == 2 and why in p.stderr, (flags, p.stderr)

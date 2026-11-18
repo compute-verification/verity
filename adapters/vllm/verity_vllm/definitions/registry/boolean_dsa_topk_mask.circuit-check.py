@@ -48,6 +48,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (N 9, K 8; N 7, K 3) and at GLM-5.3's row width (576 bf16) over 5 rows; and 6 rows padded to 9, and 9 padded to 16, a long
     row's shape (T >= K, N = 2K)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [
@@ -70,6 +71,7 @@ def _ties_calls_roots() -> list[Any]:
     long row's served statics, TOPK 2,048 over a block of 16,384 keys and over the longest row a unit masks whole, 40,960,
     each held to its digest pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [bind(BM.DsaRadixTiesV2, N=n, TOPK=k) for n, k in ((20, 16), (16, 8), (16384, 2048), (40960, 2048))]
@@ -79,6 +81,7 @@ def _tags_count_roots() -> list[Any]:
     """The tags and the count as one tree of counts (`DsaButterflyTagsCount_v1`), at rows of a power of two, off one and past
     one, with K below the row, at it and a power of two: reaching `DsaButterflyTag_v1` with and without a count."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [bind(BM.DsaButterflyTagsCount, N=n, K=k) for n, k in ((8, 4), (6, 4), (13, 13), (37, 9))]
@@ -92,6 +95,7 @@ def _select_calls_roots() -> list[Any]:
     and `DsaRowValidLast_v1`) and at the served ones, the merge's 2,048 slots, a block's 16,384 keys and the whole row's
     40,960."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [*(bind(BM.DsaRadixPassV2, N=n, TOPK=k) for n, k in ((20, 16), (600, 512), (40960, 2048))),

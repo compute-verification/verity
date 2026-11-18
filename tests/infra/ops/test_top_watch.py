@@ -5,6 +5,7 @@ import gzip
 import importlib.util
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -201,6 +202,41 @@ def test_a_new_comment_is_quoted_unless_it_starts_with_a_handle():
     assert len(ring.rings) == 2
 
 
+HANDLES = ["infra", "proofs", "ci", "lean", "soundness", "compute-accounting", "top"]
+AGENTS = ["soundness, Tue 17 Nov 6:05 PM PST: the lemma holds.", "soundness (lead), Tue 17 Nov 6:05 PM PST, taken as B.",
+          "proofs (lead): done.", "ci, 5:31 PM PST: green.", "infra (lead), Tue 17 Nov 6:13 PM PST, relay fixed.",
+          "lean (WIRES, Claude Opus), Tue 17 Nov 6:20 PM PST: rebuilt.", "proofs:", "proofs 03:20Z: noted.",
+          "proofs, 26 Oct 03:20Z: accepted.", "top: logged.", "@soundness: see above", "  **soundness**: B applied.",
+          "**infra (lead)**, 5:31 PM: done", "Soundness, Tuesday 6:05 pm PST: ok", "compute-accounting 17:05 UTC: rerun.",
+          "ci, Nov 17, 5:31 PM PST: merged.", "lean (lead)", "infra, 6 PM PST: up."]
+DANIELS = ["proofs, please restate", "soundness is right here", "top should decide", "B. Not trusted", "yes",
+           "infra can you check", "Go with B, but keep the tests.", "Note: keep TileChecks on the same plan.",
+           "proofs, 3 options is too many", "soundness (and lean) should agree first", "lean is wrong at 5:31",
+           "ci should rerun at 6 PM", "Why not C?", "A, at 03:20Z", "nobody: please wait", "proofsx: hmm"]
+
+
+@pytest.mark.parametrize("text", AGENTS)
+def test_an_agents_signed_note_is_the_agents(text):
+    assert T.agent_lead(HANDLES).match(text)
+
+
+@pytest.mark.parametrize("text", DANIELS)
+def test_daniels_own_text_is_his(text):
+    assert not T.agent_lead(HANDLES).match(text)
+
+
+def test_another_leads_signed_note_on_a_lanes_page_rings_nobody_and_logs_one_line(capsys):
+    n, ring, state = Notion(page("p1")), Ring(), {}
+    n.body("p1")
+    T.asks_pass(state, n, None, "ds", NOW, False, HANDLES)
+    n.body("p1", ("b1", "soundness, Tue 17 Nov 6:05 PM PST: the restated lemma covers your case."), ("b2", "Taken as B."))
+    n.comments["p1"] = [{"id": "c1", "rich_text": rt("infra (lead), Tue 17 Nov 6:13 PM PST, relay fixed.")}]
+    T.asks_pass(state, n, ring, "ds", NOW + 900, False, HANDLES)
+    assert ring.rings == [] and n.patches == []
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if "agent's note skipped" in ln]
+    assert len(lines) == 3 and "soundness, Tue 17 Nov 6:05 PM PST: the restated lemma covers'" in lines[0] and " proofs p1 " in lines[0]
+
+
 def test_a_dry_run_writes_nothing_to_notion():
     n, ring = Notion(page("p1", Approve=True)), Ring()
     n.body("p1")
@@ -231,20 +267,31 @@ def test_an_active_agent_with_no_handle_rings_top_once():
     assert [(to, "x (bc-a)" in body) for to, body, _ in ring.rings] == [("top", True)]
 
 
-def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head():
+def test_main_stalled_rings_ci_only_while_the_queue_has_a_candidate_and_once_per_main_head():
     state, ring = {}, Ring()
-    ahead = {"n": 0}
+    candidates = {"n": 0}
 
     def read():
-        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": ahead["n"]}
+        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": candidates["n"]}
 
     T.main_stalled(state, ring, NOW - 3600, read)
     T.main_stalled(state, ring, NOW, read)
     assert ring.rings == []
-    ahead["n"] = 3
+    candidates["n"] = 3
     T.main_stalled(state, ring, NOW, read)
     T.main_stalled(state, ring, NOW + 3600, read)
     assert [to for to, _, _ in ring.rings] == ["ci"] and "60 min" in ring.rings[0][1]
+    assert "the verified queue has 3 candidate(s)" in ring.rings[0][1] and "next" not in ring.rings[0][1]
+
+
+def test_the_stall_read_names_main_and_the_candidates_and_no_other_branch(monkeypatch):
+    """A read naming a branch origin no longer has fails every pass, and then a stalled main rings nobody."""
+    github = GitHub(monkeypatch)
+    monkeypatch.setattr(T, "gh_token", lambda: "dummy")
+    assert T.gh_main() == {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": 3}
+    query = json.loads(github.bodies[0])["query"]
+    assert re.findall(r'"(refs/heads/[^"]*)"', query) == ["refs/heads/main", "refs/heads/queue/"]
+    assert not re.search(r"\b(next|checked|queue-shadow)\b", query)
 
 
 def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_long_ago():
@@ -252,7 +299,7 @@ def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_l
     heads = iter(["old", "landed", "landed", "landed"])
 
     def read():
-        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "ahead": 700}
+        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "candidates": 7}
 
     for t in (NOW - 3600, NOW, NOW + 1800):
         T.main_stalled(state, ring, t, read)
@@ -266,15 +313,16 @@ class GitHub:
     the HTTP status it is told to refuse with."""
 
     def __init__(self, monkeypatch):
-        self.sent, self.status = [], None
+        self.sent, self.bodies, self.status = [], [], None
         monkeypatch.setattr(T.urllib.request, "urlopen", self.open)
 
     def open(self, req, timeout=None):
         self.sent.append(req.get_header("Authorization"))
+        self.bodies.append(req.data)
         if self.status:
             raise T.urllib.error.HTTPError(req.full_url, self.status, "refused", None, None)
-        ref = {"target": {"oid": "abc1234567", "committedDate": "2026-10-19T18:30:00Z"}, "compare": {"aheadBy": 3}}
-        return io.BytesIO(json.dumps({"data": {"repository": {"ref": ref}}}).encode())
+        repo = {"ref": {"target": {"oid": "abc1234567", "committedDate": "2026-10-19T18:30:00Z"}}, "refs": {"totalCount": 3}}
+        return io.BytesIO(json.dumps({"data": {"repository": repo}}).encode())
 
 
 def test_each_pass_reads_main_with_the_token_its_source_gives_then_never_one_from_the_loops_start(monkeypatch):
@@ -335,7 +383,7 @@ def test_a_refused_github_read_rings_infra_once_with_what_to_do_and_again_only_a
     monkeypatch.setattr(T, "gh_token", none)
     T.sweep_pass(state, ring, main)
     assert [to for to, _, _ in ring.rings] == ["infra", "infra"] and "HTTP 403" in ring.rings[1][1]
-    T.main_stalled(state, None, NOW, lambda: {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": 0})
+    T.main_stalled(state, None, NOW, lambda: {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": 0})
     T.sweep_pass(state, ring, main)
     assert len(ring.rings) == 3 and "gave no token (exit 1: GitHub refused: Bad credentials)" in ring.rings[2][1]
 

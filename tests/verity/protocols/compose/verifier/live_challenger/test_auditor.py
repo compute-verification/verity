@@ -38,7 +38,7 @@ FAMILIES = [["positions", 2], ["replay", 1]]
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-    (tmp_path / "coin-ports").write_text("# peer, its certifier coin link's ports\nvy-nebius-1 7811-7899\n")
+    (tmp_path / "coin-ports").write_text("# peer, its attester coin link's ports\nvy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -341,15 +341,15 @@ def test_the_gate_refuses_a_reserve_it_cant_check(host, signer, bad, why):
 @pytest.mark.parametrize("ports", [None, "", "vy-nebius-2 7811-7899\n", "vy-nebius-1\n", "vy-nebius-1 7811-7899 x\n",
                                    "vy-nebius-1 7810-7820\n", "vy-nebius-1 7890-7900\n", "vy-nebius-1 7820-7811\n",
                                    "vy-nebius-1 78a1\n"])
-def test_a_reserve_for_a_peer_without_a_certifier_coin_link_is_refused(host, signer, ports):
-    """A window's coins reach its peer only through the peer's certifier coin link (`CoinsConfidential`), so a peer
+def test_a_reserve_for_a_peer_without_a_attester_coin_link_is_refused(host, signer, ports):
+    """A window's coins reach its peer only through the peer's attester coin link (`CoinsConfidential`), so a peer
     with no line of /etc/vy/coin-ports, or one whose ports aren't the gate's, gets no window."""
     if ports is None:
         host.coin_ports.unlink()
     else:
         host.coin_ports.write_text(ports)
     rc, out = call(host, signer, RESERVE)
-    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"] and A.read_ledger(host.ledger) == []
+    assert rc == 3 and "has no attester coin link" in json.loads(out)["refused"] and A.read_ledger(host.ledger) == []
 
 
 def test_an_open_takes_a_port_of_its_peers_coin_link_and_its_serve_py_opens_no_tunnel(host, signer):
@@ -369,7 +369,7 @@ def test_an_open_takes_a_port_of_its_peers_coin_link_and_its_serve_py_opens_no_t
     reserved = reserve(host, signer, token="0a0b")
     host.coin_ports.write_text("")
     rc, out = call(host, signer, ["open", "--session", reserved, "--root", "0a" * 64])
-    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"]
+    assert rc == 3 and "has no attester coin link" in json.loads(out)["refused"]
 
 
 @pytest.mark.parametrize("bad, why", [

@@ -63,7 +63,7 @@ open scoped ENNReal
 /-- **`ServiceSound` from a window's Flock sessions**: when the check layer's proofs are Flock sessions `sess` that
 meet `ResourceAccounting.Guarantees.TS.SessionSoundAt`'s named premises, the check accepts a window and some sampled proof block fails
 its relation with probability at most `n_π · (δ_s + δ)`. -/
-theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
+theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwVerifier.Params)
     (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)

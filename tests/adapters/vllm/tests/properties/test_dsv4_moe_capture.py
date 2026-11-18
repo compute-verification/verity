@@ -4,8 +4,6 @@ Programs, the rows reach the routers' and the clamp's edges, the MUFU probe's ex
 `--check` finds a changed output."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import hashlib
 import json
 
@@ -15,11 +13,11 @@ from verity.circuits import library
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops import mufu as MU
+
+from tests.properties import dsv4_moe_capture_gpu as S
 from verity_vllm.definitions.numerics import dsv4_moe_twin as T
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import prims as P
-
-from tests.properties import dsv4_moe_capture_gpu as S
 
 U32 = np.uint32
 

@@ -2,7 +2,7 @@
 
     uv run python benchmarks/pouw/eps_budget.py [--json OUT] [--md OUT]
 
-ε_skip and γ are `verity_machine_model.skip`'s (benchmarks/machine_model/), whose docstring has the definition, the two
+ε_skip and γ are `verity_machine_model.skip`'s (calibration/machine_model/), whose docstring has the definition, the two
 weightings, the rates and the two pieces of served-only work it does not price. This file prints them as tables, and
 with `--json` writes every cell:
 

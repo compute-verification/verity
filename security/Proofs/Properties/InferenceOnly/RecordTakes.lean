@@ -16,7 +16,7 @@ of the wired circuit on which a row's reads land.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope fieldsOf)
 open Flock.TemplateQuery (TRange)
@@ -84,4 +84,4 @@ noncomputable def landing (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring)
     {D : Verity.Circuit} (at_ : Fin D.N → ℕ) (r : Row) : Finset (Fin D.N) :=
   Finset.univ.filter fun a => ∃ l o lo hi, RowLeaf P rs W r l o lo hi ∧ Lands P rs W S o (at_ a)
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

@@ -19,6 +19,7 @@ from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
+
 from verity_vllm.definitions.registry import act, b1
 from verity_vllm.definitions.registry import boolean_silu as BSL
 from verity_vllm.definitions.registry import prims as P

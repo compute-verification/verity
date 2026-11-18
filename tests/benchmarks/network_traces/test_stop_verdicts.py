@@ -1,5 +1,5 @@
 """The stop class's verdict records as the calculator's rows read them (`stop_verdicts`): a head is the
-registration's own, held to the digest its certificate names; a record is its verifier's, and which of the four
+registration's own, held to the digest its attestation names; a record is its verifier's, and which of the four
 verdicts it is is its verdict's format; the answer counts the execution phases held, those of a head read in which
 every class that holds a row has its four verdicts by the network attester's rule, each on that head; every other
 execution phase is charged its whole schedule, so one left out of a run's files charges what it would refused;
@@ -88,7 +88,7 @@ def head(window: int, *counts: int, parameters: bytes = TIED.digest, domain: byt
 
 
 def registration(of: C.Head) -> dict:
-    """A registration, in the verifier's format, of a head, with a certificate that names the head's digest."""
+    """A registration, in the verifier's format, of a head, with an attestation that names the head's digest."""
     return {"format": C.REGISTRATION, "link": of.link, "window": of.window, "parameters": of.parameters.hex(),
             "word_bits": C.WORD_BITS, "row_schema": C.SCHEMA,
             "tables": [{"name": e.name, "rows": e.rows, "words": e.row_bytes * 8 // C.WORD_BITS,
@@ -125,7 +125,7 @@ def by_verdict(records: list[dict]) -> dict[str, list[dict]]:
     return out
 
 
-def test_a_head_is_the_registrations_own_and_held_to_the_digest_its_certificate_names():
+def test_a_head_is_the_registrations_own_and_held_to_the_digest_its_attestation_names():
     params = schedule()
     signed = C.Head(LINK, 7, params.digest, tuple(C.Entry(name, rows, size, ZEROS, bytes([i]) * 64)
                                                   for i, (name, rows, size) in enumerate(C.tables_of(params))))
@@ -343,9 +343,9 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     whatever other it refused."""
     assert SV.CONTROLS == {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by one"),
                            CC.RESPONSE_TIE: ("id", "a released id changed"),
-                           CC.CERTIFIED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
+                           CC.ATTESTED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
                            CC.COMPUTE_AUDIT: ("output", "a committed output changed")}
-    assert SV.REASONS == {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ: "max_tokens",
+    assert SV.REASONS == {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.ATTESTED_READ: "max_tokens",
                           CC.COMPUTE_AUDIT: "output"}
     assert SV.CONTROL_FIELDS == ("run", "verifier", "control", "verdict", "reason") and SV.REASON == "reason"
     first, second, whole = head(3, 5, 0), head(4, 2, 0), LB.table(LB.inputs())
@@ -387,7 +387,7 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     # word for a refusal, and the class's line gives none for that verifier
     not_refused = at + ("the response tie's verifier the response tie's verifier at a commit did not refuse its "
                         "negative control (`id`: a released id changed) on ")
-    others = refused(CC.STOP_RECORD, CC.CERTIFIED_READ, CC.COMPUTE_AUDIT)
+    others = refused(CC.STOP_RECORD, CC.ATTESTED_READ, CC.COMPUTE_AUDIT)
     for accepted in (True, None, "false", 0):
         for reason in ("id", None, ""):
             controls = [c | {SV.REASON: reason} if i == 1 else c
@@ -597,7 +597,7 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
                 got = stop(one, records, served=[*with_streams(SERVED), doc])
                 assert got.held == 0 and got.why[4].startswith(at + f"{who} is registered at `{text}`, not `1/1`")
             assert got.why[4] == at + f"{who} is registered at `{text}`, not `1/1`", (kind, k, n)
-    # the certified read is over no sampled population and the compute audit's rate is not held: a rate or a
+    # the attested read is over no sampled population and the compute audit's rate is not held: a rate or a
     # stream's registration on their records is not read
     assert stop(one, [r | {SV.RATE: "1/8", SV.STREAM: "a digest"} if i >= 2 else r
                       for i, r in enumerate(four(first))]).held == 1
@@ -1877,7 +1877,7 @@ def test_a_control_counts_only_where_its_verifier_refused_and_a_withheld_one_is_
         assert got.why[4] == at + (f"control run of the response tie (withheld for `{over[CC.WITHHELD]}`, which is "
                                    "no refusal)") and len(got.why) == 5, over
         assert got.why[2] == f"the link {LINK}, execution phase 3, {BELOW}" + refused(
-            CC.STOP_RECORD, CC.CERTIFIED_READ, CC.COMPUTE_AUDIT), over
+            CC.STOP_RECORD, CC.ATTESTED_READ, CC.COMPUTE_AUDIT), over
         # whatever other control that verifier refused
         got = stop(one, four(first), controls=[*the_controls(), controls[1] | {CC.RUN: "a second control run"}])
         assert got.held == 0 and got.why[4] == at + (f"a second control run (withheld for `{over[CC.WITHHELD]}`, "

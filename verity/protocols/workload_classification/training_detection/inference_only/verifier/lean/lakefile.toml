@@ -10,9 +10,9 @@
 # `inference-only-rows` is the policy's check of an execution phase's circuit record, a block counted in the rows of
 # its templates' circuit files, as the core protocol `verity/inference-only/rows/v1`: it reads each file with the
 # reader SPOT's one-stage check reads it with (`core_spot`, below).
-name = "inference_only_check"
-defaultTargets = ["InferenceOnlyCheck", "inference-only-difftest", "inference-only-desc-difftest", "inference-only-desc-liveness", "inference-only-desc-fuzz", "inference-only-theta-difftest",
-  "inference-only-count-difftest", "inference-only-check", "inference-only", "inference-only-rows"]
+name = "inference_only_verifier"
+defaultTargets = ["InferenceOnlyVerifier", "inference-only-difftest", "inference-only-desc-difftest", "inference-only-desc-liveness", "inference-only-desc-fuzz", "inference-only-theta-difftest",
+  "inference-only-count-difftest", "inference-only-verifier", "inference-only", "inference-only-rows"]
 
 [leanOptions]
 autoImplicit = false
@@ -35,48 +35,48 @@ name = "core_spot"
 path = "../../../../../proofs/spot/verifier/lean"
 
 [[lean_lib]]
-name = "InferenceOnlyCheck"
+name = "InferenceOnlyVerifier"
 
 [[lean_exe]]
 name = "inference-only-difftest"
-root = "InferenceOnlyCheck.DifftestMain"
+root = "InferenceOnlyVerifier.DifftestMain"
 
 [[lean_exe]]
 name = "inference-only-desc-difftest"
-root = "InferenceOnlyCheck.DescDifftestMain"
+root = "InferenceOnlyVerifier.DescDifftestMain"
 
 [[lean_exe]]
 name = "inference-only-desc-liveness"
-root = "InferenceOnlyCheck.DescLivenessMain"
+root = "InferenceOnlyVerifier.DescLivenessMain"
 
 [[lean_exe]]
 name = "inference-only-desc-fuzz"
-root = "InferenceOnlyCheck.DescFuzzMain"
+root = "InferenceOnlyVerifier.DescFuzzMain"
 
 [[lean_exe]]
 name = "inference-only-record-difftest"
-root = "InferenceOnlyCheck.RecordDifftestMain"
+root = "InferenceOnlyVerifier.RecordDifftestMain"
 
 [[lean_exe]]
 name = "inference-only-record-check"
-root = "InferenceOnlyCheck.RecordCheckMain"
+root = "InferenceOnlyVerifier.RecordCheckMain"
 
 [[lean_exe]]
 name = "inference-only-theta-difftest"
-root = "InferenceOnlyCheck.ThetaDifftestMain"
+root = "InferenceOnlyVerifier.ThetaDifftestMain"
 
 [[lean_exe]]
 name = "inference-only-count-difftest"
-root = "InferenceOnlyCheck.CountDifftestMain"
+root = "InferenceOnlyVerifier.CountDifftestMain"
 
 [[lean_exe]]
-name = "inference-only-check"
-root = "InferenceOnlyCheck.CheckMain"
+name = "inference-only-verifier"
+root = "InferenceOnlyVerifier.CheckMain"
 
 [[lean_exe]]
 name = "inference-only"
-root = "InferenceOnlyCheck.ProtocolMain"
+root = "InferenceOnlyVerifier.ProtocolMain"
 
 [[lean_exe]]
 name = "inference-only-rows"
-root = "InferenceOnlyCheck.RowsProtocolMain"
+root = "InferenceOnlyVerifier.RowsProtocolMain"

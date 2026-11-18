@@ -174,7 +174,6 @@ public import Proofs.Flock.Claims.KS.ZkExtend
 public import Proofs.Flock.Claims.KS.ZkKSTable
 public import Proofs.Flock.Claims.KS.ZkKSTableNumbers
 public import Proofs.Flock.Claims.KS.KSTableOne
-public import Proofs.Flock.Claims.KS.ZkKSTableOne
 public import Proofs.Flock.Claims.KS.PlainUntrim
 public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.KS.PlainAccPrR

@@ -61,7 +61,7 @@ that record the premise reads is the H200's, so the properties are stated at it 
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
+open PouwCommit PouwVerifier.PearlPlus PouwVerifier.PearlPlus.Words
 
 /-- The fixed operand's noise the replay uses for tile `tid` of pass `p`: its fixed operand's, once per pass and fixed operand. -/
 def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
@@ -85,7 +85,7 @@ def PlanMeans : Prop :=
     pl.root = runCommitment pl.passes ∧
     (∀ h, i.held = some h → h.commitment = pl.root ∧ pl.source = h.source ∧ (i.source = none ∨ i.source = some h.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
-    ∃ key drawn, PouwCheck.PearlPlus.drawKey pl.source pl.root = .ok key ∧ PouwCheck.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
+    ∃ key drawn, PouwVerifier.PearlPlus.drawKey pl.source pl.root = .ok key ∧ PouwVerifier.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
       pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn
 
 /-- **What `check` accepts**: a plan, every one of whose tiles the prover opened and `checkTile` passed, on the fixed

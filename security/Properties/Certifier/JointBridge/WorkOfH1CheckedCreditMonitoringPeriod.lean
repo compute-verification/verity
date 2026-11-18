@@ -61,7 +61,7 @@ most `K / b_unit` units (`ResourceAccounting.Assumptions.HelpWithinCertifier`).
 
 namespace Properties.Certifier.JointBridge
 
-open Properties.Pouw.MonitoringPeriod PouwCheck
+open Properties.Pouw.MonitoringPeriod PouwVerifier
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **PoUW's per-period guarantee in the joint period, from H1's checked credit on the torch loop, at price `p`,

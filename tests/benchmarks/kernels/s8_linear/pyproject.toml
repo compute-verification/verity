@@ -16,7 +16,7 @@ untraced = ["test_ship_nvcc.py", "test_ship_place.py"]
 # wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate;
 # a call to wgmma.py naming no SM count reads the H200's from its card through verity.device.
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
-          "verity/device.py", "verity/channel.py", "hardware/cards/h200-sxm-141gb.toml",
+          "verity/device.py", "verity/channel.py", "calibration/hardware/cards/h200-sxm-141gb.toml",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "tools/config/verity_config",
           "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "benchmarks/kernels/ship_nvcc.sh",
           "benchmarks/kernels/ship_probe.sh", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/ship.sh",

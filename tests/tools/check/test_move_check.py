@@ -212,7 +212,7 @@ def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_
     the mover's own `only_comments`: empty or of comments and whitespace alone, it goes with its package; a docstring,
     code, or text that doesn't parse is refused, naming the file and the fix."""
     repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": held})
-    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/a100.toml", "calibration/hardware/cards/a100.toml")
     _git(repo, "rm", "-q", "verity/hardware/cards/__init__.py")
     r = _check(repo, base)
     if certified:
@@ -228,7 +228,7 @@ def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_
 def test_the_init_of_an_emptied_package_moved_by_its_row_is_certified(tmp_path):
     """The fix for one that holds code: its row sends it where it goes (the package becomes a module of its name)."""
     repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": CODE})
-    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/a100.toml", "calibration/hardware/cards/a100.toml")
     _move(repo, "verity/hardware/cards/__init__.py", "verity/hardware/cards.py")
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
@@ -1688,7 +1688,7 @@ def _why(why: str) -> str:
     return _lock(guarantees={}, runs={"L.Difftest": {"why": why, "args": ["10"]}})
 
 
-def _certifier(tmp_path: Path, edits: dict[str, str]) -> dict:
+def _attester(tmp_path: Path, edits: dict[str, str]) -> dict:
     """`proto/certifier` renamed `proto/network_attester`, which a script three levels down and a lock's run name."""
     repo, base = _repo(tmp_path, {"proto/certifier/cert.py": "X = 1\n", "proto/certifier/tests/v.json": "{}\n",
                                   "bench/e2e/enc/vectors.py": VECTORS, "L/lean-audit.json": _why(WHY)})
@@ -1698,7 +1698,7 @@ def _certifier(tmp_path: Path, edits: dict[str, str]) -> dict:
 
 
 def test_relative_path_in_a_comment_naming_a_moved_place_is_certified(tmp_path):
-    r = _certifier(tmp_path, {"bench/e2e/enc/vectors.py": VECTORS.replace("/certifier/", "/network_attester/")})
+    r = _attester(tmp_path, {"bench/e2e/enc/vectors.py": VECTORS.replace("/certifier/", "/network_attester/")})
     assert r["certified"], r["refusals"]
     assert {"path": "bench/e2e/enc/vectors.py", "kind": "python"} in r["edits"]
 
@@ -1708,18 +1708,18 @@ def test_relative_path_with_any_other_change_or_resolving_elsewhere_is_refused(t
     for i, (text, line) in enumerate([
             (moved.replace("the schema", "its schema"), "+# reads ../../../proto/network_attester/ for its schema"),
             (moved.replace("../../../", "../../"), "+    vectors.py --out ../../proto/network_attester/tests/v.json")]):
-        [f] = _certifier(tmp_path / str(i), {"bench/e2e/enc/vectors.py": text})["refusals"]
+        [f] = _attester(tmp_path / str(i), {"bench/e2e/enc/vectors.py": text})["refusals"]
         assert f["path"] == "bench/e2e/enc/vectors.py" and line in f["hunk"]
 
 
 def test_runs_why_naming_a_moved_path_from_the_root_is_certified(tmp_path):
-    r = _certifier(tmp_path, {"L/lean-audit.json": _why(WHY.replace("/certifier/", "/network_attester/"))})
+    r = _attester(tmp_path, {"L/lean-audit.json": _why(WHY.replace("/certifier/", "/network_attester/"))})
     assert r["certified"], r["refusals"]
 
 
 def test_runs_why_with_any_other_change_is_refused(tmp_path):
     why = WHY.replace("/certifier/", "/network_attester/").replace("byte for byte", "bit for bit")
-    [f] = _certifier(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
+    [f] = _attester(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
     assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]
 
 

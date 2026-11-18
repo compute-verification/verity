@@ -655,6 +655,38 @@ def test_editing_a_sub_definition_a_target_resolves_reruns_that_target(tmp_path)
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
 
 
+#: `HARNESS` listing the targets its run would check (`cli.run`'s ``listing``, ``--reached``), checking none
+LISTING = HARNESS.split("rep = cli.run(")[0] + """
+rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache", listing=True)
+print(json.dumps(sorted(label for _, label in rep["reached"])))
+"""
+
+
+def _reached(root: Path) -> list[str]:
+    r = subprocess.run([sys.executable, "-c", LISTING, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO,
+                       env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_the_targets_a_change_reaches_are_those_a_run_checks_and_none_is_checked(tmp_path):
+    """``--reached``: a change to one Definition's module reaches its targets and no other family's; one to a builder every
+    Definition imports (`syn.prims`) reaches them all; one no check reads reaches none.  Listing checks nothing: the run after
+    it checks exactly what it listed."""
+    root = _tree(tmp_path)
+    assert _reached(root) == ["SynOther_v1", "SynTop_v1"]
+    assert _run(root)["hits"] == []
+    assert _reached(root) == []
+    _edit(root, "syn/other.py", "B.call(SynAdd, b, a)", "B.call(SynAdd, a, b)")
+    assert _reached(root) == ["SynOther_v1"]
+    assert _run(root)["hits"] == ["SynTop_v1"]
+    _edit(root, "syn/prims.py", "return (a + b) & 0xFFFF", "return (b + a) & 0xFFFF")
+    assert _reached(root) == ["SynOther_v1", "SynTop_v1"]
+    _run(root)
+    (root / "syn" / "README.md").write_text("what syn is\n")
+    assert _reached(root) == []
+
+
 def test_another_binding_or_pin_reuses_every_target_and_its_own_reruns_it(tmp_path):
     """A new `_model_roots` entry, a new `TEMPLATE_PARAMS` entry, a new pin and a comment change no target's key; a target's
     own binding unit or its own pin does."""

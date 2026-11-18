@@ -30,7 +30,7 @@ import Proofs.Properties.InferenceOnly.DescAgree
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
@@ -44,4 +44,4 @@ theorem ThetaProvenance : Properties.ThetaProvenance := by
   obtain ⟨k, hk, -⟩ := (DescAgree.nodeThetaFold_ok P i.theta mask hfold).2.1 t ht
   exact ⟨k, hk⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

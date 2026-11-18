@@ -1,6 +1,6 @@
 """A stand-in for the wipe challenger's side on its own host (`wipe_challenger.main`), for `test_pous_wipe_period`'s wipe: the
 same stdin, stdout and socket, signed by a key at S1's deployed parameters whose tree holds leaf 0 alone (as
-`test_pous_memory_challenger._SparseTree`), so no deployed key is made, and timed on a counting clock and reporting the
+`test_pous_memory_attester._SparseTree`), so no deployed key is made, and timed on a counting clock and reporting the
 fixed window `WINDOW`, so no reading is the machine's. `python wipe_side.py DIR [STREAMER]` keeps its session log in
 `DIR`, and with `STREAMER` (a built `wipe_stream`) streams the fill natively and reports the streamer's gate and figures
 as `main` does."""
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_stream as WS
 
@@ -45,7 +45,7 @@ class LeafZero:
         self.public_key = lms.public_key(self.key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign_at(self.key, 0, lms.memory_challenger_message(self.key.I, session, record)).encode()
+        return lms.sign_at(self.key, 0, lms.memory_attester_message(self.key.I, session, record)).encode()
 
 
 def key_sha512() -> str:

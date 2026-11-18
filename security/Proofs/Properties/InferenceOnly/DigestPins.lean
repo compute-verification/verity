@@ -14,11 +14,11 @@ decoders build the same Definition, callees and all. `digestPins_of_entriesPin` 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
 
 /-- **Equivalent canonical entries pin the decoded Definition.** Two Program texts whose descriptors give every
 Definition `key` reaches equivalent canonical entries decode `key` to the same Definition, callees and all. -/
@@ -38,4 +38,4 @@ theorem digestPins_of_entriesPin (hE : EntriesPin) : DigestPins := by
   · exact .inr hC
   · exact .inl (hE text text' j j' P P' key k k' hP hP' hj hj' hA hk hk')
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

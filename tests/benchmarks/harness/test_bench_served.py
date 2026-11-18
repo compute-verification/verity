@@ -1,4 +1,4 @@
-"""Served variants and protocol arms: their checkpoints, settings and execution, and the Pearl-C and H1 arms' gates."""
+"""Served variants and protocol arms: their checkpoints, settings and execution, and the Pearl-C arms' gates."""
 from __future__ import annotations
 
 import json
@@ -8,42 +8,14 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench import jobs, settings
-from verity_bench.vllm.arms import (
-    H1,
-    h1_config,
-    plugin,
-    protocols_config,
-    resolve_arms,
-    window_steps,
-)
-from verity_bench.vllm.engine import (
-    H1_OPENING_STEPS,
-    PASS_COUNTS,
-    ProcessEngineFactory,
-    _pass_totals,
-    _pearl_c_run,
-    _VllmEngine,
-    arm_execution,
-    engine_args,
-)
-from verity_bench.vllm.presets import (
-    SPEC_ROOT,
-    SweepPoint,
-    expand_sweep,
-    load_spec,
-    resolve_spec,
-    served,
-)
-from verity_bench.vllm.runner import (
-    h1_gate,
-    h1_summary,
-)
+from verity_bench.vllm.arms import plugin, protocols_config, resolve_arms
+from verity_bench.vllm.engine import PASS_COUNTS, ProcessEngineFactory, _pass_totals, _pearl_c_run, arm_execution, engine_args
+from verity_bench.vllm.presets import SPEC_ROOT, load_spec, resolve_spec, served
 
 
 def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
@@ -296,115 +268,12 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
                   "kv_cache_memory_bytes")
         assert len({tuple(b[k] for k in shared) for b in built}) == 1
         assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
+    assert engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True, eager=True)["max_num_seqs"] == 128
 
     b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
     assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (
         spec.arms, spec.arm_settings, spec.setup, spec.eager, replace(spec.preset, id=b32.id))
     assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
-
-
-def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_llm_accepts():
-    """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
-    (`stock-int8`). The harness hands `verity_vllm.LLM` only H1's public parameters, T the engine's step budget and S
-    from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
-    supply them, nor S."""
-
-    from verity.errors import Refused
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import H1_SCHEME
-    from verity_vllm.llm import protocol_context, resolve_options
-
-    spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
-    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-    assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
-    assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
-    assert f"pouw:{H1_SCHEME}" == H1
-    preset, eager = served(spec.preset, spec.eager)
-    args = engine_args(preset, "int8_exact", resident=True, eager=eager)
-    assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
-    assert args["max_num_batched_tokens"] == spec.arm_settings[H1].protocols_config["pouw"]["rows"] == 64
-    assert args["max_num_seqs"] == 64 and engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True,
-                                                      eager=True)["max_num_seqs"] == 128
-    with pytest.raises(ValueError, match="eagerly only"):
-        engine_args(preset, "int8_exact", resident=True, eager=False)
-
-    b8, b32 = expand_sweep("quick")
-    assert (window_steps(b8, 64), window_steps(b32, 64)) == (130, 294)
-    config = protocols_config(arm, {})
-    assert config == {"pouw": {"rows": 64, "admission": "per-round"}}
-    assert h1_config(config, H1_OPENING_STEPS) == {"pouw": {"rows": 64, "admission": "per-round", "steps": 1}}
-    for steps in (H1_OPENING_STEPS, 294):
-        ctx = protocol_context(resolve_options({"protocols": H1, "protocols_config": h1_config(config, steps)}))
-        assert ctx.settings_of("pouw")["steps"] == steps and ctx.filled == {"pouw": ("runner", "coins", "rounds")}
-    with pytest.raises(Refused, match=r"'rows' \(T"):
-        protocol_context(resolve_options({"protocols": H1, "protocols_config": config}))
-    for named in ({"steps": 10}, {"coins": object()}, {"runner": object()}):
-        with pytest.raises(ValueError, match="each window's"):
-            h1_config({"pouw": {"rows": 64, **named}}, 294)
-
-
-def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_serving(monkeypatch):
-    """Per run, the H1 engine calls `verity_vllm.LLM.reinstall` with the run's S before serving, reads that window
-    (`pouw.h1_run`) and closes it with `LLM.close` after serving, even when serving fails; each window's summary is the
-    arm's gate, and a timed rep's is its `extras.h1_window`."""
-
-    from verity_vllm.protocols import pouw
-
-    calls: list[tuple[Any, ...]] = []
-    window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
-                             requests=[0], refused_requests=[], coins_from="in-process",
-                             details={"steps_served": 106, "static": True, "u": "1/2"}, request_gaps=lambda: [])
-
-    class LLM:
-        def reinstall(self, config: dict[str, Any]) -> None:
-            calls.append(("reinstall", config))
-
-        def close(self) -> None:
-            calls.append(("close",))
-
-    def serve(point: SweepPoint, phase: str) -> tuple[dict[str, Any], dict[str, Any]]:
-        calls.append(("serve", phase))
-        if phase == "warmup":
-            raise RuntimeError("serving failed")
-        return {}, {"extras": {}}
-
-    monkeypatch.setattr(pouw, "h1_run", lambda entry: calls.append(("h1_run", entry)) or window)
-    engine = object.__new__(_VllmEngine)
-    engine.llm, engine.h1 = LLM(), {"config": {"pouw": {"rows": 64, "admission": "per-round"}}, "rows": 64,
-                                    "windows": []}
-    monkeypatch.setattr(engine, "_serve", serve)
-    b8 = expand_sweep("quick")[0]
-    engine._run(b8, "gate")
-    with pytest.raises(RuntimeError, match="serving failed"):
-        engine._run(b8, "warmup")
-    out = engine._run(b8, "measure")[1]
-    opened = ("reinstall", {"pouw": {"rows": 64, "admission": "per-round", "steps": 130}})
-    assert calls == [opened, ("h1_run", H1), ("serve", "gate"), ("close",)] + [
-        opened, ("h1_run", H1), ("serve", "warmup"), ("close",), opened, ("h1_run", H1), ("serve", "measure"), ("close",)]
-    assert [w["phase"] for w in engine.h1["windows"]] == ["gate", "warmup", "measure"]
-    assert out["extras"]["h1_window"] is engine.h1["windows"][-1] and out["extras"]["h1_window"]["steps_served"] == 106
-    assert engine.custom_gate()["passed"]
-
-
-def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
-    def run(**over):
-        base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
-                    calls=[0, 1], requests=[0], refused_requests=[], coins_from="in-process",
-                    details={"steps_served": 120, "static": True, "u": "1/2"}, request_gaps=lambda: [])
-        return SimpleNamespace(**{**base, **over})
-
-    good = h1_summary(run())
-    assert good["ok"] and good["served_calls"] == good["credit_gate_passed"] == 2 and good["steps_served"] == 120
-    bad = [h1_summary(run(refused=[{"step": 130, "linear": 0, "m": 8}])),
-           h1_summary(run(details={"static": False})),
-           h1_summary(run(verdicts={0: {"credit": False, "reason": "credit: served-output-not-credited-kernel"}})),
-           h1_summary(run(request_gaps=lambda: ["step 3: 1 row of a request with no entry"])),
-           h1_summary(run(details={"static": True, "unopened": "refused"})),
-           h1_summary(run(verdicts={}))]
-    assert not any(b["ok"] for b in bad)
-    assert bad[2]["credit_gate_refusals"] == ["credit: served-output-not-credited-kernel"]
-    assert h1_gate([good, good])["passed"] and not h1_gate([]).get("passed")
-    gate = h1_gate([good, bad[0]])
-    assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
 
 
 def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):

@@ -12,7 +12,7 @@ import pytest
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as R
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 SCRIPT = THEORY / "fold_opt.py"
 
 

@@ -1,4 +1,4 @@
-"""a5's sampled members' sessions run one at a time: outer proofs go through the ZK server one at a time (AGENTS.md), so
+"""a5's sampled members' sessions run one at a time: the verifier takes them only one after another (`MEMBERS_ORDER`), so
 ``--session-jobs`` takes only 1, kept so the commands that pass it still run, and the proof server an audit proves its
 members on behind the ZK server (`a5.proof_server`) verifies none ahead and starts every member's Lean session loop on
 the one environment its members agree on. Its verifiers take their sessions' coin trees through the audit's relay where
@@ -24,7 +24,7 @@ def test_session_jobs_takes_one():
 
 @pytest.mark.parametrize("jobs", ["0", "2", "16"])
 def test_session_jobs_refuses_anything_else_naming_the_rule(jobs):
-    with pytest.raises(argparse.ArgumentTypeError, match="through the ZK server one at a time"):
+    with pytest.raises(argparse.ArgumentTypeError, match="MEMBERS_ORDER"):
         a5.one_session(jobs)
 
 

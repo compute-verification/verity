@@ -24,7 +24,7 @@ def _load(name: str):
 AV = _load("arith_vectors")
 
 
-def test_the_certifiers_vectors_are_the_coders():
+def test_the_attesters_vectors_are_the_coders():
     streams = [{"source": name, **make()} for name, make in AV.sources((), True, (128001,), 600)]
     got = json.loads(json.dumps({"K": AV.K, "streams": streams}))
     assert got == json.loads(AV.FIXTURE.read_text()), \

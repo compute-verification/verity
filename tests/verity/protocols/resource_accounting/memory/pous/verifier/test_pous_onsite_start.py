@@ -1,5 +1,5 @@
 """A deployment's start of PoUS's parties, the timed rounds' and the wipe's (`ProtocolDef.starts`): the memory
-challenger's key refused unless the configuration pins it, before its tree or any other input is read, and the goal each
+attester's key refused unless the configuration pins it, before its tree or any other input is read, and the goal each
 start that reads the served store or the card raises under."""
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import types
 import pytest
 
 from verity.channel import Refused
+from verity.commitments.crypto import lms
 from verity.protocol import ProtocolDef
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -18,7 +19,6 @@ from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CPR
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_prover as WR
-from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WPS
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 

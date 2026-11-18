@@ -28,16 +28,35 @@ skips the shift words no stage after it reads.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BF16, BIT, F32, I32, SelectF32
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry.topp_keep_builder import (INF, NEG_INF, ONE_F, Engine, Vec, bfly, cat, pad, put, reduce, scan,
-                                                              tree1d)
+
+from verity_vllm.definitions.registry.topp_keep_builder import (
+    INF,
+    NEG_INF,
+    ONE_F,
+    Engine,
+    Vec,
+    bfly,
+    cat,
+    pad,
+    put,
+    reduce,
+    scan,
+    tree1d,
+)
 from verity_vllm.definitions.registry.topp_split import fma32
-from verity_vllm.definitions.registry.topp_standalone import BLOCK, BLOCK_TRUNC, MAX_ROUNDS, NORMAL_CDF_TO_SIGMA, NUM_WARPS, SPT
+from verity_vllm.definitions.registry.topp_standalone import (
+    BLOCK,
+    BLOCK_TRUNC,
+    MAX_ROUNDS,
+    NORMAL_CDF_TO_SIGMA,
+    NUM_WARPS,
+    SPT,
+)
 from verity_vllm.definitions.registry.topp_word_gates import CW, EPS9, HALF, f32_word
 from verity_vllm.definitions.registry.topp_words import IREngine
 

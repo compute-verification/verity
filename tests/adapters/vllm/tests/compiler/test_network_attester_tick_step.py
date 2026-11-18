@@ -1,0 +1,197 @@
+from __future__ import annotations
+
+import dataclasses
+from types import SimpleNamespace
+
+import pytest
+
+from tests.pipeline import test_tick_step as TT
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity_vllm.compiler import replay_step as RS
+from verity_vllm.compiler import tick_step as TK
+from verity_vllm.pipeline.advice_code import schedule as SC
+from verity_vllm.pipeline.advice_code import tick_step as TS
+
+TODAY = TS.Rule(TT.TICK.bucket_us, TT.TICK.sat_us, TT.TICK.free_us)
+CHOSEN = TS.Rule(10**8, 6_303_000, 6_303_000, 18_126)
+SEVERAL = TS.Rule(10**8, 278_000_000, 152_000_000, 18_126)
+RULES = {f"{name}-{'quiet' if quiet else 'unqueued'}": dataclasses.replace(rule, quiet=quiet)
+         for name, rule in (("today", TODAY), ("chosen", CHOSEN), ("several", SEVERAL)) for quiet in (True, False)}
+
+Step = tuple[TS.State, TS.Inputs, TS.Out]
+
+
+def binding(e: SC.Engine, n: int, R: int, W: int, A: int, rule: TS.Rule, carry: int | None = None) -> dict:
+    most = max(rule.sat, rule.free) + rule.token * e.max_num_batched_tokens
+    return TK.statics(R, W, A, dataclasses.asdict(e), max(n - 1, 1).bit_length(), tau=rule.bucket, sat=rule.sat,
+                      free=rule.free, token=rule.token, quiet=rule.quiet,
+                      carry=most // rule.bucket + 1 if carry is None else carry)
+
+
+def scan(S: SimpleNamespace, rule: TS.Rule, ios: list[SC.RequestIO], released: list[int]) -> list[Step]:
+    st, cursor, out = TS.empty(S), 0, []
+    while cursor < len(ios) or st.step.running or st.step.waiting:
+        assert len(out) < 1000
+        inp = TT.inputs(S, st.step, cursor, ios, released)
+        got = TS.reference(S, rule, st, inp)
+        assert got.ok and got.state is not None
+        out.append((st, inp, got))
+        st, cursor = got.state, cursor + got.taken
+    return out
+
+
+def held(st_: dict, steps: list[Step]) -> None:
+    cases = [(st.step, st.clock, RS.Inputs(inp.arrivals, (), inp.hit, inp.evict, inp.ret, inp.row_pfx), inp.released)
+             for st, inp, _ in steps]
+    for (st, _, want), (got, clock) in zip(steps, TK.evaluate(st_, cases), strict=True):
+        assert want.state is not None and got.ok and got.state is not None
+        assert (got.rows, got.state, got.taken, got.looked, clock) == (
+            want.rows, want.state.step, want.taken, want.looked, want.state.clock), (st, want)
+
+
+def seen(steps: list[Step], rule: TS.Rule) -> set[str]:
+    out = set()
+    for st, inp, o in steps:
+        assert o.state is not None
+        jump = (not st.step.waiting and not (rule.quiet and st.step.running) and bool(inp.arrivals)
+                and st.clock < rule.close(inp.released[0]))
+        if jump:
+            out.add("jumps while running" if st.step.running else "jumps")
+        elif o.rows and st.clock // rule.bucket != o.state.clock // rule.bucket:
+            out.add("carries")
+            if o.state.clock // rule.bucket - st.clock // rule.bucket > 1:
+                out.add("carries several")
+        moved = o.state.clock - st.clock - rule.token * sum(n for *_, n in o.rows)
+        if o.rows and not jump and moved == rule.sat != rule.free:
+            out.add("saturates")
+    return out
+
+
+SMALL = [(False, 2, [(15, 10, True), (10, 8, True)], [0, 0]), (True, 2, [(15, 4, True), (10, 2, True)], [0, 0]),
+         (True, 2, [(10, 7, False), (5, 9, True)], [0, 0]),
+         (False, 15, [(4, 3, True), (4, 6, True), (4, 2, True)], [0, 1, 2]),
+         (True, 15, [(4, 2, True), (4, 6, True), (4, 2, True)], [0, 1, 2])]
+
+
+@pytest.mark.parametrize("name", RULES)
+@TT.BOTH
+def test_the_circuit_is_the_reference_on_the_plan(name: str, asy: bool) -> None:
+    rule = RULES[name]
+    e = dataclasses.replace(TT.engine(asy), enable_prefix_caching=False)
+    ios, released = TT.plan()
+    st_ = binding(e, TT.N, 4, 4, 5, rule)
+    steps = scan(SimpleNamespace(**st_), rule, ios, released)
+    held(st_, steps)
+    want = {"carries", "jumps"} | ({"saturates"} if rule.sat != rule.free else set()) | (
+        {"jumps while running"} if not rule.quiet and rule.free < rule.bucket else set()) | (
+        {"carries several"} if rule.free > rule.bucket else set())
+    assert want <= seen(steps, rule)
+
+
+@pytest.mark.parametrize("name", RULES)
+@pytest.mark.parametrize("asy, blocks, requests, released", SMALL)
+def test_the_circuit_is_the_reference_on_the_small_engines(name: str, asy: bool, blocks: int,
+                                                         requests: list[tuple[int, int, bool]], released: list[int]) -> None:
+    rule = RULES[name]
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=blocks + 1, block_size=16,
+                  async_scheduling=asy)
+    ios = [SC.RequestIO(prompt_len=p, max_tokens=o + 4 if eos else o, output_len=o, eos=eos) for p, o, eos in requests]
+    st_ = binding(e, len(ios), 2, 2, 3, rule)
+    held(st_, scan(SimpleNamespace(**st_), rule, ios, released))
+
+
+@pytest.mark.parametrize("name", RULES)
+@TT.BOTH
+def test_the_circuit_is_the_reference_on_the_replays_prefix_hits(name: str, asy: bool,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    rule = RULES[name]
+    e = TT.engine(asy)
+    ios, released = TT.plan()
+    rp, units = TT.record(monkeypatch, e, ios, released, rule)
+    st_ = binding(e, TT.N, 4, 4, 5, rule)
+    S = SimpleNamespace(**st_)
+    st, cursor, steps = TS.empty(S), 0, []
+    for u in (u for u in units if not u.idle):
+        inp = TT.inputs(S, st.step, cursor, ios, released, u)
+        out = TS.reference(S, rule, st, inp)
+        assert out.ok and out.state is not None
+        steps.append((st, inp, out))
+        st, cursor = out.state, cursor + out.taken
+    assert cursor == TT.N and any(any(inp.hit) for _, inp, _ in steps)
+    with_rows = [o for _, _, o in steps if o.rows]
+    assert [[(i, start, n) for _, i, _, start, n in o.rows] for o in with_rows] == [s.rows for s in rp.steps]
+    assert [o.state.clock for o in with_rows if o.state is not None] == rp.clock
+    held(st_, steps)
+
+
+def test_a_bucket_count_past_32_bits_is_refused() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    st_ = binding(e, 2, 2, 2, 3, CHOSEN)
+    top = (1 << TK.QW) - 1
+    one, empty = RS.Req(0, 4, 3), RS.empty(SimpleNamespace(**st_))
+    running = RS.State((dataclasses.replace(one, out=1, comp=4),), (), empty.free - 1)
+    cases = [(empty, 0, RS.Inputs((one,)), (top,)), (empty, 0, RS.Inputs((one,)), (top - 1,)),
+             (running, top * CHOSEN.bucket + CHOSEN.bucket - 1, RS.Inputs(()), ()),
+             (running, (top - 1) * CHOSEN.bucket + CHOSEN.bucket - 1, RS.Inputs(()), ())]
+    assert [o.ok for o, _ in TK.evaluate(st_, cases)] == [False, True, False, True]
+
+
+def test_a_remainder_at_a_bucket_or_past_it_is_refused() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    st_ = binding(e, 2, 2, 2, 3, CHOSEN)
+    S = SimpleNamespace(**st_)
+    empty = RS.empty(S)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), empty.free - 1)
+    at = [name for name, _n, _w in TK._in_fields(S)].index("tick_r")
+    cases = []
+    for r in (CHOSEN.bucket - 1, CHOSEN.bucket, CHOSEN.bucket + 1):
+        args = TK.arguments(S, running, 0, RS.Inputs(()), ())
+        args[at] = RS._bits(r, TK.widths(S).RW)
+        cases.append(args)
+    flat = evaluate_bits(TK.unit(**st_), *([list(c) for c in zip(*cases)])).reshape(len(cases), -1).tolist()
+    got = [TK.decode(S, row) for row in flat]
+    assert [o.ok for o, _ in got] == [True, False, False]
+    want = TS.reference(S, CHOSEN, TS.State(running, CHOSEN.bucket - 1), TS.Inputs((), ())).state
+    assert want is not None and got[0][1] == want.clock > CHOSEN.bucket
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_a_step_carries_each_count_of_buckets_up_to_carry_at_its_edge(k: int) -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    rule = TS.Rule(1000, k * 1000 + 5, k * 1000 + 5)
+    st_ = binding(e, 2, 2, 2, 3, rule, carry=4)
+    S = SimpleNamespace(**st_)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), RS.empty(S).free - 1)
+    clocks = [8 * rule.bucket - 6, 8 * rule.bucket - 5]
+    got = TK.evaluate(st_, [(running, t, RS.Inputs(()), ()) for t in clocks])
+    want = [TS.reference(S, rule, TS.State(running, t), TS.Inputs((), ())).state for t in clocks]
+    assert all(o.ok for o, _ in got) and [c for _, c in got] == [w.clock for w in want if w is not None]
+    assert [c // rule.bucket - 7 for _, c in got] == [k, k + 1]
+
+
+def test_a_bucket_count_past_32_bits_is_refused_when_several_buckets_are_added() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    rule = TS.Rule(1000, 3005, 3005)
+    st_ = binding(e, 2, 2, 2, 3, rule, carry=4)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), RS.empty(SimpleNamespace(**st_)).free - 1)
+    top = (1 << TK.QW) - 1
+    got = TK.evaluate(st_, [(running, (top - k) * rule.bucket + rule.bucket - 5, RS.Inputs(()), ()) for k in (4, 3)])
+    assert [o.ok for o, _ in got] == [True, False] and got[0][1] == top * rule.bucket
+
+
+def test_the_binding_refuses_an_advance_that_reaches_carry_buckets() -> None:
+    e = SC.Engine(max_num_seqs=8, max_num_batched_tokens=2048, max_model_len=512, num_gpu_blocks=64, block_size=16)
+    most = CHOSEN.sat + CHOSEN.token * 2048
+    binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most + 1), carry=1)
+    with pytest.raises(ValueError, match=rf"C1·T = {most} reaches CARRY = 1 buckets of TAU = {most}:"):
+        binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most), carry=1)
+    binding(e, 2, 8, 1, 9, CHOSEN, carry=1)
+    recipe = dataclasses.replace(e, max_num_batched_tokens=8192)
+    with pytest.raises(ValueError, match=r"C1·T = 154791192 reaches CARRY = 1 buckets of TAU = 100000000"):
+        binding(recipe, 2, 8, 1, 9, CHOSEN, carry=1)
+    assert binding(recipe, 2, 8, 1, 9, CHOSEN)["CARRY"] == 2
+    binding(recipe, 2, 8, 1, 9, TS.Rule(10**8, 100_000_255, 100_000_255, 12_207), carry=2)
+    with pytest.raises(ValueError, match=r"C1·T = 200000000 reaches CARRY = 2 buckets"):
+        binding(recipe, 2, 8, 1, 9, TS.Rule(10**8, 100_000_256, 100_000_256, 12_207), carry=2)
+    with pytest.raises(ValueError, match=r"A ≥ min\(M, R\) \+ 1 = 9"):
+        binding(e, 2, 8, 1, 8, CHOSEN)

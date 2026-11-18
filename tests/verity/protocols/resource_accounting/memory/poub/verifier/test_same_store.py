@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
 from verity.protocols.resource_accounting.memory.poub.prover import period_prover as PP
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties
 from verity.protocols.resource_accounting.memory.poub.verifier import period as P
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period as pous
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R

@@ -71,6 +71,15 @@ def tiny_snapshot(root: Path, arch: str = "llama", layers: int = 2, seed: int = 
 
 
 @pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
+    where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
+    unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def deterministic_cpu():
     """Two of PyTorch's CPU kernels are not deterministic: SDPA's flash kernel, and oneDNN's bf16 GEMM behind F.linear
     (the same call twice can differ, by up to 3 on 2% of a 256 x 224 output; torch 2.9 and 2.14). The tests pin SDPA's

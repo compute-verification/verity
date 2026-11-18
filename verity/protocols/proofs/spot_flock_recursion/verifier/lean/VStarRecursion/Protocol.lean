@@ -91,7 +91,7 @@ structure Own where
   circuit : String
   pub : String
   draw : String
-  registration : Option String
+  docket : Option String
   programJ : Json
   program : ByteArray
   partition : Json
@@ -154,13 +154,13 @@ def ownOf (rec_ programJ : Json) (partition : Option Json) : V Own := do
   let circuit ← digestOf (getD rec_ "circuit") "recursive: circuit"
   let pub ← digestOf (getD rec_ "public") "recursive: public"
   let draw ← digestOf (getD rec_ "draw") "recursive: draw"
-  let registration ← match getD rec_ "registration" with
+  let docket ← match getD rec_ "registration" with
     | .null => pure none
     | j => some <$> digestOf j "recursive: registration"
   let some partition := partition
     | throw "partition is null: the inner statement is set up against the verifier's own partition object"
   let .arr ps := getD rec_ "parts" | throw "recursive: parts is not a list"
-  pure { circuit, pub, draw, registration, programJ, program := (← Flock.canon programJ).toUTF8, partition,
+  pure { circuit, pub, draw, docket, programJ, program := (← Flock.canon programJ).toUTF8, partition,
          parts := ← ps.mapM partOwnOf }
 
 def paramsOfJson (j : Json) : V Params := do
@@ -323,7 +323,7 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   fits transcriptB "rec inner transcript"
   let some t := String.fromUTF8? transcriptB
     | throw "rec inner transcript: not UTF-8"
-  let reg ← o.registration.mapM fun d => do
+  let reg ← o.docket.mapM fun d => do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
     pure s
   let commits ← Flock.RecSetup.commits (some shape) (pure t) (pure reg) bound record
@@ -459,7 +459,7 @@ def statementSize (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V 
   let circuitB ← bs.get o.circuit "the inner circuit"
   let pubB ← bs.get o.pub "the inner public file"
   let sampleB ← bs.get o.draw "the inner statement's draw"
-  let regB ← o.registration.mapM fun d => bs.get d "rec inner registration"
+  let regB ← o.docket.mapM fun d => bs.get d "rec inner registration"
   let partitionB ← canonBytes o.partition
   let shapeB ← canonBytes h.shape.toJson
   let partsB ← partsSize bs 0 o.parts.toList pr.parts.toList

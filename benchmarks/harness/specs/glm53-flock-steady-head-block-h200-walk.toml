@@ -1,0 +1,31 @@
+schema = "verity-bench/steady-spec/v0"
+id = "glm53-flock-steady-head-block-h200-walk"
+# `glm53-flock-steady-head-block-h200`'s `FIRST=false` point at one prover with the unit's level walk on the card
+# (`FC_UNIT_WALK=1`): the device builds the witness's unit words itself, where that spec's prover walks them on the
+# host's CPUs. Everything else is that spec's, so the two points differ in the walk alone; a row says which walk ran
+# (`unit_walk`). Launch with `verity-bench run SPEC --direct NODE`.
+workload = "glm53"
+card = "h200"
+cores = 10
+sessions = 120
+ahead = 2
+driver = "595.91.07"
+cuda_toolkit = "13.3.73"
+setup = "benchmarks/harness/setup/flock_prover.sh"
+
+[env]
+RUST_MIN_STACK = "67108864"
+FC_UNIT_WALK = "1"
+
+[admission]
+max_minutes = 90
+mem_gb = 300
+
+[[row]]
+type = 'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+n = 256
+pin = "4b31e7caba0113987350c49cb19e8a5d18558a517aa3297986cd5f9732e4f3f9eb589b79c47a3da24870ba151250eee25fef7a2872acebc14c0e2185acb6b0b5"
+provers = [1]
+warm = 3
+period = 2
+staged = "art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430/out/row1"

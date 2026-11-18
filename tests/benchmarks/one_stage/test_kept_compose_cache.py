@@ -33,7 +33,7 @@ SERVED = {"Toy{N=1}": 16, "Toy{N=2}": 32}
 #: another window's: SERVED's first id at another Definition and statement, and its first Definition and statement at
 #: another id
 OTHER = {"Toy{N=1}": 64, "Toy{N=3}": 16}
-#: the limit the script runs the certifier's chain within where CERTIFIER_TIMEOUT is unset; no other step of V3c has it
+#: the limit the script runs network attestation's chain within where CERTIFIER_TIMEOUT is unset; no other step of V3c has it
 CHAIN_LIMIT = "4h"
 #: `test_served_verdicts.CHAIN` held until the script has written V3c's period line, the last before it waits for the
 #: chain
@@ -179,7 +179,7 @@ def test_a_window_whose_templates_differ_takes_none_of_a_kept_cache_and_composes
 
 
 def _but_the_chain(order: list[str], limits: list[str], lines: list[str]) -> tuple[list[str], list[str], list[str], str]:
-    """A V3c run's steps, limits and verdict lines without the certifier's chain's, each in the order the script wrote
+    """A V3c run's steps, limits and verdict lines without network attestation's chain's, each in the order the script wrote
     them, and the chain's line. The script starts the chain beside the warm and the audit (`v3c_proved`), so where the
     chain's step, its limit and its line fall among theirs is the scheduler's, and two runs of the same script may
     differ in it; each run has exactly one of each."""
@@ -192,7 +192,7 @@ def _but_the_chain(order: list[str], limits: list[str], lines: list[str]) -> tup
 def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_directory_as_before(tmp_path):
     """Unset or empty, the warm's and the audit's arguments name $VW/compose-cache, the warm's whole line as it was; set,
     the same arguments but for that one value at each, with the same steps in the same order, limits and verdict lines,
-    but for where the certifier's chain, which runs beside them, falls among them (`_but_the_chain`): a run whose chain
+    but for where network attestation's chain, which runs beside them, falls among them (`_but_the_chain`): a run whose chain
     ends only after V3c's period line is written, its line after theirs, compares equal to one whose chain is not held."""
     kept, got = tmp_path / "kept", {}
     for name, given, chain in (("unset", None, SV.CHAIN), ("empty", "", SV.CHAIN), ("set", str(kept), SV.CHAIN),

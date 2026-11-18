@@ -4,8 +4,6 @@ that source, and none is missing.  vLLM is its one stand-in (`tests.fake_vllm`),
 signatures; the tensors are shape-and-dtype stand-ins on a "cuda" device, so nothing here needs vLLM or a GPU."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import importlib.util
 import json
 import re

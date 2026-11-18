@@ -29,9 +29,9 @@ activation, to the gate that computes it. This module proves that the gate is as
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
-open InferenceOnlyCheck.Properties.SecurityProofs.Resolve (Good RefOk BodyOk)
+open InferenceOnlyVerifier.Properties.SecurityProofs.Resolve (Good RefOk BodyOk)
 
 /-! ## A leaf's width is its type's -/
 
@@ -740,4 +740,4 @@ theorem resolve_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
   rw [(gate_of_node P hroot hB hL hD sc₁ hsc₁ k m hk hp hm p ops sc' hg).1]
   exact hw
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

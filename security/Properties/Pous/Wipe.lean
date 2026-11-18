@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeProtocol
 public import Definitions.Pous.Accounting.Wipe
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
@@ -44,7 +44,7 @@ its honest and nontrivial lemmas, `WipeSurvivorBoundHonest` and `WipeSurvivorBou
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Verity
 open scoped ENNReal
@@ -121,4 +121,4 @@ def segmentDevice : ResourceAccounting.Device Unit := ⟨0, 2 ^ 19 * 512, fun _ 
 `certify` takes them. -/
 def segmentParams : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties

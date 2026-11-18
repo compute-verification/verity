@@ -1,4 +1,4 @@
-"""The proof system's deployment gate (``bench.placement.gate``): the ZK server, network attesters, memory challengers and
+"""The proof system's deployment gate (``bench.placement.gate``): the ZK server, network attesters, memory attesters and
 challenger each where the architecture puts them, over injected probe records and ``/proc`` readings."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ ZK_SERVER = {"product_uuid": "u-zk", "boot_id": "b-zk", "hypervisor": True, "sys
              "cpu_model": "AMD EPYC 9654"}
 CHALLENGER = {"product_uuid": "u-ch", "boot_id": "b-ch", "hypervisor": False, "sys_vendor": "Dell Inc.", "public_ip": "198.51.100.7",
               "cpu_model": "Intel Xeon 6538N"}
-#: The memory challenger inside node 2's guest: its kernel's boot id; the DMI uuid is root-only, so a user's probe lacks it.
+#: The memory attester inside node 2's guest: its kernel's boot id; the DMI uuid is root-only, so a user's probe lacks it.
 INSIDE_N2 = {"boot_id": "b-n2", "hypervisor": True, "sys_vendor": "QEMU", "public_ip": "203.0.113.2", "cpu_model": "AMD EPYC 9654"}
 
 SCOPE = "/pous-quiet.slice/run-u7.scope"
@@ -61,7 +61,7 @@ def test_the_rule_table_names_every_role_and_only_known_peers():
     assert PL.GATE_RULES["certifier"] == PL.GATE_RULES["memory-challenger"]
 
 
-def test_the_memory_challenger_inside_node_2_on_its_quiet_cores_passes():
+def test_the_memory_attester_inside_node_2_on_its_quiet_cores_passes():
     v = _mc()
     assert v["passed"] is True and v["problems"] == [] and v["schema"] == PL.GATE_SCHEMA
     assert v["peers"] == [{"name": "vy-nebius-2", "role": "worker", "relation": "same machine", "problems": []}]
@@ -77,7 +77,7 @@ def test_the_memory_challenger_inside_node_2_on_its_quiet_cores_passes():
     ({**INSIDE_N2, "product_uuid": "u-n1"}, "its product_uuid u-n1 is not the node's u-n2"),
     ({"public_ip": "203.0.113.2", "cpu_model": "AMD EPYC 9654"}, "none of machine_id, product_uuid, boot_id is recorded on both"),
 ])
-def test_a_memory_challenger_outside_the_node_it_guards_is_refused(me, why):
+def test_a_memory_attester_outside_the_node_it_guards_is_refused(me, why):
     assert f"vy-nebius-2 (worker): {why}" in _problems(_mc(me=me))
 
 
@@ -92,7 +92,7 @@ def test_every_peer_role_is_named_or_declared_absent(kw, why):
     assert why in _problems(_mc(**kw))
 
 
-def test_a_memory_challenger_sharing_the_zk_servers_or_the_challengers_machine_is_refused():
+def test_a_memory_attester_sharing_the_zk_servers_or_the_challengers_machine_is_refused():
     v = _mc(peers=GUARDED + [("zk-server", "zk", {**ZK_SERVER, "boot_id": "b-n2"})], absent=("challenger",))
     assert "zk (zk-server): they share boot_id b-n2 (one machine)" in _problems(v)
     v = _mc(peers=GUARDED + [("challenger", "ch", CHALLENGER)], absent=("zk-server",))

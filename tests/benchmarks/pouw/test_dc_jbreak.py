@@ -6,9 +6,9 @@ from pathlib import Path
 
 import gen_jbreak
 
-DC = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "dc"
+DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
 
 
 def test_probe_list_is_current():
     inc = DC / "probes" / "sm90_jbreak.inc"
-    assert inc.read_text() == gen_jbreak.render(), "run python benchmarks/pouw/dc/gen_jbreak.py"
+    assert inc.read_text() == gen_jbreak.render(), "run python calibration/pouw/dc/gen_jbreak.py"

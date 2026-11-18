@@ -7,11 +7,11 @@ This module codes three subjects, each with four codes, all prefix-free and all 
 `Codebook`:
 
 - **v0**: I1 v0's fields as the advice module defines them (`requests`; `steps` with their rows, a cache hit with its
-  sources; `release`, one bucket per kept output), the request ids aside (they are the certified ingress's `user`
+  sources; `release`, one bucket per kept output), the request ids aside (they are the attested ingress's `user`
   fields);
 - **admit**: each request's admission step, the engine step before which it joined: the timing that replaying the
   scheduler (`replay.py`) leaves;
-- **residual** (`Residual`): all that remains on a shaped egress once the fields the certified I/O determines are
+- **residual** (`Residual`): all that remains on a shaped egress once the fields the attested I/O determines are
   dropped (`derived.py`) and the scheduler is replayed: the admission steps, and the prompt and output lengths and
   cache hits the replay reads.
 
@@ -23,7 +23,7 @@ The codes:
   the previous step's (the public schedule: a running request continues, a prefill chunk fills the token budget, new rows
   are first come, first served), and a step's first release from a release clock (the registered step-time model run
   over the decoded rows, from the previous step's end or an idle engine's next delivery); for admit, the step count
-  between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
+  between two arrivals is predicted from their attested arrival buckets and the step-time model run over the replayed
   schedule, or, where a window's flag says the prediction would cost more, coded as a plain gap (the residual's other
   fields have no public conditioning on a served link, whose requests and responses are padded to fixed frame counts,
   so they keep their static tables). In both, a cache hit is keyed on the advice already decoded: its first source is a
@@ -31,7 +31,7 @@ The codes:
   its length a flag for that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time
   model online from the decoded past (a public, adaptive model).
 
-**What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
+**What a window is charged.** Window w's segment codes the requests whose attested arrival bucket is in w and the steps
 charged to w (the advice module's charge: the earliest window of an output at that step or later) with their outputs'
 releases, conditioned only on earlier segments and public data. Each segment is prefix-free (the arithmetic coder's
 segments are terminated), so the concatenation of the first m segments is, and Kraft's inequality gives
@@ -187,7 +187,7 @@ def kept_outputs(adv: Any) -> list[tuple[int, int]]:
 
 @dataclass(frozen=True)
 class Public:
-    """What the decoder may read besides the advice: each request's certified arrival bucket (its anchor, in request
+    """What the decoder may read besides the advice: each request's attested arrival bucket (its anchor, in request
     order, non-decreasing), the buckets per window T, and the number of windows W the audit covers."""
 
     anchors: tuple[int, ...]
@@ -952,7 +952,7 @@ class Hit(NamedTuple):
 @dataclass(frozen=True)
 class Residual:
     """What remains of the advice on a shaped egress (whose releases are derived from public data) once the fields the
-    certified I/O fixes are dropped (`derived.py`) and the scheduler is replayed (`replay.py`): each request's prompt
+    attested I/O fixes are dropped (`derived.py`) and the scheduler is replayed (`replay.py`): each request's prompt
     and output lengths, its first row's cache hit with its sources, and its admission step; and each resume's re-hit
     with its sources, in step order. The output length stays: the replay needs where each request stopped, which only
     the committed samples show, and the rows it would be derived from are the replay's output. The hits are whole blocks

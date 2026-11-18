@@ -267,6 +267,18 @@ def summarize(recs: list[dict]) -> tuple[dict, dict]:
     return summary, verdict
 
 
+def headline(summary: dict, verdict: dict, rounds: int, cores: int) -> str:
+    """The benchmark's numbers in one line: each kind's medians over its clean arms, its peak and its `lean` at once."""
+    s = {k: summary[k] for k in "ABC"}
+    failed = [k for k, ok in verdict.items() if not ok]
+    return (f"lean_records: build step A {s['A']['median_build_s']} s, B {s['B']['median_build_s']} s, C "
+            f"{s['C']['median_build_s']} s; tools' own CPU A {s['A']['median_tool_cpu_s']} s, B "
+            f"{s['B']['median_tool_cpu_s']} s, C {s['C']['median_tool_cpu_s']} s; peak A {s['A']['peak_gib']}, B "
+            f"{s['B']['peak_gib']}, C {s['C']['peak_gib']} GiB; lean at once A {s['A']['max_lean']}, B {s['B']['max_lean']}, "
+            f"C {s['C']['max_lean']} (medians over {s['A']['n']}, {s['B']['n']} and {s['C']['n']} clean arms, {rounds} rounds, "
+            f"{cores} cores); verdict {'pass' if not failed else 'fail: ' + ', '.join(failed)}")
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--rounds", type=int, default=3, help="rounds of the three arms after the warm-up")
@@ -313,6 +325,7 @@ def main(argv: list[str]) -> int:
     for k in "ABC":
         say(f"{k}: {summary[k]}")
     say(f"verdict {verdict}")
+    print(headline(summary, verdict, a.rounds, common.cores()), flush=True)
     return 0 if all(r["rc"] == 0 for r in recs) and all(verdict.values()) else 1
 
 

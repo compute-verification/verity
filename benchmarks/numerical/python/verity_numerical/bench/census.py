@@ -1,4 +1,4 @@
-"""The census (``benchmarks/census/`` at the repository root, data only: see its README), read directly.
+"""The census (``calibration/census/`` at the repository root, data only: see its README), read directly.
 
 Each file is loaded as ``{id: entry}`` with entries as attribute namespaces (``HARDWARE["rtx-4090/e4m3"].flop_per_second``).
 ``$VERITY_CENSUS`` points at the directory when it lives elsewhere.  The files are validated against their schemas in
@@ -38,11 +38,11 @@ __all__ = [
     "subcircuit_of",
 ]
 
-ROOT = Path(settings.VERITY_CENSUS or Path(__file__).resolve().parents[4] / "census")
+ROOT = Path(settings.VERITY_CENSUS or Path(__file__).resolve().parents[5] / "calibration" / "census")
 
 
 def raw(name: str) -> list[dict[str, Any]]:
-    """``benchmarks/census/<name>.json`` as written."""
+    """``calibration/census/<name>.json`` as written."""
     return json.loads((ROOT / f"{name}.json").read_text(encoding="utf-8"))
 
 

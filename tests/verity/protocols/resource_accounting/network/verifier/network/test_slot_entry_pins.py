@@ -21,7 +21,7 @@ ROWS = ("SlotEntry_v1:2", "SlotEntry_v1:64")
 #: the sidecar's `SelectEntry_v1` rows the pins are of, in `SELECT_ENTRY_PINS`' order
 SELECT_ROWS = ("SelectEntry_v1:2", "SelectEntry_v1:4", "SelectEntry_v1:64")
 SCRIPT = "tests/verity/protocols/resource_accounting/network/verifier/network/test_slot_entry_pins.py"
-PERIOD = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean" / "NetworkCheck" / "Period" / "Decode.lean"
+PERIOD = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean" / "NetworkVerifier" / "Period" / "Decode.lean"
 
 
 def digests(rows: tuple[str, ...] = ROWS) -> dict[str, tuple[str, str]]:
@@ -45,7 +45,7 @@ def _pinned(rows: tuple[str, ...], pins: str, what: str) -> None:
     assert tuple(d for _, d in got.values()) == getattr(PC, pins), (
         f"io_shell.{what}'s closure digests are not {pins} ({now}). If the change to {what}, or to a Definition it "
         f"reaches, is meant, re-pin: set {pins} in tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py and its Lean copy "
-        f"in NetworkCheck/Period/Decode.lean to the digests `uv run python {SCRIPT}` prints, in its order, and the descriptor "
+        f"in NetworkVerifier/Period/Decode.lean to the digests `uv run python {SCRIPT}` prints, in its order, and the descriptor "
         f"ids in their comments to the ids it prints")
 
 

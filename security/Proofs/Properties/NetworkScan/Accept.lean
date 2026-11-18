@@ -4,7 +4,7 @@ public import Aesop.BuiltinRules
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -56,8 +56,8 @@ its first argument one input node's leaves), and the Program topological (`Prog.
 namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Node Part Ty Defn)
-open InferenceOnlyCheck.Properties.SecurityProofs
-open NetworkCheck.Period
+open InferenceOnlyVerifier.Properties.SecurityProofs
+open NetworkVerifier.Period
 
 /-- Root node `k`. -/
 abbrev node (P : Prog) (k : ℕ) : Node := (P.defs[P.root]!).body.nodes[k]!
@@ -83,7 +83,7 @@ def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
 
 /-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
-  laid : InferenceOnlyCheck.Desc.rootLaidOut P = true ∧ InferenceOnlyCheck.Desc.inputsAtRoot P = true ∧ InferenceOnlyCheck.Desc.walkable P = true
+  laid : InferenceOnlyVerifier.Desc.rootLaidOut P = true ∧ InferenceOnlyVerifier.Desc.inputsAtRoot P = true ∧ InferenceOnlyVerifier.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P
   egress_batch : (node P (egressNode P)).form = .batch ∧ (node P (egressNode P)).n = s.window
   egress_ret : (callee P (egressNode P)).ret = .tuple #[.array outBits (.value 1), rowTy s]

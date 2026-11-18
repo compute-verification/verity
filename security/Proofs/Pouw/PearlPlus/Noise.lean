@@ -32,7 +32,7 @@ check's value is the spec's on the same bytes, and where the check returns a val
 
 namespace Pouw.PearlPlus.Bridge
 
-open PouwCheck.PearlPlus
+open PouwVerifier.PearlPlus
 
 /-- A byte array's bytes, as the spec's lists of naturals. -/
 def bytesNat (b : ByteArray) : List ℕ := b.data.toList.map UInt8.toNat

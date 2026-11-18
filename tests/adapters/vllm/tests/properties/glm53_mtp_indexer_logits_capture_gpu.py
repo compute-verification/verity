@@ -35,8 +35,6 @@ raises ends the script with its traceback and writes no record.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import json
 import multiprocessing
@@ -51,7 +49,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity_vllm.records.property_record import REGISTRY, seal as seal_record
+from verity_vllm.records.property_record import REGISTRY
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["glm53_mtp_indexer_logits_capture"].schema
 RECORD = "glm53_mtp_indexer_logits_capture.json"
@@ -132,7 +131,10 @@ def selection() -> dict[str, Any]:
 def launch(outdir: Path, name: str, o: dict[str, np.ndarray], seed: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """vLLM's flattening and the paged logits twice; the record and the comparison jobs."""
     import torch
-    from vllm.utils.deep_gemm import fp8_fp4_paged_mqa_logits, get_paged_mqa_logits_metadata
+    from vllm.utils.deep_gemm import (
+        fp8_fp4_paged_mqa_logits,
+        get_paged_mqa_logits_metadata,
+    )
     from vllm.utils.platform_utils import num_compute_units
     from vllm.v1.attention.backends.mla import indexer as IX
 
@@ -181,6 +183,7 @@ def launch(outdir: Path, name: str, o: dict[str, np.ndarray], seed: int) -> tupl
 
 def bind_check() -> dict[str, Any]:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa
 
     fn = bind(dsa.DsaMqaLogitV3, H=H, D=D)

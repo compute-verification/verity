@@ -12,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import ll_bf16 as LL
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -33,6 +34,7 @@ def _boolean_roots() -> list[Any]:
     rows at two W rows."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import ll_bf16 as LL
 
     HOP = BG.HopperBF16WgmmaDot16

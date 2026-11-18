@@ -39,7 +39,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.network.verifier import load_check as LK
 from verity.protocols.resource_accounting.network.attester import load_relay as LR
-from verity.protocols.resource_accounting.network.attester.certifier_key import signer
+from verity.protocols.resource_accounting.network.attester.attester_key import signer
 
 ROOT = Path(__file__).resolve().parents[6]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-tiny.json").read_text())
@@ -118,7 +118,7 @@ def odd_values() -> tuple:
     return tuple(out)
 
 
-def test_the_relayed_roots_are_registered_commits_under_the_certifiers_salts(tmp_path):
+def test_the_relayed_roots_are_registered_commits_under_the_attesters_salts(tmp_path):
     values = odd_values()
     data = os.urandom(sum(v.nbytes for v in values))
     witness = tmp_path / "witness.bin"
@@ -348,7 +348,7 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
     assert set(rep) == {"shape", "model", "values", "rows", "link_bytes", "witness_bytes", "seconds", "jobs", "workers",
                         "streams"} and [set(a) for a in rep["streams"]] == [{"weights", "witness"}] * 4, (
-        "the relay's record is witness whole (auditor.NETWORK_CERTIFIER_PUBLIC names none of it): a new key stays there")
+        "the relay's record is witness whole (auditor.NETWORK_ATTESTER_PUBLIC names none of it): a new key stays there")
     assert [sum(a[k] for a in rep["streams"]) for k in ("weights", "witness")] == [rep["link_bytes"],
                                                                                     rep["witness_bytes"]]
     assert rep == json.loads((out / "load-relay.json").read_text())

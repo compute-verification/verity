@@ -1,5 +1,5 @@
 """`b1.RMSNormFusedCuda_v2{N, EPS}` cut at its residual add, for a norm whose x is more writer rows than a unit holds:
-N / C `RMSNormFusedCudaAdd_v1{N, C, AT}` parts, each the add on C elements of x and the whole residual row, and one
+N / C `RMSNormFusedCudaAdd_v2{N, C, AT, R}` parts, each the add on C elements of x (R rows) and the whole residual row, and one
 `RMSNormFusedCudaTail_v1{N, EPS}`, v2's body after the add on the parts' r in order of AT.
 
 Nothing in `b1.py` is modified: the tail's body is v2's lines after the add, on `b1`'s own reduce and epilogue, so the parts
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from verity.circuits.defs import composite
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -34,21 +35,23 @@ def _fused_rms_tail(B, S, r, w, eps=None):
 
 
 def _fused_rms_add_refuse(S: dict) -> str | None:
-    """Why `RMSNormFusedCudaAdd_v1`'s statics bound so far name no part of the residual row, or None."""
-    N, C, AT = (S.get(k) for k in ("N", "C", "AT"))
-    if None in (N, C, AT):
-        return None
-    if not (all(type(v) is int for v in (N, C, AT)) and C >= 1 and N % C == 0 and 0 <= AT < N // C):
+    """Why `RMSNormFusedCudaAdd_v2`'s statics bound so far name no part of the residual row, or no rows of its x, or None."""
+    N, C, AT, R = (S.get(k) for k in ("N", "C", "AT", "R"))
+    if None not in (N, C, AT) and not (all(type(v) is int for v in (N, C, AT)) and C >= 1 and N % C == 0 and 0 <= AT < N // C):
         return f"part AT={AT!r} of C={C!r} elements is not one of the N / C whole parts of a residual row of N={N!r}"
+    if None not in (C, R) and not (type(R) is int and R >= 1 and type(C) is int and C % R == 0):
+        return f"x of C={C!r} elements is not R={R!r} rows of C / R"
     return None
 
 
-@composite("RMSNormFusedCudaAdd", 1, ["N", "C", "AT"],
+@composite("RMSNormFusedCudaAdd", 2, ["N", "C", "AT", "R"],
            lambda S: ((("x", Array(S.C, BF16)), ("res", Array(S.N, BF16))), Array(S.C, BF16)),
            conformance=_FUSED_SPLIT_CONFORMANCE, refuse=_fused_rms_add_refuse)
 def RMSNormFusedCudaAdd(B, S, x, res):
     """`RMSNormFusedCuda_v2{N}`'s residual add on its elements [AT·C, (AT+1)·C): ``r_i = bf16(x_i + res[AT·C + i])``, x the norm's
-    x on those C elements and res its whole residual row. `RMSNormFusedCudaTail_v1` reads the N / C parts' r in order of AT."""
+    x on those C elements and res its whole residual row. `RMSNormFusedCudaTail_v1` reads the N / C parts' r in order of AT.
+    ``R``, read by no gate, is the rows x is read as: a template's port is cut one way, so parts whose x their writers hold
+    in another number of rows are a template of their own."""
     return B.batch(P.Bf16AddF2fp, x, res[S.AT * S.C:(S.AT + 1) * S.C], axes=(0, 0))
 
 
@@ -57,5 +60,5 @@ def RMSNormFusedCudaAdd(B, S, x, res):
            conformance=_FUSED_SPLIT_CONFORMANCE)
 def RMSNormFusedCudaTail(B, S, r, w):
     """`RMSNormFusedCuda_v2{N, EPS}`'s body after the residual add (`_fused_rms_tail`) on the sum r that its
-    `RMSNormFusedCudaAdd_v1` parts write: returns (normed, r) as v2 returns (normed, res'), r the row it reads, with no gate."""
+    `RMSNormFusedCudaAdd_v2` parts write: returns (normed, r) as v2 returns (normed, res'), r the row it reads, with no gate."""
     return _fused_rms_tail(B, S, r, w)

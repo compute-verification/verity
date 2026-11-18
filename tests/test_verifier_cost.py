@@ -40,15 +40,15 @@ ALLOWED: dict[str, str] = {
     "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean":
-        "InferenceOnlyCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean":
+        "InferenceOnlyVerifier.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/DescFuzz.lean":
-        "InferenceOnlyCheck.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyCheck.DescFuzzMain): it visits every member of every "
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
+        "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean":
-        "InferenceOnlyCheck.check, the gate-by-gate reference InferenceOnlyCheck.Desc is difftested against (runs InferenceOnlyCheck.DescDifftestMain); "
-        "`inference-only-check` runs it only with --unrolled",
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Check.lean":
+        "InferenceOnlyVerifier.check, the gate-by-gate reference InferenceOnlyVerifier.Desc is difftested against (runs InferenceOnlyVerifier.DescDifftestMain); "
+        "`inference-only-verifier` runs it only with --unrolled",
     "verity/circuits/lean/Circuits/AnnotExpand.lean":
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
@@ -79,7 +79,7 @@ ALLOWED: dict[str, str] = {
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
         "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
-        "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
+        "statement as a version it doesn't serve (ProvedScope.servedForm)",
     "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to, which the soundness statements read; no check runs it: verify sets up on and "
@@ -114,7 +114,7 @@ ALLOWED: dict[str, str] = {
 
 FIX = ("a verifier does work proportional to the description, never to the unrolled circuit (AGENTS.md "
        "\"Design rules\"): summarize once per specialized Definition and multiply through batch members and scan "
-       "iterations, as InferenceOnlyCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
+       "iterations, as InferenceOnlyVerifier.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
        "with its reason")
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay

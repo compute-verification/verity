@@ -58,7 +58,6 @@ theorem live_C (c : Array ByteArray) (s : State) : Poub.Session.live (C c s) = P
 theorem record_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).record t = s.record t := rfl
 theorem deadline_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).deadline t = s.deadline t := rfl
 theorem isReleased_C (c : Array ByteArray) (s : State) (a b : Nat) : (C c s).isReleased a b = s.isReleased a b := rfl
-theorem staleBelow_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).staleBelow t = s.staleBelow t := rfl
 theorem withdrawable_C (c : Array ByteArray) (s : State) (pl : Plan) (w : Array (Int × Int)) :
     (C c s).withdrawable pl w = s.withdrawable pl w := rfl
 
@@ -345,17 +344,6 @@ theorem adv_of_keep {ws ws' : Array Win} (h : Keep ws ws') : Adv ws ws' := by
     · rw [e] at h1; exact (isSome_isNone h1 h2).elim
     · rw [e] at h1; cases h1
 
-theorem adv_trans {a b c : Array Win} (h₁ : Adv a b) (h₂ : Keep b c) : Adv a c := by
-  obtain ⟨s1, p1, n1⟩ := h₁
-  obtain ⟨s2, k⟩ := h₂
-  refine ⟨by omega, fun t d hd => ?_, fun t h1 h2 => ?_⟩
-  · have := p1 t d hd
-    rcases k t with e | ⟨l, -⟩
-    · rw [e, this]
-    · rw [dr_none (by omega)] at this; cases this
-  · rcases k t with e | ⟨-, e⟩
-    · rw [e] at h1; exact n1 t h1 h2
-    · rw [e] at h1; cases h1
 
 theorem dr_mm (ws : Array Win) (u : Nat) (f g : Win → Win) (d : Array (Nat × Nat)) (hg : ∀ w, (g w).drawn = some d)
     (t : Nat) : dr ((ws.modify u f).modify u g) t = if u = t ∧ t < ws.size then some d else dr ws t := by

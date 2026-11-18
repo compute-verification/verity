@@ -6,8 +6,6 @@ autotuned kernel binds the one config its autotuners ran; a batched-copy flush l
 launch config it does not model is refused by name, and a GEMM route it lacks leaves it incomplete."""
 from __future__ import annotations
 
-__models__ = ("unsloth/Llama-3.2-1B",)
-
 import copy
 import dataclasses
 import inspect

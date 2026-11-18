@@ -1,5 +1,5 @@
 """The LMS verifier (`verity.commitments.crypto.lms`, RFC 8554 over SHA-512) as Boolean Definitions: what a proof runs to accept
-a network certificate or a memory challenger's record without revealing it.
+a network certificate or a memory attester's record without revealing it.
 
     LmsVerify_v1{N, W, H}
         (I: Array<2, Word>, root: Value_N, message: Array<8, Word>, q: Array<H, Value<1>>, C: Value_N,

@@ -20,7 +20,7 @@ preemptions, cache hits, admissions and stops (`window`) as the vectors network 
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
 refuses a window that doesn't open on a drained engine, since the slice's replay starts from the empty one.
 `slice_inputs` gives `compile_slice.CompileSlice_v1`'s inputs for such a window in `compile_slice_smallkv.json`'s
-layout: the statics, the certified arrivals (id, P, O, and cap at AS = 1), the decisions in the scan's order, the
+layout: the statics, the attested arrivals (id, P, O, and cap at AS = 1), the decisions in the scan's order, the
 executed step count and each step's rows (slot, request, kind, start, n). The scheduler (AS) is the engine class's, the
 trace's own unless the class is the sync one (AS = 0), and it refuses a window whose schedule at that AS isn't the
 served one.

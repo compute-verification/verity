@@ -56,6 +56,7 @@ TARGET = 1000
 CALCULATOR = "uv run python benchmarks/slowdown/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
 TIED_LABEL = "The served class under the value tie: NOT SERVED, and every figure of it RESTS ON NO PoUW VERDICT"
+UNCONFIRMED = "resting on the record's count, which the Lean verifier does not confirm"
 #: `lean.status` as what the lock says of a statement
 STANDING = {"proved": "proved in the lock", "assumption": "assumption", "draft": "no Lean statement",
             "absent": "no lock lists a proof of it"}
@@ -109,8 +110,8 @@ def rests_on(p: P.Policy, b: min_cut.Bound) -> str:
         blocks = f"{p.check['executable']}, which accepts the policy"
     elif p.label == "built":
         by = "verity_vllm's block_counts" if p.division == "session" else "this benchmark's built.divisions"
-        blocks = (f"the Python count of what a block reads ({by}, on the record's description), which the Lean check "
-                  "does not establish")
+        blocks = (f"the record's count of what a block reads ({by}, on the record's description), which the Lean "
+                  "verifier does not confirm")
     else:
         blocks = "the stated c, k and work, which nothing on this tree builds or checks"
     return f"{blocks}; {b.rests_on}"
@@ -160,7 +161,8 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"  blocks    {p.division}: class {','.join(map(str, p.cls))} (slots, prompt ids, outputs), a session one slot's "
         f"{positions} positions",
         f"  c         {p.c:,} {P.UNITS['c']}",
-        f"  k         {p.k:,} {P.UNITS['k']}, made of",
+        f"  k         {p.k:,} {P.UNITS['k']}"
+        + (f", {UNCONFIRMED}" if p.label == "built" and check["verdict"] != "accepted" else "") + ", made of",
         *(f"              {bits:>{width},}  {kind}{': ' + how if how else ''}" for kind, bits, how in p.parts),
         f"              {p.unexplained:>{width},}  unexplained",
         f"  n         {p.n:,} {P.UNITS['n']}" + ("" if p.label != "built" else ", the stated policy's" + (
@@ -172,13 +174,16 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         out.append(f"  check     not run: {check['why']}")
     else:
         cost = check["cost"]
-        out.append(f"  check     {check['executable']} ({check['rule']}): complies: {str(check['complies']).lower()}"
-                   + (f", {check['failed']} failed" if not check["complies"] else ""))
+        out.append(f"  verdict   the Lean verifier's, {check['executable']} ({check['rule']}): "
+                   + ("accept" if check["complies"] else f"reject, {check['failed']} failed"))
         if not check["complies"]:
             f = check["failed"]
             same = f != "c" and check["counted"]["c"] == check["policy"]["c"]
-            out.append("            the Lean counts " + (f"c's {P.UNITS['c']} exactly, and " if same else "")
+            out.append("            the Lean verifier counts " + (f"c's {P.UNITS['c']} exactly, and " if same else "")
                        + f"{check['counted'][f]:,} {P.UNITS[f]} against {f} = {check['policy'][f]:,}: {check['why']}")
+        if r := check.get("record_count"):
+            out.append(f"            the record's count, which decides nothing: {r['fresh']:,} {P.UNITS['k']} "
+                       f"({r['held']:,} held, {r['wired']:,} wired, {r['openings']:,} openings)")
         if cost:
             out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, "
                        f"{cost['peak_mib']:,.0f} MiB peak, on an instance of {cost['instance_bytes']:,} bytes")
@@ -250,7 +255,7 @@ def tied_lines(d: dict[str, Any], file: str, words_of: Mapping[str, str] = TYPED
         f"  work      the figures are for {P.WORK_IS}",
         f"  source    {d['source']}",
         f"  c         {d['c']:,} {P.UNITS['c']}",
-        f"  k         {k:,} {P.UNITS['k']}, made of",
+        f"  k         {k:,} {P.UNITS['k']}, {UNCONFIRMED}, made of",
         *(f"              {x['bits']:>{width},}  {x['kind']}{': ' + x['how'] if x['how'] else ''}" for x in d["k_by_kind"]),
         f"  N         {_n(N)} MACs a block, in the policy's unit",
         f"  untied    at most {un['words']:,} untied words in a node's accepted execution phases for each {un['blocks']} "

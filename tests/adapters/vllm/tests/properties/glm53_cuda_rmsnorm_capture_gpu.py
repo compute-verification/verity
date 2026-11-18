@@ -16,8 +16,6 @@ Exit 0 is GO, 1 is NO-GO, and 3 is a device-gate failure (cc 9.0, 132 SMs, drive
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import hashlib
 import json
@@ -32,12 +30,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.registry import cuda_rmsnorm as M
 from verity_vllm.definitions.registry import prims as P
-
-from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.records.property_record import seal as seal_record

@@ -81,7 +81,7 @@ from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -1013,7 +1013,7 @@ class Settled:
     Programs of record.  No field is written after."""
 
     args: Options
-    #: the PoUB session (`remote_session.session_of`); None without ``--remote-verifier``
+    #: the PoUB session (`poub_session.session_of`); None without ``--remote-verifier``
     session: Any | None
     #: the source identity precheck's document, which versions.json records
     source_identity: dict[str, Any]

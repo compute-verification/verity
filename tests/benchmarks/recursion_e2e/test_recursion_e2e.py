@@ -220,8 +220,8 @@ def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path
     o = job(tmp_path)
 
     def sample(t: str, cpu: float) -> str:
-        procs = [{"pid": 7, "comm": RP.LOOP_PROCESSES[0], "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
-                 {"pid": 8, "comm": RP.LOOP_PROCESSES[0], "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
+        procs = [{"pid": 7, "comm": RP.LOOP_PROCESS, "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
+                 {"pid": 8, "comm": RP.LOOP_PROCESS, "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
                  {"pid": 9, "comm": "flock-circuit", "cpu_s": 16.0}]
         return json.dumps({"kind": "process", "t_utc": t, "processes": procs}, separators=(",", ":")) + "\n"
     (tmp_path / "resources.jsonl").write_text(sample("2026-10-24T07:17:46.6Z", 2.0) + sample("2026-10-24T07:26:27.6Z", 1177.0))
@@ -230,28 +230,7 @@ def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path
                                         "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
     assert "Lean session loop" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)["note"]
     assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RT.markdown(doc)
-    assert RP.loop_line({RP.RECORDED_LOOP: doc["summary"][RP.LOOP]}) == RP.loop_line(doc["summary"])
 
-
-def test_a_run_recorded_under_the_older_names_reads_under_todays(tmp_path: Path) -> None:
-    """A run recorded before the ZK server's names: its oprove directory ends in the older mode, its prover bucket and
-    its Lean loop's process carry the older names, and a result's rows the older mode; each reads under today's."""
-    o = job(tmp_path)
-    p = o / "steps" / "oprove" / "r1" / "out" / "oprove"
-    (p / f"L0-{ZK}").rename(p / f"L0-{RP.RECORDED_MODE}")
-    tsv = p / f"L0-{RP.RECORDED_MODE}" / "prove.tsv"
-    (older,) = RP.RECORDED_BUCKETS
-    tsv.write_text(tsv.read_text().replace("t.ligerito", older))
-    procs = [{"pid": 7, "comm": RP.LOOP_PROCESSES[1], "cpu_s": 30.0, "rss_hwm_bytes": 2**30, "threads": 8}]
-    (tmp_path / "resources.jsonl").write_text(
-        json.dumps({"kind": "process", "t_utc": "2026-10-24T07:17:46.6Z", "processes": procs}, separators=(",", ":")) + "\n")
-    doc = RP.read(o)
-    r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
-    assert r["wall_s"]["median"] == 6.0 and r["dominant"]["phase"] == RP.RECORDED_BUCKETS[older]
-    assert [e["pid"] for e in doc["summary"][RP.LOOP]] == [7]
-    rows = [{**r, "extra": {**r["extra"], "mode": RP.RECORDED_MODE}} if r["extra"].get("mode") == ZK else r
-            for r in doc["rows"]]
-    assert set(RP.merge([{**doc, "rows": rows}])["summary"]["outer"]) == {ZK, "dev"}
 
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
@@ -390,7 +369,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
     d = d.parent / f"forged-dirs-L0-{ZK}"
     d.mkdir()
-    (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")
+    (d / "prove.err").write_text("ZK-SERVER-REFUSED R7: the witness does not open the registered row; no proof\n")
     for n in (1, 2):
         lr = o / "steps" / "lean" / f"r{n}" / "out" / "lean"
         (lr / "time-forged-top-L0.txt").write_text(timev("0:04.00"))
@@ -413,7 +392,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     coef = row(doc, "outer forged-coef-L0")
     assert coef["ok"] is True and coef["note"].endswith(stop)        # the release the ZK server stopped, from its LIVE record
     outer = row(doc, "outer forged-dirs-L0")
-    assert outer["ok"] is True and outer["note"].startswith("no run finished") and "FIREWALL-REFUSED" in outer["note"]
+    assert outer["ok"] is True and outer["note"].startswith("no run finished") and "ZK-SERVER-REFUSED R7" in outer["note"]
     assert doc["summary"]["outer"][ZK]["statements"] == 1      # a forged statement is no part of the run's cost
     assert row(doc, "lean forged-top-L0")["ok"] is True
     assert row(doc, "lean forged-sum-alg-p0")["ok"] is True

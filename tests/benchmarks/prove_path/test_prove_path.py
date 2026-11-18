@@ -2033,7 +2033,7 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
         PP.committer_key(p)
 
 
-def test_window_commit_without_the_certifiers_reader_or_state_file_is_refused_by_name():
+def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_name():
     """SPOT imports neither the attester nor a benchmark, so window-commit takes the reader of the run a serve kept and
     the name the attester's scan reads the opened scan state under from its caller, and refuses by name without them."""
     for given in ({}, {"kept_ingress": lambda serve_dir: None}, {"scan_state_file": "unread"}):

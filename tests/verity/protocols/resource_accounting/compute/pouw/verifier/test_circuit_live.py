@@ -1,7 +1,8 @@
-"""`circuit.live`: `PouwLiveSlots_v1{T}` on bits is `live_ok` on words, ok = 1 iff exactly the slots [0, m) name an admitted
-request of a prefix-ordered request table, none past what its request can take in round s (`takes`), and then m is rule
-A's count (`admitted`). `PouwLiveSlots_v2{T}` on bits is `live_ok_v2`: v1's ok with each request's cap and round bound to
-the public caps, so a request takes a decode row only within its public max_tokens."""
+"""`circuit.live`: `live_ok` is 1 iff exactly the slots [0, m) name an admitted request of a prefix-ordered request table,
+none past what its request can take in round s (`takes`), and then m is rule A's count (`admitted`). `PouwLiveSlots_v2{T}`
+on bits is `live_ok_v2`: `live_ok` with each request's cap and round bound to the public caps, so a request takes a decode
+row only within its public max_tokens. `live_ok`'s cases run on v2's bits at the caps their headers state (`_bits`), where
+v2's ok is `live_ok`'s whenever every live header is round 0's with a nonzero cap."""
 from __future__ import annotations
 
 import random
@@ -24,10 +25,24 @@ def _b(v, w=32):
     return [(v >> i) & 1 for i in range(w)]
 
 
-def _bits(slot, req, m, s):
-    (ok,) = evaluate(bind(L.PouwLiveSlots, T=len(slot)), sum(map(_b, slot), []), sum((_b(x) for h in req for x in h), []),
-                     _b(m), _b(s))
+def _bits_v2(slot, req, m, s, cap):
+    (ok,) = evaluate(bind(L.PouwLiveSlotsV2, T=len(slot)), sum(map(_b, slot), []),
+                     sum((_b(x) for h in req for x in h), []), _b(m), _b(s), sum(map(_b, cap), []))
     return ok
+
+
+def _caps(req):
+    """The public caps the headers state: each live leaf's own cap, 0 past them."""
+    return [h[L.CAP] if h[L.PROMPT] else 0 for h in req]
+
+
+def _bits(slot, req, m, s):
+    """`PouwLiveSlots_v2` on bits at the caps the headers state (`_caps`)."""
+    return _bits_v2(slot, req, m, s, _caps(req))
+
+
+def _word(slot, req, m, s):
+    return L.live_ok_v2(slot, req, m, s, _caps(req))
 
 
 def _valid(rng, T, n=None, s=None):
@@ -79,7 +94,7 @@ def test_bits_are_the_word(T):
         case = _valid(rng, T)
         for _ in range(rng.randrange(3)):
             case = _mutate(rng, *case)
-        assert _bits(*case) == L.live_ok(*case)
+        assert _bits(*case) == _word(*case)
 
 
 @pytest.mark.parametrize("T", [1, 4, 8])
@@ -87,7 +102,7 @@ def test_an_accepted_round_counts_m_admitted_slots(T):
     rng = random.Random(100 + T)
     for _ in range(40):
         slot, req, m, s = _valid(rng, T)
-        assert L.live_ok(slot, req, m, s) == 1 and _bits(slot, req, m, s) == 1
+        assert L.live_ok(slot, req, m, s) == 1 and _bits(slot, req, m, s) == _word(slot, req, m, s)
         assert L.admitted(slot, req) == m <= sum(L.takes(h, s) for h in req)
 
 
@@ -129,7 +144,7 @@ def _round():
 def test_ok_iff_exactly_the_first_m_slots_name_admitted_requests(edit, want):
     slot, req, m, s = edit(*_round())
     assert L.live_ok(slot, req, m, s) == want
-    assert _bits(slot, req, m, s) == want
+    assert _bits(slot, req, m, s) == _word(slot, req, m, s) == (want and L.caps_bound(req, _caps(req)))
     if want:
         assert L.admitted(slot, req) == m
 
@@ -153,7 +168,7 @@ def _mixed():
 def test_a_mixed_round_is_held_to_each_request_s_prefill_or_decode(edit, want):
     slot, req, m, s = edit(*_mixed())
     assert L.live_ok(slot, req, m, s) == want
-    assert _bits(slot, req, m, s) == want
+    assert _bits(slot, req, m, s) == _word(slot, req, m, s)
 
 
 @pytest.mark.slow
@@ -168,50 +183,16 @@ def test_m_reaches_the_leaf_count_not_the_window_slot():
         assert L.live_ok(slot, req, m, 0) == _bits(slot, req, m, 0) == 0
 
 
-def test_ok_reads_every_slot_and_every_header_word_it_checks():
-    """Its ports are T slots, T five-word headers, m and s, in that order, to one bit; its circuit grows as T², a count of
-    each request's slots."""
-    params, ret = bind(L.PouwLiveSlots, T=8).signature()
-    assert [n for n, _ in params] == list(L.PORTS) and ret == BL.BIT
-    assert [t.leaves for _, t in params] == [8 * 32, 8 * 5 * 32, 32, 32]
-    a8, a16 = L.traced(8).counts["and"], L.traced(16).counts["and"]
-    assert a16 < 4 * a8
-
-
 @pytest.mark.parametrize("T", [0, -1, "8", 2.5, None])
 def test_t_is_a_positive_integer(T):
     with pytest.raises(ValueError, match="refuses this binding"):
-        bind(L.PouwLiveSlots, T=T)
-
-
-@pytest.mark.parametrize("T, S", [(4, 1), (8, 3)])
-def test_the_live_program_is_one_unit_a_round_of_its_one_template(T, S):
-    """The live Program's partition is S units, unit s round s's `PouwLiveSlots_v1{T}` on its rows of the slots, m and round
-    and on every header, so it evaluates to round s's ok at row s."""
-    prog = L.program(T, S, "h1/")
-    params, ret = prog.fn.signature()
-    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES] and ret.leaves == S
-    tp = P.evaluate(prog, L.query(T))
-    assert tp.population == S
-    rng, n = random.Random(T * S), max(T // 2, 1)
-    req = [[q, 0, q, S + 1, 1] if q < n else [0] * LR.HEADER for q in range(T)]
-    rounds = []
-    for _s in range(S):
-        m = rng.randrange(1, n + 1)
-        rounds.append(([q + 1 for q in rng.sample(range(n), m)] + [0] * (T - m), m))
-    if S > 1:
-        rounds[-1] = (rounds[-1][0], rounds[-1][1] + 1)
-    want = [L.live_ok(slot, req, m, s) for s, (slot, m) in enumerate(rounds)]
-    assert want[0] == 1 and (S == 1 or want[-1] == 0)
-    args = (sum((_b(v) for slot, _m in rounds for v in slot), []), sum((_b(x) for h in req for x in h), []),
-            sum((_b(m) for _slot, m in rounds), []), sum((_b(s) for s in range(S)), []))
-    assert list(evaluate(prog.fn, *args)) == want
+        bind(L.PouwLiveSlotsV2, T=T)
 
 
 @pytest.mark.parametrize("T, S", [(0, 1), (4, 0), (True, 2), (4, 2.0)])
 def test_the_live_programs_t_and_s_are_positive_integers(T, S):
     with pytest.raises(ValueError, match="positive integers"):
-        L.program(T, S)
+        L.program_v2(T, S)
 
 
 def test_the_tables_rows_are_the_statements_port_rows():
@@ -282,12 +263,6 @@ def test_the_live_tables_are_named_by_round():
         LR.table("h1/", LR.REQUESTS, 1)
 
 
-def _bits_v2(slot, req, m, s, cap):
-    (ok,) = evaluate(bind(L.PouwLiveSlotsV2, T=len(slot)), sum(map(_b, slot), []),
-                     sum((_b(x) for h in req for x in h), []), _b(m), _b(s), sum(map(_b, cap), []))
-    return ok
-
-
 def _admitted_in_round_0(rng, T, s=None):
     """A round s the v2 unit accepts: `_valid`'s with every live request admitted in round 0, and its public caps."""
     s = rng.choice([0, 1, 2, 5]) if s is None else s
@@ -339,7 +314,7 @@ def test_an_honest_fixed_length_round_is_accepted(s, slot):
 
 
 @pytest.mark.parametrize("s, slot, edit", [
-    # request 1 takes request 0's decode row in round 1, its hidden cap swapped with request 0's: v1 accepts it
+    # request 1 takes request 0's decode row in round 1, its hidden cap swapped with request 0's: `live_ok` accepts it
     (1, [2, 3, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),
     # ... and in round 2
     (2, [2, 0, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),
@@ -349,13 +324,13 @@ def test_an_honest_fixed_length_round_is_accepted(s, slot):
     (1, [1, 4, 0, 0, 0, 0, 0, 0], lambda r: r[:3] + [[3, 0, 3, 2, 1]] + r[4:]),
 ])
 def test_a_swapped_request_to_row_assignment_is_refused(s, slot, edit):
-    """The rows a round serves are the public schedule's count (`credit._length`), and v1 holds each
-    request to its hidden header's cap and round. A prover who keeps the counts but rewrites those headers moves a decode
-    row from one request to another, and v1 accepts it; v2 reads the public caps and refuses it."""
+    """The rows a round serves are the public schedule's count (`credit._length`), and `live_ok` holds each request to its
+    hidden header's cap and round. A prover who keeps the counts but rewrites those headers moves a decode row from one
+    request to another, which `live_ok` accepts; v2 reads the public caps and refuses it."""
     req, cap = _fixed()
     req = edit(req)
     m = sum(1 for x in slot if x)
-    assert L.live_ok(slot, req, m, s) == _bits(slot, req, m, s) == 1
+    assert L.live_ok(slot, req, m, s) == 1
     assert L.live_ok_v2(slot, req, m, s, cap) == _bits_v2(slot, req, m, s, cap) == 0
 
 
@@ -369,13 +344,15 @@ def test_the_live_requests_are_exactly_the_public_caps(cap):
     assert L.live_ok_v2(slot, req, 2, 1, cap) == _bits_v2(slot, req, 2, 1, cap) == 0
 
 
-def test_v2_reads_v1s_ports_and_the_public_caps():
-    """v2's ports are v1's and then T public caps, its one output the ok bit; v1's Definition is unchanged."""
+def test_v2_reads_every_slot_header_word_and_public_cap():
+    """Its ports are T slots, T five-word headers, m, s and T public caps, in that order, to one bit; its circuit grows as
+    T², a count of each request's slots."""
     params, ret = bind(L.PouwLiveSlotsV2, T=8).signature()
     assert [n for n, _ in params] == list(L.PORTS_V2) == [*L.PORTS, "cap"] and ret == BL.BIT
     assert [t.leaves for _, t in params] == [8 * 32, 8 * 5 * 32, 32, 32, 8 * 32]
-    assert bind(L.PouwLiveSlots, T=8).id == "PouwLiveSlots_v1{T=8}" and bind(L.PouwLiveSlotsV2, T=8).id == "PouwLiveSlots_v2{T=8}"
-    assert [n for n, _ in bind(L.PouwLiveSlots, T=8).signature()[0]] == list(L.PORTS)
+    assert bind(L.PouwLiveSlotsV2, T=8).id == "PouwLiveSlots_v2{T=8}"
+    a8, a16 = L.traced_v2(8).counts["and"], L.traced_v2(16).counts["and"]
+    assert a16 < 4 * a8
     with pytest.raises(ValueError, match="refuses this binding"):
         bind(L.PouwLiveSlotsV2, T=0)
 

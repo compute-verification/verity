@@ -3,14 +3,13 @@ on the RTX PRO 6000, each Definition at its edges, and the statics checked.  The
 Programs on many rows and the interpolant on all 2^23 mantissas are `tests/properties/test_dsv4_moe_capture.py`'s."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import math
 
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import act
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import prims as P

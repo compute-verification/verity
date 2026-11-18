@@ -1,5 +1,0 @@
-{
- "Claims.Sampling.Deploy.stage2": "Claims.Sampling.Deploy.secondStage",
- "Claims.SamplingGeneric.Compiled.stage2": "Claims.SamplingGeneric.Compiled.secondStage",
- "SamplingDeploy.Code.stage2": "SamplingDeploy.Code.secondStage"
-}

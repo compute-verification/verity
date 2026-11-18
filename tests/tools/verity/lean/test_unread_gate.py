@@ -4,7 +4,7 @@ to a Python file that takes away a declaration's last mention fails, naming the 
 no Lean built; a change that leaves every name somewhere, or that changes what a Lean check reads, passes; with none of the
 tree's facts it can't judge; the store lookup takes the newest recorded check's facts of a key whose bytes check out. What it
 costs: it refreshes the store only from the oldest commit it looks up, and its git calls don't grow with the seed files a
-change takes names from."""
+change takes names from. An archive reads git's output to its end, so no git is left blocked on a full pipe."""
 from __future__ import annotations
 
 import gzip
@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -341,3 +342,31 @@ def test_the_names_lean_declares_read_alike_under_any_locale_and_are_kept_by_the
 
     monkeypatch.setattr(G, "git_text", no_grep)
     assert G.declared(rev, tmp_path / "kept") == (heads, lasts)
+
+
+def test_an_archive_reads_git_s_output_to_its_end(tmp_path, monkeypatch):
+    """git writes a record of zeros after the tar's end marker when the marker leaves under 1024 bytes of its record (here
+    after one 8 KiB file), which the tar reader leaves: where a pipe holds less than a record (its user over
+    `fs.pipe-user-pages-soft`), git then blocks on it while the gate waits on git, until the suite's timeout kills both."""
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    rev = commit(root, "one file", {"f": "x" * 8192})
+    monkeypatch.chdir(root)
+    with subprocess.Popen(["git", "archive", "--format=tar", rev], stdout=subprocess.PIPE) as p:
+        with tarfile.open(fileobj=p.stdout, mode="r|") as t:
+            assert [m.name for m in t] == ["f"]
+        assert len(p.stdout.read()) == 10240, "the tar ends with a record its reader leaves"
+    made = []
+
+    class Seen(subprocess.Popen):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            made.append(self)
+
+    monkeypatch.setattr(subprocess, "Popen", Seen)
+    assert (G.archive(rev, tmp_path / "out") / "f").read_text() == "x" * 8192
+    assert len(made) == 1 and (made[0].stdout.closed or not made[0].stdout.read()), "git's output left unread"

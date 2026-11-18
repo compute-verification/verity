@@ -55,7 +55,7 @@ record's, that parses to a document whose cuts and wires SPOT's reader reads as 
 (`Spot.RecordText.wiring`: no template and no order, which no wire's rows read). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
   ∃ (text : String) (doc : Lean.Json),
-    InferenceOnlyCheck.Theta.strAt (InferenceOnlyCheck.Theta.getD record "window") "circuit" =
+    InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
       Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
 

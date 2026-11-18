@@ -18,6 +18,7 @@ from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_attention as BAT
 from verity_vllm.definitions.registry import boolean_sparse_mla_split as BSS
 from verity_vllm.definitions.registry import fa2_split as W

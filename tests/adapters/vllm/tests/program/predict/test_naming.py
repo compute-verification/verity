@@ -23,11 +23,11 @@ from typing import Any
 
 import pytest
 from verity.circuits.types import RecordType
+from verity_torch.correspondence.runtime import validate_document
 
 from tests.program.predict.test_steps import TINY, _hit, _registered
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
-from verity_torch.correspondence.runtime import validate_document
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.model import INT8_EXACT_QUANT

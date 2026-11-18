@@ -40,7 +40,7 @@ A decode step's four linears LAYERS deep, each a graph replayed REPS rounds, in 
 Throughput, outside graphs: hash_rows_b3s against a.hm96's kernels over PREFILL rows of each k, in GB/s of row bytes.
 
   python3 rows_bench.py --cubin pearl_c_sm120.cubin --rows-cubin hm96_rows.cubin --out OUT.json
-  (env: PEARLC_EXPECT_UUID; CALLS=32, REPS=30, PREFILL=8192)
+  [--expect-uuid UUID] [--calls 32] [--reps 30] [--prefill 8192] [--run NAME]
 """
 from __future__ import annotations
 
@@ -199,15 +199,19 @@ def main() -> int:
     ap.add_argument("--cubin", required=True, help="pearl_c_sm120.cu built as build.sh builds it")
     ap.add_argument("--rows-cubin", required=True, help="hm96_rows.cu built for sm_120a")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--expect-uuid", help="the UUID the one visible GPU must have (the lease's)")
+    ap.add_argument("--calls", type=int, default=32)
+    ap.add_argument("--reps", type=int, default=30)
+    ap.add_argument("--prefill", type=int, default=8192)
+    ap.add_argument("--run", default="local", help="the run the record names")
     args = ap.parse_args()
     R = load("gpu1_run", SM120 / "run.py")
     vp, u64, P = C.c_void_p, C.c_uint64, C.POINTER
     image, rimage = Path(args.cubin).read_bytes(), Path(args.rows_cubin).read_bytes()
     dev = R.Dev(image)
-    refused = dev.identity(os.environ.get("PEARLC_EXPECT_UUID"))
-    calls, reps, prefill = int(os.environ.get("CALLS", "32")), int(os.environ.get("REPS", "30")), int(os.environ.get("PREFILL", "8192"))
-    res: dict = {"schema": "verity-pouw/served-zk-rows-bench/v0",
-                 "run": os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local",
+    refused = dev.identity(args.expect_uuid)
+    calls, reps, prefill = args.calls, args.reps, args.prefill
+    res: dict = {"schema": "verity-pouw/served-zk-rows-bench/v0", "run": args.run,
                  "device": dev.name, "uuid": dev.uuid, "sms": dev.sms, "cubin_sha256": hashlib.sha256(image).hexdigest(),
                  "rows_cubin_sha256": hashlib.sha256(rimage).hexdigest(), "refused": refused, "m_real": M_REAL,
                  "shapes": {s: list(v) for s, v in SHAPES.items()}, "layers": LAYERS, "calls": calls, "reps": reps,

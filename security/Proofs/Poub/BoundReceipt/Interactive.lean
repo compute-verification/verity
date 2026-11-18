@@ -278,10 +278,4 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
     rfl
 
 
-/-- At a node whose answers ignore the mix, `BoundReceiptLinkInteractive` is `BoundReceiptLink`. -/
-theorem boundReceiptLink_of_interactive : ResourceAccounting.Guarantees.BoundReceiptLink :=
-  fun N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hm =>
-    BoundReceiptLinkInteractive N a b h S L q Lz qz s k m F cTag cEnc w Fz lam (InteractiveNode.ofNode A)
-      (InteractiveNode.ofNode_queryDetermined A) hm
-
 end ResourceAccounting.SecurityProofs

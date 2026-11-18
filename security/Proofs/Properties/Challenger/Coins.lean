@@ -2,7 +2,7 @@ module
 
 public import Properties.Challenger
 public import Proofs.Properties.Pouw.LiveSalt.Coin
-public import Proofs.Properties.Pous.MemoryChallenger.Attest
+public import Proofs.Properties.Pous.MemoryAttester.Attest
 
 /-!
 # The coins a sample reads are the ones the run released
@@ -37,8 +37,8 @@ namespace Properties.Challenger.Coins
 
 open Lean (Json)
 open Spot Spot.Challenger
-open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size hash_size)
-open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind climbL_climbRec)
+open MemoryAttester.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size hash_size)
+open MemoryAttester.Attest.Properties.SecurityProofs (climbRec climb_bind climbL_climbRec)
 open Properties.Pouw.LiveSalt (jsonStrIs_eq)
 open Properties.Pouw.LiveSalt.Coin (leafMsg coin_eq reason_ok)
 
@@ -126,10 +126,10 @@ theorem climbL_eq (d : Flock.FV3.Sha512.Domain) (path : List ByteArray) (cur : B
 
 /-- The node frames `Registered.climbL` hashes are `Attest`'s `climbInputs`. -/
 theorem frames_eq (d : Flock.FV3.Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
-    climbFrames d.id cur idx l path = MemoryChallenger.Attest.Properties.climbInputs d l idx cur path
+    climbFrames d.id cur idx l path = MemoryAttester.Attest.Properties.climbInputs d l idx cur path
   | [], _, _, _ => rfl
   | sib :: rest, cur, idx, l => by
-    simp only [climbFrames, MemoryChallenger.Attest.Properties.climbInputs, shift_eq]
+    simp only [climbFrames, MemoryAttester.Attest.Properties.climbInputs, shift_eq]
     split <;> exact congrArg _ (frames_eq d rest _ _ _)
 
 theorem log2ceil_pow (D : Nat) : Flock.log2ceil (2 ^ D) = D := by

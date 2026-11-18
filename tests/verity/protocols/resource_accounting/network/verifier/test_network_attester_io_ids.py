@@ -1,5 +1,5 @@
 """The ingress-ids tie on a fake upstream Commit and the network attester's own ingress (`io_ids`): each prompt id the
-network attester certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
+network attester attested on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
 and every prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions.
 The first negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the
 model could compute on another prompt of the same length."""

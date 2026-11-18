@@ -190,6 +190,32 @@ def test_interleaved_imma_ffma_beats_r1_and_kffma0(tmp_path, census, capsys):
     assert "2 rows beaten" in out and "R1 " in out and "[ε]" in out and "KFFMA0" in out
 
 
+def test_no_timed_program_beats_no_facet_and_fails(tmp_path, capsys):
+    path = _records(tmp_path)
+    for flags in ([], ["--json"]):
+        assert loads.main(["summary", str(path), "--epoch", EPOCH, *flags]) == 2
+        out, err = capsys.readouterr()
+        assert "no facet beaten" not in out and "no program was timed" in err
+
+
+def test_record_writes_the_largest_load_and_a_failed_gate_or_no_program_writes_none(tmp_path, census, no_gpu):
+    path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
+    for name, args, rc in (("ok", [], 1), ("gate", ["--failed", "a chunk's gate exited 1"], 1)):
+        out = tmp_path / name
+        assert loads.main(["summary", str(path), "--epoch", EPOCH, "--json", "--record", str(out), *args]) == rc
+        doc = json.loads((out / "result.json").read_text())
+        assert doc["validation"]["status"] == ("passed" if name == "ok" else "failed")
+    [m] = json.loads((tmp_path / "ok" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["unit"], m["mark"], m["row"], m["programs"], m["host"]["card"]) == (
+        loads.METRIC, "load", "measured", "KFFMA0", 3, "none")
+    assert m["value"] == pytest.approx(1.0296, abs=1e-4)
+    assert json.loads((tmp_path / "gate" / "result.json").read_text())["measurements"] == []
+    empty, out = _records(tmp_path / "empty"), tmp_path / "none"
+    assert loads.main(["summary", str(empty), "--epoch", EPOCH, "--record", str(out)]) == 2
+    doc = json.loads((out / "result.json").read_text())
+    assert doc["validation"]["detail"] == "no program was timed" and doc["measurements"] == []
+
+
 def test_refit_is_the_hull_at_the_margin(tmp_path, capsys):
     path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
     assert loads.main(["refit", str(path), "--row", "R1", "--epoch", EPOCH]) == 0

@@ -9,7 +9,7 @@
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
 # it for an installed COMMIT skips the unpack and reads no TAR, and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/remote_session verity/protocols/resource_accounting/memory/poub/attester/live_verifier tools/research/src/research \
+#   git archive COMMIT verity benchmarks/poub_session verity/protocols/resource_accounting/memory/poub/attester/live_verifier tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }
@@ -24,7 +24,7 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py tools/research/src/research/store/cli.py; do
+  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"

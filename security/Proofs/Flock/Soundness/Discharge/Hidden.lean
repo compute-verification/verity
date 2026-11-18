@@ -22,7 +22,6 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit

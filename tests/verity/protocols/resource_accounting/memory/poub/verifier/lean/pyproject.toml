@@ -69,7 +69,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/memory/pous/prover",
           "verity/commitments/identity/lakefile.toml",
           "verity/commitments/identity/lake-manifest.json", "verity/commitments/identity/lean-toolchain",
-          # the memory challenger's party, whose kept setup (`keep`) test_p2_party.py registers a store from
+          # the memory attester's party, whose kept setup (`keep`) test_p2_party.py registers a store from
           "verity/protocols/resource_accounting/memory/pous/attester/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/attester/challenger_party.py",
           "verity/protocols/resource_accounting/memory/pous/attester/lean/lakefile.toml",

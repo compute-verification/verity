@@ -47,6 +47,8 @@ row: the Lean verifier checks each read's path (`registered.verify_read`).
   `steps` counts the window's executed steps still to come.
 - `queue` is the arrivals in certified order, the step's `arr_*` the A at `qh`; `dec` the decisions, the step's `bits`
   the A at `dh`, and `left` counts them.
+- With TAU (the tick's bucket; 0 for none) the state ends with `tick_step.TickStep_v1`'s T = q·TAU + r (`tick_q`, `tick_r`)
+  and an arrival with its bucket, in `TickAdvance_v1`, `TickLoad_v1`, `TickClose_v1`: the load copies T, which the carry holds.
 - Widths, from the size class and the public config (`widths`): LW = bitlen(L), BW = bitlen(NB), AC = bitlen(A),
   QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's and EW a walk entry's.
 - In every row the valid elements of each group are a prefix and the rest are zero bits, as are `dec`'s bits past
@@ -113,6 +115,8 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
+from verity_vllm.compiler import tick_step as TK
+
 VALUE = "replay-state"
 WINDOW = "replay-window"
 WORD_BITS = 16
@@ -133,7 +137,7 @@ class Shape:
     """The public size class: ReplayStep_v1's R running slots, W waiting slots and A arrivals a step, the engine's
     max_model_len L and num_gpu_blocks NB, a request id's width IW; the chain's Q pending arrivals, D decisions and P
     steps a window, and the network attester's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1)
-    and its walk entries' width EW (0 for none)."""
+    and its walk entries' width EW (0 for none); and the certified tick's bucket TAU (0 for none)."""
 
     R: int
     W: int
@@ -147,19 +151,20 @@ class Shape:
     K: int
     AS: int = 0
     EW: int = 0
+    TAU: int = 0
 
     def __post_init__(self) -> None:
         for f in fields(self):
             v = getattr(self, f.name)
             if not isinstance(v, int) or isinstance(v, bool):
                 raise ValueError(f"{f.name} is an integer, not {v!r}")
-            if f.name not in ("AS", "EW") and v < 1:
+            if f.name not in ("AS", "EW", "TAU") and v < 1:
                 raise ValueError(f"{f.name} is a positive integer, not {v!r}")
-        if self.AS not in (0, 1) or self.EW < 0:
-            raise ValueError(f"AS is 0 or 1 and EW at least 0, not {self.AS!r} and {self.EW!r}")
+        if self.AS not in (0, 1) or self.EW < 0 or self.TAU < 0:
+            raise ValueError(f"AS is 0 or 1 and EW and TAU at least 0, not {self.AS!r}, {self.EW!r} and {self.TAU!r}")
 
     def statics(self) -> dict[str, int]:
-        return {k: getattr(self, k) for k in STATICS}
+        return _statics(self)
 
     @property
     def width(self) -> int:
@@ -178,18 +183,19 @@ class Shape:
 
 def widths(S: Shape) -> SimpleNamespace:
     return SimpleNamespace(LW=_bitlen(S.L), BW=_bitlen(S.NB), AC=_bitlen(S.A), QW=_bitlen(S.Q), DW=_bitlen(S.D),
-                           PW=_bitlen(S.P))
+                           PW=_bitlen(S.P), RW=_bitlen(getattr(S, "TAU", 0) - 1))
 
 
 def state_fields(S: Shape) -> list[tuple[str, int, int]]:
     """ReplayStep_v1's state, its `_in_fields`' and `_out_fields`' order and widths: with EW `run_pfx` after
-    `run_comp`, with AS the async group after `free`."""
+    `run_comp`, with AS the async group after `free`; with TAU, TickStep_v1's, the clock last."""
     Z, R, W = widths(S), S.R, S.W
     return ([("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
              ("run_comp", R, Z.LW)] + ([("run_pfx", R, S.EW)] if S.EW else [])
             + [("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW), ("wait_out", W, Z.LW),
                ("free", 1, Z.BW)]
-            + ([("run_fin", R, 1), ("run_cap", R, 1), ("wait_cap", W, 1)] if S.AS else []))
+            + ([("run_fin", R, 1), ("run_cap", R, 1), ("wait_cap", W, 1)] if S.AS else [])
+            + ([("tick_q", 1, TK.QW), ("tick_r", 1, Z.RW)] if getattr(S, "TAU", 0) else []))
 
 
 def running_names(S: Shape) -> tuple[str, ...]:
@@ -204,13 +210,13 @@ def waiting_names(S: Shape) -> tuple[str, ...]:
 
 def arrival_names(S: Shape) -> tuple[str, ...]:
     """An arrival's fields, in `QueueRow.queue`'s tuples, the step's and the load's arrivals."""
-    return ("id", "P", "O") + (("cap",) if S.AS else ())
+    return ("id", "P", "O") + (("cap",) if S.AS else ()) + (("bucket",) if getattr(S, "TAU", 0) else ())
 
 
 def _arrivals(prefix: str, n: int, S) -> list[tuple[str, int, int]]:
     Z = widths(S)
     return ([(f"{prefix}_valid", n, 1), (f"{prefix}_id", n, S.IW), (f"{prefix}_P", n, Z.LW), (f"{prefix}_O", n, Z.LW)]
-            + ([(f"{prefix}_cap", n, 1)] if S.AS else []))
+            + ([(f"{prefix}_cap", n, 1)] if S.AS else []) + ([(f"{prefix}_bucket", n, TK.QW)] if getattr(S, "TAU", 0) else []))
 
 
 def queue_fields(S: Shape) -> list[tuple[str, int, int]]:
@@ -256,13 +262,13 @@ def window_width(S: Shape) -> int:
 
 Running = tuple[int, ...]   # (id, P, O, out, computed[, cap, fin][, pfx]): `running_names`
 Waiting = tuple[int, ...]   # (id, P, O, out[, cap]): `waiting_names`
-Arrival = tuple[int, ...]   # (id, P, O[, cap]): `arrival_names`
+Arrival = tuple[int, ...]   # (id, P, O[, cap][, bucket]): `arrival_names`
 
 
 @dataclass(frozen=True)
 class Row:
     """A state row: the scheduler and the window's heads between two proof blocks (the module's docstring, "The
-    rows")."""
+    rows"), and with TAU the tick's T (`clock`, 0 without)."""
 
     running: tuple[Running, ...] = ()
     waiting: tuple[Waiting, ...] = ()
@@ -270,6 +276,7 @@ class Row:
     qh: int = 0
     dh: int = 0
     steps: int = 0
+    clock: int = 0
 
 
 @dataclass(frozen=True)
@@ -309,6 +316,9 @@ def _values(row: Row, S) -> dict[str, list[int]]:
     _group(vals, "run", running_names(S), row.running, S.R)
     _group(vals, "wait", waiting_names(S), row.waiting, S.W)
     vals["free"], vals["qh"], vals["dh"], vals["steps"] = [row.free], [row.qh], [row.dh], [row.steps]
+    if row.clock and not S.TAU:
+        raise MalformedRow(f"a clock {row.clock} in a shape without the tick")
+    vals.update({"tick_q": [row.clock // S.TAU], "tick_r": [row.clock % S.TAU]} if S.TAU else {})
     return vals
 
 
@@ -397,7 +407,10 @@ def decode(bits: Sequence[int], S: Shape) -> Row:
     qh, dh, steps = f["qh"][0], f["dh"][0], f["steps"][0]
     if qh > S.Q or dh > S.D or steps > S.P:
         raise MalformedRow(f"heads {qh}, {dh} of at most {S.Q}, {S.D}; steps {steps} of at most {S.P}")
-    return Row(_items(f, "run", running_names(S)), _items(f, "wait", waiting_names(S)), f["free"][0], qh, dh, steps)
+    if S.TAU and f["tick_r"][0] >= S.TAU:
+        raise MalformedRow(f"the clock's remainder {f['tick_r'][0]} isn't below TAU = {S.TAU}")
+    clock = f["tick_q"][0] * S.TAU + f["tick_r"][0] if S.TAU else 0
+    return Row(_items(f, "run", running_names(S)), _items(f, "wait", waiting_names(S)), f["free"][0], qh, dh, steps, clock)
 
 
 def decode_window(bits: Sequence[int], S: Shape) -> QueueRow:
@@ -425,7 +438,7 @@ def unrow(words: Sequence[int]) -> tuple[int, ...]:
 def advance(S: Shape, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
             used: int) -> Row | None:
     """The state row after step proof block u: `cur` when the window's steps are done (idle), else the step's next state
-    (`stepped`'s running, waiting and free) with the heads past what it took and read and one step fewer. None refuses:
+    (`stepped`'s running, waiting, free and clock) with the heads past what it took and read and one step fewer. None refuses:
     the step's ok is 0, its arrivals or bits aren't the window row's at the heads, it took more than A or than are
     left, or it read more than A or than are left. Decisions the window's last step leaves unread carry (`load`)."""
     if not cur.steps:
@@ -436,13 +449,13 @@ def advance(S: Shape, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals:
         return None
     if taken > len(want_arr) or used > S.A or dh > len(win.decisions):
         return None
-    return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1)
+    return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1, stepped.clock)
 
 
 def load(S: Shape, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decisions: Sequence[int],
          steps: int) -> tuple[Row, QueueRow] | None:
-    """The window's state row 1 and window row: state row 0 (`prev`, the last window's last) with its heads reset and
-    the window's executed step count, and the last window's arrivals and decisions past `prev`'s heads with the
+    """The window's state row 1 and window row: state row 0 (`prev`, the last window's last, its clock kept) with its
+    heads reset and the window's executed step count, and the last window's arrivals and decisions past `prev`'s heads with the
     window's certified arrivals and its decisions appended. None refuses: the last window left steps, or read past its
     decisions, the queue overflows Q or the decisions D, more than K arrivals or P steps."""
     if prev.steps or prev.dh > len(last.decisions):
@@ -452,7 +465,7 @@ def load(S: Shape, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decis
         return None
     if len(kept) + len(decisions) > S.D or steps > S.P:
         return None
-    return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps),
+    return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps, prev.clock),
             QueueRow(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
 
 
@@ -712,21 +725,34 @@ ReplayClose = _part(
     "ReplayClose", STATICS, _sig_close, _build_close,
     "a session's last unit: its last state row has no step to run and has read every decision of its window row")
 
+def _tick(sig):
+    def tick_sig(S):
+        if S.TAU < 1:
+            raise ValueError(f"TAU = {S.TAU}: the tick's parts have TAU ≥ 1 (without the tick the parts are the Replay ones)")
+        return sig(S)
+    return tick_sig
+
+
+_TICK = ", at the certified tick's rows (TAU ≥ 1): the state row ends with TickStep_v1's clock T and each arrival with its bucket"
+TickAdvance = _part("TickAdvance", STATICS + ("TAU",), _tick(_sig_advance), _build_advance, ReplayAdvance.doc + _TICK)
+TickLoad = _part("TickLoad", STATICS + ("TAU",), _tick(_sig_load), _build_load, ReplayLoad.doc + _TICK + ", T state row 0's")
+TickClose = _part("TickClose", STATICS + ("TAU",), _tick(_sig_close), _build_close, ReplayClose.doc + _TICK)
+
 
 def advance_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayAdvance, **_statics(S))
+    return bind(TickAdvance if getattr(S, "TAU", 0) else ReplayAdvance, **_statics(S))
 
 
 def load_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayLoad, **_statics(S))
+    return bind(TickLoad if getattr(S, "TAU", 0) else ReplayLoad, **_statics(S))
 
 
 def close_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayClose, **_statics(S))
+    return bind(TickClose if getattr(S, "TAU", 0) else ReplayClose, **_statics(S))
 
 
 def _statics(S) -> dict[str, int]:
-    return {k: getattr(S, k) for k in STATICS}
+    return {k: getattr(S, k) for k in (STATICS + ("TAU",) if getattr(S, "TAU", 0) else STATICS)}
 
 
 def advance_arguments(S: Shape, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
@@ -792,7 +818,7 @@ def evaluate_close(S: Shape, cases: Sequence[list[list[int]]]) -> list[int]:
 
 @cache
 def _counted(which: str, key: tuple) -> int:
-    S = SimpleNamespace(**dict(zip(STATICS, key)))
+    S = SimpleNamespace(**dict(zip(STATICS + ("TAU",), key)))
     build: Any
     sig, build = {"advance": (_sig_advance, _build_advance), "load": (_sig_load, _build_load),
                   "close": (_sig_close, _build_close)}[which]
@@ -806,7 +832,7 @@ def _counted(which: str, key: tuple) -> int:
 def size(S: Shape) -> dict[str, int]:
     """The chain's cost at a shape (traced on a counting circuit, no gates written): per step `ReplayAdvance`'s ANDs, per
     window P of them and one `ReplayLoad`, per session one `ReplayClose`, the rows, the reads and their path depth."""
-    key = tuple(getattr(S, k) for k in STATICS)
+    key = tuple(getattr(S, k) for k in STATICS + ("TAU",))
     step, window = _counted("advance", key), _counted("load", key)
     return {"width": width(S), "window_width": window_width(S), "state_bits": _bits_of(state_fields(S)),
             "queue_bits": _bits_of(queue_fields(S)), "ands_per_step": step, "ands_load": window,

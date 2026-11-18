@@ -10,7 +10,7 @@ window (`verity/protocols/resource_accounting/network/verifier/protocol/charge-c
 
 `ChargeCount_v1` (`arith_encode`) charges a window that sends only decisions: it codes `window_code`'s four other
 counts (n_hits, n_resumes, n_order, n_lag) as 0. Advice v1 never sends hits, resumes or lag bits. Every hit is the
-replay's block pool's, past the pool bound too, the replay derives preemptions and the certified O forces every lag
+replay's block pool's, past the pool bound too, the replay derives preemptions and the attested O forces every lag
 row, and the advice code (`advice_code.codec`) refuses a window that sends any. It does send one of the four: where
 the arrivals deviate from release order (the client's ingress), an order entry for each deviating arrival (`order`).
 This unit charges the whole window, hits included. It counts `window_code._window`'s segment for the whole window with the counting
@@ -27,7 +27,7 @@ encoder (`arith_encode`, "The counting variant"), in `window_code`'s order:
 The segment's count and the tail's widths are the window's charge, which the caller holds to c_w.
 
 **Slots.** N decision slots (en, bit), H hit slots (hen, and short, the value, 17 bits), O order slots (oen; p, the
-arrival's position, 32 bits; r, its rank, 25 bits) and L length slots (qen; mt, the request's certified max_tokens, and
+arrival's position, 32 bits; r, its rank, 25 bits) and L length slots (qen; mt, the request's attested max_tokens, and
 olen, the output_len it sends, 32 bits each). Each field's enabled slots hold its values in order, and a disabled slot
 changes nothing. A field's count is its enabled slots. A field with no slots (H = 0, O = 0, L = 0) has no inputs and
 its count is 0; with L = 0 the circuit is the one without length terms, gate for gate.
@@ -100,7 +100,7 @@ HIT_CAP, GAP_CAP, INDEX_CAP = 1 << 16, 1 << 24, 1 << 24
 ZIG_CAP = 2 * INDEX_CAP + 1
 #: the widths of a hit's value, an order entry's position and its rank
 HW, PW, RW = HIT_CAP.bit_length(), 32, INDEX_CAP.bit_length()
-#: the width of a length term's max_tokens and output_len, u32s of the certified body (`id_form.id_request`)
+#: the width of a length term's max_tokens and output_len, u32s of the attested body (`id_form.id_request`)
 MW = CC.LENGTH_BITS
 MT_CAP = (1 << MW) - 1
 #: `code_v1._window`'s integer symbols in its order, each a table of the book
@@ -138,7 +138,7 @@ class Advice:
     """What one sampling block of the network attester is charged: advice v1's residual for the block, each field's
     values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
     each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
-    new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
+    new requests' attested ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
     sends, which has no hits, resumes or lag bits and one index an order entry, in slots: `arrived` in (en, bits),
     `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's advice (`ds`,
     `hits`, `order`)."""

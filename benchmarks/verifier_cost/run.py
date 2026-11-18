@@ -11,6 +11,10 @@ the size of the circuit that description unrolls to (README.md).
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
+  scaling NAME [ARG ...] | scaling --list
+      one of SCALING's scripts, each timing a verifier's function against the size of what it reads, its Lean
+      (`<name>/Main.lean`) built in a scratch Lake package against the checkout's verifier; with no ARG, at SCALING's small
+      sizes. Under `research run`, which sets OUT (README.md has each script's full sizes).
   store RUN [--runs-dir DIR]
       a `job.sh` run's results.json or partition.json (`research fetch RUN --all`) as one evidence/v1 record, naming
       the run and its commit; prints its art: id. From a VM with the store's keys: a node's shell has none.
@@ -34,8 +38,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-check"
+EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-verifier"
 SCHEMA = "verity/verifier-cost/v1"
+METRIC = "proofs/verifier-seconds-served-description"
+
+
+def built(exe: Path) -> Path:
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    if not exe.exists():
+        V.executable(exe.name, exe.parents[3])
+    return exe
 
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "benchmarks/network_sim"))
@@ -50,6 +62,8 @@ CONFIGS: dict[str, dict | tuple[str, int]] = {
     "mid": {"layers": 1, "hidden": 128, "intermediate": 256, "vocab": 64},
     **{f"b0-{n}": ("b0", n) for n in (1, 2, 4, 8, 16)},
     "b0": ("b0", 30),
+    "llama32-1b": {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim": 64, "intermediate": 8192,
+                   "vocab": 128256},
 }
 BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
@@ -146,6 +160,7 @@ def _digest(v) -> str:
 
 def measure(args) -> int:
     ref = _reference()
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -181,15 +196,33 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "inference-only-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-verifier", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
            if r["desc"]["rc"] != 0 or r["unrolled"].get("agrees") is False]
+    record(out, rows, bad)
     if bad:
         print("disagreements or failures:", ", ".join(bad), file=sys.stderr)
         return 1
     return 0
+
+
+def record(out: Path, rows: list[dict], bad: list[str]) -> None:
+    from verity_bench import kit
+
+    res = kit.writer(out)
+    res.validation("failed" if bad else "passed",
+                   "inference-only-verifier --policy exits 0 on every row and agrees with --unrolled wherever both ran",
+                   ", ".join(bad) or "ok")
+
+    for r in rows:
+        ok = r["desc"]["rc"] == 0 and r["unrolled"].get("agrees") is not False
+        res.measurement(METRIC, r["desc"]["seconds"] if ok else None, "s", mark="measured",
+                        member=f"serve-v1-{r['config']}-{r['ir']}-cpu",
+                        why=None if ok else "the verifier refused or disagreed with --unrolled",
+                        extra={"workload": "Serve_v1", "max_rss_kb": r["desc"].get("max_rss_kb"),
+                               **{k: r[k] for k in ("config", "ir", "description_bytes", "unrolled_gates")}})
 
 
 PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"
@@ -227,6 +260,7 @@ def partition(args) -> int:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits import partition_object as PO
 
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -273,6 +307,35 @@ def partition(args) -> int:
     return 0
 
 
+#: name -> (its script here, its arguments at a size one CPU slot runs in minutes, the environment it adds to those)
+SCALING: dict[str, tuple[str, tuple[str, ...], dict[str, str]]] = {
+    "registration": ("registration.sh", ("1024", "4096"), {}),
+    "population": ("population.sh", ("20", "50", "10000"), {}),
+    "members_parse": ("members_parse.sh", ("1000", "25000"), {}),
+    # builds Flock's prover and audits a stand-in window of MEMBERS members before it times anything
+    "members_files": ("members_files.sh", ("1", "16"), {"MEMBERS": "32"}),
+    "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30"), {}),
+    "flock_tmpl": ("flock_tmpl.sh", ("256",), {}),
+    "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000"), {}),
+}
+
+
+def scaling(args) -> int:
+    if args.list:
+        for name, (script, sizes, env) in SCALING.items():
+            print(f"{name}\tbenchmarks/verifier_cost/{script} {' '.join(sizes)}"
+                  + "".join(f"\t{k}={v}" for k, v in env.items()))
+        return 0
+    if args.name not in SCALING:
+        print(f"no scaling benchmark {args.name!r}: one of {', '.join(SCALING)}", file=sys.stderr)
+        return 2
+    script, sizes, env = SCALING[args.name]
+    if args.args:
+        return subprocess.run(["bash", str(HERE / script), *args.args], cwd=ROOT).returncode
+    return subprocess.run(["env", *(f"{k}={v}" for k, v in env.items()), "bash", str(HERE / script), *sizes],
+                          cwd=ROOT).returncode
+
+
 def store(args) -> int:
     subprocess.run(["research", "fetch", args.run, "--all"], check=True, capture_output=True)
     run = args.runs_dir / args.run
@@ -312,11 +375,11 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyVerifier.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"InferenceOnlyCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyVerifier.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)
@@ -347,6 +410,10 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--unrolled-max", type=int, default=5_000_000)
     q.add_argument("--repeat", type=int, default=3)
     q.add_argument("--exe", type=Path, default=PIECES)
+    c = sub.add_parser("scaling")
+    c.add_argument("--list", action="store_true")
+    c.add_argument("name", nargs="?")
+    c.add_argument("args", nargs=argparse.REMAINDER)
     s = sub.add_parser("store")
     s.add_argument("run")
     s.add_argument("--runs-dir", type=Path, default=Path.home() / ".research/runs")
@@ -354,7 +421,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("art")
     p.add_argument("--to", required=True)
     args = ap.parse_args(argv)
-    return {"measure": measure, "partition": partition, "store": store, "plot": plot}[args.cmd](args)
+    if args.cmd == "scaling" and not args.list and not args.name:
+        ap.error("scaling: name a benchmark, or --list")
+    return {"measure": measure, "partition": partition, "scaling": scaling, "store": store, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":

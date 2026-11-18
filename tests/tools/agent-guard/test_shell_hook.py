@@ -576,6 +576,29 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
     assert "AGENT_INBOX_POLL_S is off" in tool("check", W, "--repo", str(worker), inbox=box, poll="off").stdout
 
 
+def test_check_says_whether_the_tool_call_hook_has_run_on_this_vm(tmp_path):
+    """The tool-call hook's evidence is its `preToolUse` line in the event log; the Task log stays empty for MCP calls."""
+    W = "bc-33333333-3333-4333-8333-333333333333"
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env={**os.environ, **GIT_ENV})
+    shutil.copytree(ROOT / ".cursor", repo / ".cursor")
+    env = {**os.environ, "AGENT_GUARD_EVENT_LOG": str(tmp_path / "events.jsonl"), "AGENT_INBOX": str(tmp_path / "inbox"),
+           "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+
+    def check() -> str:
+        return subprocess.run([sys.executable, INBOX_TOOL, "check", W, "--repo", str(repo)], env=env, capture_output=True,
+                              text=True).stdout
+
+    assert "no tool-call hook has run on this VM" in check()
+    mcp = {"hook_event_name": "preToolUse", "tool_name": "MCP:list_teams", "conversation_id": W,
+           "tool_input": {"limit": 1}}
+    out = subprocess.run([sys.executable, HOOK.parent / "task_hook.py"], input=json.dumps(mcp), env=env,
+                         capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == {"permission": "allow"} and not (tmp_path / "task.jsonl").exists()
+    assert "the tool-call hook has run on this VM: 1 `preToolUse` event(s)" in check()
+    assert "the last for MCP:list_teams" in check()
+
+
 def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deliver_and_names_a_hooks_file_cursor_misreads(tmp_path):
     """`selftest` is delivery end to end: it pushes a message to the agent's own inbox branch and clears its poll mark, so its
     next command's hook pulls it and the one after is refused with it. It also says, at once, when Cursor reads no shell hook
@@ -913,7 +936,7 @@ def test_a_turn_on_another_model_than_the_launchs_is_refused_once_at_its_first_c
     text = first["user_message"]
     assert first["permission"] == "deny" and text == first["agent_message"]
     assert f"this turn runs on `{OTHER}`, and you were launched on `{LAUNCH}`" in text
-    assert "Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
+    assert "Task and `model: claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
     assert f"model: {LAUNCH}" not in text and "resumed by your lead" in text and "go by your brief" in text
     assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
     assert on_model("pwd", AGENT, two, OTHER, tmp_path) == ALLOW
@@ -1049,7 +1072,7 @@ def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event
         assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
 
 
-FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-high", "claude-sonnet-5-5-high"
+FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-medium", "claude-sonnet-5-5-high"
 HOLDER = "bc-12121212-1212-4121-8121-121212121212"
 
 
@@ -1077,8 +1100,8 @@ def test_every_command_of_a_workers_turn_on_fable_is_refused_each_time_with_the_
             text = refused["user_message"]
             assert refused["permission"] == "deny" and text == refused["agent_message"], (model, command)
             assert f"this turn runs on `{model}`, and no worker runs Fable 5.2" in text
-            assert "`claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task" in text
-            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-high`" in text
+            assert "`claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task" in text
+            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-medium`" in text
     for turn, model in ((TURNS[3], OPUS), (TURNS[4], SONNET), (TURNS[5], OPUS)):
         assert on_model("ls", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
         assert on_model("pwd", AGENT, turn, model, tmp_path, **registry) == ALLOW, model

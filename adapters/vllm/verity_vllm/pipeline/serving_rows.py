@@ -144,9 +144,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    chain_ways, final_hits, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, KEY_BLOCKS, LAYOUTS, PACKED,  # noqa: F401
+                                                    PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
+                                                    chain_ways, final_hits, part, proved_as, template, unit_templates)
 from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -404,7 +404,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
         if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified law: its strata are templates, which a word "
+            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
@@ -436,7 +436,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
 
 
 def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
+    """The partition file as derived: the verifier's templates, sampling design and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),

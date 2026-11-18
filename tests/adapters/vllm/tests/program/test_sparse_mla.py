@@ -4,8 +4,6 @@ served statics as well; at GLM-5.3's scale it is softmax attention within bf16 r
 versions agree with their word views and the switch maps each word Definition to its Boolean one."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits import evaluation as E
@@ -14,12 +12,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import versions as SW
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import sparse_mla as M
-
-from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 GLM = M.SPARSE_MLA_GLM53

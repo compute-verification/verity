@@ -62,13 +62,6 @@ theorem ringWork_pbind (P : OracleAlgorithm (ringRO B w p) α) (g : α → Oracl
   | ret a => simp [pbind, OracleAlgorithm.ringWork, OracleAlgorithm.run]
   | round qs k ih => simp only [pbind, OracleAlgorithm.ringWork, OracleAlgorithm.run, ih]; omega
 
-theorem ringBounded_pbind {D₁ Q₁ L₁ D₂ Q₂ L₂ : ℕ} {P : OracleAlgorithm (ringRO B w p) α} {g : α → OracleAlgorithm (ringRO B w p) β}
-    (hP : P.RingBounded D₁ Q₁ L₁) (hg : ∀ a, (g a).RingBounded D₂ Q₂ L₂) :
-    (pbind P g).RingBounded (D₁ + D₂) (Q₁ + Q₂) (L₁ + L₂) := fun ω => by
-  rw [mulDepth_pbind, keyWork_pbind, ringWork_pbind]
-  obtain ⟨h1, h2, h3⟩ := hP ω
-  obtain ⟨h4, h5, h6⟩ := hg (P.run ((ringRO B w p).answer ω)) ω
-  omega
 
 theorem mulDepth_progMap (g : α → β) (P : OracleAlgorithm (ringRO B w p) α) :
     (PousThm1.progMap g P).mulDepth f = P.mulDepth f := by
@@ -323,8 +316,6 @@ section Correct
 
 variable {B w p b : ℕ} [NeZero p]
 
-theorem nthAns_zero {w : ℕ} (a : Bits w) (as : List (Bits w)) : nthAns (a :: as) 0 = a := rfl
-theorem nthAns_succ {w : ℕ} (a : Bits w) (as : List (Bits w)) (i : ℕ) : nthAns (a :: as) (i + 1) = nthAns as i := rfl
 
 /-- `decBlock`'s run, unfolded: `u = σ_K(sqFix(c, c²))`, then the label of `sqFix(u, u²) + (−τ)`. -/
 theorem run_decBlock (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (j : Fin B) (c : Bits w) :

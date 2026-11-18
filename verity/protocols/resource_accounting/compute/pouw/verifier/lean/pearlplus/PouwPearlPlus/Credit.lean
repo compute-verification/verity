@@ -23,7 +23,7 @@ Every quantity is exact (`Rat`), as the Python's `Fraction`s are, ε among them:
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 /-- δ, the sample's miss probability the run is credited at (`verify_run.DELTA`). -/
 def DELTA : Rat := mkRat 1 100
@@ -86,4 +86,4 @@ def creditAtAssumption (passes : List Pass) (t over : Nat) (delta : Rat) : Credi
   let credited := ((1 - rho) * max ((macs : Rat) - incorrect) 0).floor.toNat
   return { credited, creditedTiles := tiles, macs, rho, epsilon := eps, overInertBoundDraws := over }
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

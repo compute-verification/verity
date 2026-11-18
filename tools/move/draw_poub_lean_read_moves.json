@@ -1,6 +1,0 @@
-{
- "Accounting.ReadUnit.Reads.drawnHashed": "Accounting.ReadUnit.Reads.sampledHashed",
- "Accounting.Remote.Draw.DrawCoins": "Accounting.Remote.Draw.SampleCoins",
- "Accounting.Remote.Instances.w2Draw": "Accounting.Remote.Instances.w2Sample",
- "RemoteAudit.Session.State.appendDrawn": "RemoteAudit.Session.State.appendSampled"
-}

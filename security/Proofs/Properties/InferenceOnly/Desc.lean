@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Mathlib.Tactic
 
 /-!
@@ -27,9 +27,9 @@ holds the description-sized check against the unrolled one too (`runs` `Inferenc
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Desc
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Desc
 
-open InferenceOnlyCheck.Desc
+open InferenceOnlyVerifier.Desc
 
 /-! ## Sizes -/
 
@@ -153,4 +153,4 @@ theorem sum_copies (S : Finset ℕ) (lo period span cnt : ℕ) (hS : ∀ x ∈ S
   rw [Finset.sum_image fun x _ y _ h => by simpa using h]
   exact Finset.sum_congr rfl fun x hx => hw m (Finset.mem_range.1 hm) x hx
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Desc
+end InferenceOnlyVerifier.Properties.SecurityProofs.Desc

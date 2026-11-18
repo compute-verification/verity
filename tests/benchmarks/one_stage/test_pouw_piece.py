@@ -1,5 +1,5 @@
-"""pouw_piece.py: PoUW's pieces for `composite.py`, ``verity/pouw/v1`` and ``verity/pouw/period/v1`` (onsite's and
-remote's), each a case in its protocol's formats and its answer on it. An honest window (`pouw_check_cases`) and an
+"""pouw_piece.py: PoUW's pieces for `composite.py`, ``verity/pouw/v1`` and ``verity/pouw/period/v1`` (the work of
+remote's development composite), each a case in its protocol's formats and its answer on it. An honest window (`pouw_check_cases`) and an
 honest period (`pouw_period_cases`) written from their inputs accept, with the digest the product binds; a served H1
 window (``fixtures/served-h1-window``, window 0's line of a served H200 run's windows.jsonl, a development window in no
 period) is MISSING from both, with why, and writes no case, so `composite.py` leaves it out and names it missing; the
@@ -258,7 +258,7 @@ def test_a_window_the_run_lacks_is_missing(tmp_path):
 
 
 def test_the_exe_is_the_answer_of_record(tmp_path):
-    exe = tmp_path / "pouw-check"
+    exe = tmp_path / "pouw-verifier"
     line = {"commitment": None, "profile": None, "protocol": P.V1, "public": None, "reason": "stub", "verdict": "reject"}
     exe.write_text(f"#!/bin/sh\necho \"$@\" > {tmp_path}/argv\necho '{json.dumps(line)}'\nexit 1\n")
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR)

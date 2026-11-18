@@ -854,8 +854,8 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
 def test_the_live_program_is_read_from_its_compiled_descriptor():
     """`credit.live_of` reads the compiled `live.program_v2`'s T, S and PREFIX back from its descriptor (canonical JSON
     without annotations, the bytes its program digest hashes), its unit the one template its query samples, unit s round
-    s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
-    request's cap to its public max_tokens, is no live Program credit reads."""
+    s's; the cases' stand-in descriptor (`live_program`) reads the same. A version-1 Program's descriptor, whose units
+    don't bind each request's cap to its public max_tokens, is no live Program credit reads."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as LV
 
     def raw(prog):
@@ -868,7 +868,8 @@ def test_the_live_program_is_read_from_its_compiled_descriptor():
         assert LV.query_v2(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
         assert hashlib.sha512(raw(prog)).hexdigest() == h1.P.program_digest(prog)
         assert Cr.live_of(bytes.fromhex(cases.live_hex(cases.live_program(t, s, prefix)))) == (got, None)
-        assert Cr.live_of(raw(LV.program(t, s, prefix))) == (None, ("live", Cr.NOT_LIVE))
+        assert Cr.live_of(bytes.fromhex(cases.live_hex(cases.live_program(t, s, prefix, version=1)))) == \
+            (None, ("live", Cr.NOT_LIVE))
 
 
 @pytest.mark.parametrize("seed", SEEDS)

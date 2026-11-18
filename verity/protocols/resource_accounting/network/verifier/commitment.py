@@ -1,4 +1,4 @@
-"""The published form of a network certificate: committed by hash, with padding elided.
+"""The published form of a network attestation: committed by hash, with padding elided.
 
 A raw record is the whole grid, T·r slots of B bytes: 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600.
 The attester publishes instead one digest and the untimed status per execution phase.

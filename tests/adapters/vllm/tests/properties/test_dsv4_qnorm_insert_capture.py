@@ -4,8 +4,6 @@ comparison jobs on twin-made kernel words, the spy on the CuTe dispatch, its ver
 for."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import contextlib
 import copy
 import functools
@@ -16,11 +14,11 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as W
-from verity_vllm.definitions.registry import dsv4_qnorm_insert as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_qnorm_insert_capture_gpu as X
+from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as W
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as R
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 M = X.M

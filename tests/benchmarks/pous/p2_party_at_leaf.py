@@ -1,4 +1,4 @@
-"""`p2_parties`'s command line with the memory challenger's key `pous_test_signer.AtLeaf`'s, for a test's party in the
+"""`p2_parties`'s command line with the memory attester's key `pous_test_signer.AtLeaf`'s, for a test's party in the
 gate's shape (``python -S -E p2_party_at_leaf.py ARGS`` from the tree): ``--challenger DIR`` keeps its session log,
 and the close is signed at S1's deployed parameters without a deployed key's keygen."""
 

@@ -17,11 +17,13 @@ op, and per case whether its outputs agree with each other and with the referenc
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
 import platform
 import sys
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -417,19 +419,263 @@ def plugin(args) -> None:
     (Path(args.out) / "plugin.json").write_text(json.dumps(rec, indent=1) + "\n")
 
 
+REGISTRY = Path(__file__).resolve().parents[2] / "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.py"
+DEFINITION = ("M32", "topk_key", "topk_set", "order_ok", "canonical_ok")
+WIDTH, NEXT_N = 262144, 6
+_DEF: dict = {}
+
+
+def definition_code() -> dict:
+    """The registry's `topk_set` and `canonical_ok`, run from their source text: the pin's venv has no ``verity``."""
+    body = [n for n in ast.parse(REGISTRY.read_text()).body
+            if getattr(n, "name", None) in DEFINITION
+            or isinstance(n, ast.Assign) and any(getattr(t, "id", None) in DEFINITION for t in n.targets)]
+    ns: dict = {}
+    exec(compile(ast.Module(body=body, type_ignores=[]), str(REGISTRY), "exec"), ns)  # noqa: S102
+    if missing := set(DEFINITION) - set(ns):
+        raise SystemExit(f"{REGISTRY} no longer defines {sorted(missing)}")
+    return ns
+
+
+def _definition_row(words: list[int]) -> list[int]:
+    return sorted(_DEF["topk_set"](words, K))
+
+
+def decode_logits(dist: str, rows: int, n: int, seed: int) -> torch.Tensor:
+    g = _gen(seed)
+    x = torch.randn(rows, WIDTH, generator=g, device=DEV) * 1000.0
+    if dist in ("randn", "bf16", "shift8", "shift32"):
+        v = torch.randn(rows, n, generator=g, device=DEV)
+        v = {"bf16": v.to(torch.bfloat16).float(), "shift8": 8.0 + v, "shift32": 32.0 + v}.get(dist, v)
+    else:
+        q = torch.randn(rows, 64, 128, generator=g, device=DEV) / 128 ** 0.5
+        k = torch.randn(n, 128, generator=g, device=DEV)
+        w = torch.randn(rows, 64, generator=g, device=DEV) / 8.0
+        w = w.abs() if dist == "indexer_pos" else w
+        v = torch.zeros(rows, n, device=DEV)
+        for c in range(0, n, 32768):
+            s = torch.relu(torch.einsum("rhd,nd->rhn", q, k[c:c + 32768]))
+            v[:, c:c + 32768] = torch.einsum("rh,rhn->rn", w, s)
+    x[:, :n] = v
+    return x
+
+
+def _graph(fn) -> torch.cuda.CUDAGraph:
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        fn()
+    torch.cuda.current_stream().wait_stream(s)
+    g = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(g):
+        fn()
+    torch.cuda.synchronize()
+    return g
+
+
+def _wrong_rows(o: torch.Tensor, fn, want: torch.Tensor) -> tuple[int, int]:
+    o.fill_(-7)
+    fn()
+    torch.cuda.synchronize()
+    eager = int((o != want).any(dim=1).sum())
+    g = _graph(fn)
+    o.fill_(-7)
+    g.replay()
+    torch.cuda.synchronize()
+    return eager, int((o != want).any(dim=1).sum())
+
+
+def guesses(x: torch.Tensor, m: int) -> dict[str, torch.Tensor]:
+    """Candidates over each row's first ``m`` keys that fail: ``garbage`` (the lowest K), ``missed`` (the top K less
+    8, and the 8 below them) and ``overflow`` (the coarse k-th's ties in index order, as the pin's overflow writes)."""
+    key = dsa_topk.keys(x[:, :m])
+    order = torch.sort(key, dim=1, descending=True, stable=True).indices
+    h = x[:, :m].to(torch.float16).view(torch.int16).to(torch.int64)
+    coarse = torch.where(h < 0, h ^ 0x7FFF, h) >> 6
+    kth = torch.gather(coarse, 1, order[:, K - 1:K])
+    rank = torch.where(coarse > kth, 0, torch.where(coarse == kth, 1, 2)) * m + torch.arange(m, device=DEV)
+    g = {"garbage": order[:, -K:], "missed": torch.cat([order[:, :K - 8], order[:, K:K + 8]], dim=1),
+         "overflow": torch.sort(rank, dim=1).indices[:, :K]}
+    return {how: t.to(torch.int32).contiguous() for how, t in g.items()}
+
+
+def units(args) -> None:
+    import units as U
+
+    real = SimpleNamespace(**{op: getattr(torch.ops._C, op) for op in dsa_topk.OPS})
+    canons = {p: dsa_topk.Canon(**dsa_topk.MODES[m]) for m, p in U.PASSES.items()}
+    ws = torch.zeros(WS, dtype=torch.uint8, device=DEV)
+    cache: dict = {}
+
+    def case(values: str, rows: int, n: int):
+        if cache.get("at") != (values, rows, n):
+            seed = zlib.crc32(f"{args.shapes}/{values}/{rows}/{n}".encode())
+            cache.clear()
+            if args.shapes == "decode":
+                x = decode_logits(values, rows, n, seed)
+                sl = (n - NEXT_N + 1 + torch.arange(NEXT_N, device=DEV, dtype=torch.int32)).repeat(rows // NEXT_N, 1)
+                sl = sl.contiguous()
+
+                def fast(o):
+                    real.cooperative_topk(x, sl, o, ws, K, n)
+
+                def run(c, o):
+                    c.run("cooperative_topk", x, o, K, 1, sl, rows=rows, ncols=WIDTH, ls0=x.stride(0),
+                          ls1=x.stride(1))
+                m, lo, ln = n - NEXT_N + 1, torch.zeros_like(sl.reshape(-1)), sl.reshape(-1)
+            else:
+                v = torch.randn(rows, n, generator=_gen(seed), device=DEV)
+                x = {"bf16": v.to(torch.bfloat16).float(), "shift8": 8.0 + v, "shift32": 32.0 + v}.get(values, v)
+                ks, ke = causal(rows, n - rows)
+
+                def fast(o):
+                    real.top_k_per_row_prefill(x, ks, ke, o, rows, x.stride(0), x.stride(1), K)
+
+                def run(c, o):
+                    c.run("top_k_per_row_prefill", x, o, K, 0, ks, ke, rows=rows, ncols=n, ls0=x.stride(0),
+                          ls1=x.stride(1))
+                m, lo, ln = n - rows + 1, ks, ke - ks
+            cache.update(at=(values, rows, n), x=x, fast=fast, run=run, m=m,
+                         o=torch.empty((rows, K), dtype=torch.int32, device=DEV),
+                         ref=dsa_topk.reference_rows(x, lo, ln, K))
+        return cache
+
+    def timer(values: str, rows: int, n: int, how: str | None) -> dict:
+        c = case(values, rows, n)
+        o, fast, run = c["o"], c["fast"], c["run"]
+        iters = max(2, min(args.iters, int(2e5 // max(c["x"].numel() // 1024, 1))))
+        if how is not None and "guesses" not in c:
+            c["guesses"] = guesses(c["x"], c["m"])
+        guess = None if how is None else c["guesses"][how]
+
+        def alone() -> None:
+            if guess is None:
+                fast(o)
+            else:
+                o.copy_(guess)
+        under = device_us(alone, iters)
+        line: dict = {"fast_us" if how is None else "copy_us": under}
+        for p, canon in canons.items():
+            def fn(canon=canon) -> None:
+                alone()
+                run(canon, o)
+            before = canon.stats(c["x"].device).clone()
+            fn()
+            one = dict(zip(dsa_topk.STATS, (canon.stats(c["x"].device) - before).tolist()))
+            ok = bool(torch.equal(o, c["ref"]))
+            us = device_us(fn, iters)
+            line[p] = ({"ok": ok, "us": us, "added_us": us - under, "per_call": one} if how is None else
+                       {"ok": ok, "one_call": one, "us": us - under})
+        return line
+
+    out = Path(args.out)
+    result = Path(args.result) if args.result else out / "result.json"
+    if not U.write(out, result, args.shapes, U.lines(args.shapes, timer), torch.cuda.get_device_name()):
+        raise SystemExit(1)
+
+
+def definition(args) -> None:
+    import multiprocessing
+
+    _DEF.update(definition_code())
+    pool = multiprocessing.get_context("fork").Pool(len(os.sched_getaffinity(0)))
+    import vllm._custom_ops  # noqa: F401
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    real = SimpleNamespace(**{op: getattr(torch.ops._C, op) for op in dsa_topk.OPS})
+    passes = {}
+    for mode, kw in dsa_topk.MODES.items():
+        ns = SimpleNamespace(**vars(real))
+        passes[mode] = (ns, dsa_topk.install(ns, dsa_topk.Canon(**kw)))
+    shapes = []
+
+    def shape(rec: dict, x: torch.Tensor, rows: int, n: int, guess: torch.Tensor | None) -> None:
+        sl = n - NEXT_N + 1 + torch.arange(NEXT_N, device=DEV, dtype=torch.int32)
+        sl = sl.repeat(rows // NEXT_N, 1).contiguous()
+        ln = sl.reshape(-1)
+        words = [x[r, :int(ln[r])].contiguous().view(torch.int32).cpu().tolist() for r in range(rows)]
+        want_rows = pool.map(_definition_row, words)
+        rec["canonical_ok_first_row"] = bool(_DEF["canonical_ok"](words[0], want_rows[0], K))
+        want = torch.tensor(want_rows, dtype=torch.int32, device=DEV)
+        ws = torch.zeros(WS, dtype=torch.uint8, device=DEV)
+        msl = int(ln.max())
+        for mode, (ns, canon) in passes.items():
+            o = torch.empty((rows, K), dtype=torch.int32, device=DEV)
+            if guess is None:
+                def fn() -> None:
+                    ns.cooperative_topk(x, sl, o, ws, K, msl)
+            else:
+                def fn() -> None:
+                    o.copy_(guess)
+                    canon.run("cooperative_topk", x, o, K, 1, sl, rows=rows, ncols=WIDTH, ls0=x.stride(0),
+                              ls1=x.stride(1))
+            before = canon.stats(x.device).clone()
+            eager, graph = _wrong_rows(o, fn, want)
+            rec[mode] = {"eager_wrong_rows": eager, "graph_wrong_rows": graph,
+                         "three_runs": dict(zip(dsa_topk.STATS, (canon.stats(x.device) - before).tolist()))}
+        rec["ok"] = rec["canonical_ok_first_row"] and not any(
+            rec[m]["eager_wrong_rows"] or rec[m]["graph_wrong_rows"] for m in passes)
+        shapes.append(rec)
+        print(json.dumps(rec), flush=True)
+
+    keys = (20000, 40000, 70000, 100000, 131072)
+    for dist in ("randn", "bf16", "indexer", "indexer_pos", "shift8", "shift32"):
+        for rows in (6, 12, 24):
+            for n in keys:
+                x = decode_logits(dist, rows, n, zlib.crc32(f"{dist}/{rows}/{n}".encode()))
+                shape({"dist": dist, "rows": rows, "keys": n}, x, rows, n, None)
+    for dist in ("randn", "shift32"):
+        for rows in (6, 12, 24):
+            for n in keys:
+                x = decode_logits(dist, rows, n, 99)
+                g = guesses(x, n - NEXT_N + 1)
+                for how in ("garbage",) if dist == "randn" else ("missed", "overflow"):
+                    shape({"forced": how, "dist": dist, "rows": rows, "keys": n}, x, rows, n, g[how])
+    pool.close()
+    failed = [s for s in shapes if not s["ok"]]
+    paths = {m: {k: sum(s[m]["three_runs"][k] for s in shapes) for k in dsa_topk.STATS} for m in passes}
+    (out / "definition.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "torch": torch.__version__,
+                                                     "definition": str(REGISTRY), "paths": paths, "shapes": shapes},
+                                                    indent=1) + "\n")
+    idle = [m for m in passes if not paths[m]["rows_bisected"] + paths[m]["rows_refined"]]
+    detail = (f"{len(shapes) - len(failed)} of {len(shapes)} shapes: every row of {', '.join(passes)}, eager and "
+              f"replayed from a CUDA graph, is sorted(topk_set) of the registry's Definition; paths "
+              f"{json.dumps(paths)}" + (f"; no failed candidate reached {', '.join(idle)}'s fallback" if idle else ""))
+    failed += idle
+    f = Path(args.result) if args.result else out / "result.json"
+    run = f.parent
+    doc = json.loads(f.read_text()) if f.is_file() else {
+        "schema": "research/result/v0.1", "run_id": run.name,
+        "workload_fingerprint": {"benchmark": "dsa_topk", "mode": "definition"},
+        "measurements": [], "measurement_files": [], "artifacts": []}
+    evidence = os.path.relpath(out / "definition.json", run)
+    doc["validation"] = {"status": "failed" if failed else "passed", "checker": "stress.py definition",
+                         "detail": detail, "evidence": [evidence]}
+    doc["artifacts"] = sorted({*doc.get("artifacts", []), evidence})
+    f.write_text(json.dumps(doc, indent=1) + "\n")
+    print(detail, flush=True)
+    if failed:
+        raise SystemExit(1)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("check", "compare", "time", "plugin"))
+    p.add_argument("mode", choices=("check", "compare", "time", "plugin", "definition", "units"))
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=4)
     p.add_argument("--dists", default="randn,bf16,int,relu,signed,edge")
     p.add_argument("--iters", type=int, default=50)
     p.add_argument("--variants", default="default", help="stress.py time: the pass's parameters (`variant`), by comma")
+    p.add_argument("--result", help="stress.py definition, units: the run's result.json, which takes its validation "
+                                    "(default: OUT/result.json)")
+    p.add_argument("--shapes", choices=("decode", "prefill"), default="decode", help="stress.py units: the shapes")
     args = p.parse_args()
-    if args.mode in ("check", "time"):
+    if args.mode in ("check", "time", "units"):
         import vllm._custom_ops  # noqa: F401
-    {"check": check, "compare": compare, "time": time_, "plugin": plugin}[args.mode](args)
+    {"check": check, "compare": compare, "time": time_, "plugin": plugin, "definition": definition,
+     "units": units}[args.mode](args)
 
 
 if __name__ == "__main__":

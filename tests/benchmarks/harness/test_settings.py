@@ -108,6 +108,7 @@ def test_direct_environment_uses_only_shrink() -> None:
 
 def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from verity_bench import cli
+    from verity_bench.vllm.presets import GPUS
 
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -120,6 +121,8 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")
+    card = GPUS["rtx-pro-6000"].nvidia_smi_name
+    monkeypatch.setattr(cli.kit, "host_stamp", lambda: {"commit": "abc", "card": card})
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity]) == 0
     record = json.loads((tmp_path / "out" / "settings.json").read_text())
     assert record == settings.record() and record["values"] == {"RESEARCH_SOURCE_SHA": "a" * 40}

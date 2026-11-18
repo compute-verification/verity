@@ -1,4 +1,4 @@
-"""What every gate (`research merge`, its push guard, `research queue`) shares, so each fails closed the same way.
+"""What every gate (`research.merge`, `research queue`) shares, so each fails closed the same way.
 
 `git_env()` is the environment for a gate's subprocesses: the caller's, less what makes git read a repository other than the
 one at its cwd (`GIT_LOCAL_ENV`: a hook's GIT_DIR, a scratch GIT_INDEX_FILE) and what a caller's process leaks into code it runs

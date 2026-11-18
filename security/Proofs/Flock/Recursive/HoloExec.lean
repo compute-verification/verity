@@ -171,7 +171,7 @@ a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. 
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),
-    Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
+    Flock.RecVStar.docket (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
       Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap salt bcs
 
 /-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `RecSetup.commits` calls it, at the

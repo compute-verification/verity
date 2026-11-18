@@ -3,7 +3,7 @@ and its status (M measured, A assumed, D derived from the others), in one curren
 (sm_120); the models' shapes; what every scale commits at serve time, a token a layer, by PoUW scheme (the scales table);
 and the cost model's observations by card (`CARDS`: the RTX PRO 6000's, and the `h200` card's in H200 GPU-seconds).
 
-The measured values are data under `benchmarks/sampling_plan/` (`inputs.json`, `MEASURED`), handed in by `load`; the
+The measured values are data under `calibration/sampling_plan/` (`inputs.json`, `MEASURED`), handed in by `load`; the
 names below are the default file's."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from verity.protocols.proofs.spot.prover.costfit import Observation
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS
 
 #: the measured inputs, kept with the measurements that made them
-MEASURED = Path(__file__).resolve().parents[6] / "benchmarks" / "sampling_plan" / "inputs.json"
+MEASURED = Path(__file__).resolve().parents[6] / "calibration" / "sampling_plan" / "inputs.json"
 
 
 @dataclass(frozen=True)

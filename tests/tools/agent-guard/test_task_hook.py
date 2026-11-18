@@ -29,6 +29,7 @@ def test_cursor_runs_the_hook_before_every_task_call_direct_or_dynamic():
     entries = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["preToolUse"]
     assert len({e["command"] for e in entries}) == 1 and entries[0]["command"].endswith(" guard task_hook.py")
     assert sorted(e["matcher"] for e in entries) == ["CallDynamicTool", "Task", "^MCP:"]
+    assert all(e["failClosed"] is True for e in entries), "a hook that crashes or times out refuses the call"
 
 
 def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_one(tmp_path):
@@ -41,6 +42,32 @@ def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_on
     recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
     assert [(r["tool_name"], r["deny"], r["environment"]) for r in recs] == [("CallDynamicTool", True, None),
                                                                              ("CallDynamicTool", False, "cloud")]
+
+
+@pytest.mark.parametrize("tool_name,tool_input", [
+    ("CallDynamicTool", {"namespace": "cursor", "toolName": "CallDynamicTool",
+                         "arguments": {"namespace": "cursor", "toolName": "Task", "arguments": {"subagent_type": "debug"}}}),
+    ("CallDynamicTool", {"namespace": "cursor", "toolName": "Task", "arguments": json.dumps({"subagent_type": "debug"})}),
+    ("CallDynamicTool", {"namespace": "x", "toolName": "batch",
+                         "arguments": json.dumps({"calls": [{"toolName": "Task", "arguments": {"subagent_type": "debug"}}]})}),
+    ("MCP:batch", {"calls": [{"toolName": "Task", "arguments": {"subagent_type": "debug"}}]}),
+])
+def test_a_task_call_nested_inside_another_tools_arguments_is_still_judged(tmp_path, tool_name, tool_input):
+    """A Task call wrapped in another tool's arguments, or given them as a JSON string, read as no Task call and passed."""
+    a = answer(tmp_path, HOLDER, tool_input, tool_name)
+    assert a["permission"] == "deny" and "@proofs" in a["agent_message"]
+
+
+@pytest.mark.parametrize("registry", ["[]", '"proofs"', '{"handles": {"proofs": 1}}', '{"handles": ["proofs", 3]}'])
+def test_a_registry_that_is_not_a_json_object_of_handles_passes_every_call(tmp_path, registry):
+    """A registry.json holding a list crashed the hook on `.get`, so the call got no verdict."""
+    reg = tmp_path / "registry.json"
+    reg.write_text(registry)
+    env = {**os.environ, "AGENT_GUARD_REGISTRY": str(reg), "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    r = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "preToolUse", "tool_name": "Task",
+                                                                 "conversation_id": HOLDER, "tool_input": {"prompt": "x"}}),
+                       capture_output=True, text=True, env=env)
+    assert (r.returncode, json.loads(r.stdout)) == (0, {"permission": "allow"}) and "Traceback" not in r.stderr
 
 
 def test_another_steps_event_passes_unlogged(tmp_path, event_log):
@@ -111,22 +138,22 @@ def test_cloud_workers_foreground_lookups_and_other_agents_pass(tmp_path, conver
 
 def test_each_verdict_is_logged_with_its_model_and_without_the_prompt(tmp_path):
     answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "run_in_background": False})
-    answer(tmp_path, WORKER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "model": "claude-opus-5-5-high"})
+    answer(tmp_path, WORKER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "model": "claude-opus-5-5-medium"})
     answer(tmp_path, WORKER, {"prompt": "go on", "resume": WORKER, "model": "inherit"})
     recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
     assert recs[0] == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True,
                        "input_keys": ["prompt", "run_in_background", "subagent_type"], "environment": None,
                        "subagent_type": "generalPurpose", "run_in_background": False, "model": None, "resume": False}
-    assert [(r["deny"], r["model"], r["resume"]) for r in recs[1:]] == [(False, "claude-opus-5-5-high", False),
+    assert [(r["deny"], r["model"], r["resume"]) for r in recs[1:]] == [(False, "claude-opus-5-5-medium", False),
                                                                          (False, "inherit", True)]
     assert "a secret plan" not in (tmp_path / "task.jsonl").read_text()
 
 
 def test_a_dynamic_task_calls_model_is_logged_like_a_direct_ones(tmp_path):
-    args = {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": "claude-opus-5-5-high"}
+    args = {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": "claude-opus-5-5-medium"}
     answer(tmp_path, WORKER, {"namespace": "cursor", "toolName": "Task", "arguments": args}, "CallDynamicTool")
     (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
-    assert (rec["tool_name"], rec["model"], rec["resume"]) == ("CallDynamicTool", "claude-opus-5-5-high", False)
+    assert (rec["tool_name"], rec["model"], rec["resume"]) == ("CallDynamicTool", "claude-opus-5-5-medium", False)
 
 
 @pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "create_attachment"])

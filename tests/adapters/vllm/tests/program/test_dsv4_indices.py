@@ -3,8 +3,6 @@ the kernel's stores at every boundary of a position sweep and at the int32 ends,
 prefill row as `Dsv4ShortContextTopK_v1`, the statics, and the Boolean Definition against its word."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 from verity.circuits.boolean.trace import word_of
@@ -12,6 +10,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.numerics import dsv4_indices_twin as T
 from verity_vllm.definitions.registry import boolean_dsv4_indices as BX
 from verity_vllm.definitions.registry import dsv4_indexer as I

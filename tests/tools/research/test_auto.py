@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from research import asker, auto, cores, remote
+from research import asker, auto, cli, cores, remote
 from research.cli import main
 from research.pods.nebius import slot_only
 
@@ -28,7 +28,7 @@ NODES, SPILL = (CPU1, "vy-nebius-cpu-3", CPU5), auto.spill
 @pytest.fixture(autouse=True)
 def cpu_nodes(monkeypatch):
     """`auto.read` asks NODES, not the CPU nodes in the registry of the machine these tests run on."""
-    monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in NODES))
+    monkeypatch.setattr(auto, "spill", lambda machines=None, now=None: tuple((m, auto.SPILL_POOL) for m in NODES))
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +94,15 @@ def test_on_auto_asks_every_cpu_node_in_the_registry_and_skips_one_whose_pool_li
     assert SPILL(machines) == ((CPU1, "research"), ("vy-nebius-cpu-4", "research"), ("vy-nebius-cpu-10", "research")), \
         "the project's CPU nodes by number; never an auditor's machine, another project's node or a name that only starts so"
     assert SPILL({}) == ()
+    t0, mark = 1_794_508_500.0, "2026-11-12T18:20:00Z"                 # the mark is 15 minutes old at t0
+    marked = lambda **m: {**machines, "vy-nebius-cpu-4": {"project": "verity", **m}}       # noqa: E731
+    assert [m for m, _ in SPILL(marked(stopped_since=mark), t0)] == [CPU1, "vy-nebius-cpu-10"], \
+        "a node marked stopped is asked nothing: no launch waits out its ssh"
+    assert len(SPILL(marked(unreachable_since=mark), t0)) == 3, "one the sampler missed for a few minutes keeps its place"
+    assert len(SPILL(marked(unreachable_since=mark), t0 + 45 * 60)) == 2 and len(SPILL(marked(unreachable_since="?"), t0)) == 3
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(auto, "clock", lambda: t0)
+        assert len(SPILL(marked(stopped_since=mark))) == 2 and len(SPILL(marked(unreachable_since=mark))) == 3
     asked = []
 
     def run(argv, payload):
@@ -227,6 +236,138 @@ def test_a_machine_whose_lean_slots_cant_be_read_is_not_preferred():
     target, why = auto.choose({N2: share(waiters=5), CPU1: {**free, **uncapped}}, 4, 16, lean_pool="build")
     assert target == (CPU1, "research") and (f"; no Lean slots to wait for there: {CPU1}'s research pool has the most places for it "
                                              f"(1): a slot is free there now, and one of Lean pool") in why
+
+
+#: a Lean try's need: `security/Proofs` built in a `build` tree, a package of 4000 modules (2000 .olean files count as built)
+PROOFS = auto.LeanNeeds("security/Proofs", "build", 4000)
+
+
+def built(*trees: tuple[int, bool], pkg: str = PROOFS.package) -> dict:
+    """A machine's kept `build` trees as the probe gives them (`lean_built`): each as (the .olean files its build of ``pkg``
+    holds, whether its fetched dependencies are there)."""
+    return {"lean_built": {"dir": "/c/lean-records", "trees": {f"build-{i}": {pkg: {"modules": n, "deps": deps}}
+                                                                for i, (n, deps) in enumerate(trees)}}}
+
+
+def test_a_lean_try_goes_only_to_a_machine_whose_kept_tree_holds_its_package_built():
+    """Every single-file try came back 'not elaborated ... this node keeps no dependencies' when `--on auto` sent it by free
+    places alone to the machines with no kept tree holding the proofs package built, which had the most places free for that
+    very reason. A machine is taken only where a tree holds the package's dependencies and half its modules' .olean files."""
+    many, one = pool(*(slot(f"r{i}") for i in range(6))), pool(slot("r0"), slot("r1", held=True))
+    docs = {N2: share(free=48), CPU1: {**many, **built((100, False), (0, False))}, "vy-nebius-cpu-3": {**many, **built((1999, True))},
+            CPU5: {**one, **built((4000, True), (10, True))}}
+    assert auto.choose(docs, 4, 16, lean_pool="build")[0] == (CPU1, "research"), "without the need: by free places, as before"
+    target, why = auto.choose(docs, 4, 16, lean_pool="build", needs=PROOFS)
+    assert target == (CPU5, "research") and why.endswith(f"; {CPU5} holds security/Proofs built in 1 of 2 `build` trees")
+    assert (f"{CPU1}'s research pool skipped: it holds security/Proofs built in none of its 2 `build` trees (at most 100 of the "
+            f"2000 modules that count as built, and none has its fetched dependencies)") in why
+    assert "vy-nebius-cpu-3's research pool skipped: it holds security/Proofs built in none of its 1 `build` trees (at most 1999" in why
+    assert why.startswith(f"{N2} skipped: it is not known to hold security/Proofs built (its probe said nothing of its kept Lean "
+                          f"trees), and {CPU5} does"), "a machine whose probe gave no `lean_built` is unknown, and passed over"
+    target, _ = auto.choose({**docs, CPU5: {**pool(slot("r0", held=True)), **built((4000, True))}}, 4, 16, lean_pool="build", needs=PROOFS)
+    assert target == (CPU5, "research"), "among the machines that hold it, the line as ever: none of the cold ones"
+    capped = {**one, **built((10, True), (4000, True)), **lean(build=(1, 0, 0))}
+    target, why = auto.choose({**docs, CPU5: capped}, 4, 16, lean_pool="build", needs=PROOFS)
+    assert target is None and f"so {N2}, whose probe said nothing of its trees, is taken as unknown" in why, \
+        "a tree past the pool's slots is none a run there is given: with no machine known to hold it, the unknown node 2"
+    assert auto.choose({**docs, CPU5: {**capped, **lean(build=(2, 0, 0))}}, 4, 16, lean_pool="build", needs=PROOFS)[0] == (CPU5, "research")
+    busy = {**docs, CPU5: {**pool(slot("r0", held=True)), **built((4000, True))}}
+    assert auto.smaller(busy, 16, 16)[2] == (CPU1, "research")
+    assert auto.smaller(busy, 16, 16, needs=PROOFS) is None, "a smaller request is offered only where the package is built"
+
+
+def test_a_lean_try_no_machine_holds_built_is_refused_with_what_each_lacks_and_the_ways_on():
+    docs = {N2: DOWN, CPU1: {**pool(slot("r0")), **built((30, True))}, CPU5: {**pool(slot("r0")), "lean_built": {"dir": "/c/lean-records", "trees": {}}}}
+    with pytest.raises(auto.Unplaceable) as e:
+        auto.choose(docs, 4, 16, lean_pool="build", needs=PROOFS)
+    said = str(e.value)
+    assert said.startswith(f"no machine holds security/Proofs built in a kept `build` tree, where this run would take it: {N2}: not "
+                           f"read ({DOWN}); {CPU1}: holds security/Proofs built in none of its 1 `build` trees (at most 30 of the "
+                           f"2000 modules that count as built); {CPU5}: keeps no `build` tree (/c/lean-records/build-I)")
+    assert "`--on MACHINE` runs it there anyway, building it cold" in said
+    assert "tools/verity/lean/lean_changed.py --records security/Proofs`), then launch this again" in said
+
+
+def test_a_machine_whose_probe_says_nothing_of_its_kept_trees_is_taken_only_while_none_is_known_to_hold_the_package():
+    old = {**pool(slot("r0"), slot("r1")), "lean_built": {"error": "PermissionError: [Errno 13] Permission denied"}}
+    docs = {N2: share(waiters=5), CPU1: {**pool(slot("r0"))}, "vy-nebius-cpu-3": old, CPU5: {**pool(slot("r0")), **built((5, True))}}
+    target, why = auto.choose(docs, 4, 16, needs=PROOFS)
+    assert target == ("vy-nebius-cpu-3", "research")
+    assert (f"no machine is known to hold security/Proofs built in a kept `build` tree, so {N2}, {CPU1}, vy-nebius-cpu-3, whose "
+            "probe said nothing of its trees, are taken as unknown") in why
+    assert f"{CPU5}'s research pool skipped: it holds security/Proofs built in none" in why
+    target, why = auto.choose({**docs, CPU5: {**pool(slot("r0")), **built((2000, True))}}, 4, 16, needs=PROOFS)
+    assert target == (CPU5, "research") and ("vy-nebius-cpu-3's research pool skipped: it is not known to hold security/Proofs "
+                                             f"built (its kept Lean trees weren't read (PermissionError: [Errno 13] Permission "
+                                             f"denied)), and {CPU5} does") in why
+
+
+def test_a_late_lean_twin_moves_only_to_a_machine_that_holds_its_package_built():
+    waits = pool(slot("r0", held=True), waiters=3)
+    docs = {N2: share(free=48), CPU1: {**waits, **built((4000, True))}, CPU5: {**pool(slot("r0"), slot("r1")), **built((0, False))},
+            "vy-nebius-cpu-3": {**pool(slot("r0")), **built((4000, True))}}
+    assert auto.elsewhere(docs, CPU1, 4, 16)[0] == (CPU5, "research"), "without the need: the most places"
+    target, why = auto.elsewhere(docs, CPU1, 4, 16, needs=PROOFS)
+    assert target == ("vy-nebius-cpu-3", "research") and why.endswith("; vy-nebius-cpu-3 holds security/Proofs built in 1 of 1 `build` trees")
+    del docs["vy-nebius-cpu-3"]
+    target, why = auto.elsewhere(docs, CPU1, 4, 16, needs=PROOFS)
+    assert target is None and why.startswith("no other machine's pool would start it now (no machine holds security/Proofs built")
+
+
+def test_the_package_a_lean_try_or_records_run_needs_is_read_from_the_tree_it_ships(tmp_path):
+    src = tmp_path / "src"
+    files = {"a/lakefile.toml": 'name = "Alpha"\n', "a/lean-audit.json": "{}", "a/A.lean": "", "a/A/B.lean": "",
+             "a/sub/lakefile.toml": 'name = "Sub"\n', "a/sub/lean-audit.json": "{}", "a/sub/X.lean": "",
+             "tools/verity/lean/fixture/lean-audit.json": "{}", "tools/verity/lean/fixture/F.lean": "", "README.md": ""}
+    for f, text in files.items():
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text(text)
+    subprocess.run(["git", "init", "-q", str(src)], check=True)
+    subprocess.run(["git", "-C", str(src), "add", "."], check=True)
+    changed = ["python3", "tools/verity/lean/lean_changed.py"]
+    assert auto.lean_package([*changed, "--try", "a/sub/X.lean"], src) == auto.LeanNeeds("a/sub", "build", 1), "the deepest package"
+    assert auto.lean_package(["uv", "run", "verity", "lean", "try", "--siblings", "./a/A/B.lean"], src) == ("a", "build", 2)
+    assert auto.lean_package(["bash", "-lc", "LEAN_RECORDS_POOL=proofs python3 tools/verity/lean/lean_changed.py --try a/A.lean"],
+                             src) == ("a", "proofs", 2)
+    for name, pkg in (("a", "a"), ("Alpha", "a"), ("sub", "a/sub"), ("a/sub/", "a/sub")):
+        assert auto.lean_package([*changed, "--records", name, "--update"], src).package == pkg, name
+    assert auto.lean_package([*changed, "--records=Sub"], src, ["LEAN_RECORDS_POOL=p"]) == ("a/sub", "p", 1)
+    for command in ([*changed, "--records", "zzz"], [*changed, "--try", "README.md"], [*changed, "--try", "tools/verity/lean/fixture/F.lean"],
+                    [*changed, "--records", "a", "--dev-cache"], [*changed, "--build", "a/A.lean"], ["uv", "run", "pytest", "--try", "a/A.lean"]):
+        assert auto.lean_package(command, src) is None, command
+    assert auto.lean_package([*changed, "--try", "a/A.lean"], None) is None
+    assert auto.lean_package([*changed, "--try", "a/A.lean"], tmp_path / "not-a-checkout") is None
+
+
+def test_the_probe_lists_what_each_kept_tree_of_the_pool_holds_of_the_package(tmp_path, monkeypatch, node_2):
+    """`lean_built` as a machine's probe gives it, by listing the trees under the check cache of the user it runs as: the
+    package's .olean files under `.lake/build/lib` (any depth) and whether its `.lake/packages` is there, for each tree of the
+    pool and no other."""
+    records = tmp_path / "check" / auto.LEAN_RECORDS
+    lib = records / "build-0" / "security/Proofs/.lake/build/lib/lean/Security"
+    lib.mkdir(parents=True)
+    for name in ("A.olean", "B.olean", "B.ilean", "B.trace"):
+        (lib / name).write_text("")
+    (records / "build-0" / "security/Proofs/.lake/packages").mkdir()
+    (records / "build-1").mkdir()
+    for other in ("build-x", "audit-0", "passes"):
+        (records / other / "security/Proofs/.lake/build/lib").mkdir(parents=True)
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check"))
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "spill", lambda: ())
+
+    def read(**kw) -> dict:
+        """Node 2's answer, the one machine asked."""
+        return auto.read(tmp_path / "src", 4, reach=lambda name: [sys.executable, "-"], **kw)[N2]
+
+    doc = read(needs=PROOFS)
+    assert doc["lean_built"] == {"dir": str(records), "trees": {
+        "build-0": {"security/Proofs": {"modules": 2, "deps": True}}, "build-1": {"security/Proofs": {"modules": 0, "deps": False}}}}
+    assert auto._holds(doc, PROOFS._replace(modules=4)) == (True, "holds security/Proofs built in 1 of 2 `build` trees")
+    assert auto._holds(doc, PROOFS._replace(modules=5))[0] is False, "two of five modules are under half"
+    assert "lean_built" not in read(), "a run that needs no tree asks for none"
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "nowhere"))
+    assert read(needs=PROOFS)["lean_built"]["trees"] == {}
 
 
 def test_slots_blocked_on_memory_are_not_capacity_when_ranking_lines():
@@ -858,7 +999,12 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h` (any length) raises it"
+    assert limit in err.splitlines(), "a run under the default time limit is told the flag that raises it"
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+    assert main([*runs, "--timeout", "2h", "--", "pytest", "-q"]) == 3
+    assert launched[-1]["command"][launched[-1]["command"].index("--run-max") + 1] == "7200"
+    assert "default time limit" not in capsys.readouterr().err, "a run that names its time is not told of the default"
 
 
 def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
@@ -879,7 +1025,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
         printed = capsys.readouterr().err.splitlines()
         assert all(f"research run --on auto: {line}" in printed for line in launched[-1]["auto"]["said"]), "the words it printed"
     free, last, queued = (kw["auto"] for kw in launched)
-    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 2
+    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 3
     assert free["said"][0].startswith(f"spilled to {CPU1}'s research pool, from ")
     assert f"({N2}'s share: 0 of 48 CPUs free, 2 claim(s), 56 waiting; " in free["said"][0], "what the queue's node answered"
     assert f"; {CPU5}'s research pool: slots r0 held; 2 waiting: " in free["said"][0], "and each pool"
@@ -894,6 +1040,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
     assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
     assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
     assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
+    assert queued["said"][-1].startswith("it is stopped 60 min after it starts, the default time limit: "), "the queue's time limit is said too"
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
 
 
@@ -1393,7 +1540,7 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
         read["docs"] = lines[line]
         rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", *flags, "--", "pytest", "-q"])
         err = capsys.readouterr().err.splitlines()
-        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith(head + "spilled to ")]
+        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith((head + "spilled to ", head + "it is stopped "))]
 
     late = (f"it isn't expected to start within 10 min: it should start in about 40 min on {at}: 7 waiting ahead (the oldest "
             f"for 29 min) for the 5 slots that run there")
@@ -1502,13 +1649,14 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h`"
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
         f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
-        f"research run --on auto: passed over {CPU1}, which can start no run",
+        limit, f"research run --on auto: passed over {CPU1}, which can start no run",
         f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
-        f"research: run {launched[1]['run_id']} launched on {CPU5}"]
-    assert said[2] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
-    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[3], "the second placement says why the first is out"
+        limit, f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+    assert said[3] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[4], "the second placement says why the first is out"
     assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
 
 
@@ -1772,3 +1920,55 @@ def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, 
     assert auto.share_cpus(tmp_path) is None
     assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
         capsys.readouterr().err
+
+
+def _lean_tree(tmp_path: Path) -> Path:
+    """A tree with the Lean tool's figures and check.py, a package `security` pinning Mathlib and one pinning nothing."""
+    repo = _auto_repo(tmp_path)
+    for f in (auto.LEAN_RESERVE_PY, auto.LEAN_RESERVE_PY.with_suffix(".json"), auto.LEAN_CHECK_PY):
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_bytes((REPO / f).read_bytes())
+    for pkg, deps in (("security", ["batteries", "mathlib"]), ("verity/circuits/base", [])):
+        (repo / pkg).mkdir(parents=True)
+        (repo / pkg / "lean-audit.json").write_text("{}")
+        (repo / pkg / "lakefile.toml").write_text(f'name = "{pkg.rsplit("/", 1)[-1]}"\n')
+        (repo / pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    return repo
+
+
+def _reserve():
+    spec = importlib.util.spec_from_file_location("test_lean_reserve", REPO / auto.LEAN_RESERVE_PY)
+    reserve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reserve)
+    return reserve
+
+
+RECORDS = ["python3", "tools/verity/lean/lean_changed.py", "--records"]
+
+
+def test_a_records_run_below_its_packages_floor_is_refused_at_launch_with_the_nodes_line(tmp_path, monkeypatch, capsys):
+    """A records run below its floor waited its turn for a Lean slot and was then refused in seconds; the launch refuses it
+    instead, naming the run the node would have named (`check.py`'s BELOW_FLOOR_RUN at the package's ask)."""
+    launched = []
+    monkeypatch.setattr(cli, "_auto_launch", lambda ns, harness, command, clones: launched.append((command, ns.mem_gb)) or 0)
+    repo, R = _lean_tree(tmp_path), _reserve()
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--source", str(repo)]
+    for mem in ([], ["--mem-gb", "40"]):
+        assert main([*runs, *mem, "--", *RECORDS, "security", "--update"]) == 2
+        err = capsys.readouterr().err
+        assert f"research run --on auto: refused: the build of security needs at least {R.ONE_JOB_GIB} GiB" in err
+        assert (f"\n  research run --on auto --mem-gb {R.gb(R.BUILD_HEAVY_GIB)} --max-min 120 --project verity --source . "
+                "--cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records security "
+                "--update\n") in err
+    floor_gb = str(math.ceil(R.ONE_JOB_GIB * 2**30 / 1e9))
+    assert main([*runs, "--mem-gb", floor_gb, "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=0", "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--", "bash", "-lc", " ".join([*RECORDS, "Security"])]) == 0, "a name matching no package is the node's"
+    assert main([*runs, "--", *RECORDS, "base"]) == 0, "a package pinning neither Mathlib nor ArkLib has no floor"
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=lots", "--", *RECORDS, "security"]) == 2
+    assert "VERITY_LEAN_MEM_FLOOR_GIB='lots' is no number of GiB" in capsys.readouterr().err
+    for light in (["verity", "lean", "try", "security/Definitions/Core.lean"],
+                  ["python3", "tools/verity/lean/lean_changed.py", "--try", "security/Definitions/Core.lean"]):
+        assert main([*runs, "--", *light]) == 0, "an edit loop's node refuses nothing for memory"
+    assert len(launched) == 6 and launched[0] == ([*RECORDS, "security"], float(floor_gb))

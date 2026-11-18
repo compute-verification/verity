@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeProtocol
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Definitions.Certifier.Premises
 public import Definitions.Certifier.Guarantees.Marks
@@ -84,7 +84,7 @@ is of every cell the device sends in them.
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Flock
 
@@ -236,4 +236,4 @@ def markedCount : Unit → Unit → Unit → Core.Outcome SpanCount Unit := fun 
 def idleDevice : MarkDevice Unit :=
   ⟨.empty, .empty, "", 0, ⟨1, 0, fun _ => 0, fun _ => 0⟩, 1, 0, NetTiming.markPhase 1, [], fun _ => 0⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties

@@ -30,13 +30,15 @@ def assert_pinned(target, pins: dict) -> None:
 
 
 def assert_live_ands(d, pins: dict) -> None:
-    """``d``'s traced AND count is the live ANDs of its builder on a CSE circuit, and its pin's."""
+    """``d``'s traced AND count is the live ANDs of its builder on a CSE circuit but for its commits (a row, no gate), and
+    its pin's."""
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
     C = Circuit(cse=True)
     ins = TR._elements_in(C, params)
     C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == pins[f"{d.name}_v{d.version}"][0]
+    commits = sum(k == "and" and v[1].is_const() for k, v in zip(C.kind, C.data))
+    assert T.counts["and"] == C.counts()["ands"] - commits == pins[f"{d.name}_v{d.version}"][0]
 
 
 def assert_agrees(target, inputs) -> None:

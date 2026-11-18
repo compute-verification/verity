@@ -1,4 +1,4 @@
-"""``pearl-c-h100-v0`` and ``-v1``: the chain against Pearl's own Rust (H100) and against `pearl_kw`'s replay, the clean-up's
+"""Pearl-C on the H100: the chain against Pearl's own Rust (H100) and against `pearl_kw`'s replay, the clean-up's
 pinning and algebra, the seeds' keying, the leaf and tickets rebuilt from their bytes, the pinned vectors, and the
 lifecycle on a test instance."""
 
@@ -106,49 +106,11 @@ def instance(case: str, shape=(16, 128, 16), index=3, weight=9, salt=b"salt"):
     s = C.PearlC(k_min=32, tile=(16, 16), hashing="h0")
     ctx = Context(hashlib.sha256(salt).digest(), Matmul(index, Shape(*shape), weight), hashlib.sha256(b"root_a").digest(),
                   hashlib.sha256(b"root_b").digest())
-    a, b = CV.rows(case, "A", shape[0], shape[1]), CV.rows(case, "B", shape[2], shape[1])
+    a, b = CV.rows_f32(case, "A", shape[0], shape[1]), CV.rows_f32(case, "B", shape[2], shape[1])
     tile = Tile(tuple(range(shape[0])), tuple(range(shape[2])))
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, a, b, tile)
     return s, ctx, noise, ops, s.checked(ctx, ops), a, b
-
-
-def clean(row: bytes, k: int) -> list[float]:
-    return [P.bf16_to_f32(x) for x in P.open_row(*P.parse_row(row, k))]
-
-
-def test_useful_output_removes_the_noise():
-    """U/(α_A·α_B) tracks A·Bᵀ at FP8 accuracy, while the noisy C̃/(α_A·α_B) carries δ = 1 noise, about as large as the
-    signal: the clean-up works."""
-    s, ctx, noise, ops, checked, a, b = instance("useful")
-    k = ctx.matmul.shape.k
-    fa, fb = [clean(r, k) for r in a], [clean(r, k) for r in b]
-    useful = s.useful(ctx, noise, ops, checked)
-
-    def rel_rms(got):
-        exact = [[sum(x * y for x, y in zip(ra, rb)) for rb in fb] for ra in fa]
-        num = sum((g - e) ** 2 for gr, er in zip(got, exact) for g, e in zip(gr, er))
-        return (num / sum(e * e for er in exact for e in er)) ** 0.5
-
-    noisy = [[P.f32_of_bits(w) / (P.bf16_to_f32(ops.a.alpha[i]) * P.bf16_to_f32(ops.b.alpha[j])) for j, w in enumerate(row)]
-             for i, row in enumerate(checked.c)]
-    assert rel_rms(useful) < 0.08 and rel_rms(noisy) > 3 * rel_rms(useful)
-
-
-def test_peel_factors_are_pinned():
-    """P_A's second half is the fused chain A′·F_B; P_B's second half is the exact negation of bf16(β_B·E_B); G is the
-    FP8 chain of the F bases."""
-    s, ctx, noise, ops, checked, a, b = instance("factors")
-    k = ctx.matmul.shape.k
-    fb = C._basis(noise.seed_b, 1, k)
-    for i in range(2):
-        assert ops.pa[i][:C.R] == [C._bf16_scaled(ops.a.beta[i], e) for e in ops.e_a[i]]
-        assert ops.pa[i][C.R:] == [P.f32_to_bf16(P.f32_of_bits(C.chain(ops.a.codes[i], [line[p] for line in fb])))
-                                   for p in range(C.R)]
-        assert ops.pb[i][C.R:] == [C._bf16_scaled(ops.b.beta[i], e) ^ 0x8000 for e in ops.e_b[i]]
-    g = C.gram(noise.seed_b, k)
-    fa = C._basis(noise.seed_b, 0, k)
-    assert g[1][2] == C.chain([line[1] for line in fb], [line[2] for line in fa])
 
 
 def test_seeds_are_keyed_as_the_design_says():
@@ -236,8 +198,8 @@ def test_leaf_and_tickets_rebuilt_from_bytes():
 
 
 def test_registry_and_domain():
-    s = get("pearl-c-h100-v0")
-    assert isinstance(s, PoUWScheme) and s.name == "pearl-c-h100-v0" and s.certificate.conjecture == "tt-out"
+    s = get("pearl-c-h100-v1-h3")
+    assert isinstance(s, PoUWScheme) and s.name == "pearl-c-h100-v1-h3" and s.certificate.conjecture == "tt-out"
     s.check(Matmul(0, Shape(64, 1024, 64), 1))
     s.check(Matmul(0, Shape(32, 1024, 64), 1))
     s.check(Matmul(0, Shape(112, 1024, 64), 1))
@@ -245,13 +207,13 @@ def test_registry_and_domain():
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)
-    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 15) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
+    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 15) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 68 * 128 * 2048
     assert s.first_adds(sh) == 32 * 128 * 256
 
 
 def test_the_census_k_is_in_v1s_domain_only():
     """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
-    is 4ρ, and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
+    is 4ρ, and no other k under 1,024 is; h0 and sm_120's record have no census k."""
     h3 = get("pearl-c-h100-v1-h3")
     params = dict(h3.certificate.parameters)
     assert h3.census_ks == (256,) and params["census_ks"] == (256,) and params["census_row_cap"] == "1/100"
@@ -261,7 +223,7 @@ def test_the_census_k_is_in_v1s_domain_only():
     for bad in (Shape(64, 128, 6144), Shape(64, 512, 6144), Shape(64, 256, 96)):
         with pytest.raises(DomainError, match="or k in 256"):
             h3.check(Matmul(0, bad, 1))
-    for name in ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h3"):
+    for name in ("pearl-c-sm120-v1-h3",):
         assert get(name).census_ks == () and dict(get(name).certificate.parameters)["census_ks"] == ()
         assert "census_row_cap" not in dict(get(name).certificate.parameters)
         with pytest.raises(DomainError, match="1024 <= k"):
@@ -283,19 +245,6 @@ def test_the_h100_h3_vectors_are_the_registered_schemes():
     assert s.name == case["scheme"] == v.name and s.commitment_hash == "hm96-sha512" and s.device is C.H100
     assert (s.k_min, s.tile, s.forming, s.hashing, s.prices) == (v.k_min, v.tile, v.forming, v.hashing, v.prices)
     s.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
-
-
-def test_lifecycle_on_a_test_instance():
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
-
-    s, k = C.PearlC(k_min=32, tile=(16, 16), hashing="h0"), 128
-    rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
-    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
-    prover = Prover(s, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
-    tr = prover.prove(epoch, {3: rows_a})
-    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
 
 
 # ---- forming v1 (§5) ------------------------------------------------------------------------------------------------
@@ -512,16 +461,11 @@ def test_f32_fma_overflow_and_div_of_a_nonfinite_word_as_the_lean_states():
 
 
 def test_v1_registry_and_cost():
-    s = get("pearl-c-h100-v1")
-    assert s.name == "pearl-c-h100-v1" and dict(s.certificate.parameters)["forming"] == "v1"
-    assert dict(get("pearl-c-h100-v0").certificate.parameters)["forming"] == "v0"
-    sh = Shape(128, 2048, 256)
-    v0, v1 = get("pearl-c-h100-v0").wref(sh), s.wref(sh)
-    assert v0 - v1 == (C.FORMING_V0_UNITS - C.H100_PRICES.forming) * 128 * 2048
-    with pytest.raises(ValueError):
-        C.PearlC(forming="v2", hashing="h0")
-    with pytest.raises(ValueError):
-        get("pearl-c-h100-v0").credit_of(sh)
+    s = get("pearl-c-h100-v1-h3")
+    assert s.name == "pearl-c-h100-v1-h3" and dict(s.certificate.parameters)["forming"] == "v1"
+    for bad in ("v0", "v2"):
+        with pytest.raises(ValueError):
+            C.PearlC(forming=bad, hashing="h0")
 
 
 def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf16: int = 2) -> Fraction:
@@ -558,12 +502,10 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     assert dict(C.PearlC(forming="v1", hashing="h3").certificate.parameters)["prices"] == "sm_90"
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
-        assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
+        assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1-h3").credit_of(sh)
     assert D.inert_work_units(1, 0, s, zeros=0) == 34 and D.inert_work_units(0, 1, s, zeros=0) == 40
     assert D.inert_work_units(1, 1, zeros=0) == 40 + 64 and D.inert_work_units(0, 0, s, zeros=1) == 8
     assert D.inert_work_units(0, 0, zeros=1) == 32
-    with pytest.raises(ValueError):
-        C.PearlC(forming="v0", prices=s, hashing="h0")
 
 
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
@@ -571,7 +513,7 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
 def test_wref_is_leans_wref_of(m, k, n):
     """W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
     is not in either, at any m."""
-    s = get("pearl-c-h100-v1")
+    s = get("pearl-c-h100-v1-h3")
     sh = Shape(m, k, n)
     assert s.wref(sh) == wref_of(m, k, n) and s.credit_of(sh) == wref_of(m, k, n) - 4 * m * k
     assert s.wref(Shape(2 * m, k, n)) == 2 * s.wref(sh)
@@ -617,8 +559,8 @@ def test_each_hashing_format_is_on_the_scheme():
 
 def test_h3_is_the_default_and_h0_and_sha256_are_named():
     """One hash: what leaves its hashing format or tree hash unnamed gets h3's (SHA-512, hm96-sha512 trees), and h0's
-    SHA-256 trees are taken only by name: Pearl-C's h0 schemes, and NCP and Pearl's port, whose 32-byte tile digests
-    hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
+    SHA-256 trees are taken only by name: Pearl-C's h0 test instances, and NCP and Pearl's port, whose 32-byte tile
+    digests hm96 tile trees don't take."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import audit
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
     from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
@@ -626,7 +568,6 @@ def test_h3_is_the_default_and_h0_and_sha256_are_named():
     assert C.PearlC(forming="v1").hashing == "h3"
     assert C.leaf(C.Checked([[0]], [[0]])) == C.leaf(C.Checked([[0]], [[0]]), "h3")
     assert SchemeId("pearl-c", "h100", "v1", "e4m3").name == "pearl-c-h100-v1-h3"
-    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1")] == ["h0"] * 2
     assert {get(n).commitment_hash for n in ("ncp-v1", "pearl-fp8-v4")} == {"sha256"}
     d = audit.rows_domain(b"\0" * 64, -2, 4)
     assert isinstance(d, audit.Hm96Domain) and d.hash == "sha512"
@@ -825,14 +766,13 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
 
 
 def test_domain_needs_whole_promotion_groups():
-    s = get("pearl-c-h100-v1")
+    s = get("pearl-c-h100-v1-h3")
     s.check(Matmul(0, Shape(64, 1152, 64), 1))
     with pytest.raises(DomainError):
         s.check(Matmul(0, Shape(64, 1056, 64), 1))
 
 
-@pytest.mark.parametrize("name", ["pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1",
-                                  "pearl-c-sm120-v1-h3"])
+@pytest.mark.parametrize("name", ["pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3"])
 def test_the_domain_has_lean_s_n_floor(name):
     """Lean's `pearlCDomainDev` takes `64 <= n` and `64 | n` (a 1 x (n mod 64) edge tile's words can be guessed
     whole); the 64-column tile is that floor, and it keeps GLM-5.3's n = 512 w13 and gate_up and n = 256 router at TP8."""

@@ -11,7 +11,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.TensorLayout`.
 5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
+   The memory attester refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is flipped here through `verity.commitments.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
@@ -122,7 +122,7 @@ class Scheme(ABC):
 
     name: ClassVar[str] = ""
     experimental: ClassVar[str | None] = None
-    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the memory challenger
+    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the memory attester
     audits it only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
@@ -138,7 +138,7 @@ class Scheme(ABC):
     @property
     def certificates(self) -> tuple[CapacityBound, ...]:
         """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
-        guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
+        guarantees at several round budgets lists them all; the memory attester audits under the first that covers its
         `k` and deadline."""
         return () if self.certificate is None else (self.certificate,)
 
@@ -227,7 +227,7 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the memory challenger's own secret, kept secret until
+    """The audit's key, bound to `vk`'s root and salt; `source` is the memory attester's own secret, kept secret until
     the audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover
     compute the challenged indices before the audit and rebuild only those labels within the deadline."""
     return audit.challenge_key(source, vk)

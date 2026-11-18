@@ -7,8 +7,6 @@ deciding bias, non-finite logits and biases and rows with fewer than six current
 program digest, and the routers pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import hashlib
 import json
 
@@ -23,6 +21,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
 from verity_vllm.definitions.registry import dsv4_moe as D
 

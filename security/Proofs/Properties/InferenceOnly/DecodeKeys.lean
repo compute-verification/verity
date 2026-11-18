@@ -26,7 +26,7 @@ Definition with its key.
 
 set_option mvcgen.warning false
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.DecodeKeys
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
@@ -412,4 +412,4 @@ theorem root_first (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rw [he, hk P.root hr] at h1
   exact absurd (Option.some.inj h1) (Nat.ne_of_gt hi)
 
-end InferenceOnlyCheck.Properties.SecurityProofs.DecodeKeys
+end InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys

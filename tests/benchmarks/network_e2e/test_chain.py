@@ -1,6 +1,6 @@
 """The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
 stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per execution phase, v0's
-summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
+summing to I1's total and the residual's giving back every step from the config alone, and with the attested I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the endpoint's own advice, bound to the
 runs by its Commit windows."""
@@ -38,7 +38,7 @@ def _advice():
 
 
 def _io(users=("q0", "q1")) -> list[dict]:
-    """The certified I/O of `_advice`'s requests as a varied run's check writes it (``io.json``), in ingress order."""
+    """The attested I/O of `_advice`'s requests as a varied run's check writes it (``io.json``), in ingress order."""
     return [{"user": users[0], "prompt": [1, 2, 3, 4], "max_tokens": 2, "output": [5, 6]},
             {"user": users[1], "prompt": [1, 2, 3], "max_tokens": 4, "output": [9]}]
 
@@ -73,7 +73,7 @@ def test_the_advice_is_read_as_v0_json_as_its_bytes_and_as_an_upgraded_standin(t
         chain.advice(tmp_path / "c.json")
 
 
-def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_certified_io_binds_and_rebuilds_the_advice():
+def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_attested_io_binds_and_rebuilds_the_advice():
     adv = _advice()
     unbound = chain.bits(adv, T, 3, CONFIG, None)
     assert unbound["bound"] is None and unbound["public_fields"] is None and unbound["rebuilt"] is None
@@ -420,9 +420,9 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
     """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
-    mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
+    mid-serve) and the attested I/O of their nine requests: bound and rebuilt, each window opening its registered root;
     not bound when a window falls outside the run's execution phases, holds a request the run didn't certify, opens another
-    root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
+    root or names another Commit, or has no advice; not rebuilt when an attested output breaks the stop rule."""
     io = json.loads((EP / "io.json").read_text())["requests"]
     first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))
     dep = {"origin_unix": first[0] - 0.05, "windows": 2, "window_s": 6.0}
@@ -489,7 +489,7 @@ def _reregister(d: Path, data: bytes) -> None:
 def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advice_that_charges_the_carry_once(
         tmp_path):
     """The gate endpoint's Commit windows 113 to 116, trimmed: 114 ends three
-    requests with outputs still to keep and 115 carries them in (window advice v1). Bound and rebuilt from the certified
+    requests with outputs still to keep and 115 carries them in (window advice v1). Bound and rebuilt from the attested
     I/O of their nine requests, 114 and 115 joined into one advice (`window_chain.join`), which holds each carried
     request's record and state once where 115's string repeats them; the windows that carry nothing are charged their
     own registered bits. Refused: 115 opening with a state 114 didn't leave, registered under its own salts so that it

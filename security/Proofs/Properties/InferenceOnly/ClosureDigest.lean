@@ -16,11 +16,11 @@ of the byte strings `Hashed` names.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open InferenceOnlyCheck.DefinitionDigest (isComposite definitionDigest closureDigest)
-open InferenceOnlyCheck.DefinitionDigest.SecurityProofs (isComposite_iff)
+open InferenceOnlyVerifier.DefinitionDigest (isComposite definitionDigest closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest.SecurityProofs (isComposite_iff)
 
 /-- A loop over a list keeps an invariant that each step keeps. -/
 theorem forIn_inv {α β ε : Type} (l : List α) (f : α → β → Except ε (ForInStep β)) (I : β → Prop)
@@ -251,4 +251,4 @@ theorem closureDigest_spec {j : Json} {key h : String} (H : closureDigest j key 
     subst this
     exact hin.resolve_right List.not_mem_nil
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

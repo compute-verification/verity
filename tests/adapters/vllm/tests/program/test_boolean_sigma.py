@@ -23,8 +23,9 @@ from verity.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
 from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as MP
 from verity.circuits.ops import scalar as S
-from verity.circuits.types import Array, Value
 from verity.circuits.ops.boolean import versions as BB
+from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.registry import b1, b1_tp2, hopper, moe
 from verity_vllm.definitions.registry import dsv4_decode_indices as DI
 from verity_vllm.definitions.registry import inductor as I

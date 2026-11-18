@@ -4,17 +4,15 @@ byte, a flipped kv_c_out word and a flipped scale; the PTX check takes the two F
 `tests/properties/glm53_ds_mla_write_capture_gpu.py --phase gpu` then `--phase compare` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from tests.properties import glm53_ds_mla_write_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.properties import glm53_ds_mla_write_capture_gpu as X
 from verity_vllm.definitions.registry import dsa_ds_mla as M
 
 ROWS = 24

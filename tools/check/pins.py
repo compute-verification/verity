@@ -24,8 +24,8 @@ at the root of a checkout, rewrites it from the tree.
 restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)
 and `tools/verity/lean/lean-deps.json`, a bundle per manifest that a cold run exports (preflight names its command).
 
-`--merged` is the merge's half (`research merge --train --prepare` runs it on every merge of a train): Lake manifests and pins
-are generated, so their merged text is never kept.  Drive's merge onto `next` has no checkout to run commands in, so when its
+`--merged` is the merge's half (run it in a checkout after a merge): Lake manifests and pins
+are generated, so their merged text is never kept.  The queue's merges (`Queue._merge`) have no checkout to run commands in, so when its
 only conflicts are in pins it rebuilds each from the merged tree itself, reading `PINS` from this file's text, unless both
 sides changed what a JSON pin holds besides its digests, which conflicts (`research.queue.repinned`).
 Each Lake package (a directory with a tracked `lakefile.toml` and

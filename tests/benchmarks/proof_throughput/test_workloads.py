@@ -6,6 +6,7 @@ from verity_proof_throughput import workloads as W
 def test_cap_is_the_largest_power_of_two_a_statement_holds():
     w = W.workload("bf16-k6144")
     assert w.cap == 1024 == W.MAX_STATEMENT_BITS >> 25
+    assert W.workload("bf16-k2048").cap == 1024 < W.MAX_STATEMENT_BITS >> 24   # the population's size bounds it
     assert W.WORKLOADS["fp8-coord-k256"].cap == 4096   # no k_log yet: the instance set's size bounds it
 
 
@@ -17,16 +18,17 @@ def test_ladder_runs_over_powers_of_two():
             W.ladder(*bad)
 
 
-def test_the_population_is_n_max_independent_instances_of_the_vu(monkeypatch):
+@pytest.mark.parametrize("name, K", [("bf16-k6144", 6144), ("bf16-k2048", 2048)])
+def test_the_population_is_n_max_independent_instances_of_the_vu(monkeypatch, name, K):
     from verity.circuits import partition_object as PO
     from verity.circuits.codec import program_digest
 
     from verity_proof_throughput import population as POP
 
-    w = W.workload("bf16-k6144")
+    w = W.workload(name)
     prog = w.population()
     (_k, fn), = PO.calls(prog)
-    assert fn.id == w.vu and "K=6144" in w.vu and w.extra["dot"] in w.vu
+    assert fn.id == w.vu and f"K={K}" in w.vu and w.K == K and w.extra["dot"] in w.vu
     monkeypatch.setenv("PT_VU", w.vu)
     monkeypatch.setenv("PT_N", str(w.n_max))
     assert program_digest(POP.program()) == program_digest(prog), "the class sweep's PROGRAM= file stages the same program"

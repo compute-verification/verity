@@ -12,13 +12,13 @@ import dataclasses
 import re
 
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.commitments.periods import interface as IF
+
+from tests.program.predict.test_node_window import LP, glm_request
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
-
-from tests.program.predict.test_node_window import LP, glm_request
-from verity.circuits.codec import descriptor_id
-from verity.commitments.periods import interface as IF
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES}
 WIDTH = 6144

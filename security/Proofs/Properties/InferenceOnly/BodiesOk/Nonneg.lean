@@ -33,7 +33,7 @@ same predicate (`partNonneg_iff`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 /-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
@@ -192,4 +192,4 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
     exact parsePartsIn_nonneg_step leaves args hargs n _
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

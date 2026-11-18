@@ -1,4 +1,4 @@
-// The served execution phase's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves
+// The served execution phase's tables on the device: hm96-sha512 hiding leaves
 // (hm96-sha512/row-seg/v1) in one frame-v3-sha512 tree a table, every table a served step commits (each call's A table, its
 // admit words and its receipts; the a-step, admit-step and round trees over their roots) and the install's B tables.  Plain
 // launches on the caller's stream into caller-owned buffers, the step read from device memory, so a step's sequence is the

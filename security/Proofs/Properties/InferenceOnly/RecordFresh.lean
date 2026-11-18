@@ -31,11 +31,11 @@ rows' bits, are together within the bits of all the rows.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
-open InferenceOnlyCheck.Properties.Record.SecurityProofs (inputsOf_decls wired_of_read wire_shape shape_spec cover_apart
+open InferenceOnlyVerifier.Properties.Record.SecurityProofs (inputsOf_decls wired_of_read wire_shape shape_spec cover_apart
   fill_of_cover tmpls_named tmpl_grids tmpl_slot_units)
 
 /-! ## Sums -/
@@ -345,4 +345,4 @@ theorem fresh_rows : FreshRows := by
   show ∑ x ∈ F, b x ≤ (summarize c).fresh
   omega
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

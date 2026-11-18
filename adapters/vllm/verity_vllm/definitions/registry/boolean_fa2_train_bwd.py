@@ -10,6 +10,7 @@ bf16 conversions' and `Ex2Approx_v2`.
 from __future__ import annotations
 
 from verity.circuits.ops.boolean.versions import sigma_lift
+
 from verity_vllm.definitions.registry import fa2_train_bwd as W
 
 Fa2TrainBwdPre = sigma_lift(W.Fa2TrainBwdPre, 2)

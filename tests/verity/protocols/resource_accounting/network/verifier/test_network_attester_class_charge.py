@@ -108,7 +108,7 @@ def test_a_tie_accepted_and_not_complete_is_charged_its_whole_schedule():
     got = charge(HEAD, 0, {K.COMPUTE_AUDIT: [record(K.COMPUTE_AUDIT, complete=False)],
                            K.STOP_RECORD: [record(K.STOP_RECORD, accepted=False)]})
     assert [(kind, lack) for kind, lack, _ in got.owed] == [
-        (K.STOP_RECORD, K.REFUSED), (K.RESPONSE_TIE, K.MISSING), (K.CERTIFIED_READ, K.MISSING),
+        (K.STOP_RECORD, K.REFUSED), (K.RESPONSE_TIE, K.MISSING), (K.ATTESTED_READ, K.MISSING),
         (K.COMPUTE_AUDIT, K.NOT_COMPLETE)]
 
 

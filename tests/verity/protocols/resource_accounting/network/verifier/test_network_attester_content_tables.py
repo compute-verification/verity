@@ -1,6 +1,6 @@
 """The network attester's content tables (`content_rows`' "The tables", `connection_rows`, `network_attester`'s "The content
 rows"), driven tick by tick on `test_network_attester`'s harness. A schedule without them has the digest,
-records, heads and certificates it had. With them the device hands each release its request's bytes and its ids as
+records, heads and attestations it had. With them the device hands each release its request's bytes and its ids as
 its own records hold them, the tables are the schedule's size whatever the load, a release is filed in the first
 class that holds it, each row opens the one head's root at its place, the registration reads back, and the response
 tie run on a response row and an end row the network attester wrote returns the signed response row: for a
@@ -70,9 +70,9 @@ def fingerprint(params: NetworkAttesterParams, directory) -> str:
 
 def leaves(device, params: NetworkAttesterParams, directory) -> str:
     """A hash of everything a run of `device` leaves under `params`, with the signer's key, its coins and every salt
-    fixed: each wire record's certificate (or that it has none, not being complete), each cells' head and its
+    fixed: each wire record's attestation (or that it has none, not being complete), each cells' head and its
     signature, the `fails` records, and each handed execution phase's lengths slots, connection rows' head and
-    certificate."""
+    attestation."""
     counter = itertools.count()
     issuer = Issuer(signers.signer(directory), signers.SESSION,
                     coins=lambda n: hashlib.sha512(b"coins%d" % next(counter)).digest()[:n])
@@ -113,9 +113,9 @@ def registered(device, params: NetworkAttesterParams, directory) -> str:
     return h.hexdigest()
 
 
-def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_certificates_it_had(tmp_path):
+def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_attestations_it_had(tmp_path):
     """The classes are hashed only by a schedule that lists them, so a schedule without them, with lengths rows or
-    without, has the parameters digest it had, and its run leaves the records, the heads and the certificates it left,
+    without, has the parameters digest it had, and its run leaves the records, the heads and the attestations it left,
     byte for byte. Its device keeps and hands nothing more: a release has no request and no ids."""
     assert PLAIN.content is None and LEN.content is None and NetworkAttesterParams().content is None
     assert PLAIN.digest.hex() == PLAIN_DIGEST and LEN.digest.hex() == LEN_DIGEST
@@ -644,7 +644,7 @@ def test_a_row_of_zero_bytes_reads_as_each_tables_decoder_says(ran):
 def test_one_head_lists_every_table_and_says_nothing_of_the_load(ran, signed, tmp_path):
     """The head lists the lengths table, the fails table and each class's three, in the schedule's order, and is
     signed once. Its fields and sizes, and the registration's, are the schedule's: an execution phase with four
-    releases, one with three and one with none differ in their roots and the certificate alone, so nothing public
+    releases, one with three and one with none differ in their roots and the attestation alone, so nothing public
     counts a class's held rows."""
     _, _, _, handed = ran
     issuer, by_phase = signed
@@ -864,7 +864,7 @@ def test_under_form_2_one_head_counts_each_classes_held_rows_and_its_other_field
         assert (x.root == y.root) == (x.rows == 0)
 
     def public(doc):
-        """A registration less what a load may move: its certificate, each root, and a class's rows and domains."""
+        """A registration less what a load may move: its attestation, each root, and a class's rows and domains."""
         counts = {"rows": None, "domain": None}
         return {**doc, "certificate": None, "tables": [{**t, "root": None} | (counts if k >= 2 else {})
                                                        for k, t in enumerate(doc["tables"])]}
@@ -888,7 +888,7 @@ def test_a_form_2_registration_that_counts_more_rows_than_an_execution_phase_rel
     """The verifier reads a class's count from the registration and takes one from 0 to R = 6 and no other: three
     tables of a class at R + 1 rows, each with the domain of that count, are refused naming the bound, and so is a
     count that is no such integer. A count inside the bound that isn't the signed one is refused too: by its domain
-    where that is the signed count's, and by the certificate where it is its own."""
+    where that is the signed count's, and by the attestation where it is its own."""
     key, by_load = counted
     _, doc, _, _ = by_load["first"]
     R = HELD.phase_releases
@@ -932,9 +932,9 @@ def test_a_form_2_registration_whose_classes_three_tables_differ_in_rows_is_refu
 def test_a_form_2_registration_takes_a_table_of_no_row_only_with_the_zero_root(counted):
     """A class in which no release is filed has three entries of 0 rows and the zero root, and the verifier's read
     takes them: the head it returns holds them, under the domains of 0 rows. With any other root, a held table's or
-    the zero root with a bit set, a table of no row is refused naming it, before the certificate is read. A table
+    the zero root with a bit set, a table of no row is refused naming it, before the attestation is read. A table
     that holds rows is not taken at no row either: at 0 rows and the zero root its class's other tables differ, and
-    all three at 0 rows are not what the certificate signs."""
+    all three at 0 rows are not what the attestation signs."""
     key, by_load = counted
     _, doc, head, domains = by_load["none"]
     assert all((e.rows, e.root) == (0, bytes(64)) for e in head.tables[2:])
@@ -1099,7 +1099,7 @@ def word(order: int, o: int) -> int:
 
 
 @FORMS
-def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_signed(tied, stop):
+def test_the_response_tie_on_the_attesters_end_row_returns_the_response_row_it_signed(tied, stop):
     """Each release's proof block, in a stop class's form and a no-stop class's, on the compute side's committed row
     of the ids the server sent and the end row the network attester wrote: it accepts, and the row its gates return
     is the response row the network attester wrote, so the verifier's registered read of the response table accepts

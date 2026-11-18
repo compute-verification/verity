@@ -2,6 +2,7 @@
 holds, or on a fake clock that code under test sleeps on."""
 from __future__ import annotations
 
+import errno
 import json
 import os
 import select
@@ -14,7 +15,8 @@ from typing import Callable
 def wait_exit(pid: int) -> str:
     """Return once `pid` has exited, saying how. A child of this process (a runner `remote.launch_request` started) is reaped;
     any other (a runner a `research launch-request` subprocess left behind) is waited on through a pidfd, which is readable from
-    its exit on, reaped or not. A pid that is already gone has exited."""
+    its exit on, reaped or not. A pid that is already gone has exited, and so has one whose number a thread now holds: process
+    and thread ids share one space, and the kernel refuses a pidfd for a number that is no process's own (EINVAL)."""
     try:
         os.waitpid(pid, 0)
         return "reaped"
@@ -23,6 +25,10 @@ def wait_exit(pid: int) -> str:
     try:
         fd = os.pidfd_open(pid)
     except ProcessLookupError:
+        return "gone already"
+    except OSError as e:
+        if e.errno != errno.EINVAL:
+            raise
         return "gone already"
     try:
         select.select([fd], [], [])

@@ -6,8 +6,6 @@ at GLM-5.3's H and the route batch invariance pins at TP4, keyed on the device a
 their word Definitions, are pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import itertools
 import json
 
@@ -22,6 +20,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_check as K

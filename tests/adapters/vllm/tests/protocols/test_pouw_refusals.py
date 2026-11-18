@@ -121,8 +121,8 @@ def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(m
 def test_a_pearl_c_scheme_is_built_only_for_a_name_this_path_runs_and_only_under_that_name():
     """A test instance takes `PearlC`'s keywords; one of another device's prices names itself with them, and is refused."""
     with pytest.raises(KeyError) as e:
-        PPD.scheme_of("pearl-c-sm120-v1")
-    assert e.value.args == (f"'pearl-c-sm120-v1': this device path runs {', '.join(PPD.SCHEMES)}",)
+        PPD.scheme_of("pearl-c-nvfp4-v0")
+    assert e.value.args == (f"'pearl-c-nvfp4-v0': this device path runs {', '.join(PPD.SCHEMES)}",)
     for name in PPD.SCHEMES:
         own = DEVICES[SchemeId.parse(name).device].prices
         assert PPD.scheme_of(name).name == name

@@ -113,7 +113,7 @@ theorem expectedRow_frame {S T W : Nat} {syncs : Fin W → ClockSync} {frames : 
   · cases h
 
 /-- Every frame of the Program's grid is `B` bytes when every payload of the link is `8·B` bits. -/
-theorem programGrid_sizes {p : NetworkCheck.Check.Params} {syncs : Fin p.windows → ClockSync}
+theorem programGrid_sizes {p : NetworkVerifier.Check.Params} {syncs : Fin p.windows → ClockSync}
     {frames : List LogicalFrame} {w : Nat} (hf : ∀ f ∈ frames, f.payload.length = 8 * p.grid.frameBytes) :
     ∀ row ∈ (programGrid p syncs frames w).toList, ∀ f ∈ (row.filterMap id).toList, f.size = p.grid.frameBytes := by
   intro row hrow f hfr

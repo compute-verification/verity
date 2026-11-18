@@ -34,9 +34,9 @@ from verity.circuits.codec import (
 )
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.program import Program
-from verity_vllm.definitions.registry import b1, b1_tp2, hopper
 
 from tests.program.descriptor_equivalence import Mismatch, compare
+from verity_vllm.definitions.registry import b1, b1_tp2, hopper
 
 TINY: dict[str, Any] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}

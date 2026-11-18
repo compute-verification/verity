@@ -39,12 +39,13 @@ and what the run wrote under `out/`. `--from` takes a directory or a run id (`ma
 record from there through no store (`kit.record_dir`): nothing of research's is imported, no credential is looked up
 and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
 run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
-`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
-Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
-run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
-`job.json` says it is made up (``made_up``, as the tests' fixture does) is reported as made up through the kit
-(`kit.report`'s ``made_up``): its line under the number, ``made_up: true``, what the record says of itself
-(``made_up_says``), and `result.json`'s entries marked modeled and made up, never measured.
+`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and the commit
+`out/compute-run.json` states. Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names
+no directory, it reads that run's record from the evidence store, through research's client. Anything else is refused
+(exit 2). `result.json`'s entries are written only by the run whose record it reads (`kit.report`'s ``from_run``): a
+reprint of another run writes none. A record whose `job.json` says it is made up (``made_up``, as the tests' fixture
+does) is reported as made up through the kit (`kit.report`'s ``made_up``): its line under the number, ``made_up:
+true``, and what the record says of itself (``made_up_says``), and it writes no entry of `result.json`.
 
 Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
@@ -126,7 +127,9 @@ recorded run: the metric (the printed number, its unit and target), the two shar
 `OF_CREDITABLE`: the model's MACs Pearl+ can credit at the load, and the share of those credited, each printed too),
 the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and beside them the answer's ε_s and the error (its δ_s, a parameter the run
-chose, marked modeled: neither is more than sampling's). The metric is
+chose, marked modeled: neither is more than sampling's). Each names its member (`member`): the served model, then the
+card `out/compute-run.json` says the run served on (``llama-3.2-1b-h200``); none names one where that file names no
+card. The metric is
 named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
 resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
@@ -152,10 +155,12 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
+           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the unit of the two shares the number is the product of (`CREDITABLE`, `OF_CREDITABLE`)
@@ -180,8 +185,8 @@ POLICY = "out/inference-only-policy.json"
 VERDICTS = "out/record/verdicts.json"
 #: the Pearl+ piece's own document (`served_verdicts.py pearlplus`), read for its ``coin_source`` alone
 DEVELOPMENT = "out/pieces/pouw/development.json"
-#: the launcher's statement of the coins and parameters it ran with (`serve.sh`), read for its ``challenger`` and
-#: ``development`` alone
+#: the launcher's statement of the coins and parameters it ran with (`serve.sh`), read for its ``challenger``,
+#: ``development`` and ``card`` alone
 RAN = "out/compute-run.json"
 #: the run's own record of itself: a record directory's run id and commit, and where a record is made up, ``made_up``
 JOB = "job.json"
@@ -499,7 +504,9 @@ def row(tree: Path) -> dict:
     try:
         held = _held(tree, VERDICTS)
         work = {} if held is None else held["protocols"].get("work") or {}
-        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")}
+        weaker = ((work.get("answer") or {}).get("profile") or {}).get("weaker_tie")
+        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")} | (
+            {"weaker_tie": weaker} if weaker else {})
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise Unreadable(f"the run's composed record doesn't read as one ({type(e).__name__}: {e})") from e
 
@@ -632,12 +639,15 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
     total = sum(macs.values())
     head = {"lm_head": {"calls": len(heads), "creditable_macs": creditable,
                         "creditable_share": creditable / total}} if heads else {}
+    ran = _optional(tree, RAN)
+    card = ran.get("card") if isinstance(ran, dict) else None
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
             "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "coins": coins(tree), "record": record,
             "withdrawn": withdrawn,
-            "model": served["model"], "revision": served["revision"], "class": served["class"], "policy_agrees": served["policy_agrees"],
+            "model": served["model"], "revision": served["revision"], "card": card if isinstance(card, str) and card else None,
+            "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head,
             "made_up_says": made_up(tree)}
 
@@ -667,7 +677,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         if (sheet := site.sheet(d)) is None:
             raise Unreadable(f"the registered device {d} names no registered sheet")
         try:
-            card = load_card(sheet.sku)
+            card = load_card(sheet.sku, directory=CARD_FILES)
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
@@ -685,7 +695,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name), a parameter the run
     chose and marked so (`DELTA_S_MARK`), never measured.
     Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
-    the recorded run."""
+    the recorded run, and each names the document's `member` where it has one."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
     head = doc.get("lm_head")
@@ -707,7 +717,17 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
         v = doc[key]
         out.append({"name": name, "value": None if v is None else float(Fraction(str(v))), "unit": unit,
                     "inputs": [*inputs, key], **extra, **({"why": f"the answer states no {said}"} if v is None else {})})
-    return out
+    return [m | {"member": line} for m in out] if (line := member(doc)) else out
+
+
+def member(doc: dict) -> str | None:
+    """The metrics' line a document's measurements are for, as `benchmarks/README.md` names one, model then card: the
+    served model's name and the card the record says the run served on (`RAN`'s ``card``, nvidia-smi's name), each
+    lower-case and hyphenated (``llama-3.2-1b-h200``); None where the record names no card."""
+    if not doc.get("card"):
+        return None
+    card = "-".join(doc["card"].lower().split()).removeprefix("nvidia-")
+    return f"{doc['model'].rsplit('/', 1)[-1].lower()}-{card}"
 
 
 def commit_of(attempt: dict) -> str | None:
@@ -757,13 +777,18 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
             raise Unreadable(f"the record directory {record} holds no {path} ({what})"
                              + (": it is a run's out/ directory; name the directory holding it" if moved else ""))
     try:
-        job = _held(record, JOB) or {}
-        run = (job.get("run") or {}).get("id") or record.resolve().name
+        job, run = _held(record, JOB) or {}, record_run(record)
         conds = (job.get("store") or {}).get("conditions") or {}
-        commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+        ran = (_optional(record, RAN) or {}).get("commit")
+        commit = (commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+                  or (ran if ran != "unknown" else None))
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
-    return _with_split(document(record, commit, str(run), [], given), record, per_call, given, top)
+    return _with_split(document(record, commit, run, [], given), record, per_call, given, top)
+
+
+def record_run(record: Path) -> str:
+    return str(((_held(record, JOB) or {}).get("run") or {}).get("id") or record.resolve().name)
 
 
 def _with_split(doc: dict, tree: Path, per_call: bool, given: Path | None, top: int) -> dict:
@@ -826,6 +851,8 @@ def text(doc: dict) -> str:
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
                  + ": PoUW credits nothing of this run, and the number above is the Pearl+ verifier's answer alone"
                  + (f" (the record's reason for PoUW's verdict: {record['why']})" if record["why"] else "")))
+    if record.get("weaker_tie"):
+        lines.append(f"  PoUW's accept is {record['weaker_tie']}")
     if doc["withdrawn"]:
         lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
     lines.append(f"  {doc['model']} at revision {doc['revision']}, {cls['slots']} slots of {cls['prompt']} prompt and "
@@ -886,13 +913,14 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         said, line = stated(getattr(e, "tree", None) or tree)
         return kit.report("compute", "\n".join(x for x in (made_up_text(up) if up else "", line) if x),
                           none | {"made_up_says": up},
-                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=said,
-                          accepted=False, why=str(e), made_up=bool(up))
+                          [] if up else not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]),
+                          ran_with=said, accepted=False, why=str(e), made_up=bool(up),
+                          from_run=record_run(tree) if tree else a.source)
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True,
-                      made_up=bool(doc["made_up_says"]))
+    return kit.report("compute", text(doc), doc, [] if doc["made_up_says"] else not_an_audit(measured), ran_with=said,
+                      accepted=True, made_up=bool(doc["made_up_says"]), from_run=doc["run"])
 
 
 def not_an_audit(measured: list[dict]) -> list[dict]:

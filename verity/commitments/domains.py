@@ -271,7 +271,7 @@ REC_INNER = "verity/rec-inner/v1"
 REC_V1_VERIFIER_SALT = "verity/rec-v1/verifier-salt/v1"
 REC_V1_ZERO_RESIDUAL_SALT = "verity/rec-v1/zero-residual-salt/v1"
 
-# Not yet read from here: PoUS, the wipe and the memory challenger
+# Not yet read from here: PoUS, the wipe and the memory attester
 CHAIN_DENSE_H = "chain-dense-H/v1"
 DENSE_CHAIN = "dense-chain/v1"
 LMS_SHA512_N64_W1_H20 = "lms-sha512/n64-w1-h20/v0"
@@ -401,7 +401,7 @@ NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
 # Not yet read from here: composition (onsite, remote)
-ONSITE_PROTOCOL = "verity/onsite/v0"
+ONSITE_PROTOCOL = "verity/onsite/v1"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)

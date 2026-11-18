@@ -2,7 +2,7 @@
  "format": 2,
  "roots": ["PouwPearlPlus"],
  "exempt": {
-  "PouwPearlPlus.Main": "the pouw-pearlplus executable's entry point: it parses its arguments, reads the run's pass files and coins and prints PouwCheck.PearlPlus.check's verdict, audited under PouwPearlPlus"
+  "PouwPearlPlus.Main": "the pouw-pearlplus executable's entry point: it parses its arguments, reads the run's pass files and coins and prints PouwVerifier.PearlPlus.check's verdict, audited under PouwPearlPlus"
  },
  "layers": {
   "PouwPearlPlus": {

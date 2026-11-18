@@ -1,4 +1,4 @@
-"""`rmsnorm_fused_split`'s `RMSNormFusedCudaAdd_v1` parts and `RMSNormFusedCudaTail_v1`, wired as a window wires them (part j's x the norm's x
+"""`rmsnorm_fused_split`'s `RMSNormFusedCudaAdd_v2` parts and `RMSNormFusedCudaTail_v1`, wired as a window wires them (part j's x the norm's x
 on [j·C, (j+1)·C), its res the whole residual row, the tail reading the parts' r in order), return `RMSNormFusedCuda_v2`'s
 two outputs word for word: on Gaussian rows at three scales, on uniformly random words (NaN, ±inf, ±0 and subnormals among
 them), and on rows whose residual add, squares or variance overflow, underflow or cancel. Their gates are v2's, and at
@@ -11,12 +11,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
+from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
-from verity.commitments.periods import interface as IF
 
 #: (N, EPS, C): the norm after Llama-3.2-1B's down_proj in its 8 parts, and whole as one; 18 warps of one stride in 9 parts;
 #: N = 1536's half-filled second stride in 3; four strides (three FFMAs a thread) in 16; a lone partial warp in 4
@@ -66,8 +66,8 @@ def _rows(rng, N: int) -> list[tuple[str, np.ndarray, np.ndarray, np.ndarray]]:
     ]
 
 
-def _units(N: int, EPS: float, C: int) -> tuple[list, object]:
-    return [bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=j) for j in range(N // C)], bind(NS.RMSNormFusedCudaTail, N=N, EPS=EPS)
+def _units(N: int, EPS: float, C: int, R: int = 1) -> tuple[list, object]:
+    return [bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=j, R=R) for j in range(N // C)], bind(NS.RMSNormFusedCudaTail, N=N, EPS=EPS)
 
 
 def _split(N: int, EPS: float, C: int, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> list[int]:
@@ -115,7 +115,7 @@ def test_at_llama_1b_down_proj_each_unit_fits_a_proof_block():
     normed and r (11). Each has a row over 111 B."""
     N, EPS, C, slice_words = 2048, 1e-5, 256, 4
     assert len(_rows_of(bind(b1.RMSNormFusedCuda, N=N, EPS=EPS), {"x": N // slice_words})) == 516
-    parts, tail = _units(N, EPS, C)
+    parts, tail = _units(N, EPS, C, C // slice_words)
     assert len(parts) == 8
     for part in parts:
         rows = _rows_of(part, {"x": C // slice_words})
@@ -140,4 +140,10 @@ def test_the_catalogs_ids_hold_after_these_evaluations_in_one_process():
                                 {"N": 2048, "C": 0, "AT": 0}])
 def test_an_add_part_off_the_residual_row_is_refused_by_name(kw):
     with pytest.raises(ValueError, match=f"part AT={kw['AT']} of C={kw['C']} elements is not one of the N / C whole parts"):
-        bind(NS.RMSNormFusedCudaAdd, **kw)
+        bind(NS.RMSNormFusedCudaAdd, **kw, R=1)
+
+
+@pytest.mark.parametrize("R", [0, 3, 512])
+def test_an_add_parts_x_in_rows_that_dont_divide_it_is_refused_by_name(R):
+    with pytest.raises(ValueError, match=f"x of C=256 elements is not R={R} rows of C / R"):
+        bind(NS.RMSNormFusedCudaAdd, N=2048, C=256, AT=0, R=R)

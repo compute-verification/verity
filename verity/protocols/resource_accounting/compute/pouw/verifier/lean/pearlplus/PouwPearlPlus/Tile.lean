@@ -31,7 +31,7 @@ public import PouwCommit.Rows
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open PouwCommit Words
 
@@ -117,4 +117,4 @@ def checkTile (p : Pass) (wn : Except String FixedNoise) (tid : Nat) (o : TileOp
   | some why => .fail why
   | none => done
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

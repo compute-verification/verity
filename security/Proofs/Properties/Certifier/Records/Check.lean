@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import NetworkCheck.RecordsBytes
+import NetworkVerifier.RecordsBytes
 import Proofs.Properties.Certifier.Check.Check
 import Proofs.Properties.Certifier.Check.Extract
 import Proofs.Properties.Certifier.Check.Run
@@ -56,8 +56,8 @@ and a certified one's head is of the ingress grid (`ingress_none`). Conversely e
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks screen verifies expectedGrid noSync
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks screen verifies expectedGrid noSync
   unitSync inSyncSet)
 open NetworkAttester (ClockSync)
 open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid recordsOf Signs Settled
@@ -65,7 +65,7 @@ open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted prog
 open Properties.Certifier.CheckProofs (ba_beq bind_ok syncTest_iff not_not_true not_true declares_declared
   expectedGrid_eq verifies_iff screen_ok declares_unique)
 open Properties.Certifier.Bytes (error_ne_ok)
-open NetworkCheck.RecordsBytes (expectedGridsOfBytes_eq unitSync_toEvidence)
+open NetworkVerifier.RecordsBytes (expectedGridsOfBytes_eq unitSync_toEvidence)
 
 set_option maxRecDepth 20000
 

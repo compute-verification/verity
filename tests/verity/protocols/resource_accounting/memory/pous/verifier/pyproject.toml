@@ -22,14 +22,14 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "security/lean-audit.json", "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
           "security/Proofs/lakefile.toml", "security/Proofs/lake-manifest.json",
           "tools/pous_grader/README.md",
-          # the grader's package and the memory challenger's modules, each by its own path: the tests read them wherever
+          # the grader's package and the memory attester's modules, each by its own path: the tests read them wherever
           # they are, in this suite's directory or outside it
-          "tools/pous_grader", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+          "tools/pous_grader", "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py",
           "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py",
           "verity/protocols/resource_accounting/memory/pous/attester/continuous.py",
           "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/__init__.py",
-          # the memory challenger's key as a deployment starts it, and the wipe's native streamer, which the conftest
+          # the memory attester's key as a deployment starts it, and the wipe's native streamer, which the conftest
           # and the wipe's store tests build and run
           "verity/protocols/resource_accounting/memory/pous/attester/onsite.py",
           "verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.py",

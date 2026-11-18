@@ -3,17 +3,15 @@ end with the GPU stood in for by the twin's words, through the spawned worker po
 the exit status, so a slip between the comparisons and the record shows here and not in the card's lease."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 import sys
 import types
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 
 from tests.properties import glm53_index_share_capture_gpu as IS
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 FR = IS.FR

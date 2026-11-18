@@ -4,8 +4,6 @@ the reference pieces are the Definitions at the job's statics, the spy, the sour
 to end (the GPU run is `tests/properties/dsv4_mhc_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import contextlib
 import copy
 import hashlib
@@ -19,11 +17,11 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import mhc_twin as W
-from verity_vllm.definitions.registry import mhc as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 SMALL: dict[str, Any] = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}

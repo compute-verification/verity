@@ -16,7 +16,7 @@ ring game.
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 set_option exponentiation.threshold 20000
 

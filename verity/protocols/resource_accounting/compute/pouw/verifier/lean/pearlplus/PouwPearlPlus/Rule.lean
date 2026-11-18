@@ -35,7 +35,7 @@ the tile, `the debit replay: …`.
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus.Rule
+namespace PouwVerifier.PearlPlus.Rule
 
 open Evaluate.Fp32 Words
 
@@ -379,4 +379,4 @@ def yReason (rows cols : List Nat) (ops : Ops) (ch : Checked) (opened : List (Ar
     y [#[]] == some "y[7]: the opened row holds 0 words, the tile's columns end at 4" &&
     y [#[5, 5, 0, 1]] == some "y[7, 3] is not the unscale of the tile's U"
 
-end PouwCheck.PearlPlus.Rule
+end PouwVerifier.PearlPlus.Rule

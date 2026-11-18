@@ -22,6 +22,8 @@ def _no_inherited_run(monkeypatch, tmp_path_factory):
         if k.startswith(CLEARED) or k in SET_BY_CHECK:
             monkeypatch.delenv(k)
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path_factory.mktemp("check-cache")))
+    # nor research.mem's ledger (/workspace/ramlock), which a slot.py a test starts reads and writes
+    monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(tmp_path_factory.mktemp("ramlock")))
 
 
 @pytest.fixture

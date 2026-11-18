@@ -119,6 +119,6 @@ for r in "$O"/ncu/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY benchmarks/pouw/edited_gemm_profile/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY benchmarks/pouw/edited_gemm_profile/eps_profile.py "$O" --mm calibration/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "pv,plain" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

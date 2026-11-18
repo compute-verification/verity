@@ -328,7 +328,7 @@ folded words a window, given that `Credit.window` credits every window (`hacc`),
 round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the sampling coin
 (`hdraw`); the accepted prefix is then the whole period and its live words are `N_p·n`. -/
 theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
@@ -416,7 +416,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (r
 /-- **`H1J10RCheckedCreditMonitoringPeriod`'s conclusion at the honest J10-R period**: `j10r_meets` gives the instance every
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `N_p·n` live words. -/
 theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
-    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hsalt : ∀ c, (PouwVerifier.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :

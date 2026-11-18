@@ -20,18 +20,23 @@ from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.population import BitsWord, WordBits, wired_population_program
+from verity.circuits.program import is_input
+from verity.circuits.refs import runs
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
-from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import scan_state as SS
@@ -980,7 +985,7 @@ NORM, TAIL = "RMSNormFusedCuda_v2{N=64}", "RMSNormFusedCudaTail_v1{N=64}"
 
 
 def _add(at: int) -> str:
-    return f"RMSNormFusedCudaAdd_v1{{N=64,C=16,AT={at}}}"
+    return f"RMSNormFusedCudaAdd_v2{{N=64,C=16,AT={at},R=8}}"
 
 
 @pytest.fixture(scope="module")
@@ -990,7 +995,7 @@ def split():
 
 def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_order_of_at(split):
     """The norm after o_proj reads its x as o_proj's 16 rows, so the norm after down_proj (the next layer's input norm and the
-    final norm), whose x is down_proj's 32, is cut at its residual add: 4 `RMSNormFusedCudaAdd_v1{N=64, C=16, AT}` units, part
+    final norm), whose x is down_proj's 32, is cut at its residual add: 4 `RMSNormFusedCudaAdd_v2{N=64, C=16, AT, R=8}` units, part
     AT reading x's elements [16·AT, 16·(AT+1)) as 8 of down_proj's rows and res whole, and `RMSNormFusedCudaTail_v1{N=64}`,
     its r row j part AT = j's sum and its w a weight read. The GEMMs read the tail's normed row and the next residual add its
     r, as they read v2's. A first key block whose keys' values are two value-GEMM rows each is `AttnBlockFirst_v2{VS=8}`, its
@@ -1046,3 +1051,130 @@ def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
     rows, swap = {q: (o, ws) for q, o, ws in t.wired}, {"r#0": "r#1", "r#1": "r#0"}
     moved = [replace(m, wired=tuple((q, *rows[swap.get(q, q)]) for q, _o, _ws in m.wired)) for m in members]
     assert set(WI.check(moved, publics)) == {t.key}
+
+
+def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:
+    return wired_population_program(list(circuit.templates), {**circuit.description(), "external": list(circuit.external)})
+
+
+def root_kinds(circuit: IF.Circuit, prog: Any) -> Counter:
+    reg = circuit.description()["registered"]
+    tables = {t["name"]: t["param"] for t in reg["tables"]}
+    kind = {**{r["param"]: "read" for r in reg["reads"]},
+            **{f"{tables[r['table']]}/{r['of']}": "table read" for r in reg["roots"]},
+            **{f"{o['table']}/{p}": "opening" for o in reg["openings"] for p in o["ports"]}}
+    return Counter(kind.get(name, name) for name, _ in prog.fn.signature()[0])
+
+
+def _words(leaves: np.ndarray, ty: Any) -> np.ndarray:
+    return IF.rows_of_leaves(leaves.astype(np.uint64), ty, -(-sum(ty.leaf_widths()) // 16)).astype(np.int64)
+
+
+def made_up(prog: Any, seed: int = 11) -> dict[str, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    return {name: rng.integers(0, 1 << min(t.homogeneous_width(), 63), t.leaves, dtype=np.uint64)
+            for name, t in prog.fn.signature()[0]}
+
+
+def node_outputs(prog: Any, inputs: dict[str, np.ndarray]) -> list[np.ndarray]:
+    vals: list[np.ndarray] = []
+    params = iter(inputs.values())
+    for node in prog.root.body.nodes:
+        if is_input(node.fn):
+            vals.append(next(params))
+            continue
+        args = [np.concatenate([vals[i][lo:hi] for _s, i, lo, hi in runs(a.refs)]) for a in node.args]
+        vals.append(np.asarray(evaluate_batch(node.fn, *(x.reshape(node.n, -1) for x in args)), dtype=np.uint64).reshape(-1))
+    return vals
+
+
+def by_hand(circuit: IF.Circuit, inputs: dict[str, np.ndarray], prog: Any) -> dict[str, np.ndarray]:
+    d = circuit.description()
+    reg, ids = d["registered"], circuit.ids
+    fns, units = {i: fn for i, (fn, _) in zip(ids, circuit.templates)}, dict(zip(ids, (n for _, n in circuit.templates)))
+    tables = {t["name"]: t["param"] for t in reg["tables"]}
+    types = dict(prog.fn.signature()[0])
+    value = {name: _words(inputs[name][None], types[name])[0] for name in types}
+    rows: dict[tuple[str, str], dict[tuple[int, int], Any]] = {}
+    for w in map(IF.Wire.of, d["wires"]):
+        for i in range(w.units):
+            rows.setdefault((w.reader, w.port), {})[(w.at + i // w.cut[1], w.cut[0] + i % w.cut[1])] = ("wire", w, i)
+    for r in map(IF.Read.of, reg["reads"]):
+        for i in range(r.units):
+            rows.setdefault((r.reader, r.port), {})[(r.at + i // r.cut[1], r.cut[0] + i % r.cut[1])] = ("read", r, i)
+    for r in reg["roots"]:
+        for u in range(r["at"], r["at"] + r["units"]):
+            rows.setdefault((r["reader"], r["port"]), {})[(u, None)] = ("whole", f"{tables[r['table']]}/{r['of']}", None)
+    for o in reg["openings"]:
+        for p in o["ports"]:
+            name = f"{o['table']}/{p}"
+            per = _words(inputs[name].reshape(o["units"], -1), types[name].elem)
+            for u in range(o["at"], o["at"] + o["units"]):
+                rows.setdefault((o["reader"], p), {})[(u, None)] = ("whole", per[u - o["at"]], None)
+    out: dict[str, dict[str, np.ndarray]] = {}
+    got: dict[str, np.ndarray] = {i: np.zeros((units[i], fns[i].signature()[1].leaves), np.uint64) for i in ids}
+    for tid, lo, n in d["order"]:
+        fn, ports = fns[tid], []
+        for p, t in fn.signature()[0]:
+            k, W = int(d["cuts"].get(tid, {}).get(p, 1)), -(-sum(t.leaf_widths()) // 16)
+            a = np.zeros((n, W), np.int64)
+            for u in range(lo, lo + n):
+                for c in range(k):
+                    kind, x, i = rows[(tid, p)].get((u, c)) or rows[(tid, p)][(u, None)]
+                    if kind == "wire":
+                        src = out[x.writer][x.out][int(x.source(np.array([i]))[0])]
+                    elif kind == "read":
+                        s = int(x.source(np.array([i]))[0])
+                        src = value[x.param][s:s + W // k]
+                    else:
+                        src = (value[x] if isinstance(x, str) else x)[c * W // k:(c + 1) * W // k]
+                    a[u - lo, c * W // k:(c + 1) * W // k] = src
+            ports.append(IF.leaves_of_rows(a.astype(np.uint16), t))
+        res = np.asarray(evaluate_batch(fn, *ports), dtype=np.uint64).reshape(n, -1)
+        got[tid][lo:lo + n] = res
+        ret, at = fn.signature()[1], 0
+        fields = ret.fields if hasattr(ret, "fields") else (ret,)
+        for f, ft in enumerate(f[1] if isinstance(f, tuple) else f for f in fields):
+            words = _words(res[:, at:at + ft.leaves], ft)
+            out.setdefault(tid, {}).setdefault(f"o{f}", np.zeros((units[tid], words.shape[1]), np.int64))[lo:lo + n] = words
+            at += ft.leaves
+    return got
+
+
+def wired_matches_by_hand(circuit: IF.Circuit, prog: Any) -> None:
+    inputs = made_up(prog)
+    vals, mine = node_outputs(prog, inputs), by_hand(circuit, inputs, prog)
+    ranges = iter(circuit.description()["order"])
+    for node, v in zip(prog.root.body.nodes, vals):
+        if not is_input(node.fn) and descriptor_id(node.fn) in mine:
+            tid, lo, n = next(ranges)
+            assert descriptor_id(node.fn) == tid and np.array_equal(v.reshape(n, -1), mine[tid][lo:lo + n]), (tid, lo)
+    assert next(ranges, None) is None
+
+
+@pytest.fixture(scope="module")
+def tiny_wired():
+    circuit = class_circuit(S._registered(), CLASS, None, GRAIN, provable=False)
+    return circuit, *wired(circuit)
+
+
+@pytest.mark.slow
+def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_wiring_at_each_width_change(tiny_wired):
+    """Every root parameter is a registered read's value, a table read's root or domain or an opening's port, and no row is
+    free: the 14 wires and the scan state's read between words and bits pass through `WordBits`/`BitsWord`. Slow (about a
+    minute to build): only the whole class holds every wire kind."""
+    circuit, prog, query = tiny_wired
+    assert prog.annotations["free"] == []
+    assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
+    assert prog.fn.gates == 110_483_744
+    wiring = [descriptor_id(bind(d, W=w)) for d, w in ((BitsWord, 16), (BitsWord, 32), (WordBits, 16), (WordBits, 32))]
+    assert query["params"]["templates"] == circuit.ids + wiring
+
+
+@pytest.mark.slow
+def test_the_tiny_class_wired_program_is_its_members_fed_by_hand(tiny_wired):
+    """The wired Program, node by node on made-up parameters, gives each unit the outputs its template gives on the rows the
+    record names, read in committed words: so each width change agrees with the commitments' bit order. Slow (about a
+    minute): only the whole class holds every wire kind."""
+    circuit, prog, _ = tiny_wired
+    wired_matches_by_hand(circuit, prog)

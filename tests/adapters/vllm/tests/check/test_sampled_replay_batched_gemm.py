@@ -5,8 +5,6 @@ stores as "P" progressions (B*N runs of K leaves at stride N); the replay gather
 them, and names a gather that spans fields."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import re
 
 import numpy as np

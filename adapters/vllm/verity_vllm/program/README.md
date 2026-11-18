@@ -19,7 +19,6 @@ a registered Definition. The package's docstring and each module's say what it h
   progressions), `instances_file` (the Build's instance sequence, its reader and its writers), `prune` (a body's dead
   units and its dead-free form), `prefix_plan` (the cached prefix of each request of a prefix-caching workload),
   `sampling_event` (the families of Calls that end an engine step, and the sampler construction a Program declares),
-  `tp_binding` and `tp_workload` (a tensor-parallel request's binding of its rank Programs, and the workload over them),
   `compiled_relations` (the compiled kernels' argument roles, and MKL's one-thread warm-up), `workload` (the workload
   Program, one rooted Program over a workload, and its requests, each a `RequestComponent`, and edge) and `inputs` (what
   fills each input of a served Program, and its refusals). `lifting.continuation` is read too and states none yet. One

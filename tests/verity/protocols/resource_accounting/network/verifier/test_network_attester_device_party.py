@@ -20,7 +20,7 @@ from verity.runtime.framing import decode, encode
 LINK = "node0/uplink0"
 SCHEDULE = NetworkAttesterParams(window=4, bucket_ms=10)
 PARAMS = {"params": asdict(SCHEDULE), "windows": 2, "origin": 1_000}
-IDENTITY = Identity(NC.NETWORK_CERTIFIER, capabilities={"signing-key": object()})
+IDENTITY = Identity(NC.NETWORK_ATTESTER, capabilities={"signing-key": object()})
 
 
 def _kept(window: int) -> tuple[D.Kept, ...]:
@@ -52,12 +52,12 @@ class Answering(D.NetworkAttester):
 
 
 def test_the_partys_sends_are_exactly_the_manifests():
-    assert set(D.SENDS) == set(NC.MANIFEST.peers(NC.NETWORK_CERTIFIER))
+    assert set(D.SENDS) == set(NC.MANIFEST.peers(NC.NETWORK_ATTESTER))
     for peer, types in D.SENDS.items():
         assert len(set(types)) == len(types)
-        assert set(types) == NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, peer).types
-    assert D.PROTOCOL.manifest is NC.MANIFEST and set(D.PROTOCOL.parties) == {NC.NETWORK_CERTIFIER}
-    assert isinstance(D.PROTOCOL.parties[NC.NETWORK_CERTIFIER](), D.NetworkAttester)
+        assert set(types) == NC.MANIFEST.sends(NC.NETWORK_ATTESTER, peer).types
+    assert D.PROTOCOL.manifest is NC.MANIFEST and set(D.PROTOCOL.parties) == {NC.NETWORK_ATTESTER}
+    assert isinstance(D.PROTOCOL.parties[NC.NETWORK_ATTESTER](), D.NetworkAttester)
 
 
 @pytest.mark.parametrize("call", [
@@ -76,7 +76,7 @@ def _encoded(actions) -> list[tuple[str, str]]:
     sent = []
     for a in actions:
         if isinstance(a, Send):
-            types = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, a.channel)
+            types = NC.MANIFEST.sends(NC.NETWORK_ATTESTER, a.channel)
             assert decode(types, encode(types, a.message)) == a.message
             sent.append((a.channel, a.message.type))
     return sent

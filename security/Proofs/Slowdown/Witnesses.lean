@@ -7,7 +7,6 @@ public import Proofs.InferenceOnly.Lemmas
 public import Proofs.Slowdown.LoomisWhitneyBase
 public import Definitions.InferenceOnly.Reads
 public import Proofs.Slowdown.RemoteMonitoringPeriod
-public import Proofs.Slowdown.Capability.Witnesses
 public import Proofs.Core.Circuit
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Tactic.Linarith

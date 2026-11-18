@@ -243,6 +243,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 def ir_guard(m: int) -> int:
     """The circuit's `GuardNegInfZero_v1(m)` by the reference evaluator."""
     from verity.circuits.evaluation.reference import evaluate
+
     from verity_vllm.definitions.registry import prims
 
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
@@ -293,6 +294,7 @@ def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The circuit's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
     from verity.circuits.evaluation.reference import evaluate
+
     from verity_vllm.definitions.registry import prims
 
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
@@ -304,7 +306,10 @@ def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, 
     row_max (word 0, the running max after the block).  With `masked_from` (FA3 under `check-inf-per-iteration`) the guard applies only at
     blocks >= the row's value, as `AttnBlock_v4{CHECK}`.  All words by the twin, `ir_sample` of them (every distinct special row_max among
     them) by the reference evaluator; mismatches whose row_max is -inf are counted apart."""
-    from verity_vllm.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+    from verity_vllm.definitions.numerics.derived_rows import (
+        guard_neg_inf_zero,
+        mul_ftz,
+    )
 
     w = np.asarray(words, dtype=np.uint32)
     R, o = _row_plane(w, layout), layout.offsets

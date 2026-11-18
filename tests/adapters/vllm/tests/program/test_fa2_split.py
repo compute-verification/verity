@@ -4,8 +4,6 @@ Definition word for word on random rows, empty splits (more splits than blocks) 
 `AttentionHead_v5`; the split head is softmax attention within bf16 rounding; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
-__models__ = ("unsloth/Llama-3.2-1B", "Qwen/Qwen3-8B")
-
 import numpy as np
 import pytest
 from verity.circuits import evaluation as E
@@ -14,6 +12,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import versions as SW
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa2_split_twins as TW
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as SMT
@@ -22,8 +22,6 @@ from verity_vllm.definitions.registry import fa2_split as F
 from verity_vllm.definitions.registry import hopper
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.fa2_check_inf import AttentionHeadV5
-
-from tests.program.test_boolean_fp8 import _flat, _inputs
 
 U16, U32 = np.uint16, np.uint32
 NEG_INF = U32(F.NEG_INF)

@@ -92,36 +92,31 @@ def test_the_64_bit_fields_are_exact_decimal_strings():
     assert float((1 << 53) + 1) == float(1 << 53)
 
 
-def test_the_matmuls_are_in_declaration_order():
-    c = BY_CASE["pearl-c-sm120-v1-declared-order"]
-    assert [u["index"] for u in c["workload"]["matmuls"]] == ["5", "2", "9"]
-
-
 def variants():
     """(what changed, scheme, execution phase): the base, and the base with exactly one thing changed."""
-    yield "base", "pearl-c-h100-v1", build()
+    yield "base", "pearl-c-h100-v1-h3", build()
     for name in SCHEMES:
-        if name != "pearl-c-h100-v1":
+        if name != "pearl-c-h100-v1-h3":
             yield f"scheme {name}", name, build()
     for byte in (0, 17, 31):
         for bit in (0, 7):
             salt = bytearray(SALT)
             salt[byte] ^= 1 << bit
-            yield f"salt byte {byte} bit {bit}", "pearl-c-h100-v1", build(salt=bytes(salt))
+            yield f"salt byte {byte} bit {bit}", "pearl-c-h100-v1-h3", build(salt=bytes(salt))
     for pos in range(len(BASE)):
         for field in FIELDS:
             i, (m, k, n), w = BASE[pos]
             row = {"index": i, "m": m, "k": k, "n": n, "weight": w}
             row[field] += {"index": 100, "m": 16, "k": 128, "n": 64, "weight": 100}[field]
             changed = (row["index"], (row["m"], row["k"], row["n"]), row["weight"])
-            yield f"matmul {pos} {field}", "pearl-c-h100-v1", build(BASE[:pos] + (changed,) + BASE[pos + 1:])
+            yield f"matmul {pos} {field}", "pearl-c-h100-v1-h3", build(BASE[:pos] + (changed,) + BASE[pos + 1:])
     for w in (2, 5, 7):
         roots = {v: hashlib.sha256(b"root %d" % v).digest() for v in (2, 5, 7)}
         roots[w] = bytes([roots[w][0] ^ 1]) + roots[w][1:]
-        yield f"weight {w}'s root", "pearl-c-h100-v1", build(roots=roots)
-    yield "matmuls 0 and 1 swapped", "pearl-c-h100-v1", build((BASE[1], BASE[0], BASE[2]))
-    yield "the last matmul dropped", "pearl-c-h100-v1", build(BASE[:-1])
-    yield "a matmul added", "pearl-c-h100-v1", build(BASE + ((6, (16, 1024, 64), 2),))
+        yield f"weight {w}'s root", "pearl-c-h100-v1-h3", build(roots=roots)
+    yield "matmuls 0 and 1 swapped", "pearl-c-h100-v1-h3", build((BASE[1], BASE[0], BASE[2]))
+    yield "the last matmul dropped", "pearl-c-h100-v1-h3", build(BASE[:-1])
+    yield "a matmul added", "pearl-c-h100-v1-h3", build(BASE + ((6, (16, 1024, 64), 2),))
 
 
 def test_changing_any_one_field_changes_the_bytes():
@@ -162,15 +157,15 @@ def test_a_scheme_is_named_by_its_registered_name():
 @pytest.mark.parametrize("salt", [b"", b"\0" * 31, b"\0" * 33, b"\0" * 63, b"\0" * 65, "00" * 32, bytearray(32)])
 def test_a_salt_that_is_not_32_or_64_bytes_is_refused(salt):
     with pytest.raises(DomainError, match="the salt is 32 bytes, or a certified epoch's 64"):
-        I.identifier_v1("pearl-c-h100-v1", build(salt=salt))
+        I.identifier_v1("pearl-c-h100-v1-h3", build(salt=salt))
 
 
 def test_a_certified_epochs_64_byte_salt_is_named_whole():
     salt = bytes(range(64))
-    assert I.identifier_v1("pearl-c-h100-v1", build(salt=salt))["salt"] == salt.hex()
+    assert I.identifier_v1("pearl-c-h100-v1-h3", build(salt=salt))["salt"] == salt.hex()
 
 
-@pytest.mark.parametrize("scheme", ["ncp-v9", "", "NCP-V1", "pearl-c-h100-v1 ", None, object()])
+@pytest.mark.parametrize("scheme", ["ncp-v9", "", "NCP-V1", "pearl-c-h100-v1-h3 ", None, object()])
 def test_an_unregistered_scheme_is_refused(scheme):
     with pytest.raises(DomainError, match="no PoUW scheme"):
         I.identifier_bytes(scheme, build())

@@ -57,7 +57,8 @@ from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
-from verity.circuits.codec import descriptor_id
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
@@ -70,6 +71,8 @@ sys.path.insert(0, str(HERE))
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
+
+STATE = next(iter(RA.PHASE_OWN))
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
@@ -97,14 +100,24 @@ def _kept_prover(out: Path) -> list[str]:
     return [Path(json.loads(x[5:])["label"]).name for x in log.read_text().splitlines() if x.startswith("LIVE\t")]
 
 
-def _window(d: Path, flipped: bool = False) -> Path:
+def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     """The window (module docstring) written to ``d``. ``flipped``: the K = 256 proof block's committed output has bit 0
-    of its first word flipped, and is committed as consistently as an honest one."""
-    win = IF.Window(IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)), RUN, D.parse_design(DESIGN), 4)
+    of its first word flipped, and is committed as consistently as an honest one. ``own``: the K = 128 proof block reads
+    its ``wrow`` from a value of that name the Program takes, registered afresh under the run root."""
     rng = np.random.default_rng(0)
-    for t, k in zip(TEMPLATES, KS):
+    data = []
+    for k in KS:
         x, w = (rng.integers(-128, 128, (1, k)).astype(np.int8) for _ in range(2))
         sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
+        data.append((x, w, sx, sw))
+    reg = None if own is None else IF.Registered({own: KS[0] // 2}, reads=(
+        IF.Read(descriptor_id(TEMPLATES[0]), "wrow", own, 0, (1, 1), 0, (0, KS[0] // 2)),), values=(own,))
+    circuit = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES), registered=reg)
+    values = {} if own is None else {own: REG.Registered.commit(program_digest(circuit.program()[0]), own,
+                                                                data[0][1].view(np.uint16).tolist(), schema=REG.SCHEMA_V2,
+                                                                window=RUN)}
+    win = IF.Window(circuit, RUN, D.parse_design(DESIGN), 4, registered=values)
+    for t, k, (x, w, sx, sw) in zip(TEMPLATES, KS, data):
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         out = np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)
         if flipped and k == KS[-1]:
@@ -180,7 +193,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     count by name; over the window's two proof blocks that rate names the design the window was committed under
     (`records_audit.verifier_window`), and the stream sampled by it accepts its outcome on the challenger's coins. The
     audit record names whose coins those are, the key and the session the challenger's ledger opens on the run's root,
-    and says it wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public
+    and says it wrote the case in the per-member form; SPOT's answer on the audit accepts with both in its public
     outputs."""
     window = _window(tmp_path / "window")
     assert RA.verifier_window(window, RULE, None)[0].law == D.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
@@ -198,8 +211,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
     # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
-    # as the coins' check verified them; SPOT's answer carries them, and that the audit, of two members, wrote
-    # no case for the compiled check
+    # as the coins' check verified them; SPOT's answer carries them, and that the audit wrote its case
     opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
                if e["kind"] == "open")
     whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
@@ -207,7 +219,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit sampled 2 members" in record["case_v2"]["why"]
+    assert record["case_v2"] == {"written": True}
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert answer["public"]["case_v2"] == record["case_v2"]
@@ -221,9 +233,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert _coin_trees(out) == ("own", False)
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
-    # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
-    assert not (out / "window" / "case-v2.json").exists()
-    assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
+    case = json.loads((out / "window" / "case-v2.json").read_text())
+    assert len(case["params"]["proofs"]["members"]) == 2 and "challenger" not in case["params"]
+    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["form"] == "one-stage"
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
@@ -246,7 +258,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     assert _kept_verifier(out) == [(0, True), (1, True)]
     assert _coin_trees(out) == ("window", True)
     assert row["coins_session"]["error"] is None, row["coins_session"]
-    case = json.loads((out / "window" / "case-v2-members.json").read_text())
+    case = json.loads((out / "window" / "case-v2.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
     assert sorted(params["challenger"]) == ["key", "label"] and len(params["window_root"]) == 128
     assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]
@@ -325,9 +337,22 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert _kept_verifier(out) == [(0, True), (1, False)]
 
 
+def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
+    """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
+    ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
+    window = _window(tmp_path / "window", own=STATE)
+    rec = json.loads((window / "registration.json").read_text())
+    (entry,) = rec["registered"]
+    rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
+    assert rc == 0 and row.get("ok") is True, said
+    assert row["audit"]["accepted"] is True, row["audit"]
+    assert row["registered"]["own"] == {STATE: entry} and row["registered"]["members"] == 1, row["registered"]
+    assert row["leak"]["untied"] == [STATE] and "tie" not in row, row["leak"]
+
+
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
-    certifier's period read it), its docket the one the audit registered."""
+    attestation period read it), its docket the one the audit registered."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))

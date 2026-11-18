@@ -33,8 +33,6 @@ reached.  The record, <out>/glm53_ds_mla_write_capture.json, carries `ok` and th
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import glob
 import hashlib
@@ -262,7 +260,9 @@ def corners(rows: np.ndarray) -> dict[str, int]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity_vllm.definitions.registry import dsa_ds_mla as M, dsa_norm as DN
+
+    from verity_vllm.definitions.registry import dsa_ds_mla as M
+    from verity_vllm.definitions.registry import dsa_norm as DN
     from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
 
     row_fn = bind(M.DsaLatentRowDsMla, KVL=KVL, R=R, TILE=TILE, EPS=EPS)

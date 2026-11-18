@@ -28,11 +28,11 @@ the two over the try.
 
 **The checks.** The relay's is `relay_check.check`, whose refusal's words are its audit's (`network_attester.audit`). The I/O
 tie's is its content part (`io_tie.cells_match`, `IoTieContent`'s reference) on each bucket of the egress record
-(`tie`), with two stand-ins for what a try doesn't have: the map is the certified placement, each data cell its
+(`tie`), with two stand-ins for what a try doesn't have: the map is the attested placement, each data cell its
 stream's next output, and the Commit is the ids given (``--ids``, the server's record of each request's sampled ids),
 or under ``--stand-in`` the stand-in endpoint's own (`network_attester_serve.fake_ids` of each request). Without either the tie
 isn't run, and the row says so. ``--ids`` is JSON lines, a request each with its `output_ids`: under its `user`, or
-under its `id` ``verity-<run>-<N>``, the name the certified tick gives a request that brings none (`tick_plugin`), the
+under its `id` ``verity-<run>-<N>``, the name the attested tick gives a request that brings none (`tick_plugin`), the
 attester's run id and the request's release number, so the server's own record of its requests is read as it is.
 
 **A refusal counts only where it is the deviation's** (`row`). The tie's content refuses exactly the ids the planted

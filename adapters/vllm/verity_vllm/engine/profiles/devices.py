@@ -5,25 +5,47 @@ vLLM keys its tuned kernel configs by that name (`get_device_name_as_file_name`:
 so a GPU-free Build answers its target's (`export_compat.select_cuda_platform`: a traced request Build's `--device-name`, else its
 row's) and reads the config file that GPU does.  On a class not listed the platform answers nothing, and a construction that reads
 the name fails there by name.  `FUSED_MOE_CONFIGS` holds
-the files a prediction reads without vLLM (`predict`).  `CARD` is the card each served target is registered on, by that name, and
-`NO_CARD` the served targets with no card file yet."""
+the files a prediction reads without vLLM (`predict`).  Both names come from the GPU card records (`config.CARD_FILES`): a class
+is the record whose `short` is its token and reports that record's `driver` name, and a reported name is registered on the record
+whose `driver` holds it (`card_sku`)."""
 from __future__ import annotations
 
 import json
+import tomllib
+from functools import cache
 
-from verity_vllm.config import workload_file
+from verity_vllm.config import CARD_FILES, workload_file
 from verity_vllm.target_family import device_token_of_row
 
-__all__ = ["CARD", "NO_CARD", "device_name", "device_name_of_row", "fused_moe_config"]
+__all__ = ["card_sku", "class_device_name", "device_name", "device_name_of_row", "fused_moe_config"]
 
-DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
-#: the card file (`verity.device.load_card`) each served target is registered on, by the name its device reports, which
-#: `acquire.served_device` holds the device to (`served_device.card_of`: a name in neither this nor `NO_CARD` is refused)
-CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
+@cache
+def _gpu_records() -> tuple[dict, ...]:
+    """Each GPU card record under `config.CARD_FILES` (`kind = "gpu"`)."""
+    docs = (tomllib.loads(p.read_text()) for p in sorted(CARD_FILES.glob("*.toml")))
+    return tuple(doc for doc in docs if doc.get("kind") == "gpu")
 
-#: the served targets that have no card file yet, by the same name, each with its reason: these alone are held to no card
-NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: hardware/cards has none for the B200"}
+
+def _driver_names(record: dict) -> list[str]:
+    return [d["value"] for d in record.get("driver", ())]
+
+
+def card_sku(name: str) -> str | None:
+    """The SKU of the one GPU card record whose `driver` holds `name`, the name the device reports; None where no record does.
+    Two records holding one name is refused."""
+    found = [r["sku"] for r in _gpu_records() if name in _driver_names(r)]
+    if len(found) > 1:
+        raise ValueError(f"device {name!r} is in the `driver` of {len(found)} card records under {CARD_FILES}: {found}; one is allowed")
+    return found[0] if found else None
+
+
+def class_device_name(token: str) -> str | None:
+    """The name a GPU of row class `token` reports: the one `driver` name of the one GPU card record whose `short` is `token`; None
+    for a class no record names, or whose record states no one name."""
+    found = [r for r in _gpu_records() if r.get("short") == token]
+    names = _driver_names(found[0]) if len(found) == 1 else []
+    return names[0] if len(names) == 1 else None
 
 #: vLLM d9105ea80's tuned fused-MoE configs (model_executor/layers/fused_moe/configs/<file>, `get_config_file_name`), batch size ->
 #: (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages); the file below is sha256 ade035ab90cbce92...
@@ -39,12 +61,13 @@ FUSED_MOE_CONFIGS: dict[str, dict[int, tuple[int, int, int, int, int, int]]] = {
 
 
 def device_name_of_row(row_id: str) -> str | None:
-    """The name a GPU of the workload's class reports; None for a class `DEVICE_NAME` does not list."""
-    return DEVICE_NAME.get(device_token_of_row(row_id or "") or "")
+    """The name a GPU of the workload's class reports (`class_device_name`); None for a class no card record names."""
+    token = device_token_of_row(row_id or "")
+    return class_device_name(token) if token else None
 
 
 def device_name(workload: str | None) -> str | None:
-    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list, for a workload with no
+    """The name a GPU of the workload's row class reports; None for a class no card record names, for a workload with no
     sweep plan, and without a workload.  A stored workload is made present and checked first (`config.workload_file`)."""
     held = json.loads(workload_file(workload).read_text()).get("sweep") if workload else None
     sweep = held if held else {}

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from research import auto
-from research.merge import post_landing, unlike
+from research.merge import unlike
 from research.pods.nebius import slot_only
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -63,7 +63,7 @@ def test_a_pooled_deferred_record_is_an_after_landing_run_of_those_steps(launche
     head, tail = _split(cmd)
     assert "--tool" not in head and head[head.index("--env") + 1] == f"CHECK_SLOTS={slot_only.POOLS['research']}"
     assert tail[:5] == ["python3", "tools/check/slot.py", "--by", "ci", "--"]
-    assert tail[-2:] == ["--deferred", "lean-agreement"] and post_landing(tail, TOOL) == "lean-agreement"
+    assert tail[-2:] == ["--deferred", "lean-agreement"]
 
 
 def test_a_pool_a_node_keeps_of_its_own_is_taken_by_name(launched):

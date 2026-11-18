@@ -1,7 +1,7 @@
 """Tool declarations (store README §6.1): a small Python object around an existing command.
 
-    TOOL = Tool(name="tc_probe", version="1", command=["python", "benchmarks/tc_probe/tc_probe.py"],
-                closure=["benchmarks/tc_probe/**", ...], key_params=[...], key_conditions=["hw.family"],
+    TOOL = Tool(name="tc_probe", version="1", command=["python", "calibration/tc_probe/tc_probe.py"],
+                closure=["calibration/tc_probe/**", ...], key_params=[...], key_conditions=["hw.family"],
                 param_artifacts=["replay_golden"], caches=["nvcc"], produces=["tc-evidence/v1", "run-files/v1"],
                 parse=None, conditions=None)
 
@@ -229,15 +229,15 @@ class Tool:
     parse: Callable[[list[str]], dict] | None = None
     conditions: Callable[[dict], dict] | None = None          # extra keys, recorded under tool.<name>.<key>
     spec: str | None = None                                   # `dotted.module:NAME` this declaration was loaded from (set by the registry)
-    #: `research merge`: result steps (``result.json`` ``steps[].step``) that must have passed when a merge changes a path under
+    #: `research.merge`: result steps (``result.json`` ``steps[].step``) that must have passed when a merge changes a path under
     #: one of their prefixes, less the paths a `!` pattern names (`merge.rule_touches`); an attempt where such a step was skipped
     #: does not admit that merge
     merge_requires: dict[str, list[str]] = field(default_factory=dict)
     #: `research run --on`: an argv run on the machine in the shipped tree before the run is claimed (`remote.run_preflight`);
     #: exit 0 admits the run, anything else refuses it with the preflight's stderr as the reason
     preflight: list[str] = field(default_factory=list)
-    #: `research merge --push`: an argv started in the target's checkout, detached, with the landed commit appended, once a merge
-    #: the tool gated is on the remote (`merge.after_land`); it outlives the merge and never changes its result
+    #: `merge.after_land`: an argv started in the target's checkout, detached, with the landed commit appended, once a landing
+    #: the tool gated is on the remote; it outlives the landing and never changes its result
     after_land: list[str] = field(default_factory=list)
 
     def identity(self) -> dict[str, Any]:

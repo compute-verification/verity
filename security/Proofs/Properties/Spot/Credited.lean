@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Spot
 public import Proofs.Properties.Spot.Units
 public import Proofs.Core.QSort
-public import Proofs.Properties.Pous.MemoryChallenger.Sort
+public import Proofs.Properties.Pous.MemoryAttester.Sort
 public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
@@ -60,7 +60,7 @@ theorem qsort_qsort (as : Array Nat) : (as.qsort (· < ·)).qsort (· < ·) = as
 /-- Sorting naturals as integers is sorting them. -/
 theorem qsort_cast (as : Array Nat) :
     (as.map fun n : Nat => (n : Int)).qsort (· < ·) = (as.qsort (· < ·)).map fun n : Nat => (n : Int) := by
-  rw [MemoryChallenger.Properties.SecurityProofs.Sort.qsort_map]
+  rw [MemoryAttester.Properties.SecurityProofs.Sort.qsort_map]
   congr 2
   funext _ _
   simp

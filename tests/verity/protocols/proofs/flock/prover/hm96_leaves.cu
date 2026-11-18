@@ -1,6 +1,6 @@
 // cuda/sha512.cuh's launch_hm96_finish, for test_hm96_leaves.py: hm96_leaves finishes leaves [base, n) of n digests, hashing
 // at blocks of tpb threads as launch_merkle512 (256) and flock_cuda_hm96_leaves (128) do, leaving the digests below base, and
-// refuses a tpb hm96_tpb_fits refuses. benchmarks/flock_kernels/hm96_leaves.cu times it. hm96_trees builds whole salted trees
+// refuses a tpb hm96_tpb_fits refuses. hm96_trees builds whole salted trees
 // through launch_merkle512, their salts copied ahead of the builds or beside them.
 #include <cstdint>
 #include <cstdio>

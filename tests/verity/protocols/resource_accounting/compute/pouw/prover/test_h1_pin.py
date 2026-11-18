@@ -23,7 +23,7 @@ def test_the_h1_units_circuit_is_its_pin(tmp_path):
     st = shape.stager("unit/pouw-h1-tile", circuit=tmp_path / "circuit.txt")
     assert st.pin == tile.circuit, (
         f"{d.id} builds circuit {st.pin}, not the one the verifier pins: a change to the template or to Flock's "
-        "lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
+        "lowering lands its new digest in PouwVerifier/Tile.lean and core_check.TILES")
     r, c = tile.salted
     opened = st.ports[:r + c + 1]
     assert [p.name for p in opened] == [*(f"a{k}" for k in range(r)), *(f"b{k}" for k in range(c)), "pub"]

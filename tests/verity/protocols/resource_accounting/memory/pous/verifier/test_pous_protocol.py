@@ -1,5 +1,5 @@
 """The generic protocol (`verity.protocols.resource_accounting.memory.pous.verifier.protocol`) over every scheme (`verity.protocols.resource_accounting.memory.pous.verifier.schemes`): one conformance suite for
-the lifecycle, the certificates the memory challenger enforces, the storage profile and the claims it cites."""
+the lifecycle, the certificates the memory attester enforces, the storage profile and the claims it cites."""
 
 from __future__ import annotations
 
@@ -380,7 +380,7 @@ def test_a_two_ms_deadline_is_refused_for_five_rounds():
     assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
 
 
-def test_the_memory_challenger_enforces_the_certificate():
+def test_the_memory_attester_enforces_the_certificate():
     """k = 111 is certified only for D = 5 calls of 241.5 µs: Δ + RTT < 1.449 ms, inside the cliff at 3.1395 ms.  A
     smaller k needs a deadline the `D = 2` certificate covers (`k ≥ 97`, under 724.5 µs)."""
     sch = schemes.get()
@@ -426,8 +426,8 @@ def test_the_band_has_certificates_at_fewer_rounds():
     assert schemes.get("dense-chain/v1").certificates == (schemes.get("dense-chain/v1").certificate,)
 
 
-def test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked():
-    """With `k` unset the memory challenger stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.
+def test_the_memory_attester_audits_at_two_or_one_rounds_when_asked():
+    """With `k` unset the memory attester stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.
     Asked for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
     `BandMultiMeetsFamilyD1` within 483 µs, which the default 500 µs deadline overruns.  A band of in-degree 2 or 1,
     which has no `D = 5` certificate, defaults to its own."""
@@ -526,10 +526,10 @@ def test_every_certificate_claim_is_a_claim_id():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v4`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the memory challenger
+    """P2 (`p2-16448/v4`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the memory attester
     refuses it unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
     `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
-    `ROOT_CALL_NS`, half the fastest cooperating root: the memory challenger accepts the cap,
+    `ROOT_CALL_NS`, half the fastest cooperating root: the memory attester accepts the cap,
     `Δ + RTT = 854 µs`, and refuses a µs more, and v1's 1 ms."""
     for name in ("p2-16448/v4", "p2-16448/v2"):
         sch = schemes.get(name, segments=8)
@@ -614,7 +614,7 @@ def test_p2_wide_certificate_is_period_held_at():
 def test_p2_wide320_certificate_is_the_320_read_window():
     """`p2.wide320_certificate` is `Pous.SecurityProofs.ObligationWide320`: the wide certificate's audit at k = 320,
     with `δ` the window's `2^-20`, the theorem's whole bound at uniform indices, and `2^eps_log2 = 2^-127` the advantage
-    of `prf/sha-512` for the memory challenger's SHA-512 indices, assumed at that figure (`Hash.Assumptions.Sha512Prf`
+    of `prf/sha-512` for the memory attester's SHA-512 indices, assumed at that figure (`Hash.Assumptions.Sha512Prf`
     takes it as a parameter, which no model fixes), which its profile's statement says; under `WIDE_CLAIMS` and
     `prf/sha-512`, over the same 2^19 to 2^27 blocks; none elsewhere."""
 

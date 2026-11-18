@@ -40,15 +40,15 @@ or each row's leaves are of one width and the writer's divides the reader's.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row Tmpl outerOf templatesOf)
-open InferenceOnlyCheck.Record (unwhole leavesOf passedOn)
-open InferenceOnlyCheck.Record.SecurityProofs (runOf runOf_some mem_of_lookup shaped_of_tmplOf whole_spec bitsOf_eq passOf
+open InferenceOnlyVerifier.Record (unwhole leavesOf passedOn)
+open InferenceOnlyVerifier.Record.SecurityProofs (runOf runOf_some mem_of_lookup shaped_of_tmplOf whole_spec bitsOf_eq passOf
   passedOn_get)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Properties.SecurityProofs
 open Spot.Bits (bitsOf)
 open Lean (Json)
 
@@ -176,7 +176,7 @@ theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
 /-- **A leaf of a unit's parameter is no gate of the unit**: it is a gate of an input node of the root, and the
 unit's gates are inside a root node that is no input node. -/
 theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyCheck.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -245,7 +245,7 @@ theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
   exact ⟨g, f, rfl, hf, hl, hg, rfl, rfl⟩
 
 /-- A leaf of a unit's reader row is a leaf of the record's circuit, at its bits in the row. -/
-theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {sc : Scope}
     (hu : UnitAt P rs r.tid r.unit sc) {i : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (hp : (P.defs[sc.d]!).params[i]!.1 = r.port) (hrow : r.row < W.cutsOf r.tid r.port) {l : ℕ}
@@ -264,7 +264,7 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyC
 unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
 parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
 unit at most. A unit of a primitive returns its own gate. -/
-theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -313,7 +313,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole ts
-      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) {r : Row} {wt : String} {wu : ℤ}
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) {r : Row} {wt : String} {wu : ℤ}
     {out : String} (hw : S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out)) :
     ∃ sc sc' i f, UnitAt P rs r.tid r.unit sc ∧ 0 ≤ wu ∧ UnitAt P rs wt wu.toNat sc' ∧
       i < (P.defs[sc.d]!).params.size ∧ (P.defs[sc.d]!).params[i]!.1 = r.port ∧
@@ -349,7 +349,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
   have hp' : (P.defs[tr.defn]!).params[i].1 = w.port := by
     rw [e1, hpt]
     exact hpi.symm
-  have hs : ∀ t ∈ ts, InferenceOnlyCheck.Record.SecurityProofs.Shaped P t := fun t ht => by
+  have hs : ∀ t ∈ ts, InferenceOnlyVerifier.Record.SecurityProofs.Shaped P t := fun t ht => by
     obtain ⟨x, hx⟩ := templatesOf_tmplOf hts t ht
     exact shaped_of_tmplOf hx
   have hspec := whole_spec (tmpls_named hts).1 hs hwh (by rw [(Spot.Wires.check_sound hS).1]; exact hwm) htr htw
@@ -373,12 +373,12 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
 /-! ## Aligned and Filled -/
 
 /-- **Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
-theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
+theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole ts
-      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, out, sc₁, hw, -, hu₁, hout₁⟩ := hwl
   obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, rfl, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
@@ -424,7 +424,7 @@ theorem filled (hP : ReadProg P)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole ts
-      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
   intro r l g lo up hsome hrl b _ hb2
   obtain ⟨⟨wt, wu, out⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
   obtain ⟨sc, sc', i, f, hsc, h0, hsc', hi, hp, hf, rfl, hrow, hbits, -⟩ := wired_row hP hrs hT hS hts hwh hw
@@ -436,4 +436,4 @@ theorem filled (hP : ReadProg P)
   obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hl'
   exact ⟨l', g', _, _, ⟨wt, wu, _, sc', hw, h0, hsc', hg'⟩, h1, h2⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

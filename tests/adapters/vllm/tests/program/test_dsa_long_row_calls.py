@@ -7,8 +7,6 @@ statics a description is a few rows of Calls and the unit fits a Flock block; an
 circuit their gates lower to, a count sum's with the rows more that commit its sum."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import random
 
 import numpy as np
@@ -17,6 +15,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R

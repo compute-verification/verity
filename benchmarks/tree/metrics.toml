@@ -53,3 +53,36 @@ axis = "Sites on main that the ratchet lints find past what their allowlist entr
 better = "lower"
 command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
 every = "1d"
+
+[[metric]]
+id = "top/prose-share"
+title = "Source lines that are prose"
+owner = "top"
+unit = "percent"
+axis = "Percent of the Python and Lean lines on main that are docstrings or comments and no code, in total and for each lead's own files."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
+id = "top/prose-over-length"
+title = "Comments longer than allowed"
+owner = "top"
+unit = "items"
+axis = "Docstrings and comments on main longer than AGENTS.md's comments and docstrings section allows, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
+id = "top/prose-memory"
+title = "Comments naming dates or ids"
+owner = "top"
+unit = "items"
+axis = "Docstrings and comments on main that name a date, an issue, pull request, run or artifact id, a commit, a machine or a person, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"

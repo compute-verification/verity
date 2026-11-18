@@ -20,7 +20,7 @@ untraced = ["bench/test_input_sets.py", "bench/test_lowerings.py", "bench/test_s
 # Test-only: the bench spine's tests drive Flock's lowerings over the repository's fixtures and census; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
-inputs = ["verity/protocols/proofs/flock/verifier/VStar/Menu/Pinned.lean", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "benchmarks/census",
+inputs = ["verity/protocols/proofs/flock/verifier/VStar/Menu/Pinned.lean", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "calibration/census",
           "tests/adapters/vllm/tests/regression/expected",
           "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/regression/__init__.py"]
 parallel = true

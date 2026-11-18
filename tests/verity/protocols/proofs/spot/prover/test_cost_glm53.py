@@ -3,9 +3,9 @@ proof-block Definition is a planner candidate whose outputs fit a size class, it
 requests, its work its own ANDs and a statement at most `cap` of it; no served row is a gap; the totals per token and per
 request are the Definitions' sums; the planner certifies a sample over the card's candidates; `main` prints the totals and
 each gap's rows, ANDs and why; and `main --stop` refuses without the stop block and the network attester's response tie,
-which SPOT never imports. A stop class's populations, with the adapter's stop rule and the certifier's tie, are tested
+which SPOT never imports. A stop class's populations, with the adapter's stop rule and the network attester's tie, are tested
 where they may be imported
-(`tests/benchmarks/sampling_plan/test_glm53_stop_class.py`)."""
+(`tests/calibration/sampling_plan/test_glm53_stop_class.py`)."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def test_main_prints_the_totals_and_the_gaps(capsys, monkeypatch, tmp_path):
     assert "gap TokenSelect_v1: 1 Definitions, 8 prefill and 248 decode rows, 6.899e+09 ANDs; its rows alone need" in out
 
 
-def test_main_refuses_a_stop_class_without_the_certifiers_response_tie(capsys, monkeypatch):
+def test_main_refuses_a_stop_class_without_the_attesters_response_tie(capsys, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["glm53.py", "--stop", "16"])
     with pytest.raises(SystemExit) as e:
         G.main()

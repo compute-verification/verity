@@ -16,8 +16,6 @@ version, whose MUFU is gates:
   is the form it refuses, which `zk_refusal` says of the same template without staging it."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from types import SimpleNamespace
 
 import numpy as np

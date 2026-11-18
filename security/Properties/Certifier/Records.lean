@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.RecordsGrid
+public import NetworkVerifier.RecordsGrid
 public import Properties.Certifier.Check
 
 /-!
@@ -32,8 +32,8 @@ is the record head of the Program's grid, or two distinct strings the two heads'
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks)
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks)
 open NetworkAttester (ClockSync)
 open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid LmsVerifies headStrings)
 

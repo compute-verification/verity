@@ -12,9 +12,9 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
-- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
+- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
-  numbers them, standing in for the certifier's headers);
+  numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,
@@ -173,6 +173,16 @@ class _Admission:
 
 #: vLLM's OpenAI server's engine request id around the client's X-Request-Id: ``cmpl-{X-Request-Id}-{choice}-{8 hex}``
 ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
+
+
+#: vLLM's client's pass and user at the end of a request id's run (`serve_tax.load_tag`'s ``-r{rep}``, a user's ``-u{j}``)
+PASS_USER = re.compile(r"-r\d+(?:-u\d+)?$")
+
+
+def edge_load(key: tuple[str, int] | None) -> str | None:
+    """The load whose serving an edge's period counts: ``key``'s run without vLLM's client's pass and user, so that a
+    load's passes and users are one count."""
+    return PASS_USER.sub("", key[0]) if key else None
 
 
 def release_key(engine_id: str) -> tuple[str, int] | None:
@@ -546,8 +556,7 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
     def add_request(orig):
         def wrapped(request, *a, **kw):
             if tag is None or tag in request.request_id:
-                key = release_key(request.request_id)
-                load[0] = key[0] if key else None
+                load[0] = edge_load(release_key(request.request_id))
                 start(load[0])
             return orig(request, *a, **kw)
         return wrapped

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The build sandbox, run as
-#   unshare --user --map-root-user --mount --net --pid --fork --kill-child -- \
+#   unshare --user --map-root-user --mount --net --ipc --pid --fork --kill-child -- \
 #     bash sandbox.sh [--ro RO_DIR]... [--at FIXED TREE] RW_DIR... -- CMD...
-# Inside new user, mount, network and PID namespaces: every mount read-only except the RW_DIRs (the build's .lake
+# or, for a fetch, with the network kept (`unshare` without `--net`) and said (`--net`), the rest the same.
+# Inside new user, mount, network, IPC and PID namespaces: every mount read-only except the RW_DIRs (the build's .lake
 # directories), a private /tmp, /dev/shm and /var/tmp unless an RW_DIR or an RO_DIR (read, never written: Lake's
 # artifact cache, or the seal the sampled recompile reads) lives under one, no network, and a fresh /proc. TMPDIR, TEMP
 # and TMP name a writable directory: TMPDIR if it is under an RW_DIR, else the private /tmp, else a private tmpfs on the
@@ -20,13 +21,27 @@
 # (a new user namespace starts with empty inheritable and ambient sets, so an empty bounding set leaves its root none
 # after the `exec`) and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
 # remount, mount over or unmount anything, here or in a namespace it opens: the mounts above are the ones it gets.
+#
+# CMD reaches no unix socket it did not make (a read-only mount doesn't stop `connect`, and through the user's systemd
+# bus `systemd-run --user` would start anything outside every namespace): /run (and /var/run where it is no link to it)
+# and the job's TMPDIR get private read-only tmpfs, under /tmp's rule, and CMD runs under `sockets.py exec`, whose
+# seccomp filter refuses it every unix socket but a `SOCK_STREAM` `socketpair`. CMD's stdin is /dev/null, so a socket the
+# caller holds as its own stdin, which the filter never sees made, isn't CMD's. Before CMD runs, `sockets.py probe`,
+# run as CMD runs, tries every unix socket the kernel lists for a process the sandbox can see and the well-known ones:
+# the sandbox refuses (3) to run CMD if any connects. Where /etc/resolv.conf resolves into the hidden /run, its copy
+# stays (a fetch resolves names).
 set -euo pipefail
+tool=$(realpath -- "${BASH_SOURCE[0]}")
+tool=${tool%/*}
+py=$(command -v python3) || { echo "sandbox.sh: no python3 here, which keeps CMD from the host's unix sockets" >&2; exit 3; }
 rw=()
 ro=()
 at=
 tree=
+net=
 while [ "$1" != "--" ]; do
   case "$1" in
+    --net) net=1; shift;;
     --ro) ro+=("$2"); shift 2;;
     --at) at="$2"; tree=$(realpath "$3"); shift 3;;
     *) rw+=("$1"); shift;;
@@ -89,14 +104,37 @@ done
 private_tmp=
 private_var_tmp=
 ours=()
-for t in /tmp /dev/shm /var/tmp; do
+resolv=$(realpath -m /etc/resolv.conf)
+case "$resolv" in
+  /run/*|/var/run/*) resolved=$(cat /etc/resolv.conf 2>/dev/null) || resolved=;;
+  *) resolv=;;
+esac
+hidden=(/run)
+[ -L /var/run ] || hidden+=(/var/run)
+if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ] && [ ! -L "$TMPDIR" ]; then
+  t=$(realpath "$TMPDIR")
+  case " / /tmp /dev/shm /var/tmp ${hidden[*]} " in *" $t "*) ;; *) hidden+=("$t");; esac
+fi
+for t in /tmp /dev/shm /var/tmp "${hidden[@]}"; do
   [ -d "$t" ] || continue
-  case "$seen" in *" $t/"*) continue;; esac
-  mount -t tmpfs -o mode=1777 tmpfs "$t"
+  case "$seen" in *" $t "*|*" $t/"*) continue;; esac
+  case " ${hidden[*]} " in
+    *" $t "*) mount -t tmpfs -o mode=755 tmpfs "$t";;
+    *) mount -t tmpfs -o mode=1777 tmpfs "$t";;
+  esac
   ours+=("$t")
   [ "$t" != /tmp ] || private_tmp=1
   [ "$t" != /var/tmp ] || private_var_tmp=1
 done
+if [ -n "$resolv" ] && [ ! -e "$resolv" ]; then
+  mkdir -p -- "${resolv%/*}"
+  printf '%s\n' "$resolved" > "$resolv"
+fi
+for t in "${hidden[@]}"; do
+  case " ${ours[*]} " in *" $t "*) mount -o remount,bind,ro "$t";; esac
+done
+# the kernel's list of unix sockets, read in the host's /proc before the sandbox's own covers it
+sockets=$("$py" -I -S "$tool/sockets.py" inventory) || exit 3
 mount -t proc proc /proc
 ours+=(/proc)
 if [ -n "$at" ]; then
@@ -168,7 +206,7 @@ stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") SANDBOX_STARTED=$s
     }
   }' /proc/self/mountinfo)
 echo 0 > /proc/sys/user/max_user_namespaces
-as_cmd=(setpriv --bounding-set=-all --)
+as_cmd=(setpriv --bounding-set=-all -- "$py" -I -S "$tool/sockets.py" exec --)
 # A stuck mount is out of CMD's reach only where, run as CMD runs, this shows it: a directory above it that CMD can't
 # search and doesn't own (so can't chmod), and that doesn't hold CMD's own directory (which CMD is already past); or
 # nothing in it that CMD may write or owns, and no directory CMD can search but not list, with every word find says a
@@ -226,5 +264,7 @@ if [ ${#writable[@]} -gt 0 ]; then
     "read-only remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
   exit 3
 fi
+printf '%s\n' "$sockets" | "${as_cmd[@]}" "$py" -I -S "$tool/sockets.py" probe "${DBUS_SESSION_BUS_ADDRESS-}" \
+  "${DBUS_SYSTEM_BUS_ADDRESS-}" "${SSH_AUTH_SOCK-}" || exit 3
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec "${as_cmd[@]}" "$@"
+exec "${as_cmd[@]}" "$@" </dev/null

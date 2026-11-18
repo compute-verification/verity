@@ -97,5 +97,5 @@ def test_the_vllm_allowlist_driver_merges_in_either_layout(tmp_path, script):
 
 
 def test_refuse_says_why_on_stderr_and_exits_refused(capsys):
-    assert gates.refuse("research merge", "no passing `check` attempt") == gates.REFUSED == 3
-    assert capsys.readouterr() == ("", "research merge: refused: no passing `check` attempt\n")
+    assert gates.refuse("research queue", "no passing `check` attempt") == gates.REFUSED == 3
+    assert capsys.readouterr() == ("", "research queue: refused: no passing `check` attempt\n")

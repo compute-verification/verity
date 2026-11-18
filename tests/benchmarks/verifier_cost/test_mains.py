@@ -30,7 +30,7 @@ ROOT = HERE.parents[1]
 #: requires Flock's package by path). A main goes in the first that holds every library it imports, so a main that reads
 #: Flock alone builds neither of the others.
 PACKAGES = (("verity/protocols/proofs/flock/verifier", {"Flock"}),
-            ("verity/protocols/workload_classification/training_detection/inference_only/verifier/lean", {"InferenceOnlyCheck", "Flock"}),
+            ("verity/protocols/workload_classification/training_detection/inference_only/verifier/lean", {"InferenceOnlyVerifier", "Flock"}),
             ("verity/protocols/proofs/spot/verifier/lean", {"Spot", "Flock"}))
 MAINS = sorted(p.parent.name for p in HERE.glob("*/Main.lean"))
 assert MAINS, f"no <name>/Main.lean under {HERE}: this suite would hold nothing"
@@ -64,6 +64,22 @@ def test_main_elaborates_against_the_checkouts_verifier(name):
     assert got.returncode == 0, (
         f"benchmarks/verifier_cost/{name}/Main.lean no longer elaborates against {where}, so no script here that builds it "
         f"can run. Fix the main in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")
+
+
+def test_scaling_runs_every_main():
+    """`verity bench verifier_cost scaling --list` names a script for every `<name>/Main.lean`, and that script exists and
+    builds that main: a benchmark here that no registered command runs is deleted, not kept."""
+    got = subprocess.run([sys.executable, str(HERE / "run.py"), "scaling", "--list"], cwd=ROOT, capture_output=True,
+                         text=True)
+    assert got.returncode == 0, got.stderr
+    listed = dict(line.split("\t", 1) for line in got.stdout.splitlines())
+    assert sorted(listed) == MAINS, (
+        f"scaling --list names {sorted(listed)}, the mains here are {MAINS}: list a main's script in run.py's SCALING "
+        f"at a small size, or delete the main and its script")
+    for name, command in listed.items():
+        script = ROOT / command.split()[0]
+        assert script.is_file() and f"verifier_cost/{name}/Main.lean" in script.read_text(), (
+            f"SCALING's {name} runs {command.split()[0]}, which doesn't build benchmarks/verifier_cost/{name}/Main.lean")
 
 
 def test_whole_run_writes_a_run_its_check_accepts(tmp_path):

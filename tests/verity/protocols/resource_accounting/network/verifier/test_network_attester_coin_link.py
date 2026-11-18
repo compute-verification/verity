@@ -434,7 +434,7 @@ def test_the_link_stops_at_its_window_boundary():
     assert link.ticks == PARAMS.window and statuses(link) == [(None, None)] and link.summary()["complete"]
 
 
-def test_the_links_clock_is_the_network_certifiers_and_a_tick_whose_wait_ends_early_waits_again():
+def test_the_links_clock_is_the_network_attesters_and_a_tick_whose_wait_ends_early_waits_again():
     """Unless a caller injects one, the link's ticks read the network attester's clock. A wait may end before its time
     (a timer against another clock, a signal): here every tick's first wait ends at once, and each tick still runs only
     once the clock reads its time, none of them late and the execution phase complete."""

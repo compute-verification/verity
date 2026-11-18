@@ -17,11 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
+from verity.circuits.kernels import tc as CK
 from verity.circuits.ops import mufu as MU
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
-from verity.circuits.kernels import tc as CK
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.kernel_registry import Declined, register
 

@@ -152,7 +152,7 @@ def rolled(name: str, version: int, statics: Sequence[str], build: Callable, sig
         k = key(S)
         if k not in made:
             params, ret = signature(S)
-            made[k] = trace(build(S), [t for _, t in params], ret, key=(name, version, dict(zip(statics, k))))
+            made[k] = trace(build(S), [t for _, t in params], ret)
         return made[k]
 
     def cut(S) -> dict:

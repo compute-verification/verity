@@ -97,6 +97,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
+HOT_CARD = "hot_card"                                 # the card a run was timed on, which the driver reports as thermally slowed
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
@@ -211,8 +212,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: asks for; a candidate's member needs none, since the candidate's own check is the gate.
 READY = "ready"
 #: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
-#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
-#: (on `checked`; `main` follows only to commits whose after-landing run passed).
+#: once every member below it has one, `hold` keeps it, and every candidate holding it, off `main`; the owner's own doesn't count.
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
@@ -224,12 +224,13 @@ LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
-#: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
+#: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (the old path's landings).
 LANDED = "landed"
 #: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
 TASK_VERDICT = "verdict"
 TASK_VERDICTS = ("pass", "fail", "error")
-#: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
+#: On `commit:<sha>`, the old path's shadow comparison of its after-landing verdicts with the executor's; nothing writes
+#: or reads it.
 EXECUTOR_SHADOW = "executor_shadow"
 #: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
 #: (`tasks-graph/v1`), whose keys drive reads verdicts under.
@@ -351,7 +352,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
-       "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+       "(`research data select --label replay_set=network-attester/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
     _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
        "naming the ruling: `refused: FORM` (the verifier now refuses that form) or `blocked: GATE` (fail-closed refuses the "
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
@@ -377,7 +378,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
     _k(TRAINING_SLOWDOWN, GROUP_RESULT, TEXT, "on a training-slowdown job's run (when it is queued) and its run record (once "
        "the run ends with one), by `verity bench training-slowdown`: the job, as DIGEST/SEED/SPLIT, its attack config's "
-       "digest (benchmarks/training_slowdown/training_slowdown/config.py), its seed and its held-out split; the command's "
+       "digest (calibration/training/training_slowdown/config.py), its seed and its held-out split; the command's "
        "only state", pattern=r"[0-9a-f]{64}/\d+/(search|final)"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
@@ -419,6 +420,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
+    _k(HOT_CARD, GROUP_VERIFICATION, TEXT, "on a timed run, by whoever judged its card: a sentence naming the node and card it was "
+       "timed on and what the driver reported (its thermal-slowdown counter far above its neighbours'), so the timing may be "
+       "throttled; the result stays; never a bool or empty"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
@@ -438,8 +442,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),
-    _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
-       "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
+    _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by the verified queue after a landing (`merge.label_landed`): main's commit "
+       "that landed what it checked, or whose Check: or Checked: trailer names it", pattern=r"[0-9a-f]{40}"),
     _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
        "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
        "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
@@ -454,9 +458,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(READY_VERDICT, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: a JSON object, the verdict of that commit's "
        "`ready:` check once none of its merge-gate tasks is still to end ({check, state, why, counts, failed, infra, flaky: "
        "[{task, key, why, ...}]}); the queue's loop reads it in place of asking the executor (`research.vqueue_loop`)"),
-    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
-       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
-       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
+    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the old path's drive under `executor = \"shadow\"`, which nothing writes or reads now: a "
+       "JSON object comparing the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: "
+       "[{unit, old, executor}], pending, missing, executor_only, error, incomplete})"),
     _k(NIGHTLY_CHECK, GROUP_VERIFICATION, ENUM, "on commit:<sha>, by the control pod's nightly loop: what the uncached check of "
        "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, and "
        "the check named no cached pass it contradicts; contradicted, it named one, a cached pass that answers for something "
@@ -482,7 +486,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (benchmarks/tc_probe/trust.py)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (calibration/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
     _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
        "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "
@@ -535,6 +539,8 @@ def check(name: str, value: Any) -> str | None:
         return f"{name}={value!r} is a string; the key's form is {k.form} (`research data label` converts it; other writers must store the {k.form})"
     if k.form in (INT, NUMBER) and isinstance(value, str):
         return f"{name}={value!r} is not {'an int' if k.form == INT else 'a number'}"
+    if name == HOT_CARD and not (isinstance(value, str) and value.strip()):
+        return f"{name}={scalar_text(value)!r}: the value names the card (node and card) and says what the driver reported, as a non-empty sentence"
     return k.check(value)
 
 

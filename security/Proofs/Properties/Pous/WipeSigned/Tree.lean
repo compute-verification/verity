@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.WipeSigned
-public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Proofs.Properties.Pous.MemoryAttester.Tree
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -14,9 +14,9 @@ gives one level below it, down to the leaves, and one leaf one value (`tree_bind
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeTree
+namespace MemoryAttester.Properties.SecurityProofs.WipeTree
 
-open MemoryChallenger Flock Flock.FV3.Sha512
+open MemoryAttester Flock Flock.FV3.Sha512
 open Tree (CF lev levels_eq levels_size levels_get root_eq lev_size lev_width get!_mem hash_size frame_last frame_two
   node_hash leaf_hash next_get isEmpty_of_size)
 
@@ -155,4 +155,4 @@ theorem root_width (d : Domain) (vs : Array ByteArray) : (d.root (leavesOf d vs)
   rw [lev_size _ _ _ (Nat.le_refl _), Nat.sub_self]
   decide
 
-end MemoryChallenger.Properties.SecurityProofs.WipeTree
+end MemoryAttester.Properties.SecurityProofs.WipeTree

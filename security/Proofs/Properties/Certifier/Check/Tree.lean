@@ -13,9 +13,9 @@ the top of a tree of at most `2^D` leaves is one node or none.
 
 @[expose] public section
 
-open NetworkCheck hiding Params
+open NetworkVerifier hiding Params
 open Flock
-open NetworkCheck.Check (Grid)
+open NetworkVerifier.Check (Grid)
 
 namespace Properties.Certifier.Tree
 

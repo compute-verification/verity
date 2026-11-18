@@ -10,8 +10,6 @@
 The capture (`tests/properties/dsv4_mhc_capture_gpu.py`) checks the twin against the H200."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import itertools
 
 import numpy as np
@@ -21,6 +19,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.numerics import mhc_twin as W
 from verity_vllm.definitions.registry import boolean_mhc as BM
 from verity_vllm.definitions.registry import mhc as M

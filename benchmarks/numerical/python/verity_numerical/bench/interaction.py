@@ -2,7 +2,7 @@
 read of a ``bench-result/v1`` document.
 
 The interaction model is t = compute + rounds x RTT + bytes / bandwidth, with the
-reference network ``census.REFERENCE_NETWORK`` (``benchmarks/census/networks.json``: same datacenter)."""
+reference network ``census.REFERENCE_NETWORK`` (``calibration/census/networks.json``: same datacenter)."""
 
 from __future__ import annotations
 

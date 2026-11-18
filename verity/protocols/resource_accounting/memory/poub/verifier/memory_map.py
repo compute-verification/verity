@@ -37,7 +37,7 @@ credited past it: weights only the first steps read are freed after the last of 
 embedding, the experts a router indexes) stays until the last step whose gather may select any of its rows, whichever
 rows the run selected.  That every free but a re-key's (below), of a registered block or a written one, is at its
 values' last structural reader is the memory-map unit's to prove (`verity.circuits.requirement_units`,
-`PROTOCOL.md` §8 "The requirement's link").  A
+`audit.RequirementLink`).  A
 step's frees apply before its writes; a step frees a slot at most once, only a live one, and writes a slot at most
 once.  A block is written once, complete and encoded (deferred residency):
 a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
@@ -80,7 +80,7 @@ appends sent before whose writes the step records.  The appends are sent before 
 holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
 unit's to prove against the record's append chain and each pass's head (`audit.Record.appends`,
-`WindowRecord.heads`, `RequirementLink.mapped`, `PROTOCOL.md` §8 "The memory map's choices"): frees, re-keys and
+`WindowRecord.heads`, `RequirementLink.mapped`): frees, re-keys and
 append order chosen after the seed would otherwise be advice.  So a step's appends are sent after the pass at that
 step's root and before the next pass's, and a re-key's old index is below the stale bound of the pass after its step
 (`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).
@@ -96,7 +96,8 @@ did and the device has since encoded, and its frees are of blocks whose values' 
 `AuditRun.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
 released in between is in neither; it refuses a step at or before one already applied or taken.  That a pass's plan
 holds every complete block the circuit reads at its step is the plan's proof block's to check, against this record and
-the circuit's requirement, inside zero knowledge.
+the circuit's requirement, inside zero knowledge.  The step says which reads a pass stands for, not when serving made
+them: nothing shows that the pass at `s` ran while serving executed `s`.
 
 The schedule.  `schedule` turns the map into the schedule the prover publishes (each block's write and free, the
 appends' extents and the passes' steps, `schedule.py`), from which the verifier computes every pass's plan and which it

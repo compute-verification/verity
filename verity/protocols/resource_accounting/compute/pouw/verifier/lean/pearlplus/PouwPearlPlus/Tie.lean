@@ -46,7 +46,7 @@ are the passes', the calls' and W's tables' counts the class's and the model's, 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit
 
@@ -226,4 +226,4 @@ def tieAt (load : Option LoadClass) (w : Json) (passes : List (Json × Pass)) (r
     "its 2, each retained or dropped, every call of round 0 of 16 rows and of a later round of 2, committed in rows " ++
     "padded to a multiple of 16"
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

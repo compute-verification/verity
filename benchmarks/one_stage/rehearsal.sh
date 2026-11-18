@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The remote demo's served path as one command a node: each verb is the harness (`served_verdicts.sh`) at fixed
+# The remote application's served path as one command a node: each verb is the harness (`served_verdicts.sh`) at fixed
 # settings, its output through a filter that withholds a session secret after its key, so no run's log keeps one. On a
 # TERM to the run's process group the harness cleans up as it does alone: this shell waits for it, the filter outlives
 # the signal so the cleanup still has somewhere to write, and the exit status is the harness's.
@@ -118,8 +118,9 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
     # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
     if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den='' design=${V3C_LAW-}
-      [[ $design =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      num='' den='' design=${V3C_LAW-}; rule=$design
+      [ "${PEARLPLUS_TIE_UNIFORM-}" != 1 ] || [[ $rule != rate:* ]] || rule=stratified-$rule
+      [[ $rule =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
       [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
         || no "the sampling design is ${design:-unset}: under PEARLPLUS_TIE it has no default, and the launch states it, a" \
           "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \

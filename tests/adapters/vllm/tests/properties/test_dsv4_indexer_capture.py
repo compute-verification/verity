@@ -6,8 +6,6 @@ the top-k checks at 1024, the PTX scan, the bindings, the statics, the verdict a
 `tests/properties/dsv4_indexer_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import contextlib
 import copy
 import hashlib
@@ -19,11 +17,11 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import dsv4_indexer_twin as T
-from verity_vllm.definitions.registry import dsa
 
 from tests import fake_vllm
 from tests.properties import dsv4_indexer_capture_gpu as D4
+from verity_vllm.definitions.numerics import dsv4_indexer_twin as T
+from verity_vllm.definitions.registry import dsa
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 IDX, X = D4.I, D4.X

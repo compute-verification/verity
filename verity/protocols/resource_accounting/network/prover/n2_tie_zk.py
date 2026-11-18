@@ -21,7 +21,7 @@ through `tie_service.Ties`, the verifier's tie source).
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
   in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
   attester's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
-  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_certifier_run`
+  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_attester_run`
   reads them. The release is the cells' headers (each connection's first bucket, checked against the network attester's
   wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
   bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
@@ -212,7 +212,7 @@ def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
                              "whose root the network attester signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network attester run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
@@ -519,7 +519,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and held and row["public"] == {"verdict": x.expect, "advice": digest})
         rows.append(row)
-        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
+        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}"
             f"{'' if refused is None else f' (refused: {str(refused)[:300]})'}, output words "
             f"{opened}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
@@ -559,6 +559,21 @@ def _member_scan(M, sg, rd, out: Path) -> dict:
     return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": excluded, "files": len(got["files"])}
 
 
+def summarized(res: dict) -> dict:
+    """A member's results as its summary and log hold them: verdicts, costs and counts, never the inputs' digest, a
+    witness piece's name or bytes, or which cells the scan found."""
+    rec = res["received"]
+    windows = [{k: v for k, v in r.items() if k not in ("public", "service_public")}
+               | {"public": {"verdict": (r["public"] or {}).get("verdict")},
+                  "service_public": {k: v for k, v in (r["service_public"] or {}).items() if k != "inputs"}}
+               for r in res["windows"]]
+    return {"windows": windows, "tie": {k: v for k, v in res["tie"].items() if k != "inputs"},
+            "received": {"files": rec["files"], "verifier_bytes": rec["verifier_bytes"], "blobs": rec["blobs"],
+                         "found": len(rec["verifier_found"]), "leaked": len(rec["leaked"]),
+                         "structured": len(rec["structured"]), "public_pieces": len(rec["public_pieces"]),
+                         "control": {k: rec["control"][k] for k in ("holds_all", "blobs_found", "of")}}}
+
+
 def _member_ok(name: str, res: dict, rd) -> bool:
     """Whether member `name`'s run is what `EXPECT` says: every window's verdict its reference's, the tie's on the link
     under its advice with one registration per window, no witness piece `leak_scan.scan` reads as leaked in what the
@@ -578,15 +593,12 @@ def prove(a) -> int:
     plan = members()
     rounds = {name: phases(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
     summary: dict = {"class": a.cls, "gpu": a.gpu,
-                     **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS,
-                         "prompt_lens": list(REAL.prompt_lens), "releases": [list(r) for r in REAL.releases]}
-                        if REAL else {}),
+                     **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS} if REAL else {}),
                      "link": {"name": LINK, "shape": list(tie.key), "T": T, "unit": tie.unit.id,
                               "program": tie.partition["program"], "partition": P.digest(tie.partition),
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
-                     "changed": {name: what for name, (_, _, _, what) in plan.items()},
-                     "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
+                     "changed": {name: sorted(what) for name, (_, _, _, what) in plan.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
@@ -628,12 +640,11 @@ def prove(a) -> int:
         rec = res["received"]
         good = _member_ok(name, res, rounds[name])
         ok &= good
-        summary["members"][name].update(res, ok=good)
+        kept = summarized(res)
+        summary["members"][name].update(kept, ok=good)
         log(f"member {name}: tie {res['tie']['accepted']}, windows {[int(r['accepted']) for r in res['windows']]}, "
-            f"verifier received {rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} public pieces "
-            f"left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
-            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            f"verifier received {rec['verifier_bytes']} bytes in {rec['files']} files, scanned: {kept['received']}; "
+            f"{'as expected' if good else 'UNEXPECTED'}")
     summary["tie"] = {name: res["tie"]["accepted"] for name, res in done.items()}
     costs = [r for res in done.values() for r in res["windows"]]
     summary["per_window"] = {
@@ -653,12 +664,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_tie_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="each ingress execution phase's bucket rows proved --zk as IoTieRequest, "
-                                     "decided by the tie's verifier of record, and the tie built from the outcomes")
+                                     "decided by the tie's verifier, and the tie built from the outcomes")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
-    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+    p.add_argument("--warden-run", dest="network_attester_run", type=Path,
                    help="--class warden: a network_attester_serve run's directory (the gate's warden-rehearse's, its witness "
                         "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
@@ -674,7 +685,7 @@ def main(argv=None) -> int:
     Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    use(a.cls, a.network_certifier_run, a.windows)
+    use(a.cls, a.network_attester_run, a.windows)
     return prove(a)
 
 

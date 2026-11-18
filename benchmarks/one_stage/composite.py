@@ -6,6 +6,7 @@
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
+``onsite`` (`Core.Onsite`, ``verity/onsite/v1``) composes Pearl+'s run verdict as its work too.
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
@@ -59,11 +60,11 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
+PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
 COMPONENTS = {
-    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1",
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
     "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
@@ -79,9 +80,9 @@ EXCEPTIONS = {
 }
 #: The listed guarantee each product's accept rests on, as its lock names it: the one theorem over the compiled check its
 #: executable runs. A product with none listed accepts with no theorem behind it, and its record says so.
-CITES = {"remote": "Verity.Sampled.remote_soundness_deployedReady"}
+CITES = {"remote-v1": "Verity.remote_soundness_of_subprotocols"}
 #: The lock that lists `CITES`' guarantees, at the tree's commit.
-LOCK = "security/lean-audit.json"
+LOCK = "security/Properties/lean-audit.json"
 USAGE = 64
 LEAK = 65
 #: An accept whose cited guarantee the lock at the tree's commit doesn't list.
@@ -94,6 +95,7 @@ VERDICTS = ("accept", "reject", "undecided")
 #: carries no value.
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_./ -]{0,63}")
 VALUE = re.compile(r"[0-9A-Fa-f]{16}")
+SAMPLED = "verity/sampled-proofs/v1"
 
 
 class Parser(argparse.ArgumentParser):
@@ -215,6 +217,22 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
 
 
+def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
+    """Of the SPOT case in the per-member form, the members its accepted sample reached and the members it
+    registers; None for any other case."""
+    for p in cases:
+        proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
+        if not isinstance(proofs, dict) or not isinstance(proofs.get("members"), dict):
+            continue
+        if outcome(p["id"], p["answer"])["verdict"] != "accept":
+            return None
+        a = json.loads(p["answer"])
+        sample = (a.get("public") or {}).get("drawn") or []
+        ms = proofs["members"].values()
+        return sum(any(lo <= u < hi for u in sample for lo, hi in m["units"]) for m in ms), len(ms)
+    return None
+
+
 def uncited(p: dict[str, Any]) -> str | None:
     """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
     if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
@@ -304,6 +322,9 @@ def run(a: argparse.Namespace) -> int:
         rc = p.returncode
         ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
         lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
+        if ran["cites"] is not None and (got := members_reached(cases)) is not None and got[0] < got[1]:
+            ran["not_covered"] = {"id": SAMPLED, "members": {"sampled": got[0], "registered": got[1]}}
+            lines.append(f"NOT_COVERED {SAMPLED} {got[0]} of {got[1]} members sampled: {ran['cites']} does not cover it")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")

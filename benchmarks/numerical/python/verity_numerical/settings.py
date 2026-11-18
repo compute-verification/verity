@@ -38,7 +38,7 @@ REGISTRY = EnvSettings(
                                                "its pod id"),
     # ---- data
     S("VERITY_CENSUS", str, None, VALUE, "the census directory (hardware.json, workloads.json, ...) when it is not the "
-                                         "repository's benchmarks/census/"),
+                                         "repository's calibration/census/"),
     # ---- which tests run
     S("VERITY_BENCH_FULL", present, False, WHERE, "set, tests/bench/test_instances.py rechecks every instance of the built "
                                                   "dataset (minutes): which tests run, never what one computes"),

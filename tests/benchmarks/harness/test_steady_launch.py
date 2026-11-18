@@ -45,7 +45,7 @@ def test_a_spec_names_a_type_at_its_full_statement_and_a_quarter_side_by_side_an
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     assert len({item.identity for item in plan.points}) == 4, "the statement's units are in a point's identity"
     commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200",
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53",
                       execute=lambda command, cwd: commands.append(command) or 0) == 0
     assert [STEADY_POINT.parse(command) for command in commands] == [
         {"spec": path, "point": item.point.id, "identity": item.identity} for item in plan.points]
@@ -176,12 +176,12 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
                        lookup=lambda spec, item, identity: ("r-passed", None) if item.id == "gemm64-k1" else (None, "why"))
     assert [point.passing_run for point in plan.points] == ["r-passed", None, None]
     commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200",
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53",
                       execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
     assert [cwd for _, cwd in commands] == [root, root]
     for (command, _), item in zip(commands, plan.points[1:], strict=True):
         flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", "vy-dc-h200"] and "--queue" not in flags and "--gpus" not in flags
+        assert flags[:4] == ["research", "run", "--on", "vy-spot-glm53"] and "--queue" not in flags and "--gpus" not in flags
         assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
         assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 5400}" and "--require-result" in flags
         assert flags[flags.index("--tool") + 1] == "verity_bench.tool:STEADY_POINT"
@@ -205,7 +205,7 @@ def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_cou
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, "why"))
     commands = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", end=1_007_200, now=lambda: 1_000_000.4,
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", end=1_007_200, now=lambda: 1_000_000.4,
                       execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     assert len(commands) == 3
     for command in commands:
@@ -216,7 +216,7 @@ def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_cou
     launched = []
     with pytest.raises(ValueError, match=r"up to 90 min .* don't fit before its end, 1970-01-12T15:16:40Z: it would "
                                          r"not finish, so it isn't launched"):
-        P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", end=1_005_400, now=lambda: 1_000_000.0,
+        P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", end=1_005_400, now=lambda: 1_000_000.0,
                    execute=lambda command, cwd: launched.append(command) or 0)
     assert launched == []
     assert _parser().parse_args(["run", "x", "--direct", "n", "--end", "1970-01-12T15:46Z"]).end == 1_007_160
@@ -231,18 +231,18 @@ def test_a_point_named_again_is_launched_though_a_passing_run_stands_for_it_and_
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: ("r-passed", None))
     ran = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", execute=lambda c, cwd: ran.append(c) or 0) == 0
     assert ran == [], "every point passed: nothing is launched"
     again = jobs.again(plan, ["gemm64-k2"])
     assert [item.again for item in again.points] == [False, True, False]
     assert [point.get("again") for point in jobs.plan_json(again)["points"]] == [None, "passed by r-passed", None]
     assert [point["passing_run"] for point in jobs.plan_json(again)["points"]] == ["r-passed"] * 3, "nothing superseded"
-    assert P.dispatch(again, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert P.dispatch(again, root / path, root=root, direct="vy-spot-glm53", execute=lambda c, cwd: ran.append(c) or 0) == 0
     assert [STEADY_POINT.parse(command)["point"] for command in ran] == ["gemm64-k2"]
     with pytest.raises(ValueError, match=r"--again gemm64-k3: not a point of spec 'steady', whose points are gemm64-k1, "):
         jobs.again(plan, ["gemm64-k3"])
     with pytest.raises(SystemExit):
-        main(["run", path, "--direct", "vy-dc-h200", "--again"])
+        main(["run", path, "--direct", "vy-spot-glm53", "--again"])
 
 
 def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_the_card(tmp_path):
@@ -275,7 +275,7 @@ def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_ke
     plan = P.make_plan(spec, root=root, lookup=lambda spec, item, identity: (None, None))
     assert [point.point.row.stored for point in plan.points] == [None, None, (ART, IN_ART)]
     commands = []
-    assert P.dispatch(plan, spec, root=root, direct="vy-dc-h200",
+    assert P.dispatch(plan, spec, root=root, direct="vy-spot-glm53",
                       execute=lambda command, cwd: commands.append(command) or 0) == 0
     flags = [command[:command.index("--")] for command in commands]
     assert ["--store-read" in f for f in flags] == [False, False, True]
@@ -291,7 +291,7 @@ def test_a_launch_that_fails_stops_the_launches_after_it(tmp_path):
         ran.append(command[command.index("--point") + 1])
         return 0 if len(ran) < 2 else 75
 
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=execute) == 75
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", execute=execute) == 75
     assert ran == ["gemm64-k1", "gemm64-k2"]
 
 
@@ -311,5 +311,5 @@ def test_run_refuses_a_steady_spec_without_a_node_a_node_without_slots_and_a_spe
     unbounded, path = tree(tmp_path, spec={"admission": None}, name="unbounded")
     plan = P.make_plan(unbounded / path, root=unbounded, lookup=lambda spec, item, identity: (None, None))
     with pytest.raises(ValueError, match="admission max_minutes"):
-        P.dispatch(plan, unbounded / path, root=unbounded, direct="vy-dc-h200", execute=execute)
+        P.dispatch(plan, unbounded / path, root=unbounded, direct="vy-spot-glm53", execute=execute)
     assert launched == []

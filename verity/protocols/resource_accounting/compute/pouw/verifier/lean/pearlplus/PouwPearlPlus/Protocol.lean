@@ -57,7 +57,7 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace PouwCheck.PearlPlus.Protocol
+namespace PouwVerifier.PearlPlus.Protocol
 
 open Lean (Json toJson)
 open Flock (V)
@@ -261,4 +261,4 @@ private def run (manifests : String) : ByteArray := runIn manifests (executionPh
 #guard (reasonOf (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8).isSome
 #guard (protocol.answer (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8 #[]).verdict == .reject
 
-end PouwCheck.PearlPlus.Protocol
+end PouwVerifier.PearlPlus.Protocol

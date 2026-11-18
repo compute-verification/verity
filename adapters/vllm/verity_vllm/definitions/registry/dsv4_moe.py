@@ -67,14 +67,21 @@ exactly; ``alpha = 1`` makes ``-f * alpha`` the ``-f`` of `silu_and_mul`.
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite, primitive
-from verity.circuits.refs import tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
 from verity.circuits.ops.sqrt import PouwF32SqrtRn
-from verity_vllm.definitions.registry import act, b1
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import act, b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.moe import ArgmaxStepF32, F32GtStrict, MoeRouterPick, _array, _lane0_sum
+from verity_vllm.definitions.registry.moe import (
+    ArgmaxStepF32,
+    F32GtStrict,
+    MoeRouterPick,
+    _array,
+    _lane0_sum,
+)
 from verity_vllm.definitions.registry.prims import BF16, F32, I32
 from verity_vllm.definitions.registry.topp_word_gates import NvLogfV2
 

@@ -2,8 +2,8 @@
 selection less what ``adapters/vllm/ruff.toml`` already selects, and less line length; ``print`` flagged in the library),
 run from ``adapters/vllm`` on the whole integration with the ruff the root ``dev`` group pins.
 
-Findings are keyed as ``test_ruff.py`` keys them.  ``ruff check --config tests/lint/ruff_vllm.toml --fix --extend-ignore I001
-PATH`` fixes some; the import sort (I001) touches most files, so it runs once, in a change of its own.  A library ``print`` is
+Findings are keyed as ``test_ruff.py`` keys them.  ``ruff check --config ../../tests/adapters/vllm/tests/lint/ruff_vllm.toml
+--fix --extend-ignore I001 PATH`` fixes some; the import sort (I001) touches most files, so it runs once, in a change of its own.  A library ``print`` is
 a diagnostic for the logger, or what a command prints, which ``pipeline/cli.py`` writes.  Delete the entry each fix makes
 stale.
 
@@ -42,13 +42,13 @@ class Bookkeeping(UserWarning):
 
 @cache
 def scan() -> tuple[R.Violation, ...]:
-    return test_ruff.findings(CONFIG, ".", R.TESTS_ARG)
+    return test_ruff.findings(CONFIG, ".", *R.TESTS_ARGS)
 
 
 def test_no_new_findings() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Fix the code (`ruff check --config tests/lint/ruff_vllm.toml --fix PATH` from adapters/vllm fixes "
-                    "some; a library `print` becomes a logger call, or goes through pipeline/cli.py when "
+                    "Fix the code (`ruff check --config ../../tests/adapters/vllm/tests/lint/ruff_vllm.toml --fix PATH` "
+                    "from adapters/vllm fixes some; a library `print` becomes a logger call, or goes through pipeline/cli.py when "
                     "it is what a command prints).")
 
 
@@ -103,3 +103,14 @@ def test_print_is_flagged_in_the_library_alone(tmp_path) -> None:
                         "--output-format", "json", "--select", "T201", "."], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert [Path(f["filename"]).relative_to(tmp_path).as_posix() for f in json.loads(r.stdout)] == ["verity_vllm/a.py"]
+
+
+def test_a_finding_under_the_definitions_tests_is_seen_under_their_key(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "definitions"
+    root.mkdir()
+    (root / "test_a.py").write_text("import os\nimport sys\n\nl = sys.argv\n", encoding="utf-8")
+    monkeypatch.setattr(R, "DEFINITION_TESTS", root)
+    monkeypatch.setattr(R, "TESTS_ARGS", (R.TESTS_ARG, str(root)))
+    key = "verity_vllm/definitions/tests/test_a.py"
+    assert (key, "F401") in {(v.file, v.kind) for v in test_ruff.scan.__wrapped__()}
+    assert (key, "E741") in {(v.file, v.kind) for v in scan.__wrapped__()}

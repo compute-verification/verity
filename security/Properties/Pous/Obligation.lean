@@ -31,7 +31,7 @@ each value of the other tags' keys as it stands.
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

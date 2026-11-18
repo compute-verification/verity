@@ -1,4 +1,4 @@
-"""`wipe_stream`, the streamed wipe's native fill on the memory challenger's CPUs: its labels are `streamed_wipe.label`'s
+"""`wipe_stream`, the streamed wipe's native fill on the memory attester's CPUs: its labels are `streamed_wipe.label`'s
 at the gates and past them, its stream is `wipe_party`'s fill frames byte for byte (a short last frame included), a
 prover that left raises `ConnectionError` (the session stays unsigned), a streamer deriving other labels is refused at
 its gate, and a wipe filled natively is judged as the Python fill's: accepted."""
@@ -15,7 +15,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw

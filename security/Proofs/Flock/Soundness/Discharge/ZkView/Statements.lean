@@ -47,7 +47,6 @@ import Proofs.Flock.Soundness.LigeritoWeights
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.Merkle
-import Proofs.Flock.Soundness.Model.Compiled
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Basis

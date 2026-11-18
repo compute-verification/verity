@@ -77,8 +77,8 @@ read by a member and every node calling a composite is shaped as `CompShape` say
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
-open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
+open InferenceOnlyVerifier.Desc (Piece Seg PS Tgt)
 open Flock.Program (Prog GateTable)
 open DescAgree (nodeCount rootOffs)
 
@@ -3750,4 +3750,4 @@ theorem rootSet_of
       (hCov bytes P hd P.root hF'.1 k hk node hgk hp) a
     simpa using this
 
-end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact

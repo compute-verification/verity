@@ -5,7 +5,7 @@ the same.
     python3 tools/check/gates/markdown_caps.py BASE TOP [--json]
 
 Only the change's own effect is judged, against the commit below it: when TOP is the queue's merge of a PR (two parents, a
-``Queue: #N`` subject: `research.queue._message`), its first parent, the tip of `next` it merged onto; else TOP's merge base
+``Queue: #N`` subject: `research.queue._message`), its first parent, the commit it merged onto; else TOP's merge base
 with BASE.  Each ``.md`` file that differs between the two (deletions aside) fails when it is over its limit in TOP and the
 change put it there: it was within the limit (or absent) below, or it grew.  One already over below that doesn't grow passes,
 with a note, so a file over its limit on `main` or in a member below is never laid on every PR above it.  The limits and fixes are
@@ -13,8 +13,8 @@ BASE's ``tests/test_repository.py`` (read with ``git show`` and run with the sta
 its own limit.
 
 The merge queue runs `main`'s copy of it as a warn gate (drive.toml's ``warn_gates``), which keeps no PR out: on a PR's head at
-`research queue ready`'s preflight, which prints its failure as a warning, and at the sync on the PR's merge onto `next`, where
-the members below add their bytes too, which drive tells the PR's owner once a head, to trim in their next PR.  Before marking
+`research queue ready`'s preflight, which prints its failure as a warning, and on the PR's merge into a candidate, where
+the members below add their bytes too, to trim in the owner's next PR.  Before marking
 a branch, run ``python3 tools/check/gates/markdown_caps.py origin/main HEAD``.
 Exit 0 when no change puts a file over its limit, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
 `KIND`.
@@ -31,7 +31,7 @@ from pathlib import Path
 KIND = "markdown-caps-gate/v2"
 #: the module whose limits and fixes the gate applies, read at BASE
 LIMITS = "tests/test_repository.py"
-#: the subject of the queue's merge of one PR onto `next`
+#: the subject of the queue's merge of one PR onto a candidate's base
 QUEUE_SUBJECT = "Queue: #"
 
 

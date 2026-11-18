@@ -206,7 +206,7 @@ class Record:
 
     def registered(self, x: dict) -> dict:
         """``{"reason"}`` (null when PoUW's rule holds), or ``{"refused"}`` for parameters or a registration it can't read."""
-        return self._piece("registered", "pouw-check-difftest", POUW, "registered", x, py_registered)
+        return self._piece("registered", "pouw-verifier-difftest", POUW, "registered", x, py_registered)
 
     def registration(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
         """R1-R8's codes for `record` against `params` (`registration_params`); `python` is the reference's call, its
@@ -239,13 +239,13 @@ class Record:
         return lean if self.lean else python or lean
 
     def pass_epoch(self, x: dict) -> dict:
-        return self._piece("pass", "pouw-check-difftest", POUW, "pass", x, py_pass)
+        return self._piece("pass", "pouw-verifier-difftest", POUW, "pass", x, py_pass)
 
     def draw(self, x: dict) -> dict | None:
-        return self._piece("draw", "pouw-check-difftest", POUW, "draw", x, py_draw)
+        return self._piece("draw", "pouw-verifier-difftest", POUW, "draw", x, py_draw)
 
     def opening(self, x: dict) -> Any:
-        return self._piece("opening", "pouw-check-difftest", POUW, "opening", x, py_opening)
+        return self._piece("opening", "pouw-verifier-difftest", POUW, "opening", x, py_opening)
 
     def answer(self, case: dict) -> dict:
         """PoUW's outcome (`Core.Answer`) of a `serve` case, the whole outcome compared, reason included."""
@@ -253,7 +253,7 @@ class Record:
         if not self.lean:
             self._note("answer", py, None, None)
             return py
-        lean = self._server("pouw-check", POUW, "serve").exchange(case)
+        lean = self._server("pouw-verifier", POUW, "serve").exchange(case)
         same = self.canonical(lean) == self.canonical(py)
         self._note("answer", py, lean, same)
         if not same:

@@ -14,20 +14,24 @@ A new intervention is one more function here (or in any module `run.py --plugin`
 `@attention_step`; `spec.py` says what it receives."""
 from __future__ import annotations
 
+import hashlib
 import math
 import zlib
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import torch
 
 import gates as G
+import settings
 from matmul import MM, Next, Product, Softmaxed, exact_mm
 from spec import attention_step, linear_step
 
 __all__ = ["E2M1", "FIRST", "GRIDS", "GROUP", "LEVELS", "NATIVE", "ROUTES", "Rotation", "SCALES", "WORD_K", "act_quant",
            "bracket", "coin_positions", "dither3", "dither_shift", "exact_rows", "fake_quant", "floor_quant",
            "grid_attention", "holds", "int8_attention", "key_quant", "lut_norm_size", "lut_softmax", "lut_table",
-           "lut_up", "native_gptq", "native_parts", "on_blocks", "on_grid", "peel_linear", "quant", "route_planes",
+           "lut_up", "native_gptq", "native_parts", "on_blocks", "on_grid", "pearl_c", "pearl_c_run", "peel_linear", "quant",
+           "route_planes",
            "to_format", "to_grid", "with_blocks"]
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -1349,3 +1353,46 @@ def emulate_linear(mm: MM, nxt: Next, *, route: str) -> Product:
 def emulate_attention(mm: MM, nxt: Next, *, route: str) -> Product:
     """Both attention matmuls' int8 products by limb splitting, as `linear.emulate`."""
     return emulate(mm, nxt, route)
+
+
+# ================================================================ the served Pearl-C linear
+
+PEARL_C_SCHEME = "pearl-c-h100-v1-h3"
+PEARL_C_KERNEL = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90"
+PEARL_C_TILES = 1 << 16
+
+
+def pearl_c_run(weight: torch.Tensor, tag: str) -> object:
+    cubin = settings.get("PEARLC_CUBIN")
+    if not cubin:
+        raise SystemExit("pearl_c: PEARLC_CUBIN names no cubin: build it with benchmarks/harness/setup/pearl_c_sm90.sh "
+                         "(benchmarks/ppl/h200.sh sources it)")
+    import numpy as np
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity_torch.pouw import PearlCDeviceRun, pearl_c_weight_roots
+
+    kernel = PPD.Kernel.load(settings.get("PEARLC_KERNEL") or str(Path(__file__).resolve().parents[2] / PEARL_C_KERNEL), cubin)
+    digest = hashlib.sha512(tag.encode()).digest()
+    weights, salt_key = {0: weight}, digest[:32]
+    roots = pearl_c_weight_roots(kernel, weights, PEARL_C_SCHEME, salt_key=salt_key)
+    ch = Challenger(0, np.random.default_rng(int.from_bytes(digest[32:40], "little")).bytes)
+    return PearlCDeviceRun(PPD.scheme_of(PEARL_C_SCHEME), f"pouw:{PEARL_C_SCHEME}", kernel, weights, roots, ch.commitment,
+                           ch.open("salt", weights_root(roots)), capacity=PEARL_C_TILES, salt_key=salt_key)
+
+
+@linear_step("pearl_c", phase="quantize", seeded=True, source="pearl_c_sm90, verity_torch.pouw")
+def pearl_c(mm: MM, nxt: Next) -> Product:
+    """The linear as the compute benchmark's served engine computes it: Pearl-C (`pearl-c-h100-v1-h3`) on the sm_90a
+    kernel through `verity_torch.pouw.PearlCDeviceRun.gemm`, x and W in BF16, y in BF16. One run per (seed, layer,
+    linear), its salt an in-process challenger's coin; each call its own pass. On every call, y finite (`pearl_c`)."""
+    def make():
+        w = mm.weight().to(torch.bfloat16).contiguous()
+        return pearl_c_run(w, f"ppl/{mm.seed}/{mm.layer}/{mm.name}"), w
+
+    run, w = mm.cached("pearl_c", make)
+    y = run.gemm(0, mm.x.to(torch.bfloat16).contiguous(), w, None)
+    run.end_pass()
+    mm.gate("pearl_c", bool(torch.isfinite(y).all()))
+    return y.float()

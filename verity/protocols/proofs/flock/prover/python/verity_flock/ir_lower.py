@@ -153,8 +153,8 @@ def _boolean_build(key):
 
 
 class _Pieces(dict):
-    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``)
-    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest.
+    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``;
+    ``tail_pieces.MADE``, whose piece reads the id: ``BitOf{W}x{I}_v1``) or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest.
     A word `_boolean_build` refuses raises its `AmbiguousWord` from every question, ``key in PIECES`` and `get` included: a
     False would read as no piece (`NoPiece`) and hide the cure."""
 
@@ -165,6 +165,11 @@ class _Pieces(dict):
 
         for pat, fn in (*tail_pieces.FAMILIES.items(), *GATE_FAMILIES.items()):
             if isinstance(key, str) and re.fullmatch(pat, key):
+                self[key] = self.wrap(key, fn) if self.wrap else fn
+                return self[key]
+        for pat, make in tail_pieces.MADE.items():
+            if isinstance(key, str) and (m := re.fullmatch(pat, key)):
+                fn = make(m)
                 self[key] = self.wrap(key, fn) if self.wrap else fn
                 return self[key]
         fn = _boolean_build(key)

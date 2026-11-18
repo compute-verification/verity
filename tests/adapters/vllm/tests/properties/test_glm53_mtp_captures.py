@@ -5,8 +5,6 @@ between the comparisons and the record shows here and not in the card's lease (t
 `tests/properties/glm53_mtp_capture_card.sh NAME` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import contextlib
 import json
 import sys
@@ -14,12 +12,12 @@ import types
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from tests.properties import glm53_mtp_eh_norm_capture_gpu as EN
 from tests.properties import glm53_mtp_eh_proj_capture_gpu as EP
 from tests.properties import glm53_mtp_indexer_logits_capture_gpu as IL
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 CAPTURES = {"glm53_mtp_eh_norm_capture": EN, "glm53_mtp_eh_proj_capture": EP, "glm53_mtp_indexer_logits_capture": IL}

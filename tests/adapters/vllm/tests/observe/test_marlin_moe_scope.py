@@ -16,8 +16,6 @@ by name, each read that is not the modelled call's.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import dataclasses
 import importlib
 import math

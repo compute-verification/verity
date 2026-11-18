@@ -46,7 +46,7 @@ _spec.loader.exec_module(CS)
 
 K, M, N = 128, 3, 4
 LINK = "requests"
-#: a PoUW window is two certifier windows; the certifier sampled PoUW windows 0 and 1
+#: a PoUW window is two certifier windows; the network attester sampled PoUW windows 0 and 1
 POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
@@ -97,8 +97,8 @@ def _sid(stream: str = "window") -> bytes:
 
 
 def _certifier(record: bytes) -> tuple[CS.Certifier, dict[int, bytes]]:
-    """The certifier's run `CS.RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
-    salts are sampled: the certifier as the challenger reads it, and the salts it sampled."""
+    """The network attester's run `CS.RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
+    salts are sampled: the network attester as the challenger reads it, and the salts it sampled."""
     c = CS.Certifier(CS.salts(WINDOWS // POUW_WINDOW), dict.fromkeys(range(WINDOWS // POUW_WINDOW), record), link=LINK)
     return c, c.salts
 
@@ -143,7 +143,7 @@ def _pub(priv, advice, t: int) -> bytes:
 @pytest.mark.slow
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch):
     """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
-    that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal
+    that is neither window's and committed in PoUW windows 0 and 1, pass the network attester's record and reveal
     (`certified_salt.Certifier`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
@@ -174,7 +174,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
 
 
 def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_one():
-    """The salted unit. A certified window's salt is `pouw_salt` of the certifier's reveal; the prover can
+    """The salted unit. A certified window's salt is `pouw_salt` of the network attester's reveal; the prover can
     pick its own salt s* before any reveal and form the H1 unit's public row under it, its rows the same. Under the
     certified salt the verifier holds, the opening of record (`of_record.py_opening`, the difftest's input) refuses the
     s* proof at its public row and opens the proof formed under the certified salt (the honest twin: every rule of the

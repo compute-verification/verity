@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.TS.J10R
 public import Properties.Pouw.MonitoringPeriod
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -212,15 +212,15 @@ structure Answered where
 
 /-- **Served H1's verdict credits the window**: `Credit.executionPhase` on its inputs gives credited calls, not a refusal. -/
 def ExecutionPhaseAccepts (r : PreDraw) (e : Answered) : Prop :=
-  ∃ got : List ℕ, PouwCheck.Credit.executionPhase e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
+  ∃ got : List ℕ, PouwVerifier.Credit.executionPhase e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
 /-- **The units the window's sample demands proofs of**: `Credit.descriptorDrawn`, the verifier's `Credit.executionPhaseDrawn`
 (the sample `Credit.executionPhaseLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
 the sample's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
-def creditDrawn (r : PreDraw) (e : Answered) : PouwCheck.R (Array ℕ) :=
-  PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
+def creditDrawn (r : PreDraw) (e : Answered) : PouwVerifier.R (Array ℕ) :=
+  PouwVerifier.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
 
 /-- **A period's windows as `Credit.executionPhase` reads them**: on the period's coins, window `w`'s registration and the
 rest of its inputs, each any function of the coins. -/
@@ -318,7 +318,7 @@ def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditExecutionPhases (P
 
 /-- **Window `w`'s salt as `Credit.executionPhase` reads it**: its registered `salt`, hex-decoded. -/
 def saltOf {Ω : Type} {n : ℕ} (ws : CreditExecutionPhases Ω n) (x : Paths Ω n) (w : Fin n) : ByteArray :=
-  (PouwCheck.hex? (ws.reg x w).salt).getD ByteArray.empty
+  (PouwVerifier.hex? (ws.reg x w).salt).getD ByteArray.empty
 
 /-- **A unit's place in its window**, as the verifier derives it for the unit's public row
 (`Credit.registeredFile`'s `j10r`): its position `pos` (`u0 + t`), its call's first unit `call` (`u0`), the call's
@@ -345,7 +345,7 @@ namespace Place
 def layout (p : Place) : J10R.NoiseLayout := ⟨p.r, p.c, p.K⟩
 
 /-- The unit's first row block and first column block, the verifier's (`Credit.j10rBlocks`). -/
-def blocks (p : Place) : ℕ × ℕ := PouwCheck.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J
+def blocks (p : Place) : ℕ × ℕ := PouwVerifier.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J
 
 /-- The unit's noise at salt `s`: its call's `seed_c` at its blocks (`J10R.unitNoise`). -/
 def noise (s : ByteArray) (p : Place) : Noise :=

@@ -1,0 +1,4 @@
+description = "the linears as the compute benchmark's served engine computes them: Pearl-C (pearl-c-h100-v1-h3, PoUW's executor at each vLLM LinearBase) on the sm_90a kernel, x and W BF16, each row formed on E4M3 with Pearl's noise, the noise peeled off, y BF16; lm_head and attention bf16, as served"
+
+[[linear]]
+step = "pearl_c"

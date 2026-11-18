@@ -24,6 +24,14 @@ refused, never adapted to).
 
 from __future__ import annotations
 
+from verity_torch.frontend.rules.bindings.layer_norm import (
+    LayerNormAtenRule,
+)
+from verity_torch.frontend.rules.bindings.views import (
+    AllocViewRule,
+    IntIdWidenRule,
+)
+
 from verity_vllm.program.frontend.rules.profile import (
     FusedAddRmsNormRule as _FusedAddRmsNormRule,
 )
@@ -72,9 +80,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.int8 import (
     Int8UnifiedAttentionRule,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.kv_prefix import KvPrefixRule
-from verity_torch.frontend.rules.bindings.layer_norm import (
-    LayerNormAtenRule,
-)
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (
     AddScalarRule,
     AddWidenedRule,
@@ -88,12 +93,14 @@ from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_allreduce_settings,
+    active_device_name,
     active_target_profile,
     clear_observations,
     declared_derived_accounting,
     observe_allreduce_settings,
     observe_attention_impls,
     observe_batched_form,
+    observe_device_name,
     observe_export_facts,
     observe_launch_context,
     observe_target_profile,
@@ -112,10 +119,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
     FusedQKvRmsNormRule,
     TritonGemmRule,
     TritonRmsNormRule,
-)
-from verity_torch.frontend.rules.bindings.views import (
-    AllocViewRule,
-    IntIdWidenRule,
 )
 
 VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
@@ -139,8 +142,9 @@ def vllm_ruleset():
     """`DEFAULT_RULES` + the bindings above (the default rules already bind `_C.rotary_embedding`, `_C.silu_and_mul`, `aten.embedding`,
     `aten.argmax`, views/allocs). The default `FusedAddRmsNorm[vllm]` is REPLACED by `FusedAddRmsNorm[vllm-bi]`, which derives the
     kernel dispatch from the export instead of assuming it."""
-    from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_torch.frontend.rules.base import RuleSet
+
+    from verity_vllm.program.frontend.rules import DEFAULT_RULES
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
     from verity_vllm.program.frontend.rules.vllm_dsa import (
         VLLM_DSA_RULES,  # DeepSeek sparse attention's leaves (dsa_leaves.dsa_leaves)
@@ -182,7 +186,7 @@ def vllm_ruleset():
 
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
-           "active_allreduce_settings", "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key",
-           "observe_allreduce_settings", "observe_attention_impls", "observe_batched_form", "observe_export_facts",
+           "active_allreduce_settings", "active_device_name", "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key",
+           "observe_allreduce_settings", "observe_attention_impls", "observe_batched_form", "observe_device_name", "observe_export_facts",
            "observe_launch_context", "observe_target_profile",
            "triton_launch", "tuned_gemm_table_sha256", "vllm_ruleset"]

@@ -22,7 +22,7 @@ rounded toward -infinity, every NaN 0x7FC00000 (v3) or 0x7FFFFFFF (v4); `F32GtSt
 when its key is strictly greater, so a tie keeps a; a NaN on either side gives 0x7FC00000. `F32Sqrt_v2` is
 `verity.circuits.ops.boolean.sqrt.f32_sqrt_rn` (`PouwF32SqrtRn_v2`'s circuit: nearest even, subnormals, √-0 = -0, √+inf =
 +inf) with its NaN word 0x7FFFFFFF made 0x7FC00000: no other root has bits 22 to 30 all set, so their AND marks it and clears
-bits 0 to 21; `benchmarks/f32_exhaustive/run.py boolean F32Sqrt` holds it to its word on all 2^32 words. `I64ToI32_v2` keeps
+bits 0 to 21; `calibration/f32_exhaustive/run.py boolean F32Sqrt` holds it to its word on all 2^32 words. `I64ToI32_v2` keeps
 t's low word when bits 31 to 63 are all equal (t fits in an i32), else gives 0x80000000.
 """
 from __future__ import annotations

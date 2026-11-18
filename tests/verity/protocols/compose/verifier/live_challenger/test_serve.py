@@ -387,11 +387,11 @@ def test_a_peer_missing_from_the_peers_file_is_refused(tmp_path):
 
 
 def test_a_windows_session_never_opens_its_own_tunnel(tmp_path):
-    """A window's session (`--root`) reaches its peer through the peer's certifier coin link alone
+    """A window's session (`--root`) reaches its peer through the peer's attester coin link alone
     (`CoinsConfidential`), so `--peer` with it is refused before any key or coin is touched."""
     env = fake_ssh(tmp_path, "exec tail -f /dev/null")
     proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, "--peer", "vy-nebius-2", "--peers",
                              str(tmp_path / "peers"), env=env)
     code, err = finish(proc)
-    assert (code, first) == (2, "") and "certifier coin link, never its own ssh -R" in err
+    assert (code, first) == (2, "") and "attester coin link, never its own ssh -R" in err
     assert not out.exists() and not (tmp_path / "key").exists() and not (tmp_path / "ssh.args").exists()

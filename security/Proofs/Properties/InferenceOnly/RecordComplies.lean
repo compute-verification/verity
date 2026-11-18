@@ -17,11 +17,11 @@ block (`form_counts`), and the rate rule holds on the summary (`form_rates`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record.SecurityProofs (form form_owns form_laidOut form_rates)
+open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates)
 
 /-- **Accepting a record gives the rate rule on its circuit**, for the record check's own form. -/
 theorem form_complies : Complies form := complies_of form_owns form_laidOut form_counts form_rates
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

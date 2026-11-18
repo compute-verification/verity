@@ -5,7 +5,6 @@ public import Proofs.Flock.Claims.Bridge.OfGame
 public import Proofs.Flock.Claims.Bridge.Transport
 public import Proofs.Flock.Claims.Bridge.Live
 public import Proofs.Flock.Claims.Bridge.LiveZk
-public import Proofs.Flock.Claims.Bridge.LivePlain
 public import Proofs.Flock.Claims.Bridge.Committed
 public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Bridge.CustodyPlain

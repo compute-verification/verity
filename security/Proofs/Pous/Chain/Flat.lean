@@ -21554,47 +21554,6 @@ theorem ennreal_ratio_pow_mul_den (M P s : ℕ) (hP : 0 < P) :
           rw [ENNReal.mul_inv (Or.inl hp0) (Or.inl hpt), ENNReal.inv_pow]
           ring
 
-/-- **G3 finite geometric envelope.** The first-crossing sizes cost one extra bit;
-all larger sizes pay their own `M / P` ratio. Instantiate `P = 2^ℓ`; integer strictness
-`M < P` bounds the entire large-size tail without strengthening the branch split. -/
-theorem sum_v6_patterns_le (M P s K : ℕ) (hM : 2 ≤ M) (hMP : M < P) :
-    ((∑ n ∈ Finset.range (s + 2), M ^ n : ℕ) : ℝ≥0∞) /
-          (2 * P ^ s) +
-        ∑ k ∈ Finset.range K, ((M : ℝ≥0∞) / P) ^ (s + 2 + k)
-      ≤ 2 * (((M : ℝ≥0∞) ^ (s + 1)) / P ^ s) := by
-  have hP : 0 < P := lt_of_le_of_lt (by omega : 0 ≤ M) hMP
-  have hsmall :
-      ((∑ n ∈ Finset.range (s + 2), M ^ n : ℕ) : ℝ≥0∞) / (2 * P ^ s)
-        ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := by
-    calc
-      _ ≤ ((2 * M ^ (s + 1) : ℕ) : ℝ≥0∞) / (2 * P ^ s) :=
-        ENNReal.div_le_div_right (by exact_mod_cast geom_sum_le M hM (s + 1)) _
-      _ = _ := by
-        push_cast
-        exact ennreal_two_mul_div_two_mul _ _
-  have htail :
-      ∑ k ∈ Finset.range K, ((M : ℝ≥0∞) / P) ^ (s + 2 + k)
-        ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := by
-    let r : ℝ≥0∞ := (M : ℝ≥0∞) / P
-    calc
-      ∑ k ∈ Finset.range K, r ^ (s + 2 + k)
-          = r ^ (s + 2) * ∑ k ∈ Finset.range K, r ^ k := by
-            rw [Finset.mul_sum]
-            refine Finset.sum_congr rfl fun k _ => ?_
-            rw [← pow_add]
-      _ ≤ r ^ (s + 2) * P :=
-        mul_le_mul' le_rfl (ennreal_geom_ratio_le M P K hMP)
-      _ = r ^ (s + 1) * M := by
-        rw [show s + 2 = (s + 1) + 1 by omega, pow_succ, mul_assoc,
-          ennreal_ratio_mul_den M P hP]
-      _ ≤ r ^ (s + 1) * P := by
-        exact mul_le_mul' le_rfl (by exact_mod_cast hMP.le)
-      _ = ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s :=
-        ennreal_ratio_pow_mul_den M P s hP
-  calc
-    _ ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s +
-        ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := add_le_add hsmall htail
-    _ = _ := by ring
 -/
 
 end PousSpongeChain
@@ -28970,13 +28929,6 @@ theorem shared_domain_breaks : SharedDomainBreaks := by
   have h2 := hsec (fun _ => false) A₁ A₂
   rw [pr_eq_one hacc] at h2
   exact absurd h2 (not_le.2 (delta_add_lt_one hε))
-
-
-/-- **At `N = 1` the union `π` is the one-segment `chainPi`.** -/
-theorem chainPiSeg_one (B ℓ c D Q β : ℕ) : chainPiSeg 1 B ℓ c D Q β = chainPi B ℓ c D Q β := by
-  unfold chainPiSeg
-  simp only [Nat.one_mul]
-  rfl
 
 
 end Pous.BandMulti

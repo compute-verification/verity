@@ -45,7 +45,7 @@ def on_bits(fn, *args) -> list[list[int]]:
 
 
 def traced_cells() -> list[tuple[str, list[int], list[int], list[int], list[int], int, int]]:
-    """The vectors' traced cells, both formings: (forming, A′_i, B̃_j, P_A,i, P_B,j, C̃, U)."""
+    """The vectors' traced cells: (forming, A′_i, B̃_j, P_A,i, P_B,j, C̃, U)."""
     out = []
     for forming, f in VECTORS["formings"].items():
         pa, pb = {r["i"]: r["pa"] for r in f["rows_a"]}, {r["j"]: r["pb"] for r in f["rows_b"]}
@@ -57,10 +57,10 @@ def traced_cells() -> list[tuple[str, list[int], list[int], list[int], list[int]
 
 
 def test_tileread_reproduces_the_pinned_cells():
-    """Each traced cell of the gate problem (k = 1,024, both formings): TileRead's C̃ and U are the vectors', on words and on
+    """Each traced cell of the gate problem (k = 1,024): TileRead's C̃ and U are the vectors', on words and on
     bits."""
     cells = traced_cells()
-    assert len(cells) == 6 and {len(c[1]) for c in cells} == {1024}
+    assert len(cells) == 3 and {len(c[1]) for c in cells} == {1024}
     for forming, a, b, pa, pb, c, u in cells:
         assert evaluate(tile(1024, 1, 1), a, b, pa, pb) == (c, u), forming
     got = on_bits(tile(1024, 1, 1, bits=True), *zip(*[cell[1:5] for cell in cells]))

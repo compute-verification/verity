@@ -6,7 +6,6 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Outs
 public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 import Mathlib.Combinatorics.Matroid.Init
-public import Proofs.Flock.Soundness.Discharge.Placed.Typed
 public import Proofs.Flock.Soundness.Discharge.Const
 public import Proofs.Flock.Soundness.Discharge.Zero
 

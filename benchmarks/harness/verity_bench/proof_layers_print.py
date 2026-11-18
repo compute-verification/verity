@@ -3,6 +3,7 @@ writes (`measured`), from the benchmark results `proof_layers` reads."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from typing import Any
@@ -16,6 +17,7 @@ from verity_bench.proof_layers_result import (
     SCHEMA,
     Result,
 )
+from verity_bench.spot_status import WIRES
 
 # ---- printing and writing ------------------------------------------------------------------------------------------------
 
@@ -59,8 +61,8 @@ def render(results: Sequence[Result]) -> str:
                                                                      NOT_STATED if r.status == "read" else "—")
                                            for r in results)
                  + "; a benchmark result reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
-    lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
-              "|---|---|---|---|---|---|---|---|---|"]
+    lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes | circuit build |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
         read = r.status == "read"
         proof = r.proof or (NOT_STATED if read else "—")
@@ -68,9 +70,12 @@ def render(results: Sequence[Result]) -> str:
                   _statements(r, "proof_bytes", "one rep's proof")) if r.statements else
                  (_cell(r.prover_s, 's', r.per, r.prover_what), _cell(r.lean_s, 's', r.per, r.lean_what),
                   _cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)))
+        build = "—" if r.build_s is None else f"{r.build_s:.0f} s a build, wall ({r.build_what}; build cache: {r.build_cache})"
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
-                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} |")
-    lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
+                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} | {build} |")
+    lines += ["", *([f"- ε at δ: {WIRES}"] if any(r.status == "read" and "incorrect proof blocks" in r.eps_delta
+                                                  for r in results) else []),
+              *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in results for n in r.notes]
     return "\n".join(lines).rstrip()
 
@@ -81,24 +86,57 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
     return {"schema": SCHEMA, "audit": False, "results": [{"title": LAYERS[r.layer], **asdict(r)} for r in results]}
 
 
-def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
+def measured(results: Sequence[Result], metrics: Mapping[str, str], batch: str | None = None) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
-    in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
-    None, with why. Recursion's benchmark result is no member: its seconds are a whole recursive run's."""
+    in its order, its member the model and card the outputs state and its layer's words; none where no output states
+    them or no card record holds the card's name (the layer's note says so), and outputs that state two are refused. A layer's value is its figure a proof block, or for ``build_s`` its
+    build step's wall where its output states whether the build reused a cache, only where its Lean verdict is an
+    accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
+    whole recursive run's. ``batch``: a batch study's request steps, which every member ends in (`batch_word`)."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
+    serves = sorted({r.serves for r in results if r.serves})
+    if len(serves) > 1:
+        raise ValueError(f"the layers' outputs state {' and '.join(serves)}: give the outputs of one served row on one card")
+    if not serves:
+        return []
     by_layer = {r.layer: r for r in results}
     out = []
     for name, figure in metrics.items():
-        for layer, member in MEMBERS.items():
+        for layer, words in MEMBERS.items():
             r = by_layer[layer]
-            value = getattr(r, figure) if r.accepted and r.per_block else None
+            build = figure == "build_s"
+            value = getattr(r, figure) if r.accepted and (r.build_cache != NOT_STATED if build else r.per_block) else None
             why = None if value is not None else r.why or (
+                "its output gives no build step's wall (steps.txt)" if build and r.build_s is None else
+                "its steps.txt states no build cache: line, so not whether the build reused a cache" if build else
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
-            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": serves[0] + words + batch_word(batch),
+                        "why": why,
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
-                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof}})
+                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof,
+                                  "prover_batch": r.prover_batch, "prover_device": prover_device(r.device),
+                                  **({"build_cache": r.build_cache} if build else {})}})
     return out
+
+
+def batch_word(batch: str | None) -> str:
+    """A batch study's member's last word: ``-b<HI>`` for request steps 1 to HI, ``-b<LO>-<HI>`` from another; none
+    for the own batch."""
+
+    if not batch:
+        return ""
+    m = re.fullmatch(r"(\d+)-(\d+)", batch)
+    if not m or int(m[1]) >= int(m[2]):
+        raise ValueError(f"batch {batch!r}: LO-HI request steps, LO below HI, as A5_STEPS gives them")
+    return f"-b{m[2]}" if m[1] == "1" else f"-b{m[1]}-{m[2]}"
+
+
+def prover_device(device: str) -> str:
+    """The device a point's prover ran on, from the table's device column: ``processors`` where its output states the CPU,
+    else the column's own words. A member's card is the one the workload was served on, not this."""
+
+    return "processors" if device.startswith("CPU") else device

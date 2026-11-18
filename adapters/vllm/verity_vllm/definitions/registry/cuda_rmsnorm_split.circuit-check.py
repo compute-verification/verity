@@ -9,6 +9,7 @@ def _cuda_rmsnorm_split_roots() -> list[Any]:
     """Each kernel's sum of squares at every block size served for hidden widths 6144 and 7168, and the apply units at
     G = 64 and 96."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import cuda_rmsnorm_split as NS
 
     return [

@@ -41,6 +41,7 @@ import re
 import tarfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, TYPE_CHECKING
 
@@ -59,6 +60,7 @@ PACK_KEY = "packs/labels/latest.tar.gz"
 PACK_INFO_KEY = "packs/labels/latest.json"
 PACK_SCHEMA = "research/labels-pack/v1"
 PACK_MIN_MISSING = 5000         # a sync that lacks more of the remote's assertions than this takes the pack before it pulls
+INDEX_BATCH = 1000              # pulled assertions indexed in one transaction (`_landing`)
 
 
 def label_hash(label: Label) -> str:
@@ -363,9 +365,10 @@ def compare(store: LocalStore, target: str) -> list[dict]:
     return sorted(rows, key=lambda x: ((x["label"] or {}).get("ts") or "", x["hash"]))
 
 
-def write_label_file(store: LocalStore, label: Label) -> Path:
-    """Land an assertion that already exists elsewhere (remote, backup, another store) in this store's own layout, and index it.
-    The bytes written are the canonical document, so the file re-hashes to the same content name."""
+def write_label_file(store: LocalStore, label: Label, *, index: bool = True) -> Path:
+    """Land an assertion that already exists elsewhere (remote, backup, another store) in this store's own layout, and index it
+    unless `index` is false (the caller indexes it, `_landing`).  The bytes written are the canonical document, so the file
+    re-hashes to the same content name."""
     d = store.labels_dir(label.target)
     d.mkdir(parents=True, exist_ok=True)
     stem = f"{re.sub(r'[^0-9TZ]', '', label.ts)}-{re.sub(r'[^A-Za-z0-9._-]', '_', label.by)}"
@@ -378,9 +381,47 @@ def write_label_file(store: LocalStore, label: Label) -> Path:
             continue
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        store.index.index_label(label, p)
+        if index:
+            store.index.index_label(label, p)
         return p
     raise RuntimeError(f"could not allocate a label file under {d}")
+
+
+@contextmanager
+def _landing(store: LocalStore) -> Iterator[Callable[[Label], Path]]:
+    """`write_label_file` for many assertions, indexed `INDEX_BATCH` at a time in one transaction each and the rest on the way out,
+    so a sync's catalog rows are all written before it returns; one commit per assertion took a node's fill of 4.3e5 of them
+    half an hour.  A process killed inside a batch leaves at most `INDEX_BATCH` files without their rows, which the next pull
+    indexes before it pulls (`_index_unindexed`)."""
+    rows: list[tuple[Label, Path]] = []
+
+    def land(label: Label) -> Path:
+        path = write_label_file(store, label, index=False)
+        rows.append((label, path))
+        if len(rows) >= INDEX_BATCH:
+            store.index.index_labels(rows)
+            rows.clear()
+        return path
+
+    try:
+        yield land
+    finally:
+        if rows:
+            store.index.index_labels(rows)
+
+
+def _index_unindexed(store: LocalStore, paths: list[Path], warn: Callable[[str], None]) -> int:
+    """Index the label files among `paths` (every file under labels/) that have no catalog row, and return how many: a pull killed
+    inside a `_landing` batch leaves them, and a pull fetches only the assertions the store lacks, so it would never see them as
+    missing.  When the rows are as many as the files nothing is read; the files were listed anyway, for the sync's hashes."""
+    if len(paths) <= store.index.db.execute("SELECT count(*) FROM labels").fetchone()[0]:
+        return 0
+    have = {r[0] for r in store.index.db.execute("SELECT path FROM labels")}
+    rows = [(lab, p) for p, lab in _read_label_files([p for p in paths if str(p) not in have], warn).values()]
+    store.index.index_labels(rows)
+    if rows:
+        warn(f"labels-sync: indexed {len(rows)} label file(s) without a catalog row (a pull killed inside a batch)")
+    return len(rows)
 
 
 class PackUnusable(Exception):
@@ -472,9 +513,10 @@ def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], N
     tmp = scratch / f".labels-pack-{os.getpid()}"
     got: list[str] = []
     try:
-        for h, lab in pack_labels(store._require_remote(), tmp, want, warn):
-            write_label_file(store, lab)
-            got.append(h)
+        with _landing(store) as land:
+            for h, lab in pack_labels(store._require_remote(), tmp, want, warn):
+                land(lab)
+                got.append(h)
     except PackUnusable as e:
         warn(f"labels-sync: ignoring the labels pack {PACK_KEY} ({e}); pulling each assertion it would have given")
     finally:
@@ -485,16 +527,18 @@ def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], N
 def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None,
          theirs: dict[str, str] | None = None) -> dict:
     """Union the local labels/ and the remote `labels/` prefix (`theirs`: its listing, `remote_labels`, when the caller has it).
-    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "bad": [...]}` where `pushed` / `pulled`
-    list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
-    `PACK_MIN_MISSING` takes it first, `pull_pack`) and `bad` lists the remote keys whose content did not hash to their name or
+    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "indexed", "bad": [...]}` where `pushed` /
+    `pulled` list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
+    `PACK_MIN_MISSING` takes it first, `pull_pack`), `indexed` counts the local files a pull found without a catalog row and
+    indexed first (`_index_unindexed`) and `bad` lists the remote keys whose content did not hash to their name or
     did not validate (left alone, never written locally)."""
     r = store._require_remote()
     warn = log or (lambda s: None)
-    mine = local_labels(store, warn)
+    paths = sorted((store.root / "labels").glob("*/*.json"))
+    mine = _read_label_files(paths, warn)
     theirs = remote_labels(r) if theirs is None else theirs
     rep: dict = {"remote": r.describe(), "local": len(mine), "remote_before": len(theirs), "pushed": [], "pulled": [], "pack": 0, "already": 0,
-                 "bad": []}
+                 "bad": [], "indexed": _index_unindexed(store, paths, warn) if pull else 0}
     rep["already"] = len(set(mine) & set(theirs))
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -537,13 +581,14 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
                 rep["pulled"] = pull_pack(store, {h: theirs[h] for h in todo}, log=log)
                 rep["pack"] = len(rep["pulled"])
                 todo = sorted(set(todo) - set(rep["pulled"]))
-            for h, lab, err in ex.map(pull_one, todo):                  # written as they arrive: a sync cut short keeps what it pulled
-                if err:
-                    rep["bad"].append(err)
-                    warn(f"labels-sync: {err}")
-                else:
-                    write_label_file(store, lab)
-                    rep["pulled"].append(h)
+            with _landing(store) as land:
+                for h, lab, err in ex.map(pull_one, todo):              # written as they arrive: a sync cut short keeps what it pulled
+                    if err:
+                        rep["bad"].append(err)
+                        warn(f"labels-sync: {err}")
+                    else:
+                        land(lab)
+                        rep["pulled"].append(h)
     return rep
 
 

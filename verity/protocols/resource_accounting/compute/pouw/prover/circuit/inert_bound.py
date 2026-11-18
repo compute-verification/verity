@@ -902,7 +902,7 @@ def row_rho(scheme, k: int) -> int | None:
 def served(scheme, shape: Shape) -> pc8.Shape:
     """``scheme``'s unit ``shape`` as the hiding call with the inert-work bound: its device and tile, at its device's ρ,
     and with `row_rho`'s per-row inert-work bound.  Refuses a unit outside the scheme's domain (`PearlC.check`) and a
-    scheme this circuit doesn't price (forming v0, or another device's prices)."""
+    scheme this circuit doesn't price (another device's prices)."""
     d = scheme.device
     if scheme.forming != "v1" or scheme.prices != d.prices or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: the cap circuit prices forming v1 at its device record's own prices")

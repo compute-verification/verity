@@ -1,4 +1,4 @@
-"""`onsite_minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
+"""`onsite_minutes.py`: the onsite application's minutes from the prover node's run's start to the auditor device's run's end, written
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def repo(tmp_path: Path) -> tuple[Path, str, str]:
 
 def line(verdict: str = "accept", run: str = "r-prover", **components: str) -> str:
     c = {k: "accept" for k in M.CHECKS} | components
-    return "VERDICT " + json.dumps({"block": 0, "coins": "development", "components": c, "product": "verity/onsite/v0",
+    return "VERDICT " + json.dumps({"block": 0, "coins": "development", "components": c, "product": "verity/onsite/v1",
                                     "reason": "", "registration": "ab" * 32, "run": run, "simulated": [],
                                     "verdict": verdict}, sort_keys=True)
 
@@ -85,7 +85,7 @@ def test_an_accepting_verdict_of_the_seven_checks_from_research_runs_on_main_is_
     ((), "r-auditor: no verdict line in its stdout.log"),
     ((line(run="local"),), "its verdict line's run is local"),
     ((line(wipe="absent", pous="absent"),), "covers 5 of the goal's 7 checks, not pous, wipe"),
-    ((line(), line(verdict="reject", pouw="reject")), "the verdict is reject, after 128.2 minutes"),
+    ((line(), line(verdict="reject", **{"pearl-plus": "reject"})), "the verdict is reject, after 128.2 minutes"),
 ])
 def test_no_accepting_verdict_of_the_seven_checks_from_a_research_run_is_refused(tmp_path, repo, log, why):
     r, on, _ = repo
@@ -96,7 +96,7 @@ def test_no_accepting_verdict_of_the_seven_checks_from_a_research_run_is_refused
 def test_a_rejecting_line_before_an_accepting_one_rejects_the_period_with_no_value(tmp_path, repo, monkeypatch, capsys):
     """Accept only where every line accepts: a period whose last line accepts after one that rejects has no minutes."""
     r, on, _ = repo
-    runs = demo(tmp_path / "runs", on, line(verdict="reject", pouw="reject"), line())
+    runs = demo(tmp_path / "runs", on, line(verdict="reject", **{"pearl-plus": "reject"}), line())
     out = tmp_path / "me"
     out.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(out))
@@ -112,7 +112,7 @@ def test_a_rejecting_line_before_an_accepting_one_rejects_the_period_with_no_val
 def test_a_served_commit_off_main_or_a_third_run_is_refused(tmp_path, repo, capsys):
     r, _, off = repo
     with pytest.raises(M.R.Refused, match=f"the served commit {off} is not a commit of main"):
-        M.R.minutes(demo(tmp_path / "runs", off, line()), tmp_path / "runs", "main", r, read=M.verdict)
+        M.R.minutes(demo(tmp_path / "runs", off, line()), tmp_path / "runs", "main", r, read=M.verdict, metric=M.METRIC)
     with pytest.raises(SystemExit):
         M.main(["r-prover", "r-other", "r-auditor"])
     assert "unrecognized arguments" in capsys.readouterr().err

@@ -16,16 +16,15 @@ from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import int8_exact as IX
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
+from verity_vllm.definitions.registry.attention_cuts import CUTS, heads
 from verity_vllm.definitions.registry.dead_free import (
-    AttentionV19,
     AttnBlockFirstV2,
     TokenSelectGroupsV1,
 )
-from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
-
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
@@ -35,9 +34,6 @@ from .window_class import FixedLoad, PearlTables, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
-#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
-#: by v19, FA3's v4 by v20
-CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 
 def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
@@ -263,8 +259,8 @@ class _Program:
 
     def _RMSNormFusedCuda(self, j: int, node: Any) -> None:
         """`RMSNormFusedCuda_v2{N, EPS}`, one unit, or cut at its residual add where an earlier node reads its template's ``x``
-        at another row count or one unit would pass ``grain.rows`` rows: N / C `RMSNormFusedCudaAdd_v1{N, C, AT}` units, C =
-        ``grain.norm``, and the tail `RMSNormFusedCudaTail_v1{N, EPS}`, its ``r`` cut j part AT = j's sum."""
+        at another row count or one unit would pass ``grain.rows`` rows: N / C `RMSNormFusedCudaAdd_v2{N, C, AT, R}` units, C =
+        ``grain.norm`` and R the rows their writers hold its x part in, and the tail `RMSNormFusedCudaTail_v1{N, EPS}`, its ``r`` cut j part AT = j's sum."""
         x, res, w = node.args
         (N, eps), xs, rs = (node.fn.bindings[k] for k in ("N", "EPS")), self.rows(x.refs), self.rows(res.refs)
         if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs) and \
@@ -276,8 +272,9 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: its {N} elements aren't parts of the grain's {C}")
         parts = []
         for at in range(N // C):
-            tid, u = self.b.unit(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=at))
-            self.b.feed(tid, "x", u, 1, self.rows(x.refs.slice(at * C, (at + 1) * C)))
+            part = self.rows(x.refs.slice(at * C, (at + 1) * C))
+            tid, u = self.b.unit(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=at, R=len(part)))
+            self.b.feed(tid, "x", u, 1, part)
             self.b.feed(tid, "res", u, 1, rs)
             parts.append(Row(tid, u, "o0", C))
         tid, u = self.b.unit(bind(NS.RMSNormFusedCudaTail, N=N, EPS=eps))
@@ -369,12 +366,10 @@ class _Program:
         self.outs[j] = pieces
 
     def _heads(self, fn: Any, family: str, count: int) -> Any:
-        nodes = fn.body.nodes
-        head = nodes[0].fn
-        if head.name != family or any(m.form != "batch" or descriptor_id(m.fn) != descriptor_id(head) for m in nodes) \
-                or sum(m.n for m in nodes) != count:
-            raise Unexpressible(f"{fn.id}: its body is not {count} heads of one {family} Definition")
-        return head
+        try:
+            return heads(fn, family, count)
+        except ValueError as e:
+            raise Unexpressible(str(e)) from None
 
     def _each(self, tid: str, port: str, at: int, rowss: Sequence[tuple[Row, ...]], rep: int = 1) -> None:
         """Units ``at + g·rep`` to ``at + (g + 1)·rep - 1`` read ``rowss[g]``: one feed where each group's rows are the first's

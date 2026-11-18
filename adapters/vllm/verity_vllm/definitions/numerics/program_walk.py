@@ -27,7 +27,6 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-
 from verity.circuits import boolean as BL
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.circuits.evaluation.batch import type_dtype, type_shape

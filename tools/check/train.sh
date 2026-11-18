@@ -10,8 +10,7 @@
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
 # (but verifier/sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
 # changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
-# It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
-# COMMIT's branch. With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py
+# It prints the run ids (`RUN ID...`), which the verified queue reads (`vqueue_slim`). With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`; when its pick had a slot free, on two others at most, which join their lines only after a delay, `--twin-after`): the first to
 # take a slot runs the check and the others exit 75, not started, so RUN names one id per twin (but a twin whose launch a
 # machine refused: the wait goes on past that refusal for every other twin's id). When every twin exits 75
@@ -236,7 +235,7 @@ for _ in $(seq $((launch_wait_s / 5))); do
 done
 ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
 # a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
-# followed, which held check slots for hours on trees no longer on `next`
+# followed, which held check slots for hours on trees no longer a candidate
 if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true

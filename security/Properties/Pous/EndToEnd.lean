@@ -1,9 +1,9 @@
 module
 
-public import PousCheck.Run
+public import PousVerifier.Run
 public import Properties.Pous
 public import Properties.Pous.TimedAudit
-public import Properties.Pous.MemoryChallenger
+public import Properties.Pous.MemoryAttester
 public import Properties.Hash.Identity
 public import Definitions.Pous.Assumptions.P2
 public import Definitions.Pous.P2.Cost
@@ -76,8 +76,8 @@ Two gaps stood between these statements and the deployed verifier:
 
 @[expose] public section
 
-open MemoryChallenger MemoryChallenger.Properties
-open PousCheck PousCheck.Properties
+open MemoryAttester MemoryAttester.Properties
+open PousVerifier PousVerifier.Properties
 
 namespace Pous.EndToEnd
 

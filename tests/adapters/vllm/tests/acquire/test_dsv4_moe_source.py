@@ -13,8 +13,6 @@ call that does not take `dsv4_topk` bound anyway; a router bound twice; a launch
 label that binds no row of the manifest's shape; and a hash layer's extra value that `identity_check` would count as a module."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import types
 
 import pytest

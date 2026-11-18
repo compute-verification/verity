@@ -15,8 +15,6 @@
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import math
 from fractions import Fraction
 from pathlib import Path
@@ -26,10 +24,10 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
-from verity_vllm.definitions.registry import dsa as D
-from verity_vllm.definitions.registry import prims as P
 
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
+from verity_vllm.definitions.registry import dsa as D
+from verity_vllm.definitions.registry import prims as P
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF
 NAN_PTX = 0x7FFFFFFF

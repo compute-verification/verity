@@ -26,11 +26,11 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "security/lean-audit.json", "security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
           "security/Definitions/Slowdown/Remote.lean", "security/Definitions/Slowdown/Guarantees/Remote.lean",
           "security/Definitions/Slowdown/Cut.lean", "security/Definitions/Slowdown/Guarantees/Cut.lean",
-          "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/bracket.py",
+          "calibration/census/hardware.json", "calibration/census/adversary.json", "benchmarks/nci/bracket.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocol.py", "verity/channel.py", "verity/circuits",
-          "verity/protocols/proofs/spot/verifier/profile.py", "benchmarks/census/deployments.json", "benchmarks/nci/calibrations.json",
+          "verity/protocols/proofs/spot/verifier/profile.py", "calibration/census/deployments.json", "benchmarks/nci/calibrations.json",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/workload_classification/training_detection/inference_only/__init__.py",
-          "verity/device.py", "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml", "benchmarks/slowdown"]
+          "verity/device.py", "calibration/hardware/cards/h200-sxm-141gb.toml", "calibration/hardware/cards/dgx-h200.toml", "benchmarks/slowdown"]

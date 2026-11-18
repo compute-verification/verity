@@ -1,4 +1,4 @@
-"""The link's frame: its header, the kinds both certifiers' frames have, and its codec. A link frame is B bytes: the
+"""The link's frame: its header, the kinds both network attesters' frames have, and its codec. A link frame is B bytes: the
 header (kind, stream, the payload's length), the payload, then zero fill. The network attester's cells are such
 frames."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import struct
 
-#: the workload declares the same header (`certifier.prover.workload.FRAME_HEADER`), held equal by
+#: the workload declares the same header (`attester.prover.workload.FRAME_HEADER`), held equal by
 #: `tests/test_network_attester_id_request_writers.py`
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3

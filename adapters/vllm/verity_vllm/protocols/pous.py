@@ -1,6 +1,6 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
 point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.resource_accounting.memory.pous.verifier.period`),
-with the memory challenger a party of its own on the challenger host
+with the memory attester a party of its own on the challenger host
 (`verity.protocols.resource_accounting.memory.pous.attester.challenger_party`). The store, its commitment, encode and decode, and the
 period are PoUS's prover's (`verity.protocols.resource_accounting.memory.pous.prover.weight_store`); this module finds the weights in
 vLLM's model, attaches the decode to its layers and holds the option.
@@ -18,7 +18,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
   (``salt_source``); ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which
   checks its own decode of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W``
   by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory
-  challenger's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
+  attester's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
   tagged `Hooks`: the plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's
   ``quant_method.apply`` wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
@@ -27,7 +27,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
 * **The period** (`PousOption.audit`, `PousOption.subprotocol`): `period_prover.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In `PousOption.subprotocol` the memory challenger runs at ``period.json``'s ``challenger_host``
+  point no certificate covers).  In `PousOption.subprotocol` the memory attester runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps

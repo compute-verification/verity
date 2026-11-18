@@ -5,9 +5,6 @@ from __future__ import annotations
 import bisect
 from collections.abc import Callable, Sequence
 
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
-from verity.protocols.resource_accounting.memory.poub.verifier.receipts import PER_LEAF
-
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
     BlockOpening,
     PassCommitment,
@@ -15,6 +12,8 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.interfac
     RegionInfo,
 )
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import canonical, plan_of, runs_of
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import PER_LEAF
 
 
 def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: BlockOpening, receipt: Receipt,

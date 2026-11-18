@@ -18,8 +18,10 @@
 # whatever the exit, but for the verifier's copies of a round's circuits and program (ROUND/verifier/NAME-circuit.txt
 # and ROUND/verifier/program.json): the scan writes them in its scratch and keeps them with the rest, they are most of a
 # scan's kept bytes, and no number reads them. The scan takes no directory for them, so each is removed here, once the
-# scan has ended, where a kept lean-verify.log of its round names its SHA-512 (the verifier's command names its
-# circuit and its program by digest); one that no kept log names stays.
+# scan has ended, where a lean-verify.log of its round names its SHA-512 (the verifier's command names its circuit
+# and its program by digest); one that no log names stays. The sessions' prove.log and lean-verify.log, which the
+# stages are read from, are a child's logs and never in $OUT: the scan keeps them in its SC_KEEP, a 0700 directory
+# made here outside the run dir and removed when this exits, after result.py has read it.
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT" || exit 2
@@ -39,7 +41,9 @@ for v in $(compgen -e SC_); do
   case $v in SC_GROUP|SC_CLASS|SC_MEM_GB|SC_CACHE|SC_PORT) ;; *) unset "$v";; esac
 done
 unset OMP_NUM_THREADS OMP_THREAD_LIMIT
-SC_CLASS="${SC_CLASS:-w63k4}" SC_MEM_GB="${SC_MEM_GB:-128}" SC_RSS=1 SC_LEAN_ONE=1 \
+KEEP=$(mktemp -d "${TMPDIR:-/tmp}/scan-cost-keep.XXXXXX") || { echo "scan_cost: no private directory for the scan's keep" >&2; exit 2; }
+trap 'rm -rf "$KEEP"' EXIT
+SC_CLASS="${SC_CLASS:-w63k4}" SC_MEM_GB="${SC_MEM_GB:-128}" SC_RSS=1 SC_LEAN_ONE=1 SC_KEEP=$KEEP \
   taskset -c "$PIN" bash benchmarks/network_traces/scan_zk.sh
 rc=$?
 echo "scan_cost: the scan exited $rc"
@@ -47,8 +51,11 @@ KEPT=$RESEARCH_RUN_DIR/out/sczk
 if [ -d "$KEPT" ]; then
   find "$KEPT" -type f \( -path '*/verifier/*-circuit.txt' -o -path '*/verifier/program.json' \) -print0 \
     | while IFS= read -r -d '' f; do
-        digest=$(sha512sum "$f" | cut -d' ' -f1)
-        if grep -rqF --include=lean-verify.log -e "$digest" "$(dirname "$(dirname "$f")")"; then
+        digest=$(sha512sum "$f" | cut -d' ' -f1) rel=${f#"$KEPT"/}
+        logs=$(find "$KEEP/sczk/${rel%%/*}" -name lean-verify.log 2>/dev/null)
+        if [ -z "$logs" ]; then
+          echo "scan_cost: kept ${f#"$RESEARCH_RUN_DIR"/}: the scan's keep ($KEEP) holds no lean-verify.log of its round"
+        elif echo "$logs" | tr '\n' '\0' | xargs -0 grep -qF -e "$digest"; then
           rm -f "$f"
         else
           echo "scan_cost: kept ${f#"$RESEARCH_RUN_DIR"/}: no lean-verify.log of its round names its SHA-512"
@@ -59,7 +66,7 @@ fi
 export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/tools/config
 PY=(python3)   # the result's writer is the harness kit's, which this job's python3 may be too old to import
 python3 -c 'import verity_bench.kit' 2>/dev/null || PY=(uv run -q --no-project --python 3.12 python)
-PATH=$PATH:$HOME/.local/bin:$HOME/.cargo/bin "${PY[@]}" benchmarks/scan_cost/result.py write "$RESEARCH_RUN_DIR" --scan-exit "$rc"
+PATH=$PATH:$HOME/.local/bin:$HOME/.cargo/bin "${PY[@]}" benchmarks/scan_cost/result.py write "$RESEARCH_RUN_DIR" --scan-exit "$rc" --keep "$KEEP"
 wrote=$?
 [ "$rc" -ne 0 ] && exit "$rc"
 exit "$wrote"

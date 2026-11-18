@@ -5,8 +5,6 @@ roots by name.  The DeepSeek-V4 patterns (`dsv4`) and FlashMLA's sparse attentio
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import math
 
 from verity_vllm.observe.events import Root, ViewDesc

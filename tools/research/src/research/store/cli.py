@@ -829,7 +829,7 @@ def cmd_index(argv: list[str]) -> int:
     ap.add_argument("--from", dest="source", type=Path, metavar="DIR", help="index a directory laid out like the bucket instead of the remote")
     ap.add_argument("--public", action="store_true", help="then rebuild the public index from the export bucket's manifests")
     ap.add_argument("--public-db", type=Path, help="the public index (default <store>/index-public.sqlite)")
-    ap.add_argument("--full", action="store_true", help="list every run, not only those after the newest indexed one")
+    ap.add_argument("--full", action="store_true", help="list every run, not only those from two days before the newest indexed one")
     ap.add_argument("--postgres", action="store_true",
                     help="write the schemas store_private and store_public of the database $STORE_INDEXER_DATABASE_URL names, not SQLite files")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
@@ -1509,7 +1509,7 @@ def cmd_gc(argv: list[str]) -> int:
     if st.remote is None:
         print("research data gc: no remote configured", file=sys.stderr)
         return 2
-    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    say = lambda s: print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {s}", file=sys.stderr, flush=True)  # noqa: E731
     try:
         linear = None
         if ns.cite_linear:

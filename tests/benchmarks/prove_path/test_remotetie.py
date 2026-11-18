@@ -203,7 +203,7 @@ def _reuse(toy, W: dict) -> dict:
 def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
     """Each output row a table read holds, ``(template, port, proof block)``, as its table and row."""
     out = {}
-    for r in (r for r in circuit.registered.reads if r.param in circuit.registered.values):
+    for r in (r for r in circuit.registered.reads if r.param in circuit.registered.values and r.param != SS.SCAN_STATE):
         words = dict(circuit.layouts[r.reader][0].outs)[r.port]
         for i, leaf in enumerate(r.source(range(r.units))):
             out[(r.reader, r.port, r.at + i)] = (r.param, int(leaf) // words)
@@ -224,7 +224,8 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
     low = WC.lower(reg, CLASS, None, WC.Grain(), tables=TABLES)
     fields = _weights(low.fn)
-    state = WRS.standin_state(WC.NAME, CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
+    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0,
+                              window=OPEN)
     values = {**WW.weight_values(reg, fields, KEY, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])
              for row, _ in WRS.scan_slots(low, state.rows)]
@@ -245,8 +246,9 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
     32 a call, round 1's first) are each held once, and its padding rows by none. So `reuse` makes each table, from the
     rows its proof blocks make, W's entry of it under the circuit's name."""
     c = toy.low.circuit
-    assert c.registered.values == ("row-table/0/k2048", "input-ids/0", "row-table/1/k2048", "input-ids/1")
-    assert {p: toy.h1.tables[p].leaves for p in c.registered.values} == {
+    tables = c.registered.values[:-1]
+    assert c.registered.values == ("row-table/0/k2048", "input-ids/0", "row-table/1/k2048", "input-ids/1", SS.SCAN_STATE)
+    assert {p: toy.h1.tables[p].leaves for p in tables} == {
         "row-table/0/k2048": CALLS * M, "input-ids/0": M, "row-table/1/k2048": CALLS * M, "input-ids/1": M}
     reads = _reads(c)
     for (tid, port, u), (table, row) in reads.items():
@@ -255,8 +257,7 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
     served |= {(TABLES.a(1), M * c_) for c_ in range(CALLS)} | {(TABLES.ids(0), i) for i in range(CLASS.prompt)}
     assert sorted(reads.values()) == sorted(served | {(TABLES.ids(1), 0)})
     w = {e["value"]: e for e in toy.h1.W["registered"]}
-    assert {p: v.entry() for p, v in _reuse(toy, toy.h1.W).items()} == {p: {**w[_names()[p]], "value": p}
-                                                                        for p in c.registered.values}
+    assert {p: v.entry() for p, v in _reuse(toy, toy.h1.W).items()} == {p: {**w[_names()[p]], "value": p} for p in tables}
 
 
 @pytest.mark.slow
@@ -291,19 +292,19 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
-    prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
+    prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.h1.W))
     mine, _doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
-                           leaf_layer=CS.leaf_layer(publics))
+                           leaf_layer=CS.leaf_layer(publics), own={SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()})
 
 
 def _by_hand(toy, written, W: dict) -> dict:
     """The window's record R chained after ``W`` instead and registering ``W``'s tables, written by hand."""
     return {**written.R, "previous": REG.digest(W), "registered": [
-        {**{e["value"]: e for e in W["registered"]}[_names()[p]], "value": p} for p in toy.low.circuit.registered.values]}
+        {**{e["value"]: e for e in W["registered"]}[_names()[p]], "value": p} if p != SS.SCAN_STATE else
+        written.own[p] for p in toy.low.circuit.registered.values]}
 
 
 def _rounds(run) -> list[dict]:
@@ -314,21 +315,23 @@ def _rounds(run) -> list[dict]:
 
 def _words(c) -> dict[str, int]:
     """Each table the circuit registers, -> the words of the row its readers hold to it."""
-    words = {r.param: dict(c.layouts[r.reader][0].outs)[r.port] for r in c.registered.reads if r.param in c.registered.values}
-    return {p: words[p] for p in c.registered.values}
+    words = {r.param: dict(c.layouts[r.reader][0].outs)[r.port] for r in c.registered.reads
+             if r.param in c.registered.values and r.param != SS.SCAN_STATE}
+    return {p: words[p] for p in c.registered.values if p != SS.SCAN_STATE}
 
 
 def _check(written, toy, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
     mine, dW, words = written.mine, REG.digest(W), _words(toy.low.circuit)
+    fresh = {v: int(e["words"]) for v, e in written.own.items()}
     return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
-                     registered=words, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
+                     registered={**words, **fresh}, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
 
 
 @pytest.mark.slow
 @RECORDS
 def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_accepts(toy, written):
-    """R registers the four tables at W's entries and nothing else, chained right after W; its sampling design (R1 holds
+    """R registers the four tables at W's entries and its scan state afresh, and nothing else, chained right after W; its sampling design (R1 holds
     it to the verifier's own) samples a reader of every table, each table's readers templates of their own; ROOTS1 holds
     W's tables to it, H1 names it as its Commit record, credit's digest of it is one-stage's, and R1-R7 accept it."""
     run, R, W = toy.h1, written.R, toy.h1.W
@@ -409,7 +412,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
     params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
-                           registered=words, scheme=CS.SCHEME)
+                           registered={**words, **{v: int(e["words"]) for v, e in written.own.items()}}, scheme=CS.SCHEME)
     params |= {"outputs": {p: {"record": REG.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
                "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),

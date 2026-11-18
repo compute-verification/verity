@@ -14,8 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from verity.circuits.kernels import tc as CK
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import flashmla_twin as FT
 from verity_vllm.definitions.numerics.kernel_registry import register

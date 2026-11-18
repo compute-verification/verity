@@ -12,7 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # figures.py reads the census's reference fleets, the monitoring periods (core's reporting grid, `verity.protocol.MONITORING_PERIODS`, which imports the wire) and
 # the session's steps (rec_profile.SESSION_STEPS); `record` writes a research run's result through the harness kit (stdlib
 # only with verity_config). rec_profile imports rec_logs and rec_rows.
-inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/recursion_e2e/rec_profile.py",
+inputs = ["calibration/census/deployments.json", "calibration/census/adversary.json", "benchmarks/recursion_e2e/rec_profile.py",
           "benchmarks/recursion_e2e/rec_logs.py", "benchmarks/recursion_e2e/rec_rows.py",
           "verity/protocol.py", "verity/channel.py",
           "verity/__init__.py", "verity/errors.py", "tools/config/verity_config",

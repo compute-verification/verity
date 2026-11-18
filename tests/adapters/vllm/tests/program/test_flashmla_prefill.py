@@ -10,8 +10,6 @@
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 from verity.circuits.boolean.trace import word_of
@@ -20,6 +18,7 @@ from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.kernels import tc as CK
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import flashmla_prefill_twin as T
 from verity_vllm.definitions.numerics import flashmla_twin as FT

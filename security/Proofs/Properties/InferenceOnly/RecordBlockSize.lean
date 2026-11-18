@@ -22,13 +22,13 @@ A block is a slot's units, and its size is the gates those units compute.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row Grid outerOf)
-open InferenceOnlyCheck.Record (inSlot)
-open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
+open InferenceOnlyVerifier.Record (inSlot)
+open InferenceOnlyVerifier.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
 /-! ## A slot's units -/
@@ -36,8 +36,8 @@ open Spot.Bits (bitsOf)
 /-- A grid of whole periods, all of it among the first `units` units, has its units over `S` in a slot. -/
 private theorem term_whole (S : ℕ) (g : Grid) (units s : ℕ) (hs : s < S) (hq : 0 < g.q) (hper : g.q * S ∣ g.units)
     (hin : g.start + g.units ≤ units) :
-    InferenceOnlyCheck.Record.below S g.q (min units (g.start + g.units) - g.start) s -
-        InferenceOnlyCheck.Record.below S g.q (max 0 g.start - g.start) s = g.units / S := by
+    InferenceOnlyVerifier.Record.below S g.q (min units (g.start + g.units) - g.start) s -
+        InferenceOnlyVerifier.Record.below S g.q (max 0 g.start - g.start) s = g.units / S := by
   obtain ⟨m, hm⟩ := hper
   have hS : 0 < S := Nat.lt_of_le_of_lt (Nat.zero_le s) hs
   have hP : 0 < g.q * S := Nat.mul_pos hq hS
@@ -46,7 +46,7 @@ private theorem term_whole (S : ℕ) (g : Grid) (units s : ℕ) (hs : s < S) (hq
   have h3 : g.q * S * m / S = m * g.q := by
     rw [Nat.mul_comm g.q S, Nat.mul_assoc, Nat.mul_div_cancel_left _ hS, Nat.mul_comm]
   rw [h1, h2, hm, h3]
-  unfold InferenceOnlyCheck.Record.below
+  unfold InferenceOnlyVerifier.Record.below
   rw [Nat.mul_div_cancel_left _ hP, Nat.mul_mod_right, Nat.zero_div, Nat.zero_mod, Nat.zero_mul, Nat.zero_sub,
     Nat.min_zero, Nat.add_zero, Nat.add_zero, Nat.sub_zero]
 
@@ -67,8 +67,8 @@ private theorem inSlot_sum (S : ℕ) (units s : ℕ) (hs : s < S) : ∀ gs : Lis
     have hS : 0 < S := Nat.lt_of_le_of_lt (Nat.zero_le s) hs
     have hu : g.units = S * (g.q * m) := by rw [hm, Nat.mul_comm g.q S, Nat.mul_assoc]
     have e : inSlot S (g :: gs) 0 units s =
-        (InferenceOnlyCheck.Record.below S g.q (min units (g.start + g.units) - g.start) s -
-            InferenceOnlyCheck.Record.below S g.q (max 0 g.start - g.start) s) + inSlot S gs 0 units s := by
+        (InferenceOnlyVerifier.Record.below S g.q (min units (g.start + g.units) - g.start) s -
+            InferenceOnlyVerifier.Record.below S g.q (max 0 g.start - g.start) s) + inSlot S gs 0 units s := by
       unfold inSlot
       rw [List.map_cons, List.sum_cons]
     rw [e, hg, ih', List.map_cons, List.sum_cons]
@@ -87,7 +87,7 @@ theorem slot_units (S : ℕ) (gs : List Grid) (units s : ℕ) (hs : s < S) (hg :
     (hq : ∀ g ∈ gs, 0 < g.q) (hper : ∀ g ∈ gs, g.q * S ∣ g.units) (hin : ∀ g ∈ gs, g.start + g.units ≤ units)
     (hsum : (gs.map (·.units)).sum = units) :
     ((List.range units).filter fun u => slotOf S gs u == some s).length = units / S := by
-  have h := InferenceOnlyCheck.Record.SecurityProofs.inSlot_count S gs 0 units s hg hq hs
+  have h := InferenceOnlyVerifier.Record.SecurityProofs.inSlot_count S gs 0 units s hg hq hs
   rw [Nat.sub_zero, ← List.range_eq_range'] at h
   rw [← h]
   exact inSlot_whole S gs units s hs hq hper hin hsum
@@ -162,4 +162,4 @@ theorem slot_sum {m : ℕ} (units G c : Fin m → ℕ) (slot : (i : Fin m) → F
   show ∑ _v ∈ Finset.univ.filter (fun v : Fin (units i) => slot i v = u), G i = c i * G i
   rw [Finset.sum_const, smul_eq_mul, hc i]
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

@@ -57,8 +57,8 @@ open scoped ENNReal
 
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, with each tie between subprotocols it lists: at
-onsite every window of PoUW's period on the policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s
-run on the policy's record and its window record the one the policy's record is chained after. -/
+onsite and remote Pearl+'s run on the policy's record and its window record the one the policy's record is chained
+after, and at onsite PoUS and PoUB-P2 on one store too. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
     Properties.Composition.answerAccepts ((verifier k).on s.blobs) s.params s.commitment s.evidence h
@@ -271,11 +271,6 @@ theorem OpenTree.next_round {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.s
     · cases h
   · cases h
 
-/-- **Opening a round counts it**: once stream `s`'s next round is opened, its count is one more and every other stream's
-is unchanged, so with `OpenTree.next_round` a stream's rounds are opened in order, each at most once. -/
-theorem OpenTree.bump_opened (T : OpenTree) (s j : Fin T.spec.streams.size) :
-    (T.bump s).opened j = if j = s then T.opened s + 1 else T.opened j := rfl
-
 /-- The device's releases have a strategy from any coins and coin trees left: the prover's close. -/
 theorem releases_nonempty : (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) →
     Nonempty (Game.Strategy (releases k fs ts))
@@ -336,28 +331,27 @@ namespace Vocab
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 
 /-- **PoUW's claim where composite `k` lists Pearl+'s id is Pearl+'s**, in MACs at the credit its check published. -/
-theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k)
+theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ ∃ w, PearlPlusCredits k o.sent w ∧
       (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o := by
   simp only [Holds, if_pos hk]
 
 /-- **PoUW's claim where composite `k` doesn't list Pearl+'s id is the period's.** -/
-theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k)
+theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ (V.live k θ F c).Holds (V.certOf θ) σ .pouw o := by
   simp only [Holds, if_neg hk]
 
 /-- **A target of a subprotocol that decides an `Audit` is the per-period guarantee** `ResourceAccounting.PeriodLive.Sound` at
-the period `live`, read in the one vocabulary, except PoUW's at remote, which is Pearl+'s claim in MACs. -/
-theorem target_audit (k : Verity.Registration.Composite) (b : Audit) (hb : k = .onsite ∨ b ≠ .pouw) :
+the period `live`, read in the one vocabulary, except PoUW's where the composite lists Pearl+'s id (onsite and remote),
+which is Pearl+'s claim in MACs. -/
+theorem target_audit (k : Verity.Registration.Composite) (b : Audit)
+    (hb : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k ∨ b ≠ .pouw) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
   cases b
   case pouw =>
-    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := by
-      rcases hb with rfl | h
-      · decide
-      · exact absurd rfl h
+    have hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k := hb.resolve_right (absurd rfl)
     simp only [Target, Subprotocol.ofAudit, V.holds_pouw_of_not_mem hk]
     exact Iff.rfl
   all_goals exact Iff.rfl
@@ -403,11 +397,6 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
-
-/-- **A file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
-theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : (namedFinder h F R).S) (n : ℕ) :
-    (namedFinder h F R).cost x ≤ 0 * n + 2 := by
-  simp [namedFinder]
 
 /-- **`ecr/sha-512` at a further finder asked under it gives its premise**: its calls are within its budget on every
 coin (`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its
@@ -493,7 +482,7 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     (σ : Game.Strategy (exact.game θ F .empty)) (o : Exchange)
     (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
-  by_cases hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k
+  by_cases hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k
   · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
     change Composition.decodeCommitment o.commitment = .ok c' at hc

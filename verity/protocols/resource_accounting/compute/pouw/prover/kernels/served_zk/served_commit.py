@@ -797,7 +797,7 @@ def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Ke
 def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
-        raise _refused("law", f"the window's draw is a subset law's, not {dict(sampling_design)}")
+        raise _refused("law", f"the window's draw is a subset sampling design's, not {dict(sampling_design)}")
     return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
 
 
@@ -1230,7 +1230,7 @@ class Challenger:
                                                        "evidence": self.record.hexed(ans)})
         if o.accepted:
             if a["verdict"] != "accept":
-                raise _refused("pouw-check", a["reason"])
+                raise _refused("pouw-verifier", a["reason"])
             public = a["public"]
         if set(public) != {p[0] for p in Wd.PUBLIC}:
             raise _refused("public", sorted(public))

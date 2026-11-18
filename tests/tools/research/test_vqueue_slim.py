@@ -25,9 +25,10 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
 from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
-                                  WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
+                                  WHOLE, Read, _json, _text, _took, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
-                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
+                                  lends_suites, preferred, read_step, read_suite, reads, replaced, joined, shard_count,
+                                  shards_registered, start, step_kind,
                                   step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
@@ -118,7 +119,7 @@ def _down(rid: str, sha: str, why: str, launch: bool = False) -> Verdict:
 
 
 class Plans:
-    """Drive's auto plans (`Driver.plan_shards`, `Driver.planned`) on ``d``: each one asked for gets a job's directory and a
+    """Drive's auto plans (`plan_shards`, `planned`) on ``d``: each one asked for gets a job's directory and a
     plan's (``tmp``'s job-K and plan-K, the plan's file in it), and is being made until ``answers`` holds what its plan's
     directory answers.  An answer is read once, as `drive._job_end` reads a job's end: its job's directory goes, and a job
     with none is gone with no exit."""
@@ -179,6 +180,24 @@ def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_pu
     h.run_state["r-1"] = ("running", None, None)
     assert judge(h.d, rec) == Verdict(PENDING)
     assert rec == {"ids": ["r-1"], "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"], "skip": ["lean-agreement"]}
+
+
+def test_shards_registered_gives_each_still_launching_shard_s_run_ids_once_it_printed_them_whatever_the_others_did(
+        world, monkeypatch, tmp_path):
+    """Of a record whose shards launch, each call gives the run ids each shard printed since the last, its launch dropped
+    from it, one that registered no run giving none and one still launching kept as it is."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    dirs = [str(tmp_path / f"train-{k}") for k in (1, 2, 3)]
+    printed: dict[str, tuple[list[str] | None, str]] = {dirs[0]: ([], "train.sh: refused"), dirs[1]: (["r-2"], ""),
+                                                        dirs[2]: (None, "")}
+    h.d.launched = lambda launch: printed[launch["dir"]]
+    rec = {"ids": [], "tip": sha, "base": base, "at": h.clock, "shards": [{"ids": [], "launch": {"dir": d, "pid": 1}} for d in dirs]}
+    assert shards_registered(h.d, rec) == ["r-2"]
+    assert [("launch" in s, s["ids"]) for s in rec["shards"]] == [(False, []), (False, ["r-2"]), (True, [])]
+    assert shards_registered(h.d, rec) == []
+    printed[dirs[2]] = (["r-3"], "")
+    assert shards_registered(h.d, rec) == ["r-3"] and not any("launch" in s for s in rec["shards"])
+    assert shards_registered(h.d, rec) == []
 
 
 def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
@@ -401,6 +420,40 @@ def test_a_launch_again_after_infra_goes_to_other_machines_of_each_shards_set(wo
                                                                                                          steps, **kw)
     rec = start(h.d, sha, base, **({"shards": shards} if shards else {}), avoid=["m1"])
     assert machines == want and rec["avoid"] == ["m1"]
+
+
+def test_a_rebuilds_shards_name_their_predecessors_machines_first_and_every_other_after(world, monkeypatch):
+    """`start` with ``prefer`` (each shard's machines its dropped predecessor's took, `preferred`) launches each shard on its
+    set with its own of them first and the rest of the set after in its order, those the set lacks or ``avoid`` names left
+    out, and the record keeps them.  check.py places a check on the first machine of its list with a slot free
+    (`check.choose`, `test_placement`): on the predecessor's while it has one, where its passes are kept, and at once on the
+    next with one free while it has none, never waiting there."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    rec = start(h.d, sha, base, shards=3, prefer=[["m4"], [], ["m2", "m9"]])
+    assert machines == ["m4,m1,m2,m3", "m2,m3,m4,m1", "m2,m3,m4,m1"] and rec["prefer"] == [["m4"], [], ["m2", "m9"]]
+    assert any(x.endswith(f"as candidate {sha[:12]}'s check, each shard first on what its predecessor's took (m4; -; m2,m9): "
+                          "r-post-0 r-post-1 r-post-2") for x in world.logs), world.logs
+    start(h.d, sha, base, shards=3, prefer=[["m4"]], avoid=["m4"])
+    assert machines[3:] == ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
+    assert start(h.d, sha, base, shards=1, prefer=[["m3"]])["prefer"] == [["m3"]] and machines[6] == "m3,m1,m2,m4"
+    assert "prefer" not in start(h.d, sha, base, shards=3, prefer=[[], []]) and machines[7:] == shard_machines("m1,m2,m3,m4", 3)
+
+
+def test_an_auto_plans_shards_launched_later_prefer_the_machines_the_record_keeps(world, monkeypatch, tmp_path):
+    """An auto plan's shards launch once the plan is made (`_planned`), each on its set with the record's ``prefer`` first."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards="auto:3", prefer=[["m3"], ["m1"]])
+    assert machines == [] and rec["prefer"] == [["m3"], ["m1"]]
+    plans.answers[rec["plan"]["out"]] = (_plan_doc(3), None)
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING)
+    assert machines == ["m3,m1,m2", "m1,m2,m3", "m3,m1,m2"]
 
 
 def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, monkeypatch, tmp_path):
@@ -1003,6 +1056,52 @@ def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_
     assert replaced(lines, [5], now) == {} == replaced([], [2], now)
 
 
+def test_a_rebuild_replaces_the_runs_of_the_candidates_it_rebuilds_whatever_their_age():
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "sha": "c0", "at": stamp(now - 5000), "members": [1], "beside_cancelled": ["r-c0"]},
+             {"action": "drop", "sha": "c1", "at": stamp(now - 600), "members": [2, 3],
+              "beside_cancelled": ["r-c1", "r-kept"], "beside_cancel_failed": {"r-kept": "left running: /data/keep names it"}},
+             {"action": "drop", "sha": "c9", "at": stamp(now - 600), "members": [2], "beside_cancelled": ["r-c9"]},
+             {"action": "drop", "sha": "c1", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
+    assert replaced(lines, [2], now, ["c1", "c0"]) == {"r-c0": now - 5000, "r-c1": now - 600}
+    assert replaced(lines, [2], now) == {} == replaced(lines, [2], now, ["c7"])
+
+
+def test_a_check_keeps_each_shards_machines_whose_run_took_a_slot_and_never_forgets_one():
+    """``took``: per shard (the whole run as one), the machines of its runs running or ended having run, not a twin waiting in
+    a machine's line, one that never started there or one stopped for a sibling, nor a run whose machine isn't read; kept
+    once seen, as a drop's cancel ends them all alike; none while no run took a slot."""
+    rec = {"ids": ["a", "a2", "a3", "b", "c", "c2"], "groups": [["a", "a2", "a3"], ["b"], ["c", "c2"]]}
+    _took(rec, {"a": ("waiting", None, None, None, "m1"), "a2": ("running", None, None, None, "m2"),
+                "a3": ("done", NOT_STARTED, None, None, "m3"), "b": ("done", SIGTERM_RC, None, None, "m1"),
+                "c": ("failed", 1, None, None, "m3"), "c2": ("running", None, None)})
+    assert rec["took"] == [["m2"], [], ["m3"]]
+    _took(rec, {r: ("cancelled", SIGTERM_RC, None, None, "m4") for r in rec["ids"]})
+    assert rec["took"] == [["m2"], [], ["m3"]]
+    whole = {"ids": ["w", "w2"]}
+    _took(whole, {"w": ("waiting", None, None, None, "m1"), "w2": ("waiting", None, None, None, "m2")})
+    assert "took" not in whole
+    _took(whole, {"w": ("running", None, None, None, "m1"), "w2": ("waiting", None, None, None, "m2")})
+    assert whole["took"] == [["m1"]]
+
+
+def test_a_rebuild_prefers_each_shards_machines_its_dropped_predecessors_took_the_latest_drop_first():
+    """Of the drops `replaced` reads (the last `CARRY_WAIT_S`, a candidate sharing a member), each shard's machines their checks
+    took (``beside_took``), the latest drop's first, each machine once; none without such a drop."""
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "at": stamp(now - CARRY_WAIT_S - 1), "members": [2], "beside_took": [["m9"], ["m9"], ["m9"]]},
+             {"action": "drop", "at": stamp(now - 100), "members": [1, 2], "beside_took": [["m1", "m3"], [], ["m2"]]},
+             {"action": "drop", "at": stamp(now - 50), "members": [3], "beside_took": [["m8"]]},
+             {"action": "drop", "at": stamp(now - 30), "members": [2], "beside_took": [["m3"], ["m4"]]},
+             {"action": "drop", "at": "a while ago", "members": [2], "beside_took": [["m7"]]}]
+    assert preferred(lines, [2, 4], now) == [["m3", "m1"], ["m4"], ["m2"]]
+    assert preferred(lines, [5], now) == [] == preferred([], [2], now)
+
+
 def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
     """`check.run_packs` finds a run's packs through its attempt, which custody publishes once it ended; a store that can't
     answer, or none, finds none."""
@@ -1055,6 +1154,35 @@ def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_t
     rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == rebuilt][-1]["record"]
     assert "wait" not in rec and len(rec["ids"]) == 3
     assert rec.get("carry_without") == (replaced_ids if how == "late" else None)
+
+
+def test_the_loops_rebuild_after_a_drop_launches_each_shard_on_the_machine_its_dropped_shard_took_first(env, monkeypatch):
+    """The loop under the check that gates, on `test_vqueue_loop`'s fakes: the upper candidate's shards run each on a machine
+    not its own (`Runs`' states name it), so its record keeps them (``took``) and its drop's line too (``beside_took``) when
+    the lower one fails; its member, built again on `main`, launches each shard on its set with that machine first, where the
+    dropped shard's passes are kept, and the rest after, so a shard whose machine is busy takes another at once."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    lower = loop.tick()[1]["sha"]
+    upper = loop.tick()[0]["sha"]
+    mine = [f"c-{n}" for n, (c, *_) in enumerate(runs.launches, 1) if c == upper]
+    for rid, m in zip(mine, ("m3", "m1", "m2")):
+        runs.state[rid] = ("running", None, None, None, m)
+    runs.end(main)
+    runs.end(lower, 3, "pytest", rows=(_loop_row(NEW),))
+    frozen, reads = loop.now, itertools.count()
+    loop.now = lambda: frozen() + next(reads)
+    logged = loop.tick()
+    loop.now = frozen
+    assert next(r for r in logged if r["action"] == "drop" and r["sha"] == upper)["beside_took"] == [["m3"], ["m1"], ["m2"]]
+    rebuilt = next(r for r in logged if r["action"] == "build")["sha"]
+    assert next(r for r in logged if r["action"] == "slim" and r["sha"] == rebuilt)["record"]["prefer"] == [["m3"], ["m1"], ["m2"]]
+    runs.end(upper)
+    loop.tick()
+    assert [m for c, m, *_ in runs.launches if c == rebuilt] == ["m3,m1,m2", "m1,m2,m3", "m2,m3,m1"]
+    assert [m for c, m, *_ in runs.launches if c == upper] == shard_machines("m1,m2,m3", 3)
 
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS),
@@ -1552,11 +1680,11 @@ AUDIT {SCRATCH}/Security/Properties: FAIL; built in the sandbox
   lean: proved_in: ../Proofs's build did not pass (its report says why), so its facts are not read
 AUDIT: FAIL ({SCRATCH}/Security/Proofs, {SCRATCH}/Security/Properties); reports in /workspace/research/runs/r-x/lean-audit
 """
-TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/core/devices/certifier/lean: FAIL; built in the sandbox
+TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean: FAIL; built in the sandbox
   tamper: {SCRATCH}/verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean changed
   build: exit 1
     error: object file verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean of module Flock.Canon does not exist
-AUDIT: FAIL ({SCRATCH}/verity/core/devices/certifier/lean); reports in /workspace/research/runs/r-x/lean-audit
+AUDIT: FAIL ({SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean); reports in /workspace/research/runs/r-x/lean-audit
 """
 
 
@@ -1859,7 +1987,7 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
     above the package or in a directory named like it."""
     pouw, rand, pous = ("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "tools/pous_grader")
-    lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
+    lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwVerifier/Credit.lean",
             f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
             f"{rand}/lakefile.lean", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
             f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
@@ -1888,7 +2016,7 @@ def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
     file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
     a deleted README of it still isn't."""
     pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-    left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
+    left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwVerifier/Credit.lean"]
     gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
     assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]
 

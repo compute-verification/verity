@@ -73,7 +73,7 @@ class Instruction:
     model: Model | None
     status: Status
     evidence: tuple[str, ...] = ()
-    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``benchmarks/tc_probe/trust.py``),
+    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``calibration/tc_probe/trust.py``),
     #: from :data:`EVIDENCE_IDS`.
     dossier: str | None = None
     #: The device trust anchors this instruction on when no Target wraps it and it was measured on a device other than the
@@ -126,7 +126,7 @@ _RTX5090_BF16 = (
     "SASS HMMA.16816.F32.BF16): 204,800/204,800 elements agree with HOPPER_BF16_M16N8K16, 48,569 disagree with the Ampere/Ada pipeline"
 )
 _RTX5090_NVF4 = (
-    "the verity `run` (RTX 5090, our harness benchmarks/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
+    "the verity `run` (RTX 5090, our harness calibration/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
     "autoproof probe3 vectors replayed 1601/1601; 1,736,704 swept elements with +0 accumulators (263,781 hot-clip firings, full UE4M3 "
     "code sweep), 0 mismatches; probe2 unscaled 1400/1400 (the `probe2` run)"
 )
@@ -152,7 +152,7 @@ _H100_BF16 = (
     "floor -133 (verity.circuits.silicon.total.HOPPER_BF16_WGMMA_K16) -- the wgmma path, not mma.sync"
 )
 _H100_WGMMA_BF16 = (
-    "benchmarks/tc_probe on an H100 80GB HBM3 (driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, GPU `device`): one "
+    "calibration/tc_probe on an H100 80GB HBM3 (driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, GPU `device`): one "
     "wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x "
     "HGMMA.64x8x16.F32.BF16, against the total semantics (specials asserted).  A from shared memory (SS) `ss` "
     "and from registers (RS) `rs`: each 26,361,344 swept elements in 14 families, 2,876,928 "
@@ -178,7 +178,7 @@ _AUTOPROOF_UNSCALED = (
 )
 _B200_TCGEN05 = (
     "NVIDIA B200 cc 10.0, driver 580.126.09, nvcc/ptxas 12.9.86 (-gencode arch=compute_100a,code=sm_100a; "
-    "nvcc 12.9's plain -arch=sm_100a also emits compute_100 PTX, which refuses every tcgen05 mnemonic): benchmarks/tc_probe_fp4/"
+    "nvcc 12.9's plain -arch=sm_100a also emits compute_100 PTX, which refuses every tcgen05 mnemonic): calibration/tc_probe_fp4/"
     "tcgen05_fp4.cu issues ONE tcgen05.mma.cta_group::1 (M128 N8 K64) per tile from one thread, accumulator preloaded into "
     "tensor memory (tcgen05.st, enable_input_d = 1; all-+0 accumulators also with enable_input_d = 0), scale factors in TMEM, "
     "completion via tcgen05.commit -> mbarrier, readback tcgen05.ld; the 16 harness rows replicated into the 8 lane groups "
@@ -195,7 +195,7 @@ _B200_STAGE0 = (
 )
 
 _B200_BF16 = (
-    "benchmarks/tc_probe `run` on an NVIDIA B200 (cc 10.0, GPU `device`, driver 580.173.02, nvcc 13.0 V13.0.88, "
+    "calibration/tc_probe `run` on an NVIDIA B200 (cc 10.0, GPU `device`, driver 580.173.02, nvcc 13.0 V13.0.88, "
     "-gencode arch=compute_100a,code=sm_100a)"
 )
 _B200_TCGEN05_BF16 = (
@@ -208,7 +208,7 @@ _B200_TCGEN05_BF16 = (
     "1,365,596 / 512,378 of them"
 )
 _B200_MMA_BF16 = (
-    "benchmarks/tc_probe `run` on an NVIDIA B200 (the same B200, driver and nvcc as run `same_b200`; seed 20261019): one "
+    "calibration/tc_probe `run` on an NVIDIA B200 (the same B200, driver and nvcc as run `same_b200`; seed 20261019): one "
     "mma.sync.m16n8k16 per tile, SASS 1x HMMA.16816.F32.BF16. The full canonical family "
     "set, 25,833,472 asserted elements, 0 mismatches against HOPPER_BF16_M16N8K16 (tc-evidence `tc_evidence`); "
     "the 6,144 specials, outside that model's domain, are 0 mismatches under HOPPER_BF16_WGMMA_K16's total semantics; Ampere's "
@@ -235,7 +235,7 @@ _PIN_BF16 = (
     "dropped at 2^-26 in every slot k=2..15 on sm_90/sm_120 ((16,), 26 bits)"
 )
 _PRO6000_FP8 = (
-    "benchmarks/tc_probe on an RTX PRO 6000 Blackwell Server "
+    "calibration/tc_probe on an RTX PRO 6000 Blackwell Server "
     "Edition (cc 12.0, driver 580.173.02, SM clock locked at 2,100 MHz, CUDA 13.0 V13.0.88, -arch=sm_120a; compile check "
     "`compile_check`: one QMMA.16832 per tile kernel), one mma.sync per tile, seed 20260931, 14 families"
 )
@@ -245,7 +245,7 @@ _PRO6000_E4M3 = (_PRO6000_FP8 + ": `run` (GPU `device`, SASS QMMA.16832.F32.E4M3
 _PRO6000_E5M2 = (_PRO6000_FP8 + ": `run` (GPU `device`, SASS QMMA.16832.F32.E5M2.E5M2), "
                  "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E5M2_M16N8K32; Ada's pipeline with e5m2 products misses 15,747,373")
 _PRO6000_E5M2_SECOND = "a second PRO 6000 die: `second_die.run` (GPU `second_die.device`), 6,440,960 elements, 0 mismatches"
-_PRO6000_MXF4 = ("benchmarks/tc_probe_fp4 `pro6000.run` (RTX PRO 6000 Blackwell Server Edition, GPU `pro6000.device`, "
+_PRO6000_MXF4 = ("calibration/tc_probe_fp4 `pro6000.run` (RTX PRO 6000 Blackwell Server Edition, GPU `pro6000.device`, "
                  "driver 580.173.02, CUDA 13.0 V13.0.88 "
                  "-arch=sm_120a, SASS one OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile kernel): 1,089,536 gated elements, 0 mismatches against "
                  "BLACKWELL_SM120_MXF4; its 90,112 record-only elements (a 0xFF scale byte, sums leaving binary32, NaN and infinite "
@@ -304,7 +304,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(64, 8, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_WGMMA_K16,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5, Ta)
+            status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5, Ta)
             evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
@@ -427,7 +427,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
             # Model BlockScaledAlignAdd reproduces every word of the fit sweeps; a fresh-seed sweep (_PIN_FP4) supplied P2's
-            # missing elements and benchmarks/tc_probe/trust.py computed PINNED (P1-P5) (registry <= computed level).  With the
+            # missing elements and calibration/tc_probe/trust.py computed PINNED (P1-P5) (registry <= computed level).  With the
             # B-Ligero relation supplying Tc it stays PINNED: Ta and Tc PASS, and Td (hardware-in-the-loop replay of the frozen
             # input set) is open.
             status="pinned",
@@ -453,7 +453,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # The int8 grid's instruction.  Exact integer arithmetic, so the model has no adder parameters to fit.
-            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store (registry <= computed level).  Measured on
+            # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store (registry <= computed level).  Measured on
             # one RTX PRO 6000 only, and anchors there.
             id="sm120.mma.m16n8k32.s8",
             sm="sm_120",
@@ -471,7 +471,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         # --- the int8 grid's instruction on the datacenter cards ------------------------------------------------
         # One function on every card: these entries' models are sm120.mma.m16n8k32.s8's step under each arch's name.
-        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store; each measured on one card, which is its anchor.
+        # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store; each measured on one card, which is its anchor.
         _i(
             id="sm90.wgmma.m64n8k32.s8",
             sm="sm_90",
@@ -486,7 +486,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         # The N an s8 GEMM's warpgroup tile issues (the sm_90a s8 GEMM's m64n{64,128,256}k32).
-        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store;
+        # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store;
         # all eight forms of each (s8/u8 operands, .satfinite or not) agreed, from one run on one H200.
         _i(
             id="sm90.wgmma.m64n64k32.s8",
@@ -568,7 +568,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         # --- Blackwell datacenter (sm_100) ------------------------------------------------------------------------
         _i(
             # The datacenter Blackwell keeps Hopper's BF16 datapath for legacy mma.sync, as the consumer one does.
-            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store.
+            # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store.
             id="sm100.mma.m16n8k16.bf16",
             sm="sm_100",
             ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
@@ -586,7 +586,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM100_NVF4,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
+            status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: the `runs`, in order 303,104; "
                       "6,463,488 + probe3 1,601/1,601; 1,134,592, K=128 chain; "
@@ -602,7 +602,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM100_MXF4,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
+            status="pinned",  # calibration/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 `mxf4` "
                       "(3,956,736 and 3,956,736), kind::mxf4nvf4 2X `mxf4nvf4_2x` (3,956,736 and "
@@ -611,7 +611,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # The k16 step of cuBLAS's BF16 GEMMs on the B200 (vLLM's served routes there).  Hopper's wgmma pipeline: one group of
-            # 16, a 26-bit adder, floor -133, and the total semantics' special values.  benchmarks/tc_probe/trust.py computed
+            # 16, a 26-bit adder, floor -133, and the total semantics' special values.  calibration/tc_probe/trust.py computed
             # PINNED (P1-P5) from the store.
             id="sm100.tcgen05.mma.bf16",
             sm="sm_100",

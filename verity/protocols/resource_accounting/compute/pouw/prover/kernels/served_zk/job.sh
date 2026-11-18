@@ -88,11 +88,11 @@ jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval
 mkdir -p "$OUT/request" "$OUT/other"
 # the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-{ (cd "$SRC/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-check pouw-check-difftest) \
+{ (cd "$SRC/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier pouw-verifier-difftest) \
   && (cd "$SRC/verity/protocols/proofs/spot/verifier/lean" && lake build spot-difftest) \
   && (cd "$SRC/verity/protocols/proofs/spot_flock/verifier/lean" && lake build spot-flock-caller); } > "$OUT/lean-record-build.log" 2>&1 \
   || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
-log "Lean of record: pouw-check, pouw-check-difftest, spot-difftest, spot-flock-caller built"
+log "Lean of record: pouw-verifier, pouw-verifier-difftest, spot-difftest, spot-flock-caller built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
 # SZ_EPS / SZ_DELTA drive the sample at a non-default (ε, δ) for a realistic-parameter audit (k_prime grows with ln(1/δ)/ε);

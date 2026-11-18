@@ -1,7 +1,7 @@
 """`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
     python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] [--facts all|named|none] PACKAGE_DIR...
-    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   the Lean check of `next`;
+    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   a candidate's Lean check;
                                                     with --bookkeeping warn, drive's lock run (bookkeeping repaired, warned)
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
@@ -117,7 +117,22 @@ SETUP = threading.Lock()
 #: the toolchains a `setup.sh` of this run has installed
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
+#: a fetch's sandbox (`in_fetch_sandbox`): the build sandbox's namespaces but the network's
+UNSHARE_NET = [a for a in UNSHARE if a != "--net"]
+#: the toolchains `setup` installs: a release of Lean, a tag of `leanprover/lean4`. elan downloads any other from a
+#: repository the `lean-toolchain` names, and that toolchain's `lean` and `lake` would run outside the sandbox
+TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9][0-9A-Za-z.+-]*")
+#: where a manifest's Mathlib comes from: `setup.sh` runs its `cache` executable by its package's name (`mathlib/cache`)
+MATHLIB_URL = re.compile(r"https://github\.com/leanprover-community/mathlib4(\.git)?")
+#: a target named `cache` in a `lakefile.lean` (`lake exe cache` would find it before Mathlib's)
+LEAN_CACHE_TARGET = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:lean_exe|lean_lib|target|extern_lib|script|input_file"
+                               r"|input_dir)[ \t]+«?cache»?(?=[\s:]|$)")
+#: what a fetch keeps of the environment (`fetch_env`): it has the network, so none of the caller's credentials
+FETCH_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TERM", "TZ", "TMPDIR", "XDG_CACHE_HOME", "ELAN_HOME",
+             "LEAN_NUM_THREADS", "LAKE_ARTIFACT_CACHE", "LEAN_CACHE", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+             "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+             "GIT_SSL_CAINFO")
 #: where a sandboxed build reads its tree (`sandbox.sh --at`, `fixed`). Lean writes a source's absolute path into the
 #: module's `.olean.server` with each message its compile logged, and its `.olean.private` points past that string, so
 #: only a build that reads every tree at one path gives one source one set of bytes, in every tree and on every node
@@ -441,7 +456,7 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
-#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research.merge` refuse
 DEV_KIND = "lean-fast/v1"
 
 
@@ -485,6 +500,22 @@ def lake_env() -> dict[str, str]:
     return env
 
 
+def kept_artifacts(repo: Path) -> Path | None:
+    """`--build`: the node's Lake artifact cache (`lean_audit.LakeArtifacts`, under ``repo``'s check cache) when it indexes
+    any module, else None, as for a copy of this directory without `tools/check/common.py`."""
+    import importlib.util
+
+    path = repo / "tools" / "check" / "common.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("check_common_for_audit", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    store = module.cache_dir() / "lean-artifacts"
+    keys = store / sibling("module_keys").INDEX
+    return store if keys.is_dir() and any(keys.iterdir()) else None
+
+
 #: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
 #: (`bytes`), and the most a process tree it sampled held at once (`tree`)
 _peak = threading.local()
@@ -521,13 +552,14 @@ def peaked(rep: dict, step: str, pkg: Path, gib: float, log=print) -> None:
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
-        on_line=None) -> tuple[int, str]:
+        on_line=None, env: dict[str, str] | None = None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
     descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
     is given each line of its standard output as it comes (a build's, to `Pipeline.line`). What its whole process tree
     holds at once is sampled every `TREE_EVERY_S` (`tree_bytes`), its most kept in `_peak.tree`: a build's jobs run side
-    by side, which a single process's peak doesn't add up."""
-    p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    by side, which a single process's peak doesn't add up. ``env`` replaces `lake_env`."""
+    p = subprocess.Popen(argv, cwd=cwd, env=lake_env() if env is None else env, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True)
     done, most = threading.Event(), [0]
 
     def sample():
@@ -1099,7 +1131,8 @@ def facts_program(pkg: Path) -> str:
 
 def program(pkg: Path, source: str) -> str:
     """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
-    toolchain, once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
+    toolchain, called by its path (`compile_program`): `lake env` would load the package's workspace, which runs its
+    dependencies' lakefiles outside the sandbox. Once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
     (`kept_program`). The program is checked against the digest it had when compiled or taken before each use. Raises
     RuntimeError when it does not compile or has changed."""
     src = TOOL / source
@@ -1113,14 +1146,12 @@ def program(pkg: Path, source: str) -> str:
             if isinstance(exe := kept_program(pkg, src), str):
                 if PROGRAMS is not None:
                     print(f"program cache: {exe}; {source} is compiled for this process alone", flush=True)
+                if isinstance(tc := elan_toolchain(pkg), str):
+                    raise RuntimeError(f"{source} can't be compiled: {tc}")
                 d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
                 atexit.register(shutil.rmtree, d, True)
                 exe = d / stem.lower()
-                for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
-                             ["lake", "env", "leanc", *LEANC_FLAGS, str(d / f"{stem}.c"), "-o", str(exe)]):
-                    rc, text = run(argv, pkg, d / "compile.log")
-                    if rc:
-                        raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+                compile_program(src, tc, exe)
             _programs[key] = (exe, sha256(exe))
         exe, digest = _programs[key]
     if sha256(exe) != digest:
@@ -1284,6 +1315,12 @@ def _unwritable_in_sandbox(d: Path) -> bool:
 #: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
 #: runs once both have passed in one run: the security analysis's spec and its proofs, which always share a shard
 UNREAD_FACTS = ("security", "security/Proofs")
+
+
+def writes_unread(pkg: Path, trees: tuple[Path, ...]) -> bool:
+    """Whether ``pkg`` is one of `UNREAD_FACTS` in one of ``trees``."""
+    p = pkg.resolve()
+    return any(p.is_relative_to(t.resolve()) and p.relative_to(t.resolve()).as_posix() in UNREAD_FACTS for t in trees)
 
 
 def unread_facts(pkg: Path, modules: list[str], work: Path, sealed: "Sealed | None" = None) -> dict:
@@ -5023,21 +5060,104 @@ def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
              "line": str(n)} for n in statement_changes(notes) if isinstance(n, Change)]
 
 
+def setup_refused(pkg: Path) -> list[Failure]:
+    """Why `setup` refuses ``pkg`` before it runs anything: a `lean-toolchain` of it or of a path dependency that names no
+    release of Lean (`TOOLCHAIN`); a target named `cache` in one of their lakefiles, or a package named `mathlib` that is
+    not Mathlib's repository (`MATHLIB_URL`), either of which would make `lake exe mathlib/cache` the tree's own code; or a
+    `.lake` the tree holds as a link, which `setup.sh` would write through before any sandbox refuses it. A file that
+    can't be read refuses too."""
+    fails = []
+
+    def refuse(code: str, f: Path, why: str) -> None:
+        fails.append(Failure(f"setup.{code}", os.path.relpath(f, pkg), f"setup: {os.path.relpath(f, pkg)}: {why}"))
+    try:
+        dirs = [pkg, *(d for d in path_deps(pkg) if d != pkg.resolve())]
+        for d in dirs:
+            if (tc := d / "lean-toolchain").is_file() and not TOOLCHAIN.fullmatch(t := "".join(tc.read_text().split())):
+                refuse("toolchain", tc, f"it names {t!r}, not a release of Lean (`leanprover/lean4:vX.Y.Z`): elan would "
+                       f"download that toolchain from the repository it names, and run its `lean` and `lake` outside the "
+                       f"sandbox")
+            if (toml := d / "lakefile.toml").is_file():
+                doc = tomllib.loads(toml.read_text())
+                if doc.get("name") == "mathlib":
+                    refuse("mathlib", toml, "the package is named `mathlib`, so `lake exe mathlib/cache` would run its own "
+                           "`cache`: name it otherwise")
+                if any(isinstance(t, dict) and t.get("name") == "cache"
+                       for k, v in doc.items() if k != "require" and isinstance(v, list) for t in v):
+                    refuse("cache-target", toml, "it declares a target named `cache`, which `lake exe cache get` would "
+                           "build and run in place of Mathlib's: name it otherwise")
+            if (lean := d / "lakefile.lean").is_file() and LEAN_CACHE_TARGET.search(lean.read_text()):
+                refuse("cache-target", lean, "it declares a target named `cache`, which `lake exe cache get` would build "
+                       "and run in place of Mathlib's: name it otherwise")
+            if (d / ".lake").is_symlink():
+                refuse("link", d / ".lake", "it is a symbolic link, which setup would write through: make it a directory")
+        if (manifest := pkg / "lake-manifest.json").is_file():
+            for p in json.loads(manifest.read_text()).get("packages", []):
+                if p.get("name") == "mathlib" and not (p.get("type") == "git" and MATHLIB_URL.fullmatch(str(p.get("url")))):
+                    refuse("mathlib", manifest, f"its package `mathlib` is {p.get('type')!r} at "
+                           f"{p.get('url') or p.get('dir')!r}, not Mathlib's repository, so `lake exe mathlib/cache` "
+                           f"would run its code")
+    except (OSError, ValueError) as e:
+        fails.append(Failure("setup.unread", None, f"setup: {pkg}: {type(e).__name__}: {e}, so what setup would run "
+                             f"there is unknown"))
+    return fails
+
+
+def mathlib_cache(env: dict[str, str]) -> Path:
+    """Where Mathlib's `cache get` keeps its downloads: `MATHLIB_CACHE_DIR`, else Mathlib's own default."""
+    return Path(env.get("MATHLIB_CACHE_DIR") or Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "mathlib")
+
+
+def fetch_env() -> dict[str, str]:
+    """The environment of a fetch (`in_fetch_sandbox`): `lake_env`'s `FETCH_ENV` and locale, `MATHLIB_CACHE_DIR` set, and
+    with `--dev-cache` the build cache's read credential (`cache.py get`)."""
+    env = lake_env()
+    keep = {k: v for k, v in env.items() if k in FETCH_ENV or k.startswith("LC_")}
+    if DEV_CACHE:
+        keep |= {k: env[k] for k in (*sibling("cache").READ_ENV, "LEAN_CACHE_STATE_URL", "LAKE_CACHE_DIR") if k in env}
+    return keep | {"MATHLIB_CACHE_DIR": str(mathlib_cache(env))}
+
+
+def in_fetch_sandbox(pkg: Path, toolchain: str, argv: list[str]) -> list[str]:
+    """``argv`` in a sandbox of its own with the network (``argv`` as is where builds have none): what loads ``pkg``'s
+    workspace before its build (`setup.sh --fetch`: its dependencies' lakefiles, their clones, Mathlib's `cache`) writes
+    only the packages' `writable` directories and Mathlib's cache, and with `--dev-cache` the build cache's downloads and
+    Lake's local cache, never the tree."""
+    if not sandboxed():
+        return argv
+    env = lake_env()
+    caches = [mathlib_cache(env)]
+    if DEV_CACHE:
+        c = sibling("cache")
+        caches += [Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / c.DOWNLOADS,
+                   *filter(None, [c.lake_cache({"toolchain": toolchain}, env)])]
+    return [*UNSHARE_NET, "--", "bash", str(TOOL / "sandbox.sh"), "--net", *map(str, [*writable(pkg), *caches]), "--", *argv]
+
+
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
-    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
-    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
-    process's first)."""
-    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    """`setup.sh` for ``pkg``: its first half (elan, the toolchain, the pinned dependency bundle) here, then what loads the
+    package's workspace in a sandbox of its own (`in_fetch_sandbox`); alone until one has installed ``toolchain``, since
+    they install into one elan home; then beside the others (Mathlib's `cache get`, which they share a download directory
+    for, writes each download to a file of its own process's first). `setup_refused` refuses before either half."""
+    def both() -> tuple[int, str]:
+        if refused := setup_refused(pkg):
+            return 3, "".join(f"{f}\n" for f in refused)
+        rc, text = run(["bash", str(TOOL / "setup.sh"), "--outside", str(pkg)], pkg, log)
+        if rc:
+            return rc, text
+        rc, more = run(in_fetch_sandbox(pkg, toolchain, ["bash", str(TOOL / "setup.sh"), "--fetch", str(pkg)]), pkg,
+                       log.with_name(f"{log.stem}-fetch.log"), env=fetch_env())
+        return rc, text + more
     with SETUP:
         if toolchain not in _INSTALLED:
-            rc, text = run(argv, pkg, log)
+            rc, text = both()
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return dev_restore(pkg, rc, text, log)
-    return dev_restore(pkg, *run(argv, pkg, log), log)
+            return dev_restore(pkg, toolchain, rc, text, log)
+    return dev_restore(pkg, toolchain, *both(), log)
 
 
-def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+def dev_restore(pkg: Path, toolchain: str, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
     (most of security/Proofs' modules). A failed restore leaves those to `lake build`."""
@@ -5053,8 +5173,8 @@ def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
                 own.parent.mkdir(parents=True, exist_ok=True)
                 own.symlink_to((pkg / ".lake" / "packages").resolve())
                 linked.append(own)
-        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
-                      log.with_name(f"{log.stem}-deps.log"))
+        _, more = run(in_fetch_sandbox(pkg, toolchain, [sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)]),
+                      pkg, log.with_name(f"{log.stem}-deps.log"), env=fetch_env())
     finally:
         for own in linked:
             own.unlink(missing_ok=True)
@@ -5445,23 +5565,38 @@ def fixed(path: Path, tree: Path | None = None) -> Path:
     return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
 
 
-def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox). A build passes ``at``, `bound`'s words for those directories, and reads
-    the tree at `FIXED`; the report's `bound` is read from the same words (`audit`). A step that compiles nothing passes
-    none and stays at the package's own path, where its caller opens the files its output names."""
+def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = (), rw: Iterable[Path] = ()) -> list[str]:
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories and ``rw`` (a directory of
+    the audit's own for what the command writes), and `ARTIFACTS` readable (``argv`` as is where there is no sandbox). A
+    build passes ``at``, `bound`'s words for those directories, and reads the tree at `FIXED`; the report's `bound` is
+    read from the same words (`audit`). A step that compiles nothing passes none and stays at the package's own path,
+    where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, writable(pkg)), "--", *argv] \
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, [*writable(pkg), *rw]), "--", *argv] \
         if sandboxed() else argv
+
+
+def graph(pkg: Path, modules: Path, out: Path, log: Path) -> dict:
+    """`Graph.lean` on the modules ``modules`` lists, in ``pkg``'s workspace (`lake env`, which runs its packages'
+    lakefiles, so in the build sandbox), writing only ``out``, a directory of its own: the document it writes there.
+    Raises RuntimeError when it fails."""
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    rc, text = run(in_sandbox(pkg, ["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(out / "graph.json"),
+                                    f"@{modules}"], rw=[out]), pkg, log)
+    if rc:
+        raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
+    return json.loads((out / "graph.json").read_text())
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
 _WRITING: set[Path] = set()
+_READING: set[Path] = set()
 _WROTE = threading.Condition()
 
 
 @contextlib.contextmanager
-def writing(pkg: Path, log=print):
+def writing(pkg: Path, log=print, reads: bool = False):
     """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
     others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
     `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
@@ -5471,11 +5606,14 @@ def writing(pkg: Path, log=print):
             log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
         _WROTE.wait_for(lambda: not _WRITING & dirs)
         _WRITING.update(dirs)
+        if reads:
+            _READING.update(dirs)
     try:
         yield
     finally:
         with _WROTE:
             _WRITING.difference_update(dirs)
+            _READING.difference_update(dirs)
             _WROTE.notify_all()
 
 
@@ -5605,11 +5743,10 @@ class Sealed:
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "
                                f"({', '.join(roots)}); build {it}, or list {it} (or a prefix) under `exempt` in {POLICY}")
         (work / "graph-modules").write_text("".join(f"{m}\n" for m in seeds))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'graph-modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc} sealing {self.pkg.name}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        try:
+            doc = graph(self.pkg, work / "graph-modules", work / "graph", work / "graph.log")
+        except RuntimeError as e:
+            raise RuntimeError(f"sealing {self.pkg.name}: {e}") from None
         oleans = [Path(g["olean"]).resolve() for g in doc["graph"].values()]
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(self.copy, oleans))
@@ -5696,41 +5833,106 @@ _GRAPHS: dict[tuple[str, str], str | None] = {}
 _GRAPHS_LOCK = threading.Lock()
 
 
-def replay_digest(m: str, parts: list[Path], digest, og, mk) -> str:
-    """What module ``m``'s replay key reads of its `.olean` files ``parts``: each part's ``digest``, or, when its
-    `olean.server` holds its source's path (a message's file, which Lean writes as the absolute path it compiled), the
-    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`; ``mk``: `module_keys`,
-    for the path), which the module compiled in another tree shares."""
-    plain = ",".join(digest(p) for p in parts)
+#: one pool of graph walks at a time in this process, so a package whose closure another's walks already covered reads
+#: them from `_GRAPHS` rather than walking them again beside it
+_WALK_LOCK = threading.Lock()
+#: the share of the cores the graph walks take (`walk_graphs`): the sampled recompile runs beside the replay on the rest
+WALK_CORE_SHARE = 0.5
+#: `replay_keys`' parts, each timed into ``walked``: the parts' digests, which modules need a walk, the wait for
+#: `_WALK_LOCK`, and what is done holding it (the walks, if any)
+KEY_PARTS = ("hash", "jobs", "lock", "held")
+
+
+def walk_job(m: str, parts: list[Path], plain: str, mk) -> tuple[str, dict[str, Path]] | None:
+    """(source path, {part: file}) when module ``m``'s replay key reads the object graph of its `.olean` files ``parts``
+    (whose digests are ``plain``) and `_GRAPHS` lacks it: its `olean.server` holds its source's path (a message's file,
+    which Lean writes as the absolute path it compiled; ``mk``: `module_keys`, for the path). Else None, and a module whose
+    server part names no source is recorded so in `_GRAPHS`."""
     server = next((p for p in parts if p.name.endswith(".olean.server")), None)
-    if server is None:
-        return plain
     with _GRAPHS_LOCK:
-        known = (m, plain) in _GRAPHS
-        graph = _GRAPHS.get((m, plain))
-    if not known:
-        source = mk.path_of(m, ".lean").as_posix()
-        graph = None
-        if f"/{source}".encode() in server.read_bytes():
-            graph = og.canonical({"olean" + p.name.rpartition(".olean")[2]: p for p in parts}, source)
-        with _GRAPHS_LOCK:
-            _GRAPHS[(m, plain)] = graph
-    return f"graph:{graph}" if graph else plain
+        if server is None or (m, plain) in _GRAPHS:
+            return None
+    source = mk.path_of(m, ".lean").as_posix()
+    if f"/{source}".encode() in server.read_bytes():
+        return source, {"olean" + p.name.rpartition(".olean")[2]: p for p in parts}
+    with _GRAPHS_LOCK:
+        _GRAPHS[(m, plain)] = None
+    return None
 
 
-def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
+def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked: dict | None = None
+                ) -> dict[tuple[str, str], str | None]:
+    """`olean_graph.canonical` of each job ({(module, its parts' digests): `walk_job`'s answer}), in `WALK_CORE_SHARE` of
+    `cores` (this process's affinity, bounded by its cgroup's quota) processes, each running `olean_graph.py --canonical`
+    on its share: the walk is pure Python, which threads would run under one interpreter lock. RuntimeError, with the
+    process's last words, where one exits other than 0 or answers other than once per job: no key is computed another
+    way. ``walked`` adds the modules, the processes and the walks' own seconds, summed over the processes."""
+    n = max(1, min(len(jobs), int(cores() * WALK_CORE_SHARE)))
+    size = {k: sum(f.stat().st_size for f in files.values()) for k, (_, files) in jobs.items()}
+    chunks: list[list] = [[] for _ in range(n)]
+    weight = [0] * n
+    # a walk's time grows with its parts' size, which spans orders of magnitude: largest first, onto the least loaded
+    for item in sorted(jobs.items(), key=lambda it: (-size[it[0]], it[0])):
+        i = weight.index(min(weight))
+        chunks[i].append(item)
+        weight[i] += size[item[0]]
+
+    def walk(chunk) -> dict:
+        doc = [[source, {p: str(f) for p, f in files.items()}] for _, (source, files) in chunk]
+        r = subprocess.run([sys.executable, str(HERE / "olean_graph.py"), "--canonical"], input=json.dumps(doc),
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"replay keys: olean_graph.py --canonical exited {r.returncode} on {len(chunk)} module(s), "
+                               f"{chunk[0][0][0]} first:\n{r.stderr[-2000:]}")
+        got = json.loads(r.stdout)
+        if len(got["graphs"]) != len(chunk):
+            raise RuntimeError(f"replay keys: olean_graph.py --canonical answered {len(got['graphs'])} of "
+                               f"{len(chunk)} module(s), {chunk[0][0][0]} first")
+        return got
+
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        done = list(ex.map(walk, chunks))
+    if walked is not None:
+        walked["modules"] = walked.get("modules", 0) + len(jobs)
+        walked["processes"] = max(walked.get("processes", 0), n)
+        walked["seconds"] = round(walked.get("seconds", 0) + sum(d["seconds"] for d in done), 1)
+    return {k: g for chunk, d in zip(chunks, done) for (k, _), g in zip(chunk, d["graphs"])}
+
+
+def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
-    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part, `replay_digest`), and
-    the name and key of each module it imports, so it covers the `.olean` files of everything it imports, transitively, each
-    under its module's name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the
-    package is built, and so does one whose parts differ only in where its source was. ``digest`` hashes a file in place of
-    `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
-    in step)."""
-    graph, digest, og, mk = facts["graph"], digest or sha256, sibling("olean_graph"), sibling("module_keys")
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files, and the name and key of each module
+    it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's name, never
+    a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built, and so does
+    one whose parts differ only in where its source was. A module's files count as each part's ``digest`` (in place of
+    `sha256`: `Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
+    in step), or, where its server part holds its source's path (`walk_job`), as the parts' object graph with that path left
+    out (`olean_graph.canonical`, under `graph:`; `walk_graphs`, whose counts go to ``walked``), which the module compiled
+    in another tree shares."""
+    graph, digest, mk = facts["graph"], digest or sha256, sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
+    at = [time.monotonic()]
+
+    def lap(part):
+        if walked is not None:
+            walked[part] = round(walked.get(part, 0) + time.monotonic() - at[0], 1)
+        at[0] = time.monotonic()
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og, mk), files)))
+        plain = dict(zip(files, ex.map(lambda m: ",".join(digest(p) for p in files[m]), files)))
+        lap("hash")
+        jobs = {(m, plain[m]): j for m, j in zip(files, ex.map(lambda m: walk_job(m, files[m], plain[m], mk), files)) if j}
+    lap("jobs")
+    with _WALK_LOCK:
+        lap("lock")
+        with _GRAPHS_LOCK:
+            jobs = {k: j for k, j in jobs.items() if k not in _GRAPHS}
+        found = walk_graphs(jobs, walked) if jobs else {}
+        with _GRAPHS_LOCK:
+            _GRAPHS.update(found)
+            graphs = {m: _GRAPHS.get((m, plain[m])) for m in files}
+    lap("held")
+    digests = {m: f"graph:{graphs[m]}" if graphs[m] else plain[m] for m in files}
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
@@ -5854,7 +6056,13 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     own = isinstance(replay_cache, set)
-    keys = replay_keys(facts, toolchain, digest) if replay_cache is not None else {}
+    took, at = {}, [time.monotonic()]
+    def lap(part):
+        took[part], at[0] = round(time.monotonic() - at[0], 1), time.monotonic()
+    walked: dict = {}
+    keys = replay_keys(facts, toolchain, digest, walked) if replay_cache is not None else {}
+    lap("keys")
+    took |= {"keys-walks": walked.get("seconds", 0)} | {f"keys-{k}": walked.get(k, 0) for k in KEY_PARTS}
     def passed(m):
         return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
@@ -5866,18 +6074,22 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         lean += ["-j", str(threads)]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if alone else contextlib.nullcontext():
+        lap("wait")
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        lap("plan")
         evicted = 0
         if keys and store and not own:
             fresh = {*facts["modules"], *deps_checked}
             evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
+        lap("touch")
         rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
                         *(["--closure-reused", *deps_reused] if deps_reused else [])],
                        pkg, work / "replay.log", timeout=CLOSURE_TIMEOUT if closure else REPLAY_TIMEOUT)
+        lap("lean")
         doc = json.loads(found.read_text()) if found.exists() and not killed(rc) else {}
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
@@ -5888,8 +6100,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
+        lap("store")
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
-             "phases": doc.get("seconds", {}), "evicted": evicted}
+             "phases": doc.get("seconds", {}), "evicted": evicted, "seconds": took, "walked": walked}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -6002,7 +6215,10 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     kept = "the replay cache"
     if replay_cache is None or not store:
         replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
-    keys = replay_keys(facts, toolchain, digest)
+    s = time.monotonic()
+    walked: dict = {}
+    keys = replay_keys(facts, toolchain, digest, walked)
+    first_keys = round(time.monotonic() - s, 1)
     def passed(m):
         return has_replay(replay_cache, keys[m])
     threads = replay_threads(pkg) or int(lake_env()["LEAN_NUM_THREADS"])
@@ -6019,7 +6235,11 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
                       "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]})
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
+    took = stats.get("seconds", {}) | {f"first-keys-{k}": walked.get(k, 0) for k in KEY_PARTS} | {
+        "first-keys": first_keys, "first-keys-walks": walked.get("seconds", 0),
+                                       "first": round(sum(s["seconds"] for s in steps), 1)}
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
+                           "seconds": took,
                            "first_kept": kept, "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
 
 
@@ -6192,14 +6412,10 @@ class Pipeline:
         a directory no build writes) resolves into a writable root. Before replay, every graph module's first hit along
         the moved search path must resolve to the file its key is taken from."""
         (work / "modules").write_text("".join(f"{m}\n" for m in mods))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        doc = graph(self.pkg, work / "modules", work / "graph", work / "graph.log")
         dirs = [Path(d) for d in doc["search"]]
         jobs = {}
-        graph = {}
+        copied = {}
         for m, g in doc["graph"].items():
             rel = Path(*m.split(".")).with_suffix(".olean")
             holders: list[Path] = []
@@ -6218,23 +6434,23 @@ class Pipeline:
             if snap is None:                                   # a directory no build writes: its module is read in place
                 if self.moved(target) is not None:
                     raise RuntimeError(f"replay: {m} is read in place but resolves into a writable root at {target}")
-                graph[m] = {"olean": str(live), "imports": g["imports"]}
+                copied[m] = {"olean": str(live), "imports": g["imports"]}
             else:                                              # a writable directory: the module is copied from within it
                 if not target.is_relative_to(d.resolve()):
                     raise RuntimeError(f"replay: {m}'s olean {live} resolves outside its search directory {d} to {target}")
                 copy = snap / rel
                 jobs[copy] = live
-                graph[m] = {"olean": str(copy), "imports": g["imports"]}
+                copied[m] = {"olean": str(copy), "imports": g["imports"]}
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(lambda kv: self.copy(*kv), jobs.items()))
         search = [str(self.moved(Path(d).resolve()) or d) for d in doc["search"]]
         for m in doc["graph"]:
             rel = Path(*m.split(".")).with_suffix(".olean")
             hit = next((Path(s) / rel for s in search if (Path(s) / rel).exists()), None)
-            want = Path(graph[m]["olean"])
+            want = Path(copied[m]["olean"])
             if hit is None or hit.resolve() != want.resolve():
                 raise RuntimeError(f"replay: {m} would load {hit}, not the keyed {want}")
-        return {"graph": graph, "modules": mods, "axioms": []}, search
+        return {"graph": copied, "modules": mods, "axioms": []}, search
 
     def digest(self, p: Path) -> str:
         """`sha256` of ``p``, kept for a copy in the snapshot, which no one writes once it is made."""
@@ -6311,8 +6527,9 @@ def unpacked(src: Path, dst: Path) -> Path:
 def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path, update: bool) -> tuple[list[str], dict]:
     """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, beside
     the facts and the kernel replay (`audit`). A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
-    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (run here, outside the sandbox,
-    with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
+    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (a command the lock names, so
+    in the sandbox too, with ``repo`` for `{repo}`, read only, and the directory it writes, under the package's `.lake`,
+    for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
     fails, now = [], {}
     # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
@@ -6320,10 +6537,10 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     # so every build in the run has ended before its tests start. Fail loudly rather than read a build one is still
     # writing: a `runs` entry on a depended-on package would be caught here, not read mid-build.
     with _WROTE:
-        racing = pkg.resolve() / ".lake" in _WRITING
+        racing = (lake := pkg.resolve() / ".lake") in _WRITING and lake not in _READING
     if racing:
         return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
-                        f"it live; a package with `runs` must be one no other package builds")], now
+                        f"it live; a package with `runs` must be one no other package builds")], dict(policy.get("runs", {}))
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
@@ -6341,7 +6558,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             base.mkdir(parents=True)
             argv = [sys.executable if i == 0 and a == "python3" else a.replace("{repo}", str(repo)).replace("{out}", str(base))
                     for i, a in enumerate(gen)]
-            rc, text = run(argv, pkg, work / f"generate-{mod}.log")
+            rc, text = run(in_sandbox(pkg, argv), pkg, work / f"generate-{mod}.log")
             if rc:
                 fails.append(Failure("runs.generate", mod, f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}"))
                 continue
@@ -6356,7 +6573,9 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             if data[name] != want and not update:
                 bad.append(Failure("runs.data-digest", mod, f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the "
                                    f"record's {want or '(none)'}: run `check.py --update` when the data changed on purpose"))
-        now[mod] = entry | {"data": data} if update else entry
+        named = {a[1:-1] for a in entry.get("args", []) if a.startswith("{") and a.endswith("}")}
+        now[mod] = entry | {"data": {n: data.get(n, d) for n, d in sorted(entry.get("data", {}).items())
+                                     if n in data or n in named}} if update else entry
         if bad:
             fails += bad
             continue
@@ -6402,7 +6621,7 @@ def template(pkg: Path) -> dict:
 
 def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = False) -> list[Failure]:
     """What ``pkg``'s sources and lock fail with no build: `scans`, `run_paths`, the `compile_time` listings (`listings`),
-    and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
+    what `setup` refuses (`setup_refused`), and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
     (`source_graph`), which run only when every header can be read.  Each failure is one the audit of the build gives
     again, with its code, its entry and its text, in the order that audit reports them; ``update`` is that audit's.  A
     pass decides nothing: the audit runs each of these again, the layer rule also over the imports of modules no package
@@ -6414,7 +6633,7 @@ def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = Fal
         modules = {m for m in graph if under(policy["roots"], m)}
         fails += orphan_failures(policy, files, modules)
         fails += layer_failures(policy, modules, graph, None, set(module_files(pkg)))
-    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0]
+    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0] + setup_refused(pkg)
 
 
 def source_graph_failures(pkg: Path, policy: dict, facts: dict) -> list[Failure]:
@@ -6530,7 +6749,7 @@ def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] |
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
+          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all", write_unread: bool = False,
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
           matched=lambda ok: None, sample_matched=lambda q: None, base: list[dict] | None = None,
@@ -6544,7 +6763,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
     once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
     package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
-    a path dependency, whose modules this build read and its own sample draws only a share of. Without the sandbox
+    a path dependency, whose modules this build read and its own sample takes only a share of. Without the sandbox
     nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -6567,7 +6786,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     sealed, lets a sealed audit store its verdicts (keyed on the sealed copies) and keeps an unsealed one, whose keys are
     from the live `.lake`, from writing the shared cache a sealed run reuses; a caller whose cache is a throwaway private
     directory passes ``store=True``.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
-    documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
+    documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.  A package of
+    `UNREAD_FACTS` writes `Unread.lean`'s facts beside its replay, and with ``write_unread`` (`--unread-facts`) without one too.
     ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
     copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
     one (a control or a stubbed test, neither of which runs a dependent's build beside the audit) the
@@ -6599,6 +6819,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
     pipe = later = None
+    if build and (refused := setup_refused(pkg)):
+        rep["failures"] += refused
+        return reported(rep)
     if build:
         rep["sandbox"] = sandboxed()
         at = bound(writable(pkg)) if rep["sandbox"] else []
@@ -6714,7 +6937,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # `writable` directories from before the announcement until it ends, and no build that writes them starts beside it
     hold, held = contextlib.ExitStack(), threading.Lock()
     if later is not None and not replays:
-        hold.enter_context(writing(pkg, log))
+        hold.enter_context(writing(pkg, log, reads=True))
         log(f"sampled: {rel(pkg)}: no replay to plan it beside, so a build that writes its .lake starts once it ends")
 
     def release() -> None:
@@ -6788,8 +7011,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     try:
         facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none", sealed=sealed)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
-        if replay and not lifts and pkg.resolve().is_relative_to(ROOT) and \
-                pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
+        if not lifts and (replay and writes_unread(pkg, (ROOT,)) or write_unread and writes_unread(pkg, (ROOT, TREE))):
             unread = background.submit(timed, unread_facts, pkg, facts["modules"], work, sealed)
         if early:
             replayed = background.submit(timed, final_replay, pkg, policy, facts, rep["toolchain"], work, replay_cache,
@@ -6873,6 +7095,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
         stats = rep["replay"] if isinstance(rep["replay"], dict) else {}
+        rep["seconds"] |= {f"replay-{k}": v for k, v in (stats.get("seconds") or {}).items()}
         log(f"replay: {rel(pkg)}: ended in {rep['seconds']['replay']} s, {stats.get('checked')} modules checked and "
             f"{stats.get('reused')} reused")
         if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):
@@ -7155,7 +7378,24 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
 
 def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
     """`controls` of the package ``fixture``."""
-    fails = []
+    work, fails = control_clean(fixture, toolchain, out, install)
+    if work is None:
+        return fails
+    for name in control_cases(fixture):
+        fails += control_case(work, fixture, name)
+    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, "
+        f"{', '.join(control_cases(fixture))}; builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    return fails
+
+
+def control_cases(fixture: str) -> dict[str, dict]:
+    """The violations `controls` adds to the package ``fixture``, by name."""
+    return json.loads((FIXTURES / CONTROLS[fixture]).read_text())
+
+
+def control_clean(fixture: str, toolchain: str, out: Path, install: bool = False) -> tuple[Path | None, list[str]]:
+    """The clean copy of ``fixture`` under ``out``, built and audited, which each `control_case` copies, and its failures;
+    no copy when it could not be built."""
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}" / fixture
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(FIXTURES / fixture, work / "pkg")
@@ -7164,67 +7404,67 @@ def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, 
     if install:
         rc, text = setup(pkg, toolchain, work / "setup.log")
         if rc:
-            return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
+            return None, [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
-        return [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
-    reports = work / "reports"
-    audit(pkg, reports, update=True, log=lambda *_: None)
-    clean = audit(pkg, reports)["failures"]
-    if clean:
-        fails.append(f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean))
-    expect = json.loads((FIXTURES / CONTROLS[fixture]).read_text())
+        return None, [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
+    audit(pkg, work / "reports", update=True, log=lambda *_: None)
+    clean = audit(pkg, work / "reports")["failures"]
+    return work, [f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean)] if clean else []
+
+
+def control_case(work: Path, fixture: str, name: str) -> list[str]:
+    """Violation ``name`` of ``fixture`` added to a copy of `control_clean`'s ``work``: what it fails that it should not,
+    or should and does not."""
+    v, fails = control_cases(fixture)[name], []
+    pkg, reports = work / "pkg", work / "reports"
 
     def beside(failures: list[str]) -> list[str]:
         """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
         import changes it (its own test covers that check)."""
         return [f for f in failures if not f.startswith("dependencies:")]
 
-    for name, v in expect.items():
-        bad = work / f"bad-{name}"
-        shutil.rmtree(bad, ignore_errors=True)
-        shutil.copytree(pkg, bad)
-        for rel, text in v.get("write", {}).items():
-            (bad / rel).parent.mkdir(parents=True, exist_ok=True)
-            (bad / rel).write_text(text)
-        for rel, (old, new) in v.get("replace", {}).items():
-            src = (bad / rel).read_text()
-            assert old in src, (name, rel, old)
-            (bad / rel).write_text(src.replace(old, new))
-        if "policy" in v:
-            dump(bad, load(bad) | v["policy"])
-        for rel in v.get("delete", []):
+    bad = work / f"bad-{name}"
+    shutil.rmtree(bad, ignore_errors=True)
+    shutil.copytree(pkg, bad)
+    for rel, text in v.get("write", {}).items():
+        (bad / rel).parent.mkdir(parents=True, exist_ok=True)
+        (bad / rel).write_text(text)
+    for rel, (old, new) in v.get("replace", {}).items():
+        src = (bad / rel).read_text()
+        assert old in src, (name, rel, old)
+        (bad / rel).write_text(src.replace(old, new))
+    if "policy" in v:
+        dump(bad, load(bad) | v["policy"])
+    for rel in v.get("delete", []):
+        (bad / rel).unlink()
+    rc, text = run(in_sandbox(bad, ["lake", "build"]), bad, work / f"bad-{name}.log")
+    if rc:
+        return [f"controls: `{name}` does not build:\n{text[-1000:]}"]
+    for rel in v.get("not_written", []):
+        if (bad / rel).exists():
+            if sandboxed():
+                fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
             (bad / rel).unlink()
-        rc, text = run(in_sandbox(bad, ["lake", "build"]), bad, work / f"bad-{name}.log")
-        if rc:
-            fails.append(f"controls: `{name}` does not build:\n{text[-1000:]}")
-            continue
-        for rel in v.get("not_written", []):
-            if (bad / rel).exists():
-                if sandboxed():
-                    fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
-                (bad / rel).unlink()
-        if v.get("replay_only"):
-            if missed := beside(audit(bad, reports, replay=False)["failures"]):
-                fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
-        if v.get("closure_only"):
-            if missed := beside(audit(bad, reports)["failures"]):
-                fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
-                             "\n".join(missed))
-        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
-                    closure=v.get("closure_only", False))["failures"]
-        for rel in v.get("not_written", []):
-            if (bad / rel).exists():
-                fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
-        if v.get("passes"):
-            if beside(got):
-                fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
-        elif not any(f.startswith(v["fails"]) for f in got):
-            fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
-        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
-            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
-    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; "
-        f"builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    if v.get("replay_only"):
+        if missed := beside(audit(bad, reports, replay=False)["failures"]):
+            fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
+    if v.get("closure_only"):
+        if missed := beside(audit(bad, reports)["failures"]):
+            fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
+                         "\n".join(missed))
+    got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
+                closure=v.get("closure_only", False))["failures"]
+    for rel in v.get("not_written", []):
+        if (bad / rel).exists():
+            fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
+    if v.get("passes"):
+        if beside(got):
+            fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
+    elif not any(f.startswith(v["fails"]) for f in got):
+        fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+    if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+        fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     return fails
 
 
@@ -7271,7 +7511,7 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of a commit of `next`: a package whose every "
+    ap.add_argument("--regenerate", action="store_true", help="a candidate's Lean check: a package whose every "
                     "failure is a record difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names "
                     "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
                     "package's own lock is never written")
@@ -7282,6 +7522,9 @@ def main(argv: list[str]) -> int:
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--unread-facts", action="store_true", help="write `Unread.lean`'s facts of each package of "
+                    f"{', '.join(UNREAD_FACTS)} it audits, in this checkout or in --tree, with --no-replay too, for "
+                    "`unread.py --facts`")
     ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, a whole "
                     "number alone on stdout, and on stderr the GiB that holds and the step that needs it, then exit: the "
                     "largest need (`reserve.py`) among the steps it takes (the build with --build, the replay without "
@@ -7300,6 +7543,9 @@ def main(argv: list[str]) -> int:
                     "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
                     "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); so is one of a package it "
                     "requires by path that this run doesn't audit, and the build of one it audits is left as it is")
+    ap.add_argument("--no-artifacts", action="store_true", help="--build compiles every module from source though the node "
+                    "keeps an artifact cache and builds in the sandbox, which it refuses otherwise (`kept_artifacts`): "
+                    "the uncached check's and a cold measurement's")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -7417,6 +7663,15 @@ def main(argv: list[str]) -> int:
         return 0
     args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
                               ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
+    if a.build and not (a.artifacts or a.no_artifacts or a.fresh or a.dev_cache) and (kept := kept_artifacts(a.repo)) \
+            and sandboxed():
+        update = " --update" if a.update else ""
+        print(f"check.py: --build without --artifacts compiles every module from source, security/Proofs' included, though "
+              f"{kept} holds this node's built modules: take the records on a kept tree, which restores them,\n"
+              + "".join(f"  python3 tools/verity/lean/lean_changed.py --records {rel(p)}{update}\n"
+                        for p in pkgs if p in named)
+              + f"or pass --artifacts {kept}, or --no-artifacts to build cold on purpose", file=sys.stderr, flush=True)
+        return 2
     have = reserved() if a.facts_from is None and steps else None
     if have and (why := memory_refusal(pkgs, have, steps=steps,
                                        run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):
@@ -7501,7 +7756,7 @@ def main(argv: list[str]) -> int:
                             ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                            bookkeeping=due, seals=run_seals,
+                            bookkeeping=due, seals=run_seals, write_unread=a.unread_facts and a.facts_only is None,
                             facts_cache=(a.facts_only or a.facts_cache).resolve()
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,

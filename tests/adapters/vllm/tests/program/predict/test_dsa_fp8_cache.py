@@ -10,13 +10,14 @@ lowered to 64, one block of FlashMLA's, and vLLM's decode threshold at the rank'
 from __future__ import annotations
 
 import re
+
 import pytest
-from verity_vllm.definitions.numerics import flashmla_twin as FT
-from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 
 from tests.program.predict.test_dsa_dense_prefill import _calls, _families, _topk
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_predict import GLM53, _row_phi
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible
@@ -165,8 +166,8 @@ def test_the_cache_rows_feed_the_decode(phi):
     assert words == ["Const32[0x00000000]_v1"] * 4 + ["Const32[0xffffffff]_v1"] * (TOPK - 4)
 
 
-def test_the_counting_mirrors_refuse_it(phi):
-    """`step_needs` and `template_counts` count the default cache's Calls, so over an fp8_ds_mla cache they refuse."""
-    from verity_vllm.program.predict.template_counts import TemplateCounts
+def test_the_counting_mirror_refuses_it(phi):
+    """`step_needs` counts the default cache's Calls, so over an fp8_ds_mla cache it refuses."""
+    from verity_vllm.program.predict.step_needs import StepNeeds
     with pytest.raises(Unexpressible, match=re.escape("the needs of a step over an fp8_ds_mla cache")):
-        TemplateCounts(phi)
+        StepNeeds(phi)

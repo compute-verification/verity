@@ -19,7 +19,7 @@ from pathlib import Path
 
 import reference as R
 from verity_difftest import protocol as P
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period as pous
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as RUN
@@ -101,7 +101,7 @@ def _served(case: dict) -> dict:
 
 
 def build(tmp: Path) -> None:
-    """Fill `reference.POUS` and `reference.BANDWIDTH` with their cases, the memory challenger's session logs in
+    """Fill `reference.POUS` and `reference.BANDWIDTH` with their cases, the memory attester's session logs in
     `tmp`."""
     M = R.module("mc_cases", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/mc_cases.py")
     T = R.module("p2_party_sessions", BANDWIDTH.parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean" / "test_p2_party.py")

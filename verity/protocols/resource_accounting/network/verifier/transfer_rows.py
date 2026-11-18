@@ -1,6 +1,6 @@
 """The network attester's transfer rows: a host's load, each value of the weights it loads once a session, committed
 by the network attester on the host's uplink as it crosses, never by the prover, and signed with its key. The verifier
-pins each load's root from that certificate alone (`blocks.pins`), so every unit's row of a load is a registered read
+pins each load's root from that attestation alone (`blocks.pins`), so every unit's row of a load is a registered read
 opened against the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`,
 `Flock.Registered.checkPort`), which don't change. Every other row into the host is the scan's state
 (`ingress_scan.SCAN_STATE`), which the scan places inside the zero-knowledge proof, and its egress the scan's egress
@@ -18,7 +18,7 @@ port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
 
 D leaves the window out, as a value the verifier holds across windows does, so the root is the one `registration.check`
 holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens; the head and its
-certificate bind the link and the execution phase. `program` is the circuit's program digest (``circuit.json``'s
+attestation bind the link and the execution phase. `program` is the circuit's program digest (``circuit.json``'s
 ``program``), public. salt_r is 192 bytes the attester samples from the operating system for row r and no other row.
 The salts are witness, which the attester hands to the prover alone (`Transfer.witness`); the rows are what the host
 received, which the prover holds.
@@ -30,7 +30,7 @@ received, which the prover holds.
       ‖ root (64 bytes)
     transfer digest = tagged_sha512(TRANSFER_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the transfer digest: the attester's message for the link and execution phase
+and its attestation is `Issuer.sign`'s of the transfer digest: the attester's message for the link and execution phase
 in its session (`certificate.certificate_message`), so it verifies for that link, direction and execution phase alone.
 The network attester's cells digest and its record digest of an execution phase's transfer blocks are under other tags,
 so none verifies as another.
@@ -38,14 +38,14 @@ so none verifies as another.
 **The kind** (`KINDS`) is ``load``, ingress: the registered parameters' leaves the load connection carries, once a
 session. The head keeps its kind and direction fields, so a head signed for anything else never reads as a load's.
 
-**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
+**The registration** (`registration`) is the head and its attestation as one JSON object, kept on a run's private
 side (of a load's registrations the auditor's gate publishes nothing):
 
     {"format": REGISTRATION, "link", "direction", "window", "kind", "value", "program", "words", "rows", "word_bits",
      "row_schema", "domain", "root", "certificate": {"key", "digest", "signature"}}
 
 `check_registration` is the verifier's read of it for the transfer it expects: every field the verifier's own, the
-domain the one it derives, and the certificate over the head's digest verifying under the attester's key in its session
+domain the one it derives, and the attestation over the head's digest verifying under the attester's key in its session
 for the link and execution phase it expects. `port` is the verifier's own `--registered` port of the value at the head's
 root.
 """
@@ -212,7 +212,7 @@ def attest(issuer: Issuer, link: str, direction: Direction, window: int, kind: s
 
 
 def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]:
-    """The record of a transfer value: its head, its rows' format, and the certificate. A run keeps it on its private
+    """The record of a transfer value: its head, its rows' format, and the attestation. A run keeps it on its private
     side."""
     return {"format": REGISTRATION, "link": head.link, "direction": head.direction.value, "window": head.window,
             "kind": head.kind, "value": head.value, "program": head.program.hex(), "words": head.words, "rows": head.rows,

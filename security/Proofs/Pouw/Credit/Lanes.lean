@@ -65,16 +65,16 @@ deriving instance DecidableEq for Flock.Draw.WorkStratum
 theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x <;> simp_all [Except.toOption]
 
-theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
+theorem keys_lanes : PouwVerifier.keys lanesLayout = some PouwVerifier.Credit.LAYOUT_KEYS :=
   Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
 
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
+theorem strata_lanes : PouwVerifier.Credit.strata lanesLayout = .ok lanesStrata := by
   apply ok_of_toOption
-  unfold PouwCheck.Credit.strata
+  unfold PouwVerifier.Credit.strata
   rw [keys_lanes]
   decide +kernel
 
-theorem samplingDesign_lanes : PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign :=
+theorem samplingDesign_lanes : PouwVerifier.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign :=
   ok_of_toOption (by decide +kernel)
 
 end Properties.Pouw.Credit.SecurityProofs

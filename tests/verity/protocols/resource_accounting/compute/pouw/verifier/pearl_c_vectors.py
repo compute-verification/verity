@@ -1,9 +1,9 @@
-"""Pinned vectors for ``pearl-c-h100-v0``: ``uv run python tests/verity/protocols/resource_accounting/compute/pouw/verifier/pearl_c_vectors.py`` rewrites
+"""Pinned vectors for Pearl-C on the H100: ``uv run python tests/verity/protocols/resource_accounting/compute/pouw/verifier/pearl_c_vectors.py`` rewrites
 ``tests/vectors/pearl_c.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP10 row whose k codes are the signed bytes
 of SHAKE256("verity/pouw/pearl-c-vectors/v1", c, name, "codes", i) clamped to ±127 and whose k/8 BF16 scales are
-2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  A v1 row (FP32 words) is that row opened, each nonzero word's
+2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  A row of FP32 words is that row opened, each nonzero word's
 low 16 mantissa bits replaced by the 16-bit words of SHAKE256(…, "fraction", i).  The context's salt and roots are SHA-256
 of their labels.  A ``-h3`` case (hashing format h3, SHA-512 throughout) reads its h0 twin's inputs (its label without
 ``-h3``), and seeds E_A per row (`pearl_c.row_seed` keyed on each row's SHA-512 digest, `pearl_c.row_digest`,
@@ -26,9 +26,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
 #: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])
-CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
-         ("prod-64", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v0"),
-         ("test-16-v1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1"),
+CASES = (("test-16-v1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1"),
          ("prod-64-v1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1"),
          ("decode-32-v1", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1"),
          ("test-16-v1-h3", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h3"),
@@ -67,7 +65,7 @@ def salt_key(case: str) -> bytes:
     return hashlib.sha256(f"salt-key/{case}".encode()).digest()
 
 
-def scheme(test: bool, forming: str = "v0", hashing: str = "h0") -> C.PearlC:
+def scheme(test: bool, forming: str = "v1", hashing: str = "h0") -> C.PearlC:
     return C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing=hashing) if test else C.PearlC(forming=forming, hashing=hashing)
 
 
@@ -88,8 +86,7 @@ def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -
     s, ctx = scheme(test, forming, hashing), ctx_of(base, shape, index, weight, hashing == "h3")
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
-    make = rows if forming == "v0" else rows_f32
-    a, b = make(base, "A", len(tile.rows), shape[1]), make(base, "B", len(tile.cols), shape[1])
+    a, b = rows_f32(base, "A", len(tile.rows), shape[1]), rows_f32(base, "B", len(tile.cols), shape[1])
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, a, b, tile)
     checked = s.checked(ctx, ops)

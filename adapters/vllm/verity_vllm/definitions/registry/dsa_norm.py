@@ -53,10 +53,10 @@ live thread stays in its chain.  `DsaRMSNorm_v1{N, EPS}` computes `TritonBlockRM
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import prims as P

@@ -34,7 +34,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing  # 
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
@@ -124,7 +124,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I",
-                        str(H.TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py")]
+                        str(H.TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "poub_session" / "verifier_process.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
@@ -417,7 +417,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
         svc, tmp_path):
     """The one test that runs a session (with the Lean verdict, so it builds the Lean verifier and the difftest): what
     the cheaper tests can't show is that the runner's out/ is the one `replay.py` reads, from a real transcript, gzipped,
-    summed and shipped (that `auditor_line.py` reads it is `tests/benchmarks/remote_session/test_live_verifier_host.py`'s)."""
+    summed and shipped (that `auditor_line.py` reads it is `tests/benchmarks/poub_session/test_live_verifier_host.py`'s)."""
     units = Units()
     rc, out = call(svc, [*BASE, "--paced", "2:8:40:2"], units)
     assert rc == 0, out
@@ -533,7 +533,7 @@ def test_bw_party_holds_the_store_the_block_challenger_kept_for_a_pous_session_o
     (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
     (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
     (["wipe_party", "--minutes"], "--minutes takes one integer"),
-    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes (--pous-session SID | --fixture) [--session SID]; got '--registration'"),
+    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX]; got '--registration'"),
     (["bw_party", "--pous-record", "/tmp"], "got '--pous-record'"),
     (["bw_party", "--pous-session", "../" + "a" * 61], "64 lowercase hex digits"),
     (["bw_party", "--pous-session", "A" * 64], "64 lowercase hex digits"),
@@ -652,19 +652,23 @@ def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc
     assert rc == 0 and ran[0][-9:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
-    assert "bw_party takes (--pous-session SID | --fixture) [--session SID]" in refused(
+    assert "bw_party takes (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX]" in refused(
         party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
 
 
 def test_bw_party_signs_its_close_with_the_block_challengers_key_under_the_session_id_the_lane_names(svc):
-    sid = "ab" * 32
-    (rc, _), ran = party(svc, ["bw_party", "--session", sid, "--fixture"])
-    assert rc == 0 and ran[0][-9:-1] == ["--listen", "0.0.0.0:47612", "--challenger", str(svc.parties / "pous"),
-                                         "--session", sid, "--registration",
-                                         "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json"]
-    assert "64 lowercase hex" in refused(party(svc, ["bw_party", "--fixture", "--session", "../x"])[0])
-    assert "names no store" in refused(party(svc, ["bw_party", "--session", sid])[0])
-    assert "bw_party takes" in refused(party(svc, ["bw_party", "--fixture", "--session", sid, "--session", sid])[0])
+    sid, key = "ab" * 32, "cd" * 64
+    pinned = ["--session", sid, "--trusted-sha512", key]
+    (rc, _), ran = party(svc, ["bw_party", *pinned, "--fixture"])
+    assert rc == 0 and ran[0][-11:-1] == ["--listen", "0.0.0.0:47612", "--challenger", str(svc.parties / "pous"),
+                                          "--session", sid, "--trusted-sha512", key, "--registration",
+                                          "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json"]
+    assert "64 lowercase hex" in refused(party(svc, ["bw_party", "--fixture", "--session", "../x", "--trusted-sha512", key])[0])
+    assert "128 lowercase hex" in refused(party(svc, ["bw_party", "--fixture", "--session", sid, "--trusted-sha512", "ab"])[0])
+    assert "go together" in refused(party(svc, ["bw_party", "--fixture", "--session", sid])[0])
+    assert "go together" in refused(party(svc, ["bw_party", "--fixture", "--trusted-sha512", key])[0])
+    assert "names no store" in refused(party(svc, ["bw_party", *pinned])[0])
+    assert "bw_party takes" in refused(party(svc, ["bw_party", "--fixture", *pinned, "--session", sid])[0])
 
 
 # --- the compose gate ---------------------------------------------------------------------------------------------------------

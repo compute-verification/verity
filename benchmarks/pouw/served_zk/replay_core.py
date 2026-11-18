@@ -281,8 +281,8 @@ class Sides:
     """Python and Lean on one input each: `core` (a core_check case) and `opening`."""
 
     def __init__(self) -> None:
-        self.core = D.Server(D.ProtocolPort("pouw-check", CC.case_twin, inputs=None, package=LEAN).argv())
-        self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
+        self.core = D.Server(D.ProtocolPort("pouw-verifier", CC.case_twin, inputs=None, package=LEAN).argv())
+        self.opening = D.Server(D.Port("pouw-verifier-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
         self.record = Record()
 

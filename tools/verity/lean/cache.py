@@ -81,6 +81,8 @@ DEPS_RO = "deps"
 STATE_URL = "https://website-docs-sage.vercel.app/api/lean-cache/state"
 STATE_TTL_S = 300
 KEY_FILE = "/etc/verity/lean-cache.env"
+#: the directory under the user's cache (`XDG_CACHE_HOME`) where `get` keeps what it downloaded
+DOWNLOADS = "verity-lean-cache"  # pragma: allowlist secret
 #: the read-only credential every development machine holds (the Cursor secrets)
 READ_ENV = ("LEAN_CACHE_R2_ACCESS_KEY_ID", "LEAN_CACHE_R2_SECRET_ACCESS_KEY", "LEAN_CACHE_R2_ENDPOINT", "LEAN_CACHE_BUCKET")
 #: under HOME, the same credential as `KEY=value` lines where a node's research user holds it (0600)
@@ -548,7 +550,7 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
     if s3 is None:
         log(f"lean-cache: no read credential ({', '.join(READ_ENV)}); building from source")
         return 0
-    cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity-lean-cache"
+    cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / DOWNLOADS
     ok, q, why = state(env.get("LEAN_CACHE_STATE_URL") or STATE_URL, cache, now(), fetch_state)
     if not ok:
         log(f"lean-cache: {why}; building from source")

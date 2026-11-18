@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/unit-walk-cpu-per-slot"
+title = "Device witness walk CPU time"
+owner = "proofs"
+unit = "CPU microseconds a slot"
+axis = "CPU microseconds a seeded slot of the device witness's host unit walk takes on a CPU node, least over the widths, distances, kept vectors and pool sizes walked whose packed words are the first run's, one line per proof-block type and machine as its member names them; the width-one baseline is kept beside it in the point."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd clone -- bash benchmarks/unit_walk/run.sh"
+every = "7d"

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -24,15 +24,15 @@ members = [
     "cluster",
     "cluster-tests",
     "core-identity",
-    "memory-challenger-lean",
-    "pous-check",
+    "memory-attester-lean",
+    "pous-verifier",
     "research",
     "research-tests",
     "verity",
+    "verity-attester-timing",
     "verity-bench",
     "verity-bench-specs",
     "verity-bench-tests",
-    "verity-certifier-timing",
     "verity-check",
     "verity-check-tests",
     "verity-circuit-check",
@@ -54,8 +54,6 @@ members = [
     "verity-flock-tests",
     "verity-graph",
     "verity-graph-tests",
-    "verity-landq",
-    "verity-landq-tests",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-machine-model-tests",
@@ -67,7 +65,7 @@ members = [
     "verity-ops",
     "verity-ops-tests",
     "verity-pouw-benchmarks",
-    "verity-pouw-check-difftest",
+    "verity-pouw-verifier-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
     "verity-proof-throughput-tests",
@@ -1057,7 +1055,7 @@ wheels = [
 ]
 
 [[package]]
-name = "memory-challenger-lean"
+name = "memory-attester-lean"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean" }
 dependencies = [
@@ -1492,7 +1490,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pous-check"
+name = "pous-verifier"
 version = "0.1.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check" }
 dependencies = [
@@ -2324,6 +2322,7 @@ dev = [
     { name = "cluster" },
     { name = "editables" },
     { name = "jsonschema" },
+    { name = "mypy" },
     { name = "numpy" },
     { name = "pytest" },
     { name = "pytest-xdist" },
@@ -2342,9 +2341,6 @@ dev = [
     { name = "verity-proof-throughput" },
     { name = "verity-vllm" },
 ]
-mypy = [
-    { name = "mypy" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -2358,6 +2354,7 @@ dev = [
     { name = "cluster", editable = "infra/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
+    { name = "mypy", specifier = "==1.20.2" },
     { name = "numpy" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
@@ -2376,7 +2373,21 @@ dev = [
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
-mypy = [{ name = "mypy", specifier = "==1.20.2" }]
+
+[[package]]
+name = "verity-attester-timing"
+version = "0.0.0"
+source = { virtual = "tests/calibration/attester_timing" }
+dependencies = [
+    { name = "verity" },
+    { name = "verity-config" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "verity", editable = "." },
+    { name = "verity-config", editable = "tools/config" },
+]
 
 [[package]]
 name = "verity-bench"
@@ -2384,12 +2395,14 @@ version = "0.1.0"
 source = { editable = "benchmarks/harness" }
 dependencies = [
     { name = "verity-config" },
+    { name = "verity-flock" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "verity-config", editable = "tools/config" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
 
@@ -2408,21 +2421,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-bench", editable = "benchmarks/harness" }]
-
-[[package]]
-name = "verity-certifier-timing"
-version = "0.0.0"
-source = { virtual = "tests/benchmarks/certifier_timing" }
-dependencies = [
-    { name = "verity" },
-    { name = "verity-config" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "verity", editable = "." },
-    { name = "verity-config", editable = "tools/config" },
-]
 
 [[package]]
 name = "verity-check"
@@ -2509,6 +2507,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-bench" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -2519,6 +2518,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
+    { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
@@ -2693,22 +2693,6 @@ dependencies = [
 requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
-name = "verity-landq"
-version = "0.0.0"
-source = { editable = "tools/verity/landq" }
-
-[[package]]
-name = "verity-landq-tests"
-version = "0.0.0"
-source = { virtual = "tests/tools/verity/landq" }
-dependencies = [
-    { name = "verity-landq" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-landq", editable = "tools/verity/landq" }]
-
-[[package]]
 name = "verity-lean-audit"
 version = "0.0.0"
 source = { virtual = "tests/tools/verity/lean" }
@@ -2722,7 +2706,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-machine-model"
 version = "0.0.0"
-source = { editable = "benchmarks/machine_model" }
+source = { editable = "calibration/machine_model" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
@@ -2737,18 +2721,18 @@ requires-dist = [
 [[package]]
 name = "verity-machine-model-tests"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/machine_model" }
+source = { virtual = "tests/calibration/machine_model" }
 dependencies = [
     { name = "verity-machine-model" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-machine-model", editable = "benchmarks/machine_model" }]
+requires-dist = [{ name = "verity-machine-model", editable = "calibration/machine_model" }]
 
 [[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/native_peak" }
+source = { virtual = "tests/calibration/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2880,7 +2864,7 @@ requires-dist = [
 provides-extras = ["research", "exact-kit"]
 
 [[package]]
-name = "verity-pouw-check-difftest"
+name = "verity-pouw-verifier-difftest"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
 
@@ -2943,7 +2927,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe" }
+source = { virtual = "tests/calibration/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2962,7 +2946,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe_fp4" }
+source = { virtual = "tests/calibration/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },

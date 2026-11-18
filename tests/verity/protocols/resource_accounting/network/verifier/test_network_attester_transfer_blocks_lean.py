@@ -2,8 +2,8 @@
 Python (`TransferBlocks.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
 and digest on a network attester's execution phases, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
-shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
-missing or not certificates; the link under another digest). The Lean's other kinds of link (`Kind.plain`,
+shared-row layout; the salts and the output word forged; each attestation's fields edited, the attestations swapped,
+missing or not attestations; the link under another digest). The Lean's other kinds of link (`Kind.plain`,
 `Kind.served`) are cases the Python never makes.
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
@@ -30,7 +30,7 @@ def lean(monkeypatch):
 
 
 class Case:
-    """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run
+    """One execution phase's sample, attestations, syncs and delivered proof, with the findings of the stand-in Lean run
     on the honest proof."""
 
     def __init__(self, lw, opening, sample, syncs, tmp):
@@ -59,7 +59,7 @@ class Case:
 
 
 def _network_attester(tmp):
-    """The network attester's link: both records certified under its parameters digest, no occupancy profile."""
+    """The network attester's link: both records attested under its parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
     opening = run.honest(0)
     return Case(run.lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)
@@ -121,7 +121,7 @@ def _findings(c):
             [replace(f, units=(1,))], [replace(f, units=())], [f, f], [f, replace(f, accepted=False)]]
 
 
-def _certificates(c):
+def _attestations(c):
     e, i = c.certificates
     flip = lambda b, k=0: b[:k] + bytes([b[k] ^ 1]) + b[k + 1:]
     edits = [{"digest": flip(e.digest)}, {"digest": e.digest[:-1]}, {"signature": flip(e.signature, 40)},
@@ -153,7 +153,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
         {"pub": bytes(192)}, {"o0": bytes(192)}, {"pub": c.delivered.salts["pub"][:-1]}, {"pub": "x"}, {"pub": None})]
     cases += [{"delivered": replace(c.delivered, salts={"o0": c.delivered.salts["o0"]})}]
     cases += [{"delivered": replace(c.delivered, output=w)} for w in (0, 1, 2, 4, 1 << 16, -1, "3", None, True)]
-    cases += [{"certificates": cs} for cs in _certificates(c)]
+    cases += [{"certificates": cs} for cs in _attestations(c)]
     rejected = 0
     for k, kw in enumerate(cases):
         lean, python = c.both(**kw)
@@ -162,7 +162,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
     assert rejected >= len(cases) - 30
 
 
-def test_a_network_attester_phase_reads_the_network_certifiers_digest_and_no_sync(tmp_path):
+def test_a_network_attester_phase_reads_the_network_attesters_digest_and_no_sync(tmp_path):
     """On a network attester link the Lean holds both ends' grids to the network attester's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network attester's digest is a reject by both; and a network attester case the Python never makes (a digest of another length or none, an end with a profile, two
@@ -180,7 +180,7 @@ def test_a_network_attester_phase_reads_the_network_certifiers_digest_and_no_syn
     assert lean == python and not python["accepted"]
     c.lw = lw
     case = lw.lean_case(c.sample, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
-    assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_CERTIFIER_DIGEST.hex()
+    assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_ATTESTER_DIGEST.hex()
     assert SVC.LA.SERVER.call("link-window", case)["accepted"]
     grid = case["ingress"]["grid"]
     for edit in ({"warden": case["warden"][:-2]}, {"warden": case["warden"] + "00"}, {"warden": None},

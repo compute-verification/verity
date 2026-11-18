@@ -32,10 +32,8 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
-  writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  docket (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
-  `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
-  and its blobs.
+  writes v2's case for a `--zk` audit: the per-member form's for a workload of several members, the one statement's
+  for one (`a5.write_case`). Its answer is `vstar-recursive sampled check` on the case and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
   policy's check as a core protocol, `inference-only`):
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
@@ -91,11 +89,9 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
-  (`a5.case_v2`: v1's case with the verdicts replaced by the one sampled member's proof's files, its params naming that
-  member's circuit, public file and registered file, and ``blobs``), refused here when it commits to another record
-  than v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2
-  verifies one table's `--zk` session on its circuit and public file). Its answer is `spot-one-stage-zk
-  check` on the case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so it
+  (`a5.write_case`), refused here when it commits to another record than v1's case or names a blob that isn't there,
+  and when a5 wrote none (its ``case-v2-error.txt`` says why). Its answer is `spot-one-stage-zk check` on the case and
+  its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so it
   is made only when asked.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
@@ -110,16 +106,14 @@ Pearl+'s the Lean verdict of record's.
 
 **No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
-`CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
-limit, a development host's choice, which its line then says). The executables read every blob file into memory before
+`CHECK_MEM_GB`, no swap), on a host with no such scope behind ``prlimit`` under an address-space limit of the same
+size, and on a host with neither it is not started (``CHECK_SCOPE=none`` runs it under no limit, a development host's
+choice). The executables read every blob file into memory before
 they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
-`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's SPOT case or the bare one, is not asked where
-its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
-form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
-check is not run.
+`CHECK_BLOBS_GB`) is not started either.
 
-This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``memory``, where its check ran
-under no limit), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
+This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``host`` and ``memory``, where its
+Lean check ran and under which limit, when it ran here), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
 started, the case's blob files' sum and the limit beside it, and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
@@ -137,6 +131,7 @@ import hashlib
 import importlib
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -218,9 +213,12 @@ NO_SCOPE = "none"
 UNLIMITED = f"no limit (CHECK_SCOPE={NO_SCOPE}: a development host's choice)"
 #: the scope a check runs in, ahead of its memory limit
 SCOPE = ("systemd-run", "--user", "--scope", "--quiet", "--collect")
-#: why no check starts on a host that makes no such scope
-NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}), and no check runs outside a memory limit "
-                 f"of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a development host)")
+#: what a check runs behind, ahead of its address-space limit, on a host that makes no such scope
+ADDRESS_SPACE = ("prlimit",)
+#: why no check starts on a host that makes no such scope and runs no `ADDRESS_SPACE`
+NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}) and runs no prlimit, and no "
+                 f"check runs outside a memory limit of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a "
+                 "development host)")
 
 
 class Refused(Exception):
@@ -239,16 +237,22 @@ class NotStarted(Refused):
 @dataclasses.dataclass(frozen=True)
 class Limits:
     """What a check runs under: the most its case's blob files may sum to, in bytes, and the command its process runs
-    behind, a scope of its own with its memory limit (``mem_gb``), or none where the host said `NO_SCOPE`. ``refusal``:
-    why no check starts under them (`NO_SCOPE_HERE`), else None."""
+    behind, a scope of its own with its memory limit (``mem_gb``), else (``address_space``) an address-space limit of
+    that size, or none where the host said `NO_SCOPE`. ``refusal``: why no check starts under them (`NO_SCOPE_HERE`),
+    else None."""
     blob_bytes: int
     mem_gb: int
     scope: tuple[str, ...] | None
     refusal: str | None = None
+    address_space: bool = False
 
     @property
     def memory(self) -> str:
-        return UNLIMITED if self.scope is None else f"its own scope, MemoryMax {self.mem_gb}G, no swap"
+        if self.scope is None:
+            return UNLIMITED
+        if self.address_space:
+            return f"its own address space, RLIMIT_AS {self.mem_gb}G (prlimit; this host makes no systemd user scope)"
+        return f"its own scope, MemoryMax {self.mem_gb}G, no swap"
 
 
 def scope_here() -> bool:
@@ -259,10 +263,19 @@ def scope_here() -> bool:
         return False
 
 
+def address_space_here() -> bool:
+    try:
+        return subprocess.run([*ADDRESS_SPACE, f"--as={1 << 30}", "--", "true"], capture_output=True,
+                              check=False).returncode == 0
+    except OSError:
+        return False
+
+
 def limits(env: Mapping[str, str] | None = None) -> Limits:
     """The limits a check runs under here, from ``env`` (default the environment): ``CHECK_BLOBS_GB`` and
-    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`). On a host
-    that makes none they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
+    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`), else an
+    address-space limit of the same size where it runs `ADDRESS_SPACE` (`address_space_here`). On a host with neither
+    they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
     env = os.environ if env is None else env
     try:
         blobs, mem = (int(env.get(k) or d) for k, d in (("CHECK_BLOBS_GB", CHECK_BLOBS_GB), ("CHECK_MEM_GB", CHECK_MEM_GB)))
@@ -271,9 +284,11 @@ def limits(env: Mapping[str, str] | None = None) -> Limits:
     _need(blobs > 0 and mem > 0, "CHECK_BLOBS_GB and CHECK_MEM_GB are positive")
     if env.get("CHECK_SCOPE") == NO_SCOPE:
         return Limits(blobs * 10**9, mem, None)
-    if not scope_here():
-        return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
-    return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+    if scope_here():
+        return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+    if address_space_here():
+        return Limits(blobs * 10**9, mem, (*ADDRESS_SPACE, f"--as={mem << 30}", "--"), address_space=True)
+    return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
 
 
 def blob_bytes(case: Mapping[str, Any]) -> tuple[int, int]:
@@ -320,16 +335,8 @@ def window_case(audit: Path) -> dict[str, Any]:
     return case
 
 
-#: why a v2 case in the per-member form is not asked
-PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-member form, which one-stage v2 refuses "
-              "when it parses the evidence (OneStageZk.proofsOf), after reading every blob: its answer is known, so "
-              "the check is not started")
-
-
-def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
-    whose proofs are in the per-member form is not asked (`PER_MEMBER`: `NotStarted`, with its blobs' sum and the limit
-    of ``env``, default the environment)."""
+def v2_case(audit: Path) -> dict[str, Any]:
+    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs."""
     w = audit / "window"
     v1 = window_case(audit)
     if not (w / "case-v2.json").is_file():
@@ -344,14 +351,6 @@ def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]
     _need(isinstance(case["blobs"], list) and all(isinstance(b, str) for b in case["blobs"]), "v2's blobs are paths")
     gone = [b for b in case["blobs"] if not Path(b).is_file()]
     _need(not gone, f"v2's case names {len(gone)} blob(s) that aren't files, the first {gone[:1]}")
-    try:
-        proofs = json.loads(bytes.fromhex(case["evidence"])).get("proofs")
-    except (TypeError, ValueError, AttributeError) as e:
-        raise Refused(f"v2's evidence is not a JSON object: {type(e).__name__}: {e}") from None
-    if isinstance(proofs, dict) and set(proofs) != {"sessions"}:
-        n, total = blob_bytes(case)
-        raise NotStarted(PER_MEMBER, blobs=n, blob_bytes=total, limit_bytes=limits(
-            dict(os.environ if env is None else env) | {"CHECK_SCOPE": NO_SCOPE}).blob_bytes)
     return case
 
 
@@ -749,10 +748,11 @@ def produce(a: argparse.Namespace) -> int:
 
     kept: dict[str, dict[str, Any]] = {}
 
-    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, memory: str | None = None) -> None:
+    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, within: Limits | None = None) -> None:
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict,
-                                    **({"memory": memory} if memory else {})}, sort_keys=True), flush=True)
+        ran = {} if within is None else {"host": socket.gethostname(), "memory": within.memory}
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict, **ran},
+                                   sort_keys=True), flush=True)
 
     def refused(id: str, e: Exception) -> None:
         nonlocal bad
@@ -771,7 +771,7 @@ def produce(a: argparse.Namespace) -> int:
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             return refused(id, e)
-        written(id, case, line, answer.get("verdict"), UNLIMITED if within.scope is None else None)
+        written(id, case, line, answer.get("verdict"), within)
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)

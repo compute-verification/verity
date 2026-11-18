@@ -168,10 +168,10 @@ def test_with_no_accept_of_record_there_is_no_number_and_the_exit_is_1(case, sta
     shown = json.loads(every[-1])
     assert (shown["value"], shown["run"], shown["no_number"], shown["ran_with"], shown["audit"]) == (
         None, RUN, DEV_WHY, None, False)
-    assert rec["check"] == {"check": {"rule": "the rate rule", "public_form": "InferenceOnlyCheck.Record.check", "complies": True},
-                            "count": {"rule": "the count", "public_form": "InferenceOnlyCheck.RecordCount.check", "complies": True}}
-    assert "              the rate rule (InferenceOnlyCheck.Record.check): complies: true" in lines
-    assert "              the count (InferenceOnlyCheck.RecordCount.check): complies: true" in lines
+    assert rec["check"] == {"check": {"rule": "the rate rule", "public_form": "InferenceOnlyVerifier.Record.check", "complies": True},
+                            "count": {"rule": "the count", "public_form": "InferenceOnlyVerifier.RecordCount.check", "complies": True}}
+    assert "              the rate rule (InferenceOnlyVerifier.Record.check): complies: true" in lines
+    assert "              the count (InferenceOnlyVerifier.RecordCount.check): complies: true" in lines
     assert f"  PoUW      of record by {R.VERDICT} = 'missing'" in lines
     assert any(x.startswith("            no accept of record (a development accept counts as none): " + SV.DEV_VERDICT)
                for x in lines)
@@ -339,7 +339,7 @@ def test_a_record_a_rule_refuses_has_no_number_and_names_only_the_rule(case, sta
     out = capsys.readouterr().out
     rec, why = doc["record"], f"the check refused the record ({which})"
     assert {line: rec["check"][line]["complies"] for line in R.PUBLIC} == complies
-    assert rec["check"]["count"]["public_form"] == "InferenceOnlyCheck.RecordCount.check"
+    assert rec["check"]["count"]["public_form"] == "InferenceOnlyVerifier.RecordCount.check"
     assert (code, rec["block"]["value"], rec["no_number"], rec["tied"], rec["periods"]) == (1, None, why, None, [])
     assert out.splitlines()[0] == f"inference_only: no number: {why}"
     for line, (rule, form) in R.PUBLIC.items():

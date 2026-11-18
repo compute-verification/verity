@@ -72,8 +72,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
          late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> NetworkAttester:
     """A run of the network attester at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
-    `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
-    `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
+    `client` publish one: its records and attestations through `Publisher` inline (`serve`'s `PublisherProcess` when
+    `process`, which first signs the load's heads `load_heads` when given), the session's start attested at base 0
     before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
     them when the schedule has lengths rows (its key then a height taller, for their heads), `deployment.json`, and
     `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =

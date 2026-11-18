@@ -147,7 +147,7 @@ def test_a_push_to_a_remote_other_than_github_is_not_judged(vm):
 
 
 def test_the_hook_the_push_would_have_run_still_runs_and_neither_no_verify_nor_a_hooks_path_skips_the_rule(vm):
-    """`research merge` installs its own pre-push hook in a checkout; tools pass `-c core.hooksPath=/dev/null` or
+    """A gate may install its own pre-push hook in a checkout; tools pass `-c core.hooksPath=/dev/null` or
     `--no-verify` to skip a checkout's hooks, which skips that hook and never the branch rule."""
     own = vm.ws / ".git" / "hooks" / "pre-push"
     own.write_text(f"#!/bin/sh\ncat > {vm.tmp / 'own-ran'}\necho \"own hook: $1\" >&2\nexit ${{OWN_EXIT:-0}}\n")

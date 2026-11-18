@@ -1,8 +1,19 @@
 # security/Definitions: the spec
 
-The one tree of the package `security` (`security/lakefile.toml`, root `Definitions.lean`): each area's vocabulary, its
-premises (`Assumptions`) and its guarantee statements (`Guarantees`), each a `def G : Prop`. It is the part a reader
-reads. [`security/README.md`](../README.md) has the argument, the lock and what code outside `security/` may do.
+This tree is where Verity's claims are written down. Each area gives its vocabulary, the assumptions its
+guarantees may take (`Assumptions`), and each guarantee's statement (`Guarantees`), a `def G : Prop`. It is the part a
+reader reads: the proofs are in `security/Proofs/`, which the kernel checks and nobody reads for meaning. The tree is
+the package `security` (`security/lakefile.toml`, root `Definitions.lean`). [`security/README.md`](../README.md) has the
+argument, the lock and what code outside `security/` may do.
+
+## Try it
+
+~~~sh
+git grep -n "^def .* : Prop" -- security/Definitions/Pous/Guarantees.lean
+~~~
+
+This lists the statements in PoUS's guarantees file, each with its line, which is where to read one. It needs only the
+checkout.
 
 ## Who may import it
 
@@ -43,7 +54,7 @@ A generated file is its generator's: change the generator and run it, never the 
 
 - `ResourceAccounting/Headline/` and `ResourceAccounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
   import the `Encoding.lean` beside them.
-- `ResourceAccounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
+- `ResourceAccounting/Sheets/`: `calibration/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under

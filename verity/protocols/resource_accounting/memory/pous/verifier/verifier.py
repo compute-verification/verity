@@ -15,7 +15,7 @@ compares each answer with the true label (`Model/Audit.lean`: "no verifier key .
 digests are that idealization's instance.
 
 The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.1% of `C` at
-64 KB), so it checks an answer alone; `root` is the 64-byte key a root-only memory challenger keeps, checking an answer with the
+64 KB), so it checks an answer alone; `root` is the 64-byte key a root-only memory attester keeps, checking an answer with the
 server's audit path.  `VerifierKey.from_segments` and `from_leaves` build it one segment at a time, without `C`.  Only
 the geometry (`codec.Geometry`) is read, so the same `vk` serves any codec.
 """
@@ -175,7 +175,7 @@ class VerifierKey:
 
     @classmethod
     def from_row_digests(cls, params: Geometry, salt: bytes, rows: Sequence[bytes]) -> VerifierKey:
-        """`vk` from every label's `sha512/row/v2` digest, in label order: the memory challenger's table of `C*`."""
+        """`vk` from every label's `sha512/row/v2` digest, in label order: the memory attester's table of `C*`."""
         if len(rows) != params.blocks or any(type(r) is not bytes or len(r) != DIGEST_BYTES for r in rows):
             raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte row digests")
         return cls.from_leaves(params, salt, [row_leaf(params, salt, i, r) for i, r in enumerate(rows)])

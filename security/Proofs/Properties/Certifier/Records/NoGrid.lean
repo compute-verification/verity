@@ -13,8 +13,8 @@ committed egress record besides (`uncertifiedEgress_iff`): `noGridMeans`, `noGri
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params TransferBlocks manifestSet)
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params TransferBlocks manifestSet)
 
 namespace Properties.NetworkRecords
 

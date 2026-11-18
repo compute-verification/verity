@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import ladder as L
 import prod_plan as PP
 
@@ -106,3 +108,18 @@ def test_kinds_counts_contexts_past_the_top_k_and_where_each_difference_starts(t
 
 def test_the_context_limit_replaces_serve_tax_s():
     assert L.max_model_len(("--max-model-len", "4096", "--seed", "0"), 40960) == ("--max-model-len", "40960", "--seed", "0")
+
+
+@pytest.mark.parametrize("card, member", [("NVIDIA H200", "llama-3.2-1b-h200"), ("NVIDIA H100 80GB HBM3", "llama-3.2-1b-h100"),
+                                          ("none", "llama-3.2-1b-cpu"), ("NVIDIA Nonesuch", None)])
+def test_a_reading_names_its_card_by_its_records_short_and_a_card_without_one_gets_none(tmp_path, monkeypatch, card,
+                                                                                       member, capsys):
+    from verity_bench import kit
+
+    stamp = kit.host_stamp
+    monkeypatch.setattr(kit, "host_stamp", lambda: {**stamp(), "card": card})
+    replay = {"index": 0, "rows_exact_share": 1.0, "bit_exact": True, "compile": None}
+    L.record(tmp_path, [{"model": "llama32-1b", "pin": "pinned", "checkpoint": "c", "tp": 1, "replays": [replay]}])
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert [m["member"] for m in doc["measurements"]] == ([member] if member else [])
+    assert member or card in capsys.readouterr().out

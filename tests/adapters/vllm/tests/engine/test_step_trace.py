@@ -64,7 +64,7 @@ def _plan() -> dict[int, list[FakeRequest]]:
 
 
 def test_with_a_writer_thread_the_engine_never_writes_the_file_and_it_holds_the_same_bytes(tmp_path):
-    """serve-openai's trace (`serve_commit.advice_trace`): while a seal writes its store, an append to the serve dir's disk can
+    """serve-openai's trace (`serve_loop.advice_trace`): while a seal writes its store, an append to the serve dir's disk can
     wait hundreds of ms, and the engine thread made it every step."""
     sched, plain = _served(tmp_path / "plain.jsonl")
     drive(sched, _plan())
@@ -174,7 +174,7 @@ def _three(a: str, b: str, c: str, **kw) -> list[dict]:
 
 
 def test_every_request_a_record_names_is_named_by_the_traces_request_id():
-    """serve-openai's trace is given a ``request_id`` that takes vLLM's suffix off an id (`serve_commit.advice_trace`): its records
+    """serve-openai's trace is given a ``request_id`` that takes vLLM's suffix off an id (`serve_loop.advice_trace`): its records
     are those of a scheduler whose ids carry no suffix, in every place a record names a request."""
     plain = _three("a", "b", "c")
     fields = ("rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")

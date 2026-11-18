@@ -13,7 +13,12 @@ from dataclasses import dataclass
 
 from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
-from verity.protocols.resource_accounting.memory.poub.verifier.audit import Registration, append_head, append_tree, payload_tree
+from verity.protocols.resource_accounting.memory.poub.verifier.audit import (
+    Registration,
+    append_head,
+    append_tree,
+    payload_tree,
+)
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import SALT_BYTES, Plan
 
 

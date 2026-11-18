@@ -2,7 +2,7 @@
 scheduler's step trace, then replayed from the trace's header alone; the replay's steps, every token and every cached row's
 bytes are held to the served ones.
 
-The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers, `EXPERTS` routed experts and `HEADS`
+The stand-in is GLM-5.3's registered config cut by the adapter's `stand_in` to its first layers and routed experts and `HEADS`
 attention heads (one rank's of tensor-parallel 8, which decides how an FP8 cache is read), served tensor-parallel 1 on one
 card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer. ``--weights dummy``
 keeps vLLM's values; ``--weights scaled`` resamples every weight at `STD` after the load (`rescale`), so a token depends on its
@@ -60,9 +60,6 @@ from pathlib import Path
 from typing import Any
 
 ADAPTER = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
-CONFIG = ADAPTER / "verity_vllm/engine/profiles/hf_configs/GLM53.config.json"
-#: the stand-in's decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and experts
-LAYERS, EXPERTS = 7, 16
 #: the stand-in's attention heads: a rank's when GLM-5.3's 64 are split over tensor-parallel 8. vLLM's FlashMLA sparse
 #: backend reads an FP8 cache with its FP8 kernel at every token below 32 heads a rank; at 32 or more a prefill token reads
 #: a bf16 copy of the rows instead, a path GLM-5.3 on eight cards never takes
@@ -90,15 +87,6 @@ TOPK_OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", 
 WRITE_KERNEL = "_fused_norm_rope_kernel"
 #: what of a step record the replay must repeat
 STEP_KEYS = ("T", "order", "rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
-
-
-def stand_in(where: Path) -> None:
-    cfg = json.loads(CONFIG.read_text())
-    cut = {**cfg, "num_hidden_layers": LAYERS, "n_routed_experts": EXPERTS, "num_attention_heads": HEADS,
-           "num_key_value_heads": HEADS}
-    for k in ("indexer_types", "mlp_layer_types"):
-        cut[k] = cfg[k][:LAYERS]
-    (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
 
 
 def canonical_topk() -> Any:
@@ -368,6 +356,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     from tests.properties import specdec_replay_gpu as loop
     from verity_vllm.engine import env, handle, served_seed
     from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.engine.profiles.stand_in import stand_in
     from verity_vllm.engine.step_trace import StepTrace, load
 
     env.apply_engine(None)
@@ -382,7 +371,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         if a.cache == "named":
             cfg["kv_cache_dtype"] = served["chosen"]["cache_dtype"]
     model = Path(tempfile.mkdtemp(prefix="fp8-cache-stand-in-"))
-    stand_in(model)
+    stand_in(model, heads=HEADS)
     eng = engine(model, cfg, eager=not a.compiled)
     runner = handle.model_runner(eng)
     canon = canonical_topk()
@@ -512,6 +501,9 @@ def main() -> int:
     scratch = Path(tempfile.mkdtemp(prefix="fp8-cache-rows-"))
     env = {**os.environ, "PYTHONHASHSEED": "0", "TRITON_CACHE_DIR": str(scratch / "triton")}
     ptx_seen: set[str] = set()
+    sys.path.insert(0, str(ADAPTER))
+    from verity_vllm.engine.profiles.stand_in import EXPERTS, LAYERS
+
     report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
     ok = True
     runs = [tuple(r.split(":")) for r in a.runs.split(",")]

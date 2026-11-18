@@ -1,7 +1,7 @@
 module
 
 public import Properties.InferenceOnly
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 import Mathlib.Data.NNRat.Floor
 
 /-!
@@ -23,7 +23,7 @@ import Mathlib.Data.NNRat.Floor
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -58,4 +58,4 @@ def DescAgreed (j out : Json) : Prop :=
 def DescAgrees : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → DescAgreed j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

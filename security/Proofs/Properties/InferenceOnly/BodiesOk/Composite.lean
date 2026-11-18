@@ -36,7 +36,7 @@ names them first (`st_get_bind`, `lift_lets`, `extract_lets`) and splits each `i
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
   liftV at_ paramsOf buildNode natJ? from Circuits.Program
@@ -529,4 +529,4 @@ theorem specs : ∀ fuel, GetSpec fuel ∧ CompSpec fuel ∧ StatSpec fuel
     let ⟨g, c, s⟩ := specs n
     ⟨getDef_succ n c, composite_succ n g s, statFns_succ n g s⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

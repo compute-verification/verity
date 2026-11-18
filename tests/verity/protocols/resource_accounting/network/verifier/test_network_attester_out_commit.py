@@ -48,7 +48,7 @@ SHAPE = _shape()
 
 
 @pytest.fixture(scope="module")
-def signed(tmp_path_factory) -> tuple[O.CertifiedOut, LmsKey]:
+def signed(tmp_path_factory) -> tuple[O.AttestedOut, LmsKey]:
     s = S.signer(tmp_path_factory.mktemp("out-signer"))
     return O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=WINDOW), s.public_key()
 
@@ -66,7 +66,7 @@ def fresh(tmp_path):
     return make
 
 
-def _record(out: O.CertifiedOut) -> dict:
+def _record(out: O.AttestedOut) -> dict:
     return json.loads(json.dumps(out.public))
 
 
@@ -239,7 +239,7 @@ def test_not_a_record(signed, edit):
 
 def test_signer_refusal(fresh):
     """A signer signs window after window of its one session, and refuses another session, so that window has no out
-    certificate."""
+    attestation."""
     s = fresh()
     for w in (0, 1):
         out = O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=w)
@@ -253,7 +253,7 @@ def test_commit_refuses(fresh):
         O.commit_out([*VALUES[:-1], VALUES[-1][:-1]], shape=SHAPE, key=fresh(), session=S.SESSION, window=0)
     with pytest.raises(ValueError, match="4 rows of 8 leaves"):
         O.commit_out(VALUES[:-1], shape=SHAPE, key=fresh(), session=S.SESSION, window=0)
-    with pytest.raises(ValueError, match="another certifier session"):
+    with pytest.raises(ValueError, match="another attester session"):
         O.commit_out(VALUES, shape=SHAPE, key=Issuer(fresh(), S.OTHER_SESSION), session=S.SESSION, window=0)
     with pytest.raises(ValueError, match="program digest"):
         O.OutShape("ab", "out", WORDS, ROWS)
