@@ -11,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     outputs, its three EOS ids), and `StopRule16_v2` at the two small classes and at 1,024 outputs with three stop ids, a
     binding over `targets.MAX_GATES` that its ``digests`` pin keeps in ``--all``."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_stop_rule as BS
 
     return [("StopRule_v2:4:1", lambda: bind(BS.StopRuleV2, T=4, NSTOP=1)),
