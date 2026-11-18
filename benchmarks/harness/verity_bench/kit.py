@@ -6,7 +6,8 @@
 - `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
   holds the stamp's `card` exactly.
 - `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
-  clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field.
+  clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
+  with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -242,18 +243,27 @@ MACHINE_PROPERTIES: dict[str, Any] = {
     "python": _text, "job_cap_minutes": lambda v: v == "none" or _count(v)}
 
 
-def machine_properties(name: str, *, directory: Path) -> dict:
+def machine_properties(name: str | None = None, *, directory: Path | None = None) -> dict:
     """The `[properties]` of machine `name`'s record, ``directory/<name>.toml`` (the notes' `machines.d`), as written: each
     field of `MACHINE_PROPERTIES` ``{ value, read }``, `read` the command that read `value`, and `value` ``"unread"`` or one
     its check takes: a `toolkit` is ``{ directory, version, loader }`` (`others`: more ``{ directory, version }``) or
     ``"none"``, `numa` a list of ``{ card, node, cpus }``, `launcher` ``{ start, sets }``, `profiler` ``"allowed"``,
-    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise."""
-
-    path = directory / f"{name}.toml"
+    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise.
+    Unnamed, the machine is ``$RESEARCH_MACHINE`` and the directory ``$RESEARCH_RUN_DIR/inputs``, where `research run --on`
+    puts the copy; a run with no ``RESEARCH_MACHINE`` (a local one) is refused."""
+    run_copy = directory is None
+    if name is None:
+        if not settings.is_set("RESEARCH_MACHINE"):
+            raise SystemExit("no machine named: RESEARCH_MACHINE is unset, which `research run --on` sets; outside such a run, "
+                             "name the machine and the directory of its record")
+        name = settings.RESEARCH_MACHINE
+    path = (Path(settings.RESEARCH_RUN_DIR) / "inputs" if run_copy else directory) / f"{name}.toml"
 
     def refuse(why: str) -> SystemExit:
         return SystemExit(f"machine {name!r}: {path} {why}")
 
+    if run_copy and not path.is_file():
+        raise refuse("is not there: the launch copies a machine's [properties] into the run only where its record has the table")
     try:
         table = tomllib.loads(path.read_text()).get("properties")
     except (OSError, tomllib.TOMLDecodeError) as e:
