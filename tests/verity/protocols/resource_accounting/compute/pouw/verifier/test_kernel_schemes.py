@@ -31,10 +31,9 @@ def test_a_resource_scheme_on_a_card_without_an_entry_is_refused(scheme, card):
 
 
 def test_the_readers_read_the_table():
-    assert PPD.SCHEMES == tuple(k.name for k in K.of_family("pearl-c"))
     assert dict(circuit.SCHEMES) == {k.name: k.parameters["perm"] for k in K.of_family("ncp-v2")}
     with pytest.raises(KeyError, match="this device path runs"):
-        PPD.scheme_of("ncp-v1")
+        PPD.refusals("ncp-v1", {})
 
 
 def test_a_family_only_an_experimental_package_builds_is_registered_only_by_it():

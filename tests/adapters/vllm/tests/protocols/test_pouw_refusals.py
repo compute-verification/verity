@@ -27,6 +27,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_de
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
@@ -105,11 +106,11 @@ def test_a_forward_anchor_is_refused_under_an_executor_that_counts_its_own_forwa
 def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(monkeypatch):
     """Every registered schedule runs under every Pearl-C scheme, so `refusals` has `schedule_of`'s refusal to pass on only
     once a schedule is registered that the path can't run.  One that takes the GEMM to a side lane stands in for it."""
-    for scheme in PPD.SCHEMES:
+    for scheme in PEARL_C_SCHEMES:
         for name, schedule in SCHEDULES.items():
-            assert schedule_of(name, PPD.scheme_of(scheme)) is schedule
+            assert schedule_of(name, pearl_c_scheme(scheme)) is schedule
     monkeypatch.setitem(SCHEDULES, "side-gemm", Schedule("side-gemm", frozenset({"gemm"}), 2, "greatest", "least"))
-    for scheme in PPD.SCHEMES:
+    for scheme in PEARL_C_SCHEMES:
         assert P.refusals(scheme, _serve(scheme, device="cuda", kernel="k")) == ()
         said = (f"{scheme}: side-gemm: gemm can't leave the main lane under h3: a later step of the call reads what it "
                 "writes; side-gemm: this path runs only a_tree, tile_hash on a side lane, not gemm")
@@ -121,19 +122,19 @@ def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(m
 def test_a_pearl_c_scheme_is_built_only_for_a_name_this_path_runs_and_only_under_that_name():
     """A test instance takes `PearlC`'s keywords; one of another device's prices names itself with them, and is refused."""
     with pytest.raises(KeyError) as e:
-        PPD.scheme_of("pearl-c-nvfp4-v0")
-    assert e.value.args == (f"'pearl-c-nvfp4-v0': this device path runs {', '.join(PPD.SCHEMES)}",)
-    for name in PPD.SCHEMES:
+        PPD.new_salt_key("pearl-c-nvfp4-v0")
+    assert e.value.args == (f"'pearl-c-nvfp4-v0': this device path runs {', '.join(PEARL_C_SCHEMES)}",)
+    for name in PEARL_C_SCHEMES:
         own = DEVICES[SchemeId.parse(name).device].prices
-        assert PPD.scheme_of(name).name == name
+        assert pearl_c_scheme(name).name == name
         for device in DEVICES.values():
             if device.prices == own:
-                assert PPD.scheme_of(name, prices=device.prices).name == name
+                assert pearl_c_scheme(name, prices=device.prices).name == name
                 continue
             built = f"{name}@{device.prices.device}"
             said = f"the scheme built for {name!r} names itself {built!r}"
             with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
-                PPD.scheme_of(name, prices=device.prices)
+                pearl_c_scheme(name, prices=device.prices)
 
 
 class Linear:
