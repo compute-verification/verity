@@ -2477,6 +2477,19 @@ def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_an
     assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "facts", "passes"]
 
 
+def test_the_records_facts_cache_keeps_its_last_stored_documents_each_with_its_sidecar(tmp_path):
+    """`lean-records/facts` gains a document per audited package and run, and nothing but this ages them out."""
+    facts = tmp_path / "facts"
+    facts.mkdir()
+    for i, k in enumerate("abcd"):
+        for p in (facts / f"{k}.json.gz", facts / f"{k}.json"):
+            p.write_text("x")
+            os.utime(p, (1, 1000 + i))
+    assert LA.prune_records_facts(facts, kept=2) == 2
+    assert sorted(p.name for p in facts.iterdir()) == ["c.json", "c.json.gz", "d.json", "d.json.gz"]
+    assert LA.prune_records_facts(facts, kept=2) == 0 and LA.prune_records_facts(tmp_path / "absent") == 0
+
+
 def test_a_scratch_tree_refuses_a_tracked_link_and_in_tree_resolves_before_it_compares(tmp_path, monkeypatch):
     """`scratch_tree` recreated a tracked link, through which `WarmDeps.take` and `WarmBuilds.take` wrote outside the tree,
     and `in_tree` compared the normalized name alone. A tracked link is refused, naming it, before anything is copied
