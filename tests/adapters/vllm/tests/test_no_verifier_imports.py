@@ -34,8 +34,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/boundary_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
-            "proofs.spot.verifier.second_stage",
+            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.second_stage",
         ),
         "verity_vllm/pipeline/boundary_stop.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.served",
