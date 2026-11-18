@@ -33,30 +33,27 @@ def split_bounds(K: int, S: int, blk: int) -> tuple[int, ...]:
     return tuple(min(nb, s * per) * blk // 16 for s in range(S + 1))
 
 
-def sliced_k_spec(K: int, slices: int, gran_tiles: int, bias_mode: int, reduce_mode: int = 0, first_slice: int = 0) -> CM.GemmModelSpec | None:
+def sliced_k_spec(K: int, slices: int, gran_tiles: int, bias_mode: int) -> CM.GemmModelSpec | None:
     """Slice-K as a CTA-internal warp split does it: slice ``s`` owns every ``gran_tiles``-tile
     group whose index is congruent to ``s`` mod ``slices`` (e.g. a 64x64 ``sliced1x2`` kernel with a
     64-wide K block: slice 0 takes k in [64i, 64i+32), slice 1 takes [64i+32, 64i+64)).  Each slice
-    is one ascending chain; the FP32 partials are reduced at the end.  ``first_slice`` rotates
-    which slice is partial 0 (the one a ``bias_mode=4`` epilogue adds the bias to first)."""
+    is one ascending chain; the FP32 partials are reduced at the end, slice 0 first."""
     ntiles = K // 16
     groups = [[t for t in range(ntiles) if (t // gran_tiles) % slices == s] for s in range(slices)]
     if any(len(g) == 0 for g in groups):
         return None
-    groups = groups[first_slice:] + groups[:first_slice]
     order = tuple(t for g in groups for t in g)
     bounds = [0]
     for g in groups:
         bounds.append(bounds[-1] + len(g))
-    rot = "" if first_slice == 0 else f", partial 0 = slice {first_slice}"
     return CM.GemmModelSpec(
         AMPERE_BF16.name,
         nsplit=slices,
         bounds=tuple(bounds),
-        reduce_mode=reduce_mode,
+        reduce_mode=0,
         order=order,
         bias_mode=bias_mode,
-        note=f"slice-K {slices} interleaved at {gran_tiles * 16}-wide k granularity{rot}",
+        note=f"slice-K {slices} interleaved at {gran_tiles * 16}-wide k granularity",
     )
 
 

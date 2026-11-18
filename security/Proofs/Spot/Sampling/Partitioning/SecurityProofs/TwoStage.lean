@@ -203,22 +203,22 @@ other replay blocks'. -/
 theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
     (nested R N k a b hk).missProb B =
       ∏ i, SamplingDesign.bernFactor a b
-        ((SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
+        ((Verity.SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
   classical
   set Bi : Fin R → Finset (Fin N) := fun i => univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B
-  set E : Fin R → ℝ≥0∞ := fun i => (SamplingDesign.subset N k hk).missProb (Bi i)
-  have hdisj : ∀ ω : (Fin R → Fin b) × (Fin R → (SamplingDesign.subset N k hk).Ω),
+  set E : Fin R → ℝ≥0∞ := fun i => (Verity.SamplingDesign.subset N k hk).missProb (Bi i)
+  have hdisj : ∀ ω : (Fin R → Fin b) × (Fin R → (Verity.SamplingDesign.subset N k hk).Ω),
       Disjoint ((nested R N k a b hk).draw ω) B ↔
         ∀ i ∈ (univ : Finset (Fin R)), (ω.1 i).val < a → Disjoint (ω.2 i).1 (Bi i) := by
     intro ω
-    simp only [Finset.disjoint_left, nested, SamplingDesign.subset, SamplingDesign.bernoulli, mem_filter, mem_univ, true_and, Bi]
+    simp only [Finset.disjoint_left, nested, Verity.SamplingDesign.subset, SamplingDesign.bernoulli, mem_filter, mem_univ, true_and, Bi]
     constructor
     · intro h i _ hi j hj hjB
       exact h (a := finProdFinEquiv (i, j)) (by simpa using And.intro hi hj) hjB
     · rintro h v ⟨hv1, hv2⟩ hvB
       exact h _ trivial hv1 hv2 (by rw [Prod.mk.eta, Equiv.apply_symm_apply]; exact hvB)
   have hstage : ∀ (c : Fin R → Fin b) (i : Fin R),
-      prCoin (fun S : (SamplingDesign.subset N k hk).Ω => (c i).val < a → Disjoint S.1 (Bi i)) =
+      prCoin (fun S : (Verity.SamplingDesign.subset N k hk).Ω => (c i).val < a → Disjoint S.1 (Bi i)) =
         if (c i).val < a then E i else 1 := by
     intro c i
     by_cases h : (c i).val < a
@@ -229,13 +229,13 @@ theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b
       simp only [ite_true]
       exact avg_const 1
   have hin : ∀ c : Fin R → Fin b,
-      (prCoin fun d : Fin R → (SamplingDesign.subset N k hk).Ω =>
+      (prCoin fun d : Fin R → (Verity.SamplingDesign.subset N k hk).Ω =>
         ∀ i ∈ (univ : Finset (Fin R)), (c i).val < a → Disjoint (d i).1 (Bi i)) =
       ∏ i, if (c i).val < a then E i else 1 := fun c =>
-    (prCoin_pi_forall (Ω := fun _ : Fin R => (SamplingDesign.subset N k hk).Ω) univ
-      (fun i (S : (SamplingDesign.subset N k hk).Ω) => (c i).val < a → Disjoint S.1 (Bi i))).trans
+    (prCoin_pi_forall (Ω := fun _ : Fin R => (Verity.SamplingDesign.subset N k hk).Ω) univ
+      (fun i (S : (Verity.SamplingDesign.subset N k hk).Ω) => (c i).val < a → Disjoint S.1 (Bi i))).trans
       (Finset.prod_congr rfl fun i _ => hstage c i)
-  change prCoin (fun ω : (Fin R → Fin b) × (Fin R → (SamplingDesign.subset N k hk).Ω) =>
+  change prCoin (fun ω : (Fin R → Fin b) × (Fin R → (Verity.SamplingDesign.subset N k hk).Ω) =>
     Disjoint ((nested R N k a b hk).draw ω) B) = _
   simp_rw [hdisj]
   rw [prCoin_prod]
@@ -249,10 +249,10 @@ theorem NestedEscape : Guarantees.NestedEscape := by
   have hb : (0 : ℝ) < b := by exact_mod_cast NeZero.pos b
   have hT : (0 : ℝ) < N.choose k := by exact_mod_cast Nat.choose_pos hk
   have hfac : ∀ i, (SamplingDesign.bernFactor a b
-      ((SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
+      ((Verity.SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
       1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
     intro i
-    rw [SamplingDesign.subset_escape]
+    rw [Verity.SamplingDesign.subset_escape]
     have hE : (((N - (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card).choose k : ℕ) : ℝ≥0∞) /
         ((N.choose k : ℕ) : ℝ≥0∞) ≠ ⊤ :=
       ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast (Nat.choose_pos hk).ne')

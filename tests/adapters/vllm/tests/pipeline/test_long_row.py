@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
-from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import history as HT
@@ -174,10 +174,10 @@ def test_its_ok_and_its_reads_rows_are_the_long_rows_function() -> None:
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
     kv, ok = whole.signature()[1].fields
     assert t.signature()[1] == ok
-    want = np.asarray(BS.evaluate_bits(whole, *args[:-2])).reshape(6, -1)
+    want = np.asarray(evaluate_batch(whole, *args[:-2])).reshape(6, -1)
     assert want.shape[1] == kv.leaves + ok.leaves
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)).reshape(6, -1), want[:, kv.leaves:])
-    assert np.array_equal(np.asarray(BS.evaluate_bits(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
+    assert np.array_equal(np.asarray(evaluate_batch(t, *args)).reshape(6, -1), want[:, kv.leaves:])
+    assert np.array_equal(np.asarray(evaluate_batch(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
 
 
 PARAMS = ("scores", "n", "c", "i", "root", "domain", "row", "salt", "path")
@@ -243,6 +243,11 @@ def _bits(a: np.ndarray) -> np.ndarray:
     return np.unpackbits(np.ascontiguousarray(a, dtype="<u2").view(np.uint8).reshape(len(a), -1), axis=1, bitorder="little")
 
 
+def _leaf_bits(values: np.ndarray, widths: list[int]) -> np.ndarray:
+    return np.asarray([[(int(v) >> b) & 1 for v, w in zip(row, widths, strict=True) for b in range(w)] for row in values],
+                      dtype=np.uint8)
+
+
 def _table(length: int, seed: int, name: str = "long-row-test", fill: tuple[int, int] | None = None) -> HT.HistoryTable:
     """A history table of 16 leaves holding ``length`` rows of one word, each under a salt of its own; ``fill``: its class
     (prompt, outputs), to whose rows it is filled (`boundary_tables.fill`)."""
@@ -280,9 +285,11 @@ def test_a_spans_units_are_each_its_definitions_value() -> None:
         fields = ret.fields if isinstance(ret, Tuple) else (ret,)
         args = [_bits(s.data["rows"][p])[:, :ty.leaves] for (p, _w), (_n, ty) in zip(s.member.rows, params, strict=True)]
         outs = [_bits(s.data["outs"][p]) for p, _w in s.member.outs]
-        want = np.asarray(BS.evaluate_bits(defs[s.member.template], *args)).reshape(s.n, -1)
-        assert np.array_equal(np.concatenate([o[:, :f.leaves] for o, f in zip(outs, fields, strict=True)], axis=1), want)
-        assert not any(o[:, f.leaves:].any() for o, f in zip(outs, fields, strict=True))
+        bits = [sum(f.leaf_widths()) for f in fields]
+        values = np.asarray(evaluate_batch(defs[s.member.template], *args)).reshape(s.n, -1)
+        want = _leaf_bits(values, [w for f in fields for w in f.leaf_widths()])
+        assert np.array_equal(np.concatenate([o[:, :b] for o, b in zip(outs, bits, strict=True)], axis=1), want)
+        assert not any(o[:, b:].any() for o, b in zip(outs, bits, strict=True))
     slot, reads = got[-2], got[-1]
     assert reads.member.template == descriptor_id(t.bindings["READ"])
     assert np.array_equal(reads.data["rows"]["tok"], slot.data["outs"]["o0"])
@@ -323,10 +330,10 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     operands = [np.asarray(args[p], dtype=np.uint8) for p, _ty in t.signature()[0]]
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
     kv = whole.signature()[1].fields[0]
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *operands)).reshape(len(rows), -1),
+    assert np.array_equal(np.asarray(evaluate_batch(t, *operands)).reshape(len(rows), -1),
                           _bits(read.data["outs"]["o1"])[:, 0].reshape(len(rows), -1))
-    assert np.array_equal(np.asarray(BS.evaluate_bits(whole, *operands[:-2])).reshape(len(rows), -1)[:, :kv.leaves],
-                          _bits(read.data["outs"]["o0"]).reshape(len(rows), -1))
+    assert np.array_equal(np.asarray(evaluate_batch(whole, *operands[:-2])).reshape(len(rows), -1)[:, :kv.leaves],
+                          read.data["outs"]["o0"].reshape(len(rows), -1))
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
@@ -341,9 +348,9 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]
     assert it.published == {x.value: [bc.hex() for bc in x.bcs] for x in tables}
     reads = next(m for m in w.members if m.template == descriptor_id(t.bindings["READ"]))
-    assert w.held_leaves(reads, "tok") == tuple(range(reads.n))
+    assert w.leaves(reads, "tok").tolist() == list(range(reads.n))
     pick = next(m for m in w.members if m.template.startswith("DsaTopKDigitPick"))
-    assert w.held_leaves(pick, pick.rows[0][0]) == (0, 1, 2, 3)
+    assert w.leaves(pick, pick.rows[0][0]).tolist() == [0, 1, 2, 3]
 
     ids = [s.member.template for s in sampled[0]]
 

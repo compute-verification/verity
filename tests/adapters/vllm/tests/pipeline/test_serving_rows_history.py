@@ -39,7 +39,6 @@ from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR
 from verity_vllm.pipeline import serving_rows as SRW
-from tests.fixed_salts import fixed
 
 KVL, R, EPS, TOPK, WORDS = 512, 64, 1e-5, 4, 576
 LATENT = bind(DN.DsaLatentRow, KVL=KVL, R=R, EPS=EPS)
@@ -129,7 +128,7 @@ def cut(rows, histories=True, caps=CAPS):
 
 def binding(ms) -> CS.Binding:
     n = {t: sum(m.n for m in ms if m.template == t) for t in TMPLS}
-    return CS.Binding(*CS.population_program([(SRW.template(t).fn, n[t]) for t in TMPLS], several=True),
+    return CS.Binding(*IF.listed_program([(SRW.template(t).fn, n[t]) for t in TMPLS], ()),
                       D.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
 
 
@@ -200,7 +199,7 @@ def windows(served, commit=None):
         tables = plan.keys()
         edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
-        data, entries, roots, salts_of, strings_of, _idx, hreg = got
+        data, entries, roots, salts_of, strings_of, _idx, hreg, _w = got
         assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
@@ -250,8 +249,8 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
     def check(rows, ms, data, roots, salts_of, strings_of, hreg):
         nonlocal held
         w = binding(ms)
-        c = CS.commit(w, data, salts_of={**fixed(w), **salts_of}, strings_of=strings_of)
-        full = CS.commit(w, data, salts_of={**fixed(w), **salts_of})
+        c = CS.commit(w, data, salts_of=salts_of, strings_of=strings_of)
+        full = CS.commit(w, data, salts_of=salts_of)
         assert full.roots == c.roots and full.bc == c.bc
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))

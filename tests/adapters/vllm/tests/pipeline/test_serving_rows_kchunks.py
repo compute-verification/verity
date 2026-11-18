@@ -19,6 +19,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.commitments.gates import embedding as EMB
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
 from verity_flock.class_statement import UnitStager
@@ -31,7 +32,6 @@ from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
-from tests.fixed_salts import fixed
 
 E, K, N, G, KB, KC_ = 3, 128, 5, 32, 32, 32
 NB, KG, C = -(-N // G), K // G, K // KC_
@@ -100,7 +100,7 @@ def pairs(monkeypatch):
 def window(rows, tmpls=TMPLS):
     ms = KC.wire(SRW.members(tmpls, [rows] * len(tmpls), None, CAPS), tmpls, [rows] * len(tmpls))
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
 
 
 def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
@@ -162,7 +162,7 @@ def test_each_acc_is_wired_to_the_chunk_before_it_and_the_wires_hold_on_the_publ
             p, n, c = at[m.base + i]
             assert wr == unit[(p, n, c - 1)]
     got = SRW.read_all(w.members, [rows] * 3, store, None)
-    c = CS.commit(w, [g for g, _e in got], salts_of=fixed(w))
+    c = CS.commit(w, [g for g, _e in got])
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     k = next(k for k, m in enumerate(w.members) if m.wired)
@@ -171,7 +171,7 @@ def test_each_acc_is_wired_to_the_chunk_before_it_and_the_wires_hold_on_the_publ
     assert list(WI.check(other.members, publics)) == [w.members[k].key]
     bad = [dict(g, rows={**g["rows"], p: g["rows"][p] ^ np.uint16(1)}) if j == k else g for j, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=f"{w.members[k].key}: a in3 row is not the o0 row"):
-        CS.commit(w, bad, salts_of=fixed(w))
+        CS.commit(w, bad)
 
 
 def test_a_partition_without_a_writer_s_template_is_refused(pairs):

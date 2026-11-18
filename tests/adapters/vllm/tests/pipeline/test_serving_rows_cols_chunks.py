@@ -10,6 +10,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
@@ -21,7 +22,6 @@ from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from tests.fixed_salts import fixed
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3
@@ -109,9 +109,9 @@ def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_re
     g, _entries = got[1]
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
-    win = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * NH)], several=True), {"law": "subset", "k": 2}, "ab" * 32,
+    win = CS.Binding(*IF.listed_program([(SRW.template(T).fn, 2 * NH)], ()), {"law": "subset", "k": 2}, "ab" * 32,
                     tuple(ms))
-    assert CS.commit(win, [g for g, _e in got], salts_of=fixed(win)).window.population == 2 * NH
+    assert CS.commit(win, [g for g, _e in got]).window.population == 2 * NH
 
 
 def test_the_fused_norm_row_s_residual_part_is_chunks_of_its_blocks(monkeypatch):

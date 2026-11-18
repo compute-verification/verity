@@ -14,7 +14,6 @@ import hashlib
 import json
 import re
 from collections import Counter
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -424,12 +423,13 @@ def test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width(wi
 @pytest.mark.slow
 def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows(window):
     """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`): every read covers
-    whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows. Slow (about 70 s
+    whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows, and no member
+    spans two of the wired order's ranges. Slow (about 70 s
     on one core) for the population Program `members` builds, `EmbeddingRead_v2`'s Merkle path traced once; the cheap
     check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
     circuit, ids = window
     ms = IF.members(circuit, 64)
-    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 113
+    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and (len(circuit.ranges), len(ms)) == (159, 163)
     gemm = [m for m in ms if m.template == ids["Gemm_v2{K=64,N=8}"]]
     assert gemm and all(dict(m.tables)["w"] <= m.n for m in gemm)
 
@@ -437,12 +437,17 @@ def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows
 @pytest.mark.slow
 def test_core_registers_every_unit_of_the_window(window):
     """Core's registration of the window (`partition.evaluate` of its population program and template query, the record's
-    verifier's) accepts every unit, its ranges the circuit's: every template has a gate, so no gather or row copy stands
-    in for its reader's ports, and an instance commits within the widest public class. Slow (about a minute) for the
+    verifier's) accepts every unit, its ranges the circuit's order's (a template's several ranges its units): every template
+    has a gate, so no gather or row copy stands in for its reader's ports, and an instance commits within the widest public
+    class. Slow (about a minute) for the
     population program, `EmbeddingRead_v2`'s Merkle path traced once; no cheaper test runs core's own refusals."""
     circuit, _ = window
     part = P.evaluate(*circuit.program())
-    assert {t: n for _k, t, _lo, n in part.ranges} == {IF.descriptor_id(fn): n for fn, n in circuit.templates}
+    units: Counter = Counter()
+    for _k, t, _lo, n in part.ranges:
+        units[t] += n
+    assert units == {IF.descriptor_id(fn): n for fn, n in circuit.templates}
+    assert [(t, n) for _k, t, _lo, n in part.ranges] == [(t, n) for t, _at, n in circuit.ranges]
 
 
 def test_a_head_is_its_key_blocks_calls_reading_a_key_and_a_value_row_a_position(window):
@@ -1028,11 +1033,11 @@ def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_or
     assert IF.input_count(split.description(), **held(split))["free"] == 0
 
 
-def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
+def test_a_tails_rows_are_its_parts_leaves_in_the_order_of_at(split):
     """The tail is `RMSNormFusedCuda_v2` on its parts' sums in order of AT, and out of that order it normalizes another row. A
     window of one norm cut as the class circuit cuts it (its parts and tail, the tail's r wired as the circuit wires it)
-    commits each sum and the tail's row of it as one public string, so the verifier's wiring check holds the tail's r to its
-    writers on the public bodies, and the same rows read in a swapped order are refused there."""
+    commits no tree for the tail's r: its row j is a leaf of part AT = j's output tree, at the position its wire gives
+    (`rows.Binding.tree`, `leaves`), so the verifier reads the sums in the order of AT and no other order commits."""
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in split.templates}
     tail, v2 = split.template(ids[TAIL]), split.template(ids[NORM])
     parts = [split.template(ids[_add(at)]) for at in range(4)]
@@ -1055,13 +1060,11 @@ def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
         win.record(p, [x[:, 16 * at:16 * (at + 1)], res], [sums[at]])
     win.record(tail, [None, w], [out[:, :64], out[:, 64:]])
     assert win.mismatches() == {}
-    c, members = win.close(), win.window.members
-    publics = {m.key: c.public_body(k) for k, m in enumerate(members)}
-    assert WI.check(members, publics) == {}
-    (t,) = [m for m in members if m.wired]
-    rows, swap = {q: (o, ws) for q, o, ws in t.wired}, {"r#0": "r#1", "r#1": "r#0"}
-    moved = [replace(m, wired=tuple((q, *rows[swap.get(q, q)]) for q, _o, _ws in m.wired)) for m in members]
-    assert set(WI.check(moved, publics)) == {t.key}
+    win.close()
+    w = win.window
+    (t,) = [m for m in w.members if m.wired]
+    assert [w.tree(t, f"r#{j}") for j in range(4)] == [WI.tree(order[j], "o0") for j in range(4)]
+    assert [w.leaves(t, f"r#{j}").tolist() for j in range(4)] == [[0]] * 4
 
 
 def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:

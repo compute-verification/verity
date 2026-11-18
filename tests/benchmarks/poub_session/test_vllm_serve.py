@@ -42,7 +42,8 @@ def test_the_prover_serve_proves_by_loads_without_a_card_or_the_adapter_and_its_
 
 def serve(out: Path, plan: str, code: int) -> dict:
     """`serve.py --local` under ``plan``, which must exit ``code``: 0 only for an accepted session."""
-    r = subprocess.run([sys.executable, str(SERVE), "--local", "--plan", plan, "--out", str(out)],
+    r = subprocess.run([sys.executable, str(SERVE), "--local", "--figures-node", "rtx-pro-6000-server-x8", "--plan", plan,
+                        "--out", str(out)],
                        capture_output=True, text=True)
     assert r.returncode == code, r.stdout[-4000:] + r.stderr[-4000:]
     return json.loads((out / "serve.json").read_text())
