@@ -74,12 +74,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
-    "network-accounting": {
-        # Needs: PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/protocols/poub/remote.py": (
-            "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
-        ),
-    },
+    "network-accounting": {},
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
         # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
