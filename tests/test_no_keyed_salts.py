@@ -32,7 +32,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
     "adapters/vllm/verity_vllm/pipeline/interior_links.py": "@vllm",
     "adapters/vllm/verity_vllm/pipeline/interior_rows.py": "@vllm",
-    "adapters/vllm/verity_vllm/program/predict/window_weights.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/crypto/chacha20.py": "@proofs",
     "verity/commitments/cuda/commit_slots/slots.py": "@kernels",
