@@ -70,6 +70,7 @@ public import Proofs.Poub.RemoteHeld.Sketch
 public import Proofs.Poub.RemoteHeld.SketchLine
 public import Proofs.Poub.RemoteHeld.SketchMeets
 public import Proofs.Poub.RemoteHeld.SketchP2
+public import Proofs.Poub.RemoteHeld.Scheme
 public import Proofs.Poub.RemoteHeld.Line
 public import Proofs.Poub.RemoteHeld.Subprotocol
 public import Proofs.ResourceAccounting.Requirement

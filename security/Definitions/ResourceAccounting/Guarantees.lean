@@ -52,6 +52,7 @@ public import Definitions.Poub.Guarantees.RemotePass
 public import Definitions.Poub.Guarantees.RemoteSketch
 public import Definitions.Poub.Guarantees.RemoteSketchLine
 public import Definitions.Poub.Guarantees.RemoteSketchP2
+public import Definitions.Poub.Guarantees.RemoteScheme
 public import Definitions.ResourceAccounting.Guarantees.Requirement
 public import Definitions.Poub.Guarantees.Sketch
 public import Definitions.Poub.Guarantees.Stacking
