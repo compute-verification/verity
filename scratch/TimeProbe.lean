@@ -59,10 +59,23 @@ def main (args : List String) : IO UInt32 := do
   say s!"wires flattened: {wires.length}"
   say s!"check.cutsOk: {Spot.Wires.cutsOk W}"
   say s!"check.firstWire: {repr (Spot.Wires.firstWire W (Spot.Wires.wireCode W))}"
-  for n in [500, 1000, 2000, 4000, 8000] do
+  let timed (what : String) (f : Unit → Bool) : IO Bool := do
     let a ← IO.monoMsNow
-    let ok := Spot.Wires.pairwiseDisjoint (wires.take n)
-    say s!"pairwiseDisjoint on the first {n} wires: {ok}, {(← IO.monoMsNow) - a} ms"
+    let r ← IO.lazyPure f
+    let b ← IO.monoMsNow
+    say s!"{what}: {r}, {b - a} ms"; return r
+  for n in [2000, 4000, 8000, 16000, 32000] do
+    let ws := wires.take n
+    let o ← timed s!"pairwiseDisjoint (every pair) on the first {n} wires" fun _ => Spot.Wires.pairwiseDisjoint ws
+    let q ← timed s!"pairwiseDisjointSorted on the first {n} wires" fun _ => Spot.Wires.pairwiseDisjointSorted ws
+    say s!"  same verdict: {o == q}"
+  let _ ← timed s!"pairwiseDisjointSorted on all {wires.length} wires" fun _ => Spot.Wires.pairwiseDisjointSorted wires
+  let a0 ← IO.monoMsNow
+  let shipped ← IO.lazyPure fun _ => Spot.Edges.edgesOf f.P rs W0
+  say s!"edgesOf (the trial's Array accumulator): {(← IO.monoMsNow) - a0} ms, same wires as the probe's: {match shipped with | .ok ws => ws == wires | .error _ => false}"
+  let a1 ← IO.monoMsNow
+  let chk ← IO.lazyPure fun _ => Spot.Wires.check W
+  say s!"Spot.Wires.check (the trial's): {(← IO.monoMsNow) - a1} ms, {match chk with | .ok _ => "ok" | .error r => s!"{r.code.name} at {r.wire}"}"
   let s : Spot.Wires.Summary := ⟨wires, wires.map (Spot.Wires.rowWords W)⟩
   say s!"summary built (disjointness bypassed; order not checked)"
   say s!"unwhole (leaf-widths): {(unwhole f.P f.ts f.leaves s).getD "none"}"
@@ -80,8 +93,4 @@ def main (args : List String) : IO UInt32 := do
     let inside := (wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
     say s!"inside (sameSlot per wire): {inside.size}"
   | .error e => say s!"gridsOf: REFUSED {e}"
-  say "the shipped edgesOf (List ++), until the run's timeout:"
-  match Spot.Edges.edgesOf f.P rs W0 with
-  | .ok ws => say s!"shipped edgesOf: {ws.length} wires"
-  | .error e => say s!"shipped edgesOf: REFUSED {e}"
   return 0
