@@ -642,21 +642,29 @@ def rowParts (P : Prog) : List Part :=
       (nodes[l.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
     | _ => false
   (units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)).filter fun q =>
-    (partRun P q).isSome || (gatherRuns P q).isNone
+    !gathered P q
 
 theorem rowRuns_runsOf {P : Prog} {R : Runs} (h : rowRuns P = some R) : runsOf P (rowParts P) = some R := by
   unfold rowRuns at h
   dsimp only at h
   split at h
-  · change Option.bind (runsOf P (rowParts P)) _ = some R at h
-    cases hr : runsOf P (rowParts P) with
-    | none => rw [hr] at h; cases h
-    | some R0 =>
-      rw [hr] at h
-      dsimp only [Option.bind] at h
-      split at h
-      · cases h; rfl
-      · cases h
+  · split at h
+    · unfold gatherRows at h
+      dsimp only at h
+      change Option.bind (runsOf P (rowParts P)) _ = some R at h
+      cases hr : runsOf P (rowParts P) with
+      | none => rw [hr] at h; cases h
+      | some R0 =>
+        rw [hr] at h
+        dsimp only [Option.bind] at h
+        split at h
+        · cases h; rfl
+        · cases h
+    · rename_i hg
+      unfold rowParts
+      dsimp only
+      rw [List.filter_eq_self.2 fun q hq => by simpa using List.any_eq_false.1 (by simpa using hg) q hq]
+      exact h
   · cases h
 
 /-- **A shared run is a run of some leaf of a part `runsOf` reads.** -/

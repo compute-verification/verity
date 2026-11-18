@@ -422,6 +422,17 @@ def runsOf (P : Prog) (parts : List Part) : Option Runs :=
              next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
   else none
 
+/-- Whether part `q` is a strided part's rows that lie apart (`gatherRuns`) and no run (`partRun`). -/
+def gathered (P : Prog) (q : Part) : Bool := (partRun P q).isNone && (gatherRuns P q).isSome
+
+/-- `rowRuns` over the parts `parts`, some of them a strided part's rows (`gathered`): the others' runs (`runsOf`),
+where every row shares no leaf with any other row or run (`apart`). -/
+def gatherRows (P : Prog) (parts : List Part) : Option Runs :=
+  let rest := parts.filter fun q => !gathered P q
+  let rows := (parts.filterMap fun q => if gathered P q then gatherRuns P q else none).flatten
+  (runsOf P rest).bind fun R =>
+    if apart (rows.map (·, true) ++ (rest.filterMap (partRun P)).map (·.1, false)) then some R else none
+
 /-- **The root's rows as runs of input leaves** (the module docstring's "Rows of its own" and "Shared runs"), read
 from the root's body: every part of an argument of a root node that is no input node, but a part reading another
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
@@ -439,12 +450,7 @@ def rowRuns (P : Prog) : Option Runs :=
     | _ => false
   if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
     let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
-    let rest := parts.filter fun q => (partRun P q).isSome || (gatherRuns P q).isNone
-    let rows := (parts.filterMap fun q => if (partRun P q).isSome then none else gatherRuns P q).flatten
-    (runsOf P rest).bind fun R =>
-      if apart (rows.map (·, true) ++ (rest.filterMap (partRun P)).map (·.1, false)) then
-        some R
-      else none
+    if parts.any (gathered P) then gatherRows P parts else runsOf P parts
   else none
 
 /-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
