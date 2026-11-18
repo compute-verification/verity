@@ -361,9 +361,9 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
-`own`, each read by one part or a row of a strided part whose rows lie apart, and `shared`, each read by one strided part that reads it more than once over or
+`own`, each read by one part, and `shared`, each read by one strided part that reads it more than once over or
 by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
-once for each after the first. -/
+once for each after the first. A strided part's rows that lie apart (`gatherRuns`) are in neither. -/
 structure Runs where
   own : List (Nat × Nat × Nat)
   shared : List (Nat × Nat × Nat)
@@ -443,7 +443,7 @@ def rowRuns (P : Prog) : Option Runs :=
     let rows := (parts.filterMap fun q => if (partRun P q).isSome then none else gatherRuns P q).flatten
     (runsOf P rest).bind fun R =>
       if apart (rows.map (·, true) ++ (rest.filterMap (partRun P)).map (·.1, false)) then
-        some { R with own := R.own ++ rows }
+        some R
       else none
   else none
 

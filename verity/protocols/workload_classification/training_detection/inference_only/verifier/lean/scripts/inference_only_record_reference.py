@@ -320,7 +320,7 @@ def edge_of(nodes):
 def row_runs(program) -> tuple[list, list] | None:
     """The Lean's `Record.rowRuns`: the runs of input leaves the root's argument parts that are no edge read, as
     `(own, shared)`, `shared` those a strided part reads more than once over and those read by more than one part, in
-    order, once for each part after the first, and `own` then a strided part's rows that lie apart (`gather_runs`);
+    order, once for each part after the first; a strided part's rows that lie apart (`gather_runs`) are in neither;
     None where a part is neither a run of an input node (`part_run`) nor such rows, a batch maps an argument over no
     axis, two runs share a leaf and are not the same run, or such a row shares a leaf with any other run."""
     nodes = program.root.body.nodes
@@ -346,7 +346,7 @@ def row_runs(program) -> tuple[list, list] | None:
         return None
     same = {r[0] for r, q in pairs if r[0] == q[0]}
     own = [r[0] for r in runs if not r[1] and r[0] not in same]
-    return own + rows, [r[0] for r in runs if r[1]] + [a[0] for a, b in pairs if a[0] == b[0]]
+    return own, [r[0] for r in runs if r[1]] + [a[0] for a, b in pairs if a[0] == b[0]]
 
 
 def shared_of(program, shared: list) -> list[tuple[int, int, int, int, int, int]] | None:

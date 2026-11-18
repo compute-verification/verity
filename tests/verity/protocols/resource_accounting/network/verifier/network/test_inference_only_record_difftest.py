@@ -401,17 +401,15 @@ def test_a_weight_its_units_share_is_held(shaped):
 def test_a_member_may_read_a_row_of_its_own_of_a_weight(shaped):
     """A strided part over an input node whose outer stride is at least its inner run hands each member of a batch a
     row of its own, the rows that far apart: the form takes `Norm`'s weight so spelled, a row a member, as it takes the
-    registered case, each row its member's own run. With the rows one leaf closer, each overlaps the next and is
-    neither a row of its own nor a shared run: refused at the root (`own-rows`)."""
+    registered case, with no run shared. With the rows one leaf closer, each overlaps the next and is neither a row
+    of its own nor a shared run: refused at the root (`own-rows`)."""
     held = vectors.results(shaped["2x3 registered"]["case"])
     for what, stage in GATHERED.items():
         m = shaped[what]
         r = vectors.results(m["case"])
         program = vectors.reference.desc_program(m["case"]["instance"]["program"])
         if stage is None:
-            own, shared = ref.row_runs(program)
-            assert not shared and len(own) > len(ref.row_runs(vectors.reference.desc_program(
-                shaped["2x3 registered"]["case"]["instance"]["program"]))[0]), what
+            assert ref.row_runs(program)[1] == [], what
             assert r["detail"] == held["detail"] and r["public"] == held["public"], what
         else:
             assert ref.row_runs(program) is None, what
