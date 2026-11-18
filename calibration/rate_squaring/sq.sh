@@ -9,7 +9,8 @@
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-squaring-ceiling taskset -c 48-95 bash calibration/rate_squaring/sq.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 3
+export PATH=$CUDA_HOME/bin:$PATH
 export D=calibration/rate_squaring
 export B; B=$(mktemp -d /tmp/rate-squaring.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FORMS=${FORMS:-"0:1 0:2 1:1 1:2 1:4 2:1 2:2 2:4 3:1 3:2 4:1 4:2"}
