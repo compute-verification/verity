@@ -89,7 +89,7 @@ from verity.protocols.proofs.spot.verifier.challenger.coins import (FAMILY_ROOT,
 from verity.protocols.proofs.spot.verifier.challenger.coins import ran_out as draw_ran_out
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
-from verity.circuits import codec, partition_object as PO
+from verity.circuits import codec, partition_object as PO, partition_query as PQ
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
@@ -3197,7 +3197,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
 
 def committed_bits(j):
     """`Q_call` v1 at X over a program of root Calls (`partition_object.evaluate`): per distinct Definition, in Call order,
-    its units' committed bits (`partition._committed_bits`), twice, as Lean gives them read off its layout and by the walk
+    its units' committed bits (`partition_query._committed_bits`), twice, as Lean gives them read off its layout and by the walk
     that layout replaced."""
     j = _json(j)
     if not isinstance(j, dict):
@@ -3215,7 +3215,7 @@ def committed_bits(j):
     cuts = {codec.descriptor_id(cut.fn): cut for _k, cut in part.calls}
     out = []
     for fid, cut in cuts.items():
-        bits = P._committed_bits(cut.fn, [(lo, hi) for lo, hi, _path in cut.units])
+        bits = PQ._committed_bits(cut.fn, [(lo, hi) for lo, hi, _path in cut.units])
         out.append([fid, bits, bits])
     return out
 
