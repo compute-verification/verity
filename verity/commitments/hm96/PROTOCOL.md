@@ -122,10 +122,36 @@ is a one-time pad on `M·y`, which is why the direct bound above is tighter.
 - uniform, independent salts, one per leaf and never reused: two leaves with one salt reveal `x ⊕ x'`;
 - a key independent of the salts.
 
-**Randomness.** Hiding is statistical given uniform salts. Real salts come from a cryptographic generator: the operating system's
-(`os.urandom`, itself a ChaCha20-based generator on Linux), or a stream seeded from it, such as a prover's ChaCha20 stream. The bound
-treats either as uniform, the modelling convention this repository uses everywhere; neither is a different assumption. What differs is
-custody: salts sampled per leaf are stored beside the values, and salts expanded from one seed are exposed together if that seed is.
+**Randomness.** Hiding is statistical given uniform salts. A hiding leaf's salt comes from one of two sources and from no other.
+
+- **Fresh bytes of the operating system's generator** (`os.urandom`, `getrandom`, `IO.getRandomBytes`): one draw of the salt's
+  length for each leaf, kept beside the value by the member that commits it. The bound treats them as uniform, which is the
+  uniform-bytes assumption of the trust base.
+- **The randomness module's keyed SHA-512 stream** (`verity.commitments.randomness`: `derive`, then `stream`), under a key derived
+  from fresh operating-system bytes for the one unit it salts, a step, a pass or a registration, and used for no other. Hiding is
+  then computational: it rests on the named assumption that this stream under a uniform key passes as uniform bytes
+  (`KeyedUniform` in the Lean), one term for each key.
+
+A salt made on a host is of the first kind. On a card, where salts of the first kind would be drawn by the host and carried over,
+gigabytes a step at served sizes, a salt may be of the second kind, computed by one shared expander. Nothing else salts a leaf: not
+ChaCha20, not a codec's own stream, not a key a verifier chooses, not a generator seeded by a run's seed. A leaf that hides nothing
+may take a public salt, derived by SHA-512 from public names alone and said to be public where it is made; such a salt gives no
+hiding and none is quoted for it. Until the Lean statement that hides a card's leaves takes the keyed assumption as a premise, no
+hiding is quoted for leaves salted the second way.
+
+**Kept for now by a ruling.** Three sets of leaves keep an expansion of their own on a card until a card can check a kernel that
+computes the listed stream: the adapter's step rows, and the bandwidth audit's pass tree and payload tree. Each is a keyed SHA-512
+expansion under a key drawn fresh from the operating system for its step, its pass or its registration. No listed assumption covers
+these expansions, and no hiding is quoted for these leaves.
+
+**Custody.** Salts drawn for each leaf are kept beside the values by the member that commits them and are private as the values
+are. A key's salts are exposed together if the key is. A key is private and is never sent to a verifier. It is kept only while an
+opening may still need it: a pass's key is never written; a key that a replay must reopen rows with is written to the store's
+private directory and nowhere else, outside every run's output, where custody refuses to upload it.
+
+`tests/test_no_keyed_salts.py` holds three lists: the files that still salt a leaf any other way, which only shrinks, the
+derivations kept for now by a ruling, each with its condition, and the files of a ruled module that still write or send a ruled
+key.
 
 **Public:** the key, the commit string `b ‖ c` of every row a proof touches, the leaf digests and the tree. **Private:** the value,
 x and y. Opening a leaf reveals its value and salt. Salts are independent, so the bound still covers the unopened leaves.

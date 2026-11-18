@@ -12,8 +12,8 @@ public import Definitions.Core.Label
 
 * `coreLog`: the code's log as the core's, a recorded or committed root the commitment `(label, index, root)`, a
   released coin the coin `(label, index)` (`Verity.Label.coin`), in the code's order;
-* `CutMeans`: on a log `releasedLogOf` accepts, `cut log payloads keys` accepting gives `Log.Cut` at the recorded
-  commitments of the families `payloads` and the coins of the families `keys`;
+* `CutMeans`: on a log `releasedLogOf` accepts, `cut log payloads keys` accepting gives `Log.Cut` at the commitments
+  of the families `payloads` the verifier credits, each read from that log, and the coins of the families `keys`;
 * `KeyedBySlotMeans`: on a log `releasedLogOf` accepts, every family's coins are keyed by slot (`Log.KeyedBySlot`),
   member `s` released after the family's root `s` is recorded, once.
 
@@ -33,22 +33,26 @@ def coreLog (log : Log) : Verity.Challenger.Log (String × Nat × ByteArray) (St
     | .recorded | .committed => .recorded (e.label, e.index, e.root)
     | .released => .released (e.label, e.index)
 
-/-- The root the code's log records as member `s` of family `fam`, the empty root where it records none. -/
+/-- The root the code's log records as member `s` of family `fam`; the empty root where it records none, which the log
+then never records, so a statement that the log records it is false there. -/
 def slotRoot (log : Log) (fam : String) (s : Nat) : String × Nat × ByteArray :=
   (fam, s, ((log.find? fun e => e.kind == .recorded && e.label == fam && e.index == s).map (·.root)).getD ByteArray.empty)
 
-/-- **What `cut` checks is the core's cut** on the log `releasedLogOf` reads. -/
+/-- **What `cut` checks is the core's cut** on the log `releasedLogOf` reads, at the payloads the verifier credits. That
+everything it credits is a commitment of that log (`credited r → .recorded r ∈ coreLog log`) is the premise that the
+verifier reads only from the challenger's log, which `Verity.Assumptions.VerifierReadsLog` states of the coins it reads:
+a commitment the log never records is not one it credits. -/
 def CutMeans : Prop :=
-  ∀ (c : LiveCommitment) (lines : List String) (log : Log) (payloads keys : List String),
-    releasedLogOf c lines = .ok log → cut log payloads keys = true →
-      (coreLog log).Cut (fun r => r.1 ∈ payloads)
+  ∀ (c : LiveCommitment) (lines : List String) (log : Log) (payloads keys : List String)
+    (credited : String × Nat × ByteArray → Prop),
+    releasedLogOf c lines = .ok log → (∀ r, credited r → .recorded r ∈ coreLog log) → cut log payloads keys = true →
+      (coreLog log).Cut (fun r => r.1 ∈ payloads ∧ credited r)
         (fun i => ∃ k, (coreLog log).coins[i]? = some k ∧ k.1 ∈ keys)
 
-/-- **The log `releasedLogOf` reads is keyed by slot** in every family: its coin `i` is member `(label, index)`
-(`(0, ·)` past its last coin). -/
+/-- **The log `releasedLogOf` reads is keyed by slot** in every family: a released coin `(label, index)` is member
+`index` of family `label`, released after the family's root `index` is recorded. -/
 def KeyedBySlotMeans : Prop :=
   ∀ (c : LiveCommitment) (lines : List String) (log : Log) (fam : String),
-    releasedLogOf c lines = .ok log →
-      (coreLog log).KeyedBySlot (fun i => ((coreLog log).coins[i]?).getD ("", 0)) fam (slotRoot log fam)
+    releasedLogOf c lines = .ok log → (coreLog log).KeyedBySlot id fam (slotRoot log fam)
 
 end Spot.Challenger

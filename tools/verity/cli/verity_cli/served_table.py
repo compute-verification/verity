@@ -50,7 +50,9 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.scheme import settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -116,13 +118,18 @@ _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 
 
 def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    if extra := sorted(set(params) - {"class", "tie-uniform"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: class, tie-uniform)")
+    """Pearl+'s served piece: its scheme's settings (`scheme.settings`), and ``class``, the table's own."""
+    own = {k: v for k, v in params.items() if k != "class"}
+    if extra := sorted(set(own) - set(PEARL_PLUS.settings)):
+        known = ", ".join(["class", *sorted(PEARL_PLUS.settings)])
+        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: {known})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
-    if type(params["tie-uniform"]) is not bool:
-        raise Refused("params", f"tie-uniform is true or false, not {params['tie-uniform']!r}")
-    return {k: params[k] for k in ("class", "tie-uniform") if k in params}
+    try:
+        own = settings(PEARL_PLUS, own)
+    except ValueError as e:
+        raise Refused("params", str(e)) from None
+    return {**({"class": params["class"]} if "class" in params else {}), **own}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -174,7 +181,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                            Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params, default_params={"tie-uniform": False}),
+              needs=frozenset({"windows"}), params=_pearlplus_params),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),

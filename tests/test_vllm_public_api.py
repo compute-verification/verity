@@ -192,9 +192,9 @@ PUBLIC = {
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
     "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
                                         "CONFIG) and where a serve dir holds each window's epoch (DIR)",
-    "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
-                                        "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
-                                        "the trace corpus serves under",
+    "verity_vllm.pipeline.scheme_plugin": "I1: schemes turned on by name inside vLLM's own OpenAI server: its general "
+                                          "plugin (register) and ASGI middleware (Front), configured by VERITY_PROTOCOLS, "
+                                          "which serve-tax's tick arms and the trace corpus serve under",
     "verity_vllm.pipeline.advice_code.codec": "I1: advice v1, the network certifier's advice code: its certified record, its "
                                               "registration, and I1 v0's encode and decode against the scheduler replay, which "
                                               "the compiler reads and benchmarks/network_e2e measures",

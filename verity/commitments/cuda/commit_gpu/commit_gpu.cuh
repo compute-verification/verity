@@ -10,14 +10,14 @@
 //
 // Per position of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
 //   x    = SHA-512(P(l) || row)                         the row's sha512/row/v2 digest
-//   y    = salt (192 bytes): given, or y_r = SHA-512(Ks || u64be(pos) || u64be(r)), r = 0, 1, 2 (reference.prf_salt)
+//   y    = salt (192 bytes): the caller's, fresh operating-system bytes a leaf, in a buffer of 192 bytes a leaf in leaf order
 //   c    = SHA-512(salt_prefix || y);  b = x ^ M_key y;  h = SHA-512(leaf_prefix(key) || b || c)
 //   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
 // then node(level, index, left, right) up the tree. Every 64-byte digest is kept as 8 u64 words, each the big-endian
 // value of its 8 bytes (the host swaps them back).
 //
-// Two phases: the salt phase (y, M_key y and c; salt_kernel) reads no data and can run before the operand exists; the data
+// Two phases: the salt phase (M_key y and c; salt_kernel) reads only the salts and can run before the operand exists; the data
 // phase (x, b, h, the leaf, the tree; leaf_kernel and the node kernels) is all that sits on the critical path. The tree's
 // narrow top can run on the CPU (Committer::host_tail), where a compression is far faster than on one GPU thread.
 //
@@ -83,8 +83,6 @@ struct Consts {
   u64 mid_P[8];             // after P(l)
   u64 kw_xpad[80];          // the row digest's last block when the row fills whole blocks (all padding)
   rc::Hm96K hm;             // the hm96 leaf's: after the salt prefix, after leaf_prefix(key), and its padding block
-  u64 ks[8];                // the salt key
-  u64 ks_m8[8];             // state after rounds 0..7 of a salt block (its words 0..7 are the key)
   u64 seg_mid[64][8];       // sha512/row-seg/v1: the chaining value after segment j's first block S(j, s, m_j)
 };
 // What the domain id fixes: the frame's leaf, pad and node messages. COMMIT_GPU_DOMS slots, so committers of different
@@ -249,19 +247,6 @@ __global__ void __launch_bounds__(256) seg_kernel(Segs segs, u64 n, u32 s, u32 l
                       bswap32((u32)x[2 * i + 1]));
 }
 
-DEV void salt_prf(u64 pos, u64* Y) {
-#pragma unroll
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] = C.ks[i];
-    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
-    w[11] = w[12] = w[13] = w[14] = 0;
-    w[15] = 80 * 8;
-    sha::iv(Y + 8 * r);
-    sha::compress_from<8>(Y + 8 * r, C.ks_m8, w);
-  }
-}
 DEV void salt_given(const uint8_t* s, u64* Y) {
 #pragma unroll
   for (int c = 0; c < 12; ++c) {
@@ -337,13 +322,13 @@ DEV void st8(u64* p, const u64* d) {
   for (int i = 0; i < 4; ++i) q[i] = make_uint4((u32)d[2 * i], (u32)(d[2 * i] >> 32), (u32)d[2 * i + 1], (u32)(d[2 * i + 1] >> 32));
 }
 
-// M_key y and c = SHA-512(salt_prefix || y) for pos to S[pos] (16 words), T at T (TS: in shared memory).
-template <bool PRF, bool TS, bool NIB = false>
+// M_key y and c = SHA-512(salt_prefix || y) for pos to S[pos] (16 words), y at salts + 192 pos, T at T (TS: in shared
+// memory).
+template <bool TS, bool NIB = false>
 DEV void salt_one(u64 pos, const uint8_t* __restrict__ salts, const uint8_t* T, u64* __restrict__ S) {
   u64 Y[24], c[8], my[8];
   u32 m[16];
-  if constexpr (PRF) salt_prf(pos, Y);
-  else salt_given(salts + 192 * pos, Y);
+  salt_given(salts + 192 * pos, Y);
 #ifdef COMMIT_GPU_DIAG_NOMASK
   for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
 #else
@@ -357,7 +342,7 @@ DEV void salt_one(u64 pos, const uint8_t* __restrict__ salts, const uint8_t* T, 
 
 // The salt phase, a thread a position: S[pos]. Nothing here reads the data, so it can run before the operand exists; the
 // data phase (leaf_kernel) then has only the row on its path.
-template <bool PRF, bool TS>
+template <bool TS>
 __global__ void __launch_bounds__(LEAF_THREADS, 1)
     salt_kernel(const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64* __restrict__ S) {
   extern __shared__ uint4 smem[];
@@ -367,7 +352,7 @@ __global__ void __launch_bounds__(LEAF_THREADS, 1)
   }
   const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (pos >= n) return;
-  salt_one<PRF, TS>(pos, salts, TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), S);
+  salt_one<TS>(pos, salts, TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), S);
 }
 
 // The tree leaf at pos from its row digest x and the salt phase's S[pos]: b || c = (x ^ M_key y) || c (to bc when given),
@@ -483,8 +468,8 @@ DEV void fold_cta_regs(int dom, u64* levels, u64 width, u32 cnt, int L, u64* o) 
 
 // The small path's salt phase for slots s0 .. s0 + gridDim.y - 1 of the commitments of one domain (S_k = S + 16 n k), and
 // with slot 0 the frame leaves' first blocks F and the pads (positions n .. width) into level 0 with every CTA subtree that
-// holds only pads, so the data phase computes only what the data decides (F and the pads don't depend on the slot).
-template <bool PRF>
+// holds only pads, so the data phase computes only what the data decides (F and the pads don't depend on the slot). Slot
+// s0 + j's salts are salts + 192 n j.
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_small(int dom, const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S,
                u64* __restrict__ F, u64* levels, int s0) {
@@ -492,7 +477,7 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   const u64 slot = s0 + blockIdx.y;
   if (pos < n) {
-    salt_one<PRF, false, true>(pos, salts, reinterpret_cast<const uint8_t*>(Tg), S + 16 * n * slot);
+    salt_one<false, true>(pos, salts + 192 * n * blockIdx.y, reinterpret_cast<const uint8_t*>(Tg), S + 16 * n * slot);
     if (slot == 0) {
       u64 f[8];
       frame_first(dom, pos, f);
@@ -694,7 +679,7 @@ static const char SCHEMA_SEG[] = "hm96-sha512/row-seg/v1";   // 4 bytes longer: 
 static const char SEG_TAG[] = "verity/sha512-row-seg/v1/segment";   // + its NUL
 
 struct Params {
-  uint8_t P[128], salt_prefix[128], leaf_prefix[128], domain_id[64], ks[64];
+  uint8_t P[128], salt_prefix[128], leaf_prefix[128], domain_id[64];
   std::vector<uint8_t> T;   // 256 x 256
 };
 
@@ -716,20 +701,17 @@ static void writef(const std::string& path, const void* p, size_t n) {
 
 static Params read_params(const std::string& path) {
   const auto v = readf(path);
-  const size_t want = 4 + 128 * 3 + 64 * 2 + 65536;
-  if (v.size() != want || memcmp(v.data(), "CGP1", 4)) { fprintf(stderr, "%s: not a CGP1 params file\n", path.c_str()); exit(2); }
+  const size_t want = 4 + 128 * 3 + 64 + 65536;
+  if (v.size() != want || memcmp(v.data(), "CGP2", 4)) { fprintf(stderr, "%s: not a CGP2 params file\n", path.c_str()); exit(2); }
   Params p;
   const uint8_t* q = v.data() + 4;
   memcpy(p.P, q, 128); q += 128;
   memcpy(p.salt_prefix, q, 128); q += 128;
   memcpy(p.leaf_prefix, q, 128); q += 128;
   memcpy(p.domain_id, q, 64); q += 64;
-  memcpy(p.ks, q, 64); q += 64;
   p.T.assign(q, q + 65536);
   return p;
 }
-
-static void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
 
 // seg: sha512/row-seg/v1 rows of seg_bits bits (P is then Q(seg_bits), the outer hash's first block).
 static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits, Dom& dm) {
@@ -740,13 +722,6 @@ static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits, Dom&
   rc::midstate(p.salt_prefix, c.hm.mid_salt);
   rc::midstate(p.leaf_prefix, c.hm.mid_leaf);
   rc::pad_schedule(256, c.hm.kw_leafpad);
-  words_of(p.ks, c.ks, 8);
-  {
-    u64 blk[16] = {}, st[8];
-    memcpy(blk, c.ks, 64);
-    sha::iv(st);
-    sha::rounds_prefix(st, blk, 8, c.ks_m8);
-  }
   const char* sname = seg ? SCHEMA_SEG : SCHEMA;
   const auto* schema = reinterpret_cast<const uint8_t*>(sname);
   if (rc::frame_plan(p.domain_id, schema, (int)strlen(sname), dm) || rc::node_plan(p.domain_id, dm)) {
@@ -778,23 +753,6 @@ static u64 tile_leaves(u64 M, u64 K, u64 R) {
     exit(2);
   }
   return (M + R - 1) / R * (K / 32);
-}
-
-// The salt phase's S[pos] (M_key y || c, 16 words, as salt_one<true> writes it) on the CPU from the same constants and the
-// row-major T, so host threads can make the small path's S records (ovl.cu's cgh arms copy them in).
-static void host_salt(const Consts& c, const uint8_t* T, u64 pos, u64* S) {
-  u64 Y[24];
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16] = {};
-    for (int i = 0; i < 8; ++i) w[i] = c.ks[i];
-    w[8] = pos; w[9] = (u64)r; w[10] = 0x8000000000000000ull; w[15] = 80 * 8;
-    sha::iv(Y + 8 * r);
-    sha::compress(Y + 8 * r, w);
-  }
-  u32 m[16];
-  rc::mask<false>(rc::ByteTab<256, false>{T}, Y, m);
-  rc::mask_words(m, S);
-  rc::salt_digest(c.hm, Y, S + 8);
 }
 
 struct Committer {
@@ -855,20 +813,20 @@ struct Committer {
   // The salt phase. Small path: every slot's S, F and the pads in CTAs of SMALL_THREADS, T read through L1/L2. Otherwise,
   // above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, blocks of 64 threads read T
   // through L1, which spreads few leaves over the SMs and takes no shared memory.
-  // Small path: slots s0 .. s0 + ns - 1 (default all); F and the pads come with slot 0, which runs first.
-  template <bool PRF>
-  void salts(const uint8_t* given, cudaStream_t st, int s0 = 0, int ns = -1) {
+  // salts: the caller's device buffer of y, 192 bytes a leaf in leaf order, 16-byte aligned; on the small path one slot's
+  // n after another for slots s0 .. s0 + ns - 1 (default all). F and the pads come with slot 0, which runs first.
+  void salts(const uint8_t* salts, cudaStream_t st, int s0 = 0, int ns = -1) {
     if (small) {
       if (ns < 0) ns = slots - s0;
       const dim3 g((unsigned)((width + SMALL_THREADS - 1) / SMALL_THREADS), (unsigned)ns);
-      salt_small<PRF><<<g, SMALL_THREADS, 0, st>>>(dom, given, Tn, n, width, S, F, levels, s0);
+      salt_small<<<g, SMALL_THREADS, 0, st>>>(dom, salts, Tn, n, width, S, F, levels, s0);
     } else if (n > (1u << 16)) {
-      auto k = salt_kernel<PRF, true>;
+      auto k = salt_kernel<true>;
       static bool attr = false;
       if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
-      k<<<(unsigned)((n + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(given, T, n, S);
+      k<<<(unsigned)((n + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(salts, T, n, S);
     } else {
-      salt_kernel<PRF, false><<<(unsigned)((n + 63) / 64), 64, 0, st>>>(given, T, n, S);
+      salt_kernel<false><<<(unsigned)((n + 63) / 64), 64, 0, st>>>(salts, T, n, S);
     }
   }
   // The data phase's leaves (after salts(); slot: the small path's salt slot). Small path: leaf_small, which also folds each

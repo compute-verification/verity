@@ -34,10 +34,10 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     n, h = len(passes), rtt // 2
     c0, po, fsync, ps, d, s = 40_000, 30_000, 2 * MS, 20_000, 300_000, 100_000
     R, A, D, C, b = [0] * n, [0] * n, [0] * n, [0] * n, [0] * n
-    log = [("challenge", 0, "f" * 128, R[0] + h, R[0] + h + c0)]
+    log = [("poub/challenge", 0, "f" * 128, R[0] + h, R[0] + h + c0)]
     C[0] = R[0] + 2 * h + c0 + tau
     R[1] = b[0] = R[0] + 2 * h + c0
-    log.append(("challenge", 1, "f" * 128, R[1] + h, R[1] + h + c0))
+    log.append(("poub/challenge", 1, "f" * 128, R[1] + h, R[1] + h + c0))
     C[1] = R[1] + 2 * h + c0 + tau
     free = None
     for g in range(n):
@@ -45,10 +45,10 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
         A[g] = start + passes[g] + gap + tau
         free = A[g] - tau
         root, got = f"{g:0128x}", max(A[g], b[g] if g else R[1] + 2 * h + c0) + h
-        log.append(("openings", g, root, got, got + po))
+        log.append(("poub/openings", g, root, got, got + po))
         end = got + po
         if g + 2 < n:
-            log.append(("challenge", g + 2, root, end + fsync, end + fsync + ps))
+            log.append(("poub/challenge", g + 2, root, end + fsync, end + fsync + ps))
             end += fsync + ps
         D[g] = end + h + d
         if g + 1 < n:
@@ -119,7 +119,7 @@ def test_a_record_of_another_loop_is_refused_by_name(broken):
     s, lines, proved = loop(100 * MS, PASSES)
     if broken == "alone":
         j = next(i for i, x in enumerate(map(json.loads, lines))
-                 if x["event"] == "root" and x.get("label") == "openings" and x["index"] == 3)
+                 if x["event"] == "root" and x.get("label") == "poub/openings" and x["index"] == 3)
         lines[j + 2:j + 6] = lines[j + 4:j + 6] + lines[j + 2:j + 4]
     elif broken == "k3":
         s = {**s, "pace": {"k": 3}}
