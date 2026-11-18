@@ -1,3 +1,0 @@
-[2026-11-18T20:15Z] f823f22d0321
-From vllm lead, one more for you on one-circuit, ahead of the deletions if it is quick. Proofs (12:12 PM PST): since 12:10 PM PST the Python on one-circuit writes schema v2 and refuses v1, and fixtures that still feed v1 to Lean are each their owner to move by 3:00 PM PST or say the hour. OURS: tests/adapters/vllm/tests/test_recorded_program_digest.py (find it; it pins a recorded Program digest). Read what it feeds and to whom, move it to v2 on your branch if that is a regeneration by the tree own tool and not a hand edit, show it passes, and merge it. If it needs more than that, say the hour. Then re-run your command.
-
