@@ -119,7 +119,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
     each table committed at the rank's program ``digest`` under fresh salts, and those salts (192 bytes a row, in row order); an
     embedding shard's over ``vocab``, the whole vocabulary's rows and the rank's first token."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         registered_commit,
     )
@@ -137,7 +137,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
         words_of = rows(b, what, n)
         ys = os.urandom(len(words_of) * SF.SALT_BYTES)
         v = registered_commit(digest, param, words_of, bytes(32), 0, row_salts=ys,
-                              schema=G.SCHEMA_V2 if what == "bnk" else G.SCHEMA_SEG)
+                              schema=SCHEMA_HM96_SHA512_ROW_V2 if what == "bnk" else SCHEMA_HM96_SHA512_ROW_SEG)
         out[param], salts[param] = v.entry(), ys
     return out, salts
 
