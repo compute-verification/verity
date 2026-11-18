@@ -44,7 +44,7 @@ open Lean (Json toJson)
 
 /-- A gate of C on the block's boundary and its width in bits. -/
 structure Port where
-  gate : Nat
+  index : Nat
   width : Nat
   deriving BEq, Inhabited, Repr
 
@@ -71,16 +71,23 @@ def unitAt (P : Prog) (u : Nat) : V (Nat × Nat) := do
     at_ := at_ + n
   throw s!"unit {u} is past C's {at_} units"
 
-/-- Gate `g`'s width in bits: its primitive's return. -/
-def width (P : Prog) (g : Nat) : V Nat := do
-  let (prim, _, _) ← P.gate g
-  return (P.defs[prim]!).ret.widths.foldl (· + ·) 0
-
 def inside (S : Array (Nat × Nat)) (g : Nat) : Bool := S.any fun (lo, hi) => lo ≤ g && g < hi
 
 /-- `xs` in increasing order, each once. -/
 def sortDedup (xs : Array Nat) : Array Nat :=
   (xs.qsort (· < ·)).foldl (fun acc x => if acc.back? == some x then acc else acc.push x) #[]
+
+/-- Gates with their widths as ports, in increasing index, each once. -/
+def portsOf (xs : Array (Nat × Nat)) : Array Port :=
+  (xs.qsort (·.1 < ·.1)).foldl (fun acc (g, w) =>
+    if acc.back?.map (·.index) == some g then acc else acc.push { index := g, width := w }) #[]
+
+/-- A unit's operands, each with its width: its callee's parameter leaves in order. -/
+def operandsW (P : Prog) (x : Node) (m : Nat) : V (Array (Nat × Nat)) := do
+  let ops ← operands P P.rootScope x m
+  let ws := (P.defs[x.fn]!).params.foldl (fun a (_, t) => a ++ t.widths) #[]
+  if ops.size != ws.size then throw s!"root node's member {m}: {ops.size} operands for {ws.size} parameter leaves"
+  return ops.zip ws
 
 /-- The lift (the module docstring): from the Definitions `start`, every Definition they reach once, each word primitive
 paired with its Boolean Definition's key in C's Boolean map. -/
@@ -128,17 +135,17 @@ def front (P : Prog) (units : Array Nat) : V Front := do
   let mut outs := #[]
   for (k, m, sc) in members do
     let x := root.body.nodes[k]!
-    for g in ← operands P P.rootScope x m do
-      if !inside S g then ins := ins.push g
+    for (g, w) in ← operandsW P x m do
+      if !inside S g then ins := ins.push (g, w)
     let callee := P.defs[x.fn]!
+    let rw := callee.ret.widths
     if callee.prim then
-      outs := outs.push sc.off
+      outs := outs.push (sc.off, rw.foldl (· + ·) 0)
     else
       for j in [0:callee.outLeaves] do
         let g ← resolve P sc (callee.body.ret.get j)
-        if inside S g then outs := outs.push g
-  let port := fun g => do return ({ gate := g, width := ← width P g } : Port)
-  return { ranges := S.qsort (·.1 < ·.1), ins := ← (sortDedup ins).mapM port, outs := ← (sortDedup outs).mapM port,
+        if inside S g then outs := outs.push (g, rw[j]!)
+  return { ranges := S.qsort (·.1 < ·.1), ins := portsOf ins, outs := portsOf outs,
            lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) }
 
 /-! ### The block's Program on bits -/
@@ -282,14 +289,14 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
       index := index.insert l.key d
   let mut read := #[]
   for (k, m, _) in ms do
-    for g in ← operands P P.rootScope root.body.nodes[k]! m do
-      if !inside S g then read := read.push g
-  let ins ← (sortDedup read).mapM fun g => do return (g, ← width P g)
+    for (g, w) in ← operandsW P root.body.nodes[k]! m do
+      if !inside S g then read := read.push (g, w)
+  let ins := (portsOf read).map fun p => (p.index, p.width)
   let mut inIdx : Std.HashMap Nat Nat := {}
   for (g, _) in ins do inIdx := inIdx.insert g inIdx.size
   let mut made : Std.HashMap Nat (Nat × Nat) := {}
   let mut nodes : Array Node := #[]
-  let mut outs : Array Nat := #[]
+  let mut outs : Array (Nat × Nat) := #[]
   for t in [0:ms.size] do
     let (k, m, sc) := ms[t]!
     let x := root.body.nodes[k]!
@@ -313,15 +320,15 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
     nodes := nodes.push { form := if lc.prim then .prim else .call, fn := f, args, out := Ty.bitType c.ret }
     if c.prim then
       if !made.contains sc.off then made := made.insert sc.off (t, 0)
-      outs := outs.push sc.off
+      outs := outs.push (sc.off, c.ret.widths.foldl (· + ·) 0)
     else
       let ra := bitAt c.ret
       for j in [0:c.outLeaves] do
         let g ← resolve P sc (c.body.ret.get j)
         if inside S g then
-          outs := outs.push g
+          outs := outs.push (g, (ra j).2)
           if !made.contains g then made := made.insert g (t, (ra j).1)
-  let outPorts ← (sortDedup outs).mapM fun g => do return (g, ← width P g)
+  let outPorts := (portsOf outs).map fun p => (p.index, p.width)
   let mut ret : Array Ref := #[]
   for (g, w) in outPorts do
     let (u, o) := made[g]!
@@ -373,7 +380,7 @@ def piece (j : Json) : Except String Json := do
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
   let P ← decode d.toUTF8
   let f ← front P us
-  let ports := fun (ps : Array Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.gate, toJson p.width])
+  let ports := fun (ps : Array Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.index, toJson p.width])
   return Json.mkObj [("ranges", .arr (f.ranges.map fun (lo, hi) => Json.arr #[toJson lo, toJson hi])),
     ("ins", ports f.ins), ("outs", ports f.outs),
     ("lift", .arr (f.lift.map fun (k, b) => Json.arr #[.str k, .str b]))]

@@ -38,11 +38,11 @@ def rows (P : Prog) (ports : Array BlockFront.Port) : V (Array Row) := do
   let mut out : Array Row := #[]
   let mut last : Option (Nat × Nat) := none
   for p in ports do
-    let w ← writer P p.gate
+    let w ← writer P p.index
     if last == some w then
-      out := out.modify (out.size - 1) fun (n, b, gs) => (n, b + p.width, gs.push p.gate)
+      out := out.modify (out.size - 1) fun (n, b, gs) => (n, b + p.width, gs.push p.index)
     else
-      out := out.push (s!"g{p.gate}", p.width, #[p.gate])
+      out := out.push (s!"g{p.index}", p.width, #[p.index])
     last := some w
   return out
 
@@ -92,7 +92,7 @@ def piece (j : Json) : Except String Json := do
   let file ← Compose.compose x.block (hexOf (Sha512.hash d.toUTF8)) pd
   let c ← ProvedScope.circuitOf (Zk.tags Tags.circuit (Zk.maskLogOf file) 1) file []
   if !(← Test.Compose.agrees x.block c) then throw "the block's file read back is not the block"
-  let ports := fun (ps : Array BlockFront.Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.gate, toJson p.width])
+  let ports := fun (ps : Array BlockFront.Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.index, toJson p.width])
   let rowsJ := fun (rs : Array Row) => Json.arr (rs.map fun (n, b, gs) => Json.arr #[.str n, toJson b, toJson gs])
   return Json.mkObj [("ins", ports x.front.ins), ("outs", ports x.front.outs), ("rows", rowsJ x.ins),
     ("out_rows", rowsJ x.outs), ("meta", c.metaJ)]
