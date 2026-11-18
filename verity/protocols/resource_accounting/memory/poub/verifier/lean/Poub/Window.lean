@@ -107,25 +107,26 @@ def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
 def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := Poub.payloadDomain r.node r.blocks
 
 /-- Where an append's payloads were first committed: by the append itself (`fresh`); by the registration
-(`registered a`: its block `first + m` re-keys registered block `a + m`); or by the session's append `k`, counted over
-all appends in order received, which is fresh (`rekey k o`: block `first + m` re-keys append k's block
-`first_k + o + m`). A re-key encodes those payloads again under its own coin and commits none of its own. -/
+(`registered a`: its block `first + m` re-keys registered block `a + m`); or by the fresh append in slot `k` of the
+session's schedule (`rekey k`: block `first + m` re-keys that append's block `first_k + m`, the whole append). A re-key
+encodes those payloads again under its own coin and commits none of its own. -/
 inductive Origin
   | fresh
   | registered (a : Nat)
-  | rekey (k o : Nat)
+  | rekey (k : Nat)
 deriving BEq, Repr, DecidableEq, Inhabited
 
-/-- A re-key holds at most this many blocks, so an opening of one stays one proof block. -/
+/-- A fresh append of a session with refresh holds at most this many blocks, so its tree, a re-key's origin path, is at
+most 9 levels and an opening of a block of its re-key stays one proof block. -/
 def REKEY_MAX : Nat := 512
 
 def REKEY_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/rekey/v0"
 
-/-- `u8 0 ‖ u64be a` for `registered a`, `u8 1 ‖ u64be k ‖ u64be o` for `rekey k o`. -/
+/-- `u8 0 ‖ u64be a` for `registered a`, `u8 1 ‖ u64be k` for `rekey k`. -/
 def Origin.bytes : Origin → ByteArray
   | .fresh => ByteArray.empty
   | .registered a => be 1 0 ++ be 8 a
-  | .rekey k o => be 1 1 ++ be 8 k ++ be 8 o
+  | .rekey k => be 1 1 ++ be 8 k
 
 /-- A re-key's declaration, the root it sends in place of a payload root: SHA512(REKEY_DOMAIN ‖ registration digest ‖
 u64be first ‖ u64be count ‖ origin bytes). -/
@@ -133,14 +134,16 @@ def rekeyRoot (registration : ByteArray) (first count : Nat) (origin : Origin) :
   sha512 (REKEY_DOMAIN ++ registration ++ be 8 first ++ be 8 count ++ origin.bytes)
 
 /-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root (a re-key's
-declaration, `rekeyRoot`), the coin `c_a` it answered with, and where its payloads were first committed (`fresh` in a
-session without refresh). -/
+declaration, `rekeyRoot`), the coin `c_a` it answered with, where its payloads were first committed (`fresh` in a
+session without refresh), and its slot: with refresh, its index in the session's schedule (`Session.Params.slotAt`);
+without, its place among the appends. -/
 structure Append where
   first : Nat
   count : Nat
   root : ByteArray
   coin : ByteArray
   origin : Origin := .fresh
+  slot : Nat := 0
 deriving Inhabited
 
 /-- `append_domain(registration digest, first, count)`. -/
@@ -225,15 +228,14 @@ def appendOf (appends : Array Append) (j : Nat) : Option Append :=
   if k = 0 then none else appends[k - 1]?
 
 /-- Where the payload of store block `j` of append `a` was first committed, if `a` is a re-key: its leaf's store index,
-and the root and domain of the tree holding it (the registration's payload tree, or append k's). -/
+and the root and domain of the tree holding it (the registration's payload tree, or that of the fresh append in slot k). -/
 def originLeaf (reg : Registration) (digest : ByteArray) (appends : Array Append) (a : Append) (j : Nat) :
     Option (Nat × ByteArray × Flock.FV3.Sha512.Domain) :=
   match a.origin with
   | .fresh => none
   | .registered x => some (x + (j - a.first), reg.payloadRoot, reg.payloadDomain)
-  | .rekey k o =>
-    let b := appends[k]!
-    some (b.first + o + (j - a.first), b.root, appendDomain digest b.first b.count)
+  | .rekey k => (appends.find? (·.slot == k)).map fun b =>
+    (b.first + (j - a.first), b.root, appendDomain digest b.first b.count)
 
 /-- `Session._check`: sample (i, p)'s opening, `none` if it checks. -/
 def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
