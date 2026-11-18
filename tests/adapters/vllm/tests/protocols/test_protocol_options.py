@@ -46,7 +46,7 @@ def test_a_set_is_spelled_one_way_in_install_order():
     assert config.parse_protocols("sampled-proofs:rows-sha512, pous:band-chain/d12/v1,pouw:ncp-v1") == ALL
     assert config.parse_protocols({"pous": "band-chain/d12/v1", "pouw": "ncp-v1"}) == ALL[:2]
     assert config.parse_protocols(list(reversed(ALL))) == ALL
-    assert tuple(e.partition(":")[0] for e in ALL) == config.PROTOCOLS
+    assert tuple(e.partition(":")[0] for e in ALL) == tuple(config.PROTOCOLS)
 
 
 @pytest.mark.parametrize("value,match", [("zk:v1", "unknown protocol"), ("pous", "expected pous:<scheme>"), ("pous:", "expected"),
@@ -119,7 +119,7 @@ def _fake_adapter(monkeypatch, name, install, *, refuse=(), schemes=("s1",)):
     mod.refusals = lambda scheme, ctx: tuple(refuse)
     mod.install = install
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, name, mod.__name__.rpartition(".")[2])
+    monkeypatch.setitem(config.PROTOCOLS, name, mod.__name__.rpartition(".")[2])
     return mod
 
 
@@ -214,7 +214,7 @@ def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
 
 def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), refuse=("compiled execution",), schemes=("ncp-v1",))
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "not_landed_here")
     ctx = _serve("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512", world=2, settings={"pouw": {}, "zk": {}})
     got = PO.refusals(ctx)
     assert any("TP 2" in r for r in got) and any("['zk']" in r for r in got)
@@ -267,7 +267,7 @@ def _beside_a_live_option():
         PO.install(Model(), _serve("pous:s1"))
 
 
-SPOT = config.PROTOCOLS[2]
+SPOT = tuple(config.PROTOCOLS)[2]
 ROW_SET = ("pous:s1", ALL[2])
 AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
 #: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
@@ -326,7 +326,7 @@ def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch)
 def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(monkeypatch):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
     p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, config.PROTOCOLS[2]: {}})
+    ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, SPOT: {}})
     assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"rounds": 7}})
     assert PO.capture_context(None) is None and PO.capture_context(TargetProfile()) is None
     with pytest.raises(PO.Refused) as e:
@@ -345,7 +345,7 @@ def test_a_protocols_config_holds_one_object_a_protocol(tmp_path):
 
 def test_an_adapter_this_tree_does_not_hold_fills_nothing_from_the_engine(monkeypatch):
     """`engine_fills` and `from_engine` pass over an entry whose adapter cannot be imported: `refusals` names it."""
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "not_landed_here")
     ctx = _serve("pous:s1", filled={"pous": ("runner",)})
     assert PO.engine_fills(ctx) == {}
     got = PO.from_engine(ctx, object())
@@ -555,7 +555,7 @@ def test_a_row_refuses_a_set_it_cannot_run_before_any_stage(monkeypatch, knob, t
     if match != "not on this tree":
         _fake_adapter(monkeypatch, "pous", _pous([]))
     else:
-        monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+        monkeypatch.setitem(config.PROTOCOLS, "pous", "not_landed_here")
     with pytest.raises(PO.Refused, match=match):
         PO.at_row(knob, {"engine": {"target": target}}, world=world)
 
@@ -599,13 +599,9 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     assert json.loads(R.declared_target(str(wl), enabled)) == {"flash_attn_version": 2, "protocols": list(enabled)}
 
 
-def test_every_protocol_has_an_adapter_module_name():
-    assert tuple(PO.ADAPTERS) == config.PROTOCOLS
-
-
 def test_every_site_nests_in_install_order():
     for site, outermost_first in PO.SITES.items():
-        rank = [config.PROTOCOLS.index(n) for n in outermost_first]
+        rank = [list(config.PROTOCOLS).index(n) for n in outermost_first]
         assert rank == sorted(rank, reverse=True), site
 
 
