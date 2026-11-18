@@ -53,8 +53,8 @@ def _recut_reads() -> list[str]:
                 "Root[P_v1]_v1": {"form": "composite", "id": "Root[P_v1]_v1", "bindings": {},
                                   "body": {"params": [], "ret_type": ret_type, "ret": ret, "nodes": nodes}},
                 **({"Id_v1": ident} if call else {})}
-        return json.dumps({"callees": ["Input16_v1", *(["Id_v1"] if call else [])], "definitions": defs,
-                           "program_fn": "P_v1", "root": "Root[P_v1]_v1", "schema": "verity-ir/descriptor/v1",
+        return json.dumps({"boolean": {}, "callees": ["Input16_v1", *(["Id_v1"] if call else [])], "definitions": defs,
+                           "program_fn": "P_v1", "root": "Root[P_v1]_v1", "schema": "verity-ir/descriptor/v2",
                            "types": [word, pair, ret_type]}, sort_keys=True, separators=(",", ":"))
 
     return [desc(["Array", 4, ["Value", 8]], {"affine": ["n", 0, 0, 4]}),
