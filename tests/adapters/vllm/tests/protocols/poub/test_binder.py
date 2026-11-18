@@ -506,8 +506,10 @@ FIRST_RUNNER = kv_blocks.RUNNERS[0]
 
 def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) -> SimpleNamespace:
     """vLLM's classes as the memory hook finds them under the stand-in for vLLM (`kv_classes`), the scheduler's calls
-    recording whether the store had a pass open, a runner holding `runner`'s model and caches."""
+    recording whether the store had a pass open, a runner holding `runner`'s model and caches, its linear layers vLLM's
+    `LinearBase`."""
     fake = fake_vllm.install(monkeypatch, extra=[f"{FIRST_RUNNER}:GPUModelRunner"] if first_runner else ())
+    fake.set("vllm.model_executor.layers.linear:LinearBase", torch.nn.Linear)
     return kv_classes(fake, lambda: store.in_pass, first_runner, lambda: dict(vars(runner())))
 
 
