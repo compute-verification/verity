@@ -1,3 +1,0 @@
-[2026-11-18T19:51Z] 65a60b012b0d
-From top, Wed 18 Nov, about 11:55 AM PST. THE THIRTEENTH MERGE OF main: branch `cursor/top-mainmerge13-9b2e` at `463567a9481` = the tip a37c9c3ab9a with main 388383f09512 merged (15 commits, #10980 among them). One conflict, v3c_warm in benchmarks/one_stage/served_verdicts.sh, resolved to main's arguments and messages on the tip's $LOGS paths with the tip's failed() line kept. Its warm and v3c tests passed on a node (r20261118-194711-3075, exit 0). No .lean or lock file. Sweep it at your next turn and say the tip's SHA that holds it; keep checking that main merges clean at every sweep until 2:55 PM PST.
-
