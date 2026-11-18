@@ -139,12 +139,19 @@ may take a public salt, derived by SHA-512 from public names alone and said to b
 hiding and none is quoted for it. Until the Lean statement that hides a card's leaves takes the keyed assumption as a premise, no
 hiding is quoted for leaves salted the second way.
 
-**Custody.** Salts drawn for each leaf are kept beside the values by the member that commits them and are private as the values
-are. A key's salts are exposed together if the key is: a key is private, is kept only while an opening may still need it, and is
-never sent to a verifier.
+**Kept for now by a ruling.** Three sets of leaves keep an expansion of their own on a card until a card can check a kernel that
+computes the listed stream: the adapter's step rows, and the bandwidth audit's pass tree and payload tree. Each is a keyed SHA-512
+expansion under a key drawn fresh from the operating system for its step, its pass or its registration. No listed assumption covers
+these expansions, and no hiding is quoted for these leaves.
 
-`tests/test_no_keyed_salts.py` holds two lists: the files that still salt a leaf any other way, which only shrinks, and the
-derivations kept for now by a ruling, each with its condition.
+**Custody.** Salts drawn for each leaf are kept beside the values by the member that commits them and are private as the values
+are. A key's salts are exposed together if the key is. A key is private and is never sent to a verifier. It is kept only while an
+opening may still need it: a pass's key is never written; a key that a replay must reopen rows with is written to the store's
+private directory and nowhere else, outside every run's output, where custody refuses to upload it.
+
+`tests/test_no_keyed_salts.py` holds three lists: the files that still salt a leaf any other way, which only shrinks, the
+derivations kept for now by a ruling, each with its condition, and the files of a ruled module that still write or send a ruled
+key.
 
 **Public:** the key, the commit string `b ‖ c` of every row a proof touches, the leaf digests and the tree. **Private:** the value,
 x and y. Opening a leaf reveals its value and salt. Salts are independent, so the bound still covers the unopened leaves.

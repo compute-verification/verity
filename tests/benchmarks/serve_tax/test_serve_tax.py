@@ -164,10 +164,16 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     for inside in (out / "private", tmp_path / "run" / "private"):
         with pytest.raises(SystemExit, match="which leaves the node"):
             S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
+        with pytest.raises(SystemExit, match="^--kv-dir .* which leaves the node"):
+            S.run(NS(out=str(out), private=str(tmp_path / "kept"), kv_dir=str(inside), arm="two-stage"))
     assert not seen and not (tmp_path / "run").exists()
     kept = tmp_path / "kept"
+    (tmp_path / "run").mkdir()
     assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
+    # the run states what it keeps on the node: each private directory and the names none of its own files has
+    assert json.loads((tmp_path / "run" / S.PRIVATE_PATHS).read_text()) == {
+        "schema": "private-paths/v1", "private": [str(kept)], "names": list(S.PRIVATE_NAMES)}
     # none given, under vLLM's client (a cost's run, whose kept files nothing reads afterwards): a fresh directory for an
     # arm that keeps something and records nothing, gone when the arm stops; none for the others; an arm that records
     # (its step trace, served ids, edges' outputs) is refused, since later stages read what it records
