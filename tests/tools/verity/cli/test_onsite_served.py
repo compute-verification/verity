@@ -827,14 +827,13 @@ def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_oth
     assert "d" * 128 not in argv
 
 
-def test_an_inherited_or_bound_pous_args_adds_no_word_to_the_tables(tmp_path, capsys, monkeypatch):
+def test_an_inherited_pous_args_adds_no_word_to_the_tables(tmp_path, capsys, monkeypatch):
     """served_piece.sh evaluates POUS_ARGS as shell words, so under `verity run` it is the table's alone: the value the
-    environment carries and one a workload binding names are both replaced by the pieces' own."""
+    environment carries is replaced by the pieces' own."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
     monkeypatch.setenv("POUS_ARGS", f"--trusted-sha512 {'f' * 128}")
-    tables = {**BINDINGS, "workers": {"served-window": {"POUS_ARGS": f"--bw-trusted-sha512 {'f' * 128}"}}}
     state = tmp_path / "state"
-    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path),
                        "--state", str(state)], REG) == 0, capsys.readouterr().err
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks["POUS_ARGS"] == VARIABLES["POUS_ARGS"]
@@ -1040,13 +1039,37 @@ def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, ca
     assert (line["product"], line["verdict"], line["reason"]) == ("verity/onsite-network/v0", "undecided", reason)
 
 
-def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n'))
-    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312", "SLOTS": "9"}}}
+#: a node's settings as the adapter gives them: each where the environment sets none, then the command after ``--``
+SETTINGS_STAND_IN = """printf '%s\\n' "$@" > "$OUT.settings"
+shift 3
+export VENV=${VENV:-/node/venv} SLOTS=${SLOTS:-9}
+exec "$@"
+"""
+
+
+def test_the_runner_runs_under_the_nodes_settings_for_the_workloads_model_and_the_hooks_win(tmp_path, capsys,
+                                                                                               monkeypatch):
+    runner = stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n')
+    monkeypatch.setattr(T, "RUNNER", runner)
+    monkeypatch.setattr(T, "SETTINGS", stand_in(tmp_path, "settings.sh", SETTINGS_STAND_IN))
+    monkeypatch.delenv("VENV", raising=False)
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    model = K.parse(CONFIG.read_text())["workload"]["params"]["model"]
+    assert (state / "out.settings").read_text().splitlines() == ["settings", model, "--", "bash", runner]
+    assert (state / "out" / "node.txt").read_text() == "/node/venv|4\n"
+    assert "adapters/vllm/tools/served_run/run.sh" in T.SERVE.scripts
+
+
+def test_the_node_s_settings_are_never_bindings(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
+    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312"}}}
     state = tmp_path / "state"
     assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
-                       "--state", str(state)], REG) == 0, capsys.readouterr().err
-    assert (state / "out" / "node.txt").read_text() == "/workspace/venv312|4\n"
+                       "--state", str(state)], REG) == 2
+    assert "binds workers for served-window" in capsys.readouterr().err
+    assert not (state / "out.started").exists()
 
 
 def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():

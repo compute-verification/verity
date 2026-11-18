@@ -69,6 +69,9 @@ RUNS = (SERVED_WINDOW, GATE, RUNTIME, CHECK)
 #: what a runtime piece raises while what its machine hands its party doesn't reach the table (`held`)
 NOT_YET = "memory-accounting/onsite-memory-verdicts"
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
+#: the adapter's command whose ``settings MODEL -- CMD`` runs CMD under the node's settings for the row serving MODEL,
+#: wherever CMD's environment sets none
+SETTINGS = "adapters/vllm/tools/served_run/run.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
@@ -550,7 +553,7 @@ def _attester_piece(cfg, params, bound):
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve,
+              scripts=(RUNNER, VERDICTS_SCRIPT, SETTINGS), hooks=_serve,
               verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
               writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
                       "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
@@ -758,15 +761,15 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
     """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
     (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
-    ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
-    is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
-    theirs."""
-    node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
-    env = {**os.environ, **node, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    ``D`` and ``SERVE_ROOT``, from the environment). It runs under the node's settings for the workload's model
+    (`SETTINGS`), which give only what neither the caller's environment nor a hook sets; where it can't read them it
+    refuses, and the runner never starts."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    model = cfg["workload"]["params"]["model"]
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
-        return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
-                              check=False).returncode
+        return subprocess.run(["bash", str(ROOT / SETTINGS), "settings", model, "--", "bash", str(ROOT / RUNNER)],
+                              cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, check=False).returncode
 
 
 VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
