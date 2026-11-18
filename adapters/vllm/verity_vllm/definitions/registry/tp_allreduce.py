@@ -301,12 +301,11 @@ def _fused_geometry(N: int, cluster: int) -> tuple[int, int]:
     return block, block // WARP
 
 
-def custom_stage(world: int, nbytes: int, fully_connected: bool = True) -> int:
-    """vLLM's custom all-reduce kernel for `nbytes` over `world` ranks (``VLLM_CUSTOM_ALLREDUCE_ALGO`` unset): 1 or 2."""
+def custom_stage(world: int, nbytes: int) -> int:
+    """vLLM's custom all-reduce kernel for `nbytes` over `world` ranks of a fully connected topology
+    (``VLLM_CUSTOM_ALLREDUCE_ALGO`` unset): 1 or 2."""
     if world == 2:
         return 1
-    if not fully_connected:
-        raise ValueError("custom all-reduce past two ranks needs a fully connected topology")
     return 1 if (world <= 4 and nbytes < 512 * 1024) or (world <= 8 and nbytes < 256 * 1024) else 2
 
 
