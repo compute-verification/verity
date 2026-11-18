@@ -1946,9 +1946,9 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
         "the ACTIVE read before a restart of the watch counts (state.json)"
 
 
-def test_a_worker_on_the_listing_is_judged_from_it_with_no_read_by_id(tmp_path):
-    """Each worker read by id cost a call a sweep, and a sweep's reads ran out before reaching late workers. A worker the
-    listing has (a Task subagent, with no run) is judged from that one listing: its stop is recorded with no read of it by id."""
+def test_a_runless_agent_on_the_listing_is_judged_as_a_worker_with_no_read_by_id(tmp_path):
+    """The listing doesn't show a lead's Task workers, but an agent it does show with no run, which the sweep can't
+    judge, is judged as a worker from that listing: its stop is recorded with no read of it by id."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
     st = {"id": W1_, "name": "ZKS10", "status": "ACTIVE", "createdAt": "2026-10-18T12:00:00Z", "updatedAt": "2026-10-18T19:31:00Z"}

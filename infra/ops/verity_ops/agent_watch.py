@@ -3,7 +3,7 @@
     python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; the standard library and `research` on the path
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
-person pressing Stop frees one. Every `POLL_S` the watch lists the agents once (`GET /v1/agents`, `AGENTS_PAGES` pages at most, which shows every agent on the account:
+person pressing Stop frees one. Every `POLL_S` the watch lists the agents once (`GET /v1/agents`, `AGENTS_PAGES` pages at most, which shows every agent on the account but a lead's Task workers:
 it keeps those whose `repos` name compute-verification/verity; ACTIVE ones, and IDLE ones changed in the last `IDLE_RECENT_S`,
 since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
 page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
@@ -132,10 +132,14 @@ A worker none of these places has no handle and no lane, never one made up for i
 once as **unplaced**, with the agent whose Task call named it if the watch saw one (a run's sender no handle owns in
 that run's record instead, below), for the relay to ring infra, who finds its launcher, and from then on its alerts are
 marked `quiet` (posted, ringing no one: nobody the watch knows could resume it) until something places it. A worker whose registration names a lane no handle owns keeps that lane, and the
-relay rings infra with each of its alerts. Each sweep
-judges every worker by its status and `updatedAt` on the sweep's one listing, and reads one by id (`GET /v1/agents/{id}`)
-only when the listing lacks it (`WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a note of its
-changes; a 404 never again). It records **worker_idle** once per stop, at the stop's `updatedAt` (which moves on a status
+relay rings infra with each of its alerts. A worker is
+read by id (`GET /v1/agents/{id}`): the listing holds coordinators and API-launched agents, not a lead's Task workers. Each
+sweep makes at most `WORKER_READS` worker reads (by id, v0 statuses and a held stop's conversation), in `read_order`: first
+every worker that can have just stopped (last read ACTIVE or in a turn; launched or resumed by a Task call seen since its
+last read, or never read and first heard of within `WORKER_NEW_S`; its coordinator ACTIVE within `PARENT_ACTIVE_S`), then
+the rest, the longest unread first; a worker is read only while `FOLLOW_UP` reads are left for a stop it may show, and the
+rest wait for a later sweep (one IDLE for `WORKER_IDLE_S` is read only when a note of its changes; a 404 never again). It
+records **worker_idle** once per stop, at the stop's `updatedAt` (which moves on a status
 change and not during work), unless its parent's Task call completed as it stopped (`reported_back`: it reported back).
 A stop is an IDLE read at an `updatedAt` no worker_idle has had, where the worker left ACTIVE since the last read, or its
 `updatedAt` moved while it read IDLE at both (a Task resume's turn between two sweeps), or the first read finds it
@@ -146,16 +150,18 @@ gives of it: v1 reads it IDLE however its turn ended and lists no run for a turn
 its status as the legacy `GET /v0/agents/{id}` gives it (`stopped`: ERROR; FINISHED or EXPIRED otherwise, CREATING or
 RUNNING in a turn), when a stop may have happened (it left ACTIVE, its `updatedAt` moved, as a Task resume's message
 moves it, or a note, a registration or a Task call named it again), once more at the first sweep `SETTLE_S` after the
-change when the read came sooner, and every `STOP_S` while v0 has it in a turn or the read fails, `STOPS_SWEEP` such reads
-a sweep at most. It is recorded once per stop, with the issue key in its name (`issue`), in place of that stop's
+change when the read came sooner, and every `STOP_S` while v0 has it in a turn or the read fails, each one of the
+sweep's `WORKER_READS`. It is recorded once per stop, with the issue key in its name (`issue`), in place of that stop's
 worker_idle, and not again until it has run and stopped again; the watch can't start it, and the record says so. It
 records only; the relay rings the lane's handle. A stop's record carries where the worker's work stands (`work`: its
 branch, else its newest note). A worker's worker_idle, crashed and idle_after_run are
 held with its parent's others (`bursts` in `state.json`, timed by each stop's `updatedAt`) and posted, right after the
 workers are judged and again at the sweep's end, once none has joined for `BURST_QUIET_S`, or `BURST_S` after the first:
-one alone as itself, several as one **workers_failed** naming them all. So a lone stop is posted at the first sweep that
-starts `BURST_QUIET_S` after it, at worst one sweep interval (a sweep's length, at most `SWEEP_READS_S`, plus `POLL_S`)
-plus `BURST_QUIET_S` after it, and `STOP_S` more when v0 still has it in a turn at that sweep. Each names the wake-up the worker
+one alone as itself, several as one **workers_failed** naming them all. So a lone stop of a worker the order reads first
+is posted at the first sweep that starts `BURST_QUIET_S` after it, at worst one sweep interval plus `BURST_QUIET_S` after
+it, and `STOP_S` more when v0 still has it in a turn at that sweep. A sweep interval is `POLL_S` plus the sweep's reads,
+which stop at `SWEEP_READS_S`: the listing (one `GET /v1/agents` a page of `AGENTS_PAGE` agents), the live agents' runs and
+what each action rests on, then at most `WORKER_READS` worker reads. Each names the wake-up the worker
 says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages, `GET /v0/agents/{id}/conversation`. That
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
@@ -1368,7 +1374,7 @@ class Watch:
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.runless: frozenset[str] = frozenset()          # listed agents with no run: judged as workers
         self.listing: dict[str, dict] = {}                  # every agent on this sweep's listing, by id
-        self.worker_reads: tuple[int, ...] = ()         # workers judged from the listing, and read by id, at the last sweep
+        self.worker_reads: tuple[int, ...] = ()         # the last sweep's worker reads: from the listing, by id per group, left
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -1576,7 +1582,7 @@ class Watch:
     def flush_bursts(self, t: float) -> None:
         """Post each parent's held worker failures once `BURST_QUIET_S` has passed since the latest of their stops, or
         `BURST_S` since the first: one alone as its own record, several as one **workers_failed** to the parent's lane naming
-        them all; each with the wake-up it set itself, if it says so. Stops one listing shows are held together, so a lone
+        them all; each with the wake-up it set itself, if it says so. Stops one sweep finds are held together, so a lone
         stop is posted by the first flush, at its sweep's clock, `BURST_QUIET_S` after it."""
         due = [k for k, b in self.bursts.items() if t - b.get("last", b["first"]) >= BURST_QUIET_S or t - b["first"] >= BURST_S]
         for key in sorted(due):
