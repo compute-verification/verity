@@ -262,12 +262,18 @@ def own_rows(program, form_only: bool = False) -> None:
     from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
-    from verity.circuits.refs import Strided
+    from verity.circuits.refs import Grid, Strided
     nodes = program.root.body.nodes
 
+    def reads(s, i) -> bool:
+        return s == "n" and 0 <= i < len(nodes) and not is_input(nodes[i].fn)
+
     def edge(p) -> bool:
-        return (isinstance(p, (Affine, Strided)) and p.space == "n" and 0 <= p.idx < len(nodes)
-                and not is_input(nodes[p.idx].fn))
+        if isinstance(p, Grid):
+            return any(reads(s, i) for s, i, *_x in p.lanes)
+        if isinstance(p, Explicit):
+            return any(reads(r[0], r[1]) for r in p.items)
+        return isinstance(p, (Affine, Strided)) and reads(p.space, p.idx)
 
     def run(p) -> bool:
         return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
@@ -277,9 +283,6 @@ def own_rows(program, form_only: bool = False) -> None:
     runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
     if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
             or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
-        if any(isinstance(p, Explicit) and any(r[0] == "n" and 0 <= r[1] < len(nodes) and not is_input(nodes[r[1]].fn)
-                                               for r in p.items) for p in parts):
-            raise Malformed("edge-rows")
         raise refused("own-rows", OWN_ROWS)
     if form_only:
         return
@@ -388,13 +391,14 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
     from verity.commitments.periods.edges import edges
     by = {t.tid for t in templates}
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    ranges, at = [], 0
+    ranges, at, order, own = [], 0, [], {}
     for k, x in enumerate(nodes):
         tid = desc["callees"][x["fn"]]
         if tid in by:
             n = x["n"] if x["form"] == "batch" else 1
             ranges.append([k, tid, at, n])
-            at += n
+            order.append((tid, own.get(tid, 0), n))
+            at, own[tid] = at + n, own.get(tid, 0) + n
     cuts = rec.get("cuts", {})
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}
@@ -405,7 +409,7 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
         if "refusal" in got:
             raise ValueError(got["refusal"])
         wires = tuple(IF.Wire.of(x) for x in got["wires"])
-        IF.check_wires(lays, wires, IF._cuts(cuts), None)
+        IF.check_wires(lays, wires, IF._cuts(cuts), order)
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e
     return [{**w.doc(), "c0": w.cut[0], "C": w.cut[1]} for w in wires], IF._cuts(cuts)

@@ -53,8 +53,9 @@ def _axis_dims(t, ax: int):
 
 
 def _parts(j, args: list) -> list[tuple]:
-    """A sequence's flat parts: ``("a", p, i, base, count)``, ``("s", p, i, base, inner, os, is, count)`` or
-    ``("e", items)``, a concat spliced and an alias resolved to the earlier argument's parts (``args[k][a]``)."""
+    """A sequence's flat parts: ``("e", items)`` or ``("g", run, lanes, count, written)``, each lane
+    ``(p, i, base, e, ((radix, step), ...))`` (an affine or strided part is the one-lane grid it spells, `written`
+    false), a concat spliced and an alias resolved to the earlier argument's parts (``args[k][a]``)."""
     if "alias" in j:
         k, a = j["alias"]
         return list(args[k][a])
@@ -62,27 +63,39 @@ def _parts(j, args: list) -> list[tuple]:
         return [q for x in j["concat"] for q in _parts(x, args)]
     if "affine" in j:
         s, i, b, c = j["affine"]
-        return [("a", s == "p", 0, 0, 0)] if c == 0 else [("a", s == "p", i, b, c)]
+        return [("g", max(c, 1), ((s == "p", i if c else 0, b, 1, ()),), c, False)]
     if "strided" in j:
         s, i, b, inner, os, is_, c = j["strided"]
-        return [("s", s == "p", 0, 0, inner, os, is_, 0)] if c == 0 else [("s", s == "p", i, b, inner, os, is_, c)]
+        T = max(1, -(-c // inner))
+        return [("g", inner, ((s == "p", i if c else 0, b, is_, ((T, os),) if T > 1 else ()),), c, False)]
+    if "grid" in j:
+        run, lanes = j["grid"]
+        lanes = tuple((s == "p", i, b, e, tuple((r, d) for r, d in lv)) for s, i, b, e, lv in lanes)
+        return [("g", run, lanes, len(lanes) * run * _periods(lanes[0]), True)]
     return [("e", tuple((s == "p", i, leaf) for s, i, leaf in j["explicit"]))]
 
 
+def _periods(lane) -> int:
+    t = 1
+    for r, _d in lane[4]:
+        t *= r
+    return t
+
+
 def _count(q) -> int:
-    return len(q[1]) if q[0] == "e" else q[-1]
+    return q[3] if q[0] == "g" else len(q[1])
 
 
-def _key(q):
-    if q[0] == "e":
-        return (q[1][0][0], q[1][0][1]) if q[1] else None
-    return (q[1], q[2])
+def _keys(q) -> list:
+    if q[0] == "g":
+        return [(p, i) for p, i, *_x in q[2]]
+    return [(q[1][0][0], q[1][0][1]) if q[1] else None]
 
 
 def _arg_parts_ok(k: int, np_: int, parts: list) -> bool:
     if len(parts) > k + np_ + 2:
         return False
-    return len(parts) <= len({_key(q) for q in parts}) + 1
+    return len(parts) <= len({x for q in parts for x in _keys(q)}) + 1
 
 
 def _field_at(t, o: int):
@@ -113,21 +126,66 @@ def _members_in(x0: int, L: int, ln: int, M: int, s0: int, c: int) -> tuple[int,
     return clo, cn
 
 
-def _leaf_of(q, k0: int, L: int, ln: int, n: int):
-    if q[0] == "a":
-        _, p, i, b, _c = q
-        if p:
+def _grid_ok(R, k: int, q) -> None:
+    """A grid's lanes count one number of periods (else `edge-parts`), and each lane over an earlier root node lies
+    inside that node's outputs at both its extremes (else `edge-rows`), in O(levels) a lane."""
+    _, run, lanes, _c, _w = q
+    if len({_periods(x) for x in lanes}) != 1:
+        raise Refusal("edge-parts")
+    for p, i, b, e, lv in lanes:
+        lo = hi = b
+        for rad, d in ((run, e), *lv):
+            lo, hi = lo + (rad - 1) * min(d, 0), hi + (rad - 1) * max(d, 0)
+        if not p and i < k and (lo < 0 or hi >= R.nodes[i]["out_leaves"] * R.nodes[i]["members"]):
             raise Refusal("edge-rows")
-        return i, False, b + k0, L
-    if q[0] == "s":
-        _, p, i, b, inner, os, is_, _c = q
-        if p or not (ln == 1 or (is_ == 1 and k0 % inner + ln <= inner)) or not (n <= 1 or L % inner == 0):
-            raise Refusal("edge-rows")
-        leaf = b + (k0 // inner) * os + (k0 % inner) * is_
-        if leaf < 0:
-            raise Refusal("edge-rows")
-        return i, False, leaf, (L // inner) * os
-    return 0, True, 0, 0
+
+
+def _lane_wire(q, k0: int, L: int, ln: int, n: int):
+    """The grid part `q`'s rows `k0 + m·L`, `m < n`, each `ln` references inside one lane's run: the lane's collection,
+    its first leaf, and the members' mixed radix and steps in leaves (outermost first); refused `edge-rows` where a row
+    leaves a run or the members' rows are no mixed radix of the lane's levels."""
+    _, run, lanes, _c, _w = q
+    g = len(lanes)
+    if run == 0 or g == 0:
+        raise Refusal("edge-rows")
+    t0, r = divmod(k0, g * run)
+    j, o0 = divmod(r, run)
+    p, i, b, e, lv = lanes[j]
+    if p or o0 + ln > run or not (ln == 1 or e == 1):
+        raise Refusal("edge-rows")
+    digits, t = [], t0
+    for x, (rad, _d) in enumerate(lv):
+        t, dg = (0, t) if x == len(lv) - 1 else divmod(t, rad)
+        digits.append(dg)
+    leaf = b + o0 * e + sum(dg * d for dg, (_r, d) in zip(digits, lv))
+    if leaf < 0:
+        raise Refusal("edge-rows")
+    if n <= 1 or L == 0:
+        return i, leaf, [max(n, 1)], [0]
+    if L % (g * run) != 0:
+        if g == 1 and o0 + (n - 1) * L + ln <= run:
+            return i, leaf, [n], [L * e]
+        raise Refusal("edge-rows")
+    dt, pre = L // (g * run), [1]
+    for r, _d in lv:
+        pre.append(pre[-1] * r)
+    if lv and dt % pre[-2] == 0:
+        return i, leaf, [n], [dt // pre[-2] * lv[-1][1]]
+    if dt not in pre[:-1]:
+        raise Refusal("edge-rows")
+    a = pre.index(dt)
+    h, P = a, 1
+    while h < len(lv) and (t0 // dt) % (P * lv[h][0]) == 0 and n % (P * lv[h][0]) == 0:
+        P, h = P * lv[h][0], h + 1
+    c = n // P
+    inner = [lv[x] for x in reversed(range(a, h))]
+    if c == 1:
+        levels = inner
+    elif h < len(lv) and digits[h] + c <= lv[h][0]:
+        levels = [(c, lv[h][1])] + inner
+    else:
+        raise Refusal("edge-rows")
+    return i, leaf, [r for r, _d in levels] or [1], [d for _r, d in levels] or [0]
 
 
 class _Root:
@@ -179,13 +237,13 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
         lo, cnt = _members_in(x0, L, ln, node["members"], s0, _count(q))
         if cnt == 0:
             continue
-        w, explicit, l0, S = _leaf_of(q, max(x0 + lo * L - s0, 0), L, ln, cnt)
-        if explicit:
+        if q[0] == "e":
             if any(p or r >= k or not R.nodes[r]["input"] for p, r, _ in q[1]):
                 if any(not p and r >= k for p, r, _ in q[1]):
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
             continue
+        w, l0, radix, steps = _lane_wire(q, max(x0 + lo * L - s0, 0), L, ln, cnt)
         if w >= k:
             raise Refusal("not-topological")
         wn = R.nodes[w]
@@ -205,12 +263,13 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
         if fa is None:
             raise Refusal("edge-rows")
         f, fl, fb = fa
-        if fl != ln or (cnt > 1 and S % lw != 0):
+        if fl != ln or any(r > 1 and d % lw != 0 for r, d in zip(radix, steps)):
             raise Refusal("edge-rows")
         if fb != _bits(ty) // cuts:
             raise Refusal("edge-width")
-        out.append({"reader": rt, "port": port, "writer": wt, "out": f"o{f}", "at": rb + lo, "radix": [cnt],
-                    "base": wb + l0 // lw, "step": [S // lw], "cut": [j, 1]})
+        out.append({"reader": rt, "port": port, "writer": wt, "out": f"o{f}", "at": rb + lo, "radix": radix,
+                    "base": wb + l0 // lw, "step": [d // lw for d in steps],
+                    "cut": [j, 1]})
     return out
 
 
@@ -243,6 +302,8 @@ def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapp
             for i, g in enumerate(x["args"]):
                 s0 = 0
                 for q in g["parts"]:
+                    if q[0] == "g" and q[4]:
+                        _grid_ok(R, k, q)
                     out += _part_wires(R, fu, templates, cuts_of, k, i, q, s0)
                     s0 += _count(q)
         return {"wires": out}
