@@ -32,9 +32,10 @@ def test_audit_py_gives_a_recorded_session_the_leans_results_outcome_and_record(
 
 
 def test_the_recorded_sessions_reach_every_failure_but_tile() -> None:
-    """`tile` is a registration's that binds PoUW's tiles, which the Lean refuses."""
+    """`tile` is a registration's that binds PoUW's tiles, which the Lean refuses. Refresh's failures are reached by
+    `M.REFRESH_SCENARIOS`, held to the Python alone (`test_refresh.py`) until `Poub.Session` has refresh."""
     reached = {s[3] for s in M.SCENARIOS.values()}
-    assert reached == {*audit.FAILURES, "accepted"} - {"tile"}
+    assert reached == {*audit.FAILURES, "accepted"} - {"tile", *M.REFRESH_FAILURES}
 
 
 def test_a_session_that_defers_residency_at_a_lifetime_of_one_is_refused_by_both(server) -> None:

@@ -109,6 +109,11 @@ PUBLIC = {
     "D/private/compose/inference-only.json": "the inference-only verdict",
     "D/private/compose/inputs.sha256": "the hand-off's sums",
 }
+#: step 3's records audit in the serve dir (`served_verdicts.sh`'s SERVED_ARM), under the path prover's private keep:
+#: never under ``OUT/``; a hand-off carries of it what it carries of any records audit
+SERVED_ARM = "private/logs/sampled-proofs/keep/served"
+PUBLIC.update({f"D/{SERVED_ARM}/{p[4:]}": w for p, w in list(PUBLIC.items())
+               if p.startswith("D/*/") and not p.startswith("D/*/audit/")})
 
 
 #: Our tools' refusals that are one fixed sentence, with no path, host or value, by name: a refusal's name from this list
