@@ -121,7 +121,7 @@ def test_each_architecture_is_read_against_sm120a():
                              "serve": {"total": 4.5}},
                  "sm_90a": {"tail": {"classes": {"IMMA": 4, "IMAD": 7.5, "ALU": 16.0}, "total": 27.5},
                             "serve": {"total": 6.0}}}}
-    d = E.against(res)["t"]["sm_90a"]
+    d = E.against(res, "sm_120a")["t"]["sm_90a"]
     assert d["tail.IMAD"]["delta"] == 3.0 and d["tail.IMAD"]["estimate"] == E.RECORDED["tail"]["IMAD"] + 3.0
     assert d["serve"]["estimate"] == pytest.approx(E.RECORDED["serve"] + 1.5)
-    assert E.against(res)["t"]["sm_120a"]["tail.total"]["delta"] == 0.0
+    assert E.against(res, "sm_120a")["t"]["sm_120a"]["tail.total"]["delta"] == 0.0
