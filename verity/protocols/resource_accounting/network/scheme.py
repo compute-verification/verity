@@ -53,6 +53,7 @@ NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
     framings={IdsProtocol.name: IdsProtocol},
+    provides=("admission",),
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
