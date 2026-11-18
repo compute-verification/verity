@@ -61,7 +61,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.scheme import POUS as POUS_SCHEME
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
+from verity.commitments.randomness import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
