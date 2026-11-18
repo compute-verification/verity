@@ -43,19 +43,26 @@ for r in "${roots[@]}"; do
     -size +100k 2>/dev/null
 done | sort -u >"$WORK/candidates"
 
-# One copy of each binary (the same wheel sits in several venvs), and only binaries with device code.
-: >"$OUT/corpus.tsv"
-while read -r f; do
-  [ -z "${MAXBYTES:-}" ] || [ "$(stat -L -c %s "$f")" -le "$MAXBYTES" ] || continue
+# One copy of each binary (the same wheel sits in several venvs), the first in path order, and only binaries with device
+# code; the candidates are read $JOBS at once.
+export CUOBJDUMP WORK MAXBYTES
+scan() {
+  local i f lelf archs sha
+  IFS=$'\t' read -r i f <<<"$1"
+  [ -z "${MAXBYTES:-}" ] || [ "$(stat -L -c %s "$f")" -le "$MAXBYTES" ] || return 0
   lelf=$("$CUOBJDUMP" -lelf "$f" 2>/dev/null)
   archs=$(grep -o 'sm_[0-9]*[a-z]\?' <<<"$lelf" | sort -u | tr '\n' ' ')
   [ -n "$archs" ] || archs=$("$CUOBJDUMP" -sass "$f" 2>/dev/null | grep -m1 -o 'sm_[0-9]*[a-z]\?')
-  [ -n "$archs" ] || continue
+  [ -n "$archs" ] || return 0
   sha=$(sha256sum "$f" | cut -d' ' -f1)
   printf '%s\n' "$lelf" >"$WORK/lelf/${sha:0:16}"
   echo "$sha" >"$WORK/sha256/${sha:0:16}"
-  printf '%s\t%s\t%s\t%s\n' "${sha:0:16}" "$(stat -L -c %s "$f")" "$archs" "$f"
-done <"$WORK/candidates" | sort -t$'\t' -k1,1 -u >"$OUT/corpus.tsv"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$i" "${sha:0:16}" "$(stat -L -c %s "$f")" "$archs" "$f" >"$WORK/scan/$i"
+}
+export -f scan
+mkdir -p "$WORK/scan"
+awk '{printf "%d\t%s\0", NR, $0}' "$WORK/candidates" | xargs -0 -r -P "$JOBS" -I{} bash -c 'scan "$@"' _ {}
+find "$WORK/scan" -type f -exec cat {} + | sort -t$'\t' -k1,1n | cut -f2- | sort -t$'\t' -k1,1 -u >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
 echo "dump: $(cat "$OUT/corpus.count") binaries with device code, found in ${SECONDS}s"
 
