@@ -152,7 +152,7 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
 
 
 def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(monkeypatch):
-    _fake_pouw(monkeypatch, lambda scheme, target: None, scheme="ncp-v2").keeps_weight_copy = lambda scheme: True
+    _fake_pouw(monkeypatch, lambda scheme, target: None, scheme="ncp-v2")
     got = PO.refusals(_ctx("pouw:ncp-v2", ENTRY))
     assert any(r.startswith("pouw:ncp-v2: keeps a weight-derived copy") for r in got)
     assert PO.refusals(_ctx("pouw:ncp-v2", settings={})) == ()
@@ -358,7 +358,6 @@ def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
                      keeps_weight_copy=lambda s: s == "ncp-v2")
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
-    return mod
 
 
 def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monkeypatch):
