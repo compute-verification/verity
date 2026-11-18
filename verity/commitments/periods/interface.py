@@ -2716,7 +2716,7 @@ class Window:
 
     def give(self, param: str, value: bytes) -> None:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``value`` its function's value as
-        the verifier computes it (`one_stage.registered.mark_value`), read as the parameter's leaves by its mark's layout
+        the verifier computes it (`one_stage.registered.body`), read as the parameter's leaves by its mark's layout
         (`verity.circuits.supplied.leaves`) in rows of its reading port's words, committed under the public salts
         ``registered_value.supplied_salts`` gives at its Program's digest, so the verifier's root of them is the record's."""
         reg = self.circuit.registered or Registered({})

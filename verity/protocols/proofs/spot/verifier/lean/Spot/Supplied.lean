@@ -86,7 +86,8 @@ def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
   let h := (data.get! 0).toNat * 256 + (data.get! 1).toNat
   return (Array.range (16 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
-/-- The source kind a supplied input's `le` value takes (`ofMark`): its bytes, read by `leLeaves`. No scheme names it. -/
+/-- A row of a supplied input whose layout is `le` leads with `(LE, "")` (`ofMark`): the rest's bytes read by `leLeaves`.
+No scheme names it. -/
 def LE : String := "le"
 
 /-- `registered.le_leaves`, §5.4's `le`: `data` as one little-endian bit string (bit `t` is bit `t mod 8` of byte
@@ -151,7 +152,7 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
     if kind == "window" then
       if name.isEmpty then throw s!"supplied value {value}: window {name} is no bytes"
       return (← runSalt (← Flock.unhex name) binding (getD rec "window"))
-    let text ← if kind == "bytes" || kind == LE then pure (Json.str name) else do
+    let text ← if kind == "bytes" then pure (Json.str name) else do
       if kind == "value" && supplied.contains name then
         throw s!"supplied value {value} reads supplied value {name}'s root"
       let (field, key) := if kind == "port" then ("roots", "port") else ("registered", "value")
@@ -170,9 +171,10 @@ def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
-    let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
-    if !r.isEmpty && r.all (·.1 == LE) then leLeaves data w
-    else if digests p.ty then digestLeaves data else leavesOf data w
+    let le := r[0]?.map (·.1) == some LE
+    let data ← (if le then r.extract 1 r.size else r).foldlM
+      (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
+    if le then leLeaves data w else if digests p.ty then digestLeaves data else leavesOf data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
 def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=
@@ -291,32 +293,55 @@ private def argNat (v : String) (m : Mark) (a : String) : V Nat := do
   let some x := (m.args.find? (·.1 == a)).bind (nat? ·.2) | throw s!"supplied input {v}: {m.fn}'s {a} is no natural"
   return x
 
-/-- A function's value: `const.u16/v1`'s `value` as a u16 little-endian; `pous.setup.salt/v1` the coin the verifier holds
-for it, 24 bytes (`coins`, the memory attester's salt, drawn after W's commitment). "no statement" for any function whose
-body isn't written. -/
-def value (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V ByteArray := do
+private def argStr (v : String) (m : Mark) (a : String) : V String := do
+  if m.args.map (·.1) != #[a] then throw s!"supplied input {v}: {m.fn} takes the args [{a}]"
+  let some (_, .str x) := m.args.find? (·.1 == a) | throw s!"supplied input {v}: {m.fn}'s {a} is no string"
+  if x.isEmpty then throw s!"supplied input {v}: {m.fn}'s {a} is no string"
+  return x
+
+private def coin (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V ByteArray := do
+  if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
+  let some (_, c) := coins.find? (·.1 == m.fn) | throw s!"supplied input {v}: no statement: the verifier holds no coin for {m.fn}"
+  return c
+
+/-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.u16/v1`'s `value` as a u16
+little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
+drawn after W's commitment); `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
+`registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
+`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). "no statement" for any other
+function, whose body isn't written. -/
+def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
   match m.fn with
   | "const.u16/v1" =>
     let x ← argNat v m "value"
     if x ≥ 2 ^ 16 then throw s!"supplied input {v}: no statement: {x} is no u16"
-    return ⟨#[(x % 256).toUInt8, (x / 256).toUInt8]⟩
+    return (#[("bytes", Flock.hexOf ⟨#[(x % 256).toUInt8, (x / 256).toUInt8]⟩)], 2)
   | "pous.setup.salt/v1" =>
-    if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
-    let some (_, c) := coins.find? (·.1 == m.fn) | throw s!"supplied input {v}: no statement: the verifier holds no coin for {m.fn}"
+    let c ← coin coins v m
     if c.size != 24 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 24"
-    return c
+    return (#[("bytes", Flock.hexOf c)], 24)
+  | "window.salt/v1" =>
+    let c ← coin coins v m
+    if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"
+    return (#[("window", Flock.hexOf c)], 64)
+  | "registered.root/v1" => return (#[("value", ← argStr v m "value")], 64)
+  | "record.root/v1" => return (#[("port", ← argStr v m "port")], 64)
+  | "log.base/v1" =>
+    if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
+    return (#[("position", "0")], 8)
   | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
 
-/-- A supplied input's one row of sources (`Rows`): its value under its layout, `le` as the `le` source and `halves` and
-`digest` as the verifier's bytes, its bits the mark's. -/
+/-- A supplied input's one row of sources (`Rows`): its body's, led by `(LE, "")` where its layout is `le`, its value's
+length the mark's bits. -/
 def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Rows := do
-  let data ← value coins v m
-  if 8 * data.size != m.bits then
-    throw s!"supplied input {v}: {m.fn}'s value is {8 * data.size} bits, and the mark says {m.bits}"
-  return #[#[(if m.layout == "le" then LE else "bytes", Flock.hexOf data)]]
+  let (ss, n) ← body coins v m
+  if 8 * n != m.bits then
+    throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
+  return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
 
-/-- The difftest's `supplied_marks`: on `{program, coins, widths}` (`coins`: `{function: hex}`; `widths`: `{input: w}`),
-each supplied input's rows as leaves of its width (`marks`, `ofMark`, then `rows`' reading), or the refusal. -/
+/-- The difftest's `supplied_marks`: on `{program, coins, widths, record, log, binding}` (`coins`: `{function: hex}`;
+`widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
+(`marks`, `ofMark`, then `rows`' reading), or the refusal. -/
 def piece (j : Json) : Except String Json := do
   let ms ← marks (getD j "program")
   let coins ← match getD j "coins" with
@@ -326,13 +351,22 @@ def piece (j : Json) : Except String Json := do
     | _ => throw "coins is not an object"
   let widths := getD j "widths"
   let .obj _ := widths | throw "widths is not an object"
+  let .arr log := getD j "log" | throw "log is not a list"
+  let binding ← match getD j "binding" with
+    | .null => pure none
+    | b => match getD b "stream", getD b "prover" with
+      | .str s, .str p => pure (some (s, p))
+      | _, _ => throw "binding is not {stream, prover}"
+  let rec_ := getD j "record"
   let out ← ms.mapM fun (v, m) => do
     let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
     let rs ← ofMark coins v m
     let ls ← rs.mapM fun r => do
-      let data ← r.foldlM (fun acc s => return acc ++ (← Flock.unhex s.2)) ByteArray.empty
-      if r.all (·.1 == LE) then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
-    pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun x => Json.num (x : Int))))
+      let le := r[0]?.map (·.1) == some LE
+      let data ← (if le then r.extract 1 r.size else r).foldlM
+        (fun acc s => return acc ++ (← sourceBytes rec_ log binding (ms.map (·.1)) v s)) ByteArray.empty
+      if le then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
+    pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun (x : Nat) => Json.num (Int.ofNat x))))
   return Json.mkObj out.toList
 
 end Spot.Supplied

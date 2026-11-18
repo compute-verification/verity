@@ -100,7 +100,7 @@ WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
 SOURCES = ("port", "value", "bytes", "position", "window")
-#: the source kind a supplied input's `le` value takes (`of_mark`), read by `le_leaves`; no scheme names it
+#: a row of a supplied input whose layout is `le` leads with `(LE, "")` (`of_mark`); no scheme names it
 LE = "le"
 #: a supplied value is short: at most this many bits, whatever the population (`Supplied.SHORT_BITS`)
 SHORT_BITS = 65536
@@ -404,7 +404,7 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
     own, a position after the log's, or the verifier's coin bound to its binding and the record's window; ValueError
     where there is none."""
     rec = rec if isinstance(rec, Mapping) else {}
-    if kind in ("bytes", LE):
+    if kind == "bytes":
         return _hex_bytes(value, kind, name, name)
     if kind == "window":
         return window_salt(_hex_bytes(value, kind, name, name), rec.get("window"), binding)
@@ -438,12 +438,16 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    def leaves(row: Sequence[tuple[str, str]], data: bytes) -> list[int]:
-        if row and all(k == LE for k, _ in row):
-            return le_leaves(data, w)
-        return digest_leaves(data) if digests(t) else leaves_of(data, w)
-    return [leaves(row, b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row))
+    return [row_leaves_of(row, lambda k, n: _source_bytes(rec, value, k, n, supplied, log, binding), w, digests(t))
             for row in rows]
+
+
+def row_leaves_of(row: Sequence[tuple[str, str]], source: Any, w: int, digest: bool) -> list[int]:
+    """A supplied row's leaves: its sources' bytes (``source(kind, name)``) read by `le_leaves` where it leads with
+    ``(LE, "")``, else as whole digests where ``digest``, else by `leaves_of`."""
+    le = bool(row) and row[0][0] == LE
+    data = b"".join(source(k, n) for k, n in (row[1:] if le else row))
+    return le_leaves(data, w) if le else digest_leaves(data) if digest else leaves_of(data, w)
 
 
 def _nat(x: Any) -> int | None:
@@ -454,7 +458,8 @@ def marks(desc: Any) -> dict[str, dict[str, Any]]:
     """The marks of a program descriptor's top-level `inputs` by input, each marked input's root nodes all
     `SuppliedInput<w>_v1` and no other input's one (`Supplied.marks`); none where it has no `inputs` list; ValueError
     otherwise, and on a function the registry lacks or a value that is not short."""
-    get = (lambda j, k: j.get(k) if isinstance(j, Mapping) else None)
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
     xs = get(desc, "inputs")
     if not isinstance(xs, list):
         return {}
@@ -516,36 +521,60 @@ def mark_of(name: str, m: Any) -> dict[str, Any]:
     return dict(m)
 
 
-def mark_value(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> bytes:
-    """A supplied function's value (`Supplied.value`): `const.u16/v1`'s `value` as a u16 little-endian, and
-    `pous.setup.salt/v1` the verifier's coin for it, 24 bytes; ValueError naming "no statement" for any other."""
-    if m["supplied"] == "const.u16/v1":
-        x = m["args"].get("value") if set(m["args"]) == {"value"} else None
-        if type(x) is not int or x < 0:
-            raise ValueError(f"supplied input {name}: const.u16/v1 takes the args [value]")
+def _arg(name: str, m: Mapping[str, Any], a: str, kind: type) -> Any:
+    if set(m["args"]) != {a}:
+        raise ValueError(f"supplied input {name}: {m['supplied']} takes the args [{a}]")
+    x = m["args"][a]
+    if not (type(x) is kind and (x >= 0 if kind is int else x != "")):
+        raise ValueError(f"supplied input {name}: {m['supplied']}'s {a} is no {'natural' if kind is int else 'string'}")
+    return x
+
+
+def _coin(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> bytes:
+    if m["args"]:
+        raise ValueError(f"supplied input {name}: {m['supplied']} takes no args")
+    if m["supplied"] not in coins:
+        raise ValueError(f"supplied input {name}: no statement: the verifier holds no coin for {m['supplied']}")
+    return bytes(coins[m["supplied"]])
+
+
+def body(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
+    statement" where the verifier can't compute it."""
+    f = m["supplied"]
+    if f == "const.u16/v1":
+        x = _arg(name, m, "value", int)
         if x >= 1 << 16:
             raise ValueError(f"supplied input {name}: no statement: {x} is no u16")
-        return x.to_bytes(2, "little")
-    if m["supplied"] == "pous.setup.salt/v1":
-        if m["args"]:
-            raise ValueError(f"supplied input {name}: pous.setup.salt/v1 takes no args")
-        c = coins.get(m["supplied"])
-        if c is None:
-            raise ValueError(f"supplied input {name}: no statement: the verifier holds no coin for pous.setup.salt/v1")
+        return [("bytes", x.to_bytes(2, "little").hex())], 2
+    if f == "pous.setup.salt/v1":
+        c = _coin(coins, name, m)
         if len(c) != 24:
-            raise ValueError(f"supplied input {name}: no statement: pous.setup.salt/v1's coin is {len(c)} bytes, not 24")
-        return bytes(c)
-    raise ValueError(f"supplied input {name}: no statement: {m['supplied']}'s body is not the verifier's yet")
+            raise ValueError(f"supplied input {name}: no statement: {f}'s coin is {len(c)} bytes, not 24")
+        return [("bytes", c.hex())], 24
+    if f == "window.salt/v1":
+        c = _coin(coins, name, m)
+        if not c:
+            raise ValueError(f"supplied input {name}: no statement: {f}'s coin is no bytes")
+        return [("window", c.hex())], 64
+    if f == "registered.root/v1":
+        return [("value", _arg(name, m, "value", str))], 64
+    if f == "record.root/v1":
+        return [("port", _arg(name, m, "port", str))], 64
+    if f == "log.base/v1":
+        if m["args"]:
+            raise ValueError(f"supplied input {name}: {f} takes no args")
+        return [("position", "0")], 8
+    raise ValueError(f"supplied input {name}: no statement: {f}'s body is not the verifier's yet")
 
 
 def of_mark(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list[list[tuple[str, str]]]:
-    """A supplied input's one row of sources (`Supplied.ofMark`): its value, `le` as the `LE` source, else as the
-    verifier's bytes."""
-    data = mark_value(coins, name, m)
-    if 8 * len(data) != m["bits"]:
-        raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * len(data)} bits, and the mark says "
-                         f"{m['bits']}")
-    return [[(LE if m["layout"] == "le" else "bytes", data.hex())]]
+    """A supplied input's one row of sources (`Supplied.ofMark`): its body's, led by ``(LE, "")`` where its layout is
+    `le`."""
+    sources, n = body(coins, name, m)
+    if 8 * n != m["bits"]:
+        raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * n} bits, and the mark says {m['bits']}")
+    return [([(LE, "")] if m["layout"] == "le" else []) + sources]
 
 
 def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],
