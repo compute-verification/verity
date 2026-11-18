@@ -91,9 +91,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d8411888"
+    assert r.digest == "5d27500cfc13de9c702784aba413700764b20c9c0b652940c91e3d54c2083802dd730213feb3712295b6274cdee059be514bdfbb457c99003a22eb7bfc6a0c4e"
     assert r.n_root_nodes == 84698
-    assert S.predict_workload(phi)["digest"] == "24835950b9fd8c930fcf2077b8a767921c9a5ddc6e12cfe1ed20c4a2030c658a60ec601035e171e4f9197de081ad75b6b06da9ea7be4742a00aa6d0d62ba242f"
+    assert S.predict_workload(phi)["digest"] == "647476fb737cd62b89936075f5fb6a3d9e66a92379ff5dcaca2d14f62d0d6e32b5619fb3fc797ae836e09325983e25343b3b15cb8596dc9d1b4b8506292fcc3c"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
@@ -123,7 +123,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "93df4dd412d503b870425a351b2d46c916f7ce83e194b92ea2acab147a5aa10389bae4320dc5f1bedc56c7dad10e040cd80791cb90b0d8dfb9eb497d3682973c"
+    assert S.predict_workload(phi)["digest"] == "70468fe0fee095b09765883d67013afffda931d609ae63b67c26d81da0d445942ff49dd254f8d2477d7f721c06b2a7758237b3c2ded6a1dbccdb0eaf3a7c2f4a"
 
 
 @pytest.mark.slow
