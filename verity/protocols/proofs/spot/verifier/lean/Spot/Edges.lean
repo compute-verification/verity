@@ -33,7 +33,7 @@ members whose rows are no mixed radix of the lane's levels, a row of an explicit
 another node's or not that node's consecutive leaves, a reference to a parameter), `edge-units` (a reader row whose
 leaves lie in two writer units: across a unit's end, `unitsCross`), `edge-run` (a row inside one unit that is not one
 whole return field: it starts at no field's first leaf, or ends at no field's last, or runs over several, `runAt`)
-and `edge-width` (a reader row's bits are not the field's, or a field before it is not whole u16 words). Each names
+and `edge-width` (a reader row's bits are not the field's). Each names
 where it arose: the node, and for a part's refusal its argument and part.
 
 The work is the root's nodes and arguments, then each part times its port's rows, and an explicit part's references:
@@ -78,16 +78,32 @@ def runAt (t : Ty) (o len : Nat) : Option Nat :=
 /-- The first leaf of return field `f` of `t`. -/
 def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves).sum
 
-/-- The first u16 word of return field `f` of `t` in its unit's output row `out`, the fields before it whole words: a
-row is its leaves in order, each its bits in u16 words low first, padded only at its end (`Registered.rowWords`). -/
-def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => bitsOf ty / 16).sum
+/-- The u16 words of a value of `t` in a link row: its leaves in order, a leaf of `w` bits `⌈w/16⌉` words, low first. -/
+def wordsOf : Ty → Nat
+  | .value w => (w + 15) / 16
+  | .array n e => n * wordsOf e
+  | .tuple fs => fs.attach.foldl (fun a f => a + wordsOf f.1) 0
+  | .record fs => fs.attach.foldl (fun a f => a + wordsOf f.1.2) 0
+termination_by t => t
+decreasing_by
+  all_goals simp only [Flock.Program.Ty.array.sizeOf_spec, Flock.Program.Ty.tuple.sizeOf_spec,
+    Flock.Program.Ty.record.sizeOf_spec]
+  · omega
+  · have := Array.sizeOf_lt_of_mem f.2; omega
+  · have := Array.sizeOf_lt_of_mem f.2
+    generalize f.1 = g at this ⊢
+    obtain ⟨k, t⟩ := g
+    simp only [Prod.mk.sizeOf_spec] at this ⊢
+    omega
 
-/-- Return field `f` of `t` at leaf `p` of its unit, of `len` leaves and `bits` bits, the fields before it whole u16
-words; none otherwise. -/
+/-- The first u16 word of return field `f` of `t` in its unit's output row `out`: the words of the leaves before it
+(`wordsOf`), the row being its leaves in order, each its own words. -/
+def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map wordsOf).sum
+
+/-- Return field `f` of `t` at leaf `p` of its unit, of `len` leaves and `bits` bits; none otherwise. -/
 def fieldAt (t : Ty) (len bits : Nat) (p : Int) : Option Nat :=
   if p < 0 then none else
-  (runAt t p.toNat len).filter fun f =>
-    bitsOf (fieldsOf t)[f]! == bits && ((fieldsOf t).take f).all (bitsOf · % 16 == 0)
+  (runAt t p.toNat len).filter fun f => bitsOf (fieldsOf t)[f]! == bits
 
 /-- The word step of each level of `lv` (its radix and its leaf step inside the unit), the members starting at a field
 at leaf `p0`: every leaf they reach is a field `fieldAt` admits, and its first word is `p0`'s plus a word step a level
@@ -250,8 +266,7 @@ def wireOf (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wir
   if LW == 0 then throw "edge-rows"
   if l0 % LW + len > LW then throw "edge-units"
   let some f := runAt wd.ret (l0 % LW) len | throw "edge-run"
-  if bitsOf (fieldsOf wd.ret)[f]! != bitsOf ty / cuts || ((fieldsOf wd.ret).take f).any (bitsOf · % 16 != 0) then
-    throw "edge-width"
+  if bitsOf (fieldsOf wd.ret)[f]! != bitsOf ty / cuts then throw "edge-width"
   let some ws := wordSteps wd.ret len (bitsOf ty / cuts) (l0 % LW)
     (radix.zip (steps.map fun s => s - s.tdiv LW * LW)) | throw "edge-run"
   let wire : Spot.Wires.Wire :=
@@ -273,7 +288,7 @@ def explicitWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wi
     if row.all fun r => !r.p && isInputNode P r.i then continue
     let some r0 := row.head? | continue
     if r0.p || row.zipIdx.any (fun (r, t) => r.p || r.i != r0.i || r.j != r0.j + t) then throw "edge-rows"
-    out := out.appendList (← wireOf P fu W k rt port ty cuts j (start + m) r0.i r0.j [1] [0])
+    out := out ++ (← wireOf P fu W k rt port ty cuts j (start + m) r0.i r0.j [1] [0]).toArray
   return out.toList
 
 /-- The wires of the reads of argument `i`'s part `q` (at `[s0, s0 + c)` of the argument) by root node `k`'s members,
@@ -305,14 +320,14 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     if let .explicit it := q then
       let rows := (List.range cnt).map fun m =>
         (it.extract (x0 + (lo + m) * L - s0) (x0 + (lo + m) * L - s0 + len)).toList
-      out := out.appendList (← explicitWires P fu W k rt port ty cuts j (rb + lo) rows)
+      out := out ++ (← explicitWires P fu W k rt port ty cuts j (rb + lo) rows).toArray
       continue
     let (run, lanes) := partLanes q
     let k0 := x0 + lo * L - s0
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
       | .ok v => pure v
       | .error e => throw (if e == "edge-rows" && unitsCross P run lanes q.count k0 len then "edge-units" else e)
-    out := out.appendList (← wireOf P fu W k rt port ty cuts j (rb + lo) w l0 radix steps)
+    out := out ++ (← wireOf P fu W k rt port ty cuts j (rb + lo) w l0 radix steps).toArray
   return out.toList
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
@@ -331,7 +346,7 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       for (q, s0, qi) in merged node.args[i]!.seq do
         match partWires P fu W k i q s0 with
-        | .ok ws => out := out.appendList ws
+        | .ok ws => out := out ++ ws.toArray
         | .error e => throw s!"{e} at node {k} argument {i} part {qi}"
   return out.toList
 

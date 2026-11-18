@@ -505,29 +505,40 @@ _WIRE_FIELDS = ("reader", "port", "writer", "out", "at", "radix", "base", "step"
 _READ_FIELDS = ("reader", "port", "param", "at", "radix", "base", "step")
 
 
-def _of(cls: Any, d: Any, fields: Sequence[str], what: str) -> Any:
-    if (not isinstance(d, Mapping) or not set(fields) <= set(d) <= {*fields, "cut"}
-            or not all(isinstance(d[k], list) for k in ("radix", "step")) or ("cut" in d and not isinstance(d["cut"], list))):
-        raise ValueError(f"a {what}'s record is {{{', '.join(fields)}}} and optionally its cut, its radix and step lists and its "
-                         f"cut a list, not {d!r}")
-    return cls(*(d[k] for k in fields), **({"cut": tuple(d["cut"])} if "cut" in d else {}))
+def _of(cls: Any, d: Any, fields: Sequence[str], what: str, optional: Sequence[str] = ("cut",)) -> Any:
+    lists = ("radix", "step", "cut", "ostep")
+    if (not isinstance(d, Mapping) or not set(fields) <= set(d) <= {*fields, *optional}
+            or not all(isinstance(d[k], list) for k in lists if k in d)):
+        raise ValueError(f"a {what}'s record is {{{', '.join(fields)}}} and optionally its {', '.join(optional)}, its radix and "
+                         f"step lists and its cut and ostep lists, not {d!r}")
+    return cls(*(d[k] for k in fields), **{k: tuple(d[k]) if k in lists else d[k] for k in optional if k in d})
 
 
 @dataclass(frozen=True, init=False)
 class Wire(_Pattern):
-    """A wiring pattern (`_Pattern`): each reader row it covers is the ``out`` row of unit ``base + sum(d[k] * step[k])`` of
-    template ``writer``, each index counting its own template's units (the wire cut's form, `Spot.Wires`). With no cut
-    it reads the port's one row, a whole-port wire."""
+    """A wiring pattern (`_Pattern`): each reader row it covers is read from the ``out`` row of unit
+    ``base + sum(d[k] * step[k])`` of template ``writer``, from u16 word ``offset + sum(d[k] * ostep[k])`` on (no
+    ``ostep``: ``offset`` at every index), each index counting its own template's units (`Circuits.Wire`). ``out`` is
+    ``"out"``, the unit's output fields in order, or one field ``o<j>``. With no cut it reads the port's one row."""
     writer: str
     out: str
+    offset: int = 0
+    ostep: tuple[int, ...] = ()
     key_fields: ClassVar[tuple[str, ...]] = ("writer", "out")
 
     def __init__(self, reader: str, port: str, writer: str, out: str, at: int, radix: Sequence[int], base: int,
-                 step: Sequence[int], cut: Sequence[int] = (0, 1)) -> None:
+                 step: Sequence[int], cut: Sequence[int] = (0, 1), offset: int = 0, ostep: Sequence[int] = ()) -> None:
         for k, v in dict(reader=reader, port=port, writer=writer, out=out, at=at, radix=radix, base=base, step=step,
-                         cut=cut).items():
+                         cut=cut, offset=offset, ostep=tuple(ostep)).items():
             object.__setattr__(self, k, v)
         self._check((reader, port, writer, out), "a wire names its reader's port and its writer's output")
+        if not _ints(self.offset, *self.ostep) or self.offset < 0 or (self.ostep and len(self.ostep) != len(self.radix)):
+            raise ValueError(f"{self.doc()}: a wire's offset is a natural and its ostep one integer a digit")
+
+    def offsets(self) -> tuple[int, int]:
+        """The least and the greatest first word the wire reads its writer's row from (`Spot.Wires.shape`)."""
+        reach = [s * (r - 1) for r, s in zip(self.radix, self.ostep)]
+        return self.offset + sum(min(0, x) for x in reach), self.offset + sum(max(0, x) for x in reach)
 
     def writers(self, lo: int, n: int, row: int | None = None) -> np.ndarray:
         """The writer units (``writer``'s) of reader units ``lo`` to ``lo + n`` (``reader``'s) at reader row ``row`` (the
@@ -558,12 +569,14 @@ class Wire(_Pattern):
         return a, b
 
     def doc(self) -> dict[str, Any]:
-        return {"reader": self.reader, "port": self.port, "writer": self.writer, "out": self.out, **self._doc()}
+        return {"reader": self.reader, "port": self.port, "writer": self.writer, "out": self.out, **self._doc(),
+                **({"offset": self.offset} if self.offset else {}), **({"ostep": list(self.ostep)} if self.ostep else {})}
 
     @classmethod
     def of(cls, d: Any) -> Wire:
-        """A wire from its record (`doc`), refused unless it has exactly the wire's fields (``cut`` optional)."""
-        return _of(cls, d, _WIRE_FIELDS, "wire")
+        """A wire from its record (`doc`), refused unless it has exactly the wire's fields (``cut``, ``offset`` and
+        ``ostep`` optional), as `Circuits.Wire.ofJson`."""
+        return _of(cls, d, _WIRE_FIELDS, "wire", ("cut", "offset", "ostep"))
 
 
 @dataclass(frozen=True, init=False)
@@ -1037,6 +1050,15 @@ def check_ranks(templates: Mapping[str, tuple[RowLayout, int]], ranks: Ranks, wi
             raise ValueError(f"ranks-reads: {d} reads {name!r}, and its reader units are not that name's rank's")
 
 
+def _out_rows(lay: RowLayout) -> dict[str, int]:
+    """A writer's output rows in u16 words, as a wire reads them: each field ``o<j>``, and ``out``, the fields in order, a
+    leaf of ``w`` bits ``ceil(w/16)`` words (the link row's; a field of 8-bit leaves is its leaves' words, not its packed
+    bits')."""
+    outs = dict(lay.outs)
+    ws = lay.widths[len(lay.rows):]
+    return outs | {"out": sum(n * 16 // w * -(-w // 16) if w < 16 else n for (_p, n), w in zip(lay.outs, ws))}
+
+
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
                 cuts: Mapping[str, Mapping[str, int]] | None = None,
                 order: Sequence[tuple[str, int, int]] | None = None) -> None:
@@ -1044,7 +1066,8 @@ def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[
     descriptor id, its layout and units): a cut naming no template's parameter or not dividing its outer length and words
     (``cuts``); then wire by wire, a reader or writer that is no template (``template``), a port no parameter of the reader
     or an output no output of the writer (``port``), rows not among the port's or a last digit that isn't ``C`` (``cut``),
-    a reader row of other words than its writer's output row (``width``), reader or writer units outside their templates
+    a reader row past its writer's output row from some index's first word, or a first word below 0 (``width``),
+    reader or writer units outside their templates
     (``bounds``); then two wires wiring one reader row (``overlap``); then a dataflow between units that isn't acyclic
     (`check_order`: ``order``, the circuit's `Circuit.order`, or with none ``cycle``). The work is per wire, never per
     unit."""
@@ -1060,16 +1083,17 @@ def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[
         if w.reader not in templates or w.writer not in templates:
             raise ValueError(f"wire {w.doc()}: its reader and writer are templates of the circuit, {sorted(templates)}")
         (rl, rn), (wl, wn) = templates[w.reader], templates[w.writer]
-        rows, outs = dict(rl.rows), dict(wl.outs)
+        rows, outs = dict(rl.rows), _out_rows(wl)
         if w.port not in rows or w.out not in outs:
             raise ValueError(f"wire {w.doc()}: it reads one of {w.reader}'s parameters {sorted(rows)} as one of {w.writer}'s "
                              f"outputs {sorted(outs)}")
         k = int(cuts.get(w.reader, {}).get(w.port, 1))
         _cut_ok(w, k, "wire")
-        if rows[w.port] // k != outs[w.out]:
-            raise ValueError(f"wire {w.doc()}: a row of {w.port} is {rows[w.port] // k} words and {w.out} {outs[w.out]}; a wire "
-                             "reads its writer's output row whole, and a row gathered from several writers is cut or read "
-                             "through a gather unit")
+        lo, hi = w.offsets()
+        if lo < 0 or hi + rows[w.port] // k > outs[w.out]:
+            raise ValueError(f"wire {w.doc()}: a row of {w.port} is {rows[w.port] // k} words, read from words {lo} to {hi} of "
+                             f"{w.out}'s {outs[w.out]}; a wire reads inside its writer's output row, and a row gathered from "
+                             "several writers is cut or read through a gather unit")
         lo, hi = w.span()
         if w.at + w.reader_units > rn or lo < 0 or hi >= wn:
             raise ValueError(f"wire {w.doc()}: reader units [{w.at}, {w.at + w.reader_units}) of {rn}, writer units [{lo}, {hi}] "
