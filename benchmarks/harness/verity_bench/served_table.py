@@ -58,6 +58,38 @@ ORDER BY a.start_utc DESC, a.id DESC
 
 
 @dataclass(frozen=True)
+class Member:
+    """A protocol's member: ``model``'s runs of ``spec`` on the card whose file is ``card`` (its ``sku``, under
+    `kit.cards_directory`), whose record gives its ``short``: the member's name (`name`, ``MODEL-SHORT``) and its rows'
+    spec (`key`, the spec as a run on that card names it, `_on_card`)."""
+
+    model: str
+    spec: str
+    card: str
+
+    @property
+    def short(self) -> str:
+        from verity.device import load_card
+
+        return load_card(self.card, directory=kit.cards_directory())["short"]
+
+    @property
+    def name(self) -> str:
+        return f"{self.model}-{self.short}"
+
+    @property
+    def key(self) -> str:
+        return _on_card(self.spec, self.short)
+
+
+def _option(scheme: str) -> str:
+    """The adapter entry that attaches the declared scheme ``scheme`` to a served run (`Scheme.option`)."""
+    from verity.protocols.compose import schemes
+
+    return schemes.get(scheme).option
+
+
+@dataclass(frozen=True)
 class Protocol:
     """A protocol's served rows: its `arm` over `stock-fp8@compiled`, and `own_arm` (default `arm`) over `eager_stock`,
     the eager stock engine its runs time beside it (None where their stock isn't eager). The rows are every point of
@@ -69,7 +101,7 @@ class Protocol:
     eager_stock: str | None
     own_arm: str | None = None
     record: str = ""
-    members: tuple[tuple[str, str], ...] = ()
+    members: tuple[Member, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -88,11 +120,11 @@ class Live:
 PROTOCOLS = (
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
-             members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200"),
-                      ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served"))),
+             members=(Member("llama-3.1-8b", "llama31-8b-fp8-1gpu-bandwidth-served-reps6", "h200-sxm-141gb"),
+                      Member("llama-3.2-1b", "llama32-1b-fp8-1gpu-bandwidth-served", "h200-sxm-141gb"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
-    Protocol("PoUW served on sm_90a", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
-             members=(("llama-3.2-1b-h100", "llama32-1b-1gpu-pouw-protocol-served@h100"),)),
+    Protocol("Pearl+ served", (), _option("pearl-plus"), "stock-fp8", record="pouw-served-sm90",
+             members=(Member("llama-3.2-1b", "llama32-1b-1gpu-pouw-protocol-served", "h100-sxm-80gb"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
 )
@@ -475,7 +507,7 @@ def collect(store: Any, *, protocols: Sequence[Protocol] | None = None, factors:
     rows = []
     for protocol in protocols:
         own = protocol.own_arm or protocol.arm
-        members = {spec: member for member, spec in protocol.members}
+        members = {m.key: m.name for m in protocol.members}
         head = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
                 "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock}
         seen = set()

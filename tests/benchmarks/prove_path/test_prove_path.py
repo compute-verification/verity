@@ -52,6 +52,7 @@ from typing import Any
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
@@ -175,7 +176,7 @@ def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_afte
     rec = _rec("11" * 64)
     drawn = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
-        "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
+        "drawn_after": DD.digest(rec), "registration": DD.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
     assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
     assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
@@ -1607,7 +1608,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
     reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
-    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
+    assert rec == WW.deployment_record(reg) and said["deployment"] == DD.digest(rec) and said["roots"] == 16
     assert (rec["format"], rec["protocol"], rec["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
@@ -1967,7 +1968,8 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
-    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
+    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
@@ -2116,6 +2118,9 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
+    (tmp_path / "c4.json").write_text(json.dumps({"window": {"scheme": "pearl-c-nvfp4-v0"}, "registered": []}))
+    with pytest.raises(ValueError, match="pearl-c-nvfp4-v0 is of no Pearl-C family"):
+        tie(window_registration=str(tmp_path / "c4.json"))
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()

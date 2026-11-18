@@ -45,8 +45,9 @@ from verity.circuits.codec import canonical_json
 from verity.circuits import library
 
 from . import circuit_types as CT
+from verity.commitments.domains import LAYOUT
 
-FORMAT = "verity/layout/v1"
+FORMAT = LAYOUT
 GEN = "table/v2"
 WORD = 128
 _SHA512 = re.compile(r"[0-9a-f]{128}")

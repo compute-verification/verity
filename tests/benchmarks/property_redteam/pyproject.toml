@@ -29,6 +29,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/circuit",
+          # PoUW's prover circuit registers its circuits on the declaration at import (`register_circuits`), which reads
+          # the hooks, and names the ncp-v2 family from the one kernel table
+          "verity/protocols/resource_accounting/scheme.py", "verity/hooks.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
           "adapters/vllm/verity_vllm/__init__.py",  # `verity_vllm.definitions`' package: importing it runs this first
           "adapters/vllm/verity_vllm/definitions/__init__.py",
           "adapters/vllm/verity_vllm/definitions/registry",
@@ -38,4 +42,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
           "verity/protocols/proofs/spot/__init__.py",
-          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam"]
+          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam",
+          "calibration/hardware/cards",
+          "verity/device.py"]

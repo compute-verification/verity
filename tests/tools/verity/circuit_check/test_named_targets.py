@@ -197,7 +197,8 @@ def test_a_warning_is_printed_unchecked_apart_from_the_passes_and_counted(runs, 
     assert "3 unchecked (warnings, which never fail) on 2 Definition(s)" in out[-1]
     assert cli.main(["F32Add_v1", "--fail-on-warnings"]) == 1
     statuses = [cli._status(t) for t in (_target("A", 0, {}, warnings=by["F32Add_v1"]), _target("B", 0, {}),
-                                          _target("C", 0, {}, failures=[{}], warnings=by["F32Mul_v1"]))]
+                                          _target("C", 0, {}, failures=[{"check": "lowering", "code": "dead", "definition": "C"}],
+                                                  warnings=by["F32Mul_v1"]))]
     assert [s.strip() for s in statuses] == ["unchecked", "ok", "FAIL"]
 
 

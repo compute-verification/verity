@@ -11,6 +11,7 @@ import types
 import pytest
 
 from verity.channel import Refused
+from verity.commitments.crypto import lms
 from verity.protocol import ProtocolDef
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -18,7 +19,6 @@ from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CPR
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_prover as WR
-from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WPS
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 

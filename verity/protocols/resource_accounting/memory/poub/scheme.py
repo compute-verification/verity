@@ -23,7 +23,11 @@ bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layo
 budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
 Lean's εrank, which is not the audit's error ε).
 The two sides are the route form's: `ResourceAccounting.Remote.Run.Paid` is `Verity.Scheme`'s charge exactly
-(`ResourceAccounting.Remote.Run.scheme`); the deployed forms are what its `GetsBack` gives.
+(`ResourceAccounting.Remote.Run.scheme`, security/Definitions/Poub/Remote/Scheme.lean:56); the deployed forms are what
+its `GetsBack` gives. The term and the sides are not yet one statement: `Run.scheme`'s own term is `Paid`'s δ
+(`δscheme := δ`, linked by `PaidBoundsBreaks`, stated and unproved), which the deployed route gives as
+`RemoteRunRoutes`' hash term (Guarantees/RateAuditDeployed.lean:164), while `δSketch` is the error of `SketchBound`
+(Assumptions/RemoteHeld.lean:108), a bound on the trace's correct receipts, and no statement takes it to `Paid`.
 """
 
 from __future__ import annotations
@@ -38,7 +42,7 @@ from dataclasses import replace
 
 from verity import hooks as H
 from verity.commitments import domains
-from verity.protocol import Channel
+from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.poub.verifier import session_parties as RS
@@ -145,13 +149,14 @@ BANDWIDTH = S.register(S.Scheme(
     under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
           "(`Remote.Run.paid`), in bits",
     attach=_bandwidth_attach,
-    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), S.VERIFIER),
+    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), VERIFIER),
     channels=(*(replace(c, sender=_named(c.sender), receiver=_named(c.receiver)) for c in P2.MANIFEST.channels),
-              Channel(P2.CLOSER_PARTY, S.VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
+              Channel(P2.CLOSER_PARTY, VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
     channel_schemas=P2.MANIFEST.messages,
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
+    pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),

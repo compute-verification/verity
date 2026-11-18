@@ -153,20 +153,18 @@
 #
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
-# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. Its cores default to this process's: the first quarter the
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). Its cores default to this process's: the first quarter the
 # engines' (ENGINE_CPUS), under ROLE=both the last quarter the verifier's, the rest the prover's, all declared to a lease
 # program that takes --cores. PACED (K:T_MS:DRAWS:WINDOWS a session of PLAN, `verifier.py --paced`) and PACE_PASS_MS
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--hbm-bytes N' states the share of the node the store is on (default: the figures').
-# The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# verdict line. The verifier reads the audited node's figures, its HBM and host DRAM among them, from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
 # writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
 # the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 \
 #     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
@@ -227,6 +225,9 @@ B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
 trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
+# kv.cu's defines at the session's codec, p1024 masked, squaring by FOLD 6 as the paged build does
+# (benchmarks/vllm_encoded/stack.sh's KVDEFS): each build of the session's kv.so reads them here, node.sh's too
+export KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1"
 [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
 lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
   [ -n "${LEAN_EXE:-}" ] && return 0
@@ -468,7 +469,8 @@ major, minor = json.load(open(sys.argv[1]))["engine"]["target"]["compute_capabil
 print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
-        nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
+        # shellcheck disable=SC2086
+        nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared $KV_DEFS -o "$B/kv.so" \
           verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
@@ -572,7 +574,7 @@ fi
     [ "${CC%%.*}" -ge 9 ] && SM+=a
     FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
     nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" $KV_DEFS -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"

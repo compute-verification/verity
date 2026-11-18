@@ -247,15 +247,14 @@ def need_lake() -> None:
 
 
 def lake_built(exe: str) -> Path:
-    """The package's executable ``exe``, built first with `lake`."""
+    """The package's executable ``exe``, built first with `lake` under the tree's Lake build lock (`verifier.executable`)."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    if shutil.which("lake") is None:
+        raise NoLake
     try:
-        build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
-    except FileNotFoundError:
-        raise NoLake from None
-    if build.returncode:
-        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
-                           + (build.stdout + build.stderr)[-2000:])
-    return PACKAGE / ".lake/build/bin" / exe
+        return V.executable(exe, PACKAGE)
+    except V.LeanError as e:
+        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n{e}") from None
 
 
 def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,
@@ -311,12 +310,14 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
     declares, which nothing here derives. ``say`` gets a line as each step starts; ``circuit`` is the class's where the
     caller lowered it (default: `class_circuit` of what a serve of ``model`` registers)."""
     from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import class_circuit
+    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
 
     work = block_work(cls, model)
     say(f"lowering class {','.join(map(str, cls))} of {model}")
     try:
-        circuit = class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
+        if circuit is None:
+            circuit = class_circuit(registered(model), P.class_of(cls))
+            check_provable(circuit)
     except Unexpressible as e:
         raise Refused(f"the integration lowers no circuit of class {','.join(map(str, cls))} of {model}, so there is "
                       f"nothing to count: {e}") from e

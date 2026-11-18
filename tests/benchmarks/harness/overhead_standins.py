@@ -3,10 +3,12 @@ verify.py), the scheme, and a machine that runs the door on a real store with a 
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
 import re
+import shutil
 import sqlite3
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -227,6 +229,15 @@ INSERT INTO TARGET_INFO_GPU_METRICS VALUES (1, 'GR Active [Throughput %]'), (3, 
 """
 
 
+@dataclasses.dataclass(frozen=True)
+class StandinScheme(O.Scheme):
+    """A made-up entry beside pearl-plus's binding: its ``family`` and its timed call's ``commits_y`` its own, not a
+    declaration's."""
+
+    family: str = ""
+    commits_y: bool = False
+
+
 @pytest.fixture
 def scheme(tmp_path, monkeypatch):
     """pearl-plus with its arm and ε in a directory of the test's own: ε a stand-in function."""
@@ -235,8 +246,8 @@ def scheme(tmp_path, monkeypatch):
     arm_dir.mkdir()
     (arm_dir / "overhead_eps_standin.py").write_text(
         "def epsilon(m, n, k, card):\n    return {'epsilon': 2.0 ** -40 * n / 8192, 'delta': 1e-9, 'basis': 'stand-in'}\n")
-    sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
-                   "overhead_eps_standin:epsilon")
+    sch = StandinScheme("pearl-plus", "overhead_arm:PearlPlus", str(arm_dir), "overhead_eps_standin:epsilon",
+                        family=O.SCHEMES["pearl-plus"].family)
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
     return sch
 
@@ -299,12 +310,19 @@ class Store:
 
     def ran(self, run: str, run_dir: Path, *, sub: str = "run", argv: list[str] | None = None, env: dict | None = None,
             validation: str = "passed", rc: int = 0, dirty: bool = False) -> None:
-        """The run's attempt: by default the door's node job `sub` under the door's lease."""
+        """The run's attempt: by default the door's node job `sub` under the door's lease. As `research` keeps them, its
+        run files hold no `kit.RESULT`, which is its result art's meta instead."""
 
         from research.store import canon
 
-        files = self.store.put_artifact("run-files/v1", {}, tree=run_dir)
+        kept = run_dir.parent / f"{run}-files"
+        shutil.copytree(run_dir, kept, ignore=shutil.ignore_patterns(kit.RESULT), dirs_exist_ok=True)
+        files = self.store.put_artifact("run-files/v1", {}, tree=kept)
         self.store.push(files)
+        result = None
+        if (run_dir / kit.RESULT).is_file():
+            result = self.store.put_artifact("bench-result/v1", json.loads((run_dir / kit.RESULT).read_text()))
+            self.store.push(result)
         start = f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"
         if argv is None:
             argv = [*LEASE, "bash", R.NODE_JOB, sub, "--card", "h200"]
@@ -315,7 +333,7 @@ class Store:
             "conditions": {}, "key_conditions": [], "source": {"commit": SHA, "dirty": dirty}, "closure": None,
             "execution": {"start_utc": start, "machine": "vy-dc-h200"}, "cost": None,
             "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
-            "outputs": {"result": None, "run_files": files}, "telemetry": None,
+            "outputs": {"result": result, "run_files": files}, "telemetry": None,
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
 

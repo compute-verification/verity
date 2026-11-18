@@ -57,6 +57,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -243,7 +244,7 @@ def smoke(a: argparse.Namespace) -> None:
     ZY = tree("h1/zy@3", recs)
 
     def entry(tr):
-        return {**tr.entry(), "word_bits": tr.word_bits, **G.schema_entry(V2)}
+        return {**tr.entry(), "word_bits": tr.word_bits, **RV.schema_entry(V2)}
 
     def port(tr, row):
         return {"entry": entry(tr), "opening": {"value": tr.value, "row": list(tr.rows[row]), "salt": tr.salts[row].hex(),
@@ -315,7 +316,7 @@ def statement(ctx: L.Ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dic
     st = ctx.stagers[LL.LANE]
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
-    reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
+    reads = {"format": G.READS, "ports": {**{p: RV.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
                                           **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
@@ -444,7 +445,7 @@ def prepare(a: argparse.Namespace) -> None:
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
                    {"kind": "served-window", "window": op["window"], "draw_root": op["draw_root"], "unit": u,
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
-    d = R.digest(rec)
+    d = DD.digest(rec)
     pa = L.partials(leaf, (a_root, b_root))
     # the partials' salts come from a private opening salt, so prepares of disjoint lane sets (on several nodes) commit
     # the one produced tree the unit's lanes read
