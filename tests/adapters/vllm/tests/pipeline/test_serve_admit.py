@@ -22,7 +22,7 @@ import pytest
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, Tokenizer, records
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import network_admission as na
+from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so

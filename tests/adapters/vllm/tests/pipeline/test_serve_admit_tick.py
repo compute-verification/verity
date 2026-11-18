@@ -29,7 +29,7 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm import messages
 from verity_vllm.engine import admission, core_gate, hooks
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import network_admission as na
+from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity.protocols.resource_accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
@@ -40,7 +40,7 @@ RUN = "ab"
 
 
 def refuse(adm: Any, why: str) -> None:
-    """serve-openai's refusal of an admission (`network_admission.TickAdmit`'s ``refuse``)."""
+    """serve-openai's refusal of an admission (`network.prover.admission.TickAdmit`'s ``refuse``)."""
     adm.deliver(sa.Delta([], "", error=why))
 
 def line(t: int, n: int, lost: Sequence[int] = ()) -> bytes:

@@ -25,7 +25,7 @@ import pytest
 
 from verity_vllm import messages
 from verity_vllm.engine import admission
-from verity_vllm.pipeline import network_admission as na
+from verity.protocols.resource_accounting.network.prover import admission as na
 
 HERE = (Path(__file__).resolve().parents[4] / "benchmarks" / "network_e2e" / "encodings")
 

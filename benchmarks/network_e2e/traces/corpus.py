@@ -375,12 +375,13 @@ def stop(server: subprocess.Popen) -> None:
 
 
 def tick_modules():
-    """The network attester's `network_admission` (the release headers and the watermark's path) and `tick_plugin` (the
+    """The network attester's `network.prover.admission` (the release headers and the watermark's path) and `tick_plugin` (the
     plugin and middleware, and ``VERITY_TICK``), imported only for ``--admit tick``."""
     p = str(ROOT / "adapters/vllm")
     if p not in sys.path:
         sys.path.insert(0, p)
-    from verity_vllm.pipeline import network_admission, tick_plugin
+    from verity.protocols.resource_accounting.network.prover import admission as network_admission
+    from verity_vllm.pipeline import tick_plugin
     return network_admission, tick_plugin
 
 

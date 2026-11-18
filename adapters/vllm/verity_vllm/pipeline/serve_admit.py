@@ -4,7 +4,7 @@ it, in the API server's body-read order; ``release-order`` adds them in the netw
 needn't carry the permutation between the two; ``tick`` also fixes the step each is added at, by the certified tick, so it
 needn't carry when each arrived either.
 
-The orders ``release-order`` and ``tick`` are the network attester's (`network_admission`: `ReleaseOrder`, and the
+The orders ``release-order`` and ``tick`` are the network attester's (`network.prover.admission`: `ReleaseOrder`, and the
 certified tick's `TickGate`); this module is what any admission order reads, and the step's rows it needs.
 
 **A step's rows**. The advice numbers requests by their first row, so the order of the rows inside a step is a

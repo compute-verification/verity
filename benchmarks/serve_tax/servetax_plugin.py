@@ -126,7 +126,7 @@ class ReleaseGate:
 
     def __init__(self, add: Callable[[Any], Any], abort: Callable[[list[str]], Any], *, hold_s: float = 5.0,
                  key: Callable[[str], tuple[str, int] | None], clock: Callable[[], float] = time.monotonic) -> None:
-        from verity_vllm.pipeline.network_admission import RELEASE_HEADER, RUN_HEADER, ReleaseOrder
+        from verity.protocols.resource_accounting.network.prover.admission import RELEASE_HEADER, RUN_HEADER, ReleaseOrder
 
         self.headers = (RELEASE_HEADER, RUN_HEADER)
         self.key_of, self.clock = key, clock

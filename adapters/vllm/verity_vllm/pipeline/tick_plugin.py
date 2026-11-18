@@ -1,13 +1,13 @@
-"""``--admit tick`` under vLLM's own OpenAI server, without serve-openai (`network_admission`'s certified tick): `TickFeed`,
+"""``--admit tick`` under vLLM's own OpenAI server, without serve-openai (`network.prover.admission`'s certified tick): `TickFeed`,
 the server's ASGI ``--middleware``, appends the network attester's releases and its watermark to a feed file
-(`network_admission.ReleaseFeed` over this server's routes and body check), and `register`, a vLLM general plugin, makes a
-`network_admission.TickGate` that reads the feed (`FeedReader`) a hold of the adapter's admission hook on every engine
+(`network.prover.admission.ReleaseFeed` over this server's routes and body check), and `register`, a vLLM general plugin, makes a
+`network.prover.admission.TickGate` that reads the feed (`FeedReader`) a hold of the adapter's admission hook on every engine
 core the process builds (`verity_vllm.engine.admission.register`). Both read ``VERITY_TICK`` (`tick_config`).
 The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit tick``).
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings` and `network_admission`, and `register` imports the admission hook only once
-``VERITY_TICK`` is set. `network_admission` reads a watermark line with the network attester's own reader
+stdlib, `verity_vllm.settings` and `network.prover.admission`, and `register` imports the admission hook only once
+``VERITY_TICK`` is set. `network.prover.admission` reads a watermark line with the network attester's own reader
 (`verity.protocols.resource_accounting.network.verifier.release`, which imports only the stdlib), and imports it when the first line
 comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.pipeline import network_admission as NA
+from verity.protocols.resource_accounting.network.prover import admission as NA
 
 __all__ = ["OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "TickFeed", "register", "route_of", "tick_config",
            "unseeded"]
@@ -34,7 +34,7 @@ OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics
 
 
 def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
-    """``VERITY_TICK``'s JSON object (in ``environ``, by default the process environment) as `network_admission.tick_config`
+    """``VERITY_TICK``'s JSON object (in ``environ``, by default the process environment) as `network.prover.admission.tick_config`
     reads it, None where it isn't set."""
     return NA.tick_config(settings.get(TICK_ENV, environ), TICK_ENV)
 
@@ -88,7 +88,7 @@ def route_of(scope: Mapping[str, Any]) -> str:
 
 
 class TickFeed(NA.ReleaseFeed):
-    """vLLM's OpenAI server's ``--middleware`` under ``VERITY_TICK``: `network_admission.ReleaseFeed` over this server's
+    """vLLM's OpenAI server's ``--middleware`` under ``VERITY_TICK``: `network.prover.admission.ReleaseFeed` over this server's
     routes (`SAMPLED_PATHS`, `OTHER_PATHS`, `route_of`) and its body check (`unseeded`). Without the variable it passes
     everything."""
 
@@ -119,7 +119,7 @@ _PLUGIN: list[Mapping[str, Any]] = []
 def register() -> None:
     """``--admit tick`` under vLLM's own OpenAI server, as a vLLM general plugin (entry point group
     ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every engine core
-    built in this process gets a `network_admission.TickGate` that reads the feed, a hold of the adapter's admission hook on its
+    built in this process gets a `network.prover.admission.TickGate` that reads the feed, a hold of the adapter's admission hook on its
     scheduler (`verity_vllm.engine.admission.register`, keyed by the client's X-Request-Id). Idempotent."""
     cfg = tick_config()
     if cfg is None or _PLUGIN:

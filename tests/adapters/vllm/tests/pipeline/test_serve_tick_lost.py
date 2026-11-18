@@ -24,7 +24,7 @@ from tests.pipeline.test_serve_openai import Tokenizer, records
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.pipeline import advice as ADV
-from verity_vllm.pipeline import network_admission as na
+from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import schedule as SC

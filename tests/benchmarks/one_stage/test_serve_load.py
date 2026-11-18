@@ -17,7 +17,7 @@ from typing import Any
 
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as sp
-from verity_vllm.pipeline.network_admission import ReleaseOrder
+from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder
 
 HERE = Path(__file__).resolve().parent
 _SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "adapters" / "vllm" / "tools" / "served_run" / "serve_load.py")
