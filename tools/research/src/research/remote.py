@@ -138,8 +138,10 @@ import errno
 import fcntl
 import hashlib
 import io
+import ipaddress
 import json
 import os
+import re
 import secrets
 import select
 import shlex
@@ -156,7 +158,7 @@ from typing import IO, Any, Callable
 
 from . import clone
 from .telemetry.events import utc_now_ms
-from .telemetry.job import address_names, hide_addresses, write_json_atomic
+from .telemetry.job import ADDRESS_MIN, REDACTED, address_names, hide_addresses, write_json_atomic
 
 REQUEST_SCHEMA = "research/request/v0.1"
 #: the request's {address: machine name} for the registered addresses it holds, which the machine's records name instead
@@ -470,7 +472,7 @@ def wake_on_control(iid: str, *, run=None) -> str | None:
     except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
         raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
     if r.returncode != 0:
-        why = (r.stderr or r.stdout).strip().splitlines()
+        why = name_addresses(r.stderr or r.stdout).strip().splitlines()
         raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}{door.hint(host, r.stderr)}")
     return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
 
@@ -520,10 +522,82 @@ def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, 
     raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 
 
+#: a whole run of the characters an IPv4 or IPv6 address is written in, `user@` before it, which `name_addresses` checks
+_IP_WORD = re.compile(r"(?:[A-Za-z0-9._-]+@)?(?<![0-9A-Fa-f.:\[\]])(?P<run>[0-9A-Fa-f.:\[\]]*[.:][0-9A-Fa-f.:\[\]]*)(?![0-9A-Fa-f.:\[\]])")
+#: an address inside a run that isn't one whole: `ADDRESS:PORT`, `[ADDRESS]:PORT`
+_IP_INNER = re.compile(r"(?<![0-9.])(?P<a>\d{1,3}(?:\.\d{1,3}){3})(?![0-9]|\.[0-9])|(?<=\[)(?P<a6>[0-9A-Fa-f:.]+)(?=\])")
+#: where ssh's own messages put a host by name (`user@HOST:`, `connect to host`, `resolve hostname`, `Connection closed by`)
+_HOST_HINT = re.compile(r"@|\bhost|Connection (?:closed by|to)", re.I)
+
+
+def _registered_names() -> dict[str, str]:
+    """{address: name} of the register, read only when an error's text may hold an address."""
+    try:
+        return {a: n for n, a in registered_addresses(load_machines()).items()}
+    except Exception as e:  # noqa: BLE001  (no register here: every address is then unregistered)
+        print(f"research: the machine register is unread ({type(e).__name__}), so an address in ssh's error is given as "
+              f"{REDACTED}", file=sys.stderr)
+        return {}
+
+
+def _is_ip(text: str) -> bool:
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return True
+
+
+def name_addresses(text: str, names: dict[str, str] | None = None, *, machine: str | None = None) -> str:
+    """`text` (what ssh or a remote command wrote on stderr) with each machine address in it, `user@` included, given as the
+    machine's registered name: an IPv4 or IPv6 address, or a registered host (`names`, address -> name; default the
+    register's); an address no machine registers is given as `machine` (the one ssh was asked to reach), else `<redacted>`.
+    Every message or record that carries ssh's stderr off this machine (a refusal, request.json, job.json, a placement
+    record, the stranded report, a Slack post) takes it from here."""
+    if not text:
+        return text
+    given = names
+
+    def register() -> dict[str, str]:
+        nonlocal given
+        if given is None:
+            given = _registered_names()
+        return given
+
+    def name(addr: str) -> str | None:
+        return register().get(addr) or machine or REDACTED if _is_ip(addr) else None
+
+    def ip(m: re.Match) -> str:
+        run = m.group("run")
+        core = next((c for c in (run.strip("[]"), run.strip("[]").rstrip(".:"), run.strip(".:[]")) if name(c) is not None), "")
+        if core and (n := name(core)) is not None:
+            start = run.index(core)
+            return run[:start].lstrip("[") + n + run[start + len(core):].lstrip("]")
+        inner = _IP_INNER.sub(lambda i: name(i.group("a") or i.group("a6")) or i.group(), run)
+        return m.group() if inner == run else inner
+
+    text = _IP_WORD.sub(ip, text)
+    if given is None and not _HOST_HINT.search(text):
+        return text
+    names = register()
+    if hosts := sorted((a for a in names if len(a) >= ADDRESS_MIN), key=len, reverse=True):
+        alt = "|".join(re.escape(h) for h in hosts)
+        text = re.sub(rf"(?<![A-Za-z0-9_.-])(?:[A-Za-z0-9._-]+@)?({alt})(?![A-Za-z0-9_-]|\.[A-Za-z0-9])",
+                      lambda m: names[m.group(1)], text)
+    return text
+
+
+def _named(r: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
+    if r.stderr:
+        r.stderr = name_addresses(r.stderr.decode(errors="replace")).encode()
+    return r
+
+
 def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = None, timeout: float = 120) -> subprocess.CompletedProcess:
-    """Run one remote argv (quoted per-arg with shlex; no eval on the far side)."""
+    """Run one remote argv (quoted per-arg with shlex; no eval on the far side). Its stderr names machines, never their
+    addresses (`name_addresses`)."""
     cmd = [*ssh, " ".join(shlex.quote(a) for a in remote_argv)]
-    return subprocess.run(cmd, input=stdin, capture_output=True, timeout=timeout)
+    return _named(subprocess.run(cmd, input=stdin, capture_output=True, timeout=timeout))
 
 
 def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
@@ -566,7 +640,7 @@ def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]
         t.join()
     if failed:
         raise failed[0]
-    return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err))
+    return _named(subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err)))
 
 
 def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
@@ -590,7 +664,7 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
             rc = proc.wait()
             err.seek(0)
             stderr = err.read()[-8000:]
-    return subprocess.CompletedProcess(cmd, rc, b"", stderr)
+    return _named(subprocess.CompletedProcess(cmd, rc, b"", stderr))
 
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
@@ -2367,6 +2441,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
             harness_args = set_flag(harness_args, "--source-identity", json.dumps(shipped_identity(tree_sha, ready), sort_keys=True))
+        from .pods import registry
+        from .result import ENV_MACHINE
+
+        env = {**env, ENV_MACHINE: machine_name}
+        props = registry.properties_copy(machine_name, m)
+        props_name = f"{machine_name}.toml"
+        if props is not None and any(p.name == props_name for p in sends):
+            raise Refused(f"--send {props_name}: the launch puts {machine_name}'s [properties] in the run's inputs/ under that name "
+                          f"itself (${ENV_MACHINE} names it); drop the --send")
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
@@ -2393,7 +2476,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         held = json.dumps(request)
         names = address_names(env, {**registered_addresses(load_machines()), machine_name: tgt["host"]}, command)
         request[HIDDEN_ADDRESSES] = {a: n for a, n in names.items() if a in held}
-        req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
+        with tempfile.TemporaryDirectory(prefix="research-props-") as props_dir:
+            if props is not None:
+                (Path(props_dir) / props_name).write_text(props)
+                sends = [*sends, Path(props_dir) / props_name]
+            req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
         rec.update(phase="launching", request=req_path, remote_run_dir=f"{m['root']}/runs/{run_id}", tool=tool_dir, source_sha=tree_sha,
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])
         write_json_atomic(local_dir / "remote.json", rec)
@@ -2650,6 +2737,27 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+#: the head of a run's stderr.log that `slot_lines` reads: slot.py and lean_slot.py write there before the job's own output
+SLOT_HEAD = 1 << 18
+
+
+def slot_lines(local_dir: Path, *, timeout: float = 30) -> list[str]:
+    """What slot.py (`slot:`) and lean_slot.py (`lean-slot:`) have said in the head of the run's stderr.log on its machine, in
+    order; none for a run not launched on one or a machine that doesn't answer."""
+    rec = _read_json(local_dir / "remote.json") or {}
+    if not rec.get("remote_run_dir"):
+        return []
+    log = shlex.quote(f"{rec['remote_run_dir']}/stderr.log")
+    try:
+        ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+        r = ssh_run(ssh, ["sh", "-c", f"head -c {SLOT_HEAD} {log} 2>/dev/null | grep -E '^(lean-)?slot:'"], timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError, KeyError) as e:
+        why = f"in {e.timeout:.0f} s" if isinstance(e, subprocess.TimeoutExpired) else f"({e})"
+        print(f"research: its stderr.log was not read {why}, so what its slot says is not known", file=sys.stderr)
+        return []
+    return r.stdout.decode(errors="replace").splitlines() if r.returncode == 0 else []
 
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py

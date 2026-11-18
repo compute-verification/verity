@@ -2414,6 +2414,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
     world.gh.put(1, head := world.change({"a.txt": "1\n"}))
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(Qm, "loop_staged", lambda: ([], ""))
     posts, ok = [], [True]
     monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
     argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
@@ -2437,6 +2438,7 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
 
     monkeypatch.delenv("RESEARCH_DRIVE")
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(Qm, "loop_staged", lambda: ([], ""))
     monkeypatch.setattr(L, "merge_thread_post", lambda *a, **k: True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
@@ -2447,6 +2449,76 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
     assert refs() == before and "the verified queue leaves it out until a ready mark re-admits it" in capsys.readouterr().out
+
+
+def test_an_eject_refuses_while_a_staged_lean_batch_carries_the_head_naming_it_unless_forced(world, monkeypatch, capsys):
+    """Ejecting a head a staged Lean batch carries, as a member or under one whose commits hold it, would drop the batch, its
+    records run and every candidate built on it: the eject refuses, naming the batch, and withdraws no mark; a head none
+    carries is ejected; an unreadable loop log refuses too, and so does an ancestor test that cannot read its object.
+    `--force REASON` ejects without reading the log, the reason in its notice, including when that log cannot be read."""
+    import research.landing as L
+    import research.queue as Qm
+
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    posts = []
+    monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append(text) or True)
+    one = world.change({"a.txt": "1\n"})
+    world.gh.put(1, one)
+    two = world.change({"b.txt": "2\n"}, base=one)                   # #2 is stacked on #1: its commits hold #1's head
+    world.gh.put(2, two)
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    _git(world.origin, "update-ref", "refs/heads/queue/" + two[:12], two)
+    staged = [{"sha": two, "members": [2], "heads": [two], "staged": True}]
+    read = [(staged, "")]
+    calls = {"n": 0}
+
+    def staged_read():
+        calls["n"] += 1
+        return read[0]
+
+    monkeypatch.setattr(Qm, "loop_staged", staged_read)
+    base = ["--by", "ci", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store")]
+    for n in (1, 2):
+        assert research_main(["queue", "eject", str(n), "--reason", "x", *base]) == 1
+        err = capsys.readouterr().err
+        assert f"#{n}'s head is carried by the verified queue's {two[:12]} (#2, staged off main's chain)" in err, err
+    assert posts == []
+    assert research_main(["queue", "eject", "3", "--reason", "x", *base]) == 0 and len(posts) == 1
+    read[0] = ([], "no answer in 100 s")
+    assert research_main(["queue", "eject", "1", "--reason", "x", *base]) == 1
+    assert "the verified queue's log can't be read (no answer in 100 s)" in capsys.readouterr().err and len(posts) == 1
+    missing = "ab" * 20
+    read[0] = ([{"sha": missing, "members": [9], "heads": ["not-a-head"], "staged": True}], "")
+    assert research_main(["queue", "eject", "2", "--reason", "x", *base]) == 1
+    err = capsys.readouterr().err
+    assert f"of #2's head and {missing[:12]} exited 128" in err and missing in err and len(posts) == 1, err
+    before = calls["n"]
+    read[0] = ([], "no answer in 100 s")
+    assert research_main(["queue", "eject", "1", "--reason", "x", "--force", "its batch is dropped anyway", *base]) == 0
+    assert calls["n"] == before
+    assert f"#1 at {one[:8]} is ejected from `next` by ci: x (forced over a staged batch carrying it: its batch is dropped " \
+           "anyway)" in posts[-1], posts
+
+
+def test_the_loop_s_staged_batches_are_read_from_its_log_staged_or_put_on_the_chain_until_dropped(tmp_path):
+    """`STAGED_SCRIPT`, as the control pod runs it over the loop's decision log: each staged build (`records_first`) and each
+    candidate a `Commit` built from one (`repairs`), the latter no longer staged, as is a staged one whose check a later build
+    line enqueued; a drop removes either, and a plain candidate is none."""
+    import research.queue as Qm
+
+    lines = [{"action": "build", "sha": "a", "members": [1], "heads": ["h1"], "records_first": True, "done": True},
+             {"action": "build", "sha": "b", "members": [2], "heads": ["h2"], "done": True},
+             {"action": "build", "sha": "c", "members": [1], "heads": ["h1"], "repairs": "a", "done": True},
+             {"action": "drop", "sha": "a"},
+             {"action": "build", "sha": "d", "members": [3], "heads": ["h3"], "records_first": True, "done": True},
+             {"action": "build", "sha": "e", "members": [4], "heads": ["h4"], "records_first": True, "done": True},
+             {"action": "build", "sha": "e", "members": [4], "heads": ["h4"], "enqueued": True, "done": True},
+             {"action": "drop", "sha": "d"}]
+    (tmp_path / "decisions.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines) + "{torn")
+    out = subprocess.run([sys.executable, "-", str(tmp_path)], input=Qm.STAGED_SCRIPT, capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout)["candidates"] == [{"sha": "c", "members": [1], "heads": ["h1"], "staged": False},
+                                                    {"sha": "e", "members": [4], "heads": ["h4"], "staged": False}]
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
@@ -2955,7 +3027,7 @@ def _invariant(marker: str, up: int) -> str:
 
 
 #: what the preflight runs on the merged tree, as stand-ins (each invariant test fails while its marker is in the tree,
-#: `pins.py --stale` while STALE.txt is), but `suites.py`, the real one: the suites collected are those its own `touched` picks
+#: `pins.py --stale` while STALE.txt is)
 PREFLIGHT_FILES = {
     "pyproject.toml": '[tool.uv.workspace]\nmembers = ["pkg"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
     "pkg/pyproject.toml": '[project]\nname = "pkg"\nversion = "0"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
@@ -2968,8 +3040,6 @@ PREFLIGHT_FILES = {
     "tests/tools/research/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
     "tests/adapters/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 5),
-    "tools/check/suites.py": (Path(__file__).resolve().parents[3] / "tools" / "check" / "suites.py").read_text(),
-    "tools/check/settings.py": (Path(__file__).resolve().parents[3] / "tools" / "check" / "settings.py").read_text(),
     "tools/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
                                    "    sys.exit(1)\n"),
@@ -2977,7 +3047,7 @@ PREFLIGHT_FILES = {
 #: `uv sync --locked` as the preflight runs it, refusing while LOCK_STALE.txt is in the tree
 FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Path('LOCK_STALE.txt').exists(); s and print("
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
-#: the ratchet gate (`PREFLIGHT_RATCHET`) as a stand-in, run as `ratchet_gate.py BASE TOP --json`: it writes where it ran and
+#: the ratchet gate as a stand-in, run as `ratchet_gate.py BASE TOP --json`: it writes where it ran and
 #: with what to $RATCHET_SEEN, fails TOP on an import cycle while TOP's tree holds RATCHET_NEW, and exits 2 (it can't judge)
 #: while it holds RATCHET_CANT; like the gate, it reads TOP from git, never the checkout it runs in
 RATCHET_GATE = (
@@ -2995,7 +3065,7 @@ RATCHET_GATE = (
     "sys.exit(1 if fails else 0)\n")
 
 
-def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC,
+def _preflight(world: World, store=None, repo: Path | None = None, sync=FAKE_SYNC,
                budget_s: float = math.inf, **kw):
     """The preflight on ``world``.  Its checks' budget never runs out, so each waits on its check's end: the preflight is
     fail-open, and a check a slow disk kept past the real `PREFLIGHT_CHECKS_S` would be skipped, the refusal a test expects
@@ -3004,7 +3074,7 @@ def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Pat
 
     kw.setdefault("collide_s", math.inf)
     return Preflight(repo or world.dev, str(world.origin), store or world.store, sync=sync, python=sys.executable,
-                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, budget_s=budget_s, **kw)
+                     root=world.tmp / "pre", log=world.logs.append, budget_s=budget_s, **kw)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -3030,7 +3100,7 @@ def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_
     world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight" in s)
-    assert f"#2 at {h2[:12]} merged onto `next` at" in said and "nothing refused" in said and "collected 2 suite(s)" in said
+    assert f"#2 at {h2[:12]} merged onto `next` at" in said and "nothing refused" in said
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True
     assert _no_worktree_left(world)
     world.logs.clear()                                         # #1, already on `next`, merges onto what's below its merge there
@@ -3038,169 +3108,9 @@ def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_
     assert f"merged onto `next` below its merge of #1 at {h1[:8]}" in next(s for s in world.logs if "preflight" in s)
 
 
-def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(world, capsys):
-    """Four torch-importing collections reach about 8 GB of a marker's 16 GB VM. Under a quarter of memory free,
-    the preflight collects nothing, says so, and still marks; the candidate's check collects."""
-    from research.queue import MarkOnly, StoreLabels, ready
-
-    _preflight_main(world)
-    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, free=lambda: 0.1)) == 0
-    said = next(s for s in world.logs if "preflight" in s)
-    assert "no suite collected: 10% of memory available, under 25%" in said and "collected 0 suite(s)" in said, said
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
-
-
-def test_the_preflight_collects_each_suite_without_the_suites_under_its_test_paths(world, capsys):
-    """The root's `tests/` holds every suite's tests, so a suite's test paths hold the suites mirrored under them (the root's
-    hold them all, the PoUW verifier's its `lean/window` difftest), which `suites.py` has its pytest ignore (`Suite.inner`).
-    Collected without them, the root suite imports the nested suite's `test_doc_paths.py` beside its own and fails, on the
-    merged tree alone, so the head was refused; collected as `suites.py` runs them, both suites pass and the head is marked."""
-    from research.queue import MarkOnly, StoreLabels, ready
-
-    _preflight_main(world, {"tests/inner/pyproject.toml": '[project]\nname = "inner"\nversion = "0"\n\n[tool.pytest.ini_options]\n'})
-    world.gh.put(2, h2 := world.change({"tests/inner/test_doc_paths.py": "def test_inner():\n    pass\n"}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if "preflight" in s)
-    assert "nothing refused" in said and "collected 2 suite(s) (., tests/inner)" in said, said
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
-
-
-#: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0's K=1536 vector
-#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
-#: below touches
-BIG = b'{"openings": [1, 2, 3]}\n'
-BIG_PATH = "pkg/data/big.json"
-
-
-def _fixture_tree(world: World) -> tuple[dict[str, str], str]:
-    from research.store import fixtures as F
-
-    (src := world.tmp / "src").mkdir()
-    (src / "big.json").write_bytes(BIG)
-    (src / "other.json").write_bytes(b"{}\n")
-    art = F.fixture_id(src / "big.json")
-    files = {".gitignore": f"__pycache__/\n{BIG_PATH}\nother/data/other.json\n",
-             "artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
-             "pyproject.toml": PREFLIGHT_FILES["pyproject.toml"].replace('["pkg"]', '["pkg", "other"]'),
-             "other/pyproject.toml": PREFLIGHT_FILES["pkg/pyproject.toml"].replace('"pkg"', '"other"'),
-             "other/tests/test_other.py": "def test_other():\n    pass\n",
-             "pkg/tests/test_big.py": ("import json\nfrom pathlib import Path\n\n"
-                                       "BIG = json.loads((Path(__file__).parents[1] / 'data' / 'big.json').read_text())\n\n\n"
-                                       "def test_big():\n    assert BIG['openings']\n")}
-    return files, art
-
-
-def _stub_fetch(calls: list, why: str = ""):
-    """The preflight's fetch, recording what it was asked; it places the bytes, or (``why``) fetches nothing and says why."""
-    def fetch(wt: Path, paths: list[str], deadline: float) -> tuple[set[str], str]:
-        calls.append(list(paths))
-        if why:
-            return set(paths), why
-        for p in paths:
-            (wt / p).parent.mkdir(parents=True, exist_ok=True)
-            (wt / p).write_bytes(BIG)
-        return set(), ""
-    return fetch
-
-
 #: a pkg test that fails to collect on the merged tree alone: #1, on `next`, refits away the row it reads
 ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
                                        "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"}
-
-
-def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
-    """A suite whose test reads a fetched fixture at import (as `benchmarks/numerical` reads a vector of
-    tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
-    fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
-    collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
-    from research.queue import MarkOnly, StoreLabels, ready
-
-    files, _ = _fixture_tree(world)
-    _preflight_main(world, files)
-    calls: list = []
-    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, fetch=_stub_fetch(calls))) == 0
-    said = next(s for s in world.logs if "preflight" in s)
-    assert "nothing refused" in said and "collected 2 suite(s)" in said and "not judged" not in said, said
-    assert calls == [[BIG_PATH]]
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
-
-    calls.clear()
-    world.gh.put(3, world.change(ROWS_TEST), ready=False)
-    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world, fetch=_stub_fetch(calls))) == 1
-    err = capsys.readouterr().err
-    found = [ln for ln in err.splitlines() if ln.startswith("  - ")]
-    assert found == ["  - `pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7': a "
-                     "test reads what another queued PR changes or what only an unlanded PR adds; make it read what `main` and "
-                     "`next` hold, or wait for that PR"], err
-    assert calls == [[BIG_PATH], [BIG_PATH]] and _no_worktree_left(world)
-
-
-def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_unjudged(world, capsys):
-    """With no credentials (or no source holding it), the suite that reads it isn't collected, so it can't refuse on bytes it
-    never had; one note names the suite and the fixtures, and the head is marked: its candidate's check fetches them."""
-    from research.queue import MarkOnly, StoreLabels, ready
-
-    files, _ = _fixture_tree(world)
-    _preflight_main(world, files)
-    calls: list = []
-    world.gh.put(2, h2 := world.change(ROWS_TEST), ready=False)
-    pre = _preflight(world, fetch=_stub_fetch(calls, why="no credentials for the store's remote"))
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if "preflight" in s)
-    note = (f"pkg not judged: 1 of the 1 fixture(s) the suites read weren't fetched (no credentials for the store's remote: "
-            f"{BIG_PATH}); its candidate's check fetches them")
-    assert said.count(note) == 1 and "collected 1 suite(s) (.)" in said and "not judged" not in said.replace(note, ""), said
-    assert calls == [[BIG_PATH]]
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
-
-
-def test_the_preflights_fetch_keeps_what_it_fetched_in_this_machines_store_for_the_next_preflight(world, monkeypatch, capsys):
-    """The default fetch is `research data fetch-fixtures` through the caller's store: the first preflight takes the fixture
-    from the store's remote, and the next one on this machine from the store alone, with the remote gone; a store that never
-    fetched it then can't, and its preflight says so and still marks."""
-    from research.queue import MarkOnly, ready
-    from research.store import fixtures as F
-    from research.store.local import manifest_key, object_key
-    from research.store.remote import FsRemote
-
-    files, art = _fixture_tree(world)
-    _preflight_main(world, files)
-    seed = LocalStore(world.tmp / "seed")
-    assert seed.put_artifact(F.FIXTURE_KIND, {}, None, file=world.tmp / "src" / "big.json") == art
-    vault = FsRemote(world.tmp / "vault")
-    [(blob, _)] = seed.get_manifest(art).blobs()
-    vault.put(object_key(blob), seed.object_path(blob))
-    vault.put(manifest_key(art.split(":", 1)[1]), seed.manifest_path(art.split(":", 1)[1]))
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(world.tmp / "store.toml"))
-    monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
-
-    def recorded(store=None):
-        pre = _preflight(world, store=store)
-        real = pre.fetch
-        pre.fetch = lambda wt, paths, deadline: got.append((paths, real(wt, paths, deadline))) or got[-1][1]
-        return pre
-
-    got: list = []
-    world.gh.put(2, world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=recorded()) == 0, capsys.readouterr().err
-    assert got == [([BIG_PATH], (set(), ""))] and world.store.object_path(blob).is_file()
-    said = next(s for s in world.logs if "preflight: #2" in s)
-    assert "collected 2 suite(s)" in said and "not judged" not in said, said
-
-    shutil.rmtree(world.tmp / "vault")
-    world.gh.put(3, world.change({"pkg/tests/test_most.py": "def test_most():\n    pass\n"}), ready=False)
-    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=recorded()) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if "preflight: #3" in s)
-    assert got[-1] == ([BIG_PATH], (set(), "")) and "collected 2 suite(s)" in said and "not judged" not in said, said
-
-    elsewhere = LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml")
-    world.gh.put(4, world.change({"pkg/tests/test_else.py": "def test_else():\n    pass\n"}), ready=False)
-    assert ready(world.gh, elsewhere, 4, "lane-4", MarkOnly(), preflight=recorded(elsewhere)) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if "preflight: #4" in s)
-    assert got[-1][1][0] == {BIG_PATH} and "pkg not judged: 1 of the 1 fixture(s)" in said, said
 
 
 def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
@@ -3335,7 +3245,7 @@ def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pi
         else:
             said = next(s for s in world.logs if f"preflight: #{n} at" in s)
             assert "nothing refused" in said and f"conflicts only in pins: {pin}, rebuilt from the merged tree" in said, said
-            assert "collected 2 suite(s) (pkg, .)" in said and "checks skipped" not in said, said
+            assert "checks skipped" not in said, said
         assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not broken) and _no_worktree_left(world)
 
 
@@ -3402,10 +3312,6 @@ PREFLIGHT_REFUSALS = {
     # a report-genre name fails a candidate's preflight-lints
     "repository lint": ({"REPORT_GENRE_NAME": ""}, "the invariant tests in . fail on the merged tree: FAILED "
                         "tests/test_repository.py::test_report_genre_name_absent"),
-    # a test reads a vector row that a PR queued before it refits away: a KeyError at import on the merged tree only
-    "collection error": ({"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
-                          "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"},
-                         "`pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7'"),
     "stale lock": ({"LOCK_STALE.txt": ""}, "`uv sync --locked` on the merged tree: error: The lockfile at `uv.lock` needs to be "
                    "updated"),
     # time.perf_counter in a test fixture, or numpy's rng in vllm (P3), costs a candidate its check
@@ -3484,7 +3390,7 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
 #: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
 ADDED = "tools/check/added_lines.py"
 ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
-    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+    ADDED, "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
 
 
 def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
@@ -3517,69 +3423,15 @@ def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
-def test_the_preflight_prints_what_the_ratchet_gate_fails_on_the_merge_as_a_warning_and_notes_one_that_cant_judge(
-        world, capsys, monkeypatch):
-    """The ratchet gate tells a new violation by its text, so it can read an honest change's (a moved line, a cycle through a
-    module the PR adds) as one: on a change that reaches what it judges, the preflight runs the base's copy on the merge as
-    check's step does, keeping no verdict and its scratch in the merged worktree's directory, and the mark prints what it fails
-    and goes through.  A gate that can't judge is named under "checks skipped"."""
-    from research.queue import PREFLIGHT_RATCHET, RATCHET_SAYS, MarkOnly, StoreLabels, ready
+def test_a_marks_preflight_runs_no_suite_and_no_ratchet_gate(world, capsys, monkeypatch):
+    from research.queue import MarkOnly, StoreLabels, ready
 
     monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
-    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
-    nxt = _git(world.origin, "rev-parse", "next")
-    own = "print('{\"failures\": []}')\n"                              # the head's copy, which passes: the base's judges
-    world.gh.put(2, h2 := world.change({"adapters/vllm/verity_vllm/commit.py": "", "RATCHET_NEW": "", PREFLIGHT_RATCHET[0]: own}),
-                 ready=False)
+    _preflight_main(world, {"adapters/vllm/tools/ratchet_gate.py": RATCHET_GATE})
+    world.gh.put(2, h2 := world.change({**ROWS_TEST, "adapters/vllm/verity_vllm/commit.py": "", "RATCHET_NEW": ""}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
-    assert [s for s in world.logs if "warning" in s] == [
-        f"research queue: preflight: warning: #2 at {h2[:12]}: the ratchet gate ({PREFLIGHT_RATCHET[0]} as `next` at "
-        f"{nxt[:12]} has it) fails the merge: the base finds 1 violation its lists miss\n"
-        f"    p09_layering: [package-cycle] commit <-> engine\n  {RATCHET_SAYS}"], world.logs
-    ran = json.loads(seen.read_text())
-    base, top, *rest = ran["argv"]
-    assert base == nxt and rest == ["--json"] and _git(world.dev, "log", "-1", "--format=%P", top) == f"{nxt} {h2}", ran
-    assert ran["cache"] == "" and ran["head"] == top, ran
-    assert Path(ran["script"]).resolve().parent == Path(ran["cwd"]).resolve().parent == Path(ran["tmp"]).resolve(), ran
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
-
-    world.gh.put(3, h3 := world.change({"adapters/vllm/verity_vllm/engine.py": "", "RATCHET_CANT": ""}), ready=False)
-    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
-    assert "checks skipped: ratchet-gate not checked: exited 2: ratchet gate: the base has no lints to run" in said, said
-    assert [s for s in world.logs if "warning" in s] == [s for s in world.logs if "warning" in s and "#2" in s]
-    assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is True and _no_worktree_left(world)
-
-
-def test_the_preflight_runs_the_ratchet_gate_after_the_run_at_next_that_a_refusal_needs(world, capsys, monkeypatch):
-    """The gate comes last, after the run at `next` that tells a failure the PR causes from one `next` has too, so the time it
-    takes never turns a refusal into a check that couldn't run on `next` to compare; it judges the merge by its commit, though
-    the worktree is at `next` by then."""
-    from research.queue import PREFLIGHT_RATCHET, MarkOnly, StoreLabels, ready
-
-    monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
-    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
-    nxt = _git(world.origin, "rev-parse", "next")
-    world.gh.put(2, h2 := world.change({"adapters/vllm/verity_vllm/commit.py": "", "RATCHET_NEW": "", "BROKEN_DOC_PATH": ""}),
-                 ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
-    assert "FAILED tests/test_doc_paths.py::test_broken_doc_path_absent" in (err := capsys.readouterr().err), err
-    assert [s for s in world.logs if f"warning: #2 at {h2[:12]}: the ratchet gate" in s], world.logs
-    ran = json.loads(seen.read_text())
-    assert ran["head"] == nxt and _git(world.dev, "log", "-1", "--format=%P", ran["argv"][1]) == f"{nxt} {h2}", ran
-    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
-
-
-def test_the_preflight_runs_the_ratchet_gate_only_on_a_change_that_reaches_what_it_judges(world, capsys, monkeypatch):
-    """The gate judges the vLLM integration, the repository's lints and lists and the root's ruff configs, so a change
-    elsewhere, a ruff.toml below the root included, doesn't run it, whatever its tree holds."""
-    from research.queue import PREFLIGHT_RATCHET, MarkOnly, StoreLabels, ready
-
-    monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
-    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
-    world.gh.put(2, h2 := world.change({"pkg/notes.txt": "x\n", "pkg/ruff.toml": "", "RATCHET_NEW": ""}), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
-    assert not seen.exists() and not [s for s in world.logs if "warning" in s], world.logs
+    said = next(s for s in world.logs if "preflight: #2" in s)
+    assert "nothing refused" in said and "collect" not in said and not seen.exists(), world.logs
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
@@ -3900,6 +3752,19 @@ def test_the_lean_step_builds_the_changed_modules_and_their_importers_transitive
     assert lean_graph(tmp_path, files, ["lean/a/README.md", "a.txt"]).targets == {}
 
 
+def test_the_lean_step_leaves_the_auditor_s_fixture_packages_to_its_controls(tmp_path):
+    """The builder skips the auditor's fixture packages (`lean_audit.packages`), so a change to one builds nothing here."""
+    from research.queue import lean_graph
+
+    tree = {f"{d}/{rel}": text for d in ("tools/verity/lean/fixtures/old", "tests/tools/verity/lean/fixtures/finders")
+            for rel, text in (("lakefile.toml", 'name = "f"\n\n[[lean_lib]]\nname = "F"\n'), ("lean-audit.json", "{}\n"),
+                              ("F.lean", "def x := 1\n"))}
+    for rel, text in tree.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    assert lean_graph(tmp_path, sorted(tree), [f for f in tree if f.endswith(".lean")]).targets == {}
+
+
 #: `lean_changed.py --build`'s stand-in for Lake: a file whose `-- needs NAME` line names no `def NAME` of the tree's Lean files
 #: fails, as Lean's `unknown identifier` would; each call's files are appended to $FAKE_LEAN_SEEN, and $FAKE_LEAN_SKIP skips
 FAKE_LEAN_BUILDER = """\
@@ -4173,7 +4038,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert goal_gates == [Q.goal_gate] * 3                                               # the goal gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
-    assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+    assert e.value.code == 2 and "--no-preflight is for ready only, not status" in capsys.readouterr().err
 
 
 def test_research_queue_judge_marks_through_the_goal_gate(world, monkeypatch):
@@ -4465,6 +4330,46 @@ def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_ma
     names = world.change({"e.txt": "reads c.txt\n"}, base=base)
     assert Q.lacked_moves(world.origin, move, clean) == []
     assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
+def _commit(world: World, tree_of: str, *parents: str, msg: str) -> str:
+    """A commit of ``tree_of``'s tree on ``parents`` with message ``msg``, on the origin."""
+    tree = _git(world.dev, "rev-parse", f"{tree_of}^{{tree}}")
+    sha = _git(world.dev, "commit-tree", tree, *(x for p in parents for x in ("-p", p)), "-m", msg)
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_and_ran_itself_is_no_move_a_head_lacks(world):
+    """A branch's earlier, landed work merged back with `-s ours` brought into `main`'s history a copy of a move `main` ran
+    itself, by another commit the head holds: the merge's tree is its first parent's, so the copy changed nothing on `main`,
+    and the head lacks nothing (`moves_between`, `lacked_moves`). A copy whose line `main` never ran elsewhere stays, as
+    restack.py's moved merge holds a move in flight whose change its rerun, with no move line, brought; a move on `main`'s
+    first-parent line, and the same line again on a merge's second parent with its tree, are still found, and
+    `move_lines.toml`'s `move = false` still takes one out. The same case is restack.py's (`test_restack.py`)."""
+    line = "Move\n\nLayout-move: tools/move/x_map.toml"
+    base = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    copy = _commit(world, world.change({"moved/c.txt": "c\n"}, base=base), base, msg=line)
+    ran = _commit(world, world.change({"moved/c.txt": "c\n", "r.txt": "r\n"}, base=base), base, msg=line)
+    head = world.change({"e.txt": "reads c.txt\n"}, base=ran)
+    beside = world.change({"m.txt": "1\n"}, base=ran)
+    ours = _commit(world, beside, beside, copy, msg="Merge the branch's earlier, landed work, keeping this tree (-s ours)")
+    _git(world.dev, "push", "-q", "origin", f"{ours}:refs/heads/main")
+    assert Q.moves_between(world.origin, ours, head) == []
+    assert Q.lacked_moves(world.origin, ours, head) == []
+    inflight = _commit(world, world.change({"tools/move/y_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n',
+                                             "moved/d.txt": "d\n"}, base=ours), ours,
+                       msg="Move\n\nLayout-move: tools/move/y_map.toml")
+    rerun = _commit(world, inflight, ours, msg="restack: rerun tools/move/layout.py")
+    moved = _commit(world, rerun, rerun, inflight, msg="Merge the layout move into the branch, restacked")
+    real = _commit(world, world.change({"n.txt": "n\n"}, base=moved), moved, msg=line)
+    side = _commit(world, world.change({"s.txt": "s\n"}, base=real), real, msg=line)
+    landed = _commit(world, side, real, side, msg="Queue: #2 lands the move")
+    assert [m for m, _ in Q.moves_between(world.origin, landed, head)] == [inflight, real, side]
+    assert Q.lacked_moves(world.origin, landed, head) == [(real, "tools/move/x_map.toml", ["c.txt"]),
+                                                          (side, "tools/move/x_map.toml", ["c.txt"])]
+    corrected = world.change({Q.MOVE_LINES: f'["{real}"]\nmove = false\nreason = "It ran nothing."\n'}, base=landed)
+    assert [m for m, _ in Q.moves_between(world.origin, corrected, head)] == [inflight, side]
 
 
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
@@ -5258,8 +5163,11 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open and edit only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open and edit only: `ready` would act")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open, edit only, not eject"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open, edit only, not ready"),
+                      (["queue", "status", "--issue", "X-1"], "--issue is for open, link only, not status"),
+                      (["queue", "cross", "--title", "x"], "--title is for open, edit only, not cross"),
+                      (["queue", "stats", "--mark"], "--mark is for ready only, not stats")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

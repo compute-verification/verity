@@ -216,6 +216,19 @@ def test_runs_whose_sender_no_handle_owns_are_one_post_that_rings_infra(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]] * 2
 
 
+def test_a_run_of_a_team_agent_no_handle_owns_names_the_agent(relay):
+    """Every sender of such a post had to be looked up by hand to tell it was one of the team's own workers, and whose."""
+    agent = "bc-00000000-0000-0000-0000-0000000000aa"
+    run = {"run": "r20261118-010000-0001", "node": "vy-nebius-1", "sender": f"https://cursor.com/agents/{agent}",
+           "what": "uv run x", "rc": 0, "state": "done", "after": "1 min", "at": "2026-11-18T01:01:00Z",
+           "title": "WIRES: one spec a workload"}
+    relay.log_text["text"] = json.dumps({"kind": "run_ended", "agent": "", "name": "", "run": run["run"], "handle": None,
+                                         "role": "unknown", "count": 1, "runs": [run]}) + "\n"
+    relay.once()
+    assert (f"sent by <https://cursor.com/agents/{agent}|bc-00000000>, the team's agent \u201cWIRES: one spec a workload\u201d. "
+            "@infra is rung") in relay.posts[0]
+
+
 def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_no_one(relay):
     """A worker whose launcher the watch couldn't find came as infra's own ("of lane infra ...; resume it with Task"), each
     time it stopped, and each run of a sender no handle owned rang infra again. The watch's one `unplaced` record rings infra

@@ -82,6 +82,7 @@ public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.WiredAt
 public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.WireMapRewires
+public import Proofs.Flock.SpotFlock.MembersAt
 public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
@@ -101,11 +102,17 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Decode
 public import Proofs.Flock.SpotFlock.InstanceStmt.Inputs
 public import Proofs.Flock.SpotFlock.InstanceStmt.Round2
 public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
+public import Proofs.Flock.SpotFlock.InstanceStmt.ScopeZk
 public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 public import Proofs.Flock.SpotFlock.InstanceStmt.Setup
 public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 public import Proofs.Flock.SpotFlock.InstanceStmt.InsSetup
 public import Proofs.Flock.SpotFlock.InstanceStmt.Scope
+public import Proofs.Flock.SpotFlock.InstanceStmt.ReadyZk
+public import Proofs.Flock.SpotFlock.InstanceStmt.RecordFits
+public import Proofs.Flock.SpotFlock.InstanceStmt.AcceptsFixture
+public import Proofs.Flock.SpotFlock.Honest.Ref
+public import Proofs.Flock.Claims.Complete.ZkTables.RecordGeneral
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsOpen

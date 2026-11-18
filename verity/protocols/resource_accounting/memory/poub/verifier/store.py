@@ -1,6 +1,6 @@
 """A store a pinned BF16 checkpoint lays out, and the payload salts every store's leaves take: the prover lays its store
-out from its own checkpoint (`arena_of`, `Store`, `node.py --model-dir`) and salts its payload tree's leaves under the
-verifier's key (`store_salt`). The verifier holds no checkpoint: what the store holds is the developer's choice.
+out from its own checkpoint (`arena_of`, `Store`, `node.py --model-dir`) and salts its payload tree's leaves itself: a
+card's prover under a key of its own from the operating system (`store_salt`), never sent. The verifier holds no checkpoint: what the store holds is the developer's choice.
 `checkpoint.sh` holds a node's checkpoint to core's pin (`read_pin`, `check`), and `auditor_line.py` reads a pin
 (`read_pin`).
 
@@ -19,7 +19,7 @@ store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blo
 salt       store_salt(key, label, c) = `codec.xof`(m)[0 : 192], SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖
            SHA512(m ‖ u32be 2), m = "verity/store/salt/v1\0" ‖ key ‖ label ‖ u64be c (`SALT_VERSION`)
 payload    `audit.payload_tree` over the store, chunk j salted with store_salt(key, PAYLOAD_LABEL, j) under the
-           verifier's key (its payload-key message)
+           card's prover's own key from the operating system, never sent or written
 ~~~
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ SALT_VERSION = "verity/store/salt/v1"
 SALT_DOMAIN = SALT_VERSION.encode() + b"\0"
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
 KEY_BYTES = 32
-"""The verifier's payload salt key."""
+"""The payload salt key's length: the card's prover's own key, from the operating system."""
 ARCHITECTURES = ("LlamaForCausalLM", "Qwen2ForCausalLM")
 """The models whose vLLM module order `arena` states: a decoder layer's attention, then its MLP, no other 2-D parameter."""
 LAYER = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),

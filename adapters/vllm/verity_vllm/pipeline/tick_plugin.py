@@ -32,7 +32,8 @@ __all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader"
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
 #: when T catches up: ``quiet``, the registered rule (only with nothing running or waiting), ``marks`` (`RuleGate`), or
-#: ``open``, a gate open from the start, which orders nothing: the tick's server without its order
+#: ``open``, a gate open from the start, which orders nothing: the tick's server without its order, which nothing serves
+#: under and only a benchmark arm that names it measures (`tick_config` refuses it without an ``arm``)
 CATCH_UPS = frozenset({"quiet", "marks", "open"})
 #: the OpenAI server's routes whose request body carries sampling parameters, which `TickFeed` reads (`unseeded`)
 SAMPLED_PATHS = frozenset({"/v1/completions", "/v1/chat/completions"})
@@ -45,7 +46,7 @@ def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | No
     ``bucket_us``, ``sat_us`` and ``free_us`` (the `serve_admit.Tick`), ``hold_ms`` (5000 by default), ``feed`` (the file
     `TickFeed` appends to and `register`'s gate reads), ``log`` (a directory for each gate's ``tick.PID.jsonl``,
     optional), and a rule other than the registered one, ``token_ns`` and ``catch_up`` (`RuleGate`; 0 and ``quiet``,
-    the registered rule, by default)."""
+    the registered rule, by default), with ``arm``, the benchmark arm measuring it, where ``catch_up`` is ``open``."""
     cfg = settings.get(TICK_ENV, environ)
     if cfg is None:
         return None
@@ -54,6 +55,9 @@ def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | No
     rule = {"token_ns": cfg.get("token_ns", 0), "catch_up": cfg.get("catch_up", "quiet")}
     if type(rule["token_ns"]) is not int or rule["token_ns"] < 0 or rule["catch_up"] not in CATCH_UPS:
         raise ValueError(f"{TICK_ENV}: token_ns a non-negative integer and catch_up one of {sorted(CATCH_UPS)}, not {rule}")
+    if rule["catch_up"] == "open" and not cfg.get("arm"):
+        raise ValueError(f"{TICK_ENV}: catch_up 'open' opens the gate, which then orders nothing, so nothing serves under "
+                         "it; only a benchmark arm that names it measures it, its name the object's \"arm\"")
     return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
             "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]), "log": cfg.get("log"), **rule}
 

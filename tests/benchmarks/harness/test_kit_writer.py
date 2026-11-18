@@ -24,8 +24,8 @@ def test_the_writer_appends_measurements_in_the_form_a_reader_of_numbers_takes(t
     w = kit.writer(out)
     stamp = kit.host_stamp()
     first = w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured")
-    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
-                     "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}
+    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "version": 1,
+                     "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}
     assert _result(out) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [first]}
     second = kit.writer(out).measurement("serving_cost", 0.031, "ratio", interval=(0.029, 0.034), target=0.05,
                                          verdict="within target", inputs=("served_tok_s", "stock_tok_s"), mark="measured")
@@ -326,7 +326,7 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
     w, stamp = kit.writer(tmp_path), kit.host_stamp()
     year = w.measurement("gb", 14240.0, "GB a world year", mark="modeled", period="year", over="world")
     assert year == {"name": "gb", "value": 14240.0, "unit": "GB a world year", "mark": "modeled", "period": "year",
-                    "over": "world", "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
+                    "over": "world", "version": 1, "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
                     "inputs": ["modeled"], "host": stamp}
     week = w.measurement("gb", 273.1, "GB a datacenter week", mark="modeled", period="week", over="datacenter")
     phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no phase's rows")
@@ -395,9 +395,11 @@ def test_a_measurement_with_no_why_is_written_byte_for_byte_as_it_was_and_one_wi
     w.measurement("served_tok_s", 4120.5, "tok/s", interval=(4100, 4140), target=4000, verdict="within target", inputs="reps",
                   mark="measured")
     w.measurement("stock_tok_s", None, "tok/s", mark="measured")
-    entries = [{"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
+    entries = [{"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "version": 1, "commit": SHA,
+                "run": RUN,
                 "ci95": [4100, 4140], "target": 4000, "verdict": "within target", "inputs": ["measured", "reps"], "host": stamp},
-               {"name": "stock_tok_s", "value": None, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
+               {"name": "stock_tok_s", "value": None, "unit": "tok/s", "mark": "measured", "version": 1, "commit": SHA,
+                "run": RUN,
                 "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}]
     doc = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": entries}
     assert (tmp_path / kit.RESULT).read_text() == json.dumps(doc, indent=1) + "\n"
@@ -427,3 +429,97 @@ def test_a_measurement_carries_its_benchmarks_extra_keys_and_none_that_the_entry
     doc = _result(tmp_path)
     assert [m["name"] for m in doc["measurements"]] == ["share", "bare"]
     assert research_result.check_doc(tmp_path, doc, RUN).valid
+
+
+def test_every_measurement_carries_its_metrics_version_and_no_caller_gives_one(tmp_path, no_gpu, monkeypatch):
+    from research import result as research_result
+    from verity_bench import kit_report
+
+    w = kit.writer(tmp_path)
+    registered = w.measurement("benchmarks/exfiltration-total-gb", 1.0, "GB", mark="modeled")
+    assert registered["version"] == 1 and list(registered)[:5] == ["name", "value", "unit", "mark", "version"]
+    spanned = w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured", period="year", member="b1")
+    assert spanned["version"] == 1 and list(spanned)[:7] == ["name", "value", "unit", "mark", "period", "member", "version"]
+    for name in ("served_tok_s", "benchmarks/exfiltration-total-gb"):
+        with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
+            w.measurement(name, 1, "GB", mark="measured", member="b8", extra={"version": 2})
+    monkeypatch.setattr(kit_report, "VERSIONS", {"vllm/x": 2})
+    assert w.measurement("vllm/x", 1.0, "s", mark="measured")["version"] == 2
+    assert w.measurement("vllm/y", 1.0, "s", mark="measured")["version"] == 1
+    assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid
+
+
+PARAMETERS = {"epsilon": {"value": 0.0123, "from": "applications/onsite_compute.toml",
+                          "basis": "window.eps_at(K=64, δ=0.01, C=60, W=64, 1)"}, "delta": {"value": "1/100",
+                                                                                         "from": "onsite_compute"}}
+CALIBRATION = [{"path": "calibration/census/hardware.json", "key": "h100-sxm5-80gb/e4m3.flop_per_second"}]
+
+
+def test_a_measurement_names_its_parameters_and_calibration_each_only_where_given(tmp_path, no_gpu):
+    from research import result as research_result
+
+    w = kit.writer(tmp_path)
+    bare = w.measurement("vllm/x", 1.0, "s", mark="measured")
+    assert "parameters" not in bare and "calibration" not in bare
+    held = w.measurement("vllm/y", 1.0, "s", mark="modeled", parameters=PARAMETERS, calibration=CALIBRATION)
+    assert held["parameters"] == PARAMETERS and held["calibration"] == CALIBRATION
+    for bad in ({}, [], {"epsilon": 0.01}, {"epsilon": {"value": 0.01}}, {"epsilon": {"value": True, "from": "a"}},
+                {"epsilon": {"value": math.inf, "from": "a"}}, {"epsilon": {"value": 1, "from": "a", "unit": "s"}},
+                {"": {"value": 1, "from": "a"}}, {"epsilon": {"value": 1, "from": "a", "basis": ""}}):
+        with pytest.raises(ValueError, match="parameter"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", parameters=bad)
+    for bad in ([], "calibration/census/hardware.json", [{"path": "benchmarks/slowdown/data/reference.toml", "key": "k"}],
+                [{"path": "calibration/../x", "key": "k"}], [{"path": "calibration/x.toml"}],
+                [{"path": "calibration/x.toml", "key": " "}], CALIBRATION[0]):
+        with pytest.raises(ValueError, match="calibration is a list of"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", calibration=bad)
+    for key in ("parameters", "calibration"):
+        with pytest.raises(ValueError, match="already has a meaning for"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", extra={key: []})
+    assert [m["name"] for m in _result(tmp_path)["measurements"]] == ["vllm/x", "vllm/y"]
+    assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid
+
+
+def test_a_metric_that_needs_a_parameter_or_a_calibration_number_is_refused_one_naming_none(tmp_path, no_gpu, monkeypatch):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter",), "vllm/pc": ("parameter", "calibration")})
+    w = kit.writer(tmp_path)
+    with pytest.raises(ValueError, match=r"^vllm/p's metrics.toml row needs parameter \(parameter\), and the measurement "
+                                         r"names none: pass parameters=\{NAME: "):
+        w.measurement("vllm/p", 1.0, "s", mark="measured", calibration=CALIBRATION)
+    with pytest.raises(ValueError, match=r"needs calibration \(parameter, calibration\).*pass calibration=\[\{'path': "):
+        w.measurement("vllm/pc", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    with pytest.raises(ValueError, match="needs parameter and calibration"):
+        w.measurement("vllm/pc", None, "s", mark="measured", why="no run yet")
+    with pytest.raises(ValueError, match="needs parameter"):
+        w.keep([{"name": "vllm/p", "value": 1.0}])
+    w.measurement("vllm/p", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    w.measurement("vllm/pc", 1.0, "s", mark="measured", parameters=PARAMETERS, calibration=CALIBRATION)
+    w.measurement("vllm/other", 1.0, "s", mark="measured", calibration=CALIBRATION)
+    assert [m["name"] for m in _result(tmp_path)["measurements"]] == ["vllm/p", "vllm/pc", "vllm/other"]
+
+
+def test_a_trial_is_held_to_what_its_metric_needs(tmp_path, no_gpu, monkeypatch):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter",)})
+    monkeypatch.setenv(kit.TRIAL, "1")
+    w = kit.writer(tmp_path)
+    with pytest.raises(ValueError, match="needs parameter"):
+        w.measurement("vllm/p", 1.0, "s", mark="measured")
+    w.measurement("vllm/p", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    assert [m["parameters"] for m in json.loads(w.trial_file().read_text())] == [PARAMETERS]
+
+
+def test_the_kits_report_call_passes_parameters_and_calibration_through(tmp_path, no_gpu, monkeypatch, capsys):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter", "calibration")})
+    m = {"name": "vllm/p", "value": 1.0, "unit": "s", "parameters": PARAMETERS, "calibration": CALIBRATION}
+    assert kit_report.report("p", "p: 1 s", {"value": 1.0}, [m], out=tmp_path) == 0
+    (held,) = _result(tmp_path)["measurements"]
+    assert held["parameters"] == PARAMETERS and held["calibration"] == CALIBRATION
+    with pytest.raises(ValueError, match="needs parameter and calibration"):
+        kit_report.report("p", "p: 1 s", {"value": 1.0}, [{"name": "vllm/p", "value": 2.0, "unit": "s"}],
+                          out=tmp_path / "again")

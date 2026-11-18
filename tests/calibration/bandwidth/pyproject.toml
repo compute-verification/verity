@@ -1,6 +1,6 @@
 # PoUB's device ceilings. Not a package: the probes (`chip.cu`, `write.cu`, `write_host.c`) run on a GPU node or a host,
-# each by its own script. The runner that hands a name to its script, `run.sh`, and `chip_ur.py`'s rewrite of a cubin
-# are tested here as a suite (`uv run tools/check/suites.py calibration/bandwidth`).
+# each a probe of the one runner, `run.sh` (`verity calibrate bandwidth chip|write_gpu|write_host`). The runner, the
+# probes' results (`result.py`) and `chip_ur.py`'s rewrite of a cubin are tested here as a suite (`uv run tools/check/suites.py calibration/bandwidth`).
 [tool.pytest.ini_options]
 testpaths = ["."]
 pythonpath = ["../../../calibration/bandwidth"]

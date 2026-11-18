@@ -1,5 +1,6 @@
 """`research metrics show` against a fake route: each declared metric's line, one no run has recorded, a refused row and
-why the site couldn't read something; filtering by id and owner; an undeclared id or a refusal as one line; which
+why the site couldn't read something; filtering by id, owner and kind; a version above 1 and a former id; a breakdown under its main number; the registry's rows of a tree, by id and by former id;
+an undeclared id or a refusal as one line; which
 credential goes where: a site key only to the console's route, an older token never, the identity otherwise. And `research
 metrics send`, with a stand-in for the site: a reading's shape, the panels key read from its file and left out of a dry run,
 sent only over https to the site's own host, a reading the door would refuse sent not at all, and a failure on the network
@@ -286,3 +287,60 @@ def test_the_site_client_is_slacks_with_the_bearer_and_its_answer_unread(monkeyp
     monkeypatch.setattr(metrics, "http_open", http_open)
     assert metrics.send_json("PUT", metrics.METRICS, {"a": 1}, "k", "x") is None
     assert calls == [("PUT", metrics.METRICS, {"a": 1}, {"Authorization": "Bearer k", "Content-Type": "application/json"})]
+
+
+def test_show_names_a_version_above_one_and_finds_a_metric_by_a_former_id(capsys):
+    report = {**REPORT, "metrics": [{**COST, "version": 2, "was": ["vllm/serving-cost"]}, LAND], "refused": []}
+    assert metrics.main(["show"], Fake(report)) == 0
+    heads = [line for line in capsys.readouterr().out.splitlines() if not line.startswith(" ")]
+    assert heads == ["vllm/serving-cost-glm53@v2  @vllm  GLM-5.3's serving cost over stock vLLM",
+                     "ci/mark-to-main  @ci  Ready mark to main"]
+    assert metrics.main(["show", "vllm/serving-cost", "--json"], Fake(report)) == 0
+    assert [(m["id"], m["version"]) for m in json.loads(capsys.readouterr().out)["metrics"]] == [("vllm/serving-cost-glm53", 2)]
+    assert metrics.main(["show", "--json"], Fake(REPORT)) == 0
+    assert [m["version"] for m in json.loads(capsys.readouterr().out)["metrics"]] == [1, 1]
+
+
+def test_the_registry_gives_each_row_its_version_by_its_id_and_its_former_ids(tmp_path):
+    (tmp_path / "benchmarks" / "a").mkdir(parents=True)
+    (tmp_path / "benchmarks" / "a" / "metrics.toml").write_text(
+        '[[metric]]\nid = "vllm/new"\nunit = "s"\nversion = 2\nchanged = "Seconds of the whole run."\nwas = ["vllm/old"]\n'
+        '[[metric]]\nid = "vllm/other"\nunit = "s"\nwas = ["vllm/new"]\n')
+    (tmp_path / "benchmarks" / "a" / ".venv").mkdir()
+    (tmp_path / "benchmarks" / "a" / ".venv" / "metrics.toml").write_text('[[metric]]\nid = "vllm/skipped"\n')
+    rows = metrics.registry(tmp_path)
+    assert sorted(rows) == ["vllm/new", "vllm/old", "vllm/other"]
+    assert rows["vllm/old"] is rows["vllm/new"] and rows["vllm/new"]["version"] == 2
+    assert rows["vllm/new"]["changed"] == "Seconds of the whole run." and rows["vllm/other"]["version"] == 1
+
+
+PART = {**LAND, "id": "vllm/serving-cost-glm53-commit", "title": "Commit's part of the cost", "owner": "vllm",
+        "command": "bash benchmarks/serve_tax/run.sh", "under": "vllm/serving-cost-glm53"}
+
+
+def test_show_prints_each_breakdown_indented_under_its_main_number(capsys):
+    report = {**REPORT, "metrics": [PART, LAND, COST], "refused": []}
+    assert metrics.main(["show"], Fake(report)) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "ci/mark-to-main  @ci  Ready mark to main",
+        "  not recorded yet; measured by: research run -- python tools/ci/landing.py",
+        "vllm/serving-cost-glm53  @vllm  GLM-5.3's serving cost over stock vLLM",
+        "  2 [1.8, 2.2] percent of stock's serving compute  7d -0.4  30d —  age 2 d (every 7d)  meets (target 2.05)",
+        "  run r20261109-000000-abcd at dddddddddddd",
+        "    vllm/serving-cost-glm53-commit  @vllm  Commit's part of the cost",
+        "      not recorded yet; measured by: bash benchmarks/serve_tax/run.sh",
+    ]
+    assert metrics.main(["show", "vllm/serving-cost-glm53-commit"], Fake(report)) == 0
+    assert capsys.readouterr().out.splitlines()[0] == (
+        "vllm/serving-cost-glm53-commit  @vllm  Commit's part of the cost  (under vllm/serving-cost-glm53)")
+
+
+def test_show_keeps_one_kind_and_a_row_that_gives_none_is_system(capsys):
+    report = {**REPORT, "metrics": [COST, {**LAND, "kind": "platform"}], "refused": []}
+    assert metrics.main(["show", "--kind", "platform", "--json"], Fake(report)) == 0
+    assert [(m["id"], m["kind"]) for m in json.loads(capsys.readouterr().out)["metrics"]] == [("ci/mark-to-main", "platform")]
+    assert metrics.main(["show", "--kind", "system", "--json"], Fake(report)) == 0
+    assert [(m["id"], m["kind"]) for m in json.loads(capsys.readouterr().out)["metrics"]] == [
+        ("vllm/serving-cost-glm53", "system")]
+    with pytest.raises(SystemExit):
+        metrics.main(["show", "--kind", "project"], Fake(report))

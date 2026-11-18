@@ -209,6 +209,18 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
 
 
+def test_a_case_that_cant_reach_the_private_dir_leaves_none_in_dir(node, tmp_path) -> None:
+    """The case holds the signed session: where the serve dir's private/wipe can't be made, DIR, the window's output that
+    leaves the node, keeps no copy of it."""
+    d = tmp_path / "pieces" / "wipe"
+    (tmp_path / "pieces" / "serve-run").mkdir(parents=True)
+    (tmp_path / "pieces" / "serve-run" / "private").write_text("not a directory\n")
+    judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
+    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
+    assert "WIPE CASE: the case didn't move to" in r.stdout and "removed from DIR" in r.stdout, r.stdout + r.stderr
+    assert not (d / "wipe.case.json").exists()
+
+
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     """Without the serve's lease it waits for a card of its own (`gpu-lease 1 --wait` as memory-accounting) and wipes
     that one. A Lean judge built already (WIPE_PROTOCOL_EXE) goes to demo.sh as `--wipe-protocol`, nothing built here."""
@@ -280,14 +292,70 @@ def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(
 
 
 def test_a_piece_that_builds_its_judge_stamps_the_build(node, tmp_path) -> None:
-    """The build of `wipe-protocol` is on the piece's timeline: after its start, before it asks for the card."""
+    """The build of `wipe-protocol` is on the piece's timeline, beside the lease and the wipe: it starts before the card
+    is asked for and ends before the piece does."""
     d, home = tmp_path / "wipe", tmp_path / "home"
     home.mkdir()
     _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
     r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert _stamps(d) == ["start", "built wipe-protocol", "asked for the card", "leased the card", "the wipe exit 0",
-                          "exit 0"]
+    stamps = _stamps(d)
+    assert [s for s in stamps if s != "built wipe-protocol"] == [
+        "start", "the Lean build starts", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
+    assert stamps.index("the Lean build starts") < stamps.index("built wipe-protocol") < stamps.index("exit 0")
+
+
+def test_the_wipe_runs_while_its_judge_builds(node, tmp_path) -> None:
+    """The stand-in `lake` doesn't end until the stand-in demo.sh has started (a FIFO the demo writes and `lake` reads,
+    once the piece has stamped the build's start): the wipe runs before the judge's build ends."""
+    d, home, fifo = tmp_path / "wipe", tmp_path / "home", tmp_path / "demo-started"
+    home.mkdir()
+    os.mkfifo(fifo)
+    events = tmp_path / "events"
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE.replace(
+        'python3 - <<', f'echo "lake start" >> {events}\n'
+        f'! grep -q "the Lean build starts" "$FAKE_STAMPS" || read -r _ < {fifo}\npython3 - <<', 1)
+        + f'echo "lake end" >> {events}\n')
+    shim = Path(node["WIPE_DEMO"])
+    shim.write_text(shim.read_text().replace(
+        "exec ", f'echo "demo start" >> {events}\n'
+                 f'! grep -q "the Lean build starts" {d / "stamps.txt"} || echo started > {fifo}\nexec ', 1))
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log"),
+                      "FAKE_STAMPS": str(d / "stamps.txt")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    seen = events.read_text().splitlines()
+    assert seen.index("lake start") < seen.index("demo start") < seen.index("lake end"), seen
+
+
+def test_the_wipe_waits_only_for_a_judge_still_being_built_and_raises_the_builds_own_error(tmp_path) -> None:
+    """`wipe_on_node.ready`, which `wipe_run` calls before the judge answers: a judge with no lock beside it is taken
+    as it is; one with a lock whose build ended (`EXE.ok`) is ready; one whose build failed raises that build's error."""
+    ready = runpy.run_path(str(WRAPPER.parent / "wipe_on_node.py"))["ready"]
+    exe = tmp_path / "bin" / "wipe-protocol"
+    exe.parent.mkdir()
+    ready(str(exe))
+    Path(f"{exe}.lock").touch()
+    (exe.parent / "failed").write_text("error: wipe-protocol has a hole\n")
+    with pytest.raises(RuntimeError, match="^error: wipe-protocol has a hole$"):
+        ready(str(exe))
+    Path(f"{exe}.ok").touch()
+    ready(str(exe))
+
+
+def test_a_judge_that_does_not_build_ends_the_piece_after_the_wipe_with_its_own_error(node, tmp_path) -> None:
+    """The wipe runs beside the build; the piece then ends with exit 7, the build's own last lines and why, and no
+    answer: no headline, no answer.json."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", '#!/usr/bin/env bash\necho "error: wipe-protocol has a hole"; exit 1\n')
+    r = _wipe(node | {"HOME": str(home)}, d)
+    assert r.returncode == 7, r.stdout + r.stderr
+    lines = r.stdout.strip().splitlines()
+    assert lines[-1] == f"WIPE FAILED: wipe-protocol doesn't build ({d}/lake-build.log)" and \
+        "error: wipe-protocol has a hole" in lines
+    assert not (d / "answer.json").exists() and not any(line.startswith("WIPE {") for line in lines)
+    stamps = _stamps(d)
+    assert "wipe-protocol didn't build" in stamps and stamps[-1] == "the piece stops: wipe-protocol didn't build"
 
 
 @pytest.mark.parametrize("create", [1, 2])
@@ -304,7 +372,7 @@ def test_a_file_that_changes_as_the_copy_reads_it_still_builds_the_judge(node, t
     if create == 1:
         assert r.returncode == 0, r.stdout + r.stderr
         assert (tmp_path / "lake.log").read_text().split(" ", 1)[1] == "build wipe-protocol\n"
-        assert _stamps(d)[:3] == ["start", "built wipe-protocol", "asked for the card"]
+        assert _stamps(d)[:3] == ["start", "the Lean build starts", "asked for the card"]
     else:
         assert r.returncode == 7 and "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build" in r.stdout
         assert not (tmp_path / "lake.log").exists() and not (tmp_path / "lease.log").exists()

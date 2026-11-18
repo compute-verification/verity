@@ -8,6 +8,7 @@ beside it, and the two must agree at every event, window verdict and record fiel
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import os
 import random
@@ -1745,3 +1746,14 @@ def test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt(
     assert summary.miss(20, 2, 2) == pytest.approx(18 / 20 * 17 / 19)
     U, f, s = 68 << 22, 2.0 ** -14, 2773
     assert summary.miss(U, round(f * U), s) == pytest.approx((1 - f) ** s, rel=1e-4)
+
+
+def test_a_seeds_served_load_does_not_move_with_the_salts():
+    """The first served writes under the prover's default seed (20261013) are `main`'s at 98e9c1de7be byte for byte:
+    the salts left the seeded stream, the load stays on it."""
+    reg = audit.register(os.urandom(32), b"test-node", 16, bytes(64), P512)
+    trace = prover.ServingTrace(prover.CpuBackend(16, random.Random(7)), reg, 2, 8, random.Random(20261013), 2)
+    got = [hashlib.sha512(m).hexdigest()[:32] for s in range(3) for _, m in trace.serve(s)[1]]
+    assert got == ["4d1ac9aebff5010963103b41d86c15ba", "947b98c093a5f0fded379c3490c7e71a",
+                   "d67ab9e9a09082206df3f643f074208a", "d55e50e17f3d523f7b365d05b2b2ff16",
+                   "a5f0cf00de38823f0172319e380a331a", "b989405d492a73fa4a1d3ecd27862df2"]

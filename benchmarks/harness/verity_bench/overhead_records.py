@@ -41,14 +41,15 @@ POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-spot-glm53"}
+NODES = {"h200": "vy-spot-glm53", "h100": "vy-h100-1"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
                 "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art",
                         "--keep-reports"}}
-#: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
-DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+#: the variables a run of the door sets with `--env` (`launch_argv`): its interpreter, and whether it is a trial; any other
+#: could change what the node job runs
+DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
 #: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
 RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
@@ -61,8 +62,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
-#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
-MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
+#: each model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.1-70b": "llama-3.1-70b", "llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -77,6 +78,7 @@ def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends
     checkout."""
 
     env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
+    env += [f"{kit.TRIAL}=1"] if kit.is_trial() else []
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
@@ -172,6 +174,21 @@ def _json(store: Any, files: str, path: str) -> dict:
     return json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
 
 
+def trial_why(store: Any, attempt: Mapping, run: str) -> str | None:
+    """Why `run` is never of record as a trial: its result says ``trial`` or its attempt set `kit.TRIAL`; or why its
+    result can't tell. The result is the attempt's `result` art, whose meta is the run's `kit.RESULT`: its run files
+    hold only the files it lists."""
+
+    art = (attempt.get("outputs") or {}).get("result")
+    if not art:
+        return f"{run} has no result art, so not whether it is a trial"
+    try:
+        result = store.get_manifest(art).meta
+    except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
+        return f"{run}'s result {art} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
+    return kit.trial_why(run, attempt, result)
+
+
 def _superseded(store: Any, target: str) -> list[str]:
     return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
@@ -195,7 +212,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = []
+    whys = [why] if (why := trial_why(store, attempt, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -251,7 +268,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.y_note(arm)}
+                   "note": O.row_note(arm, doc.get("card"))}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -266,8 +283,8 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     record; the version it replaces is labelled `superseded_by` it."""
 
     attempt, files = run_files(store, run, "points")
-    if attempt is None:
-        raise ValueError(files)
+    if attempt is None or (why := trial_why(store, attempt, run)):
+        raise ValueError(files if attempt is None else why)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(store.fetch(files, paths=["out/points.json"])) / "out" / "points.json"
         doc = json.loads(path.read_text())
@@ -341,8 +358,8 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
-    for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
-    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    for each model that row's γ of record with its interval (the kernel model's on the kernel card as the metric's own
+    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
     as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
     where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
@@ -351,11 +368,11 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     for name, row in metrics.items():
         scheme, card, point = row.split("/")
         for model in O.MODELS:
-            own = model == O.KERNEL_MODEL
+            own = model == O.KERNEL_MODEL and card == O.KERNEL_CARD
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-                                 "extra": {"covers": table["covers"] if own else O.covers(model)}}
+                                 "extra": {"covers": table["covers"] if model == O.KERNEL_MODEL else O.covers(model)}}
             if not own:
                 m["member"] = f"{MEMBER_MODEL[model]}-{card}"
             if r is None or not r["of_record"] or g.get("gamma") is None:

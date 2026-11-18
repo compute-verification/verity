@@ -398,7 +398,8 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
     return out
 
 
-def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side]) -> dict[str, Any]:
+def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side],
+                ready: Callable[[str], None] = lambda exe: None) -> dict[str, Any]:
     """The wipe's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`): one wipe as
     `period.json`'s `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `wipe_store.Prover`), the
     memory attester a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local,
@@ -407,7 +408,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier) and must agree with the Python; without it the Python may only refuse: its reject or undecided stands,
+    verifier), once `ready` returns for it (a caller whose build runs beside the wipe waits there), and must agree
+    with the Python; without it the Python may only refuse: its reject or undecided stands,
     and its accept is undecided (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
@@ -475,6 +477,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
                                   "challenger's start included)"}}
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
+        ready(tools["wipe-protocol"])
         lean = serve(tools["wipe-protocol"], [wipe.case])[0]
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"wipe-protocol answered {lean}, the Python {answer}")
@@ -520,7 +523,8 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
                        "sync_ns": (prover.get("fill") or {}).get("sync_ns"), "gate": prover.get("gate")}}
 
 
-def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> int:
+def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side],
+         ready: Callable[[str], None] = lambda exe: None) -> int:
     """`--period DIR --out DIR [--node NAME] [--expect VERDICT]`: the wipe on this node, its challenger's side where
     `side_of` puts it (the runtime's `Side.of`, handed in by the program that starts the run), its summary printed; exit
     0 when the verdict is the expected one (`accept` by default), 1 otherwise."""
@@ -531,7 +535,7 @@ def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> 
     ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)
-    answer = subprotocol(a.period, a.node, a.out, side_of=side_of)
+    answer = subprotocol(a.period, a.node, a.out, side_of=side_of, ready=ready)
     print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
     return 0 if answer["verdict"] == a.expect else 1
 
