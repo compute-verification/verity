@@ -50,6 +50,7 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json, descriptor_size
 from verity.circuits.types import RecordType
+from verity_torch.correspondence.runtime import correspondence_digest
 
 from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
 from verity_vllm.config import (
@@ -60,7 +61,6 @@ from verity_vllm.config import (
     row_file,
     workload_file,
 )
-from verity_torch.correspondence.runtime import correspondence_digest
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.pipeline import epoch
 from verity_vllm.program import prefix_plan as PP
@@ -88,8 +88,8 @@ def phi_at(row: str, rank: int, config: str) -> Phi:
     return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 
-def predict(phi: Phi, wrapper: str, *, M: int = 1, pos0: int = 8, LP: int | None = None, T: int | None = None):
-    return build_program(phi, "step", M=M, pos0=pos0) if wrapper == "step" else build_program(phi, "request", LP=LP, T=T)
+def predict(phi: Phi, wrapper: str, *, M: int = 1, pos0: int = 8, LP: int | None = None, T: int | None = None, C: int = 0):
+    return build_program(phi, "step", M=M, pos0=pos0, C=C) if wrapper == "step" else build_program(phi, "request", LP=LP, T=T)
 
 
 def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None], list[list[str]]]:

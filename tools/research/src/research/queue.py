@@ -768,6 +768,16 @@ DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
 #: what every command says to a `--first`, refusing it: the landing order is the priority file's alone
 FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`research queue vqueue --priority-file`) holds the "
                  "landing order; list the PRs there, first to land first")
+#: the commands that read each command's own flag; a flag not named here is every command's
+COMMAND_FLAGS = {
+    "--jobs": ("map-moves", "cross"), "--main": ("cross",), "--move-commit": ("cross",), "--only": ("cross",),
+    "--push": ("cross",), "--from": ("cross",), "--reason": ("eject",), "--on": ("ready", "judge"), "--local": ("ready",),
+    "--mark": ("ready",), "--again": ("ready",), "--no-preflight": ("ready",),
+    "--land": ("review",), "--hold": ("review",), "--ref": ("review",), "--over": ("review",), "--head": ("open",),
+    "--draft": ("open",), "--base": ("open",), "--title": ("open", "edit"), "--body-file": ("open", "edit"),
+    "--issue": ("open", "link"), "--dry-run": ("open", "edit"), "--sha": ("open", "ready", "eject", "review"),
+    "--json": ("status", "ready", "review", "stats"), "--tip": ("map-moves",), "--out": ("map-moves", "cross"),
+    "--short": ("stats",), "--rounds": ("stats",), "--reds": ("stats",), "--until": ("stats",), "--days": ("delegate",)}
 #: what `DriveFlags.signed_verdicts` "on" keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
                  "tools/research/src/research/landing.py")
@@ -4399,22 +4409,86 @@ def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
     return {k: v for k, v in data.items() if isinstance(v, dict)}
 
 
+#: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
+_KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `_ran`: the last few tips
+_REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
+
+
+def reached(repo: Path, graph: dict[str, tuple[str, list[str]]]) -> set[str]:
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk
+    as `tools/move/restack.py`'s `reached`."""
+    parents = {p for _, ps in graph.values() for p in ps}
+    outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in _KEEPS_FIRST and ps[0] not in graph})
+    r = _git(repo, "rev-parse", *(f"{x}^{{tree}}" for x in outside), check=False) if outside else None
+    trees = dict(zip(outside, r.stdout.split())) if r is not None and r.returncode == 0 else {}
+    for c, (tree, ps) in graph.items():
+        if len(ps) > 1 and c not in _KEEPS_FIRST and (first := graph[ps[0]][0] if ps[0] in graph else trees.get(ps[0])):
+            _KEEPS_FIRST[c] = tree == first
+    seen, todo = set(), [c for c in graph if c not in parents]
+    while todo:
+        if (c := todo.pop()) in seen or c not in graph:
+            continue
+        seen.add(c)
+        ps = graph[c][1]
+        todo.extend(ps[:1] if _KEEPS_FIRST.get(c) else ps)
+    return seen
+
+
+def _ran(repo: Path, tip: str, corrections: dict[str, dict], want: set[str]) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``corrections``, and none whose entry says `move = false`. What the
+    history holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in _REACHED:
+        log = _git(repo, "log", "--format=%H %T %P", tip, check=False).stdout
+        on = reached(repo, {c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)})
+        log = _git(repo, "log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip,
+                   check=False).stdout
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (s.strip() for s in log.split("\x1e"))))
+        if len(_REACHED) >= 4:
+            _REACHED.clear()
+        _REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = _REACHED[tip]
+    held = set()
+    for commit in {*bodies, *corrections}:
+        entry = corrections.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE_RE.search(str(entry.get("line") or bodies.get(commit, "")))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
     """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
     move line (`MOVE_LINE_RE`), its entry's in ``onto``'s corrections where it has one (`move_lines_at`) and none whose entry
     says `move = false`, as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever parent
-    of `main`'s merges it landed."""
+    of `main`'s merges it landed. A move ``onto`` holds only through the other parents of a merge that kept its first
+    parent's tree (`reached`) is left out where ``onto`` also holds its move line at a commit it reaches through its trees
+    (`_ran`): that merge took none of the copy's change, and ``onto`` ran the same line itself, in the range or in what
+    ``head`` holds. Without such a line it stays in, since its change may have reached ``onto`` by another commit (restack.py's
+    rerun of a move, which carries no move line, on such a merge's first parent)."""
     lines = move_lines_at(repo, onto)
-    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "--format=%H %P%x00%B%x1e", onto, f"^{head}",
+    log = _git(repo, "log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", onto, f"^{head}",
                check=False).stdout
-    found = []
+    recs = []
     for rec in filter(None, (s.strip() for s in log.split("\x1e"))):
         line, _, body = rec.partition("\x00")
-        commit, *parents = line.split()
+        commit, tree, *parents = line.split()
+        recs.append((commit, tree, parents, body))
+    on = reached(repo, {c: (t, ps) for c, t, ps, _ in recs})
+    moves = []
+    for commit, _, parents, body in recs:
         entry = lines.get(commit, {})
-        if entry.get("move") is not False and MOVE_LINE_RE.search(str(entry.get("line") or body)):
-            found.append((commit, parents))
-    return found
+        if len(parents) < 2 and entry.get("move") is not False and (m := MOVE_LINE_RE.search(str(entry.get("line") or body))):
+            moves.append((commit, parents, m[0]))
+    held = {line for commit, _, line in moves if commit in on}
+    if lost := {line for commit, _, line in moves if commit not in on} - held:
+        held |= _ran(repo, recs[-1][0], lines, lost)
+    return [(commit, parents) for commit, parents, line in moves if commit in on or line not in held]
 
 
 @dataclass(frozen=True)
@@ -5039,7 +5113,8 @@ LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build
 #: `lean_slot.py`'s SLOTS: a machine whose file lists a `build` pool keeps warm Lean trees; an agent VM has none
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: the Lake packages the Lean step reads: a directory with a lakefile and a `lean-audit.json`, the auditor's fixtures aside
-LEAN_FIXTURES = "tools/verity/lean/"
+#: (`lean_audit.packages`' prefixes: the builder skips them, and the audit suite's controls build them)
+LEAN_FIXTURES = ("tools/verity/lean/", "tests/tools/verity/lean/")
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
@@ -6926,6 +7001,10 @@ def main(argv: list[str]) -> int:
         ap.error("vqueue comes first, its options after it: research queue vqueue --help")
     if a.first is not None:
         ap.error(FIRST_RETIRED)
+    for act in ap._actions:
+        verbs = COMMAND_FLAGS.get(act.option_strings[0] if act.option_strings else "", (a.command,))
+        if a.command not in verbs and getattr(a, act.dest, act.default) != act.default:
+            ap.error(f"{act.option_strings[0]} is for {', '.join(verbs)} only, not {a.command}")
     global MERGED_ROOT
     MERGED_ROOT = a.preflight_root or MERGED_ROOT
     if a.command == "stats":
@@ -6939,12 +7018,14 @@ def main(argv: list[str]) -> int:
     if a.command == "cross":
         if a.from_dir is not None and not a.push:
             ap.error("cross: --from DIR goes with --push: it pushes what a dry run left in DIR")
-        return _cross(a)
-    if a.issue is not None and a.command not in ("open", "link"):
-        ap.error("--issue is for open and link only")
+        try:
+            return _cross(a)
+        except QueueError as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
     if a.command == "link":
-        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
-            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
+        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)):
+            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123)")
         try:
             repo = remote_and_repo(a.remote, a.repo, Path.cwd())[1]
             print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
@@ -6999,12 +7080,8 @@ def main(argv: list[str]) -> int:
             return 1
     if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if a.dry_run:
-        ap.error(f"--dry-run is for open and edit only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
-    if a.no_preflight and a.command != "ready":
-        ap.error("--no-preflight is for ready only")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:
