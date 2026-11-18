@@ -656,10 +656,6 @@ ID_FORM = "--protocol ids --id-payload 503"
 SCAN_CLASS = "8,32,4,4,16"
 
 
-#: the most output tokens a front request asks for (`attester_piece.TOKENS`): its group stays in one execution phase
-FRONT_TOKENS = 4
-
-
 def _attester_piece(cfg, params, bound, pinned):
     """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
     runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
@@ -671,7 +667,7 @@ def _attester_piece(cfg, params, bound, pinned):
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
     if "pearl-plus" in cfg["protocols"]:
-        tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
+        tokens = min(params["front_tokens"], cfg["workload"]["params"]["window-steps"])
         return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
                 "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,

@@ -34,9 +34,10 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 
 #: the scheme's settings and their defaults: ``order`` ``arrival`` admits no request in release order (the id relay
 #: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
-#: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty
+#: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty; ``front_tokens``, the
+#: most output tokens a request of the attester's front asks for, so its group stays in one execution phase
 SETTINGS = {"order": "arrival", "hold_ms": 5000, "bucket_us": 100_000, "sat_us": 0, "free_us": 0, "token_ns": 0,
-            "log": ""}
+            "log": "", "front_tokens": 4}
 
 
 def _check(values: Mapping[str, Any]) -> str | None:
@@ -44,6 +45,8 @@ def _check(values: Mapping[str, Any]) -> str | None:
         return f"order one of {['arrival', *ORDERS]}, not {values['order']!r}"
     if values["hold_ms"] < 1:
         return f"hold_ms a positive number of milliseconds, not {values['hold_ms']!r}"
+    if type(values["front_tokens"]) is not int or values["front_tokens"] < 1:
+        return f"front_tokens a positive integer, not {values['front_tokens']!r}"
     if values["order"] == "tick":
         try:
             tick_config({k: v for k, v in values.items() if k != "order"}, "tick")

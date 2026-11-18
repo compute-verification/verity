@@ -232,7 +232,7 @@ LOGS = ("piece.log", "chain.log", "period.log")
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
-PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
+PROMPTS, PROMPT_IDS, TOKENS = 4, 24, schemes.get("network-attester").settings["front_tokens"]
 HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
 #: windows closed
