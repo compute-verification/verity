@@ -4,11 +4,17 @@
 # Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), CARD_SKU (machine.py sku), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/verity_vllm/ops/h100_smoke.sh   (DRY=1: off the card)
+# SCHEME=pearl-plus: the same window served under Pearl+ by its name (serve-openai --protocols pearl-plus), at Pearl+'s tie
+#   (scheme.py's tie, class 4,27,2: 4 slots of 27-token prompts, 2 window steps, fixed load), its kernel PEARLC_KERNEL and
+#   cubin PEARLC_CUBIN (benchmarks/harness/setup/pearl_c_sm90.sh, CUDA 13.0, built outside the lease); its salt in-process
+#   unless PEARLC_CHALLENGER_GATE, PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_LANE name a live session; it keeps the
+#   serve dir's pearl/w0/ (passes, coins.json, served.json) and schemes/pearl-plus/ (its report) beside the sealed window.
 set -euo pipefail
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-}
+case $SCHEME in ""|pearl-plus) ;; *) echo "SMOKE REFUSED scheme: SCHEME is empty or pearl-plus, not $SCHEME"; exit 3 ;; esac
 NSO=/workspace/cp/norm_tap/build/verity_norm_tap.so
 SERVER= SCRATCH=
 stop() {
@@ -48,12 +54,30 @@ want=$(awk -v n="$ROW.json" '$2==n{print $1}' adapters/vllm/workloads/SHA256SUMS
 sys.exit(h(json.load(open(sys.argv[1]))) is not False)' "$PRED/manifest.json" \
   || { say "SMOKE FAILED manifest: it names the hidden class, and this smoke attaches no hidden tap"; exit 1; }
 
-SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
-  --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps 256
-  --required-manifest "$PRED/manifest.json" --norm-tap-so "$NSO" --window-requests 1
-  --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8)
+STEPS=256 REQS=1 PP=()
 LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
   --prompt-range 16:24 --seed 1 --out "$SR/load.jsonl")
+if [ "$SCHEME" = pearl-plus ]; then
+  if [ "$DRY" = 1 ] && [ -z "${PEARLC_KERNEL:-}" ]; then
+    PEARLC_KERNEL=$TREE/verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 PEARLC_CUBIN=$SCRATCH/stand-in.cubin
+    : > "$PEARLC_CUBIN"; echo "DRY: PEARLC_KERNEL and PEARLC_CUBIN unset, a stand-in cubin (the serve's preflight reads no cubin)"
+  fi
+  [ -d "${PEARLC_KERNEL:-}" ] && [ -s "${PEARLC_CUBIN:-}" ] || [ "$DRY" = 1 ] || { echo "SMOKE REFUSED pearl-plus: PEARLC_KERNEL" \
+    "and PEARLC_CUBIN name no kernel and cubin; build them outside the lease (no card): RESEARCH_RUN_DIR=DIR bash -c '. benchmarks/harness/env.sh" \
+    "&& . benchmarks/harness/setup/pearl_c_sm90.sh && echo \$PEARLC_KERNEL \$PEARLC_CUBIN'"; exit 3; }
+  IFS=, read -r slots prompt STEPS < <("$PY" -c 'from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS as s; print(s.tie["class"])')
+  [ -n "${STEPS:-}" ] || { echo "SMOKE REFUSED pearl-plus: its scheme states no tie class (scheme.py's PEARL_PLUS.tie, above)"; exit 3; }
+  REQS=$slots
+  PP=(--protocols pearl-plus --protocols-config "$("$PY" -c 'import json, sys; print(json.dumps({"pearl-plus": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}}))' "$PEARLC_KERNEL" "$PEARLC_CUBIN")")
+  [ -z "${PEARLC_CHALLENGER_GATE:-}" ] || PP+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
+    --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
+  LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --fixed "$slots" --window-steps "$STEPS"
+    --prompt-range "$prompt:$prompt" --seed 1 --out "$SR/load.jsonl")
+fi
+SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
+  --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps "$STEPS"
+  --required-manifest "$PRED/manifest.json" --norm-tap-so "$NSO" --window-requests "$REQS"
+  --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8 "${PP[@]}")
 
 if [ "$DRY" = 1 ]; then
   "$PY" - "${SERVE[@]}" <<'EOF'
@@ -61,7 +85,11 @@ import os, sys
 from verity_vllm.pipeline import cli, serve_openai as so
 opts = cli.parse(sys.argv[1], sys.argv[2:], environ=os.environ)
 so.preflight(opts, which=lambda _: "/stand-in/ninja")
-print("SERVE PARSED AND PREFLIGHT PASSED:", opts.precision, opts.scheme, "seal", opts.seal)
+print("SERVE PARSED AND PREFLIGHT PASSED:", opts.precision, opts.scheme, "seal", opts.seal, "protocols", opts.protocols or "none",
+      "window steps", opts.window_steps, "window requests", opts.window_requests)
+if opts.protocols:
+    found = so.listed(opts, so.Path(opts.out))
+    print("SCHEMES ATTACHED BY NAME:", [(s.name, {k: g[k] for k in ("coins", "challenger", "transcript_dir") if k in g}) for s, g in found])
 if run := os.environ.get("RESEARCH_RUN_DIR"):
     try:
         so.preflight(cli.parse(sys.argv[1], [*sys.argv[2:], "--out", run + "/serve"], environ=os.environ), which=lambda _: "/stand-in/ninja")
@@ -79,11 +107,15 @@ ext = native_ext.ext()
 assert not native_jit.missing_bindings(ext, os.path.join(native_ext.HERE, "native_collect.cpp"))
 print(f"COMMITTER BUILT ITS NATIVE COLLECTOR: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, every binding present")
 EOF
-  "$PY" - "${LOAD[@]}" <<'EOF'
-import runpy, sys
+  SCHEME=$SCHEME "$PY" - "${LOAD[@]}" <<'EOF'
+import os, runpy, sys
 a = runpy.run_path(sys.argv[1])["parser"]().parse_args(sys.argv[2:])
-assert a.varied == 1 and not a.fixed, a
-print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
+if os.environ["SCHEME"] == "pearl-plus":
+    assert (a.fixed, a.window_steps, a.prompt_range, a.varied) == (4, 2, "27:27", 0), a
+    print("LOAD PARSED: fixed", a.fixed, "request(s) of", a.prompt_range, "tokens over", a.window_steps, "window steps (Pearl+'s tie)")
+else:
+    assert a.varied == 1 and not a.fixed, a
+    print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
 EOF
   echo "SMOKE DRY OK; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal and the open"
   exit 0
@@ -110,4 +142,15 @@ r = DR.of_record(json.load(open(f"{w}/commit/verdict.json"))["replay_deferred"][
 print(f"SMOKE SEALED AND OPENED window 0 with no card visible: {r.commitment}, run root {bytes(r.run.run_root).hex()[:16]}")
 EOF
 ) || { say "SMOKE FAILED open: the sealed bundle against its record ($D/windows/w0)"; exit 1; }
+if [ "$SCHEME" = pearl-plus ]; then
+  said+=$("$PY" - "$D" <<'EOF'
+import json, os, sys
+d = sys.argv[1]
+c = json.load(open(f"{d}/schemes/pearl-plus/commitment.json"))
+passes = [f for f in os.listdir(f"{d}/pearl/w0") if f not in ("coins.json", "served.json")]
+assert passes and os.path.exists(f"{d}/pearl/w0/coins.json"), f"{d}/pearl/w0 holds no passes or no coins.json"
+print(f"; PEARL+ epoch 0 kept {len(passes)} pass file(s) under pearl/w0, its commitment {json.dumps(c, default=str)[:120]}")
+EOF
+) || { say "SMOKE FAILED pearl-plus: no report or no passes ($D/schemes/pearl-plus, $D/pearl/w0)"; exit 1; }
+fi
 say "$said"
