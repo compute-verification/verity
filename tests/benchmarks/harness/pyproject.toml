@@ -51,6 +51,8 @@ inputs = [
     "benchmarks/served_commit/arm.py",
     "benchmarks/served_commit/prof_arm.py",
     "benchmarks/served_commit/tp_decode.py",
+    # a test resolves every spec's arms against main's identities, the commit arm's served arm among them
+    "benchmarks/served_commit/served_arm.py",
     "benchmarks/harness/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
@@ -183,11 +185,10 @@ paths = ["pyproject.toml", "*/pyproject.toml",
          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
 
-# the serve arms' table of vLLM's defaults names the vLLM commit the pods install, which a test holds to the bootstrap's
-# wheel; and a test resolves every spec's arms, the commit arm's among them
+# the serve arms' table of vLLM's defaults names the vLLM commit the pods install, which a test holds to the bootstrap's wheel
 [[tool.verity.tests.reads]]
 tests = ["test_serve_arms.py"]
-paths = ["adapters/vllm/verity_vllm/ops/pod_bootstrap.sh", "benchmarks/served_commit/served_arm.py"]
+paths = ["adapters/vllm/verity_vllm/ops/pod_bootstrap.sh"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]
