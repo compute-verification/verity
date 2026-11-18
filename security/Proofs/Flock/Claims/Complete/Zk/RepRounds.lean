@@ -38,7 +38,7 @@ def CoinsLe (B : ℕ) (t : Transcript) : Prop := ∀ x ∈ t.rounds, x.n ≤ B
 
 /-- A transcript computation of the pure session that keeps every round at most `B` coins and drops none. -/
 def Keeps (B : ℕ) {α : Type} (y : TMW PS α) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → (CoinsLe B t → CoinsLe B t') ∧ t.rounds.size ≤ t'.rounds.size
 
 theorem Keeps.same {B : ℕ} {t t' : Transcript} (h : t'.rounds = t.rounds) :
@@ -76,7 +76,7 @@ def keepS (B : ℕ) : With.Sim (TMW PS) (TMW PS) where
       exact Keeps.same rfl
 
 /-- A squeeze of at most `B` coins keeps the rounds at most `B` coins. -/
-theorem squeezeP_keeps (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) {B : ℕ} (hn : n ≤ B) :
+theorem squeezeP_keeps (resp : ℕ → Hash.Msg) (kind : UInt8) (n : ℕ) {B : ℕ} (hn : n ≤ B) :
     (keepS B).R (squeezeP (asksS resp) kind n) (squeezeP (asksS resp) kind n) := by
   intro t l a t' l' h
   change (squeezeP (asksS resp) kind n t).go l = _ at h
@@ -145,23 +145,23 @@ theorem liftT_keeps {B : ℕ} {α : Type} {x y : TMW PS α} (h : (keepS B).R x y
     ((keepS B).st LigState).R (liftT x) (liftT y) :=
   With.Sim.lift_st _ h
 
-theorem sampleP_keeps (resp : ℕ → Claims.Msg) {B : ℕ} (h1 : 1 ≤ B) :
+theorem sampleP_keeps (resp : ℕ → Hash.Msg) {B : ℕ} (h1 : 1 ≤ B) :
     (keepS B).R (sampleP (asksS resp)) (sampleP (asksS resp)) := by
   unfold sampleP
   sim_walk [squeezeP_keeps resp _ _ h1]
 
-theorem sampleKP_keeps (resp : ℕ → Claims.Msg) {B : ℕ} (h2 : 2 ≤ B) :
+theorem sampleKP_keeps (resp : ℕ → Hash.Msg) {B : ℕ} (h2 : 2 ≤ B) :
     (keepS B).R (sampleKP (asksS resp)) (sampleKP (asksS resp)) := by
   unfold sampleKP
   sim_walk [squeezeP_keeps resp _ _ h2]
 
-theorem lincheckPZk_keeps (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
+theorem lincheckPZk_keeps (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) {B : ℕ} (h1 : 1 ≤ B) :
     (keepS B).R (lincheckPZk (asksS resp) c m lay h tr zc) (lincheckPZk (asksS resp) c m lay h tr zc) := by
   unfold lincheckPZk
   sim_walk [sampleP_keeps resp h1, label_keeps, absorbSlice_keeps, absorbF_keeps]
 
-theorem ringSwitchP_keeps (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) {B : ℕ} (h7 : 7 ≤ B)
+theorem ringSwitchP_keeps (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) {B : ℕ} (h7 : 7 ≤ B)
     (hc : claims.size ≤ B) :
     (keepS B).R (ringSwitchP (asksS resp) tr claims) (ringSwitchP (asksS resp) tr claims) := by
   unfold ringSwitchP sampleVecP
@@ -176,19 +176,19 @@ theorem powP_keeps (B : ℕ) (nonce : ℕ → ℕ → UInt64) (kind : ℕ) :
   unfold powP
   sim_walk [liftT_keeps, pow_keeps]
 
-theorem challengeP_keeps (resp : ℕ → Claims.Msg) (split : Bool) {B : ℕ} (h2 : 2 ≤ B) :
+theorem challengeP_keeps (resp : ℕ → Hash.Msg) (split : Bool) {B : ℕ} (h2 : 2 ≤ B) :
     ((keepS B).st LigState).R (challengeP (asksS resp) split) (challengeP (asksS resp) split) := by
   unfold challengeP
   sim_walk [liftT_keeps, sampleKP_keeps resp h2, sendMsg_keeps]
 
-theorem oodIntroP_keeps (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) {B : ℕ}
+theorem oodIntroP_keeps (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) {B : ℕ}
     (hd : dim ≤ B) (h1 : 1 ≤ B) :
     ((keepS B).st LigState).R (oodIntroP (asksS resp) nonce g dim) (oodIntroP (asksS resp) nonce g dim) := by
   unfold oodIntroP sampleVecP
   sim_walk [liftT_keeps, squeezeP_keeps resp _ _ hd, sampleP_keeps resp h1, sendMsg_keeps, powP_keeps,
     absorbF_keeps]
 
-theorem queryP_keeps (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
+theorem queryP_keeps (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
     {B : ℕ} (hq : lv.q ≤ B) (hl : Nat.log2 (lv.q - 1) + 1 ≤ B) :
     ((keepS B).st LigState).R (queryP (asksS resp) nonce ms lv cm) (queryP (asksS resp) nonce ms lv cm) := by
   unfold queryP sampleVecP
@@ -199,14 +199,14 @@ theorem tau_keeps (B : ℕ) (h : ByteArray → ByteArray) (tau : F128) (salt : B
       (StateT.lift (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt)) :=
   liftPS_keeps B _
 
-theorem squeezeP_keeps_cons (resp : ℕ → Claims.Msg) (lay : Zk.PadLayout) (cons : Array (String × Zk.Lin)) {B : ℕ}
+theorem squeezeP_keeps_cons (resp : ℕ → Hash.Msg) (lay : Zk.PadLayout) (cons : Array (String × Zk.Lin)) {B : ℕ}
     (hc : cons.size + 3 ≤ B) (e r s : F128) :
     (keepS B).R (squeezeP (asksS resp) 2 (cons ++ Zk.triple lay e r s).size)
       (squeezeP (asksS resp) 2 (cons ++ Zk.triple lay e r s).size) :=
   squeezeP_keeps resp 2 _ (by simp [Zk.triple]; omega)
 
 /-- **The inner proof keeps the rounds small**, given its constraints and three, and `Zk.Q`, at most `B`. -/
-theorem innerP_keeps (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_keeps (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) {B : ℕ} (hc : cons.size + 3 ≤ B)
     (hQ : Zk.Q ≤ B) :
     (keepS B).R (innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons)
@@ -217,7 +217,7 @@ theorem innerP_keeps (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
     absorbF_keeps, absorbSlice_keeps, absorbBytes_keeps, tau_keeps B h]
 
 
-theorem queryP_keeps_lv (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch : Schedule)
+theorem queryP_keeps_lv (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch : Schedule)
     {B : ℕ} (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) (j : ℕ) (cm : Commit) :
     ((keepS B).st LigState).R (queryP (asksS resp) nonce ms (sch.levels.getD j default) cm)
       (queryP (asksS resp) nonce ms (sch.levels.getD j default) cm) :=
@@ -233,7 +233,7 @@ theorem commitP_keeps (B : ℕ) (h : ByteArray → ByteArray) (ms : MerkleScheme
 /-- A transcript computation of the pure session that keeps every round at most `B` coins, adds at least `k` rounds,
 and returns a value with `Q`. -/
 def Grows (B k : ℕ) {α : Type} (y : TMW PS α) (Q : α → Prop) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → ((CoinsLe B t → CoinsLe B t') ∧ t.rounds.size + k ≤ t'.rounds.size) ∧ Q a
 
 theorem Grows.of_keeps {B : ℕ} {α : Type} {y : TMW PS α} (h : (keepS B).R y y) : Grows B 0 y fun _ => True :=
@@ -268,7 +268,7 @@ theorem Grows.liftV {B : ℕ} {α : Type} (v : V α) :
   exact ⟨Keeps.same rfl, by cases v <;> simp_all⟩
 
 /-- A squeeze of a positive number of coins adds a round. -/
-theorem squeezeP_grows (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) {B : ℕ} (h0 : 0 < n) (hn : n ≤ B) :
+theorem squeezeP_grows (resp : ℕ → Hash.Msg) (kind : UInt8) (n : ℕ) {B : ℕ} (h0 : 0 < n) (hn : n ≤ B) :
     Grows B 1 (squeezeP (asksS resp) kind n) fun _ => True := by
   intro t l a t' l' h
   change (squeezeP (asksS resp) kind n t).go l = _ at h
@@ -339,7 +339,7 @@ theorem loopR_keeps {B : ℕ} {β : Type} (I : β → Prop) (r : Std.Legacy.Rang
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at e
   simpa using (GrowsL.forIn_list f I hf _ b hb s t l a t' l' e).1
 
-theorem oodIntroP_keeps_loop (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (N : ℕ) {B : ℕ} (hN : N ≤ B)
+theorem oodIntroP_keeps_loop (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (N : ℕ) {B : ℕ} (hN : N ≤ B)
     (h1 : 1 ≤ B) (g : Array F128) (b : ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof)
     (hb : b.1 ≤ N) :
     ((keepS B).st LigState).R (oodIntroP (asksS resp) nonce g (b.1 - 4 + 1))
@@ -347,7 +347,7 @@ theorem oodIntroP_keeps_loop (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ �
   oodIntroP_keeps resp nonce g _ (by omega) h1
 
 /-- **The masked Ligerito keeps the rounds small**, given `2`, `n + 1` and every level's `q + 1` at most `B`. -/
-theorem ligeritoPZk_keeps (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_keeps (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {B : ℕ} (h2 : 2 ≤ B)
     (hn : sch.n + 1 ≤ B) (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) :
@@ -384,7 +384,7 @@ theorem Grows.pure {B : ℕ} {α : Type} {a : α} {P : α → Prop} (h : P a) : 
   exact ⟨Keeps.same rfl, h⟩
 
 /-- **The masked zerocheck adds a round**: its first squeeze, of `6` coins. -/
-theorem zerocheckPZk_grows (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
+theorem zerocheckPZk_grows (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) {B : ℕ} (h6 : 6 ≤ B) (hm : m - 13 ≤ B) :
     Grows B 1 (zerocheckPZk (asksS resp) m digest cap root lay h tr) fun _ => True := by
   unfold zerocheckPZk sampleVecP
@@ -404,7 +404,7 @@ theorem rankCheckP_keeps (B m kLog : ℕ) (prior : Array (List F128)) (words : L
 
 /-- **A masked rep adds a round and keeps the rounds small**, given `Zk.Q`, `m - 13`, its claims, `n + 1` and every
 level's `q + 1` at most `B`. -/
-theorem repPZk_grows (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_grows (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) {B : ℕ} (hQ : Zk.Q ≤ B)
@@ -447,7 +447,7 @@ theorem zkSchedule_small {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule
   · rw [Array.getD, dite_eq_right (fun h => absurd h hj)]
     decide
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked case's table has at most 1,024 regions**: the scope check's `checkInRange`. -/
 theorem _root_.FlockComplete.CaseZk.regions (c : CaseZk H rel) :
@@ -476,7 +476,7 @@ theorem _root_.FlockComplete.CaseZk.regions (c : CaseZk H rel) :
     omega
 
 /-- **Each masked rep records a round, each of at most `65536` coins** (`RepRoundsZk`). -/
-theorem repRoundsZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem repRoundsZk_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     RepRoundsZk H rel := by
   intro c st hst v hv rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws hex
   obtain ⟨st', hst', hspec, hm1, hm2⟩ := c.table

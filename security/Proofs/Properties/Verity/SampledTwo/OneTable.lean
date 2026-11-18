@@ -27,7 +27,7 @@ open SpotFlock.RunsAs.Round2 (TwoHolds RoundsHeld ScopeHeld two_of_twoHolds)
 
 /-- **A member session sets up one table**: where the held copies' two-stage design evaluates and each session
 statement is in scope, template `t`'s session statement sets up exactly one table. -/
-theorem oneTable_of_scope {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHolds h) (hS : ScopeHeld h m₂) {t : ℕ}
+theorem oneTable_of_scope {h : SpotFlock.Held} {m₂ : Hash.Msg} (hT : TwoHolds h) (hS : ScopeHeld h m₂) {t : ℕ}
     (ht : t < h.ms.length) :
     ∃ s spec st, FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st]) := by
   obtain ⟨_, _, hd⟩ := two_of_twoHolds hT
@@ -43,7 +43,7 @@ theorem oneTable_of_scope {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHold
 /-- **A statement that sets up one table runs `2 + 2 · repRounds` rounds**: the link's, each of the table's two
 reps' and the last message's (`FlockDeploy.V`), so each rep has `SessionCoins.repsOf` of the statement's round
 count. -/
-theorem rounds_of_oneTable {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
+theorem rounds_of_oneTable {x : Hash.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
     (hset : FlockDeploy.setupOf true x = some (s, spec, #[st])) :
     (FlockDeploy.V true).k x = 2 + 2 * FlockDeploy.repRounds true spec st ∧
       SessionCoins.repsOf ((FlockDeploy.V true).k x) = FlockDeploy.repRounds true spec st := by
@@ -60,7 +60,7 @@ theorem rounds_of_oneTable {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.
 copies' two-stage design evaluates, each session statement has its template's round count and each is in scope,
 template `t`'s session statement sets up one table, and its `SpotFlock.k₀` rounds are the link's, the last message's
 and each of the table's two reps'. -/
-theorem reps_of_scope {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHolds h) (hR : RoundsHeld h m₂)
+theorem reps_of_scope {h : SpotFlock.Held} {m₂ : Hash.Msg} (hT : TwoHolds h) (hR : RoundsHeld h m₂)
     (hS : ScopeHeld h m₂) {t : ℕ} (ht : t < h.ms.length) :
     ∃ s spec st, FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st]) ∧
       SpotFlock.k₀ h t = 2 + 2 * FlockDeploy.repRounds true spec st ∧

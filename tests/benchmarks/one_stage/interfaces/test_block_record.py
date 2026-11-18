@@ -199,6 +199,23 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
                                    "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
     assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
+    assert lg["premises"] == ["Verity.Vocab.WipeSound"]
+
+
+def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_read_by_name() -> None:
+    """The bandwidth audit's and the network attester's quantities are their schemes' readings under their declared
+    symbols and published units, as the record wrote them before the readers; only the sampled proofs and the work
+    row are read by name, a list that only shrinks; a subprotocol no scheme's record names is refused by name."""
+    row = {"answer": {}, "quantity": {"q_bytes": 5, "eps": "1/4", "K": 9, "windows": 3}}
+    assert R._quantity("bandwidth", row) == ({"symbol": "Q_cert", "value": 5, "unit": "bytes"}, Fraction(1, 4),
+                                             "quantity.eps")
+    assert R._quantity("certifier", row) == ({"symbol": "K", "value": 9, "unit": "bits", "windows": 3},
+                                             Fraction(1, 4), "quantity.eps")
+    assert set(R.BY_NAME) <= {"integrity", "pouw"}
+    assert R._premises(R._scheme("bandwidth")) == ["ResourceAccounting.Remote.Run.Counted"]
+    assert R._premises(R._scheme("pous")) == [] and "owner's to name" in R._premises(R._scheme("certifier"))
+    with pytest.raises(ValueError, match="not a subprotocol"):
+        R._quantity("attester", row)
 
 
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
