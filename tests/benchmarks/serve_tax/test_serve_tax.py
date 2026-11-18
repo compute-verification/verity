@@ -2395,6 +2395,6 @@ def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monk
                                          r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
                                          r"and give it a `short`.*<sku>\.toml"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": ""})
     with pytest.raises(SystemExit, match="0 card records"):
-        S.card_record("")
-    assert S.card_record("NVIDIA H200")["sku"] == "h200-sxm-141gb"
+        S.member(S.MODELS["llama32-1b"], "record", "compiled")

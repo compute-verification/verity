@@ -373,6 +373,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
@@ -553,6 +554,14 @@ loads = [
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+]
+loads = [
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
@@ -865,6 +874,11 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/prover/window_chain.py",
     "verity/protocols/resource_accounting/network/prover/window_charge.py",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]

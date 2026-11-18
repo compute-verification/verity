@@ -1,5 +1,5 @@
 """A two-stage interior whose replay block reads history tables (`interior_rows`, ``tables``): each span two
-`EmbeddingRead_v1{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
+`EmbeddingRead_v2{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
 (a stand-in boundary) registers each span's table as a port of its record, of its class's C strings (P=4, O=2: 6 of 8
 leaves, `boundary_tables.class_rows`), its rows past its length L zero rows (`boundary_tables.fill`). The interior commits no
 table: each read's ``root`` and ``domain`` rows are rows of two supplied values, named as round 2 names the replay

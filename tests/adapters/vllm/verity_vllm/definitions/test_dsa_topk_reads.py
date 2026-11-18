@@ -318,11 +318,10 @@ def test_the_long_row_reads_todays_kv_rows() -> None:
             want.append([given if s == w else today[i][s] for s in range(TOPK)])
     t = bind(R.DsaTopKReadRows, N=N, TOPK=TOPK, BLOCK=block, READ=READ)
     cols = [np.stack([a[k] for a in args]).astype(np.uint8) for k in range(len(args[0]))]
-    got = np.asarray(BS.evaluate_bits(t, *cols)).reshape(len(args), -1)
-    w = 16 * H
+    got = np.asarray(E.evaluate_batch(t, *cols)).reshape(len(args), -1)
     for k, (g, b) in enumerate(zip(got, bad)):
-        kv = [_words(g[s * w:(s + 1) * w], 16) for s in range(TOPK)]
-        ok = [int(x) for x in g[TOPK * w:]]
+        kv = [[int(x) for x in g[s * H:(s + 1) * H]] for s in range(TOPK)]
+        ok = [int(x) for x in g[TOPK * H:]]
         assert kv == want[k], k
         assert ok == [int(s != b) for s in range(TOPK)], (k, ok)
 
@@ -349,7 +348,7 @@ def test_the_cut_counts_its_units() -> None:
 #: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity
 SERVED_CLASSES = range(4096, SERVED_V + 1, SERVED_TOPK)
 #: the units the long row's own Definitions add to its cut: the index's past the mask, and the read
-INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
+INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v2")
 
 
 def _served_units() -> dict[str, list]:
@@ -387,7 +386,7 @@ def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -
     and the composer packs proof blocks into a Flock block of that size), at most 2^26 for the merge of up to 8 blocks."""
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
-    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v2"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
     assert max(k["DsaPositionsMerge_v2"]) <= 26
 
 
@@ -414,7 +413,7 @@ def test_the_long_row_is_typed_by_its_read_and_malformed_bindings_are_refused() 
     assert [n for n, _ in params] == ["scores", "n", *R.READ_PORTS[1:]]
     assert [t.leaves for _, t in params] == [32 * SERVED_V, 32, rp[1][1].leaves, rp[2][1].leaves,
                                              *(SERVED_TOPK * t.leaves for _, t in rp[3:])]
-    assert ret.leaves == SERVED_TOPK * (16 * SERVED_H + 1)
+    assert ret.leaf_widths() == [16] * (SERVED_TOPK * SERVED_H) + [1] * SERVED_TOPK
     with pytest.raises(ValueError, match="bind V >= N"):
         bind(R.DsaTopKReadRows, N=8, TOPK=4, BLOCK=8, READ=EM.read(4, 2)).signature()
     with pytest.raises(ValueError, match="no read of u16 rows"):

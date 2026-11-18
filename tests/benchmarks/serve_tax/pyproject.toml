@@ -17,7 +17,7 @@ untraced = ["test_serve_tax.py"]
 # virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
 # behind the network attester names the network attester's program by its file in this tree, which its test (tests/test_certified.py,
 # both sides on stand-ins for the processes they start) checks is there
-inputs = ["benchmarks/serve_tax", "verity/errors.py",
+inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py",
     "verity/circuits",
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
