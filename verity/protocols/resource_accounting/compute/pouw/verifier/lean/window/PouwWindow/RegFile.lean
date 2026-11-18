@@ -49,7 +49,7 @@ def bytes64 (s what : String) : Except String ByteArray := do
   pure b
 
 /-- One value's registered port from its entry (`{"leaves", "words", "word_bits"?, "domain"}`, a registration's or
-`produced.entry`'s) and its root, its rows `schema`'s: `produced.port` before its reads. -/
+`produced.entry`'s) and its root, its rows `schema`'s: `registered_value.port` before its reads. -/
 def valuePort (value : String) (e : Json) (root schema : String) : Except String Flock.Registered.Port := do
   let ctx := s!"the entry of {value}"
   let leaves ← Flock.J.nat e "leaves" ctx
@@ -94,7 +94,7 @@ def want? (rs : List (String × Flock.Registered.Port)) (place : String → Stri
       throw s!"port {nm} reads {(place v).1}, whose entry and root the verifier does not hold"
   pure (ownOf (rootsFn rs) place T k)
 
-/-- A registered port's `--registered` entry (`produced.port`): its value, root, leaves, row words and leaf width,
+/-- A registered port's `--registered` entry (`registered_value.port`): its value, root, leaves, row words and leaf width,
 domain, schema (named where it is not `hm96-sha512/row/v1`) and reads, and `read_in_full` where `full`. -/
 def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
   Json.mkObj ([("value", Json.str p.value), ("root", Json.str (Flock.hexOf p.root)), ("leaves", toJson p.leaves)] ++
