@@ -8,25 +8,15 @@ position's cut linears are, of each of TINY's 2 layers, q/k/v (K = 64, N = 128),
 """
 from __future__ import annotations
 
-import os
-import re
 
 import numpy as np
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
-    served_y as SY,
-)
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -49,20 +39,12 @@ from tests.program.predict.test_window_circuit_int8 import GRAIN as INT8_GRAIN
 from tests.program.predict.test_window_circuit_int8 import _registered as _int8
 from tests.program.predict.test_window_circuit_tables import FIXED
 from tests.program.predict.test_window_rows import (
-    DESIGN,
-    PROGRAM,
-    RUN,
-    _read,
     _registered,
-    _served,
-    _weights,
-    unserved_slots,
 )
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_cut as WK
 from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
@@ -280,163 +262,9 @@ def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves()
 LANES = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
 STATE = [state_row(CLASS.scan, LANES)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
 
-
-@pytest.fixture(scope="module")
-def filled(low):
-    """The cut class circuit filled from a window's values (`window_rows.Rows`: `test_window_rows`' random weights, the fixed
-    load's scan state, each slot's `Slot` taking the circuit's cut linears as registered): its weights, registered values,
-    slots and rows."""
-    fields = _weights(low.fn)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(), fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-
-    def weights(label: str, lo: int, hi: int) -> np.ndarray:
-        return fields[label][lo:hi]
-
-    slots = unserved_slots(low, STATE, weights, cut=low.cut)
-    return weights, values, slots, WR.Rows(low, slots, values)
-
-
 def _widened(x: np.ndarray) -> np.ndarray:
     """bf16 words ``x`` widened to FP32, as u16 words."""
     return (np.asarray(x, np.uint32) << 16).astype("<u4").view("<u2")
-
-
-def test_a_cut_linears_a_row_is_its_x_widened_and_its_y_unit_holds_its_value(low, filled):
-    """Each cut linear's `LinearARow_v3` row is its Definition on the node's x, x's bf16 widened to FP32 exactly; its
-    `LinearOut_v3` unit's output rows are the node's value in rows of 16, and its input row the value widened (the row the
-    window commits by reference from the call's y)."""
-    _w, _v, slots, rows = filled
-    for k, j, *_ in _calls(low):
-        P, s = low.programs[k], slots[k]
-        x, a, y = s.operand(low.fn.body.nodes[j].args[0]), P.arows[j], P.ys[j]
-        got = rows.outs[a.tid][0][a.unit]
-        assert np.array_equal(got, _widened(x))
-        assert np.array_equal(got, np.asarray(evaluate_batch(rows.fns[a.tid], x[None])).astype("<u4").view("<u2").reshape(-1))
-        w = WR._words(s.values[j])
-        assert np.array_equal(np.concatenate([rows.outs[y.tid][o][y.unit] for o in range(len(w) // 16)]), w)
-        assert np.array_equal(rows.given[y.tid]["y"][y.unit], _widened(w))
-    assert len(_calls(low)) == 2 * 5 * 8 and len(low.cut) == 5 * 8
-
-
-def _pearl_values(low, slots) -> dict[str, np.ndarray]:
-    """Pearl+'s tables of the fixed load as each call commits them, from the model's values: round s's call c's A rows each
-    of its m rows the x of the position at round s's row i (`FixedLoad.at`) widened to FP32, then zero rows up to its
-    m₁₆, and its y each row that call's value so widened (`served_y.f32_rows`, the rows Pearl+'s verifier opens)."""
-    out: dict[str, np.ndarray] = {}
-    for k, j, p, ci in _calls(low):
-        (K, N), (s, i), sl = CALLS[ci], PEARL.at(CLASS, k, p), slots[k]
-        a = out.setdefault(PEARL.a(s, ci), np.zeros((PEARL.a_rows(CLASS, s), 2 * K), np.uint16))
-        y = out.setdefault(PEARL.y(s, ci), np.zeros((M[s], 2 * N), np.uint16))
-        for v, at, n in ((a, sl.operand(low.fn.body.nodes[j].args[0]), K), (y, WR._words(sl.values[j]), N)):
-            (row,) = SY.f32_rows(np.asarray(at, "<u2").tobytes(), n)
-            v[i] = np.frombuffer(row, "<u2")
-    return out
-
-
-def test_pearls_values_are_the_rows_the_cut_linears_make(low, filled):
-    """`Rows.value` gives each of Pearl+'s values as the cut circuit's proof blocks make it, which is as Pearl+'s calls
-    commit them: a call's A rows each its cut linear's A row at the fixed load's rows, then the filler rows no unit makes
-    (``empty``: Pearl+'s are zero), and its y each one's y widened, every row some unit's. It refuses a y read as another
-    width."""
-    _w, _v, slots, rows = filled
-    want = _pearl_values(low, slots)
-    assert sorted(want) == sorted(set(low.circuit.registered.values) - {SS.SCAN_STATE})
-    for name, v in want.items():
-        assert np.array_equal(rows.value(name, len(v), np.zeros(v.shape[1], np.uint16)), v), name
-        made = (rows.value(name, len(v), np.full(v.shape[1], 0xFFFF, np.uint16)) != 0xFFFF).any(axis=1)
-        assert made.sum() == M[int(name.split("/")[1])], name
-    with pytest.raises(ValueError, match="reads 'pearl-y/0/1' other than as an output row of 8 words or an input row a "
-                                         "node's value gives"):
-        rows.value(PEARL.y(0, 1), 8, np.zeros(8, np.uint16))
-
-
-def test_a_cut_linear_served_under_other_statics_is_taken_as_served(low, filled):
-    """Pearl+ serves each linear's y by its own product, not the BF16 GEMM's, so a cut linear's served value is its y
-    whatever the statics it was served under: served under another ``DOT`` and off the GEMM's value, a slot of the cut
-    circuit (`Lowered.cut`) takes it as served, and one of the uncut circuit refuses it by name, holding it to its class
-    node's value."""
-    weights, _v, slots, _rows = filled
-    s0, j = slots[0], min(low.cut)
-    rows, store = _served(low, s0, T=1)
-    op = f"op{j}"
-    rows = [{**d, "spec": re.sub(r'(?<=DOT=\{"fn":")\w+', "PearlPlus", d["spec"])} if d["op_path"] == op else d for d in rows]
-    assert all(d["spec"] != descriptor_id(low.fn.body.nodes[j].fn) for d in rows if d["op_path"] == op)
-    store[(0, op, "out")] = store[(0, op, "out")] ^ np.uint16(1)
-    got = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)), cut=low.cut)
-    assert got.source[j] == WR.SERVED and np.array_equal(got.values[j][0], s0.values[j][0] ^ np.uint16(1))
-    with pytest.raises(ValueError, match=rf"node {j} .* at position 0: served as .*not its Definition's value on its "
-                                         r"operands \(served as Gemm_v2\{.*PearlPlus"):
-        WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)))
-
-
-def test_a_cut_linear_prefill_prunes_is_read_at_every_prompt_position(low, filled):
-    """Prefill prunes the last layer from its query on at the prompt rows before the last, but the engine computes it there,
-    the record binds it a row a prompt position and Pearl+ commits each call's y at them all: a cut linear there, which the
-    circuit never computes, is read from those rows (off the GEMM's value, a slot of the cut circuit takes it as served),
-    where the uncut circuit computes it and the other pruned nodes stay computed. Bound at its last row alone, it is
-    refused by name."""
-    weights, _v, slots, _rows = filled
-    s0, nodes, lp = slots[0], low.fn.body.nodes, slots[0].row[1]
-    K = len(nodes) // (max(WR.positions(low.fn)) + 1)
-    query = [k for k in range(K) if nodes[k].fn.name == "RoPE"][-2]
-    pruned = tuple(k for k in range(query, K - 3) if nodes[k].fn.name != "RoPE" or k == query)
-    cut = [k for k in pruned if k in low.cut]
-    assert [nodes[k].fn.name for k in cut] == ["Gemm"] * 3
-    rows, store = _served(low, s0, T=1, also=pruned, whole=pruned)
-    got = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)), cut=low.cut)
-    assert got.source == [WR.COMPUTED if p < lp - 1 and (k in pruned and k not in cut or k >= K - 3) else WR.SERVED
-                          for p in range(5) for k in range(K)]
-    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
-
-    o, N = cut[0], WR._fields(nodes[cut[0]].fn)[0].leaves
-    y = store[(0, f"op{o}", "out")]
-    off = {**store, (0, f"op{o}", "out"): np.concatenate([y[:N] ^ np.uint16(1), y[N:]])}
-    taken = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(off)), cut=low.cut)
-    assert taken.source[o] == WR.SERVED and np.array_equal(taken.values[o][0], s0.values[o][0] ^ np.uint16(1))
-    computed = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(off)))
-    assert computed.source[o] == WR.COMPUTED and np.array_equal(computed.values[o][0], s0.values[o][0])
-
-    rows, store = _served(low, s0, T=1, also=pruned)
-    with pytest.raises(ValueError, match=rf"op{o}: a node the circuit never computes, pruned at the prompt rows before the "
-                                         rf"last, its members bound at its last one alone, not a row a prompt position "
-                                         rf"\({lp}\)"):
-        WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)), cut=low.cut)
-    WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)))
-
-
-@pytest.mark.slow
-def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low, filled):
-    """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under fresh salts, FP32 words
-    in row-seg rows: `ROW_FORMAT`), each
-    `LinearARow_v3` and `LinearOut_v3` unit's output rows are its Definition on the inputs the window commits, x by its
-    writers' wires and y by reference from the call's y rows, and the window closes over them. What no cheaper test
-    reaches: the window resolving the cut's wires and committing a registered read of an input row by reference. Slow (a
-    minute and more) for the window's members, which trace the embedding read's population Program."""
-    _w, values, slots, rows = filled
-    c = low.circuit
-    for i, (name, v) in enumerate(_pearl_values(low, slots).items()):
-        schema, bits = IF.value_format(c.registered, name)
-        values = {**values, name: RV.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
-                                                       [os.urandom(192) for _ in range(len(v))],
-                                                       word_bits=bits, schema=schema)}
-    win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
-    win.supply()
-    rows.record(win)
-    bad = {}
-    for fn, n in c.templates:
-        if fn.name in ("LinearARow", "LinearOut"):
-            tid, widths = descriptor_id(fn), [ty.homogeneous_width() for _, ty in fn.signature()[0]]
-            ins = [np.ascontiguousarray(x).view("<u2").reshape(n, -1).view(f"<u{w // 8}")
-                   for x, w in zip(win.input_words(tid, 0, n), widths)]
-            want = np.asarray(evaluate_batch(fn, *ins, kernel="reference")).reshape(n, -1)
-            want = want.astype("<u4").view("<u2").reshape(n, -1) if fn.name == "LinearARow" else want.astype(np.uint16)
-            if (u := np.flatnonzero((want != np.concatenate(rows.outs[tid], axis=1)).any(axis=1))).size:
-                bad[tid] = u.tolist()
-    assert bad == {}
-    assert win.close() is not None
-
 
 @pytest.fixture(scope="module")
 def pearl_wired():

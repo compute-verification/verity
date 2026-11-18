@@ -115,9 +115,9 @@ class Unserved:
         return None
 
 
-def unserved_slots(low, state, weights, cut=frozenset()) -> list[WR.Slot]:
+def unserved_slots(low, state, weights) -> list[WR.Slot]:
     """Each of ``low``'s Programs' `Slot` of its lane's row (`scan_slots`), every node computed (`Unserved`)."""
-    return [WR.Slot(P.fn, CLASS, row, weights, Unserved(row[1], P.positions), cut=cut)
+    return [WR.Slot(P.fn, CLASS, row, weights, Unserved(row[1], P.positions))
             for P, (row, _) in zip(low.programs, WR.scan_slots(low, state))]
 
 
@@ -248,8 +248,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
 
 def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
     """Each slot's row and head are its lane's of the scan state row its `ScanSlots_v3` reads, the one at its anchor
-    (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): a slot of another row than its lane's, slots of
-    other Programs than the circuit's, or no scan state's value, are refused by name."""
+    (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): a slot of another row than its lane's, a class
+    circuit, slots of other Programs than the circuit's, or no scan state's value, are refused by name."""
     low, _f, values, weights, slots = window
     assert WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
     other = [*SLOTS[0][:-1], SLOTS[0][-1] + 1]
@@ -257,6 +257,8 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
         WR.Rows(low, [WR.Slot(low.fn, CLASS, other, weights, Unserved(4, 5)), slots[1]], values)
     with pytest.raises(ValueError, match="slot 0's values are of another Program than the circuit's slot 0"):
         WR.Rows(low, slots[::-1], values)
+    with pytest.raises(ValueError, match="a class circuit's rows: the committer fills a served window's circuit"):
+        WR.Rows(WC.lower(_registered(), CLASS, None, GRAIN), slots, values)
     with pytest.raises(ValueError, match="a Program of 5 positions for a request served at 4"):
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, Unserved(4, 4))
     with pytest.raises(ValueError, match=re.escape(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")):
@@ -860,23 +862,16 @@ def _rows(requests, lanes):
     registered values and its `Rows` of every node computed."""
     reg = _registered()
     low = WC.lower(reg, CLASS, None, GRAIN, requests=requests)
-    return (low, *_filled(reg, low, lanes))
-
-
-def _filled(reg, low, lanes, values=None):
     rows_ = [state_row(CLASS.scan, lanes), *STATE[1:]]
     fields = _weights(low.fn)
-    if values is None:
-        state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
-                                     schema=CR.SCHEMA_V2)
-        values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-    return values, WR.Rows(low, unserved_slots(low, rows_, lambda label, lo, hi: fields[label][lo:hi]), values)
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+                                 schema=CR.SCHEMA_V2)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    return low, values, WR.Rows(low, unserved_slots(low, rows_, lambda label, lo, hi: fields[label][lo:hi]), values)
 
 
 #: one request in lane 0 (a prompt of 3 keeping 1 output: 3 positions), lane 1 empty
 ONE = [(1, 3, 1, [5, 77, 42, 0]), (0, 0, 0, [0, 0, 0, 0])]
-#: the fixed load: each lane a prompt of 4 keeping 2 outputs, the class's whole prompt and outputs
-FIXED = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
 
 
 def test_a_window_of_fewer_requests_than_slots_is_its_one_requests_rows():
@@ -895,25 +890,6 @@ def test_a_window_of_fewer_requests_than_slots_is_its_one_requests_rows():
     for t, n in rows.n.items():
         want[rows.fns[t].id] = want.get(rows.fns[t].id, 0) + n
     assert counts == want
-
-
-def test_the_fixed_loads_served_rows_are_the_class_circuits():
-    """At the fixed load the served circuit is the class circuit byte for byte (`test_window_circuit`), and its rows are too:
-    the same values (one registration) give every unit the same output and opening rows from the same source, and `record` hands the window
-    the same calls, template, label and element bytes alike."""
-    reg = _registered()
-    served = WC.lower(reg, CLASS, None, GRAIN, requests=tuple(WC.Request(CLASS.anchor(k), CLASS.lane(k), 4, 2) for k in range(2)))
-    cls = WC.lower(reg, CLASS, None, GRAIN)
-    assert IF.circuit_bytes(served.circuit.description()) == IF.circuit_bytes(cls.circuit.description())
-    values, a = _filled(reg, served, FIXED)
-    _, b = _filled(reg, cls, FIXED, values)
-    assert a.n == b.n and all(np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
-    assert all(np.array_equal(a.source[t], b.source[t]) for t in a.source)
-    assert all(np.array_equal(a.inputs[t][p], b.inputs[t][p]) for t in a.inputs for p in a.inputs[t])
-    ka, kb = _Kept(), _Kept()
-    a.record(ka)
-    b.record(kb)
-    assert ka.calls == kb.calls and ka.calls
 
 
 @pytest.mark.slow
