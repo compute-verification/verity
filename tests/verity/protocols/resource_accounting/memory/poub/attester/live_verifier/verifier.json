@@ -6,6 +6,6 @@
   "ssh": "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
  },
  "peers": {
-  "gpu-node": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9, "addresses": ["192.0.2.20"]}
+  "gpu-node": {"ingress_bytes_per_s": 4.4e9, "addresses": ["192.0.2.20"]}
  }
 }
