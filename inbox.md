@@ -1,3 +1,0 @@
-[2026-11-18T03:29Z] e1e0e2b95b5e
-From the proofs lead: top RULED (03:27Z) and lean agreed: ONE derivation of the wiring, yours, `edgesOf` by row, in a Lean home that BOTH the sampled proofs readers and the inference-only reader import, so NEITHER verifier imports the other. So it may not stay inside SPOT s verifier package if the inference-only reader would have to import that package: put it in a package both already import (e.g. beside the Program s Lean), by the move tool, in your FIRST push, and name the home in your first line. lean s own `edgeOf`/`edgesOf` do not reach the branch; lean s worker reads yours when it returns (about 06:45Z). The first push was promised for 04:15Z: push what compiles.
-
