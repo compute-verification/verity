@@ -5,7 +5,8 @@ Its model is the memory attester of `security/Definitions/Pous/Model/Continuous.
 guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory attester sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryAttester` enforces each one on a single
-`audit.UnsignedRounds` over the whole stream, with its clock and its index samples:
+`audit.UnsignedRounds` over the whole stream, on its `device`'s clock (`verity.clock.Device`, which has no default
+clock) and with its index samples:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
    (`UnsignedRounds.challenge`), and each deadline runs from the memory attester's own clock reading when it reveals
@@ -37,10 +38,10 @@ attester's own randomness, independent of the setup, the indices and the answers
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     DEADLINE_NS,
     RTT_ALLOWANCE_NS,
@@ -84,14 +85,13 @@ class ContinuousMemoryAttester:
 
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,
-                 clock: Callable[[], int] = time.perf_counter_ns,
-                 on_answer: Callable[[ChallengeReply], None] | None = None, root_only: bool = False,
+                 device: Device, on_answer: Callable[[ChallengeReply], None] | None = None, root_only: bool = False,
                  audit_cap: int | None = None) -> None:
         if late_deadline_ns is None:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
             raise ValueError("a stream has at least one challenge, and a nonnegative miss allowance")
-        self.timed = UnsignedRounds(vk, key, n, deadline_ns, rtt_allowance_ns, clock, on_answer, root_only,
+        self.timed = UnsignedRounds(vk, key, n, deadline_ns, rtt_allowance_ns, device.clock, on_answer, root_only,
                                    late_deadline_ns=late_deadline_ns, audit_cap=audit_cap)
         self.max_misses = max_misses
 

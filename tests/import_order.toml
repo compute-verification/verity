@@ -779,12 +779,14 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
+    "verity/clock.py",
     "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",

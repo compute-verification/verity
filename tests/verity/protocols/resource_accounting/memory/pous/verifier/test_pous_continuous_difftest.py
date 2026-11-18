@@ -43,6 +43,7 @@ from pous_continuous_model import (
 )
 from pous_fakes import Clock
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.verifier import band
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     UnsignedRounds,
@@ -111,7 +112,8 @@ class Subject:
         self.kind, self.named, self.hard = kind, kind == "continuous", kind != "timed"
         if self.named:
             self.v = ContinuousMemoryAttester(vk, key, n, late_deadline_ns=late, max_misses=max_misses, deadline_ns=deadline,
-                                        rtt_allowance_ns=rtt, clock=clock)
+                                        rtt_allowance_ns=rtt,
+                                        device=Device("memory-attester", clock, 1, 0))
             self.timed = self.v.timed
         else:
             kw = {"late_deadline_ns": late} if self.hard else {}
