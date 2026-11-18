@@ -39,7 +39,7 @@ def handed():
 def _attest(tmp_path, strides, window=0, session=signers.SESSION, seed=b"certifier"):
     tmp_path.mkdir(parents=True, exist_ok=True)
     issuer = Issuer(signers.signer(tmp_path, seed), session)
-    rows, cert = C.attest(issuer, LINK, window, strides, LEN, None)
+    rows, cert = signers.attest_connection_rows(issuer, LINK, window, strides, LEN, None)
     return issuer, rows, cert
 
 
@@ -261,6 +261,6 @@ def test_a_refused_signer_gives_no_attestation(handed, tmp_path):
     _, _, by_window = handed
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)
-    rows, cert = C.attest(issuer, LINK, 0, by_window[0], LEN)
+    rows, cert = signers.attest_connection_rows(issuer, LINK, 0, by_window[0], LEN)
     assert cert is None and issuer.refused == [(LINK, Direction.EGRESS, 0)]
     assert [len(t.rows) for t in rows.tables] == [T, T]

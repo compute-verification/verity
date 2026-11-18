@@ -271,15 +271,11 @@ def window_digest(record: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(IF.circuit_of(record))).hexdigest()
 
 
-def replay(circuit: IF.Circuit, record: Mapping[str, Any]) -> SpecializedDefinition:
+def replay(circuit: IF.Circuit) -> SpecializedDefinition:
     """``circuit`` as one replay Definition (the module docstring), `WindowReplay_v1{window}`: ``window`` the
-    `window_digest` of ``record``, the circuit's record: its templates, wires, declarations and external ports are the
-    circuit's. The plan is made once, in work proportional to the circuit's ranges and its arguments' parts, and the body
-    built from it wherever the Definition is."""
+    `window_digest` of the circuit's own record (`interface.descriptor_record`). The plan is made once, in work
+    proportional to the circuit's ranges and its arguments' parts, and the body built from it wherever the Definition is."""
     plan = _plan(circuit)
-    want = {**circuit.description(), "external": list(circuit.external)}
-    if got := [k for k in sorted({*want, *IF.DECLARED}) if record.get(k) != want.get(k)]:
-        raise ValueError(f"{circuit.name}: the record is not its record: its {', '.join(got)} differ")
     if (bits := sum(plan.ret.leaf_widths())) > UNIT_MAX_BITS:
         raise ValueError(f"{circuit.name}: its external ports return {bits:,} bits; a proof block returns at most "
                          f"{UNIT_MAX_BITS:,}")
@@ -298,4 +294,4 @@ def replay(circuit: IF.Circuit, record: Mapping[str, Any]) -> SpecializedDefinit
     defn = CompositeDefinition(NAME, VERSION, ("window",), lambda S: (plan.params, plan.ret), body, register=False,
                                conformance="derived: its templates' calls, wired as the window's circuit wires them",
                                doc=f"{circuit.name}: {sum(n for _f, _a, n in plan.nodes)} units in {len(plan.nodes)} nodes")
-    return bind(defn, window=window_digest(record))
+    return bind(defn, window=window_digest(IF.descriptor_record(circuit, 1)))
