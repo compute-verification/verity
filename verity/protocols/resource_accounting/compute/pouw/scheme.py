@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from verity.protocols.resource_accounting.compute.pouw.prover import workload
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
 
 
@@ -20,6 +21,7 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
+    messages=workload.MESSAGES,
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),

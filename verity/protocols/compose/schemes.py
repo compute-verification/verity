@@ -26,6 +26,7 @@ DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "dither": "verity.protocols.experimental.dither.scheme",
     "network-attester": "verity.protocols.resource_accounting.network.scheme",
     "pearl-plus": f"{_COMPUTE}.pouw.scheme",
+    "poub": f"{_MEMORY}.poub.scheme",
     "pous": f"{_MEMORY}.pous.scheme",
     "wipe": f"{_MEMORY}.pous.scheme",
 })
