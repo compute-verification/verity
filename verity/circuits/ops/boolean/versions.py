@@ -14,8 +14,9 @@ it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training
 with ``opt_in=True`` (a reader asking what a block is proved as), so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`,
-`BitAtx{W}`) has its Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
-vocabulary size ahead: the constants' family is the core's, and a catalog adds its own with its loader (the gathers and `BitAtx`).
+`BitAtx{W}`, `population`'s wiring `BitOf{W}x{I}` and `WordOf{W}`) has its Boolean version made on demand too (`_families`, by id:
+`made_on_demand`), since no module can register one per constant or vocabulary size ahead: the constants' and the wiring's families
+are the core's, and a catalog adds its own with its loader (the gathers and `BitAtx`).
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
 the Boolean version of its Definition, over the bits each word operand occupies (`lift_body`); `boolean_version` serves it
@@ -210,11 +211,13 @@ def _statics_on_bits(kw: dict) -> dict:
 
 def _families() -> tuple:
     """The Boolean versions made on demand, as their word Definitions are (a family by id): (word id pattern, its Boolean
-    version's factory), the core's constants first, then each registered catalog's (`catalog_loader`)."""
+    version's factory), the core's constants and wiring first, then each registered catalog's (`catalog_loader`)."""
     if not _FAMILIES:
         from verity.circuits.ops.boolean import scalar as SC
-        _FAMILIES.append(
-            (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))))
+        from verity.circuits.population import BIT_OF_ID, WORD_OF_ID
+        _FAMILIES.extend((
+            (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
+            (BIT_OF_ID, lambda m: SC.bit_of_bits(int(m[1]), int(m[2]))), (WORD_OF_ID, lambda m: SC.word_of_bits(int(m[1])))))
         for families in _CATALOG_FAMILIES:
             _FAMILIES.extend(families())
     return tuple(_FAMILIES)
