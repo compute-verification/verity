@@ -46,12 +46,17 @@ def test_its_useful_products_are_rowwise_scaled_e4m3_whatever_format_y_leaves_in
     assert S.declared(PS.PEARL_PLUS, "output_format") == "bf16"
 
 
+def test_it_keeps_a_weight_derived_copy_for_the_serves_life() -> None:
+    """Its device run builds each registered weight's B buffers once, held to the committed root, and every call reads
+    them (`run_device`'s ``_weight_side`` and pipelines)."""
+    assert S.declared(PS.PEARL_PLUS, "keeps_weight_copy") is True
+
+
 def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
     """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
     assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
     assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
-    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
-        S.declared(PS.PEARL_PLUS, "channel_schemas")
+    assert [s.type for s in S.declared(PS.PEARL_PLUS, "channel_schemas")] == ["PearlSalt"]
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
