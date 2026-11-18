@@ -171,7 +171,7 @@ def _stage(topo, d: Path, wired: bool):
         (d / "writers.reads.json").write_text(json.dumps(_reads(tree, template, None)))
         (d / "readers.reads.json").write_text(json.dumps(_reads(tree, template, port)))
         text = (d / "honest" / "circuit.txt").read_text()
-        (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, readers.indices)))
+        (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
 
 
