@@ -75,7 +75,9 @@ under no pin, the largest limits and a log of no registered value. Taken: an edg
 two slots, across slots, into a call, and from a writer's second output in one strided part and in two parts.
 Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
 port the record cuts, a partial row, and one template in two root nodes with an edge each way, its order stated or
-not (`wires`), a row of another width (`program`), ingress or a registered read onto an edge's row (`inputs`), and
+not (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
+into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
+mismatches a wire's leaves were refused for (`program`: no Program states them), ingress or a registered read onto an edge's row (`inputs`), and
 a reference to a later node (`not-topological`).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
@@ -689,95 +691,18 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     return c
 
 
-def passed_on(S: int = 2, how: str = "direct", gate: bool = True) -> Circuit:
-    """A circuit whose wires `Spot.Wires.check` takes, word for word, and that lays out no circuit: a 16-bit leaf
-    that reads sixteen 16-bit gates of another slot through one 16-bit row. `Wide`, sixteen units a slot, each one
-    16-bit gate over a registered weight. `On`, a unit a slot: its parameter sixteen rows of sixteen one-bit leaves,
-    row `j` wired from the slot's `j`-th `Wide`; its first output sixteen one-bit leaves, leaf `j` its row `j`'s leaf
-    `j` itself, passed on with no gate. `Take`, a unit a slot: one gate over one 16-bit leaf, wired from the next
-    slot's `On`. Each of `On`'s one-bit leaves lies under a 16-bit leaf of its writer, so through the one row that
-    crosses slots, 16 bits, `Take`'s leaf reads sixteen gates of 16 bits.
-
-    `how` is how `On` passes those leaves on (`PASSES`): itself, or through a call, a callee inside a callee, a
-    batch member or a scan; with `"carry"` it passes one of them on, through a scan's carry, and with `"ys"` the
-    other fifteen, as a scan's outputs, the rest of its output gates of its own; with `"beside"` it passes none, and its output
-    is sixteen gates of its own, one over each of those leaves, returned through a callee whose argument holds the
-    leaves beside them. With `"gates"` the output is those sixteen gates, called directly: `On`'s row is closed,
-    and `Take`'s leaf reads sixteen one-bit gates of `On`. With `"unread"` the first output is those sixteen gates
-    and a second output, which no wire reads, is the leaves themselves: `On` passes them on all the same. Without
-    `gate`, `On` has that one output and no other, so no gate where it passes its leaves on."""
-    c = Circuit(f"passed{S}", S)
-    v16, bits = Value(16), Array(16, Value(1))
-    one, diagonal = [[("op", 16, [(0, 0)])]], [17 * j for j in range(16)]
-    wide = c.add(template("PassWide", [("w", v16)], [v16], one), [([S, 16], ["slot", "-"], 0)])
-    own = [("op", 1, [(0, k)]) for k in diagonal]
-    first = own if how in ("gates", "unread") else ("pass", 0, diagonal, how)
-    second = (bits, ("pass", 0, diagonal, "direct")) if how == "unread" else (v16, [("op", 16, [])])
-    on = c.add(template("PassOn", [("x", Array(16, bits))], [bits, second[0]] if gate else [bits],
-                        [first, second[1]] if gate else [first]), [([S], ["slot"], 0)])
-    take = c.add(template("PassTake", [("v", v16)], [v16], one), [([S], ["slot"], 0)])
-    c.cuts = {on: {"x": 16}}
-    c.wires = IF.coalesce([IF.Wire(on, "x", wide, "o0", s, (16,), 16 * s, (1,), (0, 16)) for s in range(S)]
-                          + [IF.Wire(take, "v", on, "o0", s, (1,), (s + 1) % S, (0,), (0, 1)) for s in range(S)])
+def read_in_leaves(S: int = 2) -> Circuit:
+    """A circuit of one template, `Wide`, sixteen units a slot, each one 16-bit gate over a registered weight read
+    in rows of one 16-bit leaf."""
+    c = Circuit(f"leaves{S}", S)
+    wide = c.add(template("LeavesWide", [("w", Value(16))], [Value(16)], [[("op", 16, [(0, 0)])]]),
+                 [([S, 16], ["slot", "-"], 0)])
     c.params = {"weights/wide": 16 * S}
     c.reads = IF.coalesce([IF.Read(wide, "w", "weights/wide", u, (1,), u, (0,)) for u in range(16 * S)])
     c.order = c.ordered()
     return c
 
 
-def two_widths(S: int = 2, bits: bool = False) -> Circuit:
-    """A circuit with a wire from an output whose leaves have two widths: `Two`, a unit a slot, its first output a
-    leaf of 8 bits and one of 24; `Whole`, a unit a slot, one gate over one 32-bit leaf wired from its slot's `Two`.
-    With `bits`, `Whole`'s row is 32 one-bit leaves, the first read by its gate and none passed on: a closed row."""
-    c = Circuit(f"widths{S}", S)
-    v16 = Value(16)
-    two = c.add(template("WidthsTwo", [("a", v16)], [Tuple(Value(8), Value(24)), v16],
-                         [[("op", 8, [(0, 0)]), ("op", 24, [(0, 0)])], [("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    whole = c.add(template("WidthsWhole", [("v", Array(32, Value(1)) if bits else Value(32))], [v16],
-                           [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    c.wires = IF.coalesce([IF.Wire(whole, "v", two, "o0", s, (1,), s, (0,), (0, 1)) for s in range(S)])
-    c.order = c.ordered()
-    return c
-
-
-def short_output(S: int = 2, bits: bool = False) -> Circuit:
-    """A circuit with a wire from an output that lacks bits of the row it fills: `Eight`, a unit a slot, its first
-    output one 8-bit leaf; `Whole`, a unit a slot, one gate over one 16-bit leaf wired from its slot's `Eight`. The
-    two rows have the same words, one, and 8 of the row's bits are no gate's. With `bits`, `Whole`'s row is 16
-    one-bit leaves, the first read by its gate and none passed on: a closed row, which the output lacks bits of all
-    the same."""
-    c = Circuit(f"short{S}", S)
-    v16 = Value(16)
-    eight = c.add(template("ShortEight", [("a", v16)], [Value(8), v16],
-                           [[("op", 8, [(0, 0)])], [("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    whole = c.add(template("ShortWhole", [("v", Array(16, Value(1)) if bits else v16)], [v16],
-                           [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    c.wires = IF.coalesce([IF.Wire(whole, "v", eight, "o0", s, (1,), s, (0,), (0, 1)) for s in range(S)])
-    c.order = c.ordered()
-    return c
-
-
-def odd_output(S: int = 2, words: int = 2) -> Circuit:
-    """A circuit with an output of 31 bits, which is two words, its bits rounded up: `Odd`, a unit a slot, its first
-    output one 31-bit leaf; `Whole`, a unit a slot, one gate over the first of its row's `16 * words` one-bit
-    leaves and none passed on, a closed row. With two words the row is wired from its slot's `Odd`: the two rows
-    have the same words, and the row holds a bit the output lacks. With one word nothing is wired, and `ODD_WIRE`
-    is the wire a record then adds: the output's two words against the row's one."""
-    c = Circuit(f"odd{S}x{words}", S)
-    v16 = Value(16)
-    odd = c.add(template("OddOut", [("a", v16)], [Value(31), v16],
-                         [[("op", 31, [(0, 0)])], [("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    whole = c.add(template("OddWhole", [("v", Array(16 * words, Value(1)))], [v16],
-                           [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    if words == 2:
-        c.wires = IF.coalesce([IF.Wire(whole, "v", odd, "o0", s, (1,), s, (0,), (0, 1)) for s in range(S)])
-    c.order = c.ordered()
-    return c
-
-
-#: the wire a record of `odd_output(words=1)` adds: its first `Whole`'s row from its first `Odd`'s 31-bit output
-ODD_WIRE = {"reader": "OddWhole_v1", "port": "v", "writer": "OddOut_v1", "out": "o0", "at": 0, "radix": [1],
-            "base": 0, "step": [0]}
 WEIGHTS = ("weights/embed/table", "weights/norm", "weights/query", "weights/mixing")
 EMBED, NORM, MIX, TABLE = "LowEmbed_v1", "LowNorm_v1", "LowMix_v1", "table/weights/embed"
 
@@ -958,7 +883,7 @@ FORMATS: dict[str, tuple] = {
         ("inputs", None, {"formats": {"scan-state": SEG32},
                           "edit": lambda d: d["registered"]["params"].update({"scan-state": 9})}),
     "a 32-bit format on a weight read in rows of one 16-bit leaf":
-        ("inputs", "gates", {"formats": {"weights/wide": SEG32}, "wide": ("weights/wide",)}),
+        ("inputs", "leaves", {"formats": {"weights/wide": SEG32}, "wide": ("weights/wide",)}),
     "the scan state in 32-bit leaves, its format right, its entry stating 16 bits":
         ("formats", None, {"formats": {"scan-state": SEG32}, "ran": {"scan-state": 32}, "stated": {"scan-state": 16}}),
     "a weight in 32-bit leaves, its format right, its entry stating 16 bits":
@@ -985,15 +910,8 @@ def shaped() -> list[dict]:
     is refused (`reader-layout`). Under no pin none of those records is refused by its roles: the opening's ports are
     fresh and the rate refuses.
 
-    Then a wire's leaves, each case under the policy of exactly what its blocks hold, counted without the refusal
-    where the case is refused: the token a word into a key of bits that only gates read, and bits into a key of one
-    word (both accepted); `passed_on`, its leaves passed on each way of `PASSES`, by a Definition of no gate and to
-    an output no wire reads (`leaf-widths`, the one that hands them to a callee that returns none among them and
-    the two that pass on some of them alone, through a scan's carry and as a scan's outputs), and
-    its output gates of its own (accepted); `two_widths` (`leaf-widths`), and into a closed row (accepted);
-    `short_output`, into one leaf and into a closed row (`leaf-widths`, both); `odd_output`, its 31 bits two words:
-    into a row of two words (`leaf-widths`), and a record that wires it into a row of one (`wires`). Then the
-    accepted case with its Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x`
+    Then a wire's leaves, each case under the policy of exactly what its blocks hold: the token a word into a key of
+    bits that only gates read, and bits into a key of one word (both accepted). Then the accepted case with its Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x`
     has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output.
 
     Then the accepted case with its record's text another: one that lists its members and so states no wires
@@ -1111,37 +1029,12 @@ def shaped() -> list[dict]:
         first(f"2x3 {what}, pinned", lowered(2, 3, **shape), seed, pins=[], pinned=pin, broken="reader-layout")
         first(f"2x3 {what}, no pin", lowered(2, 3, **shape), seed + 1, pins=[])
 
-    whole, units = "leaf-widths", lambda nodes: [n for n in nodes if n["args"]]
+
+    def units(nodes: list) -> list:
+        return [n for n in nodes if n["args"]]
     for seed, side in ((23, "reader"), (24, "writer")):
         pin = [ref.closure_digest(json.loads(lowered(2, 3, bits=side).program()[0]), EMBED)]
         first(f"2x3 the key's {side} bits, the other side a word", lowered(2, 3, bits=side), seed, pins=pin, policy={})
-    for seed, what, shape, refused in (
-            (25, "a leaf that reads sixteen gates through one row", {}, whole),
-            (30, "sixteen gates through one row, passed on by a Definition of no gate", {"gate": False}, whole),
-            (31, "sixteen gates through one row, passed on through a call", {"how": "call"}, whole),
-            (32, "sixteen gates through one row, passed on through a batch member", {"how": "batch"}, whole),
-            (33, "sixteen gates through one row, passed on through a scan", {"how": "scan"}, whole),
-            (39, "sixteen gates through one row, passed on through a callee inside a callee", {"how": "nested"}, whole),
-            (40, "a gate through one row, passed on through a scan's carry", {"how": "carry"}, whole),
-            (44, "fifteen gates through one row, passed on as a scan's outputs", {"how": "ys"}, whole),
-            (41, "sixteen gates through one row, passed on to an output no wire reads", {"how": "unread"}, whole),
-            (34, "a row a callee is handed and returns no leaf of", {"how": "beside"}, whole),
-            (35, "a closed row: sixteen gates read, none passed on", {"how": "gates"}, None)):
-        first(what, passed_on(**shape), seed, held=("weights/wide",), committed=("weights/wide",), pins=[], policy={},
-              refused=refused)
-    first("a wire from an output of two widths", two_widths(), 26, held=(), committed=(), pins=[], policy={},
-          refused=whole)
-    first("an output of two widths into a closed row", two_widths(bits=True), 36, held=(), committed=(), pins=[],
-          policy={})
-    first("an output that lacks bits of its row", short_output(), 37, held=(), committed=(), pins=[], policy={},
-          refused=whole)
-    first("an output that lacks bits of a closed row", short_output(bits=True), 38, held=(), committed=(), pins=[],
-          policy={}, refused=whole)
-    first("an output of 31 bits into a row of two words", odd_output(), 42, held=(), committed=(), pins=[], policy={},
-          refused=whole)
-    first("an output of 31 bits wired into a row of one word", odd_output(words=1), 43, held=(), committed=(), pins=[],
-          policy={}, edit=lambda d: d["wires"].append(dict(ODD_WIRE)), broken="wires")
-
     def twice(nodes: list, _desc: dict) -> None:
         """`Norm`'s weights' row handed the input gates its `x` has."""
         norm = units(nodes)[2]
@@ -1207,7 +1100,7 @@ def shaped() -> list[dict]:
         first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k, edit=declare,
               broken=stage)
     for k, (what, (stage, shape, more)) in enumerate(FORMATS.items()):
-        c = lowered(2, 3) if shape is None else passed_on(how=shape)
+        c = lowered(2, 3) if shape is None else read_in_leaves()
         place = {} if shape is None else {"held": ("weights/wide",), "committed": ("weights/wide",), "pins": [],
                                           "policy": {}}
         if stage == "inputs":
@@ -2086,6 +1979,20 @@ def _narrow() -> Edged:
                  [(EA, 2, _units(1, 2)), (ENARROW, 1, _units(1, 1))])
 
 
+def _onto(name: str, out, row, writes: list) -> Edged:
+    """`name`'s writer, two units each one output `out` computed by `writes` from a 16-bit leaf, and its reader called
+    once on an input `row` of its own, one 16-bit gate over its first leaf, which the toy repoints to the writer's
+    member 0."""
+    W = template(f"{name}Writer", [("a", Value(16))], [out], [writes])
+    R = template(f"{name}Reader", [("v", row)], [Value(16)], [[("op", 16, [(0, 0)])]])
+
+    def body(B, S, a, z):
+        B.batch(W, a, axes=(0,))
+        return B.call(R, z)
+    return Edged(1, [("a", Array(2, Value(16))), ("z", row)], Value(16), body,
+                 [(W, 2, _units(1, 2)), (R, 1, _units(1, 1))])
+
+
 def _repoint(refs: list, k: int, j: int = 0, form: str = "affine"):
     """The edit that sets root node `k`'s argument `j` to the references `refs` of the form `form`."""
     def edit(nodes: list) -> None:
@@ -2112,6 +2019,18 @@ EDGED = {
     "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, "wires"),
     "a partial row": (lambda: _ab(_first_two, n=3, m=2), _repoint(["n", 2, 2, 8], 3), None, "wires"),
     "a row of another width": (_narrow, _repoint(["n", 3, 4, 4], 4), None, "program"),
+    "an edge from an output of two widths into one 32-bit leaf": (
+        lambda: _onto("EdgeTwo", Tuple(Value(8), Value(24)), Value(32), [("op", 8, [(0, 0)]), ("op", 24, [(0, 0)])]),
+        _repoint(["n", 2, 0, 1], 3), None, "program"),
+    "an edge from an output of 8 bits into a 16-bit leaf": (
+        lambda: _onto("EdgeShort", Value(8), Value(16), [("op", 8, [(0, 0)])]), _repoint(["n", 2, 0, 1], 3), None,
+        "program"),
+    "an edge from an output of 31 bits into 32 one-bit leaves": (
+        lambda: _onto("EdgeOdd", Value(31), Array(32, Value(1)), [("op", 31, [(0, 0)])]),
+        _repoint(["n", 2, 0, 32], 3), None, "program"),
+    "an edge from a 16-bit output into 16 one-bit leaves": (
+        lambda: _onto("EdgeBits", Value(16), Array(16, Value(1)), [("op", 16, [(0, 0)])]),
+        _repoint(["n", 2, 0, 16], 3), None, "program"),
     "a row half its own input and half an edge": (lambda: _ab(_half, m=1, reader=EWIDE, ret=EU4), None, None,
                                                   "own-rows"),
     "ingress onto an edge's row": (lambda: _ab(_mapped), None, lambda d: d.update(
@@ -2162,7 +2081,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
-    return len(EDGED) + COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
+    return len(EDGED) + COUNT + 33 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
 
 
 def results(case: dict) -> dict:
