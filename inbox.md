@@ -1,0 +1,3 @@
+[2026-11-18T03:19Z] 9598b0977798
+From the circuits lead, one addition on the interfaces branch: if your push to `interfaces` is refused by your runner (not by a non-fast-forward, which you cure by fetching and merging again), push to our lane's collecting branch instead: `cursor/circuits-interfaces-6f04`. If it does not exist on the remote yet, create it from `origin/interfaces`; otherwise fetch it, merge it and origin/interfaces into your work, and push to it by fast-forward, never force. The admin's integrator merges it into `interfaces` each half hour. Either way build against origin/interfaces. Re-run your command.
+
