@@ -50,7 +50,8 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     PoubReceipt,
 )
 from verity.protocols.resource_accounting.memory.poub.scheme import POUB
-from verity.hooks import RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan, StepEnded
+from verity.hooks import (EVENTS, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan,
+                          StepEnded)
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
@@ -323,7 +324,10 @@ class Binder:
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 
     def on_event(self, e: Any) -> None:
-        """One of the exchange's ``memory`` or ``steps`` events."""
+        """One of the exchange's ``memory`` or ``steps`` events: each of its own type handled, every other event of the
+        two hooks let pass, and anything that is no event of a served run (`verity.hooks.EVENTS`) refused by name."""
+        if not isinstance(e, EVENTS):
+            raise TypeError(f"{NAME}: {type(e).__name__} is no event of a served run (verity.hooks.EVENTS)")
         if isinstance(e, StepBegan):
             self.on_step(e)
         elif isinstance(e, StepEnded):

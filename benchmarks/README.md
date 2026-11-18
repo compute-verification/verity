@@ -183,8 +183,11 @@ itself. A metric whose command's script is under `infra/control/` is a loop's, w
   list of words; `version`, `changed`, `was`, `under`, `kind` and `needs` (below); `runs = "control"`, for a command that
   reads what only the control pod reaches (its own state, GitHub through its read token, the Linear app's keys): the rerun
   loop runs it there as a local `research run`, which takes no `--on`, `--pool`, `--cpus`, `--mem-gb`, `--gpus` or
-  `--store-read`, with the Linear app's keys and none of the pod's site or Slack keys. A row without it runs on a machine,
-  with none of them. A row that says it runs on the control pod runs only once infra has listed it there, with its command.
+  `--store-read`. Of the pod's stripped keys it keeps only those its list entry names, of the Linear app's two
+  (`LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`); it carries every other variable of the loop's environment, all but the
+  stripped set `JOBS_TOKEN`, `SLACK_*` and `LINEAR_*` (`LEFT_OUT` in `metrics_rerun.py`), with `PYTHONPATH` set to the clone's `research`. A row without it runs on a
+  machine, with none of the stripped set. A row that says it runs on the control pod runs only once infra has listed it
+  there, with its command.
 
 The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
 the site's reader before a metric uses it.

@@ -71,6 +71,7 @@
  "network-accounting/attester-added-first-byte": {"version": 1, "unit": "ms"},
  "network-accounting/attester-added-last-byte": {"version": 1, "unit": "ms"},
  "network-accounting/attester-tick-lateness": {"version": 1, "unit": "ms"},
+ "network-accounting/pacing-capacity-left": {"version": 1, "unit": "GB"},
  "network-accounting/release-timing-bits": {"version": 1, "unit": "bits a release interval"},
  "network-accounting/scan-proving-cost": {"version": 1, "unit": "proving seconds a second"},
  "network-accounting/scan-verifier-cost": {"version": 1, "unit": "CPU seconds a second"},
