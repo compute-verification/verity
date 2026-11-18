@@ -1,11 +1,11 @@
 /-
-SPOT's two-stage form (`verity/sampled-proofs/v1`, params and evidence `{"form": "two-stage", ...}`): a boundary
+SPOT at two levels (`verity/sampled-proofs/v1`, params and evidence `{"levels": 2, ...}`): a boundary
 registration sampled once on the challenger's coins (the first stage, its replay blocks), the interior registration
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
-accepts a two-stage audit that passes every check, ahead of the form's soundness proof. `VStar.Recursive.Sampled` reads
-the form and runs this check. The package's root imports it, so the package's audit builds and reads it.
+accepts a two-stage audit that passes every check, ahead of its soundness proof. `VStar.Recursive.Sampled` reads
+the levels and runs this check at two. The package's root imports it, so the package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
