@@ -86,11 +86,11 @@ def engine_options(a: argparse.Namespace) -> dict:
     return {k: v for k, v in kw.items() if v is not None}
 
 
-def target_of(device: dict, record: dict, device_name: str) -> dict:
-    """The run's target: the device's profile (``device``, `TargetProfile.to_json`) with the batch invariance the built engine
-    reports, its breakable CUDA graphs (the compilation "breakable"), the experts its engine arguments name and the name the device
-    reports, as a registration's target states them."""
-    out = {**device, "device_name": device_name}
+def target_of(device: dict, record: dict) -> dict:
+    """The run's target: the device's profile (``device``, `TargetProfile.to_json` of one that names its card) with the batch
+    invariance the built engine reports, its breakable CUDA graphs (the compilation "breakable") and the experts its engine
+    arguments name, as a registration's target states them."""
+    out = dict(device)
     eff = record.get("effective") or {}
     if eff.get("batch_invariant") is not None:
         out["batch_invariant"] = bool(eff["batch_invariant"])
@@ -137,6 +137,11 @@ def main(argv: list[str] | None = None) -> int:
     from verity_vllm.engine.step_trace import StepTrace
 
     llm = LLM(a.model, revision=a.revision, **kw)
+    import torch
+
+    from verity_vllm.engine.profiles.devices import card_sku
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    device = TargetProfile.from_device().with_overrides(card=card_sku(torch.cuda.get_device_name(0))).to_json()
     from vllm import SamplingParams
     tok = llm.vllm.get_tokenizer()
     reqs = traffic(tok, a.requests, random.Random(a.seed), a.max_prompt, a.gaps, [int(x) for x in a.max_tokens.split(",")],
@@ -187,13 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     finishes = {}
     for o in done.values():
         finishes[str(o.outputs[0].finish_reason)] = finishes.get(str(o.outputs[0].finish_reason), 0) + 1
-    import torch
-
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     rec = llm.engine_record
     (out / "run.json").write_text(json.dumps({
         "model": a.model, "revision": a.revision, "engine_kwargs": kw, "engine_record": rec, "args": vars(a),
-        "target": target_of(TargetProfile.from_device().to_json(), rec, torch.cuda.get_device_name(0)),
+        "target": target_of(device, rec),
         "execution": rec["execution"], "default_seed": DEFAULT_SEED,
         "commit_record": "requests.jsonl: the engine's own outputs; no committer installed", "finishes": finishes,
         "steps_traced": trace.executed, "wall_s": timing.get("wall_s") if isinstance(timing, dict) else None}, indent=1, default=str) + "\n")
