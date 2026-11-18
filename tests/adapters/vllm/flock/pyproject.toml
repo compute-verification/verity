@@ -20,6 +20,8 @@ inputs = [
     "tools/verity/circuit_check", "calibration/census",
     # test_lean_typed_statement starts `research`; test_partition_units reads the torch adapter's catalog beside vLLM's
     "tools/research/src/research", "adapters/torch/verity_torch",
+    # test_boolean_export reads the served node's card
+    "calibration/hardware/cards/rtx-pro-6000-server.toml",
     # the Flock suite's helpers these tests import (conftest.py puts its directory on the path) and what they read
     "tests/verity/protocols/proofs/flock/prover/synthetic_sets.py",
     "tests/verity/protocols/proofs/flock/prover/fixtures/synthetic_sets",
