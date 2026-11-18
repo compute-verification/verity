@@ -12,6 +12,7 @@ list has no ``D/`` entry for, and exits 1 when it printed any.
 from __future__ import annotations
 
 import fnmatch
+import re
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -108,6 +109,54 @@ PUBLIC = {
     "D/private/compose/inference-only.json": "the inference-only verdict",
     "D/private/compose/inputs.sha256": "the hand-off's sums",
 }
+
+
+#: Our tools' refusals that are one fixed sentence, with no path, host or value, by name: a refusal's name from this list
+#: may leave (`refusal`); its free text, and every other line of a tool's log, stays in the private directory
+REFUSALS = {
+    "serve-json-no-target-profile": "serve.json records no target profile (the serving device"s TargetProfile.to_json()), so φ can"t be read: --target F gives it",
+    "serve-json-no-execution-label": "serve.json records no execution label (execution, engine.execution), so φ can"t be read",
+    "advice-no-capped-compiler": "verity_vllm.pipeline.advice registers no capped compiler (its registered_compiler wraps none)",
+    "advice-not-canonical": "the advice"s bytes are not its canonical encoding",
+    "pearl-and-h1-tables": "--pearl-tables or --window-registration: the circuit reads Pearl+"s tables or H1"s, not both",
+    "scan-reader-not-passed": "a window"s scan reads the network attester run its serve kept, or that it kept none, by the caller"s reader, since SPOT imports neither the attester nor a benchmark: run this from a caller that passes it (main"s kept_ingress, as benchmarks/one_stage/window_commit.py does)",
+    "request-without-end": "a request of the window has no END in the kept run"s ingress",
+    "window-registration-without-h1-key": "--window-registration: give --h1-key, H1"s prover key, whose salts W"s tables take",
+    "pearl-passes-without-window-registration": "--pearl-passes: give --window-registration W, Pearl+"s window record of the passes (served_passes.py retain --window-record W)",
+    "h1-key-with-pearl-passes": "--h1-key is H1"s prover key: a window tied to Pearl+"s W takes its salts from the passes" manifests",
+    "window-commit-reader-not-passed": "window-commit reads the network attester run its serve kept, and names the scan state it opens for the attester"s scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py",
+    "advice-compiler-absent": "a served window"s registered compiler is `verity-vllm advice`"s (verity_vllm.pipeline.advice), which this tree lacks",
+    "scan-request-in-two-slots": "the scan starts one request in two slots of the window",
+    "compiler-without-code": "the verifier"s table names no code for this compiler, so a checkout"s digest can"t be recomputed",
+    "tie-without-values": "the audit is tied to an earlier registration (--tie), and the circuit takes no values",
+    "day-without-day-log": "--day needs --day-log, the registration log whose declarations R2 reads",
+    "answer-of-another-registration": "the audit"s answer commits to another registration than the window"s",
+    "day-log-without-day": "--day-log and --day-params go with --day",
+    "not-an-object": "not an object",
+    "session-check-without-pins": "no gate, key pin or main"s first-parent line to check the session by (--gate, --key-sha512, --main)",
+    "no-live-session": "the served run names no live session",
+    "draw-session-check-without-pins": "no gate, key pin or main"s first-parent line to check the draw session by (--gate, --key-sha512, --main)",
+    "draw-commitment-not-signed": "the record"s draw commitment is not the one the draw session"s challenger signed",
+    "draw-coin-not-after-commitment": "the draw session"s log does not show the run"s commitment as the one root its draw coin followed",
+    "source-not-draw-coin": "the record"s source is not its draw session"s coin",
+    "no-gate-command": "no gate command (--gate)",
+    "period-open-arguments": "period open needs --name, --circuits, --slots and --max-tokens",
+    "pearlplus-period-open-name": "pearlplus-period open needs --name",
+    "window-session-without-pins": "no gate or no key pin to check the window"s session by (H1_GATE, H1_KEY_SHA512)",
+    "pearlplus-period-rule-arguments": "pearlplus-period rule needs --lane and --coin",
+    "pearlplus-period-close-arguments": "pearlplus-period close takes --lane and --windows together",
+}
+_BY_SENTENCE = {v: k for k, v in REFUSALS.items()}
+#: what a tool prints before its refusal: its name and command, or the exception's class, and a colon
+_PREFIX = re.compile(r"(?:[A-Za-z_][\w.\-]*(?: [\w\-]+)?: )?")
+
+
+def refusal(line: str) -> str | None:
+    """The `REFUSALS` name of ``line`` where it is one of those sentences, after at most a tool's or an exception's name
+    and a colon; None for any other line."""
+    line = line.strip()
+    return next((n for t, n in _BY_SENTENCE.items() if line.endswith(t) and _PREFIX.fullmatch(line[:len(line) - len(t)])),
+                None)
 
 
 def _match(pat: tuple[str, ...], parts: tuple[str, ...]) -> bool:
