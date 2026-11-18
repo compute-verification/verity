@@ -57,7 +57,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept network attester run's attested I/O (`network_attester_chain.io`: each request's prompt and streamed ids as the
   network attester's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
-  prints only its path and counts.
+  prints only its path and the network attester run.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -203,7 +203,9 @@ SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "Se
 #: sealed without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
            "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
-           "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
+           "--seal --retain-exclude hidden_m1"
+#: serve-openai's defaults the endpoint's flags leave out but `served_as` still holds serve.json to
+DEFAULTED = ("--scheme", "rows-sha512")
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
 #: the endpoint's map from its engine requests to the network attester's, in its serve dir: each engine request's
@@ -219,8 +221,8 @@ CERTIFIED = "certified-io.json"
 HAND_START = ("serve-openai run directly (--out SERVE_DIR, the serve dir `endpoint` reads as --from, outside every "
               "run's directory, where the serve refuses it; --required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
-              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
-              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40, which --seal requires "
+              "(72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
               "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
@@ -639,14 +641,14 @@ def certified(a: argparse.Namespace) -> int:
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
     dep, io = attested_io(fetch)
     if not io["accepted"]:
-        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: "
+                      f"{len(io['violations'])} violation(s)")
     dest = a.keep / a.run / CERTIFIED
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump({"deployment": dep, "io": io}, f)
     dest.chmod(0o600)
-    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"], "requests": io["requests"],
-                      "tokens": io["tokens"]}), flush=True)
+    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"]}), flush=True)
     return 0
 
 
@@ -680,8 +682,9 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
 
 
 def served_as(serve: dict, port: int) -> list[str]:
-    """Each of `ENDPOINT`'s flags that serve.json shows the endpoint didn't serve with, beside what it recorded."""
-    words, off = shlex.split(ENDPOINT.format(port=port))[2:], []
+    """Each of `ENDPOINT`'s flags and `DEFAULTED`'s that serve.json shows the endpoint didn't serve with, beside what it
+    recorded."""
+    words, off = [*shlex.split(ENDPOINT.format(port=port))[2:], *DEFAULTED], []
     host, at = (serve.get("address") or [None, None])[:2]
     for i, w in enumerate(words):
         if not w.startswith("--"):

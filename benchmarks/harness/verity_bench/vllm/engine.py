@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm import LLM, messages
+from verity_vllm import LLM
 from verity_vllm.engine.arrivals import run_requests_arrivals
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_compile_fresh, apply_engine, apply_target, own_inductor_dir
 from verity_vllm.engine.hooks import Hooks, live
@@ -74,10 +74,10 @@ def _pearl_c_run(llm: Any) -> Any | None:
 
 
 def _served_scheme(arm: Arm) -> str | None:
-    """The declared useful-work scheme the arm serves (its entry's `messages.option`), None for any other arm."""
-    from verity_vllm import messages
+    """The declared useful-work scheme the arm serves (its entry, a declared scheme's name), None for any other arm."""
+    from verity_bench.vllm.presets import declared_schemes
 
-    return next((s.name for e in arm.protocols if (s := messages.option(e)) is not None), None)
+    return next((e for e in arm.protocols if e in declared_schemes()), None)
 
 
 def _no_run(scheme: str) -> dict[str, Any]:
@@ -178,9 +178,7 @@ class _VllmEngine:
         config: dict[str, Any] = {}
         if arm.protocols:
             config = protocols_config(arm, settings.environ())
-            by = {e.partition(":")[0]: s.name for e in arm.protocols if (s := messages.option(e)) is not None}
-            engine["protocols"] = ",".join(by.get(e.partition(":")[0], e) for e in arm.protocols)
-            config = {by.get(k, k): v for k, v in config.items()}
+            engine["protocols"] = ",".join(arm.protocols)
             if config:
                 engine["protocols_config"] = config
         self.llm = LLM(preset.model, revision=preset.revision, **engine)

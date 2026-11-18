@@ -22,7 +22,7 @@ from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 
 from tests.pipeline import predicted
@@ -249,6 +249,14 @@ def test_a_serve_attaches_each_listed_scheme_by_name_the_earlier_outer_and_relea
 def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tmp_path):
     with pytest.raises(cli.UsageError, match="--protocols a,nope: nope names no declared scheme"):
         so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
+
+
+def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
+                                      "--protocols", "pouw:pearl-c-h100-v1-h3"])
+    with pytest.raises(cli.UsageError, match="pouw:pearl-c-h100-v1-h3 is pearl-plus's option: list it as --protocols "
+                                             "pearl-plus, its settings under 'pearl-plus'"):
+        so.listed(opts, tmp_path)
 
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
