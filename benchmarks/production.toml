@@ -46,11 +46,17 @@ cap_minutes = 20
 serve = ["--dtype", "bfloat16"]
 
 [profiles.coding-agent]
-version = 1
+version = 2
 what = "a coding agent's recorded sessions, each user sending its sessions' turns in order with one request in flight"
 dataset_name = "timed_trace"
 block = 64
 within = ["token"]
+
+[profiles.coding-agent.ladder]
+start = 1
+factor = 2
+most = 64
+gain = 0.05
 
 [profiles.coding-agent.cuts.262144]
 dataset = "agentx-256k"

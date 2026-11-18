@@ -16,7 +16,7 @@ from verity_config import ConfigError
 
 SERVE_TAX = Path(__file__).resolve().parents[3] / "benchmarks" / "serve_tax" / "serve_tax.py"
 PINS = {
-    "coding-agent": (1, "54ef9ec108314bddeaff1f5c8546edf8b00f8cdd32e046be0a3ca8a159578ade"),
+    "coding-agent": (2, "fa839372a8da13a51ea65c76d5a74b0a0a8f39cadc1eabb2b8d96364930e61a6"),
     "chat": (1, "553bc90ac63b177fcd651c58798f764d7e30f26f57dee79688a92b613e3c2a40"),
     "fixed-size": (1, "93036f84deab9449aa7d8e4f1343c9f23a1918bed489dc5efbcb036d51e1cbc4"),
 }
@@ -74,10 +74,24 @@ def test_an_unknown_key_is_refused(tmp_path, table, line):
     ("prompts = 200\n", "", "exactly"),
     ("within = [\"token\"]\n", "within = [\"e2e\"]\n", "within names"),
     ("[profiles.coding-agent.cuts.131072]", "[profiles.coding-agent.cuts.65536]", "no cut at llama-3.2-1b"),
+    ("factor = 2\n", "factor = 1\n", "factor of at least 2"),
+    ("gain = 0.05\n", "gain = 0.0\n", "gain a fraction between 0 and 1"),
+    ("most = 64\n", "most = 0\n", "start of at least 1 and at most most"),
 ])
 def test_a_profile_off_its_shape_is_refused(tmp_path, old, new, refusal):
     (tmp_path / "production.toml").write_text(P.PATH.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
     with pytest.raises(ConfigError, match=refusal):
+        P.load(tmp_path / "production.toml")
+
+
+def test_a_sessions_profile_has_a_ladder_and_the_others_none(tmp_path, doc):
+    assert P.rungs(doc, "coding-agent") == (1, 2, 4, 8, 16, 32, 64)
+    assert (doc.profiles["chat"].ladder, doc.profiles["fixed-size"].ladder) == (None, None)
+    text = P.PATH.read_text(encoding="utf-8")
+    start = text.index("[profiles.coding-agent.ladder]")
+    (tmp_path / "production.toml").write_text(text[:start] + text[text.index("[profiles.coding-agent.cuts", start):],
+                                              encoding="utf-8")
+    with pytest.raises(ConfigError, match="a timed_trace profile has exactly .*'ladder'"):
         P.load(tmp_path / "production.toml")
 
 

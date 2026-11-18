@@ -279,7 +279,7 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
     assert not (tmp_path / "out" / "serving_profile.json").exists()
     assert (result["kind"], result["validation"]["status"]) == ("serve-tax-profile/v1", "failed")
     assert result["workload_fingerprint"] | {"source_sha": None} == {
-        "profile": "coding-agent", "version": 1, "digest": r["digest"], "model": "glm53", "card": "h200", "stock": "prod",
+        "profile": "coding-agent", "version": 2, "digest": r["digest"], "model": "glm53", "card": "h200", "stock": "prod",
         "feature": "tick-unseeded", "arm": "tick-unseeded", "load": "agentic-256k", "point": 4, "source_sha": None}
     got = {(m["name"], m["member"]): m for m in result["measurements"]}
     ours = "glm-5.3-h200-tick-unseeded-over-prod-coding-agent"
@@ -316,7 +316,7 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
     assert t["value"] == pytest.approx(sum(each) / 2, abs=1e-4)
     assert r["latency"]["ours"]["ttft_p50_s"] == 0.2 and r["latency"]["stock"]["tpot_p99_s"] == pytest.approx(0.03)
     assert r["within"]["ours"] == {"met": 530, "sent": 576, "within": 530 / 576}
-    assert (r["profile"], r["version"], r["model_id"], r["quick_check"]) == ("coding-agent", 1, "glm53", False)
+    assert (r["profile"], r["version"], r["model_id"], r["quick_check"]) == ("coding-agent", 2, "glm53", False)
     assert r["vllm"] == P.load().vllm and r["served_vllm"] == ["0.1+gd9105ea8"]
     lines = text.splitlines()
     assert lines[0].startswith("1. our extra card time a token, our seconds for the same requests over stock's, less "
@@ -326,7 +326,7 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
     assert lines[1].startswith("2. time to first token, median / P99: ours 200.0 ms / 800.0 ms, stock ")
     assert lines[2] == "3. within the bounds (each token within 80 ms): ours 92.0% of 576 requests, stock 93.8% of 576 requests"
     assert lines[3] == "prod-record (prod-record) beside prod at agentic-256k, 4 users, 2 lifetimes of 3 reps each"
-    assert lines[4].startswith("profile coding-agent v1 (digest ")
+    assert lines[4].startswith("profile coding-agent v2 (digest ")
     # an interval the noise floor straddles, or a side the cap cut short, cannot tell
     same = [[rep(1, 100.4), rep(2, 101.2), rep(3, 99.2)], [rep(1, 99.6), rep(2, 100.3), rep(3, 99.3)]]
     for k in (0, 1):
@@ -367,7 +367,7 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": card, "ARMS": "compiled",
                     "LOADS": "chat=4+8+12+16+24+32+48", "REPS": "3", "LIFETIMES": "1"}
     assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=1+2+4+8"
-    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=4"
+    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8+16+32+64"
     with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
         S.profile_plan("chat", "llama32-1b", "record", False)
     tok = {4: 100, 8: 190, 12: 260, 16: 300, 24: 300, 32: 298, 48: 295}
@@ -401,6 +401,28 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     rc, r, text = S.profile_result([tmp_path / "compiled"], "chat", "llama32-1b", None, True)
     assert (r["verdict"], "line" in r) == ("cannot tell", False)
     assert text.splitlines()[1] == "cannot tell: stock still rises at its highest rung served (12): no line"
+
+
+def test_find_load_on_sessions_takes_the_fewest_users_past_which_the_rise_is_under_the_ladders_gain(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    tok = {1: 100, 2: 190, 4: 300, 8: 310, 16: 330, 32: 331, 64: 331}
+    reps = {c: [{**rep(r, v), "concurrency": c} for r in (1, 2, 3)] for c, v in tok.items()}
+    metrics = {"arm": "compiled", "model_id": "llama32-1b", "slo": {}, "vllm": "v", "lifetime": None, "reps": 3,
+               "left_out": 0, "loads": {f"agentic@{c}": x for c, x in reps.items()}}
+    (tmp_path / "compiled").mkdir()
+    (tmp_path / "compiled" / "meta.json").write_text(json.dumps({"arm": "compiled"}))
+    monkeypatch.setattr(S, "arm_metrics", lambda d, slo=None: metrics)
+    rc, r, text = S.profile_result([tmp_path / "compiled"], "coding-agent", "llama32-1b", None, True)
+    assert rc == 0 and (r["verdict"], r["peak"], r["key"], r["line"], r["raise_version"]) == (
+        "saturated", 4, "users", "llama32-1b.h200 = 4", 3)
+    assert text.splitlines()[1] == ("saturated: output tokens a second rise by less than 5% past 4 "
+                                    "(1+2+4+8+16+32+64 served)")
+    # rising by 5% or more at every rung served: no line
+    metrics["loads"] = {f"agentic@{c}": x for c, x in reps.items() if c <= 4}
+    rc, r, text = S.profile_result([tmp_path / "compiled"], "coding-agent", "llama32-1b", None, True)
+    assert (r["verdict"], "line" in r) == ("cannot tell", False)
+    assert text.splitlines()[1] == "cannot tell: stock still rises by 5% or more at each rung served, up to 4: no line"
 
 
 def bash(argv: list[str], env: dict[str, str]) -> tuple[int, str]:
