@@ -27,8 +27,7 @@ case $GENCODE in *,code=$ARCH) ;; *) echo "pearl_c_sm90 is $ARCH's: GENCODE=$GEN
 [ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
 "$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
-FLAGS=(-O3 -std=c++17 -gencode "$GENCODE" -fmad=false -Xptxas -v -cubin)
-case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math flag: ${FLAGS[*]}" >&2; exit 1;; esac
+. "$HERE/../cubin_flags.sh"; cubin_flags "$GENCODE" || exit 1
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/pearl_c_sm90.cubin" "$HERE/pearl_c_sm90.cu" 2> "$OUT/ptxas.txt" || { cat "$OUT/ptxas.txt" >&2; exit 1; }
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm90.cubin" > "$OUT/pearl_c_sm90.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm90.sass" "$OUT/sass.json"

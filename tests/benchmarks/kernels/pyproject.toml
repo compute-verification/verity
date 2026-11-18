@@ -13,4 +13,6 @@ inputs = ["benchmarks/kernels/ship.sh", "benchmarks/kernels/ship_nvcc.sh", "benc
           "benchmarks/harness/verity_bench", "tools/config/verity_config", "verity/__init__.py", "verity/channel.py",
           "verity/device.py", "verity/errors.py", "calibration/hardware/cards", "calibration/hardware/architectures",
           "benchmarks/kernels/device_libs_gate.py", "benchmarks/kernels/smoke_h100.sh",
-          "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"]
+          "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py",
+          # ship.sh's ship_cubin_flags sources the kernels' one statement of a shipped cubin's flags
+          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/cubin_flags.sh"]
