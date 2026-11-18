@@ -14,11 +14,11 @@ import bisect
 import hashlib
 import math
 import re
+from array import array
 from collections.abc import Iterator, Mapping
+from itertools import accumulate
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
-
-import numpy as np
 
 from .codec import canonical_json, descriptor_id, register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
@@ -350,7 +350,7 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             template_instances_query([t for t, _ in templates]))
 
 
-Positions = dict[tuple[str, str, int], dict[str, tuple[np.ndarray, np.ndarray]]]
+Positions = dict[tuple[str, str, int], dict[str, tuple[array, array]]]
 
 
 def _record_digest(record: Mapping[str, Any]) -> str:
@@ -382,7 +382,7 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
         raise ValueError(f"cut-form: templates {sorted(set(ids) - {ids[j] for j in defs})} have no root batch")
     sigs = [defs[j].signature() for j in range(len(ids))]
     ret = [r.leaves for _, r in sigs]
-    bounds = list(np.cumsum([0] + [n * r for n, r in zip(counts, ret)]))
+    bounds = list(accumulate((n * r for n, r in zip(counts, ret)), initial=0))
     first, pos = [-1] * len(nodes), 0
     for s, i, lo, hi in runs(body.ret):
         j = bisect.bisect_right(bounds, pos) - 1
@@ -392,11 +392,9 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
         first[i], pos = (pos - bounds[j]) // ret[j], pos + hi
     if pos != bounds[-1] or min(first, default=0) < 0:
         raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
-    fields = []
-    for _, r in sigs:
-        fs = _fields(r)
-        fields.append((np.cumsum([0] + [f.leaves for f in fs])[:-1], np.array([f.leaves for f in fs]), fs))
-    got: dict[tuple[str, str, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    fields = [({o: f for f, o in enumerate(accumulate(ls[:-1], initial=0))}, ls)
+              for ls in ([f.leaves for f in _fields(r)] for _, r in sigs)]
+    got: Positions = {}
     for k, nd in enumerate(nodes):
         j = of[k]
         for (port, t), arg in zip(sigs[j][0], nd.args):
@@ -410,8 +408,7 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
                     _wired_rows(got, ids, of, first, fields, ret, k, j, port, kc, rl, at, i, lo, hi)
                 at += hi - lo
     cut, query = wired_population_program([(defs[j], n) for j, n in enumerate(counts)], {**record, "wires": []})
-    return cut, query, {key: {tree: tuple(np.concatenate(x) for x in zip(*ps)) for tree, ps in trees.items()}
-                        for key, trees in got.items()}
+    return cut, query, got
 
 
 def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int],
@@ -419,22 +416,23 @@ def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fiel
     where = f"{ids[j]} {port}: root node {k}'s leaves [{at}, {at + hi - lo}) read root node {i}'s [{lo}, {hi})"
     if at % rl or (hi - lo) % rl:
         raise ValueError(f"cut-rows: {where}, not whole rows of {rl} leaves")
-    w = of[i]
-    g = np.arange(at // rl, (at + hi - lo) // rl, dtype=np.int64)
-    b, o = np.divmod(lo + (g - g[0]) * rl, ret[w])
-    starts, lens, fs = fields[w]
-    f = np.searchsorted(starts, o, side="right") - 1
-    if (starts[f] != o).any():
-        raise ValueError(f"cut-offset: {where}, off {ids[w]}'s field's first leaf")
-    if (o + rl > ret[w]).any():
-        raise ValueError(f"cut-units: {where}, a row across two of {ids[w]}'s units")
-    if (lens[f] != rl).any():
-        raise ValueError(f"cut-fields: {where}, a row of {rl} leaves over {ids[w]}'s fields of {sorted(set(lens[f].tolist()))}")
-    reader, c, writer = first[k] + g // kc, g % kc, first[i] + b
-    for cx in np.unique(c * len(fs) + f).tolist():
-        m = c * len(fs) + f == cx
-        got.setdefault((ids[j], port, cx // len(fs)), {}).setdefault(f"{ids[w]}/o{cx % len(fs)}", []).append(
-            (reader[m], writer[m]))
+    w, (starts, lens), mine = of[i], fields[of[i]], {}
+    for t in range((hi - lo) // rl):
+        b, o = divmod(lo + t * rl, ret[w])
+        f = starts.get(o)
+        if f is None:
+            raise ValueError(f"cut-offset: {where}, off {ids[w]}'s field's first leaf")
+        if o + rl > ret[w]:
+            raise ValueError(f"cut-units: {where}, a row across two of {ids[w]}'s units")
+        if lens[f] != rl:
+            raise ValueError(f"cut-fields: {where}, a row of {rl} leaves over {ids[w]}'s field of {lens[f]}")
+        g = at // rl + t
+        to = mine.get((g % kc, f))
+        if to is None:
+            to = mine[g % kc, f] = got.setdefault((ids[j], port, g % kc), {}).setdefault(
+                f"{ids[w]}/o{f}", (array("q"), array("q")))
+        to[0].append(first[k] + g // kc)
+        to[1].append(first[i] + b)
 
 
 def _chunks(parts: Sequence[Refs]) -> Iterator[tuple[int, str, int, int, int]]:
