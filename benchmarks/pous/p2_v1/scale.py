@@ -322,7 +322,7 @@ def gpu_cmd(a: argparse.Namespace) -> int:
     ok = True
     for j, n in enumerate(batches):
         m = payload_rows(n, 1 + j)
-        reps = [timed(lambda: K.encode(m, 0)) for _ in range(3 if n <= 16 else 1)]
+        reps = [timed(lambda: K.encode(m, 0)) for _ in range(3 if n <= 16 else 1)]  # noqa: F821  -- called before the `del m` that ends this pass
         s, c = min(reps, key=lambda x: x[0])
         flags = K.raised()
         rt = bool(torch.equal(K.decode(c, 0), m))

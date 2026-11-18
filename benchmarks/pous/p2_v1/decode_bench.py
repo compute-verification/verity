@@ -196,18 +196,18 @@ def main() -> int:
         stream = lambda: torch.cuda.current_stream().cuda_stream  # noqa: E731
 
         def kernel_only() -> None:
-            rc = lib.p2v1_decode(c.data_ptr(), m.data_ptr(), k.data_ptr(), t.data_ptr(), n, P.c0, kern.flags.data_ptr(), stream())
+            rc = lib.p2v1_decode(c.data_ptr(), m.data_ptr(), k.data_ptr(), t.data_ptr(), n, P.c0, kern.flags.data_ptr(), stream())  # noqa: F821  -- called only before the `del`s below free these
             assert rc == 0, rc
 
-        keys_reps = timed(torch, lambda: kern.keys(0, n), a.reps)
+        keys_reps = timed(torch, lambda: kern.keys(0, n), a.reps)  # noqa: F821  -- as `kernel_only` above
         kernel_reps = timed(torch, kernel_only, a.reps)
         out = {}
         if fused:
             def full() -> None:
-                out["m"] = kern.decode_fused(c, 0)
+                out["m"] = kern.decode_fused(c, 0)  # noqa: F821  -- as `kernel_only` above
         else:
             def full() -> None:
-                out["m"] = kern.decode(c, 0)
+                out["m"] = kern.decode(c, 0)  # noqa: F821  -- as `kernel_only` above
         decode_reps = timed(torch, full, a.reps)
         m_full = out["m"]
         del k, t

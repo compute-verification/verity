@@ -30,13 +30,13 @@ sys.path.insert(0, str(HERE.parent / "word_codec"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 import cuda_lib  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb, store
-from verity.commitments import merkle_depth
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import domain_message
-from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb, store  # noqa: E402
+from verity.commitments import merkle_depth  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import domain_message  # noqa: E402
+from verity.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 
-import sketch_receipt as skr
+import sketch_receipt as skr  # noqa: E402
 
 BLOCK = 4096
 # reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.

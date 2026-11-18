@@ -29,10 +29,10 @@ sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"))
 

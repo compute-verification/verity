@@ -913,7 +913,7 @@ class DeviceStore:
                 handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
                                 host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
                                 host["top"][slot].clone())
-            except BaseException as error:
+            except BaseException as error:  # noqa: BLE001  -- handed to the caller waiting on the handle, which raises it
                 handle.value = error
             finally:
                 self.free[slot].set()

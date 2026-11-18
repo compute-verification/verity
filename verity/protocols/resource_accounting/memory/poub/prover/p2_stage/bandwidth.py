@@ -74,15 +74,15 @@ STAGE = (ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stag
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
-from verity.commitments import advice
-from verity.commitments.identity import canonical_json_bytes
-from verity.commitments.merkle import merkle_depth
-from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.commitments import advice  # noqa: E402
+from verity.commitments.identity import canonical_json_bytes  # noqa: E402
+from verity.commitments.merkle import merkle_depth  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier import period  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params  # noqa: E402
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES

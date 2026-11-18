@@ -1060,11 +1060,12 @@ PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate 
                      "log holds what its device received and signed, which no key takes off the host")
 
 
-def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
+def gate(argv: list[str], host: Host | None = None, sink: BinaryIO | None = None, **hooks: Any) -> int:
     """The gate's verbs, their answer on `sink` (stdout); the exit code. A refusal is exit 3 with {"refused": why}.
     Over ssh (`--ssh WORDS --key NAME [--from ADDRESS]`, the forced command's) `by` is NAME, the lane the key was
     registered for, and a key registered with no lane (`-`) reads only; ADDRESS is the ssh caller's, which a party verb
     holds to a registered node's (`node_of`). Run by root (vy-admin's sudo) `by` is the sudoer."""
+    host = host if host is not None else Host()
     sink = sink if sink is not None else sys.stdout.buffer
 
     def answer(rc: int, doc: dict) -> int:

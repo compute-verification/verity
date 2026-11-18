@@ -509,7 +509,7 @@ class ServingTrace:
             while ahead.begin(s):
                 ahead.hand(s, self.serve(s, (s + 1) % every == 0, fence))
                 s += 1
-        except BaseException as e:
+        except BaseException as e:  # noqa: BLE001  -- handed to the session's thread, which fails with it
             ahead.fail(e)
 
     def take(self, window: int) -> int:
