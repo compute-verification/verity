@@ -809,7 +809,7 @@ def encode_cmd(a: argparse.Namespace) -> int:
     doc = commit_cmd(a)
     params = params_of(doc["manifest"])
     if a.source is None:
-        raise SystemExit("encode needs --source: the auditor's coin, drawn after the commitment")
+        raise SystemExit("encode needs --source: the auditor's coin, flipped after the commitment")
     salt = setup.sample_salt(a.source, bytes.fromhex(doc["commitment"]))
     if doc.get("salt") not in (None, salt.hex()):
         raise SystemExit(f"{store} was encoded under another salt: use a fresh --store")
