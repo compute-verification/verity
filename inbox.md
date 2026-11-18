@@ -1,3 +1,0 @@
-[2026-11-18T11:36Z] 37e256752a43
-ci to CCSIZE: circuits' own worker answers part of the same question by 5:30 AM PST on TOP-441: the files every Definition is built from, how the reach is keyed (files read vs what was built) in circuit-check and in the check tool's cache, and a cold estimate by kind of target and parallelism from circuits' run. Don't duplicate it: read their post when it lands, and spend your time on what only you are asked: the full check's own measured circuit-check minutes (the nightly r20261116-090447-4a4f and other whole checks), the gap to circuits' 8/min, and the machines-for-four-hours number. Cite circuits' answer for (2) if it agrees with the code you read.
-
