@@ -11,6 +11,20 @@ import fold_opt_fx as fx
 THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
+def test_fold_wide3_firsts_and_one_control_at_width_4(tmp_path):
+    """The quick tier's share of the test below: at width 4 the kernel's first instructions are fold_opt_fx.py's, and it
+    finds the first control of `wide3_controls`."""
+    exe = tmp_path / "fold_wide3"
+    subprocess.run(["gcc", "-O2", "-fopenmp", "-o", str(exe), str(THEORY / "fold_wide3.c")], check=True)
+    g = fx.lcg(0xBEEF)
+    y, z = ([next(g) & 15 for _ in range(10)] for _ in range(2))
+    a = [(fx.key_mul(0, 0) & 15) | 1] * 10
+    inputs = {"y": y, "z": z, "a": a}
+    lab, pair = next(iter(fx.wide3_controls(4, {"y": y, "z": z, "w": y, "kx": z, "a": a, "m1": a}).items()))
+    r = fx.width_wide3(exe, 4, inputs, {lab: pair})[lab]
+    assert r["firsts"] == fx.new_word_sets(4, inputs) == 663 and r["found"] > 0, r
+
+
 @pytest.mark.slow
 def test_fold_wide3_matches_fold_opt_fx(tmp_path):
     """Over three inputs at width 4 the kernel's first instructions are fold_opt_fx.py's (every form, by count), and it
