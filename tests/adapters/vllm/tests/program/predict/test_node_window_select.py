@@ -9,21 +9,22 @@ import re
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.batch import evaluate_batch
+from verity.circuits.refs import runs
+from verity.commitments.periods import interface as IF
+
+from tests.program.predict.test_node_window import LP, glm_request
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_select as NSEL
 from verity_vllm.program.predict import node_window_sparse as NS
-from tests.program.predict.test_node_window import LP, glm_request
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation.batch import evaluate_batch
-from verity.circuits.refs import runs
-from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import dead_free as DF
-from verity_vllm.definitions.registry import greedy_stages as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NSEL.FAMILIES}
 V, K, N, R = 154880, 20, 7744, 121
@@ -150,7 +151,7 @@ def test_joined_with_select():
         (f"r{c}", descriptor_id(G.plan(V)[c].defn), 1) for c in range(K - 1)}
     assert not [f for f in w.free if f.tid == stop and f.port != "logits"]
     assert not [f for f in w.free if f.family == "TokenSelect"]
-    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v1{")]
+    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v2{")]
     blocks = 6144 // NE.WIDTH
     tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
            for x in circuit.wires if x.reader == read and x.port == "tok"]

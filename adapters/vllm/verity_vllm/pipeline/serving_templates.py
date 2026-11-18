@@ -180,7 +180,7 @@ STAGE_PLANS = {"GumbelTopPTokenSelect_v1": _TOPP_PLAN, "GumbelTopPTokenSelectSha
                "TokenSelect_v1": "verity_vllm.definitions.registry.greedy_stages"}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
-#: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
+#: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v2`, ``READ``), whose key is the slot
 #: id of the token's router row cut into slots (``SLOTS``)
 EXPERTS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8BlockGemm_v3", "MoeExpertFp8GemmW_v1": "MoeExpertFp8BlockGemmW_v3"}
 #: the fused blocks of the per-expert cut, by the row family: a block GEMM whose body reads its block's rows from the expert's
@@ -191,7 +191,7 @@ FUSED = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8ReadGemm_v1", "MoeExpertFp8GemmW_v1
 #: or id (`moe.MoeRouterSigmoidBiasSlots`)
 SLOTS = {"MoeRouterSigmoidBias_v1": "MoeRouterSigmoidBiasSlots_v1"}
 #: the family of the per-expert cut's table reads
-READ = "EmbeddingRead_v1"
+READ = "EmbeddingRead_v2"
 #: DSA's long rows' history reads cut into reads of the request's history table at the layer (`history_rows`), by the row
 #: family: its writer's family, whose units' outputs are the table's rows.  A row of TOPK reads is TOPK ``READ`` units at
 #: V = the table's capacity (`verity.commitments.history.CAPACITY`) and the row's H, the ``history`` layout
@@ -212,9 +212,10 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
-    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template that is a Boolean Definition with no word
-    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
-    as a bit row, its bits low first (`interface.unit_rows`, which holds each to whole u16 words); else ``"row"``).
+    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template with a port of bits and no word
+    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits but a word a read takes (a slot's
+    position): each port is committed as a bit row, its bits low first, or as its words (`interface.unit_rows`, which holds
+    each to whole u16 words); else ``"row"``).
     ``packed``: a row, coordinate, column block, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
@@ -233,7 +234,7 @@ def template(t: str) -> Template:
     """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
     (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
     Definition or a port of its word view is not 16-bit words (a row or coordinate template's: not whole u16 words of one ``PACKED``
-    width; a Boolean row template with no word Definition is laid out as its bits, ``"bits"``)."""
+    width; a row template with a port of bits and no word Definition is laid out as its bits, ``"bits"``)."""
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
@@ -247,7 +248,7 @@ def template(t: str) -> Template:
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity_vllm.query.program_view import spec_base, spec_statics
 
-    # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
+    # registers EmbeddingRead_v2, a read's and a READ static's Definition, which BB.load does not
     importlib.import_module("verity.commitments.gates.embedding")
     errors = BB.load()
     try:
@@ -279,7 +280,7 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
-    if layout == "row" and w is fn and widths == {1}:
+    if layout == "row" and w is fn and 1 in widths:
         layout = "bits"
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused", "history", "bits"):
@@ -410,8 +411,8 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     two of them hold is listed once: the combine of a column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
     module ``STAGE_PLANS`` names: each stage Definition and its units in its ``plan``), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
-    block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
-    them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
+    block family at N = n, the read of a block's rows, ``EmbeddingRead_v2{V=E, H=n K / 2}``, and its ``FUSED`` block reading
+    them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v2{V=E, H=2 K / G}`` (N / G of
     them), and for a ``SLOTS`` row family, its slots family at its statics (one).  None when the spec does not bind to exactly
     its own descriptor id."""
     hit = _UNITS.get(spec)
@@ -515,7 +516,7 @@ def coordinate(spec: str) -> tuple[Any, int] | None:
 
 def fused_block(spec: str, n: int) -> Any:
     """The ``FUSED`` block of an ``EXPERTS`` row ``spec`` over n of its rows: its family at the row's statics, N = n, its ``READ``
-    the read of a block's rows (``EmbeddingRead_v1{V=E, H=n K / 2}``) and its ``DOT`` the Boolean version of the row's.  None when
+    the read of a block's rows (``EmbeddingRead_v2{V=E, H=n K / 2}``) and its ``DOT`` the Boolean version of the row's.  None when
     it does not bind."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY

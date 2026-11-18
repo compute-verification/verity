@@ -109,7 +109,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     session_named,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample import (
     NO_DRAW_SESSION,
@@ -287,7 +287,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
     or main doesn't hold, trusts nothing (`remote.trusted_session`, `pinned_session`, `core_check.salt_of_record`,
     `core_check.rounds`)."""
     try:
-        trusted, _received = remote.trusted_session(directory, heads, window, key, verify)
+        trusted, _log = remote.trusted_session(directory, heads, window, key, verify)
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         files = remote.session_files(directory)
         draw_files = None if draw_directory is None else remote.session_files(draw_directory)
@@ -374,8 +374,8 @@ def evidence(ledger: Ledger, root: str, fetch: Fetch, verify: Any = lms_verify
     if tree is None:
         raise CoinError(f"session {audited.session} has no tree on the auditor's side (the gate's fetch)")
     files = remote.session_files(Path(tree) / "out")
-    trusted, received = session_named(audited, ledger.key, files, verify)
-    return files, trusted, received
+    trusted, log = session_named(audited, ledger.key, files, verify)
+    return files, trusted, Ch.by_family(trusted, log)
 
 
 def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | None, Mapping[str, Any] | None]:
@@ -423,12 +423,12 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     `trusted_rounds_reason` checks a session's: its salt by `core_check.salt_of_record`, S the ledger's reserve's
     session and R its open's root, and its rounds by `core_check.rounds`, both under the ledger's pins log and `main`); None when it
     is. `registered` is the weights' root the period registered and `commit` the window's Commit root as the verifier
-    holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
+    holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of the kernel schemes' ``pearl-c`` family) session
     is held to its salt session instead (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
         return ("the window's coins were held in the serving process, not drawn by the auditor device's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
-    if commits.get("scheme") in PPD.SCHEMES:
+    if commits.get("scheme") in kernel_names("pearl-c"):
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
     why, window = held(commits.get("session"), ledger, commit)
     if why is not None or window is None:

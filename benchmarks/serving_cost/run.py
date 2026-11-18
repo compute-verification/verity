@@ -1,5 +1,5 @@
 """`verity bench serving_cost STAGE`: the serving cost in five stages (`benchmarks/README.md`), each reading the stored
-record of the stage before it by its run id."""
+record of the stage before it by its run id, and `profile RUN`, a serving profile's stored result."""
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,8 @@ STAGES = ("minify", "exact", "capture", "price", "confirm")
 KINDS = {stage: f"serving-cost-{stage}/v1" for stage in STAGES}
 UNITS_KIND = "dsa-topk-units/v1"
 REPLAY_KIND = "serve-tax-replay/v1"
-KINDS |= {"units": UNITS_KIND, "replay": REPLAY_KIND}
+PROFILE_KIND = "serve-tax-profile/v1"
+KINDS |= {"units": UNITS_KIND, "replay": REPLAY_KIND, "profile": PROFILE_KIND}
 UNITS = "out/units.jsonl"
 EXACT = "out/exact.json"
 CIRCUIT_CHECK = "out/circuit-check.json"
@@ -38,6 +39,7 @@ MAKERS = {
     "exact": "`verity bench serving_cost exact` under research run --store-read",
     "capture": "vllm's `benchmarks/prod_repro/run.sh` on the real model, which stores it",
     "price": "`verity bench serving_cost price` under research run --store-read",
+    "profile": "vllm's `benchmarks/serve_tax/run.sh --profile NAME --feature ARM` under research run, which stores it",
 }
 HOLDS = {
     "minify": f"{UNITS} in the form `priced.units` reads",
@@ -47,6 +49,8 @@ HOLDS = {
     "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/), topk_counters.json and "
                "prod_repro.json",
     "price": f"its figure under {METRIC}",
+    "profile": "our extra card time a token under the model's serving-cost metric, its latencies and share within the "
+               "profile's bounds beside it",
 }
 FINGERPRINT = {
     "minify": "; its units are at decode shapes unless its fingerprint's `shapes` says `prefill`",
@@ -59,6 +63,8 @@ FINGERPRINT = {
                "record exists, and the member's model and card under `served` and `card` (as `serve_tax.member` gives "
                "them: `glm-5.3`, `h200`)",
     "price": "; its fingerprint names the capture, minify and units runs under `capture`, `minify` and `units`",
+    "profile": "; its fingerprint names the profile, its version and digest, the model, the card, stock and the "
+               "feature under `profile`, `version`, `digest`, `model`, `card`, `stock` and `feature`",
 }
 CIRCUIT_CHECK_RUN = (f"a stored run whose {CIRCUIT_CHECK} is circuit-check's report (schema {CIRCUIT_CHECK_SCHEMA}), "
                      "as `research run --on auto --source . --cwd source -- bash -lc 'uv run circuit-check TARGET... "
@@ -285,6 +291,27 @@ def capture(a: argparse.Namespace) -> int:
     return 0
 
 
+def profile(a: argparse.Namespace) -> int:
+    _, doc = stored("profile", a.run, "profile", "RUN")
+    fp = doc.get("workload_fingerprint") or {}
+    if not all(fp.get(k) for k in ("profile", "version", "digest", "model", "card", "stock", "feature")):
+        refuse("profile", f"profile run {a.run}'s fingerprint names no profile, model, card, stock and feature; the "
+                          f"record: {contract('profile')}")
+    held = doc.get("measurements") or []
+    cost = next((m for m in held if m.get("label") == "our extra card time a token" and m.get("value") is not None), None)
+    if cost is None:
+        refuse("profile", f"profile run {a.run} holds no figure of our extra card time a token; the record: "
+                          f"{contract('profile')}")
+    ci = cost.get("ci95")
+    print(f"profile run {a.run}: a passed profile record, {fp['profile']} v{fp['version']} ({fp['digest'][:12]}), "
+          f"{fp['feature']} beside {fp['stock']} on {fp['model']}.{fp['card']}")
+    print(f"  our extra card time a token, {cost['member']}: {cost['value']:+.2f}%"
+          + (f" [{ci[0]:+.2f}, {ci[1]:+.2f}]" if ci else "") + f", a {cost.get('cost_unit')} its unit: {cost.get('reading')}")
+    print("  beside it: " + (", ".join(f"{m['name']} {m['member']} {m['value']:.4g} {m['unit']}" for m in held
+                                       if m.get("under") == cost["name"] and m.get("value") is not None) or "none"))
+    return 0
+
+
 def priced_point(out: Path, tables: dict, a: argparse.Namespace, fp: dict, units_from: str) -> dict[str, Any]:
     if not any(priced.lifetimes(out, ours) for ours in a.ours):
         refuse("price", f"the capture served none of {', '.join(a.ours)}: give --ours an arm it served")
@@ -377,7 +404,7 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog=command("STAGE").replace(" STAGE", ""), description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="stage", required=True)
     units_help = f"a stored units run, the run of {MAKERS['units']}; repeatable"
-    for stage in ("minify", "capture"):
+    for stage in ("minify", "capture", "profile"):
         sub.add_parser(stage, help=f"check that a run is a passed {stage} record, and print what it holds") \
             .add_argument("run", nargs="?", metavar="RUN", help=f"the run of {MAKERS[stage]}")
     sub.choices["minify"].add_argument("--units", metavar="RUN", action="append", help=units_help)
@@ -404,7 +431,8 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     a = parser().parse_args(argv)
-    return {"minify": minify, "exact": exact, "capture": capture, "price": price, "confirm": confirm}[a.stage](a)
+    return {"minify": minify, "exact": exact, "capture": capture, "price": price, "confirm": confirm,
+            "profile": profile}[a.stage](a)
 
 
 if __name__ == "__main__":

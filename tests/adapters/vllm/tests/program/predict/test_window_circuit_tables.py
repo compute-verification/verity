@@ -13,9 +13,12 @@ import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    served as SV,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -34,7 +37,6 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 TABLES = Tables(64, 8, 6)
 #: H1's leaf at K = 64: 16 u32 of codes, then the f32 scale, in u16 words
@@ -109,7 +111,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
 def test_each_tables_readers_are_templates_of_their_own():
     """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
-    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v3` and `TokenFeed_v1`
     units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
     tables: dict[str, set[str]]
@@ -121,7 +123,7 @@ def test_each_tables_readers_are_templates_of_their_own():
     assert all(len(ts) == 1 and held_units[t] == set(range(units[t])) for t, ts in tables.items())
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
-        ("ScanSlots_v2", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
+        ("ScanSlots_v3", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
     assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
                                                             if p.startswith(("row-table/", "input-ids/"))}
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)

@@ -570,7 +570,7 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
@@ -594,7 +594,7 @@ def retained(tmp_path_factory):
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
+    s = pouw_schemes.get(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
 
     def words(r):

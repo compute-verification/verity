@@ -7,7 +7,7 @@ from outside does not patch the scheduler: it subclasses `Part`, overrides the `
 **Which methods are patched.**  `METHODS`' four, each through `hooks` on the scheduler object, and each only while a
 part that overrides its ``around_`` is on: a method's patch goes on with the first such part and comes off with the last.
 A method no part acts at stays the scheduler's own, so a patch that another component puts on the scheduler's class
-later is the one the scheduler calls (the store's binder wraps ``schedule`` and ``update_from_output`` there, and a
+later is the one the scheduler calls (the KV block hook, `kv_blocks`, wraps ``schedule`` and ``update_from_output`` there, and a
 protocol installed again on a built engine installs it after the engine class's admission is on).
 
 **The order parts run in.**  By rank (`runner_step.Rank`), nested: the ``around_`` of each part that overrides it,

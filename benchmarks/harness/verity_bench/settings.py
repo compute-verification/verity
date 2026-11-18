@@ -50,11 +50,17 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("RESEARCH_RUN_DIR", str, ".", WHERE, "the run directory a point writes result.json in"),
     S("OUT", str, None, WHERE, "the directory a point writes its outputs in; unset, RESEARCH_RUN_DIR/out"),
     S("RESEARCH_RUN_ID", str, "local", WHERE, "the research run a point is, which its result names"),
+    S("RESEARCH_MACHINE", str, None, WHERE, "the registered machine `research run --on` launched the run onto, whose "
+      "[properties] the launch put in RESEARCH_RUN_DIR/inputs/<name>.toml (kit.machine_properties' default)"),
     S("RESEARCH_SOURCE_SHA", str, None, VALUE, "the commit research run shipped, which a point's identity hashes; unset, the "
       "checkout's HEAD"),
     # ---- gpu-lease's (the kit's host stamp)
     S("GPU_LEASE_UUID", str, None, WHERE, "the UUIDs of the GPUs gpu-lease leased the job (it sets them), which the host stamp "
       "reads the clocks of; unset, every GPU of the host"),
+    S("GPU_LEASE_ON", str, None, WHERE, "the cards a point's lease is asked of (gpu-lease's --on: a vLLM point's, a list; a "
+      "steady-state point's, one index); unset, any card"),
+    S("GPU_LEASE_CORES", str, None, WHERE, "the CPUs a vLLM point's lease pins it to (gpu-lease's --cores, 34-43); unset, "
+      "none"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # tests/benchmarks/numerical/bench/test_instances.py's opt-in
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads

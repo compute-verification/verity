@@ -48,7 +48,7 @@ attester's bucket and τ_sat, τ_free the engine class's (`Tick`), registered wi
 run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
 once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n but
 the ones a line names lost. The rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request
-outside it until its step (`install`, on the scheduler's ``add_request``, ``schedule`` and ``finish_requests``), so the
+outside it until its step (a hold on release, driven by the adapter's admission hook, `verity_vllm.engine.admission`), so the
 scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
 registered τ, which the encoder's replay recomputes (`advice_code.replay`, ``tick``) without timing advice. A release a
 watermark line names lost is skipped (``lost``): the gate doesn't wait for it, the later ones are admitted in order, and
@@ -71,7 +71,6 @@ from __future__ import annotations
 
 import asyncio
 import bisect
-import re
 import sys
 import time
 import uuid
@@ -79,6 +78,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from verity import hooks as H
 from verity_vllm.engine.hooks import Hooks
 
 ADMIT = ("arrival", "release-order", "tick")
@@ -86,9 +86,6 @@ RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-releas
 WATERMARK_PATH = "/verity/watermark"
 #: what either frontend answers a request whose release a watermark line named lost
 LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
-#: seconds between the gate's looks at its feed while the engine waits on it
-POLL_S = 0.002
-_ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
 
 
 @dataclass
@@ -335,38 +332,33 @@ class Tick:
         return {"bucket_us": self.bucket_us, "sat_us": self.sat_us, "free_us": self.free_us}
 
 
-def _quiet(sched: Any) -> bool:
-    return not (sched.waiting or getattr(sched, "skipped_waiting", None) or sched.running)
-
-
 class TickGate:
-    """``--admit tick`` in front of one vLLM V1 scheduler (the module docstring).
+    """``--admit tick``, a gate on starting inputs (`verity.hooks.Gate`) and a subscriber of the ``steps`` hook, which
+    `attach` files and subscribes on an exchange that the adapter's admission hook drives (`verity_vllm.engine.admission`;
+    the module docstring).
 
     The frontend's records come through `take`: a numbered request's release ``{"key", "run", "n", "bucket"}`` (``key``
-    the request's id as `install`'s ``key`` reads it), before the request reaches the engine; ``{"run", "n", "passed":
-    true}`` for one that won't reach it; each watermark line ``{"run", "t", "n"}``, with ``"lost": [N, ...]`` where it
-    names lost releases; and the watermark's end ``{"run", "end": true}`` or its break ``{"run", "error": why}``.
-    ``pull()``, if given, returns the records that came since its last call (a `tick_plugin.FeedReader`). The rest runs
-    on the engine's thread: `add` is the scheduler's ``add_request``, `finished` its ``finish_requests``, `ready` comes
-    before each engine iteration and `scheduled` after each ``schedule()``. ``clock`` (seconds) times only the holds and
-    the waits, ``log`` gets one dict per admission (each request's steps held, ``held_steps``) and per event.
+    the request's key as the hook reads it), before the request reaches the engine; ``{"run", "n", "passed": true}`` for
+    one that won't reach it; each watermark line ``{"run", "t", "n"}``, with ``"lost": [N, ...]`` where it names lost
+    releases; and the watermark's end ``{"run", "end": true}`` or its break ``{"run", "error": why}``. ``pull()``, if
+    given, returns the records that came since its last call (a `tick_plugin.FeedReader`). The rest come from the hook, on
+    the engine's thread: `add` when a request comes, `ready` before each step, and the ``steps`` events (`on`): a step
+    that began advances T, and a held request completed from outside is dropped. ``clock`` (seconds) times only the holds and the waits, ``log`` gets one dict per admission (each
+    request's steps held, ``held_steps``) and per event.
 
     After a line that names N lost, N is in ``lost`` for the rest of its run and the gate holds no request of N's: the
-    one it held is dropped, never added to the scheduler, and so is one that comes later (`add`). ``next`` steps over N
-    as soon as it reaches it, with no hold, so the releases after N are admitted in order at their buckets. An open gate
-    orders nothing, lost or not: it has added what it held, and adds a lost release's request at once like any other.
-    The frontend still owns a dropped request's answer and its abort: the gate only keeps it from the scheduler, and
-    keeps its id (``dropped_ids``) until that abort comes, which it takes out of ``finish_requests``' ids, so the
-    scheduler is never handed the id of a request it never saw."""
+    one it held is dropped, never started, and so is one that comes later (`add`); the hook keeps it from the
+    scheduler until the frontend's abort of it comes. ``next`` steps over N as soon as it reaches it, with no hold, so the
+    releases after N are admitted in order at their buckets. An open gate orders nothing, lost or not: it has started what
+    it held, and starts a lost release's request at once like any other."""
 
     def __init__(self, tick: Tick, *, hold_s: float, clock: Callable[[], float] = time.monotonic,
                  pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
-                 log: Callable[[dict[str, Any]], Any] | None = None, poll_s: float = POLL_S) -> None:
-        self.tick, self.hold_s, self.clock, self.pull, self.log, self.poll_s = tick, float(hold_s), clock, pull, log, float(poll_s)
+                 log: Callable[[dict[str, Any]], Any] | None = None) -> None:
+        self.tick, self.hold_s, self.clock, self.pull, self.log = tick, float(hold_s), clock, pull, log
         self.run: str | None = None
         self.runs: list[str] = []
         self.keys: dict[str, tuple[str, int]] = {}      # a release's key -> (run, N)
-        self.dropped_ids: set[str] = set()              # the requests the gate dropped, until their aborts come
         self.opened: str | None = None
         self.counts = {"admitted": 0, "unordered": 0, "stale": 0, "late": 0, "skipped": 0, "lost": 0, "dropped": 0,
                        "aborted": 0, "past_end": 0, "bucket_mismatch": 0, "watermark_errors": 0}
@@ -381,8 +373,8 @@ class TickGate:
         self.T = self.next = 0
         self.lines: list[int] = []                      # bucket t -> the watermark's n
         self.ended = False
-        self.held: dict[int, tuple[Any, Callable[[Any], Any]]] = {}     # N -> (request, the scheduler's add)
-        self.held_ids: dict[str, int] = {}
+        self.held: dict[int, tuple[str, Callable[[], None]]] = {}       # N -> (its key, the hook's start)
+        self.held_ids: dict[str, int] = {}              # key -> N
         self.held_at: dict[int, int] = {}               # N -> the step count when its request came
         self.held_steps: list[int] = []
         self.buckets: dict[int, int] = {}               # N -> its x-verity-release-bucket
@@ -443,8 +435,7 @@ class TickGate:
         self.counts["lost"] += 1
         held = self.held.pop(n, None)
         if held is not None:
-            self.held_ids.pop(held[0].request_id, None)
-            self.dropped_ids.add(held[0].request_id)
+            self.held_ids.pop(held[0], None)
             self.counts["dropped"] += 1
         self._event("lost", n=n, dropped=held is not None)
 
@@ -453,9 +444,15 @@ class TickGate:
             for rec in self.pull():
                 self.take(rec)
 
-    def add(self, request: Any, key: str, add: Callable[[Any], Any]) -> Any:
-        """The scheduler's ``add_request(request)``, ``add``: now for a request the gate doesn't order, else at its step,
-        and never for one whose release the watermark named lost (``dropped``)."""
+    def attach(self, exchange: Any, name: str = "network") -> None:
+        """File this gate on ``exchange`` (a `verity_vllm.messages.Exchange`) under scheme ``name``, and subscribe it to
+        the ``steps`` hook."""
+        exchange.request(name, H.StartOnBoundary(self))
+        exchange.subscribe(name, "steps", self.on)
+
+    def add(self, key: str, start: Callable[[], None]) -> None:
+        """A request came: ``start`` it now where the gate doesn't order it, else at its step, and never where its
+        release the watermark named lost (``dropped``)."""
         k = self.keys.get(key)
         if k is None and self.opened is None:
             self._pull()
@@ -468,58 +465,49 @@ class TickGate:
                 self._event(why, key=key, n=None if k is None else k[1])
             if why == "late":
                 self.skipped.discard(k[1])
-            if why == "dropped":
-                self.dropped_ids.add(request.request_id)
-                return None
-            return add(request)
+            if why != "dropped":
+                start()
+            return
         n = k[1]
-        self.held[n] = (request, add)
-        self.held_ids[request.request_id] = n
+        self.held[n] = (key, start)
+        self.held_ids[key] = n
         self.held_at[n] = self.steps
         self.gone.discard(n)
         self.missing.pop(n, None)
         self.max_held = max(self.max_held, len(self.held))
-        return None
 
     def _add(self, n: int) -> None:
-        request, add = self.held.pop(n)
-        self.held_ids.pop(request.request_id, None)
+        key, start = self.held.pop(n)
+        self.held_ids.pop(key, None)
         self.counts["admitted"] += 1
         self.held_steps.append(self.steps - self.held_at.pop(n, self.steps))
-        add(request)
+        start()
 
-    def finished(self, ids: str | Iterable[str] | None) -> Iterable[str] | None:
-        """``finish_requests``' ids less the gate's own among them, which the scheduler never saw: the held requests,
-        which are dropped (their N won't come), and the ones it dropped for a lost release, whose ids it forgets here.
-        For every request (None), the held ones are added first."""
-        if ids is None:
-            self.open("every request finished")
-            return None
-        rest = []
-        for rid in (ids,) if isinstance(ids, str) else ids:
-            if rid in self.dropped_ids:
-                self.dropped_ids.discard(rid)
-                continue
-            n = self.held_ids.pop(rid, None)
-            if n is None:
-                rest.append(rid)
-                continue
-            del self.held[n]
-            self.gone.add(n)
-            self.counts["aborted"] += 1
-        return rest
+    def on(self, event: Any) -> None:
+        """A ``steps`` event: a step that began advances T; a held request completed from outside is dropped, as its N
+        won't come."""
+        if isinstance(event, H.StepBegan):
+            if self.run is not None and self.opened is None:
+                self.T += self.tick.step(event.queued > 0)
+                self.steps += 1
+        elif isinstance(event, H.OutputsComplete):
+            n = self.held_ids.pop(event.input, None)
+            if n is not None:
+                del self.held[n]
+                self.gone.add(n)
+                self.counts["aborted"] += 1
 
-    def ready(self, sched: Any) -> bool:
-        """Before an engine iteration: add what T has closed. False while the gate waits on the watermark or on a released
-        request (the engine waits too, polling every ``poll_s``), True once the iteration may run."""
+    def ready(self, due: H.StepDue) -> bool:
+        """Before a step: admit what T has closed. False while the gate waits on the watermark or on a released request
+        (the engine waits too, asking again), True once the step may run."""
         self._pull()
         if self.opened is not None or self.run is None:
             return self._go()
         while self.next in self.gone or self.next in self.lost:
             self.gone.discard(self.next)
             self.next += 1
-        quiet = _quiet(sched)
-        if quiet and sched.finished_req_ids:
+        quiet = not due.active
+        if quiet and due.completing:
             return self._go()                   # the step that frees them comes first, as in the replay
         if quiet:
             a = bisect.bisect_right(self.lines, self.next)      # the next release's bucket, if the watermark has it
@@ -586,12 +574,6 @@ class TickGate:
             self.waits["max_s"] = max(self.waits["max_s"], dt)
         return True
 
-    def scheduled(self, sched: Any, out: Any) -> None:
-        """After ``schedule()``: a step that scheduled a token advances T."""
-        if self.run is not None and self.opened is None and getattr(out, "total_num_scheduled_tokens", 0) > 0:
-            self.T += self.tick.step(bool(sched.waiting or getattr(sched, "skipped_waiting", None)))
-            self.steps += 1
-
     def open(self, why: str) -> None:
         """Order nothing from now on: what the gate holds is added now, in release order, and every later request at once."""
         if self.opened is None:
@@ -610,52 +592,6 @@ class TickGate:
                 "T_us": self.T, "next": self.next, "buckets": len(self.lines), "ended": self.ended, "held_now": len(self.held),
                 "max_held": self.max_held, "skipped_unseen": sorted(self.skipped)[:20], "opened": self.opened,
                 "waits": dict(self.waits)}
-
-
-def request_key(engine_id: str) -> str:
-    """The client's X-Request-Id inside vLLM's OpenAI server's engine request id (``cmpl-{X-Request-Id}-0-{8 hex}``), else
-    the id unchanged: `tick_plugin.TickFeed`'s key for a release."""
-    m = _ENGINE_ID.match(engine_id)
-    return m.group(1) if m else engine_id
-
-
-def install(sched: Any, gate: TickGate, key: Callable[[str], str] = request_key) -> Hooks:
-    """Put ``gate`` between the engine core and ``sched`` (a vLLM V1 scheduler) until the returned hooks are uninstalled:
-    its ``add_request`` goes through `TickGate.add` (``key`` reads a request's release key from its engine id), its
-    ``finish_requests`` through `TickGate.finished`, and each ``schedule()`` advances T; ``sched._verity_tick`` is the
-    gate. Installed after any other wrapper of these (a step trace's), so that they see a request when it is added.
-    Refused for a policy other than FCFS and for more than one data-parallel engine."""
-    policy = getattr(getattr(sched, "scheduler_config", None), "policy", None)
-    if policy != "fcfs":
-        raise RuntimeError(f"--admit tick needs the FCFS scheduler, whose waiting queue is the admission order; this one's "
-                           f"policy is {policy!r}")
-    dp = getattr(getattr(getattr(sched, "vllm_config", None), "parallel_config", None), "data_parallel_size", 1)
-    if dp != 1:
-        raise RuntimeError(f"--admit tick orders one engine's admissions; this one is one of {dp} data-parallel engines")
-    hooks = Hooks(tag="admit-tick")
-
-    def add_request(add: Callable[..., Any]) -> Callable[..., Any]:
-        def gated(request: Any, *args: Any, **kwargs: Any) -> Any:
-            return gate.add(request, key(request.request_id), lambda r: add(r, *args, **kwargs))
-        return gated
-
-    def schedule(orig: Callable[..., Any]) -> Callable[..., Any]:
-        def ticked(*args: Any, **kwargs: Any) -> Any:
-            out = orig(*args, **kwargs)
-            gate.scheduled(sched, out)
-            return out
-        return ticked
-
-    def finish_requests(orig: Callable[..., Any]) -> Callable[..., Any]:
-        def finish(request_ids: Any, finished_status: Any) -> Any:
-            return orig(gate.finished(request_ids), finished_status)
-        return finish
-
-    hooks.wrap(sched, "add_request", add_request)
-    hooks.wrap(sched, "schedule", schedule)
-    hooks.wrap(sched, "finish_requests", finish_requests)
-    hooks.patch(sched, "_verity_tick", gate)
-    return hooks
 
 
 class Watermark:

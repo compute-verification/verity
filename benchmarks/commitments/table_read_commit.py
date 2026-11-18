@@ -7,11 +7,11 @@ GPU, and its CPU twin's rate on one thread.
         PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
         ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
-A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v1{V=2^17,H=576}``),
+A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v2{V=2^17,H=576}``),
 and each read commits four fresh rows (`ROWS`): the history row it opens, the row's salt, its path (17 siblings of 64 bytes) and
 its output row. A step's reads at batch B are, per layer and per kind, one row table of ``B * reads`` rows of that kind's bytes,
 laid out as the committer takes rows (int8 codes of K = bytes - 4, then a 4-byte scale), so a table's hashing is the reads':
-each row's segment digests and row digest, its salt from the step's ChaCha20 stream, its hm96 string and leaf, its frame
+each row's segment digests and row digest, its salt from the step's fresh OS salts, its hm96 string and leaf, its frame
 leaf, the table's tree and the step's tree over the tables' roots. The rows are random and every kind's table shares one
 tensor across layers: the kernels' work depends on the rows' count and widths, not their values.
 
@@ -139,33 +139,33 @@ def host(outputs: dict) -> dict:
     return {op: (ids, c.cpu().numpy(), s.cpu().numpy()) for op, (ids, c, s) in outputs.items()}
 
 
-def gate(ctx: bytes, key: bytes, gpu: bool) -> dict[str, bool]:
+def gate(ctx: bytes, gpu: bool) -> dict[str, bool]:
     small = step(1, 8, 2, "cuda" if gpu else "cpu", 1)
-    want = RTB.step_roots(ctx, 7, host(small), key)
-    got = {"twin": D.host_step(ctx, 7, host(small), key) == want}
+    want = RTB.step_roots(ctx, 7, host(small))
+    got = {"twin": D.host_step(ctx, 7, host(small), salts=want.salts) == want}
     if gpu:
-        got["device"] = D.step_roots(ctx, 7, small, key).result() == want
+        got["device"] = D.step_roots(ctx, 7, small, salts=want.salts).result() == want
     return got
 
 
-def host_plan(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, reps: int) -> dict[str, Any]:
+def host_plan(batch: int, reads: int, layers: int, ctx: bytes, reps: int) -> dict[str, Any]:
     shapes = {op: (ids, *c.shape) for op, (ids, c, _s) in step(batch, reads, layers, "cpu", 6).items()}
     ms = []
     for i in range(1 + reps):
         t0 = time.perf_counter()
-        D.plan(ctx, 300 + i, shapes, key)
+        D.plan(ctx, 300 + i, shapes)
         if i:
             ms.append(1e3 * (time.perf_counter() - t0))
     return {"tables": len(shapes), "rows": len(shapes) * batch * reads, "plan_ms": statistics.median(ms)}
 
 
-def alone(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, reps: int) -> dict[str, Any]:
+def alone(batch: int, reads: int, layers: int, ctx: bytes, reps: int) -> dict[str, Any]:
     outputs = step(batch, reads, layers, "cuda", 2)
     kernel, launch = [], []
     for i in range(1 + reps):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        p = D.step_roots(ctx, 100 + i, outputs, key, timing=True)
+        p = D.step_roots(ctx, 100 + i, outputs, timing=True)
         t1 = time.perf_counter()
         p.result()
         if i:
@@ -176,7 +176,7 @@ def alone(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, reps: int
             "launch_ms": statistics.median(launch), "kernel_ms_all": kernel, "gb_s": n / ms / 1e6}
 
 
-def beside(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, solo: dict[str, Any], reps: int) -> dict[str, Any]:
+def beside(batch: int, reads: int, layers: int, ctx: bytes, solo: dict[str, Any], reps: int) -> dict[str, Any]:
     """The busy loop alone and with the step's hash beside it; ``n`` GEMMs, sized from one GEMM's time to last about as long
     as the hash alone (``solo``, `alone`'s result at this batch). Both streams wait on a device sleep that outlasts the
     host's enqueueing (the step's plan, the loop's launches), so the loop and the hash start together. The sleep counts
@@ -216,7 +216,7 @@ def beside(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, solo: di
         p = None
         if with_hash:
             with torch.cuda.stream(side):
-                p = D.step_roots(ctx, 500 + i, outputs, key, stream=side, timing=True)
+                p = D.step_roots(ctx, 500 + i, outputs, stream=side, timing=True)
         for _ in range(n):
             torch.mm(x, w)
         b.record(serving)
@@ -237,12 +237,12 @@ def beside(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, solo: di
             "busy_x": busy1 / busy0, "hash_x": hash1 / hash_ms, "added_ms": end1 - busy0, "hold_ms": hold}
 
 
-def cpu_twin(layers: int, reads: int, ctx: bytes, key: bytes, reps: int) -> dict[str, Any]:
+def cpu_twin(layers: int, reads: int, ctx: bytes, reps: int) -> dict[str, Any]:
     outs = host(step(1, reads, layers, "cpu", 4))
     secs = []
     for i in range(1 + reps):
         t0 = time.perf_counter()
-        D.host_step(ctx, 200 + i, outs, key)
+        D.host_step(ctx, 200 + i, outs)
         if i:
             secs.append(time.perf_counter() - t0)
     b = sum(c.nbytes + s.nbytes for _ids, c, s in outs.values())
@@ -291,14 +291,14 @@ def table(kind: str, rows: int, reps: int) -> dict[str, Any]:
             **same}
 
 
-def units(ns: argparse.Namespace, ctx: bytes, key: bytes) -> list[tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]]:
+def units(ns: argparse.Namespace, ctx: bytes) -> list[tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]]:
     """The run's arms in order, each ``(name, run)``: ``run(done)`` takes the results of the arms done so far."""
     def unit(arm: str, b: int) -> Callable[[dict[str, Any]], dict[str, Any]]:
-        return {"gate": lambda done: gate(ctx, key, torch.cuda.is_available()),
-                "plan": lambda done: host_plan(b, ns.reads, ns.layers, ctx, key, ns.reps),
-                "alone": lambda done: alone(b, ns.reads, ns.layers, ctx, key, ns.reps),
-                "cpu": lambda done: cpu_twin(ns.cpu_layers, ns.reads, ctx, key, 2),
-                "beside": lambda done: beside(b, ns.reads, ns.layers, ctx, key, done[f"alone.{b}"], max(3, ns.reps // 2)),
+        return {"gate": lambda done: gate(ctx, torch.cuda.is_available()),
+                "plan": lambda done: host_plan(b, ns.reads, ns.layers, ctx, ns.reps),
+                "alone": lambda done: alone(b, ns.reads, ns.layers, ctx, ns.reps),
+                "cpu": lambda done: cpu_twin(ns.cpu_layers, ns.reads, ctx, 2),
+                "beside": lambda done: beside(b, ns.reads, ns.layers, ctx, done[f"alone.{b}"], max(3, ns.reps // 2)),
                 }.get(arm) or (lambda done: table(arm.split(".")[1], ns.table_rows, ns.reps))
 
     return [(f"{arm}.{b}" if arm in PER_BATCH else arm, unit(arm, b))
@@ -362,7 +362,7 @@ def cpu_name() -> str:
 def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
-    ctx, key = hashlib.sha512(b"table-read-commit/context").digest(), hashlib.sha256(b"table-read-commit/row-key").digest()
+    ctx = hashlib.sha512(b"table-read-commit/context").digest()
     gpu = torch.cuda.is_available()
     nvcc_v = subprocess.run([row_table_nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
         if row_table_nvcc() else None
@@ -376,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
     d = Path(out) if out else None
     if d is not None:
         d.mkdir(parents=True, exist_ok=True)
-    done = run(units(ns, ctx, key), summary, d / "table_read_commit.json" if d is not None else None)
+    done = run(units(ns, ctx), summary, d / "table_read_commit.json" if d is not None else None)
     failed = sorted(n for n, a in summary["arms"].items() if a["status"] != "done")
     ok = not failed and all(summary["gate"].values())
     print(json.dumps(summary, indent=1))

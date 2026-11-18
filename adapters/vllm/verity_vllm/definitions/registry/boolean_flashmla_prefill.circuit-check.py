@@ -11,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     a family's smallest, and the suite builds each root.  The pair that rescales, a head and a token of one pair each; the first
     pair and a head of two pairs are checked by id."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_flashmla_prefill as BP
 
     blk = {"D": 32, "BN": 16, "DOT": BP.FLASHMLA_PREFILL_DSV4["DOT"], "SCALE": 0.25}

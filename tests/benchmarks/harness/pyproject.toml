@@ -114,6 +114,8 @@ inputs = [
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
     "calibration/hardware/cards",
+    # a host core-second's weight is read from its node's file and the cards it names (host_weight)
+    "calibration/hardware/nodes",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
@@ -151,6 +153,8 @@ inputs = [
     # are listed here, which the test checks
     "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
     "benchmarks/exfiltration/README.md",
+    # the serving profiles' file, whose client and stock server a test holds to serve_tax's, which reads the file too
+    "benchmarks/production.toml", "benchmarks/serve_tax/serve_tax.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -181,7 +185,17 @@ paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 tests = ["test_bench_served.py"]
 paths = ["pyproject.toml", "*/pyproject.toml",
          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
-         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120",
+         # the Pearl-C arm's kernel scheme: the useful-work scheme by its registered name, and the kernel-scheme table
+         "benchmarks/harness/verity_bench/schemes.py", "verity/hooks.py", "verity/protocols/__init__.py",
+         "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/scheme.py",
+         "verity/protocols/resource_accounting/compute/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
+         "verity/protocols/experimental/__init__.py", "verity/protocols/experimental/dither/__init__.py",
+         "verity/protocols/experimental/dither/scheme.py", "calibration/hardware/cards"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]

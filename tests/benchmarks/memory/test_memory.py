@@ -1234,6 +1234,26 @@ def test_local_writes_its_pass_time_and_bare_read_beside_the_share_as_metrics_of
     assert got[M.LOCAL_METRIC]["value"] == 0.199 and "member" not in got[M.LOCAL_METRIC]
 
 
+@pytest.mark.parametrize("card, member", [("NVIDIA H200", "llama-3.2-1b-h200"),
+                                          ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "llama-3.2-1b-rtx-pro-6000"),
+                                          ("NVIDIA H100 80GB HBM3", "llama-3.2-1b-h100")])
+def test_a_points_card_is_the_short_of_the_card_record_holding_its_name(card, member):
+    assert M.member({"card": card, "sheet": "h200-sxm-141gb-x1"}) == member
+
+
+def test_a_card_no_record_names_writes_the_share_and_no_pass_time_or_bare_read(store, capsys, work, monkeypatch,
+                                                                              tmp_path):
+    held = a_run(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCAL_NODE", "h200-sxm-141gb-x1")
+    record = a_local_record(with_amounts(a_session(gamma=0.199)))
+    record["calibration"] = {"pass_ns": {"p50": 79_160_000}, "read_tiers": {"hbm": {"bytes": ARENA * GIB, "ms": 26.5}}}
+    assert bench(store, "--local", run=Machine(card="NVIDIA H100 PCIe, 9.0", record=record)) == 0
+    got = written(held)
+    assert got[M.LOCAL_METRIC]["value"] == 0.199 and M.PASS_METRIC not in got and M.READ_METRIC not in got
+    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 card records under {M.CARD_FILES} have "
+            "'NVIDIA H100 PCIe', the card nvidia-smi names here, in `driver`") in printed(capsys)[2]
+
+
 def test_a_local_record_with_no_calibration_writes_the_share_alone(store, work, monkeypatch, tmp_path):
     held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--local", run=Machine(record=a_local_record(with_amounts(a_session(gamma=0.199))))) == 0

@@ -19,7 +19,7 @@ call whose every operand is one whole parameter row or one whole output of one u
   block, each reading its block of the scores and n, the Call's operands, and the outputs of the units before it;
 * the index: a `DsaMaskPositions_v2` a block, of that block's mask unit's output, and the merge of their lists and counts
   (`DsaPositionsMerge_v2`), the units `dsa_topk_reads.cut` names past `WHOLE_MAX`; then a `DsaPositionsChunk_v1` a chunk of
-  `dsa_topk_reads.CHUNK` slots, chunk k of the merge's slots at index row ``c[k]``, and a `DsaPositionsSlot_v1` a slot, slot j
+  `dsa_topk_reads.CHUNK` slots, chunk k of the merge's slots at index row ``c[k]``, and a `DsaPositionsSlot_v2` a slot, slot j
   of chunk j // CHUNK at index row ``i[j mod CHUNK]``;
 * TOPK reads of the table, READ's, each a call: read j at slot unit j's position with the Call's opening (root, domain, row[j],
   salt[j], path[j]).
@@ -28,7 +28,7 @@ It is this cut at every N: also up to `WHOLE_MAX` keys, where `dsa_topk_reads.cu
 row is.  The index rows are inputs so that one chunk template and one slot template serve every instance; where ``c[k]`` = k and
 ``i[k]`` = k (`index_values`, what the verifier supplies) its reads return (kv, ok) as `DsaTopKReadRows_v1` does
 (`read_calls`), and it returns their ok.  At the served statics (`SERVED`, `served`: N = 2^17 keys, TOPK 2,048, blocks of
-16,384, `EmbeddingRead_v1{V=2^17, H=576}`) that is 44 + 9 + 64 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.
+16,384, `EmbeddingRead_v2{V=2^17, H=576}`) that is 44 + 9 + 64 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.
 `layout` registers it over the window's class (`PROMPT`, `OUTPUTS`): per_prompt 0 and per_output 1, instance i the row at
 decode step i.
 
@@ -246,7 +246,7 @@ def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tup
 def _words(ty: Any, v: Any) -> np.ndarray:
     """A value of type ``ty`` as its row's u16 words, the low word first: an int, a sequence of u32 words where ``ty`` is
     32 bits of each, else a sequence of bits, the last word's padding 0."""
-    w = -(-ty.leaves // 16)
+    w = -(-sum(ty.leaf_widths()) // 16)
     if isinstance(v, (int, np.integer)):
         return np.asarray([(int(v) >> 16 * k) & 0xFFFF for k in range(w)], dtype=np.uint16)
     v = np.asarray(v, dtype=np.uint64)
@@ -302,8 +302,8 @@ def _instance(check: SpecializedDefinition, scores: Sequence[int], n: int, table
             else:
                 rows = [out[("chunk", key[1] // R.CHUNK)][0], _words(R.I32, index["i"][key[1] % R.CHUNK])]
         for (p, ty), r in zip(params, rows, strict=True):
-            if len(r) != ty.leaves // 16:
-                raise ValueError(f"{descriptor_id(defn)}: its {p!r} row is {ty.leaves // 16} words, not {len(r)}")
+            if len(r) != sum(ty.leaf_widths()) // 16:
+                raise ValueError(f"{descriptor_id(defn)}: its {p!r} row is {sum(ty.leaf_widths()) // 16} words, not {len(r)}")
         out[key] = outs
         done.append((rows, outs))
     return done

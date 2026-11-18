@@ -6,7 +6,7 @@ boundary, for one decode step of Llama-3.1-8B int8 at batch ``--batch``.
 
 A decode step has one row table per layer and linear (qkv, o, gate_up with K = 4096; down with K = 14336), each of ``--batch``
 token rows (the s8 codes, then the f32 scale): 128 tables of 32 rows at B32, 27.3 MB.  Per call, from the host copies of the
-quantize outputs: each row's salt (ChaCha20 under the run's row key), its ``sha512/row-seg/v1`` digest, ``b || c`` and
+quantize outputs: each row's salt (192 fresh bytes from the OS), its ``sha512/row-seg/v1`` digest, ``b || c`` and
 ``frame-v3-sha512`` leaf, each table's tree, and the step's tree over the table roots.  The first call is ``cold``; ``seconds`` is
 the median of the next ``--reps``.  ``workers`` > 1 forks a pool per call (``serving_rows.commit_ports``), so its time includes the
 pool's start.  Beside each wall time, ``cpu_s`` is this process's CPU time, which other load on a shared node does not inflate (at
@@ -75,9 +75,9 @@ def outputs(batch: int, layers: int, k_scale: int, seed: int = 7,
             for layer in range(layers) for lin, k in linears.items()}
 
 
-def reference(ctx: bytes, step: int, outs: dict[str, Any], key: bytes) -> bytes:
+def reference(ctx: bytes, step: int, outs: dict[str, Any], ys: bytes) -> bytes:
     tables = []
-    ys, at = SR.segment_salts(key, step, sum(len(v[0]) for v in outs.values())), 0
+    at = 0
     for op in sorted(outs, key=RTB.table_key):
         ids, x, s = outs[op]
         order = sorted(range(len(ids)), key=lambda b: ids[b])
@@ -107,15 +107,16 @@ def medians(f: Any, reps: int) -> tuple[float, float]:
 def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
-    ctx, key, step = hashlib.sha512(b"step-root-cost/context").digest(), hashlib.sha256(b"step-root-cost/row-key").digest(), 1
+    ctx, step = hashlib.sha512(b"step-root-cost/context").digest(), 1
     outs = outputs(ns.batch, ns.layers, ns.k_scale, linears=ns.linears)
     tables, rows = len(outs), sum(len(v[0]) for v in outs.values())
+    ys = os.urandom(rows * SR.SALT_BYTES)
     hashed = sum(x.nbytes + s.nbytes for _ids, x, s in outs.values())
     by_workers, root = {}, None
     for w in ns.workers:
         calls, cpus = [], []
         for _ in range(1 + ns.reps):
-            dt, cpu, got = timed(lambda w=w: RTB.step_roots(ctx, step, outs, key, workers=w))
+            dt, cpu, got = timed(lambda w=w: RTB.step_roots(ctx, step, outs, salts=ys, workers=w))
             calls.append(dt)
             cpus.append(cpu)
             if root not in (None, got.root):
@@ -123,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             root = got.root
         by_workers[w] = {"cold_s": calls[0], "seconds": statistics.median(calls[1:]), "warm_s": calls[1:],
                          "cpu_s": statistics.median(cpus[1:])}
-    salts_s, salts_cpu = medians(lambda: SR.segment_salts(key, step, rows), ns.reps)
+    salts_s, salts_cpu = medians(lambda: os.urandom(rows * SR.SALT_BYTES), ns.reps)
     flat = [(x[b].tobytes() + s[b:b + 1].tobytes()) for _ids, x, s in outs.values() for b in range(len(x))]
     digest_s, digest_cpu = medians(lambda: [sha512_row_seg_digest(r, 8 * len(r)) for r in flat], ns.reps)
     floor, floor_cpu = {}, {}
@@ -132,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         with ThreadPoolExecutor(w) as pool:
             sha512_pass(pool, parts)
             floor[w], floor_cpu[w] = medians(lambda: sha512_pass(pool, parts), ns.reps)
-    ref_s, _, ref = timed(lambda: reference(ctx, step, outs, key))
+    ref_s, _, ref = timed(lambda: reference(ctx, step, outs, ys))
     ok = ref == root
     summary = {"batch": ns.batch, "layers": ns.layers, "k_scale": ns.k_scale, "tables": tables, "rows": rows, "bytes_hashed": hashed,
                "root": root.hex(), "reference_root_equal": ok, "reference_s": ref_s, "salts_s": salts_s, "salts_cpu_s": salts_cpu,

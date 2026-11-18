@@ -1500,7 +1500,8 @@ def _salt_session(key: Any, ledger: Any, pins: Any, main: Any, window: Any, sess
         return ("coin", f"the verifier's challenger key is malformed: {e}"), None
     try:
         a = Ch.pinned_session(ledger, window, k, pins, main, verify)
-        c, received = Ch.session_named(a, k, session, verify)
+        c, log = Ch.session_named(a, k, session, verify)
+        received = Ch.by_family(c, log)
     except Ch.CoinError as e:
         return ("coin", f"the challenger's session is not trusted: {e}"), None
     return None, (a, c, received)
@@ -1798,7 +1799,8 @@ def rounds_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, sessio
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
+        c, log = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
+        received = Ch.by_family(c, log)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):

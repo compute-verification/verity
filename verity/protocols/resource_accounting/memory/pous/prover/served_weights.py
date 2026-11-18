@@ -29,7 +29,7 @@ root (``python -m verity.protocols.resource_accounting.memory.pous.prover.served
   root parameter of its name (core's ``Registered.commit``), its bytes cut into rows of `Tensor.words` u16 words
   (little-endian, the reading port's row: an s8 linear ``row_codes`` codes, at `H200` the 8,192 codes of the part
   ``ScaledMmS8CoordinateRows_v2``'s ``wrow{r}`` reads on circuits' FAMILIES map (``quant_chunk``); a scale 2 words; ``tok`` one coordinate's V words; a gain and ``pos`` 1 word), in
-  ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, row/v2 by default; ``EmbeddingRead_v1``'s
+  ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, row/v2 by default; ``EmbeddingRead_v2``'s
   ``hm96-sha512/row-seg/v1`` with ``tok_rows="token"``), under the
   domain the verifier derives (``registered.registered_entries``, the value held across windows):
   ``registered.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
@@ -96,7 +96,7 @@ class Shape:
     #: s8 codes in one registered row of a linear: the K of the part a unit reads
     row_codes: int
     #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover;
-    #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v1``'s
+    #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v2``'s
     tok_schema: str = REG.SCHEMA_V2
     #: ``tok``'s rows: ``"coordinate"`` (H, V), a coordinate over the tokens (the default),
     #: or ``"token"`` (V, H), a token's embedding

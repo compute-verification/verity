@@ -77,8 +77,9 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
     s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=gpus,
           env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
     assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
-    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points",
-          env={"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"})
+    from research.result import env_defaults
+
+    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points", env=env_defaults({}))
     assert R.store_points(s.store, "r20261104-020000-0022").startswith("art:")
 
     points = tmp_path / "r20261104-020000-0002" / "out" / "points.json"

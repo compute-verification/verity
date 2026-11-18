@@ -1,8 +1,8 @@
 """The vocabulary shard's embedding (`EmbeddingShard_v1{VS, H, START}`) lowered into the node window (`node_window`) as reads
-of padded tables: per column block b of `WIDTH` words, one `EmbeddingRead_v1{V, H=WIDTH}` unit a member, keyed by the token as
+of padded tables: per column block b of `WIDTH` words, one `EmbeddingRead_v2{V, H=WIDTH}` unit a member, keyed by the token as
 it is, over block b's table, a registered parameter of its own of V rows of `WIDTH` words, the shard's rows at its START and
 zero rows elsewhere (`shard_param`). A token the shard owns reads its row; any other token below V reads the zero row, as the
-shard gives zeros (`EmbeddingRead_v1` gives 0x7FFF only for a token past its table, which is why the table is padded to the
+shard gives zeros (`EmbeddingRead_v2` gives 0x7FFF only for a token past its table, which is why the table is padded to the
 whole vocabulary). The all-reduce reads block b's ``o0`` by wire as its column block b of the embedding's partial.
 
 The width is one, fixed at registration: a table's salts are its field's place and its block (`expert_tables.nonces`), so two
@@ -27,10 +27,10 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates.embedding import read
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.check.weights_of_record import weight_param
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base, spec_statics
@@ -68,7 +68,7 @@ def shard_param(label: str, words: int, block: int) -> str:
 
 def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """`serving_templates.unit_templates` of ``spec``, and for an ``EmbeddingShard_v1`` row the read of a block of its padded
-    tables, ``EmbeddingRead_v1{V, H=WIDTH}``, H / `WIDTH` of them."""
+    tables, ``EmbeddingRead_v2{V, H=WIDTH}``, H / `WIDTH` of them."""
     hit = ST.unit_templates(spec)
     if spec_base(spec) == SHARD:
         H = int(spec_statics(spec)["H"])
@@ -127,7 +127,7 @@ def _reads(w: NodeWindow, tid: str, at: int, units: int, lo: int, label: str, V:
 
 
 def embedding_shard(w: NodeWindow, j: int, node: Any) -> None:
-    """`EmbeddingShard_v1{VS, H, START}` as H / `WIDTH` column blocks of `EmbeddingRead_v1{V, WIDTH}` (module docstring), block
+    """`EmbeddingShard_v1{VS, H, START}` as H / `WIDTH` column blocks of `EmbeddingRead_v2{V, WIDTH}` (module docstring), block
     b of member t at unit ``a + b M + t``, each keyed by member t's token over block b's padded table; the node's output is
     block b's ``o0`` at its columns."""
     spec, fam, M = descriptor_id(node.fn), _family(node), w.members(node)
