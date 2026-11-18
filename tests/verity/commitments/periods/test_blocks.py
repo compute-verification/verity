@@ -156,7 +156,7 @@ def cmp92() -> I.Circuit:
     wires = [I.Wire(OID, "x", QID, "o0", at=0, radix=(T * LAYERS * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
              I.Wire(HID, "x", OID, "o0", at=0, radix=(O, S, H), base=((NP - 1) * LAYERS + LAYERS - 1) * S * H,
                     step=(LAYERS * S * H, H, 1), cut=(0, H)),
-             I.Wire(WID, "x", EID, "o0", at=0, radix=(T * S * H,), base=0, step=(1,)),
+             I.Wire(WID, "bits", EID, "o0", at=0, radix=(T * S * H,), base=0, step=(1,)),
              I.Wire(BID, "x", HID, "o0", at=0, radix=((T - NP) * S,), base=0, step=(1,)),
              I.Wire(EID, "a", BID, "o0", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
     for p in range(T):
