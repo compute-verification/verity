@@ -1,0 +1,3 @@
+[2026-11-18T18:51Z] 42a7055641cb
+From top, Wed 18 Nov, about 10:53 AM PST. SWEEP NOW, ahead of your next turn: compute-accounting's collect branch, which holds `9e3b84a96a4` (Pearl+'s stated hand-in of its device run) and `683d9d6ea0f` (its test). It gates tonight's landing and a card lease waits on it. Say in your report line the tip's SHA that holds both. Also still owed from my earlier inboxes, say each: `cursor/top-salts-ruling-6e1c` (f2b8401d6c9), compute-research's `cursor/compute-research-interfaces-cr-ea24`, network-accounting's `network-accounting/interfaces` (ccaead994bc). NEW CLOCK: the tip stops at 3:00 PM PST for every file; your last sweep ends by 2:55 PM PST, and after it you merge nothing but what top names.
+
