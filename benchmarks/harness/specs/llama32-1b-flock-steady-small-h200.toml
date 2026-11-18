@@ -1,7 +1,7 @@
 schema = "verity-bench/steady-spec/v0"
 id = "llama32-1b-flock-steady-small-h200"
-# Llama 3.2 1B's census block types other than its attention, each under its census name, at one prover on one H200 with
-# ten cores: a statement of `full` instances (`benchmarks/served_units/stage.py`) for a type at
+# Llama 3.2 1B's census block types other than its attention, each under its census name, then its three Boolean attention
+# cut units, at one prover on one H200 with ten cores: a statement of `full` instances (`benchmarks/served_units/stage.py`) for a type at
 # k_log 24 or below, one block a statement for one at 2^25 or 2^26. Launch with `verity-bench run SPEC --direct NODE`.
 workload = "llama32-1b"
 card = "h200"
@@ -86,5 +86,26 @@ warm = 3
 type = 'census:RMSNormTriton_v5{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
 n = 1
 pin = "b3587c68feb28795d22bc55e3097368179489974b791dbf2bcc6bb129271310cce38173933253197b2a9607ce420758fc8c0a76b25a814d62cd501d4131ca68b"
+provers = [1]
+warm = 3
+
+[[row]]
+type = 'census:AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'
+n = 1
+pin = "381c3b6bc8514e061ee7d18b1f71f92c56517e9645662a9e503126e11c778a90dff2e27ae7de0a9153efa7183aafb6a228427737dd2a2c6043b2ca23cecea03e"
+provers = [1]
+warm = 3
+
+[[row]]
+type = 'census:AttnBlock_v9{D=64,NVIS=128,FIRST=false,BN=128,DOT={"fn":"HopperBF16WgmmaDot16_v2"},CHECK=true}'
+n = 1
+pin = "354fed28e28331a41ccefaceb44d33c3b1954bd1cdbb7a9d2a16880f06127a417b967d8f48191866a7c25008f4d303d562fd63aa9282e1538cb0afbe6030e3d1"
+provers = [1]
+warm = 3
+
+[[row]]
+type = 'census:AttnBlockFirst_v3{D=64,NVIS=190,BN=192,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}'
+n = 1
+pin = "8b361171f6ee9d2d3ab39797b7b62435351c83562614983064c9cd03c771e1ad6e16714e252bae2e0ba4a9791fed8ac8eb837f050d348bb9bf51fdf54cf8dc9d"
 provers = [1]
 warm = 3

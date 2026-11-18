@@ -76,7 +76,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama32-1b-flock-steady-gemm-h200-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
   with the one above, the same metric's Llama member.
 - `llama32-1b-flock-steady-small-h200`: Llama 3.2 1B's census block types other than its attention, each under its
-  census name, at one prover on one H200 with ten cores: the rates `verity bench prove` reads by `definition_id`.
+  census name, then its three Boolean attention cut units, at one prover on one H200 with ten cores: the rates
+  `verity bench prove` reads by `definition_id`.
 
 ## Sweeps
 
