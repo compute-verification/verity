@@ -152,9 +152,10 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
 from . import draw as D, link_points as LP, partition as P, registered as G
+from verity.commitments import registered_value as RV
 from .verdict import Verdict, _Collect
 
-RECEIPT = "verity/registration-receipt/v1"
+RECEIPT = DM.REGISTRATION_RECEIPT
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
@@ -187,7 +188,7 @@ def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
            work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
     `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
-    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
+    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`registered_value.Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": DM.REGISTRATION if registered else DM.REGISTRATION_V1, "protocol": DM.ONE_STAGE_PROTOCOL, "program": part["program"],
@@ -196,8 +197,8 @@ def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
     if registered:
-        rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS},
-                              **G.width_entry(int(e.get(G.WIDTH_KEY, G.WORD_BITS)))} for e in registered]
+        rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in RV.ENTRY_KEYS},
+                              **RV.width_entry(int(e.get(RV.WIDTH_KEY, RV.WORD_BITS)))} for e in registered]
     return rec
 
 
@@ -288,7 +289,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
     {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
-    those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
+    those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered_value.SCHEMAS`), whose rows R7 counts in
     that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which the caller's check holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
@@ -302,7 +303,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     the values' sorted order before the other R7 codes).  `window_root`: the window's open root R, which the verifier reads from the challenger's signed open of this
     record's window (never from the record), and which every registered value's domain binds but the ones it holds
     across windows: `held` (registered values, the weights, say), and its pinned, supplied and output values
-    (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
+    (`registered_value.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither, which the caller's check reads (`caller.check`).  `seed_salt`: the window's seed salt the verifier read from its
@@ -488,13 +489,13 @@ def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],
             supplied: Mapping[str, Any], pinned: Mapping[str, str],
             outputs: Mapping[str, tuple[str, str, str]]) -> tuple[str | None, tuple[str, ...]]:
-    """The window's open root (`registered.window_root`) and the values whose domain leaves it out: `held`, a list of
+    """The window's open root (`registered_value.window_root`) and the values whose domain leaves it out: `held`, a list of
     values it expects registered, then its pinned, supplied and output values; ValueError otherwise, which the Lean
     verifier refuses too (`OneStage.paramsOfJson`)."""
     if held is not None and not (isinstance(held, (list, tuple)) and all(isinstance(v, str) and v in registered
                                                                           for v in held)):
         raise ValueError(f"held values are a list of registered values: {held!r}")
-    return G.window_root(window_root), (*(held or ()), *pinned, *supplied, *outputs)
+    return RV.window_root(window_root), (*(held or ()), *pinned, *supplied, *outputs)
 
 
 def unwindowed(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None, window: str | None,
@@ -561,7 +562,7 @@ def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mappin
 
 
 def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int]) -> dict[str, str]:
-    """The verifier's row formats, each of a value it expects registered, one of `registered.SCHEMAS`: a supplied value's
+    """The verifier's row formats, each of a value it expects registered, one of `registered_value.SCHEMAS`: a supplied value's
     is the format R7 commits its rows in (`registered.supplied_root`); ValueError otherwise, which the Lean verifier
     refuses too (`OneStage.paramsOfJson`)."""
     if schemas is None:
@@ -569,8 +570,8 @@ def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int]) -
     if not isinstance(schemas, Mapping) or not registered:
         raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
     for v, s in schemas.items():
-        if v not in registered or not isinstance(s, str) or s not in G.SCHEMAS:
-            raise ValueError(f"row format of {v!r}: not a registered value's, in one of {G.SCHEMAS}: {s!r}")
+        if v not in registered or not isinstance(s, str) or s not in RV.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value's, in one of {RV.SCHEMAS}: {s!r}")
     return dict(schemas)
 
 
@@ -601,7 +602,7 @@ def _earlier(log: Sequence[Mapping[str, Any]], record: str, kind: str, name: str
         ok = e is not None and type(e.get("leaves")) is int and e["leaves"] == want["leaves"]
     else:
         e = _output_port(log, record, name, "registered", "value")
-        width = e.get(G.WIDTH_KEY, G.WORD_BITS) if e is not None else None
+        width = e.get(RV.WIDTH_KEY, RV.WORD_BITS) if e is not None else None
         ok = (e is not None and type(e.get("leaves")) is int and e["leaves"] == want["leaves"]
               and type(e.get("words")) is int and e["words"] == want["words"]
               and type(width) is int and width == want["word_bits"])
@@ -622,7 +623,7 @@ def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], suppl
 
 
 CERTIFIED_KEYS = ("root", "leaves", "words", "domain")
-"""A certified entry's keys, with `registered.WIDTH_KEY` for leaves that are not 16 bits (`_certified`)."""
+"""A certified entry's keys, with `registered_value.WIDTH_KEY` for leaves that are not 16 bits (`_certified`)."""
 
 
 def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Mapping[str, int],
@@ -630,7 +631,7 @@ def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Ma
     """The verifier's certified entries, `{value: {"root", "leaves", "words", "word_bits", "domain"}}` in the values'
     sorted order: each of a value it neither expects a parameter registered under (`registered`) nor fills itself
     (`supplied`), an object of exactly `CERTIFIED_KEYS` (`root` lowercase hex of 64 bytes, `leaves` and `words`
-    naturals, `domain` a string) and, optionally, `word_bits`, one of `registered.WIDTHS`, 16 when left out; ValueError
+    naturals, `domain` a string) and, optionally, `word_bits`, one of `registered_value.WIDTHS`, 16 when left out; ValueError
     otherwise, which the Lean verifier refuses too (`OneStage.paramsParsed`)."""
     if certified is None:
         return {}
@@ -638,14 +639,14 @@ def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Ma
         raise ValueError(f"certified entries are an object of values' entries: {certified!r}")
     keys, out = set(CERTIFIED_KEYS), {}
     for v, e in sorted(certified.items()):
-        width = e.get(G.WIDTH_KEY, G.WORD_BITS) if isinstance(e, Mapping) else None
-        if (v in registered or v in supplied or not isinstance(e, Mapping) or not keys <= set(e) <= keys | {G.WIDTH_KEY}
+        width = e.get(RV.WIDTH_KEY, RV.WORD_BITS) if isinstance(e, Mapping) else None
+        if (v in registered or v in supplied or not isinstance(e, Mapping) or not keys <= set(e) <= keys | {RV.WIDTH_KEY}
                 or not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"]))
                 or not all(type(e[k]) is int and e[k] >= 0 for k in ("leaves", "words"))
-                or not isinstance(e["domain"], str) or type(width) is not int or width not in G.WIDTHS):
+                or not isinstance(e["domain"], str) or type(width) is not int or width not in RV.WIDTHS):
             raise ValueError(f"certified value {v!r}: one it expects a parameter registered under or fills, or an entry "
                              f"that is not a root of 64 bytes, its leaves, words and domain, and word_bits when not "
-                             f"{G.WORD_BITS}: {e!r}")
+                             f"{RV.WORD_BITS}: {e!r}")
         out[v] = {"root": e["root"], "leaves": e["leaves"], "words": e["words"], "word_bits": width,
                   "domain": e["domain"]}
     return out
@@ -887,8 +888,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
     # the certified entries, after the verifier's own: none is an output, and `_certified_held` holds its root
     for v, e in (certified or {}).items():
         mine[v] = {k: e[k] for k in ("leaves", "words", "word_bits", "domain")}
-    keys = set(G.ENTRY_KEYS)
-    if not isinstance(got, list) or not all(isinstance(e, Mapping) and keys <= set(e) <= keys | {G.WIDTH_KEY} for e in got):
+    keys = set(RV.ENTRY_KEYS)
+    if not isinstance(got, list) or not all(isinstance(e, Mapping) and keys <= set(e) <= keys | {RV.WIDTH_KEY} for e in got):
         c.fail("R7-registered", got)
         return
     by_value = {e["value"]: e for e in got}
@@ -905,8 +906,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         for k in ("leaves", "words", "domain"):
             if e[k] != want[k] or (k != "domain" and type(e[k]) is not int):
                 c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
-        width = e.get(G.WIDTH_KEY, G.WORD_BITS)
-        if type(width) is not int or width != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
+        width = e.get(RV.WIDTH_KEY, RV.WORD_BITS)
+        if type(width) is not int or width != want["word_bits"] or e.get(RV.WIDTH_KEY) == RV.WORD_BITS:
             c.fail("R7-word_bits", {"value": v, "registered": width, "verifier": want["word_bits"]})
         if v in held and v not in supplied and e["root"] != held[v]:
             c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})

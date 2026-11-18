@@ -191,7 +191,6 @@ abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-s
 abbrev STORE_SALT : String := "verity/store/salt/v1"
 
 -- Not yet read from here: the network attester and network accounting
-abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
 abbrev CERTIFIER_CERTIFICATES : String := "verity-network-certifier/certificates/v3"
 abbrev CERTIFIER_CLOCK : String := "verity-network-certifier/clock/v1"
 abbrev CERTIFIER_EMPTY : String := "verity-network-certifier/empty/v2"

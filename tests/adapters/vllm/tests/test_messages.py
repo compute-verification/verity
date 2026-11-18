@@ -184,8 +184,8 @@ def test_exchange_nests_kernels_and_hands_inputs_inward():
     ex = M.Exchange()
     seen = []
     ex.subscribe("s", "blocks", seen.append)
-    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
     ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
+    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
     due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
     assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
     assert seen == [due] and ex.computes()

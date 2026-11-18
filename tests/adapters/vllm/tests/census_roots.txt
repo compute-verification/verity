@@ -77,4 +77,3 @@ verity_vllm.protocols.pouw.h1_ranks
 verity_vllm.protocols.pouw.h1_settings
 verity_vllm.protocols.spot
 tests/regression/
-verity_vllm/protocols/poub/      # PoUB's node store on the engine, imported by the protocol driver and the benchmarks

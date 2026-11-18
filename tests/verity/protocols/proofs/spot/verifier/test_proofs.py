@@ -37,8 +37,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.commitments import hm96
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.commitments import hm96
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)

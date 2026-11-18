@@ -792,9 +792,8 @@ def lean_exe(name: str, given: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     try:
-        return SP.lean_check(exe, case, d, run=captured)
+        return schemes.get("network-attester").check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 

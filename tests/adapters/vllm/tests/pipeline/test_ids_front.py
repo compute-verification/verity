@@ -226,12 +226,12 @@ class Fronted:
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
     """`ids_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
-    attester forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
+    attester forwards it (the release, the run and the bucket); why not, in other cells, cut short, or changed by a byte."""
     for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
         assert idp.id_request_fields(request, P) == FIELDS
-    assert idp.id_request_fields(released(), P + 1) is None and idp.id_request_fields(released()[:-1], P) is None
-    assert idp.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
-    assert idp.id_request_fields(b"", P) is None
+    for other, p in ((released(), P + 1), (released()[:-1], P), (released().replace(b'"stream":true', b'"stream":True'), P),
+                     (b"", P)):
+        assert isinstance(idp.id_request_fields(other, p), str)
 
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
