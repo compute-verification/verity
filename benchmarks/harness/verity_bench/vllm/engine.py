@@ -172,21 +172,24 @@ def _serve_context(preset: Preset) -> dict[str, Any]:
     import torch
 
     props = torch.cuda.get_device_properties(0)
+    unread: list[str] = []
     if preset.model_digest is not None:
         root: Path | None = Path(preset.model)
         config: Path | None = root / "config.json"
     else:
+        config = root = None
         try:
             config = pinned_hf_config(preset.model, str(preset.revision))
-        except ValueError:
-            config = None
+        except ValueError as e:
+            unread.append(f"config.json: {e}")
         try:
             local = EnginePin.resolve(preset.model, str(preset.revision)).local_path
-        except ValueError:
-            local = None
-        root = Path(local) if local else None
-    return serve_defaults.context(int(props.total_memory), torch.cuda.get_device_name(0),
-                                  config if config is not None and config.is_file() else None, root)
+            root = Path(local) if local else None
+        except ValueError as e:
+            unread.append(f"checkpoint: {e}")
+    ctx = serve_defaults.context(int(props.total_memory), torch.cuda.get_device_name(0),
+                                 config if config is not None and config.is_file() else None, root)
+    return {**ctx, "unread": unread} if unread else ctx
 
 
 class _VllmEngine:
