@@ -23,8 +23,7 @@ value: no output word is ever public).  A bit-row member
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
   salt    ``y`` = 192 fresh bytes from the OS generator, sampled for this row alone.  The salts are kept only in the prover's
-          files and never logged.  Under a test's salt key (``commit``'s ``salt_key``) they are instead ChaCha20 (RFC 8439)
-          under it, nonce = the row port's index over all members (12 bytes LE), at stream offset ``192 i``
+          files and never logged; a caller that has them already hands them in as data (``commit``'s ``salts_of``)
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
@@ -78,7 +77,6 @@ import numpy as np
 from verity.circuits import partition_object as PO
 from verity.commitments import hm96, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.hm96 import batch as HB
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
@@ -152,23 +150,15 @@ def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
     return leaves.view("<u2").reshape(len(at), value_words(value))
 
 
-# --- salts: hm96's salt stream under RFC 8439's nonce -------------------------------------------------------------------
-
-def _stream(key: bytes, nonce: int, n: int, first: int = 0) -> bytes:
-    """The salts of rows first .. first + n - 1 under ``key`` at the 96-bit ``nonce`` (12 bytes LE), row i at offset 192 i of
-    RFC 8439's ChaCha20 stream from block 0: `hm96.batch.salts`, whose 64-bit counter and nonce are RFC 8439's 32-bit
-    counter and 96-bit nonce read another way."""
-    if not 0 <= nonce < 1 << 96:
-        raise ValueError("an RFC 8439 nonce is 12 bytes")
-    if HB.SALT_BLOCKS * (first + n) > 1 << 32:
-        raise ValueError("the 32-bit block counter would wrap")
-    return HB.salts(key, nonce >> 32, np.arange(first, first + n), (nonce & 0xFFFFFFFF) << 32)
-
-
-def salts(key: bytes, port_index: int, n: int, first: int = 0) -> bytes:
-    """The ``n`` rows' salts of port ``port_index`` from its row ``first`` (192 bytes each, concatenated): nonce = the
-    port's index."""
-    return _stream(key, port_index, n, first)
+def full_ports(window: Binding) -> dict[str, int]:
+    """Each member port `commit` takes rows of in full, with its row count: every row port but a wired one and a registered
+    value's (`Member.values`), whose rows are given by reference. The ports a caller hands salts for (``salts_of``)."""
+    out = {}
+    for m in window.members:
+        for p, _w in m.all_rows:
+            if p not in m.values and window.wire(m, p) is None:
+                out[m.port(p)] = m.n if p in dict(m.outs) else dict(m.tables).get(p, m.n)
+    return out
 
 
 def _width(n: int) -> int:
@@ -816,7 +806,7 @@ def _shaped(m: Member, kind: str, p: str, words: int, n: int, shape: tuple[int, 
         raise ValueError(f"{m.port(p)}: {tuple(shape)} is not {n} x {words}" + (" words of whole SHA-512 blocks" if blocks else ""))
 
 
-def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_key: bytes | None = None,
+def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
            carried: Mapping[str, bytes] | None = None,
            table_salts: Mapping[int, bytes] | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None,
@@ -828,10 +818,11 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the period's, or the
     commit is refused.
 
-    ``salt_key``: tests only: ChaCha20 under it, as `salts` gives it.  ``table_salts``: by segment, the salts the integration
+    ``table_salts``: by segment, the salts the integration
     drew for its tables' rows when it recorded the segment's root (`row_tables.StepRoots.salts`: its tables in order, each
     table's rows in rank order), which ``segment_roots`` requires.
-    ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
+    ``salts_of``: by port given in full, its rows' salts, one a row: an outside registered value's, so its rows' ``b || c``
+    are the value's (`write`), or a test's, which hands in the bytes it needs repeated; fresh OS bytes for every other row.
     ``strings_of``: by port of ``salts_of``, its rows' ``b || c`` under those salts, already made (a history table's, whose
     leaves they are), so the period hashes only their leaves and tree; a wrong string is a leaf no opening of the row matches.
 
@@ -853,7 +844,7 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
     if into is not None:
         if window.row_tables or strings_of or carried or segment_roots is not None:
             raise ValueError("a commit into a directory takes no row tables, strings_of or carried: it never holds a port whole")
-        return _commit_into(window, data, Path(into), salt_key=salt_key, salts_of=salts_of or {}, workers=workers, chunk=chunk)
+        return _commit_into(window, data, Path(into), salts_of=salts_of or {}, workers=workers, chunk=chunk)
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -899,8 +890,7 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
     if refd and window.row_tables:
         raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a period with row tables, whose linked "
                          "members' rows are read off their x tables: give every row")
-    ys = {p: (salts_of or {}).get(p) or (os.urandom(n * SALT_BYTES) if salt_key is None else salts(bytes(salt_key), k, n))
-          for k, (p, n) in enumerate(counts.items()) if p not in refd}
+    ys = {p: (salts_of or {}).get(p) or os.urandom(n * SALT_BYTES) for p, n in counts.items() if p not in refd}
     domains = {t: window.domain(t, s, n) for t, (s, n) in window.trees.items()}
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
@@ -1026,8 +1016,7 @@ def _strings(d: Path, k: int, m: Member, p: str, mode: str = "r") -> np.ndarray:
     return np.memmap(path, dtype=np.uint8, mode=mode, offset=BC_BYTES * sum(counts[:j]), shape=(counts[j], BC_BYTES))
 
 
-def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, salt_key: bytes | None,
-                 salts_of: Mapping[str, bytes], workers: int, chunk: int) -> Committed:
+def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, salts_of: Mapping[str, bytes], workers: int, chunk: int) -> Committed:
     """`commit` into the window directory ``d`` (its ``into``): the commitment `commit` makes of the same rows under the
     same salts, never held whole. ``data`` is read a member at a time, each asked for after the one before is written, and a
     member a run of rows at a time: a port's rows are an array or anything with a ``shape`` that slices to rows (a memory
@@ -1058,13 +1047,13 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
         if dk is None:
             raise ValueError(f"{k} members' rows; the window has {len(ms)} members")
         leaves = {p: dict(m.tables).get(p, m.n) for p, _ in m.rows} | {p: m.n for p, _ in m.outs}
-        given, wired, full, nonce = dict(m.rows + m.outs), {w.port for w in m.wired}, {}, {}
+        given, wired, full = dict(m.rows + m.outs), {w.port for w in m.wired}, {}
         for kind, ports in (("rows", m.rows), ("outs", m.outs)):
             if set(dk[kind]) != {p for p, _ in ports}:
                 raise ValueError(f"{m.key}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
             for p, words in ports:
                 port, src = m.port(p), dk[kind][p]
-                where[port], schemas[port], nonce[p], counts[port] = (k, p), m.schema(p), len(counts), leaves[p]
+                where[port], schemas[port], counts[port] = (k, p), m.schema(p), leaves[p]
                 if port in domains:
                     nodes[port] = []
                 if _referenced(m, kind, p, words, leaves[p], src):
@@ -1110,8 +1099,7 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
                             a = np.concatenate([a, np.zeros((hi - lo, w - given[p]), dtype=np.uint16)], axis=1)
                         t = time.perf_counter()
                         y = (bytes(salts_of[port][lo * SALT_BYTES:hi * SALT_BYTES]) if salts_of.get(port)
-                             else os.urandom((hi - lo) * SALT_BYTES) if salt_key is None
-                             else salts(bytes(salt_key), nonce[p], hi - lo, lo))
+                             else os.urandom((hi - lo) * SALT_BYTES))
                         spent += time.perf_counter() - t
                         if port in nodes:
                             jobs[port] = _row_port(domains[port], a, y, schemas[port], lo)
@@ -1751,8 +1739,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                        "public_sha512": hashlib.sha512(pub).hexdigest(), "private": f"t{t}-private.bin"})
     segs = {"context": c.window.context, "port": TABLE_PORT, "root_schema": ROOTS_SCHEMA,
             "steps": [{SEGMENT_KEY: s, "tables": list(ks), "root": c.segment_roots[s].hex()} for s, ks in c.window.segments],
-            "salt_rule": "chacha20 (rfc 8439) under the run's 32-byte row key, nonce = the segment (12 bytes le), the segment's "
-            "tables in order and each table's rows in rank order at consecutive 192-byte offsets"}
+            "salt_rule": "192 fresh bytes from the os generator a row, the segment's tables in order and each table's rows in "
+            "rank order at consecutive 192-byte offsets"}
     win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
@@ -1761,8 +1749,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
-           "salt_rule": "192 fresh bytes from the os generator a row; under a test's salt key, chacha20 (rfc 8439), nonce = the "
-           "row port's index over all members (12 bytes le), row i at stream offset 192 i", "seconds": c.seconds, **(extra or {})}
+           "salt_rule": "192 fresh bytes from the os generator a row", "seconds": c.seconds, **(extra or {})}
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")
     return win
 

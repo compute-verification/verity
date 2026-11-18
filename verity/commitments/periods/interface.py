@@ -2721,9 +2721,10 @@ class Window:
                 out[tid] = bad
         return out
 
-    def close(self, *, workers: int = 1, salt_key: bytes | None = None) -> CS.Committed:
-        """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
-        tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
+    def close(self, *, workers: int = 1, salts_of: Mapping[str, bytes] | None = None) -> CS.Committed:
+        """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salts_of``:
+        by port given in full (`rows.full_ports`), the salts a test hands in (`rows.commit`); a port whose salts the period
+        fixes (a history table's row, a registered read's) takes those. A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
         row that is neither. Each registered row the period reads has its salt sampled and its path made once (`_Drawn`).
         An input row recorded in full is committed by reference all the same, refused unless it is the value's row: a
@@ -2749,7 +2750,7 @@ class Window:
                         "waits on circuits and lean defining that cut once in the Program's Lean and Python")
                 wanted.setdefault(param, []).append(positions)
         sampled, written = _Drawn(values, wanted), self._written(values)
-        data, salts_of, strings_of, self._entries = [], {}, {}, {}
+        given, (data, salts_of, strings_of, self._entries) = dict(salts_of or {}), ([], {}, {}, {})
         for m, reads, lo in zip(self.window.members, read_by, own, strict=True):
             lay = by[m.template][1]
             if m.template not in cat:
@@ -2792,7 +2793,7 @@ class Window:
                 if r in wired:
                     d["rows"][r] = CS.WIRED
             data.append(d)
-        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of)
+        return CS.commit(self.window, data, workers=workers, salts_of={**given, **salts_of}, strings_of=strings_of)
 
     def _written(self, values: Mapping[str, Any]) -> dict[str, dict[str, tuple[list[Any], np.ndarray]]]:
         """Each history writer's output (by template, then port): for each of its template's units, the committed table

@@ -41,8 +41,6 @@ ALLOWED: dict[str, str] = {
     "verity/commitments/cuda/sha512_rows/engine.py": "@kernels",
     "verity/commitments/cuda/sha512_rows/rows.cuh": "@kernels",
     "verity/commitments/hm96/batch.py": "@proofs",
-    "verity/commitments/periods/interface.py": "@proofs",
-    "verity/commitments/periods/rows.py": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py": "@proofs",
