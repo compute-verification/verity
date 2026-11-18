@@ -510,8 +510,6 @@ def proved_as(spec: str) -> str | None:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.ops.boolean import versions as BB
 
-    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-
     sp = _bind(spec)
     if sp is None or not sp.complete or descriptor_id(sp) != spec or BL.is_boolean(sp):
         return None
