@@ -105,7 +105,7 @@ def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_
     runs (the adapter's `CommitSession` standing in for the session memory-accounting registers by name)."""
     from verity.protocols.resource_accounting import scheme
     from verity_vllm.pipeline import commit, poub_session
-    from verity_vllm.protocols.poub import remote
+    from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
 
     monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
 

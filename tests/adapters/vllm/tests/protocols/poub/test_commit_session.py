@@ -40,7 +40,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 from verity import hooks as H
 from verity.channel import Refused
 from verity_vllm import messages
-from verity_vllm.protocols.poub import remote
+from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
 
 VLLM_TESTS = Path(__file__).resolve().parents[3]  # tests/adapters/vllm, where the adapter's tests import as `tests`
 
