@@ -257,7 +257,7 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     """The request's words: the gate's scan rehearsal, or its relay session where ``a`` names a ``client_port``
-    (`attester_piece.py front --session`: the relay kept up for the served run's own load, no traffic of ours)."""
+    (`attester_front.py front --session`: the relay kept up for the served run's own load, no traffic of ours)."""
     tick = getattr(a, "bucket_ms", None)
     if getattr(a, "client_port", None) is not None:
         return ["relay-session", "--peer", a.peer, "--port", str(a.port), "--client-port", str(a.client_port),
@@ -485,7 +485,7 @@ def _ended(signum, _frame):
 
 def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path, hold: Path) -> tuple[dict, Path]:
     """The session, its files written to `hold`: its outcome and the kept fetch. A run opened earlier is ended by
-    ``a.close`` (``hold -> the lane's fetch``: `attester_piece.py close`, a relay session's), which starts none."""
+    ``a.close`` (``hold -> the lane's fetch``: `attester_front.py close`, a relay session's), which starts none."""
     if a.at:
         wait_until(a.at)
     if getattr(a, "close", None) is not None:

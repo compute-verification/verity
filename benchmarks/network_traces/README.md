@@ -86,7 +86,7 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounti
 `served_session.py` is the runbook of the served session of record, the network attester in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
 `site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
-(`VY_CHALLENGER_1_HOST`): the session, the front (`attester_piece.py front`), a chain on the gate's coins and
+(`VY_CHALLENGER_1_HOST`): the session, the front (`attester_front.py front`), a chain on the gate's coins and
 `wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
@@ -112,8 +112,8 @@ runs on, which the challenger's coin link reaches through that node's own line o
 network attester run's witness never go on the developer's machine. Without the gate's coins the chain samples on the verifier's
 (`--coins verifier`, the default).
 
-`attester_piece.py` is the network attester's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
-(`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the execution phase circuit's
+`attester_front.py` and `attester_piece.py` are the network attester's front and piece of
+`benchmarks/one_stage/served_verdicts.sh`. The front (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the execution phase circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
 network attester at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest execution phase, the one it audits,
@@ -125,7 +125,7 @@ listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and 
 client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
 rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
-Its `piece` (`CERTIFIER_CMD`) runs the chain's network attester path on that fetch with the serve dir's
+The piece (`CERTIFIER_CMD`) runs the chain's network attester path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network attester's
 records pass `network-rows check` (each record held to its attested head, then the network attester's program's rows audit,
