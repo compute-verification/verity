@@ -1594,14 +1594,14 @@ def load_card(sku: str, *, directory: Path) -> dict:
 
 def card_for_driver(name: str, *, directory: Path) -> dict:
     """The GPU card in ``directory`` whose ``driver`` holds ``name``, the product string a driver reports for the device
-    (``nvidia-smi --query-gpu=name``), exactly; refused unless exactly one card holds it."""
+    (``nvidia-smi --query-gpu=name``), exactly; refused unless exactly one card holds it, with how many do."""
     found = [card for card in (load_card(sku, directory=directory) for sku in skus("gpu", directory=directory))
              if name and name in {d["value"] for d in card.get("driver", ())}]
     if len(found) != 1:
         quoted = '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
         raise KeyError(f"{len(found)} card records under {directory} have {name!r}, the name a driver reports, in "
                        f"`driver`: add {{ value = {quoted}, source = ... }} to its one record's `driver`, adding its "
-                       "<sku>.toml there if it has none")
+                       "<sku>.toml there if it has none", len(found))
     return found[0]
 
 

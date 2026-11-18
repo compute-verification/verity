@@ -206,11 +206,14 @@ def card_short(name: str, *, directory: Path) -> str:
     from verity.device import card_for_driver
 
     try:
-        card = card_for_driver(name, directory=directory)
+        card, held = card_for_driver(name, directory=directory), 1
     except KeyError as e:
-        raise SystemExit(e.args[0]) from None
-    if not card.get("short"):
-        raise SystemExit(f"{card['sku']} under {directory} has no `short`: give it the card's name in a measurement's member")
+        card, held = None, e.args[1]
+    if card is None or not card.get("short"):
+        raise SystemExit(
+            f"{held} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
+            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
+            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
     return card["short"]
 
 

@@ -59,10 +59,11 @@ def test_card_for_driver_finds_the_one_card_and_refuses_none_or_two(tmp_path: Pa
     for name in ("NVIDIA H100", "nvidia h200", ""):
         with pytest.raises(KeyError) as none:
             card_for_driver(name, directory=CARD_FILES)
-        assert none.value.args[0].startswith(f"0 card records under {CARD_FILES} have {name!r}")
+        assert none.value.args[0].startswith(f"0 card records under {CARD_FILES} have {name!r}") and none.value.args[1] == 0
     h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text(encoding="utf-8")
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200, encoding="utf-8")
     (tmp_path / "h200-twin.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', 'sku = "h200-twin"'), encoding="utf-8")
     with pytest.raises(KeyError) as two:
         card_for_driver("NVIDIA H200", directory=tmp_path)
     assert re.match(r'2 card records .* add \{ value = "NVIDIA H200", source = \.\.\. \}', two.value.args[0])
+    assert two.value.args[1] == 2
