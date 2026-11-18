@@ -232,11 +232,21 @@ class ReuseOldestFreed:
     range keeps its values as long as the workload has other ranges to hand out."""
 
 
+@dataclass(frozen=True)
+class StartBeside:
+    """A scheme's request to start its process ``process`` beside the workload, by the command line it registered
+    (``command``), handed the readers it names (``readers``)."""
+
+    process: str
+    command: tuple[str, ...]
+    readers: tuple[str, ...] = ()
+
+
 type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
-                | ReuseOldestFreed)
+                | StartBeside | ReuseOldestFreed)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
-           "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced"]
+           "StartBeside", "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced"]

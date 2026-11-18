@@ -28,7 +28,7 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
-from verity_vllm.pipeline import serve_head as hd
+from verity.protocols.resource_accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import tick_plugin as tp
 
