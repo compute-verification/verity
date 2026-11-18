@@ -1220,6 +1220,23 @@ def test_a_passed_staged_batch_goes_onto_the_chain_s_top_once_it_has_room_and_it
     assert kinds(acts) == [Eject, Drop, Commit, Build] and acts[2:] == [Commit("c1", MAIN, 3), Build((3,), MAIN, 2, after="c1")]
 
 
+def test_a_passed_staged_batch_goes_onto_the_chain_only_once_the_quick_tiers_under_it_passed_and_the_chain_drains_meanwhile():
+    """A candidate on the chain that lands on the quick tier (its members all `Snapshot.plain`) and hasn't passed it could fail
+    under the staged batch, costing its check: the batch waits, and nothing is built on the chain, which drains, a `Wait` and
+    each PR left waiting saying why; once that candidate has passed and landed, the batch goes onto the chain.  A candidate
+    taking the whole check holds nothing back, as before."""
+    passed = waiting("c1", MAIN, 1, records=RecordsRun(PASS))
+    s = snap(passed, cand("c2", MAIN, 2), ready=[lean(1), *prs(2, 3)], depth=3, records=True, plain=frozenset({2, 3}))
+    why = ("the staged batch c1 goes onto main's chain's top once the quick tier of every candidate on it has passed, so a red "
+           "under it can't cost its check (c2 pending): nothing is built on the chain meanwhile")
+    assert decide(s) == [Wait(why)]
+    assert [(x.number, x.cause, x.why) for x in left_out(s)] == [(3, "staged batch first", why)]
+    assert decide(replace(s, candidates=(passed, cand("c2", MAIN, 2, state=PASS)))) == [
+        Advance("c2"), Drop("c2", "on main", Outcome((2,), heads(2), PASS)), Commit("c1", "c2", 3),
+        Build((3,), "c2", 2, after="c1")]
+    assert decide(replace(s, plain=frozenset({3}))) == [Commit("c1", "c2", 2), Build((3,), "c2", 1, after="c1")]
+
+
 def test_a_tick_whose_staged_batch_is_dropped_rather_than_committed_builds_on_the_chain_s_top_as_it_is():
     """No `Commit`, no `Build.after`: the batch whose member moved on, dropped as the top is no longer its base, leaves the
     tick's builds on that top."""
@@ -2734,9 +2751,15 @@ class World:
         takes = [r.number for r in waiting if not r.lean and not (beside and r.lean_input)]
         free = min(s.depth - places, max(s.fill, 1)) - bool(lean and not s.records)
         rest = [r.number for r in self.takeable(s, acts) if not r.lean and not (beside and r.lean_input)]
-        assert len(on) + len(away) - bool(lean and not s.records) >= free or not rest, (
+        drained = any(isinstance(a, Wait) and a.why.startswith("the staged batch ") for a in acts)
+        self.seen["a passed staged batch waited for the quick tiers on the chain, which drained"] += drained
+        assert drained or len(on) + len(away) - bool(lean and not s.records) >= free or not rest, (
             f"{where}: no batch of PRs with no Lean change built while #{rest[0]} waited and the chain had room")
-        if any(isinstance(a, Wait) for a in acts):
+        if drained:
+            assert not builds and staged and any(c.verdict.state != PASS and set(c.members) <= s.plain
+                                                 for c in s.candidates if not c.waits and not c.apart), (
+                f"{where}: the chain drained for a staged batch with no quick tier pending under it")
+        elif any(isinstance(a, Wait) for a in acts):
             assert not builds and room and not takes, f"{where}: a wait beside a build, or while a PR with no Lean change waited"
             assert [r for r in self.pool(s, acts, aside=True) if r.lean], f"{where}: a wait with no Lean PR waiting"
             assert wide or erred or top or (s.records and inputs), f"{where}: a Lean PR waited on a chain it could be built on"

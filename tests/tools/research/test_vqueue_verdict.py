@@ -454,6 +454,45 @@ def test_under_gate_verdict_a_quick_tier_that_ended_in_infra_is_started_again_on
     assert "advance" in _acts(loop.tick()) and env.main() == sha
 
 
+def test_under_gate_verdict_a_quick_tier_goes_to_the_machine_with_a_free_check_slot_and_by_its_sha_when_none_can_be_read(
+        env, monkeypatch):
+    """A plain candidate's quick tier takes the queue's machine `Landing.place_quick` finds a free check slot on, not the one
+    its sha picks, so it doesn't wait in one machine's line while another's slots stand free; started again after infra, it
+    is placed among the machines its tier before didn't err on; with no machine's slots read, its sha picks one."""
+    below = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch)
+    d, asked, free = loop.world.slim_driver(), [], ["m3"]
+    d.place_quick = lambda machines: asked.append(machines) or ((m, "a check slot is free there") if (m := free[0]) else
+                                                                 (None, "no machine's slots could be read"))
+    _, built, started = loop.tick()
+    sha = built["sha"]
+    assert (asked, started["record"]["on"], quick.launches[-1][2]) == (["m1,m2,m3"], "m3", "m3")
+    runs.end(below)
+    (r := runs.tmp / "q-1").mkdir(parents=True)
+    (r / "result.json").write_text("{}")
+    runs.state["q-1"] = ("done", 1, None)
+    free[0] = None
+    again = loop.tick()[-1]["record"]
+    assert asked[-1] == "m1,m2" and again["on"] == ["m1", "m2"][int(sha[:8], 16) % 2], (asked, again)
+
+
+def test_place_quick_takes_queue_place_s_pick_among_the_machines_given_and_none_when_it_can_t_read_or_picks_elsewhere(
+        monkeypatch, tmp_path):
+    """`landing.place_quick` is `queue.place` over the machines given: its pick and why; (None, why) when that pick is none of
+    them (a research pool), it picked none, or reading broke."""
+    import research.queue as Q
+    from research.landing import place_quick
+
+    picks = [("m2", "m2 has a free check slot", [], 0), ("m1:research", "spilled", [], 0), (None, "none read", [], 0)]
+    monkeypatch.setattr(Q, "place", lambda spec, repo: picks.pop(0))
+    assert place_quick(tmp_path, "m1,m2") == ("m2", "m2 has a free check slot")
+    assert place_quick(tmp_path, "m1,m2") == (None, "spilled")
+    assert place_quick(tmp_path, "m1,m2") == (None, "none read")
+    monkeypatch.setattr(Q, "place", lambda spec, repo: 1 / 0)
+    assert place_quick(tmp_path, "m1,m2") == (None, "its slots couldn't be read: ZeroDivisionError: division by zero")
+
+
 def test_under_gate_verdict_a_plain_candidate_falls_back_to_the_whole_check_once_a_member_has_no_land_verdict(env, monkeypatch):
     """A member's land verdict is gone from its head while its candidate's quick tier runs: the candidate isn't plain, so its
     whole check starts in the quick tier's place."""
