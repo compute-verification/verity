@@ -1550,16 +1550,16 @@ theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = s
   simp only [StepAt.ofOwn_kept, ht]
   cases hc : p.circuitFile with
   | error e =>
-    rw [fileOf_error hc]
+    rw [fileOf_error rfl]
     simp only [error_bind] <;> rfl
   | ok circuitB =>
     simp only [ok_bind]
     cases hl : lookupsOf circuitB with
     | error e =>
-      rw [fileOf_unread hc hl]
+      rw [fileOf_unread rfl hl]
       simp only [error_bind] <;> rfl
     | ok names =>
-      rw [fileOf_ok hc hl]
+      rw [fileOf_ok rfl hl]
       simp only [ok_bind, pure_bind] <;> rfl
 
 /-- `Member.files` on what the files' pass keeps of the member's circuit file (`fk`) and of its program (`pk`):
@@ -1605,7 +1605,6 @@ theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = som
       cases h
       rfl
     rw [keptFiles, membersFiles, Member.files_on ht, ProgramKept.next_eq hp]
-    dsimp only
     rw [keptFiles_eq ht slice bs ms _ hnext]
 
 /-- **Every member's files, a circuit file read and parsed once for the members that name it**, and the program's
