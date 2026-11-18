@@ -182,6 +182,9 @@ BANDWIDTH = S.register(S.Scheme(
     check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
     reader=_bandwidth_reading,
     premises=(_COUNTED,),
+    # For its session's life it holds a reference to storage's own encoded rows, a tree of salted leaves held to the
+    # store's root, and each pass's receipts: none yields the weights apart from the store it audits.
+    keeps_weight_copy=False,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
 ))
@@ -226,6 +229,11 @@ POUB = S.register(S.Scheme(
     reader=S.Lacks("no combined record has a row for the remote session"),
     premises=("ResourceAccounting.Assumptions.WorkHardness",
               "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
+    # Its binder registers views of the served tensors (`prover.binder.TorchBacking.of_tensor`), which keep the plain
+    # weights resident after storage releases them, and its session keeps two host copies of every block's payload,
+    # one of them plain (`prover.node_store.serving`: `payload_root`'s payloads and the audit store's encoded
+    # blocks). The commit that drops the views and the plain host copy changes this.
+    keeps_weight_copy=True,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
 ))
