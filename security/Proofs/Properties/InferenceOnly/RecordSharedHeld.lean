@@ -661,10 +661,13 @@ theorem rowRuns_runsOf {P : Prog} {R : Runs} (h : rowRuns P = some R) : runsOf P
         · cases h; rfl
         · cases h
     · rename_i hg
-      unfold rowParts
-      dsimp only
-      rw [List.filter_eq_self.2 fun q hq => by simpa using List.any_eq_false.1 (by simpa using hg) q hq]
-      exact h
+      have hg' : _ = false := Bool.eq_false_iff.2 hg
+      have e := List.filter_eq_self.2 fun q hq => by
+        have hq' := List.any_eq_false.1 hg' q hq
+        show (!gathered P q) = true
+        revert hq'
+        cases gathered P q <;> simp
+      exact (congrArg (runsOf P) e).trans h
   · cases h
 
 /-- **A shared run is a run of some leaf of a part `runsOf` reads.** -/
