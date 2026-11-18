@@ -253,8 +253,9 @@ class Clock:
 
 class Replay:
     """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
-    case's 2W, then its append coins in the order sampled, each the audit's 32 bytes padded to the challenger's 64 under a
-    zero salt. Past the case's append coins it refuses the case, as the Lean does."""
+    case's 2W, then its append coins by slot, each the audit's 32 bytes padded to the challenger's 64 under a zero salt.
+    Past the case's append coins, or at a slot whose coin was never released (b""), it refuses the case, as the Lean
+    does."""
 
     def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1) -> None:
         a = max(coins.APPENDS, len(appends))
@@ -263,10 +264,13 @@ class Replay:
                    for x in (c, bytes(HM96.salt_bytes)))
         self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a, per_coin), lambda n: next(out))
         self.commitment, self.appends = self.live.commitment, len(appends)
+        self.empty = {i for i, c in enumerate(appends) if not c}
 
     def open(self, label: str, index: int, after: bytes) -> coins.LiveOpening:
         if label == coins.APPEND and index >= self.appends:
             raise D.Reject("the append coins ran out")
+        if label == coins.APPEND and index in self.empty:
+            raise D.Reject(f"append coin {index} was never released")
         return self.live.open(label, index, after)
 
 
@@ -368,8 +372,8 @@ def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
         raise D.Reject("W + ⌈W/g⌉ coins of 32 bytes")
     appends = hexes(v, "append_coins")
-    if any(len(c) != coins.COIN_BYTES for c in appends):
-        raise D.Reject("append coins are 32 bytes")
+    if any(len(c) not in (0, coins.COIN_BYTES) for c in appends):
+        raise D.Reject("append coins are 32 bytes, or empty for a slot whose coin was never released")
     return kw, committed, appends, nat(v, "not_before_ns")
 
 
@@ -630,7 +634,8 @@ class Run:
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin,
+                                 **({"appends": self.params.schedule.total} if refresh else {}))
         self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit_prover.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
@@ -640,6 +645,8 @@ class Run:
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit_prover.Pass] = {}
         self.draws: dict[int, tuple] = {}
+        self.encode_under: dict[int, int] = {}
+        """slot σ: slot k, a cheating prover's encoding of the append in σ under append coin k (released or not)."""
 
     def _call(self, event: dict, fn: Callable[[], Any]) -> Any:
         self.events.append(event)
@@ -686,8 +693,13 @@ class Run:
                 self.store.slotted[slot] = len(self.store.appends) - 1
             self.head = audit.append_head(self.head, first, count, root)
             if first in self.store.pending:
-                self.store.encode(first, coin)
+                under = self.encode_under.get(slot)
+                self.store.encode(first, coin if under is None else self.append_coin(under))
         return out
+
+    def append_coin(self, k: int) -> bytes:
+        """Append coin k as the challenger committed to it, released or not."""
+        return self.coins.challenger._coins[self.params.coins + k][0][:coins.COIN_BYTES]
 
     def append(self, count: int, label: bytes = b"kv page", slot: int | None = None) -> audit_prover.Append:
         a = self.store.append(pages(self.store.extent, count, label),
@@ -775,7 +787,7 @@ class Run:
 
     def case(self) -> dict:
         p = self.params
-        return {"append_coins": [c.hex() for c in self.append_coins],
+        return {"append_coins": [c.hex() for c in coins.by_slot(self.coins)],
                 "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:p.coins]],
                 "events": self.events,
                 "not_before_ns": self.not_before_ns,
@@ -1549,6 +1561,31 @@ def shifted_origin(r: Run) -> None:
     r.rekey(10, ("append", 5))
 
 
+def coin_of_empty_slot(r: Run) -> None:
+    """The honest refresh session but for R2, the append in slot 3, which the prover encodes under slot 2's coin, never
+    released: the coin a session keyed by the count of appends would have given R2, its third."""
+    r.encode_under[3] = 2
+    honest_refresh(r)
+
+
+def opening_input(r: Run, t: int, k: int, slots: dict[int, int] | None = None) -> dict:
+    """`openingFn`'s input: sample k of window t of `r`'s session, closed, with its honest opening, under the session's
+    appends as `AuditRun` holds them, each append's slot σ named `slots[σ]` where `slots` has it."""
+    s, slots = r.s, slots or {}
+    w = s.windows[t]
+    i, p = w.draws[k]
+    previous = s.windows[t - 1].roots[-1] if t > 0 else s.registration.digest
+    return {"registration": registration_json(r.store.registration),
+            "appends": [{"first": first, "count": c.count, "root": c.root.hex(), "coin": coin.hex(),
+                         "origin": origin_json(o), "slot": slots.get(σ, σ)}
+                        for (first, _, c, coin), o, σ in zip(s._appends, s._origins, s._slots)],
+            "window": {"index": t, "challenge": w.challenge.hex(), "previous": previous.hex(),
+                       "passes": [{"root": root.hex(), "runs": [list(x) for x in plan.runs],
+                                   "head": None if head is None else head.hex()}
+                                  for root, plan, head in zip(w.roots, w.plans, w.heads)]},
+            "i": i, "p": p, "opening": opening_json(r.openings(t)[k])}
+
+
 def on_rekey(o: audit.Opening) -> bool:
     return o.origin_position is not None
 
@@ -1557,6 +1594,7 @@ REFRESH_SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | Non
     "honest-refresh": (World(), REFRESH, honest_refresh, "accepted"),
     "refresh-skipped-rekey": (World(), REFRESH, refreshed(skip=("R3",), reads={3: ("R2", "K1"), 4: ("R4", "K2")}),
                               "accepted"),
+    "refresh-coin-of-empty-slot": (World(), REFRESH, coin_of_empty_slot, "codec"),
     "refresh-skipped-rekey-stale": (World(), REFRESH, refreshed(skip=("R3",), reads={3: ("R1", "R2", "K1")}),
                                     "lifetime"),
     "refresh-lifetime-registered": (World(), REFRESH, refreshed(reads={2: ("store", "R2", "K1")}), "lifetime"),

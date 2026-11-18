@@ -7,11 +7,13 @@ public import Poub.Window
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
 clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
-its openings coin at W + t, and the append coins in the order sampled). Each event gives what the Python call returns:
+its openings coin at W + t, and the append coins by slot, an empty entry one never released). Each event gives what the
+Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
-* `append(root, count, origin, slot)`: the first index and its coin `c_a`; rejected `append` if malformed or past the
-  codec's `max_blocks`, a re-key or a slot without refresh, or a re-key's root not its declaration (`rekeyRoot`);
+* `append(root, count, origin, slot)`: the first index and its coin `c_a`, the append coin of its slot; rejected
+  `append` if malformed or past the codec's `max_blocks`, a re-key or a slot without refresh, or a re-key's root not its
+  declaration (`rekeyRoot`);
   with refresh, `origin` unless its slot is above the last append's and holds it (`State.slotOk`); `coin` if its root
   was sent before or the last window's roots are final;
 * `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
@@ -99,7 +101,6 @@ structure State where
   digest : ByteArray
   coins : Array ByteArray
   appendCoins : Array ByteArray
-  appendSampled : Nat := 0
   notBeforeNs : Nat
   windows : Array Win := #[]
   filling : Nat := 0
@@ -292,6 +293,9 @@ def boundary (s : State) (now : Nat) : Result × State := Id.run do
   if t + 1 < s.params.windows then return (.released (some (t + 1)), s.releaseCoin (t + 1) now)
   return (.released none, s)
 
+/-- The append's coin is `appendCoins[σ]`, σ its slot (with refresh) or the appends before it (without, where the
+two are one): an empty entry is a coin never released, refused by name, as is a slot past the family. The coin keys
+only this append's own blocks (`checkOpening` decodes block `j` under the coin of the append holding it). -/
 def append (s : State) (root : ByteArray) (count : Int) (origin : Origin := .fresh) (slot : Option Nat := none) :
     Except String (Result × State) := do
   if let some r := live s then return (r, s)
@@ -302,13 +306,14 @@ def append (s : State) (root : ByteArray) (count : Int) (origin : Origin := .fre
   if s.params.refresh && !(slot.any fun k => s.slotOk k count.toNat origin) then return s.fail s.filling .origin
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
-  let some coin := s.appendCoins[s.appendSampled]? | throw "the append coins ran out"
+  let σ := slot.getD s.appends.size
+  let some coin := s.appendCoins[σ]? | throw "the append coins ran out"
+  if coin.size ≠ Codec.COIN_BYTES then throw s!"append coin {σ} was never released"
   let first := s.extent
   let n := count.toNat
   return (.appended first coin,
     { s with
-      appendSampled := s.appendSampled + 1
-      appends := s.appends.push { first, count := n, root, coin, origin, slot := slot.getD s.appends.size }
+      appends := s.appends.push { first, count := n, root, coin, origin, slot := σ }
       head := some (appendHead s.head first n root)
       extent := first + n })
 

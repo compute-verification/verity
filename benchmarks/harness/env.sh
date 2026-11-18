@@ -1,16 +1,22 @@
 # Sourced by the harness's launchers (run_point.sh, benchmarks/<name>/run.sh) from the source tree: the node's pinned-vLLM
 # Python as $VENV, CUDA, and this tree's packages on PYTHONPATH. $VENV is VERITY_BENCH_VENV, which the launch gives
-# (`research run --env VERITY_BENCH_VENV=...`; the environment adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes), else
-# the environment the launch already runs in, $VIRTUAL_ENV (`uv run`'s, or an activated one); and the checkpoint store
-# HF_HOME, where it gives one. CUDA_HOME, where the launch gives none, is the toolkit the run's
+# (`research run --env VERITY_BENCH_VENV=...`), else the environment the launch already runs in, $VIRTUAL_ENV (`uv run`'s,
+# or an activated one), else the one this user's bootstrap recorded (adapters/vllm/verity_vllm/ops/pod_bootstrap.sh writes
+# its path in ${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv); and the checkpoint store HF_HOME, where it gives one. CUDA_HOME, where the launch gives none, is the toolkit the run's
 # machine's [properties] list first (benchmarks/kernels/machine.py toolkit). `benchmarks` is on the path so a spec
 # names an experimental arm module from there (`served_commit.prof_arm:SERVED_COMMIT_ROWS`), and so is every workspace
 # member's import root.
 VENV=${VERITY_BENCH_VENV:-${VIRTUAL_ENV:-}}
+venv_record=${XDG_STATE_HOME:-${HOME:+$HOME/.local/state}}
+venv_record=${venv_record:+$venv_record/verity-bench/venv}
+if [ -z "$VENV" ] && [ -n "$venv_record" ] && [ -f "$venv_record" ]; then
+  IFS= read -r VENV < "$venv_record" || VENV=
+fi
 if [ -z "$VENV" ] || [ ! -x "$VENV/bin/python" ]; then
-  echo "verity-bench: no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (${VENV:-both unset}): launch with VERITY_BENCH_VENV" \
-       "set to the node's pinned-vLLM environment (adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes one), or inside" \
-       "one (uv run, or an activated environment)" >&2
+  echo "verity-bench: no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV, else the path recorded in" \
+       "${venv_record:-\$XDG_STATE_HOME/verity-bench/venv} (${VENV:-none of them set}): bootstrap this machine" \
+       "(adapters/vllm/verity_vllm/ops/pod_bootstrap.sh, which records its environment), or record one it already has" \
+       "with \`bash adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --record-venv PATH\`, or launch with VERITY_BENCH_VENV" >&2
   exit 2
 fi
 if [ -z "${CUDA_HOME:-}" ] && [ -n "${RESEARCH_MACHINE:-}" ]; then

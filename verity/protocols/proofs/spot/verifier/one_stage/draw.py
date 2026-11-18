@@ -36,7 +36,7 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
   over the credited W, which a per-template work that over-credits any unit breaks.
 
-**The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
+**The rate sampling designs** (`randomness.parse_rate` and `randomness.parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
 selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a docket's
 N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
 tables. `stratified-rate:NUM/DEN` is the stratified sampling design at the K its strata need (`strat_k`: the most any stratum of
@@ -58,6 +58,7 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
+from verity.commitments.randomness import digits
 
 from . import partition as P
 from .verdict import Verdict, _Collect
@@ -66,66 +67,11 @@ _STRATUM_KEYS = {"template", "units", "k"}
 _WORK_STRATUM_KEYS = {"template", "units", "work", "floor", "k"}
 
 
-def digits(s: str) -> bool:
-    """One or more ASCII digits, as the Lean verifier reads a number (`str.isdigit` alone admits other scripts' digits)."""
-    return s.isascii() and s.isdigit()
-
-
-def parse_design(text: str) -> dict[str, Any]:
-    """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
-    expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
-    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
-    nothing, so its `P_a` is no acceptance probability."""
-    kind, _, arg = text.partition(":")
-    if kind == "subset" and digits(arg) and int(arg) >= 1:
-        return {"law": "subset", "k": int(arg)}
-    if kind in ("stratified", "work") and digits(arg) and int(arg) >= 1:
-        return {"law": kind, "k": int(arg)}
-    if kind == "bernoulli":
-        num, _, den = arg.partition("/")
-        if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
-            return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
-    raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
-
-
-def parse_rate(text: Any) -> tuple[int, int, int] | None:
-    """The rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
-    T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
-    (`service.SamplingDesign`), and over a docket's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_sampling_design`)."""
-    if not isinstance(text, str):
-        return None
-    kind, _, arg = text.partition(":")
-    q, sep, t = arg.partition(":")
-    num, _, den = q.partition("/")
-    if not sep:
-        tables = 1
-    elif digits(t):
-        tables = int(t)
-    else:
-        return None
-    if kind == "rate" and digits(num) and digits(den) and 0 < int(num) <= int(den) and tables >= 1:
-        return int(num), int(den), tables
-    return None
-
-
 def rate_count(num: int, den: int, tables: int, n: int) -> int:
     """The rate sampling design's sample over n proof blocks: ceil(NUM n / DEN) rounded up to a multiple of `tables`, so each of the session's
     tables proves the same count and every proof block is sampled with probability K/n >= NUM/DEN, whatever n the prover registers.
     The Lean's `Spot.Rate.count` is this."""
     return tables * -(-(num * n) // (den * tables))
-
-
-def parse_strata_rate(text: Any) -> tuple[bool, int, int] | None:
-    """The stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN` as
-    `(work, NUM, DEN)`, `work` True for the work rate: a public rate NUM/DEN with 0 < NUM <= DEN, numbers in ASCII digits; None
-    for any other text. The Lean's `Select.parseStrataRate` is this."""
-    if not isinstance(text, str):
-        return None
-    kind, _, arg = text.partition(":")
-    num, _, den = arg.partition("/")
-    if kind in ("stratified-rate", "work-rate") and digits(num) and digits(den) and 0 < int(num) <= int(den):
-        return kind == "work-rate", int(num), int(den)
-    return None
 
 
 def rate_floor(num: int, den: int, n: int, floor: int) -> int:
@@ -426,6 +372,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "digits", "fixed_count", "sampling_design_of", "parse_design", "parse_rate",
+__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "fixed_count", "sampling_design_of",
            "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
            "work_table"]

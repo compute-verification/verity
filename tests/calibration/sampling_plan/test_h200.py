@@ -10,8 +10,8 @@ from math import ceil, log
 
 import pytest
 
-from verity.protocols.proofs.spot.prover.cost import h200 as H
-from verity.protocols.proofs.spot.prover.cost.inputs import observations
+import h200 as H
+from inputs import observations
 
 M = H.Shape()
 

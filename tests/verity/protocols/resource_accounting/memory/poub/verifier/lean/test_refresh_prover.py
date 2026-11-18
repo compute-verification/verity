@@ -78,7 +78,8 @@ class Lean:
         named = {"refresh": True, "fresh_slots": FRESH} if refresh else {}
         assert self.lean.call({"op": "session", "node": NODE.hex(), "params": lv.params_json(params) | named,
                                "coins": None, "append_coins": [], "not_before_ns": 0, "index": 0}) == {"session": 0}
-        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"))
+        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"),
+                                 **({"appends": Schedule(N, LIFETIME, WINDOWS, FRESH).total} if refresh else {}))
         self.now, self.latest, self.checks = 0, reg.digest, 0
 
     def event(self, ev: dict, coin: bytes | None = None, *, at: int | None = None) -> dict:
@@ -124,7 +125,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
         ev = {"kind": "append", "root": a.root.hex(), "count": a.count}
         ev |= {} if a.slot is None else {"slot": a.slot}
         ev |= {} if a.origin is None else {"origin": session_wire.origin_json(a.origin)}
-        coin = coins.coin(lean.coins.append(a.root))
+        coin = coins.coin(lean.coins.append(a.root, a.slot))
         assert lean.event(ev, coin) == {"coin": coin.hex(), "first": a.first}, (t, ev)
         head = audit.append_head(head, a.first, a.count, a.root)
         if a.origin is not None:

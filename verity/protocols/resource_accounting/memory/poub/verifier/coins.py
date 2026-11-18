@@ -293,9 +293,12 @@ class SessionCoins:
         last window."""
         return self._open(OPENINGS, c, after)
 
-    def append(self, root: bytes) -> LiveOpening:
-        """The next append's coin, released now, after the append's root."""
-        return self._open(APPEND, self.appends, root)
+    def append(self, root: bytes, slot: int | None = None) -> LiveOpening:
+        """Append coin `slot` (None: the next, `appends`), released now, after the append's root: each coin once, in
+        any order (`LiveRecord.record_slot`), so a slot left empty never releases its coin."""
+        if APPEND not in self._records:
+            raise CoinError(f"the session's coins have no {APPEND} family")
+        return self._records[APPEND].record_slot(self.appends if slot is None else slot, root)
 
     @property
     def appends(self) -> int:
@@ -313,6 +316,16 @@ class SessionCoins:
     def log(self) -> tuple[dict, ...]:
         """Every family's release order on the record's clock (`LiveRecord.log`), family by family."""
         return tuple(e for r in self._records.values() for e in r.log)
+
+
+def by_slot(coins: SessionCoins) -> list[bytes]:
+    """The append coins released, coin σ at index σ, and b"" for a slot below the last released whose coin never was
+    (`Session.State.appendCoins`)."""
+    opened = coins.opened(APPEND)
+    out = [b""] * (max((o.index for o in opened), default=-1) + 1)
+    for o in opened:
+        out[o.index] = coin(o)
+    return out
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
@@ -409,6 +422,6 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
-           "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason",
-           "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason", "trusted",
-           "undecided", "window", "window_root"]
+           "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "by_slot", "coin", "coin_reason", "families",
+           "layout_reason", "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason",
+           "trusted", "undecided", "window", "window_root"]

@@ -224,7 +224,8 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
   if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
     throw "W + ⌈W/g⌉ coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
-  if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
+  if appendCoins.any fun c => c.size != Codec.COIN_BYTES && !c.isEmpty then
+    throw "append coins are 32 bytes, or empty for a slot whose coin was never released"
   pure (params, coins, appendCoins, ← nat j "not_before_ns")
 
 /-- The record of a session at `inFlight` windows in flight and `perCoin` windows a coin: `summaryJ`'s, naming
@@ -706,6 +707,33 @@ def p2SketchFn (j : Json) : V Json := do
   pure (Json.mkObj [("partials", .arr (ps.map (hexJ ∘ P2.int32s))), ("sigma", hexJ sigma),
     ("receipt", hexJ (P2.unitReceipt s g sigma))])
 
+private def appendJOf (j : Json) : V Append := do
+  pure { first := ← nat j "first", count := ← nat j "count", root := ← hex j "root", coin := ← hex j "coin",
+         origin := ← originOf j, slot := ← nat j "slot" }
+
+/-- `checkOpening` of sample (`i`, `p`) of a window under the session's `appends` (`{"first", "count", "root", "coin",
+"origin", "slot"}` each, as `Session.append` holds them), the window as `{"index", "challenge", "previous", "passes":
+[{"root", "runs", "head"}]}` (`WindowRecord`, each plan over the store the appends end at): the failure's name, or
+null. -/
+def openingFn (j : Json) : V Json := do
+  let reg ← registrationOf (← J.get j "registration" "input")
+  let appends ← (← J.arr j "appends" "input").mapM appendJOf
+  let extent := (appends.back?.map fun a => a.first + a.count).getD reg.blocks
+  let w ← J.get j "window" "input"
+  let passes ← (← J.arr w "passes" "window").mapM fun x => do
+    let some plan := Plan.make? (← runsOf (← J.get x "runs" "pass") "runs") extent | throw "not a plan"
+    pure ({ root := ← hex x "root", plan, head := ← hexOrNull (← J.get x "head" "pass") "head" } : PassRecord)
+  let record : WindowRecord :=
+    { index := ← nat w "index", challenge := ← hex w "challenge", previous := ← hex w "previous", passes }
+  let i ← nat j "i"
+  let p ← nat j "p"
+  let some pass := passes[i]? | throw "no such pass"
+  if p ≥ pass.plan.length then throw "a position past the plan"
+  let o ← openingOf (← J.get j "opening" "input")
+  pure (match checkOpening reg reg.digest appends record (receipter reg.receipt (record.seedOf i) reg.rows) i p o with
+    | some f => .str f.name
+    | none => .null)
+
 private def p2OpeningOf (j : Json) : V P2.Opening := do
   pure
     { pass := ← int j "pass"
@@ -822,6 +850,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
+  ("opening", openingFn),
   ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn), ("gamma", gammaFn),
   ("named_bits", namedBitsFn),

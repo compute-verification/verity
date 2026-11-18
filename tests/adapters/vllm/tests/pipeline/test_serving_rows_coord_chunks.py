@@ -18,6 +18,7 @@ from verity_flock.class_statement import UnitStager
 
 from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 
@@ -108,5 +109,5 @@ def test_a_chunk_on_its_rows_computes_the_committed_words_and_a_flipped_word_is_
     g, _entries = got[1]
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
-    w = CS.Binding(*IF.listed_program([(SRW.template(T).fn, 2 * N)], ()), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
-    assert CS.commit(w, [g for g, _e in got]).window.population == 2 * N
+    w = CS.Binding(*IF.listed_program([(SRW.template(T).fn, 2 * N)], ()), {"law": "subset", "k": 2}, "ab" * 32, tuple(CH.shared_tables(ms)))
+    assert CS.commit(w, CH.held_rows(w, [g for g, _e in got])).window.population == 2 * N

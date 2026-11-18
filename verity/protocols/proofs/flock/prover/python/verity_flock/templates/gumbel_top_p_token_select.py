@@ -33,10 +33,3 @@ def supports(subcircuit, scheme):
 
 def relation(subcircuit, scheme):
     return "irf:gumbel-top-p-token-select"
-
-
-def stage(input_set, lo, hi, out_dir):
-    """The ``flock-ir-sampling/v1`` instance file for ids [lo, hi) (``verity_flock.ir_sampling.stage``): each pod stages its own."""
-    from verity_flock import ir_sampling
-
-    return ir_sampling.stage(frame_lowering(input_set.subcircuit), input_set, lo, hi, out_dir)

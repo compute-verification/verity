@@ -1052,7 +1052,7 @@ class AuditRun:
         if self.params.refresh and (slot is None or not self._slot_ok(slot, count, o)):
             return self._fail(self.filling, "origin")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
-                or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
+                or (len(self._slots) if slot is None else slot) >= (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
         first, coin = self.extent, self._append_coin(root, slot)
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
@@ -1101,9 +1101,9 @@ class AuditRun:
         return self._appends[k][0] if k < len(self._appends) else self.extent
 
     def _append_coin(self, root: bytes, slot: int | None) -> bytes:
-        """The coin `c_a` of the append whose root is `root`, in `slot`: the session's next append coin, in the order
-        the appends are received, so an empty slot takes none."""
-        return coins.coin(self.coins.append(root))
+        """The coin `c_a` of the append whose root is `root`: append coin `slot`, or without refresh the appends before
+        it, so an empty slot's coin is never released. It keys only this append's blocks (`_committed`)."""
+        return coins.coin(self.coins.append(root, len(self._slots) if slot is None else slot))
 
     def _slot_window(self, slot: int, default: int | None = None) -> int | None:
         """The window slot `slot` of the schedule joins, used or empty, `default` past it (`State.slotWindow`)."""
@@ -1333,6 +1333,8 @@ class AuditRun:
         j = plan.block(p)
         if type(o.digest) is not bytes or len(o.digest) != (0 if j < N else DIGEST_BYTES):
             return "malformed"
+        if not self._origin_held(j):
+            return "origin"
         domain, commitment, coin, origin = self._committed(j)
         if (o.origin_position is not None and type(o.origin_position) is not int) or o.origin_position != origin:
             return "malformed"
@@ -1376,6 +1378,14 @@ class AuditRun:
             out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
                                       w.roots[i], domain, commitment, coin, origin))
         return tuple(out)
+
+    def _origin_held(self, j: int) -> bool:
+        """Whether block j's origin is held: false only for a block of a re-key whose origin slot holds no append, which
+        has no origin leaf and never opens under its own append's root (`Poub.checkOpening`)."""
+        if j < self.params.blocks:
+            return True
+        o = self._origins[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
+        return o is None or o[0] == "registered" or o[1] in self._slotted
 
     def _committed(self, j: int) -> tuple[CommitmentDomain, Commitment, bytes | None, int | None]:
         """Block j's payload's commitment, its append's coin (None registered), and for a block of a re-key its
