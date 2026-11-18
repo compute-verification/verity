@@ -361,7 +361,7 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
     source = CS.salt(side, AUDIT, commitment)
     assert len(source) == CP.SOURCE_BYTES
     assert mc.SaltLog(device / "salts").get(AUDIT) == (commitment, pous_setup.sample_salt(source, commitment))
-    with pytest.raises(RuntimeError, match="the memory attester on auditor-host drew no salt: the request's `audit` has its"):
+    with pytest.raises(RuntimeError, match="the memory attester on the memory attester's machine drew no salt: the request's `audit` has its"):
         CS.salt(side, AUDIT, commitment)
     point = period.point_for(len(STORE), period.W, period.C0)
     wrong = run.Setup(point.params.blocks, commitment, b"\x02" * 64, bytes(24))
