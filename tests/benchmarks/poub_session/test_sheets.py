@@ -11,8 +11,8 @@ import sheets  # noqa: E402
 from verity.device import load_card, load_node  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 
 def test_the_sheets_figures_are_timings():

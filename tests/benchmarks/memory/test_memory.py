@@ -122,7 +122,7 @@ def as_local(record: dict) -> dict:
 #: the `ran with` detail of such a record, under `--local` on an H200
 LOCAL_DETAIL = ("2773 openings a window; 7 windows of 1,000 ms; 16 sketch rows, not the deployed registration's 64; the "
                 "sample's term a window 2^-101.0; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 "
-                "compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
+                "compressions on any hardware; the share against calibration/hardware/nodes/h200-sxm-141gb-x1.toml at one card")
 
 
 class FakeStore:
@@ -1188,7 +1188,7 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
                                                 f"{ARENA * GIB / 1e9:.2f} GB of its ")
     assert "; paced: 7 credited stretches of 1,000 ms, 12 groups a stretch at 85 ms a pass" in doc["ran_with"]["detail"]
     assert text[1] == f"  {M.LOCAL}" and doc["local"] == M.LOCAL
-    assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
+    assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of calibration/hardware/nodes/h200-sxm-141gb-x1.toml; "
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
     assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.88,
@@ -1208,6 +1208,44 @@ def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card,
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.88"
+
+
+@pytest.mark.parametrize("name, sheets", [("NVIDIA H200", ("h200-sxm-141gb", "h200-sxm-141gb-x1")),
+                                          ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
+                                           ("rtx-pro-6000-server", "rtx-pro-6000-server-x8")),
+                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", None))])
+def test_the_card_is_the_card_file_holding_its_name_and_the_node_the_one_file_carrying_that_card(name, sheets):
+    assert M.sheet_of(name) == sheets
+
+
+def test_a_card_two_node_files_carry_is_named_with_local_node(monkeypatch, tmp_path):
+    for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
+        text = (M.NODE_FILES / "h200-sxm-141gb-x1.toml").read_text()
+        (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
+    monkeypatch.setattr(M, "NODE_FILES", tmp_path)
+    with pytest.raises(M.CouldNotRun, match="h200-sxm-141gb-x1, h200-sxm-141gb-x2 all carry h200-sxm-141gb, the card "
+                                            "here: name the one this machine is with LOCAL_NODE"):
+        M.sheet_of("NVIDIA H200")
+    monkeypatch.setenv("LOCAL_NODE", "h200-sxm-141gb-x2")
+    assert M.sheet_of("NVIDIA H200") == ("h200-sxm-141gb", "h200-sxm-141gb-x2")
+
+
+@pytest.mark.parametrize("record, why", [
+    (a_local_record(a_session(gamma=0.199), arena=58), "session 0 was accepted by the Lean verifier, and no node file "
+     "of calibration/hardware/nodes/ carries h100-sxm-80gb, so no host of it is on record and no share is printed"),
+    (a_local_record(a_refused_session(), arena=58), "the verifier refused session 0 at pass group 2"),
+], ids=["accepted", "refused"])
+def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why):
+    """No node file carries the H100, so no host of it is on record: the session runs on its 80 GiB, with no `--node`
+    for the verifier, and its verdict is printed with no share."""
+    machine = Machine(card="NVIDIA H100 80GB HBM3, 9.0", record=record)
+    assert bench(store, "--local", run=machine) == 1
+    ((_, env),) = machine.runs()
+    assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 58 --util 0.88"
+    assert env["VERIFIER_ARGS"] == f"--hbm-bytes {80 * GIB}"
+    assert env["NODE_ARGS"].endswith("--node local/h100-sxm-80gb/serving")
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None
 
 
 @pytest.mark.parametrize("card, arena, member", [("NVIDIA H200, 9.0", 112, "llama-3.2-1b-h200"),
@@ -1232,6 +1270,26 @@ def test_local_writes_its_pass_time_and_bare_read_beside_the_share_as_metrics_of
             pytest.approx(value), "measured", member, card.rpartition(",")[0], arena * GIB)
         assert m.get("target") is None and m["unit"].startswith(rows[name]["unit"]) and rows[name]["better"] == better
     assert got[M.LOCAL_METRIC]["value"] == 0.199 and "member" not in got[M.LOCAL_METRIC]
+
+
+@pytest.mark.parametrize("card, member", [("NVIDIA H200", "llama-3.2-1b-h200"),
+                                          ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "llama-3.2-1b-rtx-pro-6000"),
+                                          ("NVIDIA H100 80GB HBM3", "llama-3.2-1b-h100")])
+def test_a_points_card_is_the_short_of_the_card_record_holding_its_name(card, member):
+    assert M.member({"card": card, "sheet": "h200-sxm-141gb-x1"}) == member
+
+
+def test_a_card_no_record_names_writes_the_share_and_no_pass_time_or_bare_read(store, capsys, work, monkeypatch,
+                                                                              tmp_path):
+    held = a_run(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCAL_NODE", "h200-sxm-141gb-x1")
+    record = a_local_record(with_amounts(a_session(gamma=0.199)))
+    record["calibration"] = {"pass_ns": {"p50": 79_160_000}, "read_tiers": {"hbm": {"bytes": ARENA * GIB, "ms": 26.5}}}
+    assert bench(store, "--local", run=Machine(card="NVIDIA H100 PCIe, 9.0", record=record)) == 0
+    got = written(held)
+    assert got[M.LOCAL_METRIC]["value"] == 0.199 and M.PASS_METRIC not in got and M.READ_METRIC not in got
+    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 card records under {M.CARD_FILES} have "
+            "'NVIDIA H100 PCIe', the card nvidia-smi names here, in `driver`") in printed(capsys)[2]
 
 
 def test_a_local_record_with_no_calibration_writes_the_share_alone(store, work, monkeypatch, tmp_path):
@@ -1293,6 +1351,44 @@ def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, gi
     err = capsys.readouterr().err
     assert "--local runs one session form, PACED=1:1000:2773:7 at PACE_PASS_MS=0" in err
     assert all(f"{k}={v}" in err for k, v in given.items())
+
+
+@pytest.mark.parametrize("given, leaf", [({"LEAF_CTAS": "132"}, " --leaf-ctas 132"), ({}, ""), ({"LEAF_CTAS": ""}, ""),
+                                         ({"LEAF_CTAS": "132", "NODE_ARGS": "--leaf-ctas 132"}, " --leaf-ctas 132"),
+                                         ({"NODE_ARGS": "--leaf-ctas=160"}, " --leaf-ctas=160")],
+                         ids=["leaf-pass", "unset", "empty", "said-twice-alike", "node-args-alone"])
+def test_local_asks_the_node_for_the_leaf_pass_where_leaf_ctas_says_as_the_node_run_does(store, work, monkeypatch,
+                                                                                         given, leaf):
+    """LEAF_CTAS is the node's `--leaf-ctas` under --local as `gate_run.sh` makes it in the node run; unset, the node's
+    arguments name no leaf pass and its passes are today's."""
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    snap = Path(env["MODEL"])
+    assert env["NODE_ARGS"] == (f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap} "
+                                f"--node local/h200-sxm-141gb-x1/serving{leaf}")
+
+
+@pytest.mark.parametrize("given, why", [
+    ({"LEAF_CTAS": "0"}, "LEAF_CTAS is 0: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "1000"}, "LEAF_CTAS is 1000: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "13x"}, "LEAF_CTAS is 13x: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "132", "NODE_ARGS": "--leaf-ctas 160"},
+     ("LEAF_CTAS is 132 and NODE_ARGS asks for --leaf-ctas 160: set the leaf pass's reading CTAs once, as LEAF_CTAS, "
+      "and take --leaf-ctas out of NODE_ARGS")),
+    ({"LEAF_CTAS": "132", "NODE_ARGS": "--decode-s 30 --leaf-ctas=64"},
+     "LEAF_CTAS is 132 and NODE_ARGS asks for --leaf-ctas 64"),
+], ids=["zero", "too-many", "not-a-number", "another-number", "another-number-with-equals"])
+def test_local_refuses_a_leaf_ctas_that_isnt_one_to_999_or_that_node_args_contradicts(store, capsys, work, monkeypatch,
+                                                                                      given, why):
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 2
+    assert machine.started == []
+    assert why in capsys.readouterr().err
 
 
 def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, work, tmp_path, monkeypatch):
@@ -1387,7 +1483,7 @@ def test_a_paced_sessions_line_is_its_records_pace_and_states_no_windows():
         "stretches of 1,000 ms, 19 groups a stretch at 52.9063 ms a pass, a coin every 1 pass, 2773 openings a "
         "stretch, 146 a group; 152 passes in 152 groups; 16 sketch rows, not the deployed registration's 64; the "
         "sample's term a pass group 2^-101.0; lateness allowed 190 ms; error 2.8e-05 (2^-15.1) against a prover of "
-        "2^80 SHA-512 compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one "
+        "2^80 SHA-512 compressions on any hardware; the share against calibration/hardware/nodes/h200-sxm-141gb-x1.toml at one "
         "card")
     assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": [12] * 96}}})["passes"] == 1152
     assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": True}}})["passes"] is None
@@ -1409,8 +1505,9 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
     (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
      3),
-    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (hardware/nodes/ "
-     "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
+    (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), "0 card files of calibration/hardware/cards/ have 'NVIDIA A100-SXM4-80GB', "
+     "the card nvidia-smi names here, in `driver`: add { value = \"NVIDIA A100-SXM4-80GB\", source = ... } to its one "
+     "card file's `driver`, adding its <sku>.toml", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),

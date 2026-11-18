@@ -49,7 +49,7 @@ KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
 case $KV_SCRIPT in
   kv_bench.py) KV=verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py
     LIBS+=(--clock-max-mhz "$("$PY" -c 'from pathlib import Path; from verity.device import load_card
-print(load_card("rtx-pro-6000-server", directory=Path("hardware/cards"))["clock"]["sm"]["value"])')") || exit 3 ;;
+print(load_card("rtx-pro-6000-server", directory=Path("calibration/hardware/cards"))["clock"]["sm"]["value"])')") || exit 3 ;;
   *) KV=$WC/$KV_SCRIPT ;;
 esac
 if [ "${SANITIZE:-0}" != 0 ]; then

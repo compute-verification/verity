@@ -1548,7 +1548,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     try:
         one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
                          lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
-        sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
+        sources = json.loads((HERE / "sources.json").read_text())
+        sizes = {"program": CZ.size(one, sources), "window": CZ.size(one, sources, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
     return {"class": asdict(cls), "positions": cls.positions, "requests": requests,
@@ -1821,7 +1822,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
-    state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
+    population = WC.population_digest(low.circuit)
+    state = None if scanned is None else WRS.state_value(population, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
                          None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
@@ -1840,7 +1842,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run) if state is None
+              SS.SCAN_STATE: WRS.standin_state(population, cls, rows, key, int(a.window), window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
@@ -1863,8 +1865,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")

@@ -18,12 +18,13 @@ from exfiltration_helpers import (
     with_verdicts,
 )
 from verity_bench import exfiltration as E
+from verity_bench import kit
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "a2d58807c8e11ec29e13276944fe783c2c64c5942aeaae9ff8545779b777e5ff",
-               "json": "816ab73b6f353d0b427dbdeb1b91856db53114bafb4f956351a16a8fa1686cae"}
+NO_VERDICTS = {"text": "5bf694eac13fa20e31d237fbc779f21cd912dda70fbdc24fd434e75849b3a49a",
+               "json": "b202cf9f69e87c637ca361ddf79faebf46509b2a74f4144ed44b1f633988ebb7"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -346,6 +347,20 @@ def test_an_honest_verdicts_class_field_holding_what_it_cant_is_refused(tmp_path
     assert E.verdict(control, "here").keys() == set(E.VERDICT_FIELDS)
     with pytest.raises(ValueError, match=f"^{HOLDER}'s `{E.VERDICTS_FILE}` line 1 holds `rate` '2/4'"):
         E.build(store=with_verdicts(tmp_path, [v | {"rate": "2/4"}, *complete()[1:]]).store, root=REPO)
+
+
+def test_a_labelled_trials_verdicts_are_refused_as_a_trial_and_never_handed_to_the_reader(tmp_path, monkeypatch):
+    handed, of_runs = [], reader().of_runs
+    monkeypatch.setattr(reader(), "of_runs", lambda store, runs, superseded=(): handed.append(
+        (list(runs), list(superseded))) or of_runs(store, runs, superseded))
+    s = with_verdicts(tmp_path, complete())
+    trial = s.label(s.ran("r20261113-000000-a100", complete()[:1], name=E.VERDICTS_FILE, env={kit.TRIAL: "1"}),
+                    value=E.VERDICTS)
+    doc = E.build(store=s.store, root=REPO)
+    why = kit.trial_why(trial, {"params": {"env": {kit.TRIAL: "1"}}})
+    assert doc["stop_class"]["complete"] and doc["refused"] == [{"target": trial, "record": E.VERDICTS, "why": why}]
+    assert f"- {trial} (`{E.VERDICTS}`): {why}" in E.render(doc)
+    assert handed == [([HOLDER], [])] == [(doc["attester"]["stop"]["runs"], doc["attester"]["stop"]["superseded"])]
 
 
 def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path, monkeypatch):

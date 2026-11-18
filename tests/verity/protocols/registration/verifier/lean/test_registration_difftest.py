@@ -24,6 +24,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
+from verity.protocols.registration.verifier import site_log as L
 from verity_difftest import protocol as P
 
 REGISTRATION = Path(__file__).resolve().parents[6] / "verity/protocols/registration/verifier/lean"
@@ -84,7 +85,7 @@ def drifted(*drift: tuple[str, Fraction]) -> G.Auditor:
 
 
 def in_vm(host: S.Loc = VM0, drift: Fraction | None = None) -> list:
-    """The example's site with its certifier in the auditor's device `host`, registered after it (the Lean's `inVm`),
+    """The example's site with its attester in the auditor's device `host`, registered after it (the Lean's `inVm`),
     the network attester stating the drift `drift`."""
     locs = tuple(dataclasses.replace(x, parent="vm0", drift=drift) if x.id == "cert0" else x for x in LOCS)
     return [G.site((SHEET,), (*locs, host), LINKS)]
@@ -121,7 +122,7 @@ def chain(composite: str, entries: Any) -> list[G.Entry]:
     """`G.chain`, through `_digest`."""
     log: list[G.Entry] = []
     for e in entries:
-        log.append(dataclasses.replace(e, previous=_digest(log[-1]) if log else S.genesis(composite)))
+        log.append(dataclasses.replace(e, previous=_digest(log[-1]) if log else L.genesis(composite)))
     return log
 
 
@@ -193,7 +194,7 @@ FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": [
           "drift": [None, Fraction(1, 10)], "timebase": [None, "tb0", "tb1"]}
 
 
-#: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
+#: Site entries that, after the example's, each fail one check of their own: an uplink no attester splits
 #: (`uncertified`, onsite), a host's memory no challenger reaches (`challenger-reach`, onsite), a device's memory over its
 #: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a network attester that splits no uplink
 #: (`kind`), an auditor's device whose key the auditor does not hold (`owner`; `WITH_VM` holds it). The second is checked
@@ -283,7 +284,7 @@ def cases(draw) -> dict:
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
-        log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, S.genesis("remote")]))
+        log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, L.genesis("remote")]))
     auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, WITH_VM, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
                                          dataclasses.replace(WITH_VM, timebases=(("vm0", "tb1"),)),
                                          dataclasses.replace(AUDITOR, tolerance=0),
@@ -407,7 +408,7 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     assert view.site.locs == LOCS
     assert view.declared(0) == DAY0 and view.declared(1) is None
     log = chain("onsite", EXAMPLE)
-    heads = [{"entries": 0, "head": S.genesis("onsite")},
+    heads = [{"entries": 0, "head": L.genesis("onsite")},
              *({"entries": i + 1, "head": _digest(e)} for i, e in enumerate(log))]
     assert reference(case("onsite", log))["public"]["heads"] == heads
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}

@@ -24,7 +24,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
       digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
       evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
-      log on all 2^32 words (`benchmarks/f32_exhaustive/run.py log`, which takes `exp` too).
+      log on all 2^32 words (`calibration/f32_exhaustive/run.py log`, which takes `exp` too).
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
   `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
@@ -58,15 +58,31 @@ from fractions import Fraction
 from functools import lru_cache
 
 import numpy as np
-
 from verity.circuits.codec import register_lazy_family
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
-from verity.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
+from verity.circuits.defs import (
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+    composite,
+    primitive,
+)
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import Explicit, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
+from verity_vllm.definitions.registry.prims import (
+    BF16,
+    BIT,
+    F32,
+    F32_NAN,
+    I32,
+    bits_of,
+    f32_is_nan,
+    f32_of,
+)
 
 REF_VOCAB_VERSION = "verity-ref-vocab/1"
 

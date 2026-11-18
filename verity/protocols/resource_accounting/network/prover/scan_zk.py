@@ -18,7 +18,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   network attester's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network attester at
   `PARAMS`, 32-bucket execution phases; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8
-  slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5
+  slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its attester w63's at egress_cells 5
   (KO + 1); ``test`` (`TEST`), network attestation's tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
   KO 8, KI 100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
@@ -29,7 +29,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   test's three (the third in the first's slot past its egress). Each execution phase of each link is committed by the
   network attester and its head signed by a test-size LMS key (`network_attester_rows.attest`); each registration is read back by
   the verifier (`network_attester_rows.check_registration`).
-* **A network attester's run** (``--warden-run RUN``, `network_certifier_run`) in its place: a network_attester_serve run's directory
+* **A network attester's run** (``--warden-run RUN``, `network_attester_run`) in its place: a network_attester_serve run's directory
   (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
   (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
   ``deployment.json`` (the network attester's public key, the session, the schedule and its digest) and each link's
@@ -67,15 +67,13 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   tie is its registration's alone. An execution phase's first round; accepted, with no output opened.
 * **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
   (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
-  `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
+  `SCAN_STATE` (its registration's ``registered`` entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
   j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
   and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
-  reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
-  whose `SCAN_STATE` is in its window's activations alone, at the state tie.
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
 * **The honest round**: one Program of three templates (`TEMPLATES`) in the generator form (`scan_root`, the form
   `NetworkCheck.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
   (`IngressScanBucket`, buckets 0 … T − 1) and T egress units, each template one batch with its row, state and egress
@@ -137,7 +135,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   prover sends.
 * **The answers** (``answers.json``, `answers`): for each execution phase W of the group, the scan's registration of W,
   the network attester's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
-  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
+  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' attestations:
   accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
   the members Lean refused. Beside them, ``audits``: each execution phase's block round's, the compute audit whose
   lanes' o0 are that execution phase's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its
@@ -696,7 +694,7 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
                            fail_buckets=[], failed_why=[])
 
 
-def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
+def network_attester_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A network_attester_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
     each execution phase in ``cells.jsonl`` verified under that key and session (`network_attester_rows.check_registration`: the
@@ -770,7 +768,7 @@ def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path
     out.mkdir(parents=True, exist_ok=True)
     signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"scan-zk tampered").digest()),
                               out / "tamper-signer-state.json")
-    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network attester run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
                            params=params, session=session, sides=sides,
                            outputs={q: tuple(xs) for q, xs in outputs.items()}, run_id=dep.get("run_id"),
                            issuer=Issuer(signer, session), key=signer.public_key(), key_of="the driver's own",
@@ -828,20 +826,30 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its entry in its registration's window
-    activations (the ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
-    `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
-    `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
-    prov = rec.get("window") or {}
-    acts = prov.get("activations") or {}
-    e = (acts.get("values") or {}).get(SCAN_STATE)
-    if not e or e.get("value") != SCAN_STATE:
-        raise _v3c_refused(window, f"its registration's window activations register no {SCAN_STATE}")
+    """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its registration's one ``registered`` entry of
+    it, its rows and salts the prover's `SCAN_STATE_FILE`, under the domain one-stage's R7 holds a value of the execution
+    phase to (`registered.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
+    ``window`` names as ``run``), held to the entry's root and domain and to the scan's ``states``."""
+    named = [e for e in rec.get("registered") or () if e.get("value") == SCAN_STATE]
+    if len(named) != 1:
+        raise _v3c_refused(window, f"its registration's registered values name {SCAN_STATE} {len(named)} times, not "
+                                   "once: register the scan's state as a value of the audit's Program")
+    (e,) = named
+    if int(e.get(REG.WIDTH_KEY, REG.WORD_BITS)) != REG.WORD_BITS:
+        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[REG.WIDTH_KEY]} bits, not the scan's "
+                                   f"{REG.WORD_BITS}")
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
         raise _v3c_refused(window, f"its {SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
                                    f"of {len(states[0])}")
-    dom = REG.domain(acts.get("program", ""), SCAN_STATE, W, n, window=prov.get("run"))
+    run = (rec.get("window") or {}).get("run")
+    if run is None:
+        raise _v3c_refused(window, f"its registration's window names no open root (``run``), which its {SCAN_STATE}'s "
+                                   "domain binds")
+    try:
+        dom = REG.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
+    except ValueError as x:
+        raise _v3c_refused(window, f"its registration's window's open root: {x}") from None
     data = (window / SCAN_STATE_FILE).read_bytes()
     if len(data) != n * (2 * W + ADV.INST.salt_bytes):
         raise _v3c_refused(window, f"{SCAN_STATE_FILE} is {len(data)} bytes, not {n} rows of {W} words and their salts")
@@ -849,8 +857,8 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
     held = Held(dom, 16 * W, tuple(bit_row((r, 16))[0] for r in words),
                 tuple(data[at + step * t:at + step * (t + 1)] for t in range(n)))
     if (held.root.hex(), dom.domain_id.hex()) != (e["root"], e["domain"]):
-        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its provenance's domain isn't its registered "
-                                   f"{SCAN_STATE}'s root and domain")
+        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its registration's program and open root isn't its "
+                                   f"registered {SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
                                    "empty state of execution phase 0): it scanned another network attester run or execution phase")
@@ -920,7 +928,7 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
          v3c: Path | None = None) -> SimpleNamespace:
-    """The run (`synthetic`, or `network_certifier_run`'s of a network_attester_serve run), execution phases start … start + group − 1 of
+    """The run (`synthetic`, or `network_attester_run`'s of a network_attester_serve run), execution phases start … start + group − 1 of
     each link registered by the network attester and read back by the verifier, and the scan's chain over their rows
     from the empty state (`scan_traffic.chain`): what each execution phase's rounds are cut from (`window_of`). The
     group's negatives are placed here, each in one execution phase: the chain round's swap in bucket ``setup.A``'s, the
@@ -933,7 +941,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     if v3c is not None and (group, start) != (1, 0):
         raise SystemExit(f"--v3c: V3c's window is execution phase 0's, a group of 1, not {group} from {start}")
     windows = list(range(start, start + group))
-    got = synthetic(out, setup, windows) if run is None else network_certifier_run(run, setup, windows, out)
+    got = synthetic(out, setup, windows) if run is None else network_attester_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
     ingress, egress = ([x for w in got.sides[s] for x in w.cells.rows] for s in ("ingress", "egress"))
     try:
@@ -1767,7 +1775,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
                        for m in members},
-           "link": "registered: each network certifier row port, input or output, at the network certifier's signed root of its "
+           "link": "registered: each network attester row port, input or output, at the network certifier's signed root of its "
                    "execution phase, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
@@ -1972,7 +1980,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
     each round's files under ``out / <round>``): for each execution phase W, in order, the scan's registration of W, its
     answer (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void execution
     phase's, names the members Lean refused) and the network attester's ingress and egress row registrations of W, the
-    rows form's evidence of W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are
+    rows form's evidence of W but its attestations. With W's block round's audit, the compute audit whose lanes' o0 are
     W's scan's
     ``prog<j>`` (``audits``, in execution phase order): its registration and answer, and the terms a period's parameters
     give it, its Program's descriptor, its free inputs (every bit of every slot entry, the stand-in's ``x``: it
@@ -2113,7 +2121,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
+    h = host(out / "warden", a.network_attester_run, a.draw, setup, a.group, v3c=a.v3c)
     whole, T = h.whole, h.T
     ch, cls, N = whole.chain, setup.cls, 2 * T + 1
     if a.draw is not None and not 3 <= a.draw <= N:
@@ -2264,13 +2272,13 @@ def main(argv=None) -> int:
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
                    help="the class and the network attester's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
-                        "and KI 32, its certifier's at egress cells 5; test: network attestation's tests', a CPU "
+                        "and KI 32, its network attester's at egress cells 5; test: network attestation's tests', a CPU "
                         "window; "
                         "test2: test's over two execution phases, a request anchored at the second's first boundary)")
     p.add_argument("--group", type=int, default=1,
                    help="G: execution phases 0 .. G - 1, each a registration of its own, its scan started from the "
                         "state the record before it committed (default 1)")
-    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+    p.add_argument("--warden-run", dest="network_attester_run", type=Path,
                    help="a network_attester_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,

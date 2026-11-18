@@ -145,6 +145,166 @@ def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_
     assert [kw["shard"] for kw in _shards_of(runs, sha)] == ["1/3", "2/3", "3/3"]
 
 
+def test_under_gate_verdict_one_tick_builds_the_plain_prs_apart_from_one_taking_the_whole_check(env, monkeypatch):
+    """Two plain PRs and, ranked between them, one changing a path `lowrisk_excludes` names: the plain two go in a candidate of
+    their own on the quick tier, and the third in one above it that takes the whole check, both built in one tick."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"c.txt": "3\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2)
+    logged = loop.tick()
+    built = [r for r in logged if r["action"] == "build"]
+    started = {r["sha"]: r["record"]["gate"] for r in logged if r["action"] == "slim"}
+    assert [(b["members"], b["base"]) for b in built] == [([1, 3], main), ([2], built[0]["sha"])]
+    assert [started[b["sha"]] for b in built] == [vqueue_slim.QUICK, "check"] and len(quick.launches) == 1
+
+
+def test_under_gate_verdict_apart_a_candidate_needing_the_whole_check_is_checked_off_the_chain_and_lands_merged_again(
+        env, monkeypatch):
+    """With `apart`, the PR needing the whole check is built on `main` off the chain while the plain two land on the quick
+    tier.  Once its whole check passed, its member is merged again onto the `main` they landed on, in its place (`repairs`),
+    the quick tier gates that merge (`checked`), and it lands; the candidate checked apart is dropped for it, and `main`'s
+    whole check follows the landing."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"c.txt": "3\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=3, fill=3, apart=True)
+    logged = loop.tick()
+    plain, apart = [r for r in logged if r["action"] == "build"]
+    started = {r["sha"]: r["record"]["gate"] for r in logged if r["action"] == "slim"}
+    assert [(b["members"], b["base"], b.get("apart")) for b in (plain, apart)] == [([1, 3], main, None), ([2], main, True)]
+    assert (started[plain["sha"]], started[apart["sha"]]) == (vqueue_slim.QUICK, "check")
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["members"], merged["repairs"], merged["checked"]) == (
+        plain["sha"], [2], apart["sha"], apart["sha"])
+    assert merged["why"] == f"its whole check passed apart: its members merged again onto {plain['sha'][:12]}, main's chain's top"
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == vqueue_slim.QUICK and quick.launches[-1][:2] == (merged["sha"], plain["sha"])
+    quick.end(merged["sha"])
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and env.main() == merged["sha"]
+    assert next(r for r in logged if r["action"] == "drop" and r["sha"] == apart["sha"])["why"] == (
+        f"its members are merged again in {merged['sha'][:12]}, on {plain['sha'][:12]}, which lands in its place")
+    after = loop.tick()
+    assert _acts(after) == ["slim"] and (after[0]["sha"], after[0]["base"], after[0]["record"]["gate"]) == (
+        merged["sha"], merged["sha"], "check")
+
+
+def test_under_gate_verdict_apart_a_candidate_merged_again_onto_other_lean_inputs_takes_the_whole_check(env, monkeypatch):
+    """Merged again onto a `main` whose Lean inputs (`vqueue_slim.lean_key`) aren't those of the tree its whole check passed
+    on, a candidate checked apart isn't `checked`: its merge takes the whole check in place, not the quick tier."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2, apart=True)
+    plain, apart = [r for r in loop.tick() if r["action"] == "build"]
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    monkeypatch.setattr(vqueue_slim, "lean_key", lambda repo, commit: commit)
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["repairs"], "checked" in merged) == (plain["sha"], apart["sha"], False)
+    assert merged["why"] == (f"its whole check passed apart: its members merged again onto {plain['sha'][:12]}, main's "
+                             "chain's top, whose Lean inputs aren't its tree's: the whole check")
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == "check" and merged["sha"] not in loop.checked
+
+
+def test_under_gate_verdict_apart_a_candidate_merged_again_onto_a_top_adding_what_isn_t_plain_takes_the_whole_check(
+        env, monkeypatch):
+    """Merged again onto a `main` that a change drive.toml keeps off the plain path moved on since the candidate was built
+    apart, the candidate isn't `checked`: its whole check passed on a tree without that change, so its merge takes the whole
+    check in place, not the quick tier."""
+    main = env.main()
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, apart=True)
+    (apart,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert apart.get("apart") and apart["base"] == main
+    runs.end(main)
+    top = _main_to(env, {"verity/core/w.py": "y = 1\n"})
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["members"], merged["repairs"], "checked" in merged) == (top, [2], apart["sha"], False)
+    assert merged["why"] == (f"its whole check passed apart: its members merged again onto {top[:12]}, main's chain's top, "
+                             "which adds over its base what isn't plain: the whole check")
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == "check" and merged["sha"] not in loop.checked and quick.launches == []
+
+
+def test_under_gate_verdict_apart_two_candidates_merged_again_one_onto_the_other_take_the_whole_check(env, monkeypatch):
+    """Two candidates needing the whole check, each built apart on `main` while a plain one lands: the first merged again
+    onto the plain top is `checked` (the top adds only plain changes), and the second, merged again onto the first's merge,
+    isn't, since that adds the first's change, which its whole check never saw: the pair isn't landed on checks run apart."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"verity/core/w.py": "y = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, batch=1, depth=3, fill=3, apart=True)
+    plain, *aparts = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(b["members"], b["base"], b.get("apart")) for b in (plain, *aparts)] == [
+        ([1], main, None), ([2], main, True), ([3], main, True)]
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    for a in aparts:
+        runs.end(a["sha"])
+    first = next(r for r in loop.tick() if r["action"] == "build")
+    assert (first["base"], first["repairs"], first["checked"]) == (plain["sha"], aparts[0]["sha"], aparts[0]["sha"])
+    second = next(r for r in loop.tick() if r["action"] == "build")
+    assert (second["base"], second["repairs"], "checked" in second) == (first["sha"], aparts[1]["sha"], False)
+    assert second["why"].endswith("which adds over its base what isn't plain: the whole check")
+    assert first["sha"] in loop.checked and second["sha"] not in loop.checked
+
+
+def test_under_gate_verdict_apart_a_candidate_checked_apart_on_main_as_it_still_is_lands_as_built(env, monkeypatch):
+    """With nothing landed since it was built, a candidate whose whole check passed apart goes onto main's chain as built,
+    with a `commit` line and no build, and lands on that check the next tick."""
+    main = env.main()
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, apart=True)
+    (apart,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert apart.get("apart") and apart["base"] == main
+    runs.end(main)
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    assert [(r["action"], r["why"]) for r in logged if r["action"] in ("commit", "build")] == [
+        ("commit", "its whole check passed apart: on main's chain as built")]
+    assert "advance" in _acts(loop.tick()) and env.main() == apart["sha"] and quick.launches == []
+
+
+def test_under_gate_verdict_apart_a_candidate_checked_apart_whose_member_no_longer_merges_goes_back_to_building(
+        env, monkeypatch):
+    """A plain PR lands while the PR needing the whole check, changing the same file, is checked apart; once that check
+    passed, its member doesn't merge onto the new `main`: the candidate is dropped, nothing lands for it, and its owner is
+    told it is left out until it merges."""
+    main = env.main()
+    env.put(1, {"x.txt": "1\n"})
+    env.put(2, {"x.txt": "2\n", "verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2, apart=True)
+    plain, apart = [r for r in loop.tick() if r["action"] == "build"]
+    assert (plain["members"], apart["members"], apart.get("apart")) == ([1], [2], True)
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    drop = next(r for r in logged if r["action"] == "drop" and r["sha"] == apart["sha"])
+    assert drop["why"] == (f"its whole check passed apart, but not every member merges onto {plain['sha'][:12]}, main's "
+                           "chain's top, at the head it was checked at: its members are built again")
+    assert [r["number"] for r in logged if r["action"] == "skip"] == [2] and env.main() == plain["sha"]
+    assert not [r for r in logged if r["action"] == "build" and r.get("checked")]
+
+
 def _tree_drive(**lists: list[str] | None) -> str:
     """drive.toml on `main` with the low-risk lane on and this tree's own `lowrisk_excludes`, `verdict_excludes` and
     `verdict_plain`, but each ``lists`` names: that list in its place, or, as None, left out."""
@@ -155,7 +315,7 @@ def _tree_drive(**lists: list[str] | None) -> str:
 
 @pytest.mark.parametrize("what, files, gate", [
     ("a doc", {"GLOSSARY.md": "x\n"}, vqueue_slim.QUICK),
-    ("a benchmark", {"benchmarks/census/README.md": "x\n"}, vqueue_slim.QUICK),
+    ("a benchmark", {"calibration/census/README.md": "x\n"}, vqueue_slim.QUICK),
     ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, "check"),
     ("the root's tests", {"tests/test_tree.py": "x = 1\n"}, vqueue_slim.QUICK),
     ("a verifier", {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "x = 1\n"}, "check"),
@@ -163,16 +323,17 @@ def _tree_drive(**lists: list[str] | None) -> str:
     ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
     ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
     ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
-    ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, "check"),
+    ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, vqueue_slim.QUICK),
+    ("the verifier machine", {"tools/research/src/research/pods/nebius/verifier/setup.sh": "x\n"}, "check"),
 ], ids=["a doc", "a benchmark", "the circuit language", "the root's tests", "a verifier", "a device", "a Lean source",
-        "a lock", "a move", "the loop"])
+        "a lock", "a move", "the loop", "the verifier machine"])
 def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_lowrisk_excludes_and_verdict_excludes_both_leave(
         env, monkeypatch, what, files, gate):
     """`main`'s drive.toml holds this tree's own `lowrisk_excludes`, `verdict_plain` and `verdict_excludes`.  A PR with a land
-    verdict of its own that changes a doc, a benchmark or the root's tests (an entry of `verdict_plain`) is plain, and its
-    candidate takes the quick tier.  One changing the circuit language, a verifier, a device, a Lean source, a lock or the
-    loop's own code takes the whole check, the gate reading what the low-risk lane keeps off but `verdict_plain` and adding
-    `verdict_excludes`, as does a move, whatever it touches."""
+    verdict of its own that changes a doc, a benchmark, the root's tests or the loop's own code (an entry of `verdict_plain`)
+    is plain, and its candidate takes the quick tier.  One changing the circuit language, a verifier, a device, a Lean source,
+    a lock or the verifier machine's deployment the research tool holds takes the whole check, the gate reading what the
+    low-risk lane keeps off but `verdict_plain` and adding `verdict_excludes`, as does a move, whatever it touches."""
     _main_to(env, {DRIVE_FLAGS: _tree_drive()})
     if what == "a move":
         _move(env, 1, files)
@@ -192,8 +353,8 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     own: none whose file `lowrisk_excludes` keeps off the low-risk lane is plain, except a file only entries of
     `verdict_plain` keep off, nor any changing non-test Python under a `verifier/` or `device/` directory, so a Python
     verifier that drifts from its Lean takes the whole check before it lands.  A verifier, a device, the code an auditor's
-    device runs, the research tool's CLI, the move tool, the Lean check and the check are not plain; a doc, a benchmark,
-    infra/ and the agent guard are."""
+    device runs, the verifier machine's deployment and the Lean check are not plain; a doc, a benchmark, infra/, the agent
+    guard, the research tool's CLI, the move tool and the check are."""
     files = _git(ROOT, "ls-files").splitlines()
     _main_to(env, {DRIVE_FLAGS: _tree_drive()})
     loop, _, _ = _verdict(env, monkeypatch)
@@ -211,10 +372,11 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
                and "tests" not in f.split("/") and not PurePosixPath(f).name.startswith("test_")}
     assert audited and not audited & plain, f"plain verifier or device Python: {sorted(audited & plain)[:10]}"
     whole = {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/compose/verifier/live_challenger/auditor.py",
-             "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
+             "tools/verity/lean/check.py", "tools/research/src/research/pods/nebius/verifier/setup.sh",
              "benchmarks/one_stage/a5.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
-             "benchmarks/poub_session/auditor_line.py", "tools/move/restack.py"}
-    quick = {"GLOSSARY.md", "benchmarks/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
+             "benchmarks/poub_session/auditor_line.py"}
+    quick = {"GLOSSARY.md", "calibration/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh",
+             "tools/research/src/research/cli.py", "tools/check/check.py", "tools/move/restack.py"}
     assert whole | quick <= set(files) and not whole & plain and quick <= plain
 
 
@@ -290,6 +452,45 @@ def test_under_gate_verdict_a_quick_tier_that_ended_in_infra_is_started_again_on
     assert first == started["record"]["on"] and second == again["on"] and second != first
     quick.end(sha)
     assert "advance" in _acts(loop.tick()) and env.main() == sha
+
+
+def test_under_gate_verdict_a_quick_tier_goes_to_the_machine_with_a_free_check_slot_and_by_its_sha_when_none_can_be_read(
+        env, monkeypatch):
+    """A plain candidate's quick tier takes the queue's machine `Landing.place_quick` finds a free check slot on, not the one
+    its sha picks, so it doesn't wait in one machine's line while another's slots stand free; started again after infra, it
+    is placed among the machines its tier before didn't err on; with no machine's slots read, its sha picks one."""
+    below = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch)
+    d, asked, free = loop.world.slim_driver(), [], ["m3"]
+    d.place_quick = lambda machines: asked.append(machines) or ((m, "a check slot is free there") if (m := free[0]) else
+                                                                 (None, "no machine's slots could be read"))
+    _, built, started = loop.tick()
+    sha = built["sha"]
+    assert (asked, started["record"]["on"], quick.launches[-1][2]) == (["m1,m2,m3"], "m3", "m3")
+    runs.end(below)
+    (r := runs.tmp / "q-1").mkdir(parents=True)
+    (r / "result.json").write_text("{}")
+    runs.state["q-1"] = ("done", 1, None)
+    free[0] = None
+    again = loop.tick()[-1]["record"]
+    assert asked[-1] == "m1,m2" and again["on"] == ["m1", "m2"][int(sha[:8], 16) % 2], (asked, again)
+
+
+def test_place_quick_takes_queue_place_s_pick_among_the_machines_given_and_none_when_it_can_t_read_or_picks_elsewhere(
+        monkeypatch, tmp_path):
+    """`landing.place_quick` is `queue.place` over the machines given: its pick and why; (None, why) when that pick is none of
+    them (a research pool), it picked none, or reading broke."""
+    import research.queue as Q
+    from research.landing import place_quick
+
+    picks = [("m2", "m2 has a free check slot", [], 0), ("m1:research", "spilled", [], 0), (None, "none read", [], 0)]
+    monkeypatch.setattr(Q, "place", lambda spec, repo: picks.pop(0))
+    assert place_quick(tmp_path, "m1,m2") == ("m2", "m2 has a free check slot")
+    assert place_quick(tmp_path, "m1,m2") == (None, "spilled")
+    assert place_quick(tmp_path, "m1,m2") == (None, "none read")
+    monkeypatch.setattr(Q, "place", lambda spec, repo: 1 / 0)
+    assert place_quick(tmp_path, "m1,m2") == (None, "its slots couldn't be read: ZeroDivisionError: division by zero")
 
 
 def test_under_gate_verdict_a_plain_candidate_falls_back_to_the_whole_check_once_a_member_has_no_land_verdict(env, monkeypatch):

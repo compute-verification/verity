@@ -1,4 +1,4 @@
-"""One table of every protocol's served overhead on Llama-3.1-8B, rendered from the evidence store.
+"""One table of every protocol's served overhead, rendered from the evidence store.
 
 A record is named in the store, never in code: a run labelled `run_of_record=NAME` is one of record NAME's runs, and an
 art so labelled names its runs in its `runs` meta, in the order they were labelled (a target's latest label wins).
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -66,12 +66,13 @@ class Protocol:
     eager_stock: str | None
     own_arm: str | None = None
     record: str = ""
+    members: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
 class Live:
     """A live PoUW row: `arm`'s decode step over `control`'s, timed in run `run` on `device`, read from the
-    `summary.json` and `stop.json` under `out` in the run's record (`sbench.sh`'s layout). Each is an
+    `summary.json` and `stop.json` under `out` in the run's record. Each is an
     entry of the `runs` meta of an art of record `LIVE`."""
 
     device: str
@@ -87,8 +88,12 @@ PROTOCOLS = (
              "pouw:pearl-c-sm120-v1-h3", "stock-fp8", record="pearl-c-served"),
     Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8", record="pearl-c-whole-step"),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
-    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit"),
+    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
+             members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-h200"),
+                      ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served-h200"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
+    Protocol("PoUW served on sm_90a", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
+             members=(("llama-3.2-1b-h100", "llama32-1b-1gpu-pouw-protocol-served-h100"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
 )
@@ -197,10 +202,14 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
 
 def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
             skipped: list[dict[str, Any]]) -> Found | None:
-    """The newest passing run of `spec` at `point` whose result isn't superseded and holds `arms`; each newer run passed
-    over goes into `skipped` with why."""
+    """The newest passing run of `spec` at `point` that isn't a trial (`kit.trial_attempt`), whose result isn't
+    superseded and holds `arms`; each newer run passed over goes into `skipped` with why."""
 
     for run, art, commit in store.index.sql(PASSING, (*spec_paths(spec), point)):
+        if kit.trial_attempt(store.get_attempt(run) or {}):
+            skipped.append({"spec": spec, "point": point, "run": run, "art": art,
+                            "why": f"a trial run ({kit.TRIAL}): its measurements are its own, never a row"})
+            continue
         found, why = _judge(store, run, art, commit, arms, [point])
         if why is None:
             return found[0]
@@ -244,12 +253,15 @@ def _natural(point: str) -> list[Any]:
 
 
 def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> tuple[str, list[Found], str | None]:
-    """A run of record's spec and points as rows, or why it can't stand: the passing rule of `PASSING`, then `_judge`'s."""
+    """A run of record's spec and points as rows, or why it can't stand: a trial (`kit.trial_why`), the passing rule of
+    `PASSING`, then `_judge`'s."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
         return "", [], "not in the store or on its remote"
     spec = spec_name(str(attempt.get("params", {}).get("spec", "")))
+    if why := kit.trial_why(run, attempt):
+        return spec, [], why
     status, source = attempt.get("status") or {}, attempt.get("source") or {}
     art = (attempt.get("outputs") or {}).get("result")
     tool = (attempt.get("tool") or {}).get("name")
@@ -350,6 +362,8 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     attempt = store.get_attempt(live.run)
     if attempt is None:
         return row, "not in the store or on its remote"
+    if why := kit.trial_why(live.run, attempt):
+        return row, why
     status = attempt.get("status") or {}
     row.update(machine=(attempt.get("execution") or {}).get("machine"), commit=(attempt.get("source") or {}).get("commit"),
                record=(attempt.get("outputs") or {}).get("run_record"))
@@ -426,17 +440,24 @@ def collect(store: Any, *, protocols: Sequence[Protocol] | None = None, factors:
             live_rows.append(row)
     rows = []
     for protocol in protocols:
+        own = protocol.own_arm or protocol.arm
+        members = {spec: member for member, spec in protocol.members}
+        head = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
+                "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock}
+        seen = set()
         for spec, point, found, record in _points(protocol, named.get(protocol.record, ()), store, skipped):
-            own = protocol.own_arm or protocol.arm
-            row = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
-                   "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock,
-                   **_source(spec, point, found, record), "over_served": None, "over_eager": None}
+            seen.add(spec)
+            row = {**head, **_source(spec, point, found, record), "member": members.get(spec), "over_served": None,
+                   "over_eager": None}
             if found is not None:
                 row["over_served"] = {metric: _over(found.point, protocol.arm, SERVED, metric)
                                       for metric in (PER_OUTPUT, PER_DECODE)}
                 if protocol.eager_stock:
                     row["over_eager"] = {PER_OUTPUT: _over(found.point, own, protocol.eager_stock, PER_OUTPUT)}
             rows.append(row)
+        rows += [{**head, **_source(spec, "—", None, None), "member": member, "over_served": None, "over_eager": None,
+                  "why": f"no run of record: label its runs `{RUN_OF_RECORD}={protocol.record}`"}
+                 for spec, member in members.items() if spec not in seen]
     factor_rows = []
     for spec, point, found, record in _points(factors, named.get(factors.record, ()), store, skipped):
         row = {"arm": SERVED, "eager_stock": factors.eager_stock, **_source(spec, point, found, record), "factor": None}

@@ -2,7 +2,7 @@
 `F32LogRn_v1` on bits: each is Boolean, names its word primitive and is its Boolean version, its gates and its Flock rows and
 nonzeros are pinned, and it agrees with the word on edges, every binade's ends, its thresholds or the words near 1, the
 words whose result lies nearest a rounding boundary, and random words. Each is held on every one of the 2^32 words by
-`benchmarks/f32_exhaustive/run.py boolean F32ExpRn` and `... boolean F32LogRn`."""
+`calibration/f32_exhaustive/run.py boolean F32ExpRn` and `... boolean F32LogRn`."""
 from __future__ import annotations
 
 import numpy as np
@@ -12,6 +12,7 @@ from verity.circuits.boolean.forms import Circuit
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean.versions import boolean_version
+
 from verity_vllm.definitions.registry import boolean_transcendental as BT
 from verity_vllm.definitions.registry import ref_prims as RP
 

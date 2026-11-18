@@ -26,9 +26,11 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
 #: The Glossary, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
-#: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
+#: Layout/spec documents left in place by the layout migration, which a human folds into PROTOCOL.md / README.md, and the
+#: retired-terms lints' table of older names, which left the Glossary.
 ALLOWED_EXTRA = (
     "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "tests/lint/retired_terms.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network attester's sections (``protocol/<topic>.md``, each
@@ -47,10 +49,8 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
-#: The one Glossary: every term, the notation and the older names. Its table of older names is the list
-#: `tests/test_retired_terms.py` scans the tree for, so it grows by an entry with each retired name, and none can go while
-#: its term is retired.
-GLOSSARY_SIZE_CAP = 112 * 1024
+#: The one Glossary: every current term and the notation.
+GLOSSARY_SIZE_CAP = 35_184
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
@@ -67,7 +67,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "benchmarks/census/workloads.json": 384 * 1024,
+    "calibration/census/workloads.json": 384 * 1024,
     "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
@@ -78,7 +78,7 @@ ALLOWLIST = {
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
     # are a type a column block
-    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,
+    "calibration/sampling_plan/glm53_blocks.json": 448 * 1024,
     "benchmarks/spot_figures/cards/partition.glm-5.3.64864861b277.json": 320 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -183,16 +183,16 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
-    assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP) is None
     assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/resource_accounting/network/verifier/"
-    assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
-    assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
+    attester = "verity/protocols/resource_accounting/network/verifier/"
+    assert markdown_over_cap(attester + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {attester}protocol/")
+    assert markdown_over_cap(attester + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{attester}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
         ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")

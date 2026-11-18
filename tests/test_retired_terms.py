@@ -14,7 +14,7 @@ the next line (behind a comment marker or not). Every file under `benchmarks/slo
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
-(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``) and a spelling baked into a
+(`tests/lint/retired_terms.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``) and a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too).
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
@@ -22,8 +22,8 @@ names keeps it until it is renamed, and each word's count of names only falls (`
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 The network attester's older name is held in every tracked file but the few that spell it to move or find it
-(``CERTIFIER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
-(``CERTIFIER_KEPT``), by count (``CERTIFIER_NAMES``).
+(``ATTESTER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
+(``ATTESTER_KEPT``), by count (``ATTESTER_NAMES``).
 
 The slowdown's older name, "rho" and ρ, is held at zero by path (``SLOWDOWN_HOME``: the slowdown calculator, the benchmarks
 that read it and the two documents that state the slowdown bound), in each file's whole text: there the word only ever
@@ -66,9 +66,10 @@ INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty blo
 _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP}units?|(?:proof{_SEP})?blocks?|sets?"
                              rf"|windows?|terms?|bits)|wrong{_SEP}units?)\b", re.I)
 
-#: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
-#: The table's rows that name the terms, in GLOSSARY.
+#: The retired-terms table: the older names and the narrower senses, which left the Glossary.
+TABLE = "tests/lint/retired_terms.md"
+#: The table's rows that name the terms, in TABLE.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
 #: The Lean's sites, a count per file, which only shrinks.
 LEAN_LIST = ROOT / "tests/lint/allowlists/lean_retired_terms.json"
@@ -84,7 +85,7 @@ DOC_TERMS = {
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
     "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
-                              "outside the tree gives, stays in backticks: GLOSSARY.md, Older names)",
+                              "outside the tree gives, stays in backticks: tests/lint/retired_terms.md)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "coin server, coin source, coin device, randomness source": "the challenger",
@@ -145,7 +146,7 @@ DOC_TERMS = {
     "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/machine_model/` and its `machine-model` "
+    "the accelerator model, the machine model": "the ACCEL model (`calibration/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
     "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
@@ -221,13 +222,13 @@ ALLOWED: dict[str, str] = {
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/resource_accounting/network/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
-                                                        "(`certifier.service`): `Spec.digest` hashes it",
+                                                        "(`attester.service`): `Spec.digest` hashes it",
     "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
-                                                                             "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
+                                                                             "Spec (`attester.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
@@ -249,7 +250,7 @@ ALLOWED: dict[str, str] = {
                                         "directory, which the protocols' word move rewrites; renamed with it",
 }
 
-#: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
+#: the lints that name the terms to find them: this one, and the ratchet over every term `tests/lint/retired_terms.md` retires
 LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
 #: the word maps a move renames by, which name the words they retire
 MAPS = "tools/move/"
@@ -298,7 +299,7 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
         terms = (_TERM, _INCORRECT_TERM) if incorrect else (_TERM,)
         for m in sorted((m for t in terms for m in t.finditer(text)), key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
-            if f == GLOSSARY and lines[n - 1].startswith(RETIRED_ROWS):
+            if f == TABLE and lines[n - 1].startswith(RETIRED_ROWS):
                 continue
             if spelling := next((s for a, b, s in allowed if a <= m.start() and m.end() <= b), None):
                 used.add(spelling)
@@ -319,7 +320,7 @@ def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, st
         for m in sorted([*_DOC_TERM.finditer(prose), *_DOC_COMMAND.finditer(text)], key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
             quoted = text[m.start() - 1:m.start()] in ('"', "“") and text[m.end():m.end() + 1] in ('"', "”")
-            if quoted or (f == GLOSSARY and lines[n - 1].startswith("|")):
+            if quoted or (f in (GLOSSARY, TABLE) and lines[n - 1].startswith("|")):
                 continue
             if f.startswith(HM96_HOME) and m[0].lower().startswith("hm96"):
                 continue
@@ -376,7 +377,7 @@ def _normal(name: str) -> str:
 
 
 def older_names(glossary: str) -> set[str]:
-    """Each name GLOSSARY's Older names table quotes in its first column: not one qualified by its sense (`"block" for a
+    """Each name TABLE's Older names table quotes in its first column: not one qualified by its sense (`"block" for a
     tile`, `"unit" alone meaning one`), nor one it keeps (`"stage", outside "one-stage"`)."""
     table = re.search(r"^## Older names\n(.*?)(?=^## |\Z)", glossary, re.M | re.S)[1]
     names = set()
@@ -393,9 +394,9 @@ def stale_replacements(tables: dict[str, str], old: set[str]) -> list[tuple[str,
 
 
 def test_no_replacement_is_an_older_name():
-    old = older_names((ROOT / GLOSSARY).read_text(encoding="utf-8"))
+    old = older_names((ROOT / TABLE).read_text(encoding="utf-8"))
     stale = stale_replacements({**TERMS, **INCORRECT_TERMS, **DOC_TERMS}, old)
-    assert not stale, (f"a row prescribes a name {GLOSSARY}'s Older names table retires: write that table's Term instead:\n"
+    assert not stale, (f"a row prescribes a name {TABLE}'s Older names table retires: write that table's Term instead:\n"
                        + "\n".join(f'  "{row}": "{name}"' for row, name in stale))
 
 
@@ -412,20 +413,20 @@ def test_the_older_names_are_read_from_the_table():
                                                     ("physical block", "server-time block"), ("unit", "stage")]
 
 
-def test_the_glossary_records_the_retired_terms():
-    rows = [line for line in (ROOT / GLOSSARY).read_text(encoding="utf-8").splitlines() if line.startswith(RETIRED_ROWS)]
-    assert len(rows) == len(RETIRED_ROWS), f"{GLOSSARY}'s retired-terms table has no row starting {RETIRED_ROWS}"
+def test_the_table_records_the_retired_terms():
+    rows = [line for line in (ROOT / TABLE).read_text(encoding="utf-8").splitlines() if line.startswith(RETIRED_ROWS)]
+    assert len(rows) == len(RETIRED_ROWS), f"{TABLE} has no row starting {RETIRED_ROWS}"
     assert all(_TERM.search(row) or _DOC_TERM.search(row) for row in rows), (
-        f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms")
+        f"{TABLE}'s rows {RETIRED_ROWS} no longer name the terms")
 
 
-#: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
+#: the older names (tests/lint/retired_terms.md) a Lean declaration's own name may carry, each word's forms and its term;
 #: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
 LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
               "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
               "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
-              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
-              "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
+              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network attester"),
+              "tap": (("tap", "taps"), "network attester"), "leg": (("leg", "legs"), "subprotocol")}
 
 
 def words(name: str) -> list[str]:
@@ -453,10 +454,10 @@ def test_no_retired_word_in_a_new_lean_name():
     found = retired_names(files)
     _held("RETIRED_NAMES", RETIRED_NAMES, {w: len(v) for w, v in found.items()}, "the Lean names with a retired word",
           "name the new one with the Glossary's term instead (" + "; ".join(f"{t} for {w}" for w, (_, t) in LEAN_WORDS.items())
-          + "; GLOSSARY.md, Older names): `git diff -U0 origin/main -- '*.lean'` shows it")
+          + f"; {TABLE}): `git diff -U0 origin/main -- '*.lean'` shows it")
 
 
-#: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
+#: SPOT's older name (tests/lint/retired_terms.md): each spelling's count in the scanned files' whole text, which only falls
 #: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
 SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 62, "SampledProofs": 15, "sampled-proofs": 507}
 _GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
@@ -478,13 +479,13 @@ def spot_names(files: list[str], read=_read) -> dict[str, int]:
 def test_spot_s_older_name_only_falls():
     """The sampled proof system is SPOT: its older name's count in every spelling only falls."""
     _held("SPOT_NAMES", SPOT_NAMES, spot_names(_tracked()), "SPOT's older name, sampled proofs,",
-          "write SPOT in prose and strings, `spot` in a new path or Python name and `Spot` in a new Lean name (GLOSSARY.md, "
-          "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
+          f"write SPOT in prose and strings, `spot` in a new path or Python name and `Spot` in a new Lean name ({TABLE}): "
+          "`git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
 
 
-#: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
-SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+#: Where "rho" and ρ only ever named the slowdown (tests/lint/retired_terms.md), so no file there says either.
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "calibration/circuit_properties/", "benchmarks/inference_only/",
+                 "calibration/training/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
@@ -526,7 +527,7 @@ def test_the_slowdown_s_older_name_is_gone():
     assert not bad, (
         f'"rho", ρ or the calculator\'s older directory for the slowdown: under {", ".join(SLOWDOWN_HOME)} say "the slowdown" in prose '
         "(the package is the slowdown calculator), `slowdown` in a name and in a formula (`slowdown >= ...`), and "
-        f"`{SLOWDOWN_HOME[0]}` for the calculator's directory ({GLOSSARY}, Older names). A stored key "
+        f"`{SLOWDOWN_HOME[0]}` for the calculator's directory ({TABLE}). A stored key "
         "that keeps the word until its schema changes, or another quantity's symbol, goes in SLOWDOWN_KEPT with its reason. "
         f"The records of moves already made ({', '.join(MOVE_RECORDS)}) map stored old paths to today's: they keep the old "
         "path and are exempt by path:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
@@ -563,11 +564,11 @@ def test_the_spot_scan_reads_each_form():
                                                    "sampled-proofs": 1}
 
 
-#: The network attester's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
+#: The network attester's older name (tests/lint/retired_terms.md), as a word or as a part of a name in any of its three
 #: spellings; `BackwardEntry` holds none of them.
-CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
+ATTESTER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
 #: The files the scan leaves out, each for what it holds the name for today.
-CERTIFIER_LEFT_OUT = {
+ATTESTER_LEFT_OUT = {
     MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
     "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
     "tests/tools/research/test_queue.py": "a test of the words a word map retires spells one in its map",
@@ -575,7 +576,7 @@ CERTIFIER_LEFT_OUT = {
     LINTS[0]: "this test spells the name to find it",
 }
 #: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
-CERTIFIER_SPEC_REASONS = (
+ATTESTER_SPEC_REASONS = (
     "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads ",
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
@@ -583,15 +584,15 @@ CERTIFIER_SPEC_REASONS = (
     "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
     "the round's provenance: its link-window of the warden's run",
 )
-#: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
+#: What keeps it, as the row of older names says: each kind's spellings and what ends it. A site is the first kind's that
 #: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
 #: corpus's `ingress="warden"`.
-CERTIFIER_KEPT = {
+ATTESTER_KEPT = {
     "said": (r"(?m)^\| \"warden\", \"network warden\".*$|\bsay \"warden\"|\ban \*?active warden\b|\ba passive warden\b",
-             "the Glossary's row of older names, the domain table's sentence on what its tags say, and network "
+             "the row of older names (tests/lint/retired_terms.md), the domain table's sentence on what its tags say, and network "
              "steganography's terms"),
     "domain tag": (r"verity-network-warden/[a-z-]+/v\d+|\ba5[/-]warden(?:-stand-in/v1\b|/rest/)|"
-                   + "|".join(map(re.escape, CERTIFIER_SPEC_REASONS)),
+                   + "|".join(map(re.escape, ATTESTER_SPEC_REASONS)),
                    "a domain tag of the network certifier's records or of a stand-in for them, or a public item's "
                    "reason in a spec, which a digest takes in, until the network certifier's next format version"),
     "circuit": (r"\bWardenRowIdentity\b|\bunit/(?:warden-row|a5-warden)\b",
@@ -612,27 +613,27 @@ CERTIFIER_KEPT = {
                  "labels, keys and values, which recorded data holds"),
 }
 #: Each kind's count, which only falls (`_held`).
-CERTIFIER_NAMES = {"said": 43, "domain tag": 37, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
+ATTESTER_NAMES = {"said": 43, "domain tag": 37, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
 
 
-def certifier_files(files: list[str]) -> list[str]:
-    """``files`` but those CERTIFIER_LEFT_OUT names, a file by its path and a directory by its prefix."""
-    out = tuple(CERTIFIER_LEFT_OUT)
+def attester_files(files: list[str]) -> list[str]:
+    """``files`` but those ATTESTER_LEFT_OUT names, a file by its path and a directory by its prefix."""
+    out = tuple(ATTESTER_LEFT_OUT)
     return [f for f in files if not f.startswith(tuple(o for o in out if o.endswith("/"))) and f not in out]
 
 
-def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
-    """The network attester's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
+def attester_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
+    """The network attester's older name in ``files``: each of ATTESTER_KEPT's count, and what it keeps nowhere, a file's
     name that holds it (`FILE`) and a site none of the kinds spells (`FILE:LINE TEXT`)."""
-    kept = {k: re.compile(spelling) for k, (spelling, _) in CERTIFIER_KEPT.items()}
+    kept = {k: re.compile(spelling) for k, (spelling, _) in ATTESTER_KEPT.items()}
     counts, other = dict.fromkeys(kept, 0), []
     for f in sorted(files):
-        if CERTIFIER_OLD.search(f):
+        if ATTESTER_OLD.search(f):
             other.append(f)
-        if (text := read(f)) is None or not CERTIFIER_OLD.search(text):
+        if (text := read(f)) is None or not ATTESTER_OLD.search(text):
             continue
         spans = {k: [m.span() for m in spelling.finditer(text)] for k, spelling in kept.items()}
-        for m in CERTIFIER_OLD.finditer(text):
+        for m in ATTESTER_OLD.finditer(text):
             kind = next((k for k, ss in spans.items() if any(s <= m.start() and m.end() <= e for s, e in ss)), None)
             if kind is None:
                 n = text.count("\n", 0, m.start())
@@ -645,26 +646,26 @@ def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[
 def test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it():
     """No file's name holds the network attester's older name, a file's text holds it only in what a format fixes, a
     caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
-    only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""
-    counts, other = certifier_names(certifier_files(_tracked()))
+    only falls. The files it reads are every tracked one but ATTESTER_LEFT_OUT's."""
+    counts, other = attester_names(attester_files(_tracked()))
     assert not other, ("the network certifier's older name, outside what keeps it: say the network certifier "
-                       "(GLOSSARY.md, Older names), or name a kept value as CERTIFIER_KEPT spells it:\n  "
+                       f"({TABLE}), or name a kept value as ATTESTER_KEPT spells it:\n  "
                        + "\n  ".join(other))
-    _held("CERTIFIER_NAMES", CERTIFIER_NAMES, counts, "the network certifier's older name",
-          "a new format, flag or key says the network certifier (GLOSSARY.md, Older names): " + "; ".join(
-              f"{k}: {why}" for k, (_, why) in CERTIFIER_KEPT.items()))
+    _held("ATTESTER_NAMES", ATTESTER_NAMES, counts, "the network certifier's older name",
+          f"a new format, flag or key says the network certifier ({TABLE}): " + "; ".join(
+              f"{k}: {why}" for k, (_, why) in ATTESTER_KEPT.items()))
 
 
-def test_the_certifier_scan_leaves_out_only_files_that_hold_the_name():
-    """Each of CERTIFIER_LEFT_OUT's entries names tracked files that hold the older name today: an entry whose files
+def test_the_attester_scan_leaves_out_only_files_that_hold_the_name():
+    """Each of ATTESTER_LEFT_OUT's entries names tracked files that hold the older name today: an entry whose files
     no longer hold it goes, and the scan reads them."""
     files = _tracked()
-    idle = [o for o in CERTIFIER_LEFT_OUT
-            if not any(CERTIFIER_OLD.search(f + (_read(f) or "")) for f in files if f not in certifier_files([f]) and f.startswith(o))]
-    assert not idle, f"CERTIFIER_LEFT_OUT names files that no longer hold the network certifier's older name: drop {idle}"
+    idle = [o for o in ATTESTER_LEFT_OUT
+            if not any(ATTESTER_OLD.search(f + (_read(f) or "")) for f in files if f not in attester_files([f]) and f.startswith(o))]
+    assert not idle, f"ATTESTER_LEFT_OUT names files that no longer hold the network certifier's older name: drop {idle}"
 
 
-def test_the_certifier_scan_reads_each_form():
+def test_the_attester_scan_reads_each_form():
     """On toy files: each kept kind counts under its own key, the Glossary's row is one kind whatever it quotes, the
     quoted word alone is a kind and a tag's or the trace corpus's value isn't, a name that only spells the letters
     (`BackwardEntry`) is no site, and a file's name, a name in code and a word in prose are kept nowhere. A directory is
@@ -680,12 +681,12 @@ def test_the_certifier_scan_reads_each_form():
                    'cp "$W/warden/$f" "$OUT/warden/"; ls warden/check.json d/warden.json\n',
            "f.py": 'got = {"warden_run": run, "value": "warden/egress/0", "link": "warden-fails", "watch": "warden:7"}\n'
                    "label, note = \"warden-smallkv\", f'{meta['warden']} at ingress=\"warden\": client or warden'\n"}
-    counts, other = certifier_names(list(toy), read=toy.get)
+    counts, other = attester_names(list(toy), read=toy.get)
     assert counts == {"said": 9, "domain tag": 3, "circuit": 2, "caller's": 8, "kind": 3, "recorded": 12}
     assert other == ["d/warden_rows.py", "d/warden_rows.py:1 class WardenParams:",
                      "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN",
                      "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN"]
-    assert certifier_files([MAPS + "a_map.toml", LINTS[0], LINTS[0] + ".orig", "tools/mover.py"]) == \
+    assert attester_files([MAPS + "a_map.toml", LINTS[0], LINTS[0] + ".orig", "tools/mover.py"]) == \
         [LINTS[0] + ".orig", "tools/mover.py"]
 
 
@@ -710,13 +711,13 @@ def test_the_scan_reads_each_form():
                    "-- a proof\ndef unit := 2\n"),
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
+        TABLE: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
-    assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
+    assert found == [("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
                      ("c.lean", 1, "proof unit"), ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services"),
-                     ("e.lean", 1, "proof -- unit"), ("e.lean", 3, "faulty unit")]
+                     ("e.lean", 1, "proof -- unit"), ("e.lean", 3, "faulty unit"), (TABLE, 2, "proof unit")]
     assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 2})) == []
     assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 1})) == [
         "  e.lean: 2 found, 1 allowed\n    e.lean:1: proof -- unit\n    e.lean:3: faulty unit"]
@@ -742,12 +743,12 @@ def test_the_scan_reads_the_slowdown_calculators_terms():
 
 def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
-    files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
+    files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty attester, a
     wrong verdict, and the same words outside them stay."""
     net = "tests/verity/protocols/resource_accounting/network/verifier/network/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
-              'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
+              'class _Faulty(Certifier):  # a faulty attester; a wrong verdict\n'
               'k = t["faulty_bits"] + t["wrong_units"]  # faultySets\n'),
         "benchmarks/network_traces/b.md": "Each link pays its faulty proof blocks; none of its faulty-windows drawn.\n",
         "c.py": "# faulty bits and wrong units outside them\n",

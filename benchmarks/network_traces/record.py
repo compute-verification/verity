@@ -31,7 +31,9 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`.
+- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`;
+- through the harness kit's writer (`record_metric`), `METRIC`: under a research run in the run's `result.json`, else in
+  `--out`'s.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
 the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
@@ -94,6 +96,9 @@ FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, MAX_COTENANT_BUSY, TAIL_MS = 1000
 FREEZE_REST_MS = 5000.0  # a longer stall drops the rest of its chunk (`convert` in the module docstring)
 CPU_RULES, FREEZE_SCOPES = ("cotenants", "total"), ("window", "chunk")
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
+#: the one number a run records: the p99.9 of the time between consecutive streamed chunks of one response, over every
+#: request sent in the recording's windows that completed, dropped windows included (`summary.json`'s ``inter_chunk_ms``)
+METRIC = "network-accounting/streamed-gap-p99.9"
 
 clock = time.monotonic
 
@@ -526,7 +531,7 @@ def identity() -> dict:
             "watched": sorted({c for n in nodes for c in numa_cpus(n)}),
             "versions": versions, "python": sys.version.split()[0],
             "env": {k: os.environ.get(k) for k in ("CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID", "RESEARCH_RUN_ID",
-                                                   "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT")}}
+                                                   "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT", "FLASHINFER_CUDA_ARCH_LIST")}}
 
 
 def free_port() -> int:
@@ -588,6 +593,7 @@ def run(args: argparse.Namespace) -> int:
                          "workloads": {name: MIXES[name] for name, _, _ in mix}, "minutes": args.minutes,
                          "warmup_s": args.warmup_s, "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS,
                                                              "frame_bytes": FRAME_BYTES}}
+    meta["member"] = member(args.model, meta["gpu"]["name"], args.mode)
     port, served, server, offline = free_port(), "served", None, args.mode in OFFLINE
     model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
     server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
@@ -656,7 +662,7 @@ def run(args: argparse.Namespace) -> int:
     ended["evicted"] = ended["stopped_ms"] is not None
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-    convert(out)
+    record_metric(out, convert(out), meta)
     return 143 if ended["evicted"] else 0
 
 
@@ -820,6 +826,28 @@ def convert(out: Path, **rules) -> dict:
     (out / "trace.json").write_text(json.dumps(trace_doc(configs), separators=(",", ":")))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     return summary
+
+
+def member(model: str, card: str, mode: str) -> str:
+    """The measurement's member: the model's name, the card's `short` in its card record (`kit.card_short`, refused
+    unless one record names the card) and the mode, so `llama-3.2-1b-h200-plaintext`."""
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card, directory=CARD_FILES)}-{mode}"
+
+
+def record_metric(out: Path, summary: dict, meta: dict) -> dict:
+    """`METRIC` of `summary`, in ms, under meta's `member`, written with the model, the mode and the traced card as the
+    measurement's fields and printed as one line; with no value where no completed request streamed two chunks."""
+    from verity_bench import kit
+
+    gap = (summary.get("inter_chunk_ms") or {}).get("p99.9")
+    why = None if gap is not None else summary.get("error") or "no completed request streamed two chunks"
+    m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured", member=meta["member"],
+                                    extra={"model": meta["model"], "mode": meta["mode"], "card": meta["gpu"]["name"]})
+    print(f"{METRIC}: {gap} ms" if gap is not None else f"{METRIC}: no number: {why}", flush=True)
+    return m
 
 
 def merge(paths: Sequence[Path]) -> dict:

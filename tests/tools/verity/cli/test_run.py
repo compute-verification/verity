@@ -34,7 +34,9 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE = ("sampled-proofs", "certifier", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
+#: onsite with H1's period as its work, which no composite takes
+ONSITE_H1 = tuple("pouw" if p == "pearl-plus" else p for p in ONSITE)
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 
@@ -130,7 +132,7 @@ def test_a_configuration_is_refused_by_name(name):
 
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
                                        ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe"),
-                                       ("sampled-proofs", "pouw"), ONSITE[:-2]])
+                                       ("sampled-proofs", "pouw"), ONSITE[:-2], ONSITE_H1])
 def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
@@ -139,16 +141,17 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v1"}
-    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v1", "verity/remote/v1"}
+    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v1"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
                                                    "pearl-plus": "verity/pouw/pearl-plus/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["sampled-proofs"] == "verity/sampled-proofs/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["pearl-plus"] == "verity/pouw/pearl-plus/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["wipe"] == "verity/wipe/v0"
+    assert "verity/onsite/v0" not in K.COMPOSITES and "verity/onsite/v0" not in SP.SUBPROTOCOLS
 
 
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
@@ -192,21 +195,21 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
-                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
+UNBOUNDED_ONSITE = ("0e75cafa02f5f4886972516193e8e219106013a7f87967565b60396034f04936"
+                    "ab2103ae8260d8731f686e5517802f65bbf048574d3e21651c030458eb79c02b")
 
 
 def bounded(tokens):
     return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(max_tokens_cap=tokens))
 
 
-def test_an_unbounded_certifier_configuration_hashes_as_before_the_bound():
+def test_an_unbounded_attester_configuration_hashes_as_before_the_bound():
     cfg = K.check(config(), REG.components, REG.workloads)
     assert not {"max_tokens_cap", "lengths", "content"} & set(cfg["params"]["verity/certifier/v0"])
     assert K.digest(cfg) == UNBOUNDED_ONSITE
 
 
-def test_a_bounded_certifier_configuration_round_trips():
+def test_a_bounded_attester_configuration_round_trips():
     cfg = K.check(K.parse(K.render(bounded(4))), REG.components, REG.workloads)
     table = cfg["params"]["verity/certifier/v0"]
     assert table["max_tokens_cap"] == 4
@@ -220,7 +223,7 @@ def with_lengths(**schedule):
     return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(table))
 
 
-def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
+def test_a_attester_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
     fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
     digests = {UNBOUNDED_ONSITE}
     for form in (1, 2):  # the lengths rows' two forms, each a configuration of its own digest
@@ -385,7 +388,7 @@ class StandIn(D.Machine):
 
     def serve(self, i):
         assert "ingress-relay" not in D.run_of(self.state)["hooks"] or \
-            (self.state / "blocks" / "certifier-session" / "relay.json").exists()
+            (self.state / "blocks" / "attester-session" / "relay.json").exists()
         self._of("workers", i)
         write(self.state / "blocks" / f"w{i}" / "period.json", {"period": i})
         write(self.state / "public" / f"w{i}" / "registration.json", {"period": i})
@@ -402,10 +405,10 @@ class StandIn(D.Machine):
         return None if v == "silent" else ({"verdict": v, "commitment": "00"}, case(v))
 
 
-def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
+def registry(verdicts: dict | None = None, attester_rc: int = 0) -> R.Registry:
     def network_attester(cfg, state, local):
-        write(state / "blocks" / "certifier-session" / "relay.json", {"periods": len(periods(state))})
-        return certifier_rc
+        write(state / "blocks" / "attester-session" / "relay.json", {"periods": len(periods(state))})
+        return attester_rc
 
     parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_attester}}
     return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
@@ -434,7 +437,7 @@ def test_every_party_here_accepts(tmp_path, capsys):
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
     line = lines[0]
     assert line["components"] == dict.fromkeys(ONSITE, "accept")
-    assert line["product"] == "verity/onsite/v0" and line["coins"] == "simulated" and line["block"] == 0
+    assert line["product"] == "verity/onsite/v1" and line["coins"] == "simulated" and line["block"] == 0
     assert line["registration"] == RG.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
     assert said(out, "VERDICT") == lines
@@ -442,7 +445,7 @@ def test_every_party_here_accepts(tmp_path, capsys):
                          *({"party": p, "refused": None} for p in ("challenger", "firewall", "verifier", "workers"))]
     state = tmp_path / "state"
     relay = [json.loads(x) for x in (state / "transcripts" / "network-certifier.jsonl").read_text().splitlines()]
-    assert [(x["file"], x["kind"]) for x in relay] == [("blocks/certifier-session/relay.json", "private")]
+    assert [(x["file"], x["kind"]) for x in relay] == [("blocks/attester-session/relay.json", "private")]
     assert (state / "challenger" / "host" / "ledger.json").exists()
     kept = state / "runs" / "local" / "runs" / "1"
     assert (kept / "record").exists() and {f.name for f in kept.glob("*.transcript")} == {
@@ -555,7 +558,7 @@ def test_an_audit_that_is_unavailable_is_its_periods_error(tmp_path):
 
 
 def test_an_entry_that_fails_stops_the_run(tmp_path, capsys):
-    rc, lines = run(tmp_path, registry(certifier_rc=3))
+    rc, lines = run(tmp_path, registry(attester_rc=3))
     assert rc == 2 and lines == [] and said(capsys.readouterr().out) == [{"party": "network-certifier", "exit": 3}]
 
 
@@ -768,13 +771,13 @@ def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypat
     assert "refused no-table" in capsys.readouterr().out
 
 
-def test_the_certifier_and_the_policy_are_declared_from_their_manifests():
-    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
+def test_the_attester_and_the_policy_are_declared_from_their_manifests():
+    attester, policy = REG.components["certifier"], REG.components["inference-only"]
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
-    assert (certifier.id, certifier.channels) == (NC.ID, NC.MANIFEST.channels)
-    assert [r for r in NC.MANIFEST.parties if r not in certifier.parties] == [NC.MANIFEST.role(NC.WORKERS)]
-    assert all(r in NC.MANIFEST.parties for r in certifier.parties)
-    assert set(D.PARTIES["certifier"]) == {r.name for r in certifier.parties}
+    assert (attester.id, attester.channels) == (NC.ID, NC.MANIFEST.channels)
+    assert [r for r in NC.MANIFEST.parties if r not in attester.parties] == [NC.MANIFEST.role(NC.WORKERS)]
+    assert all(r in NC.MANIFEST.parties for r in attester.parties)
+    assert set(D.PARTIES["certifier"]) == {r.name for r in attester.parties}
     assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
     assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
 

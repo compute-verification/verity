@@ -18,17 +18,21 @@ the SASS gate must pass): the timed pass untraced, then at each shape a traced p
 entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
 reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
 (`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
-item no report holds, refuses the run), and writes `overhead.json`: per point, the layer's γ over
+item no report holds, refuses the run; with `--keep-reports`, a profiling pass, they and their exports are kept in
+`$OUT/nsys/` and the run is not of record), and writes `overhead.json`: per point, the layer's γ over
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
 Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's entry), which the table's
 note reads.
+
+Both records carry `phases` (`Phases`): the build, each bench.py process by stage, each Nsight export and the verifier.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import importlib
 import importlib.util
@@ -36,7 +40,9 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+import time
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -55,17 +61,64 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: why a run that kept its Nsight reports (`run --keep-reports`) isn't of record
+KEEP_REPORTS_WHY = "it kept its Nsight reports in $OUT/nsys (`--keep-reports`): a profiling pass is never of record"
 #: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
 GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
 
+#: the clock the phases read (seconds since the epoch)
+CLOCK: Callable[[], float] = time.time
+
 Runner = Callable[[list[str], Path], int]
 
 
+def stamp(t: float) -> str:
+    return dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _run(argv: list[str], log: Path) -> int:
-    with log.open("w") as f:
-        return subprocess.run(argv, stdout=f, stderr=subprocess.STDOUT).returncode
+    with log.open("w") as f, subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                              errors="replace") as p:
+        assert p.stdout is not None
+        for line in p.stdout:
+            f.write(line)
+            if line.startswith("shape "):
+                print(f"{stamp(CLOCK())} {log.parent.name}/{log.name}: {line.strip()}", flush=True)
+        return p.wait()
+
+
+class Phases:
+    """The record's `phases`, each `{"name", "seconds"}`, its start and end each a stamped line of the log (UTC); a
+    bench.py process is split by its rows' `wall_s`, summed over its shapes."""
+
+    def __init__(self, build_s: float | None, clock: Callable[[], float] | None = None):
+        self.clock = clock or CLOCK
+        self.list: list[dict] = [] if build_s is None else [{"name": "build", "seconds": round(build_s, 3)}]
+
+    @contextmanager
+    def __call__(self, name: str) -> Iterator[None]:
+        t0 = self.clock()
+        print(f"{stamp(t0)} phase {name} start", flush=True)
+        try:
+            yield
+        finally:
+            t1 = self.clock()
+            self.list.append({"name": name, "seconds": round(t1 - t0, 3)})
+            print(f"{stamp(t1)} phase {name} end, {t1 - t0:.1f} s", flush=True)
+
+    def bench(self, name: str, result: dict) -> None:
+        stages: dict[str, float] = {}
+        for row in result.get("shapes") or []:
+            for stage, s in (row.get("wall_s") or {}).items():
+                stages[stage] = stages.get(stage, 0.0) + s
+        if not stages:
+            return
+        whole = next(p["seconds"] for p in reversed(self.list) if p["name"] == name)
+        for stage, s in [*stages.items(), ("outside its shapes", whole - sum(stages.values()))]:
+            self.list.append({"name": f"{name}: {stage}", "seconds": round(s, 3)})
+            print(f"phase {name}: {stage}, {s:.1f} s (bench.py's own clock)", flush=True)
 
 
 def bench_argv(card: O.Gpu, uuid: str, shapes: Sequence[str], families: Sequence[str], out: Path,
@@ -105,10 +158,9 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
 
     rel = os.path.relpath(out / record, run_dir)
     (run_dir / kit.RESULT).unlink(missing_ok=True)
-    if measurements:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
     writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    if measurements:
+        writer.keep(measurements)
     writer.fingerprint(**fingerprint)
     writer.measurement_file(rel)
     for m in measured:
@@ -128,6 +180,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
     times: dict[int, float] = {}
     results: list[dict] = []
     rounds: list[dict] = []
+    phases = Phases(a.build_s)
     doc: dict = {"schema": O.POINTS_SCHEMA, "card": card.gpu, "model": a.model, "precision": a.precision,
                  "families": list(fams), "rule": dict(O.RULE), "rounds": rounds}
     fingerprint = {"door": "points", "card": card.gpu, "model": a.model, "precision": a.precision}
@@ -137,9 +190,11 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
             ms = todo[i:i + CHUNK]
             d = out / "rounds" / f"{len(rounds):02d}"
             d.mkdir(parents=True, exist_ok=True)
-            rc = run(bench_argv(card, a.uuid, model_shapes(a.model, ms), fams, d / "bench.json", POINTS_BENCH),
-                     d / "bench.log")
+            with phases(name := f"round {len(rounds):02d} (m = {', '.join(map(str, ms))})"):
+                rc = run(bench_argv(card, a.uuid, model_shapes(a.model, ms), fams, d / "bench.json", POINTS_BENCH),
+                         d / "bench.log")
             res = json.loads((d / "bench.json").read_text()) if (d / "bench.json").is_file() else {}
+            phases.bench(name, res)
             rounds.append({"ms": ms, "bench": str((d / "bench.json").relative_to(out)), "exit": rc,
                            "error": res.get("error"), "clocks": (res.get("clocks") or {}).get("timed")})
             why = (f"bench.py exited {rc} at m = {ms}: {res.get('error') or 'see ' + str(d / 'bench.log')}" if rc
@@ -164,6 +219,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
                 "tflops": {str(m): O.layer_flop(a.model, m) / t / 1e9 for m, t in sorted(times.items())},
                 "linears": {str(m): v for m, v in sorted(chosen.items())}}
     doc["error"] = why
+    doc["phases"] = phases.list
     _write(out / "points.json", doc)
     said = why or f"C = {doc.get('c')}, L = {doc.get('l')}"
     write_result(a.run_dir, a.run_id, out, "points.json", why is None, said, fingerprint, measured=[] if why else [
@@ -231,6 +287,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     if sch.arm and a.cubin:
         cubin = (a.cubin if a.cubin.is_file() else a.run_dir / "inputs" / a.cubin).absolute()
     out, scratch = a.out, a.scratch
+    phases = Phases(a.build_s)
     fingerprint = {"door": "run", "card": card.gpu, "scheme": sch.id, "point": a.point, "points_art": a.points_art,
                    "points_sha256": _sha256(sent), "cubin_art": a.cubin_art if cubin else None}
     doc: dict = {"schema": O.RUN_SCHEMA, "scheme": sch.id, "family": sch.family, "card": card.gpu,
@@ -243,19 +300,27 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     elif sch.family not in pts.get("families", ()):
         whys.append(f"the points' sweep didn't time {sch.family}, the scheme's scaling")
     if whys:
+        doc["phases"] = phases.list
         _write(out / "overhead.json", doc)
         write_result(a.run_dir, a.run_id, out, "overhead.json", False, whys[0], fingerprint)
         print(f"run: {whys[0]}")
         return 1
+    if a.keep_reports:
+        fingerprint["keep_reports"] = True
+        whys.append(KEEP_REPORTS_WHY)
+        scratch = out / "nsys"
+        scratch.mkdir(parents=True, exist_ok=True)
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
     arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
     prof = scratch / "prof"
     bench_json = out / "bench.json"
-    rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
-              *bench_argv(card, a.uuid, model_shapes(model, list(at.values())), [sch.family], bench_json,
-                          [*RUN_BENCH, *arm_args])], out / "bench.log")
+    with phases("bench.py under nsys"):
+        rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
+                  *bench_argv(card, a.uuid, model_shapes(model, list(at.values())), [sch.family], bench_json,
+                              [*RUN_BENCH, *arm_args])], out / "bench.log")
     result = json.loads(bench_json.read_text()) if bench_json.is_file() else {}
+    phases.bench("bench.py under nsys", result)
     doc |= {"bench_exit": rc, "identity": result.get("identity"), "clocks": result.get("clocks"),
             "bridge": result.get("bridge"), "sass_gate_ok": (result.get("sass_gate") or {}).get("ok")}
     if rc:
@@ -287,17 +352,18 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         exports = []
         for i, report in enumerate(reports):
             sqlite = report.with_name(report.name.removesuffix(".nsys-rep") + ".sqlite")
-            erc = run([a.nsys, "export", "--type", "sqlite", "--force-overwrite", "true", "-o", str(sqlite), str(report)],
-                      out / f"export-{i:02d}.log")
-            exports.append({"report": report.name, "exit": erc})
-            if erc:
-                whys.append(f"nsys export of {report.name} exited {erc}")
-                continue
-            try:
-                got = nsys.report(sqlite, card, "item ")
-            except ValueError as ex:
-                whys.append(f"{report.name} has no busy SM-time: {ex}")
-                continue
+            with phases(f"nsys export {i:02d} ({report.name})"):
+                erc = run([a.nsys, "export", "--type", "sqlite", "--force-overwrite", "true", "-o", str(sqlite),
+                           str(report)], out / f"export-{i:02d}.log")
+                exports.append({"report": report.name, "exit": erc})
+                if erc:
+                    whys.append(f"nsys export of {report.name} exited {erc}")
+                    continue
+                try:
+                    got = nsys.report(sqlite, card, "item ")
+                except ValueError as ex:
+                    whys.append(f"{report.name} has no busy SM-time: {ex}")
+                    continue
             busy |= got["busy"]
             exports[-1] |= {"items": got["ranges"], "stray_kernels": got["stray"]}
             if got["ranges"] and got["stray"] > got["ranges"]:
@@ -311,19 +377,22 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         doc["reports"], doc["traced_prime"] = exports, result.get("traced_prime")
         _write(out / "busy.json", busy)
         if sch.arm:
-            vrc = run([sys.executable, str(HARNESS / "verify.py"), str(bench_json), "--every-row", "--no-ledger",
-                       "--run-id", a.run_id, *(["--commit", a.commit] if a.commit else [])], out / "verify.log")
+            with phases("verify.py, every row"):
+                vrc = run([sys.executable, str(HARNESS / "verify.py"), str(bench_json), "--every-row", "--no-ledger",
+                           "--run-id", a.run_id, *(["--commit", a.commit] if a.commit else [])], out / "verify.log")
             doc["verify_exit"] = vrc
             result = json.loads(bench_json.read_text())
-        for name, m in at.items():
-            p = O.layer_gamma(result, busy, card, m, sch, model)
-            p["verified"] = verified(result, arm, m, model)
-            p["epsilon"] = epsilon_at(sch, card, m, model)
-            p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
-            g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
-            p["whys"] = O.point_whys(p)
-            doc["points"][name] = p
+        with phases("γ at each point"):
+            for name, m in at.items():
+                p = O.layer_gamma(result, busy, card, m, sch, model)
+                p["verified"] = verified(result, arm, m, model)
+                p["epsilon"] = epsilon_at(sch, card, m, model)
+                p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
+                g = (p.get("gamma") or {}).get("gamma")
+                p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
+                p["whys"] = O.point_whys(p)
+                doc["points"][name] = p
+    doc["phases"] = phases.list
     _write(out / "overhead.json", doc)
     gammas = {n: (p.get("gamma") or {}).get("gamma") for n, p in doc["points"].items()}
     ok = not rc and bool(doc["points"]) and None not in gammas.values()
@@ -351,6 +420,7 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
         s.add_argument("--out", type=Path, required=True)
         s.add_argument("--run-dir", type=Path, required=True)
         s.add_argument("--run-id", required=True)
+        s.add_argument("--build-s", type=float, help="the harness build's seconds (overhead_node.sh), the first phase")
         if name == "points":
             s.add_argument("--model", default=O.KERNEL_MODEL, choices=list(O.MODELS))
             s.add_argument("--precision", default="fp8")
@@ -366,6 +436,8 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
             s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")
             s.add_argument("--nsys", default="nsys")
+            s.add_argument("--keep-reports", action="store_true",
+                           help="keep the Nsight reports in --out's nsys/ instead of --scratch: a profiling pass, never of record")
     return p.parse_args(argv)
 
 

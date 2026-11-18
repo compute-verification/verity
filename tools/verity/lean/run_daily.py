@@ -2,7 +2,7 @@
 """Node 1's daily publish of the Lean build cache: `vy-lean-cache-daily.service` runs it as root, with no arguments, from
 `/usr/local/lib/vy-lean-cache/run-daily`, beside the `cache.py` it runs. Root holds the key, so it never runs a tree's code.
 
-1. Main's commit is node 1's bare repository's `refs/heads/main`, which `research merge` pushes after GitHub's.
+1. Main's commit is node 1's bare repository's `refs/heads/main`, which the verified queue pushes after GitHub's (`merge.push_mirror`).
 2. `vy-lean-sandbox checkout` makes `/build/verity` a fresh clone of it, its sources root's.
 3. As research, in a checkout of the commit kept at PREP, `tools/verity/lean/setup.sh` fetches each package's dependencies: the
    pinned bundle, then Lake, then Mathlib's cache. Root copies them to DEPS/<deps_key>, readable by all, and the build

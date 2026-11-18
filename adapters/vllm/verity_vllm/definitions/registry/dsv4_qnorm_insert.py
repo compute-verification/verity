@@ -53,6 +53,7 @@ from verity.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, const
 from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import flashmla as F

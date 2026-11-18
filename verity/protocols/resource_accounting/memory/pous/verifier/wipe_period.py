@@ -317,8 +317,8 @@ def store_gaps(store: Mapping[str, Any] | None) -> list[str]:
 
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
-    check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
-    signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
+    check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the placement's
+    `trusted-device` holds (`wipe_party.holds`), which no placement made on the workload's machine does, the egress (uncounted at `EGRESS_MAX_UNITS`;
     any other count is the evidence writer's, which no network attester signed, and certifies no wipe), each
     undeclared tier, what the prover's store leaves out (`store_gaps`) and each link leaving the node that no network
     attester counts. A placement that names the prover's store (`prover_store`, before the placement named no device)
@@ -329,7 +329,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
                          "subprotocol again")
     out = [] if wipe_party.holds(where) else [f"key custody: {mc.premise(where)}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
-        out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
+        out.append("egress: uncounted, the check was given no network attester's count over the session, so the bound "
                    "is vacuous")
     elif egress_mib is not None:
         out.append(f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the "
@@ -337,7 +337,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
     out += where["store_gaps"]
-    out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network certifier, so what "
+    out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network attester, so what "
             "leaves on it is outside E" for e in where["links"] if e["counted_by"] is None]
     return out
 

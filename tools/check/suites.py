@@ -152,12 +152,13 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
-kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run in two
-lanes, the longest of them alone beside the rest one at a time, which split the processes and memory the parallel suites have in
-proportion to what each run has to do (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run each
+in a lane of its own on whole workers, each process and its `worker_gb` going to the suite with the most left to do a worker
+while it still fits, or the one with the most left to do in a lane of its own beside the rest one at a time, whichever ends
+first (`shared_lanes`, `wide_lanes`): to do, the seconds the kept passes of the tests it will run took, its
 reused ones left out (`todo_seconds`), not its last duration, which a run that reused most of its passes makes small; with
 any suite that has no such pass here, they run in one lane, each on all its processes in turn. But a suite that declares
-`[tool.verity.tests] workers` and would get fewer there runs in a third lane of its own on that many, up to half of what the
+`[tool.verity.tests] workers` and would get fewer there runs in a lane of its own on that many, up to half of what the
 parallel suites have (`wide_lanes`,
 `held_workers`); beside them the others run side by side on as few of the processes as let
 them finish about when the longest of them does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
@@ -184,9 +185,10 @@ the run's own timeout.
 
 `--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
 half of it beside parallel suites (`serial_slots`), and the parallel suites' lanes split the rest (`wide_gb`, `wide_lanes`; a
-lane held to a suite's `workers` takes that many at its `worker_gb`), each
+lane held to a suite's `workers` takes what that many book), each
 suite with as many xdist workers as its lane's share holds at its `[tool.verity.tests] worker_gb`, what one of them may reach,
-else at `TEST_PROCESS_GB`; one that overlaps another of its lane waits for its workers' GB.
+else at `TEST_PROCESS_GB`, and each past the first at its `typical_worker_gb` where it declares one, the peak its workers
+reach but for its heaviest tests (`workers_gb`); one that overlaps another of its lane waits for its workers' GB.
 """
 from __future__ import annotations
 
@@ -194,6 +196,7 @@ import argparse
 import ast
 import concurrent.futures
 import contextlib
+import functools
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -277,8 +280,9 @@ TOOLS = ("lake", "cargo")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
-#: run` would reach another verdict than inside check (test_remote_cwd's)
-RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: run` would reach another verdict than inside check (test_remote_cwd's). Nor the kit's trial switch, which `research run` sets on
+#: a run of a tree that isn't `main`'s, a queue's candidate checks among them: a test that wants a trial sets it itself
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL")
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
@@ -299,7 +303,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-veri
               "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
-              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
               "verity-network-e2e",
               "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
@@ -309,8 +313,10 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
-#: failure no PR caused
-LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+#: failure no PR caused. It holds the tree's one Lake build lock, the file every test-time build takes
+#: (`verity_difftest.BUILD_LOCK`), since Lake builds a package's path requires in their own `.lake`
+LAKE_BUILD = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
+                     'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" lake build')
 #: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
 #: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
 #: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;
@@ -404,12 +410,14 @@ class Suite:
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
-    worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
+    worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded);
+    #                              each past the first books [tool.verity.tests] typical_worker_gb where declared (`workers_gb`)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
     inner: tuple[str, ...] = ()   # the suites under its test paths, which its pytest ignores (the root's included)
     parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
     timeout_workers: int = 0     # [tool.verity.tests] timeout_workers: the xdist workers its timeout_s holds for (`bound`; 0: any)
     workers: int = 0             # [tool.verity.tests] workers: the xdist workers it runs on at least, where they fit (`held_workers`)
+    typical_worker_gb: float = 0.0
 
 
 def _pyproject(path: str) -> dict:
@@ -572,9 +580,14 @@ def discover() -> list[Suite]:
         if "workers" in tests and (type(least) is not int or least < 2 or tests.get("parallel") is not True):
             raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] workers = {least!r}: the xdist workers a parallel suite "
                              "runs on at least is an integer of at least 2, beside parallel = true")
+        typical = tests.get("typical_worker_gb", 0)
+        if "typical_worker_gb" in tests and (type(typical) not in (int, float) or not 0 < typical <= tests.get("worker_gb", 0)):
+            raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] typical_worker_gb = {typical!r}: what each xdist worker "
+                             "past the first may reach is a positive number of GB, at most its worker_gb, beside worker_gb")
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
-                            float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held, workers=least))
+                            float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held, workers=least,
+                            typical_worker_gb=float(typical)))
     named = Counter(s.name for s in suites)
     if clash := sorted(n for n, k in named.items() if k > 1):
         raise ValueError(f"two suites have each of the names {', '.join(clash)}: a suite at `tests/X` takes the name `X` gave it "
@@ -887,8 +900,10 @@ def cargo_on_path() -> None:
 
 
 def keyed_variables(env) -> dict[str, str]:
-    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`)."""
-    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}
+    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`) and those
+    no test inherits (`RUNNER_ENV`)."""
+    return {k: v for k, v in sorted(env.items())
+            if k.startswith(ENV_PREFIXES) and k not in RUNNER_ENV and SETTINGS.role_of(k) != SETTINGS.WHERE}
 
 
 def environment() -> dict:
@@ -1263,6 +1278,7 @@ class Modules:
         base = "" if suite.path == "." else suite.path + "/"
         self.testpaths = [base + t.strip("/") if t not in (".", "") else suite.path for t in cfg.get("testpaths", ["."])]
         self.inner = list(suite.inner)
+        self._narrowable: dict[str, bool] = {}
         self.texts = {p: t for p, t in texts.items() if _under(p, self.testpaths) and not _under(p, self.inner)}
         self.scans = {p: scan(t) for p, t in self.texts.items()}
         by_name: dict[str, list[str]] = {}
@@ -1275,9 +1291,12 @@ class Modules:
 
     def narrowable(self, path: str) -> bool:
         """A test module a key may leave out: a `test_*.py` file under the test paths, outside a data directory."""
-        parts = path.split("/")
-        return (parts[-1].startswith("test_") and parts[-1].endswith(".py") and not _DATA_DIRS.intersection(parts[:-1])
-                and _under(path, self.testpaths) and not _under(path, self.inner))
+        if (got := self._narrowable.get(path)) is None:
+            parts = path.split("/")
+            got = self._narrowable[path] = (parts[-1].startswith("test_") and parts[-1].endswith(".py")
+                                            and not _DATA_DIRS.intersection(parts[:-1]) and _under(path, self.testpaths)
+                                            and not _under(path, self.inner))
+        return got
 
     def modules(self) -> list[str]:
         return sorted(p for p in self.texts if self.narrowable(p))
@@ -1398,12 +1417,17 @@ def traced_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, 
     runner whole, its suite's configuration, and the suite's test modules ``keep`` names (all with ``keep`` None); not the
     directories the suite depends on, whose files a traced entry's read set holds one by one."""
     config = "pyproject.toml" if suite.path == "." else f"{suite.path}/pyproject.toml"
-    inputs = {p: i for p, i in ids.items() if p != suite.path and not (ROOT / p).is_dir()}
+    inputs = {p: i for p, i in ids.items() if p != suite.path and not _is_dir(ROOT / p)}
     inputs.update({f: i for f, i in own.items() if f == config or (mods.narrowable(f) and (keep is None or f in keep))})
     blob = json.dumps({"schema": "traced/v2", "suite": suite.name, "depth": depth(suite), "module": _rel(suite.path, module),
                        "inputs": _rel_keys(suite.path, inputs), "artifacts": _rel_keys(suite.path, artifact_ids(suite)),
                        "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
+
+
+@functools.cache
+def _is_dir(path: Path) -> bool:
+    return path.is_dir()
 
 
 def per_test_dir(suite: Suite) -> Path:
@@ -1427,6 +1451,7 @@ class PerTest:
         module's unless ``sets_of(module)`` gives its own (`own_sets`)."""
         self.suite, self.tree = suite, tree
         self.dir = per_test_dir(suite)
+        _is_dir.cache_clear()
         cut = dropped(suite, [p for p in ids if not p.startswith("fixture:")])
         self.own = {f: i for f, i in own_ids(tree, suite.path).items()
                     if (markdown(suite) or not f.endswith(".md")) and not _under(f, cut)}
@@ -1733,9 +1758,9 @@ def _changed_files(old: str | None, new: str | None) -> list[str] | None:
     return r.stdout.split() if r.returncode == 0 else None
 
 
-def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
-    """What differs between two suites' key components (`components`), one line each, a changed directory with its files, by
-    their paths from the root for the suite at ``own``."""
+def explain_changes(was: dict, now: dict, own: str = ".", files: bool = True) -> list[str]:
+    """What differs between two suites' key components (`components`), one line each, a changed directory with its files (without
+    ``files``, without them: as many lines, and no `git diff-tree`), by their paths from the root for the suite at ``own``."""
     out = []
     wi, ni = was.get("inputs", {}), now["inputs"]
     for q in sorted(set(wi) | set(ni)):
@@ -1746,12 +1771,12 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
             out.append(f"input {p}: no longer an input")
         elif wi[q] != ni[q]:
             wt, nt = was.get("trees", {}).get(q, wi[q]), now.get("trees", {}).get(q, ni[q])
-            files = _changed_files(wt, nt)
-            if files is not None and q in now.get("trees", {}):
+            changed = _changed_files(wt, nt) if files else None
+            if changed is not None and q in now.get("trees", {}):
                 nested = now.get("nested", {}).get(q, [])
-                files = [f for f in files if not (f.endswith(".md") and not ni[q].startswith("cut+md:")) and not _under(f, nested)]
-            where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
-                (f" and {len(files) - 8} more" if len(files) > 8 else "")
+                changed = [f for f in changed if not (f.endswith(".md") and not ni[q].startswith("cut+md:")) and not _under(f, nested)]
+            where = "" if changed is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in changed[:8])}" + \
+                (f" and {len(changed) - 8} more" if len(changed) > 8 else "")
             out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
     if was.get("depth") != now.get("depth"):
         out.append(f"depth: {was.get('depth')} -> {now.get('depth')} (its tests find the root by counting parents)")
@@ -1824,9 +1849,8 @@ def nearest(passes: list[dict], now: dict, own: str) -> tuple[dict, list[str]] |
     """The pass of ``passes`` whose components differ least from ``now``, with what differs (`explain_changes`)."""
     if not passes:
         return None
-    diffs = [(explain_changes(d["components"], now, own), d) for d in passes]
-    lines, best = min(diffs, key=lambda x: (len(x[0]), x[1].get("when", "")))
-    return best, lines
+    best = min(passes, key=lambda d: (len(explain_changes(d["components"], now, own, files=False)), d.get("when", "")))
+    return best, explain_changes(best["components"], now, own)
 
 
 def forced_by(s: Suite, now: dict, passes: list[dict], held: bool, fresh: bool) -> dict:
@@ -1870,30 +1894,36 @@ def _last_passes(dirs: list[Path]) -> dict[str, tuple[str, float]]:
 
 
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
-    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
-    key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first,
+    of the test modules the tree holds: of which the guard starts the longest it collected at the heads of the workers' shares
+    (`heavy_first`). An order only, which no key or verdict reads."""
     last = _last_passes([per_test_dir(suite)])
+    held = {m for m in {node.split("::", 1)[0] for node in last} if (ROOT / suite.path / m).is_file()}
+    last = {node: v for node, v in last.items() if node.split("::", 1)[0] in held}
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
 
 
-def todo_seconds(suite: Suite, part: Part | None, modules=None, reuse=()) -> float | None:
+def todo_seconds(suite: Suite, part: Part | None, modules=None, reuse=(), longest: bool = False) -> float | None:
     """What a parallel suite's run has to do, as its lanes' share reads it (`shared_lanes`): the seconds the newest kept pass
     of each test it will run took (`_last_passes`), at least 1. Those are the tests of its test ``modules`` (None: any), in
     its part (a part by test id: its share of them), whose passes it doesn't ``reuse``; None when none of them has a kept
     pass here. Not its last run's seconds: those of a run that reused most of its passes would leave a run that reuses none a
-    worker or two."""
+    worker or two. With ``longest``, the longest of those tests' seconds (of the whole suite's, for a part by test id): no
+    number of workers ends the run sooner."""
     base = "" if suite.path == "." else suite.path + "/"
     files = set(part.files) if part is not None and part.by != "id" else None
-    skip, seen, total = set(reuse), False, 0.0
+    skip, seen, total, most = set(reuse), False, 0.0, 0.0
     for node, (_when, s) in _last_passes([per_test_dir(suite)]).items():
         f = base + node.split("::", 1)[0]
         if (modules is not None and f not in modules) or (files is not None and f not in files):
             continue
         seen = True
         total += 0.0 if node in skip else s
+        most = most if node in skip else max(most, s)
     if not seen:
         return None
+    if longest:
+        return most
     return max(1.0, total * (part.share if part is not None and part.by == "id" else 1.0))
 
 
@@ -2509,15 +2539,27 @@ def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
 
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
-    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
-    at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
+    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer (`workers_gb`), at its
+    `worker_gb`, else at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
     if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // worker_gb(s))))
+    return max(1, min(n, fitting(s, mem_gb)))
 
 
 def worker_gb(s: Suite) -> float:
     return s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB
+
+
+def more_gb(s: Suite) -> float:
+    return s.typical_worker_gb if s.typical_worker_gb > 0 else worker_gb(s)
+
+
+def workers_gb(s: Suite, n: int) -> float:
+    return 0.0 if n < 1 else worker_gb(s) + (n - 1) * more_gb(s)
+
+
+def fitting(s: Suite, gb: float) -> int:
+    return 0 if gb < worker_gb(s) else 1 + int((gb - worker_gb(s)) // more_gb(s))
 
 
 def wide_gb(mem_gb: float | None, serial: int) -> float | None:
@@ -2542,43 +2584,70 @@ def held_workers(s: Suite, procs: int, gb: float | None) -> int:
     none declared)."""
     if not s.workers:
         return 0
-    return min(s.workers, procs // 2, *([] if gb is None else [int(gb / 2 // worker_gb(s))]))
+    return min(s.workers, procs // 2, *([] if gb is None else [fitting(s, gb / 2)]))
 
 
-def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
+def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None, own: bool | None = None,
+               longest: list[float | None] | None = None) -> list[Lane]:
     """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
-    None when that isn't known), split by their seconds (`shared_lanes`); but a suite that declares `workers` and would get
-    fewer there (it reuses most of its passes, or a longer suite took the larger share) has a lane of its own with what it holds to
-    (`held_workers`), and the others split the rest: a suite whose workers' count bounds its run (circuit_check's, whose
-    catalog each worker builds before any test runs) isn't left a few by a short last run."""
-    lanes = shared_lanes(wide, seconds, procs, gb)
+    None when that isn't known), split by their seconds (`shared_lanes`, a lane each with ``own``, the longest beside the rest
+    without); but a suite that declares `workers` and would get fewer there (it reuses most of its passes, or a longer suite
+    took the larger share) has a lane of its own with what it holds to (`held_workers`), and the others split the rest: a suite
+    whose workers' count bounds its run (circuit_check's, whose catalog each worker builds before any test runs) isn't left a
+    few by a short last run. Unless ``own`` is given, of the two splits the one whose lanes end first, each suite taking its
+    seconds over its workers (`wide_workers`) or its ``longest`` test's, whichever is more, and a lane each on a tie: a lane
+    of its own holds its processes and GB until the line ends, idle once a short suite has passed, where one at a time leaves
+    them to the next, and the held lane each split leaves differs."""
+    if own is None:
+        of = {id(s): (t or 0.0, m or 0.0) for s, t, m in zip(wide, seconds, longest or [None] * len(wide))}
+
+        def end(lanes: list[Lane]) -> float:
+            return max(sum(max(of[id(s)][1], of[id(s)][0] / wide_workers(s, x.procs, x.gb)) for s in x.suites) for x in lanes)
+
+        return min((wide_lanes(wide, seconds, procs, gb, o) for o in (True, False)), key=end)
+    lanes = shared_lanes(wide, seconds, procs, gb, own)
     for i, s in enumerate(wide):
         n = held_workers(s, procs, gb)
         [lane] = [x for x in lanes if s in x.suites]
         if len(wide) > 1 and n > wide_workers(s, lane.procs, lane.gb):
-            g = None if gb is None else n * worker_gb(s)
+            g = None if gb is None else workers_gb(s, n)
             return [Lane([s], n, g), *wide_lanes(wide[:i] + wide[i + 1:], seconds[:i] + seconds[i + 1:], procs - n,
-                                                 None if gb is None else gb - g)]
+                                                 None if gb is None else gb - g, own)]
     return lanes
 
 
-def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
+def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None, own: bool = True) -> list[Lane]:
     """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
-    None when that isn't known): the longest in a lane of its own beside the rest, the two splitting both in proportion to
-    their seconds, so that they end about together. One lane for fewer than two suites, a single process, a share too small
-    for one worker of a suite at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run
-    on what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of
-    its processes in turn."""
+    None when that isn't known). With ``own``, each in a lane of its own on one worker, then each further process, with what
+    it books of ``gb`` (`more_gb`), to the suite with the most seconds a worker whose next worker still fits, so that they end
+    about together on whole workers whichever of the two bounds them; without, the longest in a lane of its own beside the rest one
+    at a time, the two sharing both in proportion to their seconds. One lane for fewer than two suites or processes, too few
+    processes or too little ``gb`` for one worker in each lane at its `worker_gb`, or any suite whose seconds aren't known:
+    counted at nothing, it would run on what the others leave, one worker for a suite that may need an hour of them, while
+    each suite of one lane gets all of its processes in turn."""
     if len(wide) < 2 or procs < 2 or not all(seconds):
         return [Lane(wide, procs, gb)]
-    i = max(range(len(wide)), key=lambda j: seconds[j])
-    big, rest = wide[i], wide[:i] + wide[i + 1:]
-    f = seconds[i] / sum(seconds)
-    p = min(procs - 1, max(1, round(f * procs)))
-    g = None if gb is None else f * gb
-    if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
+    if not own:
+        i = max(range(len(wide)), key=lambda j: seconds[j])
+        big, rest = wide[i], wide[:i] + wide[i + 1:]
+        f = seconds[i] / sum(seconds)
+        p = min(procs - 1, max(1, round(f * procs)))
+        g = None if gb is None else f * gb
+        if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
+            return [Lane(wide, procs, gb)]
+        return [Lane([big], p, g), Lane(rest, procs - p, None if gb is None else gb - g)]
+    if procs < len(wide) or (gb is not None and gb < sum(map(worker_gb, wide))):
         return [Lane(wide, procs, gb)]
-    return [Lane([big], p, g), Lane(rest, procs - p, None if gb is None else gb - g)]
+    n = [1] * len(wide)
+    left = None if gb is None else gb - sum(map(worker_gb, wide))
+    for _ in range(procs - len(wide)):
+        fits = [j for j, s in enumerate(wide) if left is None or more_gb(s) <= left]
+        if not fits:
+            break
+        j = max(fits, key=lambda j: seconds[j] / n[j])
+        n[j] += 1
+        left = None if left is None else left - more_gb(wide[j])
+    return [Lane([s], k, None if gb is None else workers_gb(s, k)) for s, k in zip(wide, n)]
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:
@@ -2628,7 +2697,7 @@ def _count(r: Result) -> str:
 
 def failing_path(out: Path) -> Path:
     """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
-    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    have failed while it runs (the verified queue reads it through `research status --also`)."""
     return out.with_name(f"{out.stem}.failed.json")
 
 
@@ -2902,7 +2971,9 @@ def main(argv: list[str] | None = None) -> int:
         return f"{s.name}:{parts[s].spec}" if s in parts else s.name
 
     def last(s: Suite) -> float | None:
-        """Its last run's seconds, a part's as its share of its suite's."""
+        """Its last run's seconds, a part's as its own last run's, else as its share of its suite's."""
+        if (k := known.get(label(s))) is not None:
+            return k
         return None if (k := known.get(s.name)) is None else k * (parts[s].share if s in parts else 1.0)
 
     todo.sort(key=lambda t: -(last(t[0]) if last(t[0]) is not None else float("inf")))
@@ -2922,18 +2993,20 @@ def main(argv: list[str] | None = None) -> int:
     reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
-    work = {s: todo_seconds(s, parts.get(s), per[s].keeps if s in per else None, reuse.get(s, ())) for s in wide}
+    work, most = ({s: todo_seconds(s, parts.get(s), per[s].keeps if s in per else None, reuse.get(s, ()), longest=m) for s in wide}
+                  for m in (False, True))
     wide.sort(key=lambda s: -(work[s] if work[s] is not None else float("inf")))
     r = serial_slots([last(s) for s in one], len(wide), jobs, a.mem_gb)
-    lanes = [Lane(one, r, None), *(wide_lanes(wide, [work[s] for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
+    lanes = [Lane(one, r, None), *(wide_lanes(wide, [work[s] for s in wide], jobs - r, wide_gb(a.mem_gb, r),
+                                              longest=[most[s] for s in wide]) if wide else [])]
     lane_of = {s: k for k, lane in enumerate(lanes) for s in lane.suites}
     procs = [Slots(lane.procs) for lane in lanes]
     memory = [Slots(int(lane.gb)) if lane.gb is not None else None for lane in lanes]
     turns = {s: lane.suites.index(s) for lane in lanes for s in lane.suites}
     beside = f", beside {len(one)} others on {r}" if one else ""
     if len(lanes) > 2:
-        alone = ", ".join(f"{x.suites[0].name} on {x.procs} processes" for x in lanes[1:-1])
-        print(f"suites: {alone} beside {len(lanes[-1].suites)} parallel suites one at a time on {lanes[-1].procs}{beside}")
+        print("suites: " + ", ".join(f"{x.suites[0].name} on {x.procs} processes" if len(x.suites) == 1 else
+                                     f"{len(x.suites)} parallel suites one at a time on {x.procs}" for x in lanes[1:]) + beside)
     elif wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes{beside}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
@@ -2943,7 +3016,7 @@ def main(argv: list[str] | None = None) -> int:
     def start(s: Suite, paths: list[str]) -> Result:
         lane, mem = lanes[lane_of[s]], memory[lane_of[s]]
         n = wide_workers(s, lane.procs, lane.gb) if s in wide else 1
-        gb = min(int(lane.gb), math.ceil(n * worker_gb(s))) if mem else 0
+        gb = min(int(lane.gb), math.ceil(workers_gb(s, n))) if mem else 0
         with procs[lane_of[s]].take(turns[s], n), (mem.take(turns[s], gb) if mem else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
@@ -2958,8 +3031,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(r)
         if a.json and r.status == "failed":
             failing(a.json, results)
-        if s not in parts:                 # a part's seconds are its share's, not the suite's
-            known[s.name] = r.seconds
+        known[label(s)] = r.seconds
         u = used(r, paths, deps, tree, lock)
         if s in parts and reach[s] is not None:
             # a test module of another part its tests opened (as data, by path) is as much its input as one they import

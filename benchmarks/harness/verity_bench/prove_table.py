@@ -12,6 +12,7 @@ from typing import Any
 from verity_bench import jobs, kit, overhead_records, settings
 from verity_bench import overhead as O
 from verity_bench import prove as P
+from verity_bench import prove_census as PC
 from verity_bench.prove_common import (
     CHECKS,
     LEAN,
@@ -66,7 +67,9 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     """A proof system's table on a workload from the store's records, each type priced at `provers` provers on a host
     of `cores` CPU cores a card: `prove.report`'s rows, sources and totals, with the inputs read, the runs and rows
     refused, the stated serving rate and the totals a monitoring period over all compute. SPOT's also holds the
-    prover GPUs a serving GPU at the exfiltration run of record's design (`at_record`)."""
+    prover GPUs a serving GPU at the exfiltration run of record's design (`at_record`). A `steady_only` workload's also
+    holds its census table (`prove_census.read`); where that refuses the totals, the table holds only the census table,
+    the refusal and the steady-state rows left out."""
 
     if system != "spot" and sampling:
         raise ValueError(f"--sampling is SPOT's: {system} proves every block (pass --system spot)")
@@ -79,6 +82,10 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     if not local_only:
         completion.pull_labels()
     store, w = completion.store, WORKLOADS[workload]
+    first = PC.read(store, w, system, sampling, provers, cores) if w.steady_only else None
+    if first is not None and first["refusal"] is not None:
+        return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "system": system, "provers": provers,
+                "cores": cores, **first}
     blocks, inputs = census(store, w)
     prover, more, refused = flock(store, w, blocks, provers, cores)
     timed, its, unread = lean(store, w, blocks)
@@ -99,7 +106,8 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
             "macs_in_blocks": blocks.macs_in_blocks, "inputs": inputs,
             "refused": refused, "serving": {"gpu_seconds_per_token": seconds, "status": "modeled", "basis": rate.basis},
             **doc, "periods": _periods(root, rate, doc["totals"]["gpus_per_serving_gpu"], sampled),
-            **({} if sampled is None else {"at_record": at_record(store)})}
+            **({} if sampled is None else {"at_record": at_record(store)}),
+            **({} if first is None else {"census": first["census"], "refusal": None})}
 
 
 def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan | None) -> dict:
@@ -160,8 +168,10 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str, str]:
         other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
         own = (f"; at the sampling plan's own prices, which its planner sized the sample at: {t['planned'][figure]:.6g}"
                if t.get("planned") else "")
+        bound = (f"; an upper bound, since {len(t['bounded'])} block type(s) are priced at a larger block's rate (bounded by)"
+                 if t.get("bounded") else "")
         return t[figure], mark, (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
-                           f"{' it prices' if t['missing'] else ''}{other}{own}")
+                           f"{' it prices' if t['missing'] else ''}{bound}{other}{own}")
     v = t[figure]
     if v is None:
         return None, "modeled", ("not measured: no Lean verifier run of record measures a block type "
@@ -190,7 +200,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     a statement about the rows they rest on, which moves neither value nor mark. The figure at the exfiltration run of record's design
     (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
     `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
-    it as their `verdict`: `meets` at or under it, `misses` over it."""
+    it as their `verdict`: `meets` at or under it, `misses` over it. A workload with a `member` has each measurement
+    carry it."""
 
     if bad := sorted(set(metrics.values()) - FIGURES.keys()):
         raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
@@ -217,11 +228,14 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         if (off := doc["totals"].get("off_node")) and figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
             inputs.append(off_node_line(off))
         out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
+    member = WORKLOADS[doc["workload"]].member
     for m, figure in zip(out, metrics.values(), strict=True):
         if figure in TARGETED:
             m["target"] = GPUS_PER_SERVING_GPU_TARGET
             if m["value"] is not None:
                 m["verdict"] = "meets" if m["value"] <= GPUS_PER_SERVING_GPU_TARGET else "misses"
+        if member is not None:
+            m["member"] = member
     return out
 
 
@@ -245,11 +259,20 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
     """Writes `RECORDED`'s table into this research run's result (`kit.writer`): the table as `TABLE`, named a
     measurement file and the validation's evidence, what ran (with the sampling plan) in the fingerprint,
     `measurements` under `metrics`' ids and `validation`. Another system's table records nothing: each metric is
-    `RECORDED`'s."""
+    `RECORDED`'s. A table with a census table (`prove_census`) writes it first as `prove_census.CENSUS_TABLE`, a
+    measurement file; one whose totals are refused records nothing else."""
 
     if doc["system"].split("[", 1)[0] != RECORDED:
         return
     writer = kit.writer(settings.RESEARCH_RUN_DIR)
+    if "census" in doc:
+        kept = writer.out / PC.CENSUS_TABLE
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps({k: doc[k] for k in ("workload", "model", "census", "refusal")}, indent=1,
+                                   sort_keys=True) + "\n")
+        writer.measurement_file(PC.CENSUS_TABLE)
+        if doc["refusal"] is not None:
+            return
     table = writer.out / TABLE
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")

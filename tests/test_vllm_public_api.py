@@ -86,8 +86,7 @@ PUBLIC = {
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",
     "verity_vllm.engine.int8_ranks": "I1: the exact-int8 parts a process's engines build with, its tensor-parallel ranks "
-                                     "included (register, EXTENSION), which the harness's engine and benchmarks/network_e2e's "
-                                     "trace plugin register",
+                                     "included (register, EXTENSION), which benchmarks/network_e2e's trace plugin registers",
     "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
                                         "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
                                         "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
@@ -98,6 +97,10 @@ PUBLIC = {
                                                  "pin (MANIFEST, checkpoint_entries), a pin's config (pinned_hf_config, "
                                                  "find_hf_config, hf_snapshot) and its profile module's name, which "
                                                  "benchmarks/inference_only reads",
+    "verity_vllm.engine.profiles.stand_in": "I1: GLM-5.3's one-card stand-in: its registered config cut in layers, "
+                                            "routed experts and heads (cut) and a checkpoint directory of it with a "
+                                            "checkpoint's tokenizer and no weight (stand_in), which benchmarks/serve_tax "
+                                            "serves from random weights",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
     "verity_vllm.observe.events": "I2: the observation log's event vocabulary (schema verity-capture/log/v1), the facts a "
@@ -141,8 +144,7 @@ PUBLIC = {
                                                 "circuit cut at its linears (PearlTables)",
     "verity_vllm.program.frontend.kernel_readback": "I7: what a built model's layers execute, read back: the int8 scope "
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
-                                                    "value over the layers, which the harness's engine checks against its "
-                                                    "declaration",
+                                                    "value over the layers",
     "verity_vllm.program.frontend.vllm_derive": "I7: a Program derived under the vLLM adapter's rules, its profiles' vocabulary "
                                                 "and its served seed and length rules (derive, derive_report), which "
                                                 "benchmarks/network_sim derives its served Program with",
@@ -194,12 +196,12 @@ PUBLIC = {
                                               "the compiler reads and benchmarks/network_e2e measures",
     "verity_vllm.pipeline.advice_code.schedule": "I1: the scheduler replay's engine config, certified tick, steps and request "
                                                  "states",
-    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the certifier's cache vectors are "
+    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the network attester's cache vectors are "
                                              "held to",
-    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the certifier's replay vectors and "
+    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the network attester's replay vectors and "
                                                "the traces' admission are held to",
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
-                                                "certifier's derived vectors are held to",
+                                                "network attester's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
                                         "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
@@ -289,7 +291,7 @@ PUBLIC = {
                                        "Context, Target)",
     "verity_vllm.protocols.pouw": "I1: PoUW's protocol option, and what a run that is its own auditor reads of it: its "
                                   "coins an in-process challenger's (challenged) and the H1 run an installed H1 option "
-                                  "serves (h1_run), which the harness's arms and engine and benchmarks/pouw read",
+                                  "serves (h1_run), which the harness's arms and benchmarks/pouw read",
     "verity_vllm.protocols.linear.api": "I1: the linear-site interface: what computes y at a linear layer, where its weight comes "
                                         "from, and the one object vLLM's quant_method.apply calls (Stack, Arm, Control, PassSpec, "
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
@@ -398,8 +400,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.int8_attention",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
-    "verity_vllm.engine.int8_ops",
-    "verity_vllm.engine.int8_vllm",
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",

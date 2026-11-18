@@ -5,7 +5,9 @@ proof-block boundary of a partition of the program and registers the commitment 
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with
 probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
-applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
+applied to its committed inputs. On a served run, that holds of each sampled block on its own inputs; the wires between
+blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
+The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
@@ -238,7 +240,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   reads in `security/Properties/Spot/MonitoringPeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
-  machine only through that machine's certifier coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`, the coins' path).
+  machine only through that machine's attester coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/protocols/compose/verifier/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
@@ -252,13 +254,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor device runs the challenger and the
-    network attester, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
+    network attester, and a run's coins leave it only on the peer's attester coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
   - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the network attester's
     ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the network attester's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
-  proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
+  proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`calibration/sampling_plan`).
   Core API lists each module.
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s

@@ -79,7 +79,7 @@ under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
@@ -96,8 +96,9 @@ committer (`NativeHostCommitter.detach`), and it waits only while the windows aw
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
-run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
-the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
+run's ``$OUT``) gets the fields `serve_mirror.PUBLIC` names of the records it lists, each with its public kind, after each close
+and each seal, and at the stop before the seals still pending; every other field and file stays in ``--out``.
+SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
@@ -143,9 +144,10 @@ from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
-                                               records_mirror, served_statics, user_of)
-from verity_vllm.pipeline.serve_loop import EngineLoop
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of,
+                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
+from verity_vllm.pipeline.serve_mirror import records_mirror
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -178,7 +180,7 @@ class Options:
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
-                                 "network certification's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
+                                 "network attestation's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -217,8 +219,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
-                                              "traces) into this directory (the run's $OUT) after each block closes and at the stop")
+                                         help="copy the records' public fields (serve_mirror.PUBLIC, field by field; nothing it doesn't "
+                                              "name) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -260,6 +262,11 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
                                                "(serve_h1.config_of, serve_pearl.config_of)")
+    pearl_users: str | None = option("--pearl-users", default=None, metavar="REGEX",
+                                     help=f"with --protocols {SPL.ENTRY}: the arm opens on a window only at its first step "
+                                          "whose requests' users all match REGEX, the tied workload's; any other window "
+                                          "(the network attester's front's) serves no Pearl+ epoch and reserves no salt "
+                                          "session (serve_pearl)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
@@ -606,6 +613,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
+    if opts.pearl_users is not None and opts.protocols != SPL.ENTRY:
+        raise UsageError(f"--pearl-users is {SPL.ENTRY}'s, and --protocols is {opts.protocols}")
     if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:

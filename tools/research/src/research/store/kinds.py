@@ -13,7 +13,7 @@ KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
     "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
                       "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the frozen tables' 'native dense peak, "
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (calibration/native_peak; the frozen tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
@@ -56,12 +56,12 @@ KINDS: dict[str, str] = {
                       "its tasks' keys are the ones their verdicts are labelled under",
     "verity-graph/v2": "a graph/v2 of one commit (`verity graph --json`), listed on a worker by the executor; its tasks' keys (or, "
                        "for a task that reads others, the key rule's) are the ones their results are labelled under",
-    "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
+    "check/v1": "a repository check run's result.json (each step's status and seconds); what `research.merge` reads is its attempt",
     "check-shard/v1": "one shard's result.json (tools/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
                       "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "
                       "its set (research.merge.shard_set)",
     "lean-fast/v1": "a Lean fast-path run's result.json (tools/verity/lean/lean_changed.py --records): one package's records audited without "
-                    "the kernel replay or the tests; meta {validation, workload_fingerprint {package, update}}; `research merge` refuses "
+                    "the kernel replay or the tests; meta {validation, workload_fingerprint {package, update}}; `research.merge` refuses "
                     "an attempt with this result whatever its tool (research.merge.REFUSED_KINDS)",
     "lean-review/v1": "a `check.py --update` run's audit.json (tools/verity/lean): per package its review, statement_changes, and the guarantees "
                       "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> may name it, "
@@ -89,7 +89,7 @@ KINDS: dict[str, str] = {
                    "the name <campaign>/<slug>; payload null; title, hypothesis, owner, status, reason and evidence are labels on it",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "trust-dossier/v1": "the computed trust level of one numerical target (benchmarks/tc_probe/trust.py): meta = the TrustReport "
+    "trust-dossier/v1": "the computed trust level of one numerical target (calibration/tc_probe/trust.py): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",

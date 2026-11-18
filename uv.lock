@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -29,10 +29,10 @@ members = [
     "research",
     "research-tests",
     "verity",
+    "verity-attester-timing",
     "verity-bench",
     "verity-bench-specs",
     "verity-bench-tests",
-    "verity-certifier-timing",
     "verity-check",
     "verity-check-tests",
     "verity-circuit-check",
@@ -2375,17 +2375,34 @@ dev = [
 ]
 
 [[package]]
+name = "verity-attester-timing"
+version = "0.0.0"
+source = { virtual = "tests/calibration/attester_timing" }
+dependencies = [
+    { name = "verity" },
+    { name = "verity-config" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "verity", editable = "." },
+    { name = "verity-config", editable = "tools/config" },
+]
+
+[[package]]
 name = "verity-bench"
 version = "0.1.0"
 source = { editable = "benchmarks/harness" }
 dependencies = [
     { name = "verity-config" },
+    { name = "verity-flock" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "verity-config", editable = "tools/config" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
 
@@ -2404,21 +2421,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-bench", editable = "benchmarks/harness" }]
-
-[[package]]
-name = "verity-certifier-timing"
-version = "0.0.0"
-source = { virtual = "tests/benchmarks/certifier_timing" }
-dependencies = [
-    { name = "verity" },
-    { name = "verity-config" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "verity", editable = "." },
-    { name = "verity-config", editable = "tools/config" },
-]
 
 [[package]]
 name = "verity-check"
@@ -2704,7 +2706,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-machine-model"
 version = "0.0.0"
-source = { editable = "benchmarks/machine_model" }
+source = { editable = "calibration/machine_model" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
@@ -2719,18 +2721,18 @@ requires-dist = [
 [[package]]
 name = "verity-machine-model-tests"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/machine_model" }
+source = { virtual = "tests/calibration/machine_model" }
 dependencies = [
     { name = "verity-machine-model" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-machine-model", editable = "benchmarks/machine_model" }]
+requires-dist = [{ name = "verity-machine-model", editable = "calibration/machine_model" }]
 
 [[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/native_peak" }
+source = { virtual = "tests/calibration/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2925,7 +2927,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe" }
+source = { virtual = "tests/calibration/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2944,7 +2946,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe_fp4" }
+source = { virtual = "tests/calibration/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },

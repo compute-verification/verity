@@ -1,4 +1,9 @@
-# research.store — the evidence store
+# research.store: the evidence store
+
+The evidence store is where the team's runs and what they produce live, outside the repository. A run is recorded as an
+attempt, and each file it writes becomes an artifact: immutable, typed, and named by the hash of its content. A claim
+about one, such as a verdict or a status, is a label on it that says who asserted it, never a field inside it.
+A result is cited by its `art:` id and fetched from the store, never copied into the tree.
 
 Four objects, two relations. Everything else is a typed use of them.
 
@@ -18,6 +23,18 @@ Fixture = `fixture/v1`. Proof = `proof/v1`. Probe capture = `tc-evidence/v1`. Th
 CLI: `research data …`. Package: `research.store`. Id prefixes: `art:`, `drv:`. Attempt id = run id as-is.
 Stdlib only (the `research` rule); the S3 client is hand-rolled SigV4.
 
+## Try it
+
+Take any `art:` id from the repository's `artifacts.json`, and ask where its bytes are:
+
+~~~sh
+research data where ART
+~~~
+
+This prints a line for each replica, the local store, the repository and the remote, with whether it holds the
+artifact and when that was last verified. Without the store's credentials in the environment, the remote's line says
+`UNUSABLE` and why. `research data --help` lists the commands.
+
 ## 1. Canonical JSON and identity (`canon.py`, `ids.py`)
 
 `canon.dumps(obj) -> bytes`: `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)`
@@ -32,7 +49,7 @@ attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
 task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
-commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and its verdicts; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -117,7 +134,7 @@ Published by `research run` at completion or failure (both — a failed attempt 
   "conditions": {"hw.family": "h100", "hw.sku": "NVIDIA H100 80GB HBM3", "driver": "...", "cuda": "...", "...": "..."},
   "key_conditions": ["hw.family"],
   "source": {"commit": "<sha>", "tree": "<sha>", "dirty": false, "dirty_digest": null, "lockfiles": {"uv.lock": "<sha256>"}},
-  "closure": {"benchmarks/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
+  "closure": {"calibration/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
   "execution": {"start_utc": "...", "end_utc": "...", "wall_s": 12.3, "exclusive": false, "load_start": 1.2, "load_end": 1.1,
                 "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r...",
                 "stage": "bench", "remote": {"machine": "vy-g5", "pod_id": "...", "root": "...", "source_sha": "..."} },
@@ -202,8 +219,8 @@ edges(src, name, dst)                refs.*, inputs.*, outputs.*, telemetry.*, a
 listings(prefix, listed_at, keys)    the last listing of each prefix: the index is complete as of listed_at
 ~~~
 
-`index(remote, db)` lists `manifests/`, `labels/` and the runs after the newest indexed one (a full `attempts/` listing
-hourly), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
+`index(remote, db)` lists `manifests/`, `labels/` and the runs from two days before the newest indexed one, since a run is
+stored when it ends (a full `attempts/` listing hourly, for one published by hand later), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
 and never touches `objects/`. One pass and pass by pass agree. `index(public, db, policy=PUBLIC,
 private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
@@ -224,8 +241,8 @@ from research.store.tool import Tool
 
 TC_PROBE = Tool(
     name="tc_probe", version="1",
-    command=["python", "benchmarks/tc_probe/tc_probe.py"],
-    closure=["benchmarks/tc_probe/**", "verity/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
+    command=["python", "calibration/tc_probe/tc_probe.py"],
+    closure=["calibration/tc_probe/**", "verity/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
@@ -234,7 +251,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
+Declarations live next to the tool they describe (`calibration/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny; in a tree from before a
 layout move, at the path `moves.json` gives). A declaration
@@ -339,7 +356,7 @@ remote holds the manifest and every blob at the right size, its content checked 
 (`verify`), and `replicas.verified` says which. A missing `[remote]` makes the store local-only; a present but unusable one is
 `ConfigError`, so a broken vault never looks like no vault. `fetch` reads local objects, then the repo replica
 (`artifacts.json`), then the remote, checking every byte. The detail of all four, with the minting paths and the push
-algorithm: `remote-replicas/README.md`.
+algorithm: `remote-replicas/DESIGN.md`.
 
 ### 7.2 Remote-first: write-through, verdicts, refresh, parity
 
@@ -417,7 +434,7 @@ one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/ma
 `preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
 marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
-trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+trailer names, valued main's commit (`merge.label_landed`, from the verified queue's after-landing job).
 
 The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
 rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
@@ -455,12 +472,14 @@ prints the table; the groups are:
   `NoOutsideCompute` or `ProviderLockdown`; `label` reads the file from the ref run's record and refuses a value that isn't its).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
-  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`, `hot_card` (text: a sentence naming the node and
+  card a run was timed on and what the driver reported, a thermal slowdown, so the timing may be throttled; the result stays;
+  `label` refuses a bool or an empty value); `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
   `verity-graph/v2` graph it listed on a worker) and `ready_verdict` (its `ready:` verdict), by the executor;
-  `executor_shadow`, by drive (`research.executor`); `nightly_check`, by the control pod's nightly check;
+  `executor_shadow`, by the old path's drive, which nothing writes now; `nightly_check`, by the control pod's nightly check;
   `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, by that label's author, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
@@ -481,42 +500,14 @@ module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
 
+`research data --help` lists every command with its flags but the three `cli_prov.py` adds, each of which has its own
+`--help`:
+
 ~~~text
-research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
-research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / attempt / attempts with that derivation
-research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
-research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
-research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
-research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback] [--json]
-                                              preserve on the remote (§7, §7.2): a run id pushes its attempt and every artifact it names
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
                                               -> attempts with that reuse_key (or --any-source: that derivation); ARGV is parsed as `run` would
-research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
-research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
-                                              --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
-research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
-research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the parts that fail;
-                                              exit 4: WITHDRAWN (§7.4)
-research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
-research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
-research data evict --target-free-gb N [--runs] [--dry-run] [--json]   free local disk of copies PRESERVED on the remote (`evict.py`, `sealed.py`)
-research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
-                                              re-register every artifacts.json entry whose bytes changed (§7)
-research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
-                                              make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
-research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
-research data doctor [--clean] [--runs-dir D] [--json]
-                                              run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs; a run with run custody: `research data custody RUN --publish`)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
-research data reindex [--remote]
-research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
-research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
-research data mint-credential --job push|fetch [--ttl 6h] [--env]   a cluster job's key: custody's actions (§7.1)
 ~~~
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a
@@ -588,7 +579,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it
-trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python calibration/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor

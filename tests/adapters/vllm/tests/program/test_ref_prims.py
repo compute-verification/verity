@@ -35,6 +35,7 @@ from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.numerics import ref_prims_twins
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
@@ -720,7 +721,7 @@ def test_log_vs_torch():
                          "words": res_vec["words"], "exact_fraction": res_vec["exact_fraction"],
                          "max_ulp": max(res_vec["max_ulp"], res_sca["max_ulp"])},
                  gate_check={"evaluated": "primitive evaluator"},
-                 notes="The reference is correctly rounded on every binary32 word (benchmarks/f32_exhaustive); torch's log "
+                 notes="The reference is correctly rounded on every binary32 word (calibration/f32_exhaustive); torch's log "
                        "is within 1 ulp of it.")
 
 

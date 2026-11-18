@@ -56,14 +56,17 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    registered_commit,
+    registered_salts,
+)
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+
+from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
-from verity_vllm.check.replay.checks import check_rows
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit, registered_salts
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
@@ -710,7 +713,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
                 window: str) -> G.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
     bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows committed under the committer's secret ``key`` at salt
-    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under the window's root ``window``. It is the
+    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under ``program``, its circuit's
+    `window_circuit.population_digest`, and the execution phase's open root ``window``. It is the
     prover's side of the tree (its rows, salts and levels) for the window's prover and the scan's alike: the scan's state
     ports open their rows in it, by its root and domain."""
     if not 0 <= index < 1 << 32:

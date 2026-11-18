@@ -175,7 +175,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
 
 def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_the_tree(tmp_path, monkeypatch):
     """The agreement's pass is kept under the verifier's package and the packages of the tree it requires by path
-    (`agreement_closure`), and `research merge` asks for it for changes there, so a requirement from outside the tree, a
+    (`agreement_closure`), and `research.merge` asks for it for changes there, so a requirement from outside the tree, a
     fetched package or a path that leaves the repository, by the manifest or the lakefile, fails the step whether or not
     the upstream build was sent; one inside the tree doesn't, and this tree's verifier has none from outside."""
     import json
@@ -294,6 +294,50 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert argv[argv.index("--lean") + 1] == str(tmp_path / "fv")
     out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+
+
+_TREE = {"result.json": "{}", "argv.json": "[]", "ci/sets.json": '{"sets": []}', "ci/set0/agreement.tsv": "s\tagree\n",
+         "ci/set0/lean.err": "", "ci/set0/archive/ab/blob": "x" * 4096, "work/set0/agree/agreement.tsv": "s\tagree\n",
+         "work/set0/agree/lean.txt": "L\n", "work/set0/agree/upstream.txt": "U\n", "work/set0/agree/archive/ab/blob": "x" * 4096,
+         "work/set0/fuzz/case/case.json": "{}", "work/set0/fuzz/case/session.json": "{}" * 512,
+         "work/set0/selftest/0/u/circuit.rep0.bin": "b" * 4096}
+
+
+def _agreeing(tmp_path, monkeypatch, rc, binary=_BIN):
+    import json
+
+    out, sent = _pinned(tmp_path, monkeypatch, binary=binary, pinned=binary)
+    (CHECK.FLOCK_VERIFIER / "ci.py").write_text(
+        f"import json, pathlib, sys\nw = pathlib.Path(sys.argv[sys.argv.index('--out') + 1])\n"
+        f"for k, v in json.loads({json.dumps(json.dumps(_TREE))}).items():\n"
+        f"    (w / k).parent.mkdir(parents=True, exist_ok=True); (w / k).write_text(v)\nsys.exit({rc})\n")
+    return out, sent
+
+
+def test_the_agreement_leaves_its_verdicts_not_its_work_tree_in_the_run_directory(tmp_path, monkeypatch, capsys):
+    import tarfile
+
+    cases = {"work/set0/fuzz/case/session.json", "work/set0/selftest/0/u/circuit.rep0.bin"}
+    dropped = {"ci/set0/archive/ab/blob", "work/set0/agree/archive/ab/blob", *cases}
+    for rc in (0, 3):
+        out, sent = _agreeing(tmp_path / str(rc), monkeypatch, rc)
+        assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == rc
+        w = out / "flock-agreement"
+        left = {str(p.relative_to(w)) for p in w.rglob("*") if p.is_file()}
+        assert not (w / "upstream").exists() and not (w / "inputs").exists()
+        assert left - {"cases.tar.gz"} == set(_TREE) - dropped
+        assert all((w / k).read_text() == _TREE[k] for k in set(_TREE) - dropped)
+        assert set(CHECK.agreement_verdicts(out)) >= {"flock-agreement/result.json", "flock-agreement/work/set0/agree/lean.txt"}
+        said = capsys.readouterr().out
+        if rc:
+            with tarfile.open(w / "cases.tar.gz") as t:
+                assert set(t.getnames()) == cases and t.extractfile("work/set0/fuzz/case/session.json").read() == b"{}" * 512
+            assert "are in cases.tar.gz" in said
+        else:
+            assert "cases.tar.gz" not in left and "are dropped on a pass" in said
+    out, sent = _agreeing(tmp_path / "ill", monkeypatch, 0, binary=b"#!/bin/sh\nkill -ILL $$\n")
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+    assert not (out / "flock-agreement" / "upstream").exists() and not (out / "flock-agreement" / "inputs").exists()
 
 
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
@@ -467,7 +511,7 @@ def _repo(root: Path):
 
 
 def test_a_commit_lands_as_is_only_when_merging_it_into_main_leaves_its_own_tree(tmp_path, monkeypatch):
-    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research merge` takes a check only
+    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research.merge` takes a check only
     of that tree; `--record` warns before spending a slot on one."""
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     git, commit = _repo(tmp_path)
@@ -502,7 +546,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
         out = capsys.readouterr().out
-        assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
+        assert ("check: this commit can't land as is; the queue's check is the merge check" in out) is said
         launched.clear()
 
 
@@ -1876,7 +1920,7 @@ def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
-    """`check.py --preflight`, what `research merge --train --prepare` runs on a train before pushing it."""
+    """`check.py --preflight`, the preflight alone, to prepare a machine."""
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lock", "failed: no `uv` here", tmp_path), ("preflight-lints", touch, tmp_path)])

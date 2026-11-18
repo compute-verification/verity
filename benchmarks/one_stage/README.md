@@ -73,7 +73,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the network attester signed
   (`network_attester_rows.port`, after `check_registration` under the network attester's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
-  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
+  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its attester run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
   network attester, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
@@ -272,13 +272,16 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   same for each of its split proof blocks, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
   each proof block's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
-  a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
+  a Commit's Build: a TP row's ranks (`build/rank<r>/`), or a single-card row as rank 0 of a world of 1 (its
+  `build_request*/` at the top level, its Programs of record its Commit's `--program-digest` and `--required-manifest`),
+  one census a request, under `<request>/`, when the row's requests are of several shapes (`--request`). Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
   of its split at its coarsest fitting proof block, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
-  and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
+  and size class, estimated ANDs, served MACs and opened row bytes, the Definition on bits its proof is (`proved_as`, and
+  `bounded_by` its kind's largest block in the census where that bounds it), with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
   `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
   `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a
@@ -363,6 +366,15 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 
 `check` runs nothing here.
 
+## The two-stage audits
+
+- **A served window's** (`two_stage.py`): each class's first stage, and a class's second stage through that audit,
+  round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics.
+- **A toy replay block's, end to end** (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay
+  blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock
+  `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome,
+  with its negatives.
+
 ## The three benchmarks of the proof-layers table
 
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
@@ -379,7 +391,14 @@ Another lease may hold the example's cores: give `A5_CORES` cores no lease holds
 clone: run it from a full clone. Each row prints an interim `config FAIL` before its `config PASS`; that is expected.
 
 `A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
-leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+leases are recorded for. `A5_STEPS=LO-HI`, optional, is the prover's batch: it sets each partition file's
+`scope.steps` to the request steps [LO, HI), so the window's proof blocks, which each layer's Flock statement holds
+(unset, or the file's own `1-8`, the file's [1, 8), 880 proof blocks); with other steps, the zero-knowledge layer's
+sampling design is `rate:1/1`, every proof block, in place of `subset:880`, and every member the table writes ends in
+the batch (`-b16` for 1-16). `A5_KEEP=DIR`, optional, a new directory outside `WORK`, keeps the sampling
+run's served window (its `serving-rows`, the prover's files included) there on the machine, for
+`benchmarks/recursion_e2e/stage.sh WINDOW=DIR UNITS=A-B`: the recursion over N of its proof blocks, whose served values it
+commits again under plain leaves, not the served commitment. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
 `research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
 before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
 memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results
@@ -388,7 +407,10 @@ the three partition files, the three runs and the printer, whose table it keeps 
 records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
 the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
 failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
-run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+run the recursion benchmark. Its bootstrap is `kept_bootstrap.sh`'s: `pod_bootstrap.sh`'s environment kept on the node
+under `/workspace/cache/one-stage-bootstrap` (`BOOT_ROOT`), keyed by a digest of what it is built from (its `key.txt`),
+reused while the key matches and built anew when it doesn't, its venv and checkpoint before the card's lease and its taps
+under it; each run reads it under a shared lock. By hand, the same steps with the bootstrap in `WORK`:
 
 ~~~sh
 export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER

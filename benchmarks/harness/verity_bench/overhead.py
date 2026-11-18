@@ -39,7 +39,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -64,8 +64,9 @@ class Gpu:
     harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
-    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
-    (the H200's is the H100's: the same compute with more HBM)."""
+    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
+    (the H200's is the H100's: the same compute with more HBM); `note`: what each of its points says of the card, beside
+    its run's note."""
 
     gpu: str
     name: str
@@ -77,6 +78,7 @@ class Gpu:
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
+    note: str | None = None
 
     @cached_property
     def sms(self) -> int:
@@ -98,6 +100,9 @@ FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 CARDS = {card.gpu: card for card in (
     Gpu("h200", "H200", "9.0", "h200-sxm-141gb", "sm_90a", 0.48, {"fp8": FP8},
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
+    Gpu("h100", "H100", "9.0", "h100-sxm-80gb", "sm_90a", 0.48, {"fp8": FP8},
+        ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3",
+        "its host CPU weighed at 0.48 SM-s a core-second, its Xeon Platinum 8468's (xeon-platinum-8468-2s)"),
     Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", "rtx-pro-6000-server", "sm_120a", 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}
@@ -107,8 +112,9 @@ MODELS = {
     "llama3.1-70b": {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)},
     "llama3.2-1b": {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)},
 }
-#: the kernel points' model, whose γ is each metric's own reading; every other model's is a member of it
-KERNEL_MODEL = "llama3.1-70b"
+#: the kernel points' model and card, whose γ is each metric's own reading; every other model's, and every model's on
+#: another card, is a member of it
+KERNEL_MODEL, KERNEL_CARD = "llama3.1-70b", "h200"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
 LEFT_OUT = {"llama3.1-70b": ("the LM head",), "llama3.2-1b": ("the LM head",)}
 #: the note of a figure from a run whose arm committed no y (`y_note`): where the served call commits y, the γ leaves y's tree
@@ -155,6 +161,12 @@ def y_note(arm: Mapping | None) -> str | None:
     None for a run with no arm: stock's A/A control commits nothing."""
 
     return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def row_note(arm: Mapping | None, card: str | None) -> str | None:
+    """A row's note: its run's (`y_note`) and its card's (`Gpu.note`), joined, or None when neither says anything."""
+
+    return "; ".join(n for n in (y_note(arm), getattr(CARDS.get(card or ""), "note", None)) if n) or None
 
 
 def covers(model: str = KERNEL_MODEL) -> str:

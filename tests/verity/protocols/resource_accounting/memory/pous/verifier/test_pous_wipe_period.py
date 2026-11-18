@@ -11,10 +11,11 @@ keeping one label past it and a late read rejected, a session the prover left un
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
-session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
-says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]` entries
-give the memory attester for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
-configuration nobody committed gives a rehearsal with no bound."""
+session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record's
+`trusted-device` never holds: under a committed configuration, when the session's key is one its `[[pin]]` entries give
+the memory attester for the wipe (`period.json`'s `deployment`), it reads that the key matched the pins this machine was
+handed (`memory_attester.MATCHED`), and otherwise (a run's own pin, a rehearsal's host name or a configuration nobody
+committed) rehearsal, either with no bound."""
 
 from __future__ import annotations
 
@@ -294,10 +295,13 @@ def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() ->
     assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
 
 
-def test_the_auditor_host_under_its_pinned_key_holds() -> None:
+def test_the_auditor_host_under_its_pinned_key_reads_the_match_and_never_holds() -> None:
+    """The pins and the configuration's hash are what the workload's machine was handed: a session signed under the key
+    they give the wipe reads that it matched them, never ``holds``, and its key custody stays outside the bound."""
     where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER)
-    assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
-    assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
+    assert where["kind"] == "own-host" and not WP.holds(where)
+    assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
+    assert where[WP.PREMISE] == (f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for "
                                  "memory-challenger's wipe sessions; the memory attester ran on vy-auditor-2, not the "
                                  "developer's vy-dc-h200")
 
@@ -366,7 +370,7 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
 def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The subprotocol whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
-    recorded as held. No network attester counted the
+    recorded as matching the pins handed, never held. No network attester counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
@@ -376,8 +380,8 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-device"] == (
-        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe sessions; "
-        "the memory attester ran on auditor, not the developer's n0")
+        f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe "
+        "sessions; the memory attester ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -400,7 +404,7 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
         "clock", "t0", "t1"}
     gaps = record["uncertified"]
-    assert not any(g.startswith("key custody") for g in gaps) and gaps[0] == UNCOUNTED
+    assert gaps[0].startswith(f"key custody: {mc.MATCHED}") and gaps[1] == UNCOUNTED
     assert any(g.startswith("tier host-dram: the host's DRAM outside the declared tier (") for g in gaps)
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = wipe_run.summary(record)
@@ -448,7 +452,7 @@ def test_the_subprotocol_refuses_a_session_at_other_reads(tmp_path, monkeypatch)
     assert extras == [("--reads", "5231")]
 
 
-UNCOUNTED = ("egress: uncounted, the check was given no network certifier's count over the session, so the bound is "
+UNCOUNTED = ("egress: uncounted, the check was given no network attester's count over the session, so the bound is "
              "vacuous")
 
 
@@ -458,18 +462,18 @@ def writers(egress_mib: int) -> str:
 
 
 def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
-    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
-    holds and the count is 0, which no network attester signed, so the wipe is accepted and not certified, and the
-    record names the egress as the evidence writer's count."""
+    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the count is
+    0, which no network attester signed, so the wipe is accepted and not certified, and the record names the egress as
+    the evidence writer's count, after the key custody, which the premise, never held here, leaves out."""
     period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())
     out = tmp_path / "out"
     wipe_judge.judge(period, monkeypatch)
     answer = wipe_run.subprotocol(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
-    assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
+    assert not WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
     gaps = json.loads((out / "wipe.json").read_text())["uncertified"]
-    assert gaps[0] == writers(0) and not any(g.startswith("key custody") for g in gaps)
+    assert gaps[0].startswith(f"key custody: {mc.MATCHED}") and gaps[1] == writers(0)
     assert answer["profile"]["gaps"] == [writer(0)]
 
 
@@ -595,7 +599,7 @@ def test_what_the_bound_does_not_cover() -> None:
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
     host = wipe_run.undeclared("host-dram", 100)
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
-    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier")
+    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network attester")
     where = WP.placement("n0", "n0", OTHER, simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
@@ -607,7 +611,7 @@ def test_what_the_bound_does_not_cover() -> None:
                 {k: v for k, v in where.items() if k != "store_gaps"}):
         with pytest.raises(ValueError, match="before the placement named no device"):
             W.uncertified(old, None)
-    assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
+    assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network attester, so what leaves on it is "
                        "outside E")
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
 

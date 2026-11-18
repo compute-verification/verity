@@ -7,7 +7,7 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
 
 * ``server``: the node the block ran on; ``server_time``: the block's steps, ``[{server, steps: [lo, hi)}]`` (the circuits'
   blocks schema).
-* ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
+* ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``attester``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the subprotocol's certificate
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``
@@ -73,10 +73,10 @@ NAMES_TERMS = ("bandwidth",)
 NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
-#: the protocols each product's Lean checks name in their answers (`onsite check`; `remote-v1 check`, remote's composite
-#: of record, whose work subprotocol is Pearl+'s; `remote check`, v0, is development and never of record), and
-#: `Core.Verdict`'s names
-CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v1",)}
+#: the protocols each product's Lean checks name in their answers (`onsite check`, v1 its work Pearl+'s and v0 H1's in
+#: the records written before it; `remote-v1 check`, remote's composite of record, whose work subprotocol is Pearl+'s;
+#: `remote check`, v0, is development and never of record), and `Core.Verdict`'s names
+CHECKS = {"onsite": ("verity/onsite/v0", "verity/onsite/v1"), "remote": ("verity/remote/v1",)}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
@@ -366,7 +366,7 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
 
 # --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
-#: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
+#: `calibration/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
 REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
              "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
 

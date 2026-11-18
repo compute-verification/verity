@@ -1,7 +1,7 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate and added-lines, which run after landing, in drive's
-after-landing run on `checked`'s tip).  It reports each step's real verdict; what gates and what may stay red is drive's
-(`research.policy`).
+"""`check`: the repository's one check, what a landing on `main` requires (`research.merge.passing`), but for the jobs drive's
+policy takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate and added-lines, which run after
+landing, in the verified queue's run beside its candidate).  It reports each step's real verdict; what gates and what may stay
+red is drive's (`research.policy`).
 
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -9,7 +9,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            after-landing run drive launches on `checked`'s tip (`train.sh
+                                                            after-landing run beside a candidate (`vqueue_slim`, `train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
                                                             shard's with those no shard holds (ratchet-gate, where its
@@ -34,7 +34,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate, added-lines), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
-                                                            checked out, the record `research merge` reads; with presigned URLs
+                                                            checked out, the record `research.merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
                                                             verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
                                                             (but verifier/sigma/, a README.md or PROTOCOL.md)
@@ -77,11 +77,11 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             each part's key at COMMIT (default HEAD) and whether a recorded
                                                             pass under it is here or in a pack a recorded check imports
                                                             (`verdict_packs`);
-                                                            runs nothing (`plan.py`), read by `research merge --verdicts`;
+                                                            runs nothing (`plan.py`), read by the verified queue;
                                                             --on: planned on that check node, a short `research run`
-    uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
+    uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for a recorded check
     uv run python tools/check/check.py --agreement-files    the `--send` for the upstream build's, likewise
-    python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
+    python tools/check/check.py --preflight                 the preflight alone, to prepare this machine
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record, beside the newest recorded checks' packs,
                                                             and with --on PACK travels with the run
@@ -99,7 +99,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             caches, or FILE's {part: seconds} over them
     uv run python tools/check/check.py --record --combine RUN...
                                                             the shards RUN..., one per K, recorded as one check of this commit
-                                                            when they are together a passing one (`research merge` reads them)
+                                                            when they are together a passing one (`research.merge` reads them)
     uv run python tools/check/check.py --record --cc-records --on M
                                                             circuit-check's records step (`cc_records`): every catalog binding's
                                                             record built once and tarred into the run's $OUT, recorded without
@@ -120,7 +120,7 @@ parts, each once (the preflight's steps once, passed in every shard), when `rese
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
 every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
-may still name: circuit-check, ratchet-gate and added-lines run after landing alone). `research merge` takes the combined Attempt only
+may still name: circuit-check, ratchet-gate and added-lines run after landing alone). `research.merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
@@ -188,7 +188,7 @@ doesn't name:
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/protocols/proofs/flock/prover/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
-                    `research merge` requires it for a change under verity/protocols/proofs/flock/ or a Lean package the verifier
+                    `research.merge` requires it for a change under verity/protocols/proofs/flock/ or a Lean package the verifier
                     requires by path (but verifier/sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
@@ -484,18 +484,16 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
 #: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
-    # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
-    (("lean-agreement",), 460),
+    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
-    # thirds and the rest of lean-suites (105 + 15%)
+    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's second
+    # third and the rest of lean-suites
     (("circuit-check",), 340),
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
     (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
+    (("lean-suites:verity-flock:3/6",), 330),                    # beside lean-build, Flock's other four sixths, vLLM's last third: 140
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
@@ -1058,7 +1056,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     fails when the file sent can't be read or doesn't list both.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/protocols/proofs/flock/` or a Lean package the verifier
+    built for other nodes (`lean_audit.py --bundle`).  `research.merge` requires it for a change under `verity/protocols/proofs/flock/` or a Lean package the verifier
     requires by path (`tools/check/tool.py`), and
     `--record` sends its URLs then.  The agreement fails, sent or not, while the verifier's package requires one from outside the
     tree (`requires_outside`)."""
@@ -1082,7 +1080,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                          f"the URLs sent list {' and '.join(got) or 'neither'} of the pinned upstream build and inputs")
     if outside := requires_outside(lean):
         agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside the tree, which the "
-                     f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
+                     f"agreement's key (`agreement_closure`) and `research.merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", SUITES.LAKE_BUILD], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
@@ -1228,7 +1226,37 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
 
 def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof)."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof).  The run directory
+    keeps its verdicts and records (`agreement_prune`), not the gigabytes of work tree beside them."""
+    rc = 1
+    try:
+        rc = _lean_agreement(out, upstream, inputs, verify)
+    finally:
+        agreement_prune(out / "flock-agreement", red=rc != 0)
+    return rc
+
+
+def agreement_prune(w: Path, red: bool) -> None:
+    if not w.is_dir():
+        return
+    for p in (w / "upstream", w / "inputs"):
+        shutil.rmtree(p, ignore_errors=True)
+    for p in [p for p in w.rglob("archive") if p.is_dir()]:
+        shutil.rmtree(p, ignore_errors=True)
+    cases = sorted(p for p in w.rglob("*") if p.is_file() and (p.name == "session.json" or p.suffix == ".bin"))
+    if red and cases:
+        with tarfile.open(w / "cases.tar.gz", "w:gz", compresslevel=6) as t:
+            for p in cases:
+                t.add(p, arcname=str(p.relative_to(w)))
+    for p in cases:
+        p.unlink()
+    kept = [p for p in w.rglob("*") if p.is_file()]
+    print(f"check: lean-agreement: kept {len(kept)} files ({sum(p.stat().st_size for p in kept) >> 10} KiB) of its work tree in "
+          f"{w}: the pinned build and inputs and their copies are fetched again by art id, and each case's session and circuits "
+          + ("are in cases.tar.gz" if red and cases else "are dropped on a pass"), flush=True)
+
+
+def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None) -> int:
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -1304,8 +1332,8 @@ def lean_agreement_urls(out: Path, urls: Path, sleep=time.sleep) -> int:
 
 
 def landable(base: str) -> bool:
-    """Whether `research merge` could land HEAD on ``base`` as it is: ``base`` is in HEAD, or merging HEAD into it leaves HEAD's own
-    tree (the gate's `tree_identical`). Otherwise the tree that lands is a merge nobody checked yet."""
+    """Whether HEAD lands on ``base`` as it is: ``base`` is in HEAD, or merging HEAD into it leaves HEAD's own tree.  Otherwise
+    the tree that lands is the merge, which the verified queue checks as its own candidate."""
     if subprocess.run(["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT, capture_output=True).returncode == 0:
         return True
     r = subprocess.run(["git", "merge-tree", "--write-tree", base, "HEAD"], cwd=ROOT, capture_output=True, text=True)
@@ -1317,7 +1345,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
     pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
-    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `verdict_packs` read the attempt as a check of its
+    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research.merge` and `verdict_packs` read the attempt as a check of its
     commit.  ValueError when the pool can't be taken so; with --on auto or none, `lane_machine` picks the machine."""
     if pool is None:
         return []
@@ -1488,9 +1516,9 @@ def record(argv: list[str]) -> int:
                       f"; {got} has a slot free, so the others join their lines after {after} s, and only if none has "
                       "started by then" if after else ""), flush=True)
     if not landable(base):
-        print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
-              f"other than its own, so `research merge` won't take this check)")
-    # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+        print(f"check: this commit can't land as is; the queue's check is the merge check (merging it into {base} gives a tree "
+              f"other than its own, so the verified queue checks that merge as its candidate)")
+    # an after-landing run is no check of the commit: recorded without the tool, so `research.merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
@@ -2598,7 +2626,7 @@ OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
 
 def gated_parts() -> list[str]:
     """Every part of the jobs on the merge gate (`declaration.gated`): what a recorded check runs, unsharded or as a plan's
-    shards together, and what `research merge` requires of it."""
+    shards together, and what `research.merge` requires of it."""
     return DECLARATION.all_parts(DECLARATION.gated(JOBS), _parts_of())
 
 
@@ -2608,8 +2636,8 @@ def _rev(rev: str) -> str | None:
 
 
 def combine(ids: list[str], run_dir: Path | None) -> int:
-    """`--combine RUN...`: whether the shard Attempts ``ids`` are together a passing check of this clean commit, as `research
-    merge` judges them (`research.merge.shard_set`); inside a recorded run (`--record --combine`), its result (`check/v1`): their
+    """`--combine RUN...`: whether the shard Attempts ``ids`` are together a passing check of this clean commit, as
+    `research.merge.shard_set` judges them; inside a recorded run (`--record --combine`), its result (`check/v1`): their
     steps, each part once, which the gate admits after reading the shards again itself."""
     from research.merge import shard_set
     from research.store.local import LocalStore
@@ -2867,11 +2895,13 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree) under this interpreter when it has pytest, else under `uv run --locked`
+    (a shipped tree's system python3 has none), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    python = [sys.executable] if uv is None or importlib.util.find_spec("pytest") else [uv, "run", "--locked", "python"]
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-lints", [*python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
             ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 

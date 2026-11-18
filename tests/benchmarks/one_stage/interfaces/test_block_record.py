@@ -20,10 +20,10 @@ from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 FIXTURES = Path(__file__).parent / "fixtures"
 #: the census's deployments, which the block record's reference deployment is held to here (the record itself is public
 #: and the census is the team's, so the record carries the entry and doesn't read the file)
-CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
+CENSUS = Path(__file__).resolve().parents[4] / "calibration" / "census" / "deployments.json"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 NAMES = ("block-record-r2-period0", "block-record-r1-window10", "block-record-b71a-w30")
-ONSITE = {"protocol": "verity/onsite/v0", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
+ONSITE = {"protocol": "verity/onsite/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
 
 
 def _load(name: str) -> dict:

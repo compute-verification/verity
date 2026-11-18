@@ -32,8 +32,14 @@ sys.path.insert(0, str(ROOT))
 from verity.protocols.resource_accounting.memory.pous.verifier import band as band_codec  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier import dense as dense_codec  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (CAPACITY_BITS, KECCAK_F_NS, PI_DOMAIN, SHAKE256_RATE,  # noqa: E402
-                                                   pad_block, pi2_keccak_f)
+from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (  # noqa: E402
+    CAPACITY_BITS,
+    KECCAK_F_NS,
+    PI_DOMAIN,
+    SHAKE256_RATE,
+    pad_block,
+    pi2_keccak_f,
+)
 
 RATE = SHAKE256_RATE
 MASKW = (1 << 64) - 1

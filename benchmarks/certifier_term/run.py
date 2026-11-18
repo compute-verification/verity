@@ -15,7 +15,7 @@ figure is the model's, and its mark and every name but the metric's say so (`MOD
   document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
   `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
-- `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
+- `capacity`: what the scope's attested boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
   link of its host that a network attester splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
@@ -79,7 +79,7 @@ UNION = (f"{EPS}, the calculator's key: a union bound over the period's executio
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    """A machine's attested boundary links as a registration registers them: their `beta` summed, in bits a second
     each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
     said: str
@@ -95,17 +95,17 @@ def calculator() -> Any:
 def uplink(path: Path, links: int) -> Uplink:
     """A machine's uplink as the registration log at ``path`` registers it
     (`verity.protocols.registration.verifier.registration`'s committed log): the site its site entries
-    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network attester
+    register (`site_log.of_log`) holds one host, and each of that host's boundary links is split by a network attester
     (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
     from verity.protocols.registration.verifier import registration
-    from verity.device import Entry, Site
+    from verity.protocols.registration.verifier.site_log import Entry, of_log
 
     try:
         composite, log = registration.log_of(json.loads(path.read_text()))
     except (OSError, ValueError) as e:
         raise SystemExit(f"certifier_term: {path} is no registration log: {e}") from e
-    site = Site.of_log([e for e in log if isinstance(e, Entry)])
+    site = of_log([e for e in log if isinstance(e, Entry)])
     hosts, boundary = [x.id for x in site.locs if x.kind == "host"], site.boundary()
     split = [k for k in boundary if site.certified(k)]
     if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):

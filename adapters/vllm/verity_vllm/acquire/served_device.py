@@ -11,9 +11,9 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.device.load_card`): a device whose compute
-capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
-`engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
+target is held to its card file first (`card_of`: the card record whose `driver` holds the name the device reports,
+`verity.device.load_card`): a device whose compute capability or SM count is not its card's is refused, naming each field, both
+values and the card file, and a name no record holds is refused.
 
 FA2 (vllm-flash-attn 506341a1 `mha_varlen_fwd`, at the `num_splits = 0` vLLM's FA2 metadata passes) runs a launch whose every
 sequence has one query row as a non-causal swapped decode (a GQA model's query heads as rows), its split count `fa2_num_splits` at the
@@ -24,6 +24,7 @@ kernel's tile unsplit (`Attention_v5`, kBlockN `fa2_split_kblock_n`, FA2's causa
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Any, cast
@@ -43,7 +44,7 @@ from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.definitions.registry.hopper import Fa3InvSum
 from verity_vllm.definitions.registry.prims import Fa2InvSum
-from verity_vllm.engine.profiles.devices import CARD, NO_CARD
+from verity_vllm.engine.profiles.devices import card_sku
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import (
     UnregisteredGemmTarget,
@@ -102,15 +103,13 @@ def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dic
     return DeviceBindings(cc, int(sms), dot, f"FA{want}", max_model_len)
 
 
-def card_of(name: str) -> str | None:
-    """The SKU of the card the served target `name` (the name its device reports) is registered on; None for a target `NO_CARD`
-    lists.  Any other name is refused."""
-    if name in CARD:
-        return CARD[name]
-    if name in NO_CARD:
-        return None
-    raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
-                     "add its card under hardware/cards/ and map it in CARD")
+def card_of(name: str) -> str:
+    """The SKU of the card the served target `name` (the name its device reports) is registered on: the card record whose `driver`
+    holds it (`devices.card_sku`).  A name no record holds is refused."""
+    if (sku := card_sku(name)) is None:
+        raise Unmodelled(f"device {name!r} is in the `driver` of no card record under calibration/hardware/cards/: add "
+                         f"{{ value = {json.dumps(name)}, source = ... }} to its card's `driver`, adding its <sku>.toml if it has none")
+    return sku
 
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
@@ -118,12 +117,12 @@ def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     c = load_card(sku, directory=CARD_FILES)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
-        raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+        raise Unmodelled(f"calibration/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
     fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
               ("SM count", str(sms), str(c["sm"]["count"]["value"])))
     off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
     if off:
-        raise Unmodelled(f"the device is not its registered card hardware/cards/{sku}.toml: " + "; ".join(off))
+        raise Unmodelled(f"the device is not its registered card calibration/hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)

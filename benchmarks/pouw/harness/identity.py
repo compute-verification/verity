@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 #: what `bench.py`, `characterize.py`, `native.py` and the tests read
 __all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
@@ -87,10 +87,12 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
 
 
 #: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
-#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
+#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
+#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 or H100 (`verity bench overhead`'s cards), sm_90, driver 550 or
+#: later
 CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
-         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}
+         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a"),
+         "H100": ("9.0", "h100-sxm-80gb", 550, "sm_90a")}
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:

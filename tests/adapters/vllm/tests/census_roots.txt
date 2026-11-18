@@ -42,7 +42,7 @@ verity_vllm.program.predict.node_window_reads       # a node window's boundary r
 verity_vllm.program.predict.node_window_values      # a node window's value check: a library entry point (`made_up`, `Values`, `Check`, `run`)
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
-verity_vllm/pipeline/advice_code/      # advice v1, network certification's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
+verity_vllm/pipeline/advice_code/      # advice v1, network attestation's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
 verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
 verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and network certification's audit
@@ -56,11 +56,14 @@ verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vL
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.program.predict.class_masked   # a decode step's key-block units masked by its bit: a library entry point (`masked`), for a class's window
 verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
 verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
-verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`), not built
+verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`, `rank_window`)
+verity_vllm.program.predict.class_select   # a class's selects and length check, the Definitions `class_window` delegates to: a library entry point
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
+verity_vllm.engine.profiles.stand_in      # GLM-5.3's one-card stand-in: a library entry point (`stand_in`), read by benchmarks/serve_tax's standin
 verity_vllm.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
 # and code outside the package call
