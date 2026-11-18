@@ -557,6 +557,14 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+]
+loads = [
+    "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/resource_accounting/compute/pouw/verifier",
 ]
 loads = [
