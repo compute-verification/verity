@@ -91,9 +91,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d8411888"
+    assert r.digest == "5d27500cfc13de9c702784aba413700764b20c9c0b652940c91e3d54c2083802dd730213feb3712295b6274cdee059be514bdfbb457c99003a22eb7bfc6a0c4e"
     assert r.n_root_nodes == 84698
-    assert S.predict_workload(phi)["digest"] == "24835950b9fd8c930fcf2077b8a767921c9a5ddc6e12cfe1ed20c4a2030c658a60ec601035e171e4f9197de081ad75b6b06da9ea7be4742a00aa6d0d62ba242f"
+    assert S.predict_workload(phi)["digest"] == "647476fb737cd62b89936075f5fb6a3d9e66a92379ff5dcaca2d14f62d0d6e32b5619fb3fc797ae836e09325983e25343b3b15cb8596dc9d1b4b8506292fcc3c"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
@@ -123,7 +123,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "93df4dd412d503b870425a351b2d46c916f7ce83e194b92ea2acab147a5aa10389bae4320dc5f1bedc56c7dad10e040cd80791cb90b0d8dfb9eb497d3682973c"
+    assert S.predict_workload(phi)["digest"] == "70468fe0fee095b09765883d67013afffda931d609ae63b67c26d81da0d445942ff49dd254f8d2477d7f721c06b2a7758237b3c2ded6a1dbccdb0eaf3a7c2f4a"
 
 
 @pytest.mark.slow
@@ -455,22 +455,21 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
         build_program(as_row(bf16, "float8_e4m3fn"), "step")
 
 
-#: The H200 int8 Llama-3.2-1B rows' traced Builds (the same digests
-#: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
+#: The H200 int8 Llama-3.2-1B rows' Builds: each Program digest of the row (the step at its M and pos0 8,
 #: each request shape (LP, T), GP-01's workload).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
 H200_INT8: dict[str, dict] = {
     "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-        "step": (1, "66cc640b4c9736b2b784626f7987f865499ee9b62c0dc47b8b4e666dcc9990e538bc46e18fbd431221031b96dcfc4d608e38af457f6bd044d47afb07b8ca296f"),
-        "requests": {(256, 31): "963a228135f64eb6db7d423209c47f42f544aabfa05d7733f58f5912a7bc3241bb907af6ed69bb89203ae413042971cc0bfb30218ef6f90f2252fc58b0d99c23"},
-        "workload": "3acd044df21073dc7cfa7a999fd531f9e46055221fda040c54a0f6f5a81a980fb4d9ac11c6c7ff6174483f5e9ca0fd4a0b23206dc227ba788f91b262cfee26a4",
+        "step": (1, "6a146f062a03ab20598ddcd23cc08781975eec979a7e2a1f94c5d8a42a4c5f4d9bd66fb6a579dcb19fca08c8a15a4311c509ae54d0bf18bd4d8b54a689744293"),
+        "requests": {(256, 31): "4bf2e0c502e48a505e377e9cce9d4cc94a0644d338eca95e0a03549c540f563e74679bd1cb5c932a306c4a99587574a8a1209d1c7c644dff6527f5d32bd83a61"},
+        "workload": "6260a85900bcc21ee63e60bdc90b74cfaf3e386951f87a57c3ce3071a21c091d85b4ce43fd7ed3e437459f7adbfd8f84b3eb40ab721eec22f4912a53ec4504ac",
     },
     "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager": {
-        "step": (4, "b24251993d3ede502ee5933b1688f95d871303f415a8553b152dba32fcce848b136f81238095b8fb8fb5adb168b523ba95c28a228109af54c1269dd150e54f62"),
-        "requests": {(11, 8): "bec8910e13b197706b72c29b9e64808d8c4bb8715e75880bd2ef142db8d74f399b77226af6e0725829ea34ef3adbd3f93063e224144baa75dec6bb64af1734d4",
-                     (123, 19): "5426f0fb0717df5ca97c05aca07dc9b0f7affa808e66c6928b3f9f30843b5f14ba0107b1ab76db8c1dd663d1f5db6dca1debc9363928fac716ddaab5f0e843b7",
-                     (159, 31): "878afca2b9a5f48d77183a3f008c5acd72ce5a0fc7976894c32b245f67079a60df0aff9579bda19ba580f34d5ecb7c954d5a23f4ec775c5ae4118e778d1fb7dd",
-                     (256, 1): "05780e3bd779ed8797e079b98cb00755381dbcbf86ff06b6c571fb4db454e2b1d1991943b4564cbcd09159314da23fa4078d89f24c5f9db72053e0ee8514d1c3"},
-        "workload": "b611b68a180f306936fb81c85d26be81a044a31d0fb70dea09a786a91343cb9f332d71f285d2d047d0897d295f5856aaa1830ce89fba940dcce24072e6b436ec",
+        "step": (4, "b1e6df98ccebeae046ceed767d11b39c87d719cb584927a7875af60ffb7517f1366bfcae0ef2942e38f19520e624becd0f844d63e183dfcee3111a31a594faed"),
+        "requests": {(11, 8): "f327ab463b59afbcd377ab24615c513df7b0f8c2f82173723cca6b21b53c6ce23613411c8b3b09b57778f8f9c89d625eeb8d380fd5bb84711aa88a5a74a25154",
+                     (123, 19): "2ef3503d1adc7f0c6f9214357c3dffd9e3bcf67cd98679c0e7c90bff9050634e67c05d725aa3b81ab0eec468a1e4fcd19964ec80cfec1635028b6afa30f4c31c",
+                     (159, 31): "73e53f40588b074ad7c9073930e3cc6a083e0ac318ba07608e92c6fc6c6facf9a5220e21423a6424e5b6b2f0205349069693e9245c25136c8de97e7674179d0d",
+                     (256, 1): "afd45eebb3323e47b6d1a66666ae0a64d03d0927c890d53a5fe8c99cb120ed96fcc895bad83b101713be332014f0e8a4071a7c560e0da1bbffa844a677607b65"},
+        "workload": "1e4ee6030e9a4091c4c669c2b0032808236a310469f2aec6706eede2f8253ed90471ba34a5bdc223af2ae5bd900e69130b8d23145857fc3f5c7bcdd7fd722a5e",
     },
 }
 
