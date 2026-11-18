@@ -3,7 +3,8 @@
 In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
 subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
 answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
-time; a request changes what is served, so none is filed after the first answer.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
+time; a request changes what is served: one on what the workload declares (a property, a process beside it) is filed
+before the build's answer, and any other before serving begins, at the first step.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
@@ -55,9 +56,11 @@ class Exchange:
 
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
-        if self.declared is not None:
-            raise Refused(name, f"files {type(request).__name__} after the requests were answered; attach before the "
-                                "engine is built")
+        kind = type(request).__name__
+        if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
+            raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
+        if self.step > 0:
+            raise Refused(name, f"files {kind} after serving began (step {self.step}); file it before the first step")
         self.requests.append((name, request))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
@@ -130,6 +133,10 @@ class Exchange:
     def resident(self, range_: int, step: int) -> bool:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
+
+    def oldest_freed_first(self) -> bool:
+        """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
+        return bool(self._filed(H.ReuseOldestFreed))
 
     def beside(self) -> list[tuple[str, Callable[[], Any]]]:
         """The processes schemes asked to start beside the workload, each by its name and bound to the readers it
