@@ -40,6 +40,8 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/host.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
+    # the step rows run on a card under a fresh OS key a step, expanded there by SHA-512; a change of that kernel can't be
+    # gated until a card holds it to the reference, so these two stay by ruling until then
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
