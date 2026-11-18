@@ -10,7 +10,8 @@ On a served run (`attach`) it computes every linear block with its device run (`
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
 (``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
 arrives (`Attached.step`); outside an epoch a block is the workload's own. It ends the run's pass once each step's blocks
-are issued (``steps``, `StepComputed`). Its settings are
+are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
+linears it computes, whose calls commit their A rows and y. Its settings are
 `SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
 record states.
 """
@@ -40,7 +41,8 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
 #: run), ``cubin`` its cubin, ``schedule`` the schedule each pass runs under (`serving.SCHEDULES`),
-#: ``transcript_dir`` where passes are retained, the salt's source, ``coins`` (``in-process``: a challenger held in this
+#: ``transcript_dir`` where passes are retained (a phase's under ``w<phase>/``, owner-only, with its ``served.json``),
+#: the salt's source, ``coins`` (``in-process``: a challenger held in this
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
 #: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`); and
@@ -144,6 +146,10 @@ class Attached:
         self.gate: Any = ctx.get("gate")
         self.private: Any = ctx.get("private")
         self.ledger: Any = ctx.get("ledger")
+        if ctx.get("stage") == "capture":
+            raise NotImplementedError("pearl-plus at a Match capture (ctx['stage'] 'capture') records rather than commits, "
+                                      "and what it records of each call is not settled (vllm, TOP-441): its device run has "
+                                      "no record-only mode")
         if not self.own["coins"] and not self.own["challenger"]:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
@@ -213,7 +219,8 @@ class Attached:
         if isinstance(event, H.PhaseClosed):
             if self.phase != event.phase:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} closes, and the open phase is {self.phase}")
-            self.phases[event.phase] = {**self.close(), "first_step": self.first_step, "last_step": event.step,
+            self.phases[event.phase] = {**self.close(event.step - self.first_step + 1), "first_step": self.first_step,
+                                        "last_step": event.step,
                                         "program": event.program.hex(), "root": None}
             self.phase = None
             return
@@ -279,9 +286,9 @@ class Attached:
                                    "root": None, "closed": False}
         self.phase = None
 
-    def close(self) -> dict[str, Any]:
+    def close(self, steps: int | None = None) -> dict[str, Any]:
         """The open epoch's device run finished (its session closed with it) and freed, before another opens; what it
-        committed and its details."""
+        committed and its details. A retained epoch's record is written beside its passes (`served`)."""
         import gc
 
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
@@ -292,6 +299,8 @@ class Attached:
             run.finish()
         else:
             SV.finish_window(run, session)
+        if getattr(run, "retain_dir", None) is not None:
+            self.served(run, steps)
         out = {"commitment": dict(run.commits), "summary": dict(run.details), **({"reserved": self.reserved}
                                                                                    if self.reserved else {})}
         self.reserved = None
@@ -316,10 +325,35 @@ class Attached:
         self.reserved = {"session": reserved, "period": period}
         return reserved
 
+    def served(self, run: Any, steps: int | None) -> None:
+        """A retained epoch's ``served.json`` (`serving.SERVED_SCHEMA`, as ``served_passes.py retain --window-record`` and
+        ``verify --tie`` read it) and ``coins.json`` (its coin commitment) in its retained directory: its passes with
+        calls (`serving.served_passes`), its coins (`serving.coins_of`), and ``error`` when they aren't one round a step
+        of its phase's ``steps``, each with one call a linear and a manifest."""
+        import json
+
+        from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+
+        d, linears = Path(run.retain_dir), len(self.weights or {})
+        passes = [p for p in SV.served_passes(run.details["passes"]) if p["units"]]
+        bad = ([] if steps is None or len(passes) == steps else
+               [f"its passes with calls are {len(passes)} and its phase's steps {steps}, so round s isn't step s"])
+        bad += [f"pass {p['pass']} has {p['units']} calls, not one a linear ({linears})" for p in passes
+                if p["units"] != linears][:4]
+        bad += [f"pass {p['pass']} retained no manifest" for p in passes if not p.get("manifest")][:4]
+        held = SimpleNamespace(commitment=lambda: run.commits, info=lambda: run.details)
+        doc = {"schema": SV.SERVED_SCHEMA, "entry": OPTION, "window": self.phase, "retained": True, "commit_steps": steps,
+               "passes": passes, "passes_with_calls": len(passes),
+               "coins": SV.coins_of(held, (self.reserved or {}).get("session")), "ok": not bad,
+               "error": "; ".join(bad) or None}
+        (d / "coins.json").write_text(json.dumps(run.commits["coins"]) + "\n")
+        (d / "served.json").write_text(json.dumps(doc, indent=1) + "\n")
+
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
         """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
         ``transcript_dir``, and ``coins`` or ``challenger``, whose session `reserve` gives and the launcher's gate
-        opens): their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one
+        opens): their B rows salted with fresh bytes each epoch (the served checkpoint is not registered), their
+        roots committed before any salt, the salt coin opened on their root (with ``challenger``, one
         session an epoch, closed at its `close`, on an epoch number first spent in ``ctx["private"]``, `spend_epoch`; else
         the in-process coins of this process's epoch count), and the run's pass limit, retained passes and ``registration``,
         what it claims of the weights it serves."""
@@ -331,7 +365,8 @@ class Attached:
         if bad := SV.pearl_c_refusals(name, {w: tuple(t.shape) for w, t in weights.items()}):
             raise ValueError(f"pearl-plus: its weights are refused before any commitment: {'; '.join(bad)}")
         kernel = SV.PearlCKernel.load(own["kernel"], own["cubin"] or None)
-        roots = device.weight_roots(kernel, weights, name)
+        salts = {w: b"".join(SV.fresh_salts(t.shape[0])) for w, t in weights.items()}
+        roots = device.weight_roots(kernel, weights, name, weight_salts=salts)
         k, carried = None, None
         if own["challenger"]:
             k = spend_epoch(self.private)
@@ -344,13 +379,16 @@ class Attached:
         with SV.closed_on_error(self.session):
             scheme = SV.pearl_c_scheme(name)
             run = device.PearlCDeviceRun(scheme, OPTION, kernel, weights, roots, coins, opening, pass_index=k,
-                                         schedule=own["schedule"])
+                                         schedule=own["schedule"], weight_salts=salts)
         if self.session is not None:
             run.commits.update(coin_source=SV.H1_CHALLENGER, session=carried)
         run.commits["registration"] = registration(scheme, SV.DomainError)
         run.details["max_step_tokens"] = device.step_tokens(run, SV.PEARL_C_CALL_CAPACITY)
         if own.get("transcript_dir"):
-            run.retain_dir = Path(own["transcript_dir"])
+            run.retain_dir = Path(own["transcript_dir"]) / (f"w{self.phase}" if self.phased else "")
+            for d in {Path(own["transcript_dir"]), run.retain_dir}:
+                d.mkdir(mode=0o700, parents=True, exist_ok=True)
+                d.chmod(0o700)
             if not run.cur.matmuls:
                 run.begin()
         return run
@@ -402,6 +440,7 @@ PEARL_PLUS = register(Scheme(
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
+    provides=("cut",),
     requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",

@@ -26,6 +26,12 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
+    from verity.protocols.compose import schemes
+
+    assert [s.name for s in schemes.load().values() if "cut" in s.provides] == ["pearl-plus"]
+
+
 def test_bound_reads_its_term_at_the_parameters_given() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
     with pytest.raises(ValueError, match=r"Pouw.PearlC.δPearlC is evaluated at \['q', 'N'\], and \['N'\] were not given"):
@@ -72,6 +78,7 @@ class _Run:
         self.calls: list = []
         self.passes = 0
         self.finished = False
+        self.retain_dir = None
 
     def finish(self) -> None:
         self.finished = True
@@ -219,6 +226,51 @@ def test_each_phase_opens_a_salt_session_of_its_own(monkeypatch, tmp_path) -> No
         one.step(H.PhaseOpened(1, 1))
 
 
+def test_a_retained_phase_writes_its_record_beside_its_passes(monkeypatch, tmp_path) -> None:
+    ex, runs = _Exchange(), []
+
+    def opened(self, weights, own):
+        run = _Run()
+        run.retain_dir, run.commits = tmp_path / f"w{self.phase}", {"coins": {"epoch": self.phase}, "pass_index": None}
+        run.retain_dir.mkdir()
+        manifest = run.retain_dir / "manifest.json"
+        manifest.write_text(json.dumps({"matmuls": [{"real_rows": 2, "n": 16, "k": 16}]}))
+        run.details["passes"] = [{"units": 1, "tiles": 4, "manifest": str(manifest)} for _ in range(2)]
+        runs.append(run)
+        return run
+
+    monkeypatch.setattr(PS.Attached, "open", opened)
+    on = PS.PEARL_PLUS.attach(ex, IN_PROCESS)
+    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.PhaseClosed(0, 1, b""))
+    ex.emit(H.PhaseOpened(1, 2))
+    runs[1].details["passes"][1] = {"units": 2, "tiles": 4}
+    ex.emit(H.PhaseClosed(1, 4, b""))
+    served = [json.loads((tmp_path / f"w{p}" / "served.json").read_text()) for p in (0, 1)]
+    assert [json.loads((tmp_path / f"w{p}" / "coins.json").read_text()) for p in (0, 1)] == [{"epoch": 0}, {"epoch": 1}]
+    assert served[0]["schema"] == SV.SERVED_SCHEMA and served[0]["entry"] == PS.OPTION and served[0]["window"] == 0
+    assert (served[0]["commit_steps"], served[0]["passes_with_calls"], served[0]["ok"]) == (2, 2, True)
+    assert served[0]["coins"]["source"] == "in-process"
+    assert [p["macs"] for p in served[0]["passes"]] == [512, 512]
+    assert served[1]["ok"] is False and served[1]["error"] == (
+        "its passes with calls are 2 and its phase's steps 3, so round s isn't step s; pass 1 has 2 calls, not one a "
+        "linear (1); pass 1 retained no manifest")
+
+
+def test_each_phases_passes_are_retained_in_a_directory_of_its_own(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: _Coins())
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    on = PS.Attached({"settings": {**IN_PROCESS["settings"], "transcript_dir": str(tmp_path / "t")}})
+    on.phased, on.phase = True, 2
+    run = on.open({0: W0}, on.own)
+    assert run.retain_dir == tmp_path / "t" / "w2" and run.begun == 1
+    assert {oct(d.stat().st_mode & 0o777) for d in (tmp_path / "t", tmp_path / "t" / "w2")} == {"0o700"}
+    on.phased, on.phase = False, None
+    assert on.open({0: W0}, on.own).retain_dir == tmp_path / "t"
+
+
 def test_a_step_that_computed_without_steps_computed_is_refused(monkeypatch) -> None:
     ex, run = _attached(monkeypatch)
     ex.emit(H.StepBegan(0, ("a",), 8))
@@ -253,6 +305,12 @@ def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> 
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process"}})
 
 
+def test_a_capture_is_refused_by_name_until_what_it_records_is_settled() -> None:
+    with pytest.raises(NotImplementedError, match=r"Match capture \(ctx\['stage'\] 'capture'\) records rather than commits"):
+        PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "capture"})
+    PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "commit"})
+
+
 def test_attach_refuses_an_undeclared_setting() -> None:
     with pytest.raises(ValueError, match=r"pearl-plus has no setting \['runner'\]"):
         PS.PEARL_PLUS.attach(_Exchange(), {**CTX, "settings": {**CTX["settings"], "runner": "r"}})
@@ -280,13 +338,21 @@ class _DeviceRun(_Run):
         super().__init__()
         self.made = (scheme.name, entry, kernel, weights, roots, coins, opening, kw)
         self.commits: dict = {}
+        self.cur = SimpleNamespace(matmuls=[])
+        self.begun = 0
+
+    def begin(self) -> None:
+        self.begun += 1
 
 
 class _Device:
     PearlCDeviceRun = _DeviceRun
+    salted: list = []
 
     @staticmethod
-    def weight_roots(kernel, weights, scheme):
+    def weight_roots(kernel, weights, scheme, *, weight_salts):
+        assert {w: len(s) for w, s in weight_salts.items()} == {w: len(SV.fresh_salts(1)[0]) * t.shape[0] for w, t in weights.items()}
+        _Device.salted.append(weight_salts)
         return {w: bytes([w]) * 64 for w in weights}
 
     @staticmethod
@@ -318,7 +384,7 @@ def _in_domain(monkeypatch) -> list:
 def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch, _in_domain) -> None:
     coins = _Coins()
     monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
-    monkeypatch.setattr(SV, "in_process_coins", lambda window: window == 0 and coins)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: window in (0, 1) and coins)
     monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
     on = PS.Attached(IN_PROCESS)
     run = on.open({0: W0, 1: W1}, on.own)
@@ -326,7 +392,10 @@ def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch, _in_do
     assert _in_domain == [("pearl-c-h100-v1-h3", {0: (256, 512), 1: (256, 512)})]
     assert coins.opened == [("salt", SV.weights_root(roots))]
     assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: W0, 1: W1}, roots,
-                        "commitment", "opening", {"pass_index": None, "schedule": "serial"})
+                        "commitment", "opening", {"pass_index": None, "schedule": "serial",
+                                                  "weight_salts": _Device.salted[-1]})
+    again = on.open({0: W0, 1: W1}, on.own)
+    assert again.made[7]["weight_salts"][0] != run.made[7]["weight_salts"][0]
     assert run.commits["registration"] == PS.registration(SV.pearl_c_scheme("pearl-c-h100-v1-h3"), SV.DomainError)
     assert run.commits["registration"]["claims"] == PS.UNREGISTERED
     assert run.details["max_step_tokens"] == 128
@@ -409,7 +478,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     assert (entry, at, session, root, opens, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, True, 0)
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
-    assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial"})
+    assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
     assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
     on.release()
     assert finished == ["session"]
