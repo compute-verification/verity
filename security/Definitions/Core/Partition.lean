@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Circuit
+public import Definitions.Core.Hash
 
 /-!
 # Partitions, committed wires, and the correctness of a unit
@@ -82,6 +83,17 @@ abbrev Before (g h : Fin C.N) : Prop := P.writerRank g < P.writerRank h ∨ (P.w
 writer's gates are one run of positions, in index order; `none` off the boundary. -/
 noncomputable def pos (g : Fin C.N) : Option ℕ :=
   if g ∈ P.boundary then some (P.boundary.filter fun h => P.Before h g).card else none
+
+/-- **`Rblk`, the base argument's relation for proof block `u`**, with `S` its gates and `C_S = C.restrict S`: the trace
+`X` opens, under the string commitment `Sc` at `c`, at the position `pos g` of each gate of in(S) and out(S), each value
+encoded by `enc`, with opening `π g`; and out(S) holds what `C_S` computes with every gate outside `S` held at `X`. It
+constrains openings at in(S) and out(S) only, and reads `X` only on `S` and in(S) (`Partition.rblk_congr`): a gate
+outside `S` that `S` never reads is a free input of `C_S`, which no opening and no bound reads. -/
+def Rblk {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest) (enc : (g : Fin C.N) → BitVec (C.w g) → α)
+    (c : Sc.Com) (u : Fin n) (X : C.Trace) (π : Fin C.N → Sc.Op) : Prop :=
+  (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), ∃ i, P.pos g = some i ∧ Sc.Opens H c i (enc g (X g)) (π g)) ∧
+    ∀ g ∈ C.exits (P.gates u),
+      X g = (C.restrict (P.gates u)).run (fun a => if P.unit a = some u then none else some (X a)) g
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
 structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where

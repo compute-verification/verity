@@ -556,7 +556,7 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
 
 /-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
 circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
-writer's output field at the part's first reference (`Spot.Edges.leafAt`, `fieldIx`); an uncut port is left out.
+writer's output field at the part's first reference (`Flock.Program.partLeafAt`, `fieldIx`); an uncut port is left out.
 `edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
 is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
 `edge-form`), and so is a port of one template read in rows of two lengths. -/
@@ -575,12 +575,12 @@ def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
     for i in [0:node.args.size] do
       let (port, ty) := defn.params[i]!
       for q in node.args[i]!.seq.parts do
-        let (run, lanes) := Spot.Edges.partLanes q
-        let some (false, w, l) := Spot.Edges.leafAt run lanes 0 | continue
+        let (run, lanes) := Flock.Program.partLanes q
+        let some (false, w, l) := Flock.Program.partLeafAt run lanes 0 | continue
         if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
         let wd := P.defs[nodes[w]!.fn]!
         if wd.outLeaves == 0 then continue
-        let some f := Spot.Edges.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
+        let some f := Flock.Program.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
         let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
         if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
         let kc := ty.leaves / fl
