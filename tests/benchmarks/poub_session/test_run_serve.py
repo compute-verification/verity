@@ -646,7 +646,9 @@ def test_kv_cu_is_built_for_the_card_the_rows_target_declares_or_the_one_stated(
     ("p512/k2", "-DKV_FIELD=512"),
 ])
 def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, defines):
-    program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *compute_cap*) echo 9.0 ;; esac\nexit 0\n')
+    # the leased card as nvidia-smi names it: its card file gives the session's node and the build's target
+    program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *query-gpu=name*) echo "NVIDIA H200" ;; '
+                                     '*query-gpu=index*) echo 0 ;; esac\nexit 0\n')
     port = str(free_port())
     (node.stub / "busy").write_text(f"{port}\n")
     # a card's line takes CUDA_HOME, else /usr/local/cuda-13.0, whose real nvcc a node with that toolkit would run
@@ -656,6 +658,7 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
     assert p.returncode == 0, said(p)
     kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
     (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
+    assert nvcc.startswith("nvcc -O3 -gencode arch=compute_90a,code=sm_90a ")
     assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
     (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
     from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
