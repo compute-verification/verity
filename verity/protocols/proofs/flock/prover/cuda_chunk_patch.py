@@ -9,7 +9,8 @@ challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs 
 copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, names prove_ffi.cu's anonymous namespace, has the
 device arena take small blocks from its top,
 moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
-(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (the toolkit's directory, required), without
+(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (the target's compute capability, required: 80 or later, below which
+the b1 MMA of ring_switch.cuh and sha512.cuh has no code) and CUDA (the toolkit's directory, required), without
 upstream's -lineinfo (`--lineinfo` keeps it).
 """
 import os
@@ -19,6 +20,9 @@ import shutil
 import sys
 
 cuda = os.environ.get("CUDA") or sys.exit("set CUDA to the CUDA toolkit the prover is built with (pod/20-gpu-link.sh passes its own)")
+sm = os.environ.get("SM") or sys.exit("set SM to the target's compute capability (90 for sm_90): the card the prover runs on")
+if not sm.isdigit() or int(sm) < 80:
+    sys.exit(f"SM={sm}: no code for it (ring_switch.cuh's and sha512.cuh's b1 MMA needs 80 or later)")
 root = pathlib.Path(__file__).resolve().parents[5]
 try:
     runpy.run_path(str(root / "verity/protocols/proofs/flock/prover/cuda_live_patch.py"))
@@ -281,7 +285,6 @@ inline void merkle_capped_paths_queue(std::vector<MHash>& out, const uint8_t* d_
     ])
     print("induce_sumcheck.cuh, merkle_open_device.cuh, ligerito_f256.cuh: the host waits only for the values it reads")
 
-sm = os.environ.get("SM", "90")
 b = pathlib.Path("crates/flock-cuda-ffi/build.rs")
 s = b.read_text()
 s = s.replace("arch=compute_120,code=sm_120", f"arch=compute_{sm},code=sm_{sm}")
