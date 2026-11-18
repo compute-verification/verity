@@ -359,7 +359,9 @@ def recorded(name: str, machines_toml: Path) -> dict | None:
         return None
     try:
         return tomllib.loads(entry.read_text())
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        print(f"research: {entry} was not read ({type(e).__name__}), so the register here is taken to hold no record of {name}",
+              file=sys.stderr)
         return None
 
 
