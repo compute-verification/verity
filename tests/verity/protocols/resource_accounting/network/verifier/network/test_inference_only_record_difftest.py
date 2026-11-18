@@ -462,10 +462,11 @@ def test_a_row_is_declared_once(shaped):
     held = shaped["2x3 registered"]["case"]
     *_, templates = ref.front(held["instance"], held["trusted"])
     built = json.loads(held["instance"]["record"])
+    program = json.loads(held["instance"]["program"])
 
     def declarations(rec: dict) -> None:
         """The wires' check and the declarations' on the record `rec`, refused (`Malformed`) as the reference refuses."""
-        wires, cuts = ref.wires_of(templates, rec, None)
+        wires, cuts = ref.wires_of(templates, rec, program)
         ref.Inputs(templates, cuts, wires, rec)
 
     declarations(built)
