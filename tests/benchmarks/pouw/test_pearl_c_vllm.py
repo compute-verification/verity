@@ -1830,10 +1830,11 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
     (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
     it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
-    give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any.  Each verdict samples
-    `SAMPLE_OVER` tiles, the fewest whose sample holds a tile over the inert-work bound besides the exclusion tile.
-    Nothing cheaper catches a verdict whose rule has moved off ``volunteer-needed``'s, which only replaying sampled tiles
-    under each rule shows; it replays each verdict's sample and exclusion tile at the scalar reference, over a minute."""
+    give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any.
+    Each verdict samples `SAMPLE_OVER` tiles, the fewest whose sample holds a tile over the inert-work bound besides the
+    exclusion tile.  Nothing cheaper catches a verdict whose rule has moved off ``volunteer-needed``'s, which only replaying
+    sampled tiles under each rule shows; it replays each verdict's sample and exclusion tile at the scalar reference, over
+    a minute."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
