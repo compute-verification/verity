@@ -7,7 +7,7 @@ import pytest
 
 from verity import hooks as H
 from verity_vllm import messages
-from verity_vllm.engine import admission
+from verity_vllm.engine import admission, scheduler_step
 
 from tests.pipeline.test_serve_admit_tick import Req, Sched
 
@@ -122,3 +122,20 @@ def test_window_groups_filed_as_start_on_boundary_start_each_group_at_a_window_t
     assert hook.ready()
     step(sched)
     assert sched.steps == [["a", "b"], ["a", "b"], ["c"]]
+
+
+def test_a_scheduler_has_one_step_emitter_however_often_the_hook_is_installed():
+    ex, seen = messages.Exchange(), []
+    ex.subscribe("s", "steps", lambda e: isinstance(e, H.StepBegan) and seen.append(e.step))
+    sched = Outputs()
+    hook = admission.install(sched, ex)
+    assert admission.install(sched, ex) is hook
+    assert [p for p in scheduler_step.parts(sched) if isinstance(p, admission.Hook)] == [hook]
+    with pytest.raises(RuntimeError, match="has the admission hook already"):
+        admission.install(sched, messages.Exchange())
+    assert ex.next_step == 0
+    sched.add_request(Req("a", out=2))
+    step(sched)
+    assert ex.next_step == 1
+    step(sched)
+    assert seen == [0, 1] and ex.step == 1 and ex.next_step == 2
