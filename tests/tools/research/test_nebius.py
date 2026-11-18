@@ -1056,7 +1056,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "pass --yes" in r.stderr
     r = launch("--yes")
     assert r.returncode == 1 and "--max-hours H" in r.stderr
-    r = launch("--yes", "--max-hours", "4", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_BIN="/bin/true")
+    r = launch("--yes", "--max-hours", "4", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_BIN="/bin/true", NEBIUS_CARD=CARD)
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
