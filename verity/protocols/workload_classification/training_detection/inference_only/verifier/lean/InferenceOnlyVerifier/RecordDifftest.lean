@@ -29,9 +29,10 @@ unless, on every case:
   two refuse with one code: what each Definition passes on (`Record.passedOn`), held on every template
   whether or not a wire fills its rows;
 * **the same circuit**: where the case states the instance of SPOT's `wires` piece that Python builds from its own
-  layout of each template, SPOT's reader (`Spot.Wires.Wiring.ofJson`) reads from it the wiring it reads from the
-  form's own (`Record.piece`), and the form refuses the record's wires exactly where SPOT's reader or its
-  check (`Spot.Wires.check`) refuses that instance.
+  layout of each template and the wires and order it derives from the Program, SPOT's reader
+  (`Spot.Wires.Wiring.ofJson`) reads from it the wiring it reads from the form's derived wiring
+  (`Spot.RecordText.wiring`, as `pieceOf`), and the form refuses the record's wires exactly where SPOT's check
+  (`Spot.Wires.check`) refuses that instance.
 
 The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
@@ -84,6 +85,22 @@ def shown (j : Json) : String :=
   | .ok W => s!"{repr W}"
   | .error _ => "refused"
 
+/-- A wiring as SPOT's `wires` piece states it, the JSON `Spot.Wires.Wiring.ofJson` reads. -/
+def pieceOf (W : Spot.Wires.Wiring) : Json :=
+  Json.mkObj ([
+    ("templates", Json.mkObj (W.templates.map fun (t, x) => (t, Json.mkObj [
+      ("units", toJson x.units),
+      ("rows", Json.mkObj (x.rows.map fun (p, r) => (p, Json.arr #[toJson r.words, toJson r.outer]))),
+      ("outs", Json.mkObj (x.outs.map fun (o, w) => (o, toJson w)))]))),
+    ("cuts", Json.mkObj (W.cuts.map fun (t, ps) => (t, Json.mkObj (ps.map fun (p, k) => (p, toJson k))))),
+    ("wires", Json.arr (W.wires.map fun w => Json.mkObj [
+      ("reader", Json.str w.reader), ("port", Json.str w.port), ("writer", Json.str w.writer),
+      ("out", Json.str w.out), ("at", toJson w.start), ("radix", toJson w.radix), ("base", toJson w.base),
+      ("step", toJson w.step), ("cut", Json.arr #[toJson w.cut0, toJson w.cuts])]).toArray)] ++
+    match W.order with
+    | some o => [("order", Json.arr (o.map fun (t, a, n) => Json.arr #[Json.str t, toJson a, toJson n]).toArray)]
+    | none => [])
+
 /-- Whether SPOT's reader and its check take the `wires` piece's instance `j`. -/
 def taken (j : Json) : Bool :=
   match Spot.Wires.Wiring.ofJson j with
@@ -99,7 +116,9 @@ def circuitDiffers (i : Nat) (inst tr spot code : Json) : List String :=
   match Record.front inst tr with
   | .error e => [s!"instance {i}: same circuit: the form refuses the case before its wires ({e})"]
   | .ok f =>
-    let mine := shown (Record.piece f)
+    let mine := match Spot.RecordText.wiring f.P f.doc with
+      | .ok W => shown (pieceOf W)
+      | .error _ => "refused"
     let theirs := shown spot
     (if mine == theirs then [] else
       [s!"instance {i}: same circuit: the form's wiring is {mine.take 600}, SPOT's instance gives {theirs.take 600}"]) ++

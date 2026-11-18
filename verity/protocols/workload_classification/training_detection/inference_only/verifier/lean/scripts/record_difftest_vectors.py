@@ -94,7 +94,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.commitments.periods.edges import INPUT_ID
+from verity.commitments.periods.edges import INPUT_ID, edges
 
 HERE = Path(__file__).resolve().parent
 
@@ -1328,7 +1328,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins:
     inst.update(gamma=limits["gamma"], alpha=limits["alpha"])
     rows = [(codec.descriptor_id(fn), p, u, r) for fn, n in c.templates for p, _ in fn.signature()[0]
             for u in range(n) for r in range(c.cuts.get(codec.descriptor_id(fn), {}).get(p, 1))]
-    return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, json.loads(record), order),
+    return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, json.loads(record), json.loads(text)),
                      "rows": [list(r) for r in rng.sample(rows, min(6, len(rows)))],
                      "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}},
                      "block_rows": rows_rule},
@@ -1396,22 +1396,36 @@ def _without(stage: str | None):
         setattr(ref, name, whole)
 
 
-def spot_of(c: Circuit, doc: dict, order=None) -> dict | None:
-    """The record `doc`'s wires as SPOT's `wires` piece reads them (`Spot.Wires.Wiring.ofJson`), each template's rows
-    and outputs Python's own layout of it (`verity.commitments.periods.interface.layout`, what `check_wires` reads): the order
-    the record's, else `order` where one is given beside it. None where that layout has no row for a port: its leaves
-    of two widths, or an output of 16 bits or more that is not whole 16-bit words."""
+def spot_of(c: Circuit, doc: dict, desc: dict) -> dict | None:
+    """The wiring the record's reader derives from the Program `desc` as SPOT's `wires` piece reads it
+    (`Spot.Wires.Wiring.ofJson`): each template's rows and outputs Python's own layout of it
+    (`verity.commitments.periods.interface.layout`, what `check_wires` reads), the record's cuts, the wires
+    `verity.commitments.periods.edges` states and the root's ranges as the order. None where that layout has no row
+    for a port (its leaves of two widths, or an output of 16 bits or more that is not whole 16-bit words), the root
+    has a template the circuit doesn't, or the derivation refuses."""
     if any(len(ty.width_set()) != 1 for fn, _ in c.templates
            for ty in (*(ty for _, ty in fn.signature()[0]), *ref.fields_of(fn.signature()[1]))):
         return None
     if any(_bits(ty) > 16 and _bits(ty) % 16 for fn, _ in c.templates for ty in ref.fields_of(fn.signature()[1])):
         return None
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
+    ranges, order, own = [], [], {}
+    for k, x in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]):
+        t = desc["callees"][x["fn"]]
+        if INPUT_ID.match(t):
+            continue
+        if t not in lays:
+            return None
+        n = x["n"] if x["form"] == "batch" else 1
+        ranges.append([k, t, 0, n])
+        order.append([t, own.get(t, 0), n])
+        own[t] = own.get(t, 0) + n
+    got = edges(desc, ranges, {"templates": {t: {} for t in lays}, "cuts": doc.get("cuts", {})})
+    if "refusal" in got:
+        return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
-            "cuts": doc.get("cuts", {}), "wires": doc.get("wires"),
-            **({"order": doc["order"]} if "order" in doc else {"order": order} if order is not None else {})}
-
+            "cuts": doc.get("cuts", {}), "wires": got["wires"], "order": order}
 
 def _slots(c: Circuit, w):
     """Each reader row of wire `w`: its reader's slot and its writer's."""
