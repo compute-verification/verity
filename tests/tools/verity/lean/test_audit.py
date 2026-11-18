@@ -8933,7 +8933,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
@@ -8959,7 +8959,7 @@ def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tm
     monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
 
-    def keys(facts, toolchain, digest=None, walked=None):
+    def keys(facts, toolchain, digest=None, walked=None, graphs=None):
         clock[0] += 3
         return {m: m for m in facts["graph"]}
 
@@ -8985,7 +8985,7 @@ def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkey
     may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
     entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9025,7 +9025,7 @@ def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, mo
     own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [],
            "graph": {"P": {"imports": []}}, "files": {"P": "P.lean"}, "pins": {}}
     monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: dict(own))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {"P": "pkey"})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {"P": "pkey"})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9491,7 +9491,7 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
              "axioms": []}
     first = [{"module": "P.Wide", "threads": 64, "why": "w"}, {"module": "P.Heavy", "threads": 2, "why": "w"},
              {"module": "P.Gone", "threads": 1, "why": "w"}]
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     monkeypatch.setenv("LEAN_NUM_THREADS", "8")
     calls, rejected = [], set()
