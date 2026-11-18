@@ -83,7 +83,7 @@ theorem keysIn_same : ∀ {a b : Json}, Same a b → ∀ keys : List String,
 
 /-- `portsOf`'s reading of one port, with each read of the port's entry an argument. -/
 private def portV (name : String) (kin : Bool) (has : String → Bool) (nat : String → V Nat)
-    (str : String → V String) (get : String → V Json) : V Registered.Port := do
+    (str : String → V String) : V Registered.Port := do
   let ctx := "registered reads"
   if !kin then
     throw s!"{ctx}: port {name}: a {Registered.FORMAT} port holds keys of {Registered.PORT_KEYS} and no other (no position: C and the partition give them)"
@@ -101,17 +101,13 @@ private def portV (name : String) (kin : Bool) (has : String → Bool) (nat : St
     throw s!"{ctx}: port {name}: {Registered.SCHEMA_KEY} is one of {Registered.SCHEMAS}, not {schema}"
   if schema != HmRow.ROW_SCHEMA && words.isNone then
     throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
-  let tree ← if !has Registered.TREE_KEY then pure none else do
-    let tj ← get Registered.TREE_KEY
-    if !Registered.keysIn tj ["template", "field"] then
-      throw s!"{ctx}: port {name}: a tree port's {Registered.TREE_KEY} is {"{"}template, field{"}"}"
-    pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
-  return { name, value := ← str "value", root, leaves, words, wordBits, domain, readsRel := #[], schema, tree }
+  let param ← if has "param" then str "param" else pure ""
+  return { name, value := ← str "value", root, leaves, words, wordBits, domain, readsRel := #[], schema, param }
 
 /-- One port's reading, of its name and its entry. -/
 private def portE (p : String × Json) : V Registered.Port :=
   portV p.1 (Registered.keysIn p.2 Registered.PORT_KEYS) (J.has p.2) (fun k => J.nat p.2 k "registered reads")
-    (fun k => J.str p.2 k "registered reads") (fun k => J.get p.2 k "registered reads")
+    (fun k => J.str p.2 k "registered reads")
 
 private theorem portE_same (name : String) {e e' : Json} (h : Same e e') :
     portE (name, e) = portE (name, e') := by
@@ -121,14 +117,10 @@ private theorem portE_same (name : String) {e e' : Json} (h : Same e e') :
   have h3 : (fun k => J.str e k "registered reads") = fun k => J.str e' k "registered reads" :=
     funext fun k => str_same h k _
   show portV name (Registered.keysIn e Registered.PORT_KEYS) (J.has e) (fun k => J.nat e k "registered reads")
-      (fun k => J.str e k "registered reads") (fun k => J.get e k "registered reads") =
+      (fun k => J.str e k "registered reads") =
     portV name (Registered.keysIn e' Registered.PORT_KEYS) (J.has e') (fun k => J.nat e' k "registered reads")
-      (fun k => J.str e' k "registered reads") (fun k => J.get e' k "registered reads")
+      (fun k => J.str e' k "registered reads")
   rw [keysIn_same h, h1, h2, h3]
-  unfold portV
-  rcases get_same h Registered.TREE_KEY "registered reads" with ⟨x, e₁, e₂⟩ | ⟨a, b, e₁, e₂, hs⟩
-  · simp only [e₁, e₂]
-  · simp only [e₁, e₂, bind, Except.bind, keysIn_same hs, str_same hs]
 
 /-! ## The file's ports -/
 

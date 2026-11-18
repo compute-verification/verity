@@ -61,25 +61,25 @@ def round? (s : Json) : Option Nat :=
 
 /-- A known value's port of a `--registered` file (`live_reads.reads_file`'s `known`): the value `v`'s rows `rows` (each
 with its salt), a row/v2 value of 16-bit leaves of `words` words under `Spot.Registered.domainAt` of `program`
-binding the window's open root `window`, read at each row of `rowsRead` by unit `s` alone, one port a row. -/
-def knownPorts (program window v : String) (rows : Array (Array Nat × ByteArray)) (words s : Nat)
+binding the window's open root `window`, one port for each row of `rowsRead`, whose position C and the partition give
+(`Flock.OneCircuit.pos`). -/
+def knownPorts (program window v : String) (rows : Array (Array Nat × ByteArray)) (words : Nat)
     (rowsRead : List Nat) : R (List Json) := do
   let d ← (Spot.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
     (LIVE, why)
   let root ← knownRoot program window v rows words
-  pure (rowsRead.map fun row => Json.mkObj [("value", Json.str v), ("root", Json.str root),
+  pure (rowsRead.map fun _ => Json.mkObj [("value", Json.str v), ("root", Json.str root),
     ("leaves", toJson rows.size), ("words", toJson words), ("word_bits", toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.replicate s Json.null ++ [toJson row]).toArray)),
     ("known", Json.mkObj [("rows", toJson (rows.map (·.1))),
       ("salts", Json.arr (rows.map fun k => Json.str (Flock.hexOf k.2)))])])
 
 /-- `knownPorts` of the one row `row`. -/
-def knownPort (program window v : String) (rows : Array (Array Nat × ByteArray)) (words s row : Nat) : R Json := do
-  let some p := (← knownPorts program window v rows words s [row]).head? | throw ("error", "no port")
+def knownPort (program window v : String) (rows : Array (Array Nat × ByteArray)) (words row : Nat) : R Json := do
+  let some p := (← knownPorts program window v rows words [row]).head? | throw ("error", "no port")
   pure p
 
-/-- `live_reads.reads_file`: the verifier's `--registered` file (`Flock.Registered.FORMAT_V0`) of round s's statement
+/-- `live_reads.reads_file`: the verifier's `--registered` file (`Flock.Registered.FORMAT`) of round s's statement
 `live@<s>`, unit s of the live Program of `steps` rounds at T = `t`: its slot ports `slot_<i>` at round s's
 `<pre>slots@<s>` and its header ports `req_<i>` at `<pre>requests@0` (a `row-seg/v1` value), at the roots `roots` gives
 them, each under the registered domain of the window Program's digest `program`, the slot table bound to the window's
@@ -88,33 +88,33 @@ open root `window` and the request table to its session `session`; `m` and `s` a
 each `cap_<i>` at row i of the known `<pre>caps` of the period's committed `maxTokens` (`live_reads.caps_table`, as
 `Credit.capsRoot` reads it: row q request q's max_tokens, 0 past them, under `publicRowSalt` of `window` and q) and the
 output row `o0` at the known `live-ok` rows (`ok_table`: row s' the one word 1 under `okSalt` of `window` and s').
-Units other than s read nothing. -/
+Units other than s read nothing. The file states none of these positions: C and the partition give them
+(`Flock.OneCircuit.pos`). -/
 def readsFile (program pre window session : String) (t steps s m : Nat) (roots : List (String × String))
     (maxTokens : List Nat) : R Json := do
   let (sv, rv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0")
-  let reads := fun (row : Nat) => Json.arr ((List.replicate s Json.null ++ [toJson row]).toArray)
   let sd ← (Spot.Registered.domainAt program sv SLOT_WORDS t 16 (some window)).mapError fun why =>
     (LIVE, why)
   let rd ← (Spot.Registered.domainBound program rv HEADER_WORDS t 16 "session" session).mapError fun why =>
     (LIVE, why)
-  let port := fun (v : String) (words : Nat) (d : ByteArray) (schema : String) (row : Nat) =>
+  let port := fun (v : String) (words : Nat) (d : ByteArray) (schema : String) =>
     Json.mkObj [("value", Json.str v), ("root", Json.str ((roots.lookup v).getD "")), ("leaves", toJson t),
       ("words", toJson words), ("word_bits", toJson (16 : Nat)), ("domain", Json.str (Flock.hexOf d)),
-      (SCHEMA_KEY, Json.str schema), ("reads", reads row)]
-  let slots := (List.range t).map fun i => (s!"slot_{i}", port sv SLOT_WORDS sd Flock.HmRow.ROW_SCHEMA_V2 i)
-  let reqs := (List.range t).map fun i => (s!"req_{i}", port rv HEADER_WORDS rd Flock.HmRow.ROW_SCHEMA_SEG i)
+      (SCHEMA_KEY, Json.str schema)]
+  let slots := (List.range t).map fun i => (s!"slot_{i}", port sv SLOT_WORDS sd Flock.HmRow.ROW_SCHEMA_V2)
+  let reqs := (List.range t).map fun i => (s!"req_{i}", port rv HEADER_WORDS rd Flock.HmRow.ROW_SCHEMA_SEG)
   let mp ← knownPort program window s!"{pre}{M_ROWS}@{s}"
-    #[(#[m % 65536, m / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[m % 65536, m / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS 0
   let sp ← knownPort program window s!"{pre}{ROUND_ROWS}@{s}"
-    #[(#[s % 65536, s / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[s % 65536, s / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS 0
   let capRows := (Array.range t).map fun q =>
     let c := maxTokens.getD q 0
     (#[c % 65536, c / 65536], PouwVerifier.publicRowSalt window q)
-  let caps := (List.range t).zip (← knownPorts program window s!"{pre}{CAPS}" capRows SLOT_WORDS s (List.range t))
+  let caps := (List.range t).zip (← knownPorts program window s!"{pre}{CAPS}" capRows SLOT_WORDS (List.range t))
     |>.map fun (i, p) => (s!"cap_{i}", p)
   let op ← knownPort program window s!"{pre}{LIVE_OK_VALUE}"
-    ((Array.range steps).map fun x => (OK_ROW, okSalt window x)) OK_ROW.size s s
-  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0),
+    ((Array.range steps).map fun x => (OK_ROW, okSalt window x)) OK_ROW.size s
+  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT),
     ("ports", Json.mkObj (slots ++ reqs ++ [(M_ROWS, mp), (ROUND_PORT, sp)] ++ caps ++ [(LIVE_OK_PORT, op)]))])
 
 /-- `credit._live_asks`: the verifier runs in statement order up to the first statement a check before the verifier
