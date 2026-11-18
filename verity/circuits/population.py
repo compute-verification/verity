@@ -174,7 +174,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     range of the record's order (each template one range where it states none) is a batch; each argument's runs of equal
     rows at one stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
     row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
-    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the opening's units; any other row, the
+    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the units of that table's openings in the
+    record's order, each opening's after the one before; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
     read into a row of narrower leaves reads its root parameter's leaves recut (`refs.recut`). The Program's
     ``annotations["free"]`` are the rows no wire, read, table read, opening or ingress fills, as the record's ``free``
@@ -269,16 +270,20 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         for u in range(r["at"], r["at"] + r["units"]):
             for c in range(cut(j, r["port"])):
                 fill(r, j, r["port"], u, c, ("whole", name, None))
+    opened: dict[str, int] = {}
     for o in reg.get("openings", ()):
         j = index[o["reader"]]
         for p in o["ports"]:
-            name = f"{o['table']}/{p}"
-            if name in roots:
-                raise ValueError(f"opening {o}: {name} is opened once")
-            root(name, Array(o["units"], dict(sigs[j][0])[p]))
+            name, t = f"{o['table']}/{p}", dict(sigs[j][0])[p]
+            if name in roots and name not in opened:
+                raise ValueError(f"opening {o}: {name} is named like a read's or a table read's root")
+            off = opened.get(name, 0)
+            if off and roots[name].elem != t:
+                raise ValueError(f"opening {o}: {name} opened as {roots[name].elem!r} and as {t!r}")
+            roots[name], opened[name] = Array(off + o["units"], t), off + o["units"]
             for u in range(o["at"], o["at"] + o["units"]):
                 for c in range(cut(j, p)):
-                    fill(o, j, p, u, c, ("whole", name, u - o["at"]))
+                    fill(o, j, p, u, c, ("whole", name, off + u - o["at"]))
     ingress = {(index[g["reader"]], g["port"], u) for g in record.get("ingress", ()) for u in range(g["at"], g["at"] + g["units"])}
     free = []
     for j, ((ps, _), n) in enumerate(zip(sigs, units)):
