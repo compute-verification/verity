@@ -112,7 +112,7 @@ uv run python calibration/sampling_plan/recursion.py --result recursion_e2e.json
 
 ## The class circuit's size and its window's commit
 
-`verity/protocols/proofs/spot/prover/audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
+`benchmarks/prove_path/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census proof block for proof block), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a

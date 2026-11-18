@@ -925,12 +925,6 @@ def check_scheme_settings(arm: str, given: dict | list | None, lifetimes: int) -
                          "opens once: give a list of one object a lifetime, each with its own reserved session")
 
 
-def tick_feed(d: Path) -> Path:
-    """The feed file a tick arm's server writes in its directory ``d`` (`network.prover.admission.feed_file`)."""
-    from verity.protocols.resource_accounting.network.prover.admission import feed_file
-    return Path(feed_file(str(d)))
-
-
 def value_settings(env: dict[str, str] | None = None) -> dict:
     """The integration's value settings in force in ``env`` (this process's when None), as its registry records them
     (`verity_vllm.settings.record`): each variable set there that can change what an engine computes or commits (the
@@ -2044,7 +2038,10 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2349,11 +2346,11 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
         raise RuntimeError(f"{what} ended before it listened ({log})") from None
 
 
-def runs_ended(feed: Path) -> int:
-    """The network attester's runs whose watermark the tick's feed (`scheme_plugin.Front`) has seen end."""
-    if not feed.exists():
-        return 0
-    return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
+def runs_ended(d: Path) -> int:
+    """The network attester's runs whose watermark end the tick arm's server's front has logged in its directory ``d``
+    (``tick.PID.jsonl``, `network.prover.admission.FrontFeed`)."""
+    return sum(1 for f in d.glob("tick.*.jsonl") for x in f.read_text().splitlines()
+               if '"end"' in x and json.loads(x).get("end"))
 
 
 def hold_ends(server: int | None, front: int | None, ended: int, left_s: float | None) -> tuple[str, bool] | None:
@@ -2443,7 +2440,10 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
@@ -2474,7 +2474,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
-            why = hold_ends(server.poll(), fronted.poll(), runs_ended(tick_feed(srv)),
+            why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv),
                             None if stop_at is None else stop_at - now())
             if why is not None:
                 break

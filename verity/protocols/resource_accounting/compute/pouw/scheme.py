@@ -30,7 +30,9 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+from verity.protocol import Channel, Role
+from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
 OPTION = "pouw:pearl-c-h100-v1-h3"
 #: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
@@ -461,4 +463,18 @@ PEARL_PLUS = register(Scheme(
               "one-design": "its own tile sampling by ticket weight"},
     requests=requests,
     attach=attach,
+    parties=(Role("challenger", "auditor", needs=("host",)), Role("workers", "developer", needs=("serve",)), VERIFIER),
+    channels=(Channel("challenger", "workers", ("PearlSalt",), carries_coins=True),),
+    colocated=(),
+    needs=frozenset({"windows"}),
+    depends=(),
+    record="work",
+    symbol="V",
+    published=("MACs", Fraction(1)),
+    channel_schemas=Lacks("no Schema is declared for PearlSalt"),
+    record_owner="compute-accounting",
+    tables=("pearl-a", "pearl-y", "pearl-b"),
+    number_format="bf16",
+    y_committed=True,
+    salt_open_root=epoch_open_root,
 ))

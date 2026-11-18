@@ -39,8 +39,8 @@ the wire.
 ``--admit tick`` serves every trace of the run under the attested tick (`verity.protocols.resource_accounting.network.prover.admission`, its
 ``tick``): the server turns the network attester's scheme on by name (`verity_vllm.pipeline.scheme_plugin`), its
 `register` a general plugin beside the tracer, configured by ``VERITY_PROTOCOLS``, and its `Front` the outermost
-middleware, which writes the release headers and the watermark the server gets to its feed (in ``raw/``,
-`network.prover.admission.feed_file`). In a `NETWORK_ATTESTER` trace they come from the
+middleware, which writes the release headers and the watermark the server gets to its feed in ``raw/``, and each
+release and watermark end to the scheme's log there (``raw/tick.PID.jsonl``). In a `NETWORK_ATTESTER` trace they come from the
 network attester in front of the server: it numbers each request it releases, in its release order, with the bucket of
 its release, and streams the watermark to the server (`network_attester_serve.py serve --watermark`), its bucket τ_b
 (`tick_for`). In every other trace the client stands in for the network attester, which isn't in front of the server
@@ -337,12 +337,6 @@ class StandIn:
     def done(self, sent: int) -> bool:
         """Every one of `sent` requests is released and its bucket's line is out: the watermark may end."""
         return len(self.buckets) == sent and (not self.buckets or self.closed >= self.buckets[-1])
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def wait_ready(server: subprocess.Popen, port: int, deadline: float) -> None:
@@ -805,7 +799,12 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
     (d / "raw").mkdir(parents=True, exist_ok=True)
-    port = free_port()
+    for p in (ROOT / "benchmarks/harness", ROOT / "tools/config"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    from verity_bench import kit
+
+    port = kit.free_port()
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args,

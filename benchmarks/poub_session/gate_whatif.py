@@ -69,11 +69,12 @@ class Refused(ValueError):
 
 def log_coins(lines: list[str]) -> list[tuple[str, int, str, int, int]]:
     """A release log's coins in its order after its head: (label, index, root asked after, received_at, released_at),
-    on the challenger's clock."""
+    on the challenger's clock; a label's former name (`coins.FORMER`) read as that label."""
     out = []
     for i in range(1, len(lines) - 1, 2):
         root, release = json.loads(lines[i]), json.loads(lines[i + 1])
-        out.append((root["label"], root["index"], root["root"], root["received_at"], release["released_at"]))
+        out.append((coins.FORMER.get(root["label"], root["label"]), root["index"], root["root"], root["received_at"],
+                    release["released_at"]))
     return out
 
 
