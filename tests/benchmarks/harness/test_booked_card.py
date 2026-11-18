@@ -14,7 +14,7 @@ def test_a_vllm_point_on_a_booked_card_leases_that_card_on_its_cores(monkeypatch
     from verity_bench import cli
 
     root = Path(__file__).resolve().parents[3]
-    name = "llama32-1b-fp8-1gpu-bandwidth-served-h200"
+    name = "llama32-1b-fp8-1gpu-bandwidth-served"
     monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
     monkeypatch.setenv("GPU_LEASE_ON", "2")
     monkeypatch.setenv("GPU_LEASE_CORES", "20-39")
@@ -55,7 +55,7 @@ def test_a_booked_point_s_research_run_flags_name_its_slot_cards_end_and_bound_a
     from verity_bench.vllm.presets import Admission
 
     root = Path(__file__).resolve().parents[3]
-    spec = jobs.make_plan("llama32-1b-fp8-1gpu-bandwidth-served-h200", root=root, commit="a" * 40,
+    spec = jobs.make_plan("llama32-1b-fp8-1gpu-bandwidth-served", root=root, commit="a" * 40,
                           lookup=lambda identity, commit: None).spec
     end = "2026-11-19T05:00:00Z"
     assert jobs.booked(spec, "gpu", "g2", end, [2]) == [
