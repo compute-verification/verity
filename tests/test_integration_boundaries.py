@@ -75,7 +75,6 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.sampling"),
     ("tests/verity/protocols/proofs/flock/prover/test_fmaxf_commit.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py", "verity_vllm.definitions.registry"),
-    ("tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py", "verity_vllm.definitions.registry.prims"),
     ("tests/verity/protocols/proofs/flock/prover/test_rolled_lowering.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/prover/test_unit_range.py", "verity_vllm.definitions.registry"),
