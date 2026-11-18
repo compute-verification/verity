@@ -17,14 +17,16 @@ PoUB's tests hold them equal to the declarations.
 
 Neither declares a block: PoUB's opening unit (`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2``) is
 proved in the read session's own window (`prover.window`), not as a template of the served circuit's first level, and
-P2's openings go to its verifier in the clear. Neither says its own term (`Scheme.delta_scheme`): in the Lean it is the
-sketch bound's error (`DELTA_SCHEME`), a function of the prover's hash budget Q, the session's passes P, the store's
-blocks N and the sign blocks' rank tail ε, not one number.
+P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
+bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layout (g, b), a function of the prover's hash
+budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
+Lean's εrank, which is not the audit's error ε), and its two sides in words (`OVER`, `UNDER`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from fractions import Fraction
 from importlib import import_module
 from types import MappingProxyType
 from typing import Any
@@ -42,10 +44,32 @@ SESSION_PROCESS = "poub-session"
 GOAL = "memory-accounting/memory-protocols-declared"
 #: what `refresh` waits on: a session with the setting on accepted by the Lean verifier
 REFRESH_GOAL = "memory-accounting/refresh-session-accepted"
-#: each scheme's own term in the Lean, by the guarantee whose conclusion carries it (`SketchBound T δs`): δs at the
-#: deployed receipts, a function of Q, P, N and ε
-DELTA_SCHEME = {"bandwidth": "ResourceAccounting.Guarantees.Remote.SketchBoundP2",
-                "poub": "ResourceAccounting.Guarantees.Remote.SketchBoundDeployed"}
+#: the sketch bound's error at a fixed receipt layout, `δSketch g b Q P N εrank`
+#: (security/Definitions/Poub/Guarantees/RemoteSketch.lean): g the guess term's bits, b the bits of the sign keys'
+#: birthday term
+DELTA_SKETCH = "ResourceAccounting.Guarantees.Remote.δSketch"
+
+
+def delta_sketch(g: int, b: int) -> S.Term:
+    """`DELTA_SKETCH` at the layout (``g``, ``b``) as a scheme's own term: its parameters are the prover's SHA-512
+    compressions over the session ``Q``, its passes ``P``, the store's blocks ``N`` and the signs' rank tail
+    ``rank_tail`` (the Lean's εrank, a rational here), and its value
+    ``Q/2^g + (Q + P)·(rank_tail + N/2^512) + (Q + P)²/2^b``."""
+    def value(Q: int, P: int, N: int, rank_tail: Fraction) -> Fraction:
+        return Fraction(Q, 2**g) + (Q + P) * (Fraction(rank_tail) + Fraction(N, 2**512)) + Fraction((Q + P)**2, 2**b)
+    return S.Term(f"{DELTA_SKETCH} {g} {b}", ("Q", "P", "N", "rank_tail"), value)
+
+
+#: each scheme's own term: `DELTA_SKETCH` at its receipts' layout, the conclusion of `SketchBoundP2` (rank 12, 256-bit
+#: sign keys) and of `SketchBoundDeployed` (rank 27, 512-bit sign keys)
+DELTA_SCHEME = {"bandwidth": delta_sketch(96, 257), "poub": delta_sketch(216, 513)}
+#: the two sides (`Verity.Scheme.over`, `under`), in bits. The Lean's conclusion is that an accepted session's reads are
+#: at least (1 − γ) of its credited bits (`RemoteRunConservation`: Σ_w reads_w ≥ (1 − γ̄)·n·P·N·b), γ the session's
+#: ledger total (`verifier.audit.GammaTerms`), a public rational g/D of the session. Both sides are multiplied by D, so
+#: each is a natural and no factor stands on either: (D − g)·credited ≤ D·reads.
+OVER = ("(D − g) × the session's credited bits, n·P·N·b: its n windows, each of P passes over the store's N blocks of "
+        "b bits, where γ = g/D in lowest terms is the session's ledger total")
+UNDER = "D × the bits the session's passes read from the node's memory tier, summed over its windows"
 #: the ways to a correct receipt without a read from node memory, as the session's ledger names them
 #: (`verifier.audit.GammaTerms`)
 CHARGES = ("chip", "counting", "rebuild", "host", "link", "carrier")
@@ -77,6 +101,9 @@ BANDWIDTH = S.register(S.Scheme(
     ),
     charges=tuple(S.Charge(name, f"no P2 record carries it: verifier.audit.GammaTerms.{name} at P2's units",
                            bounded=False) for name in CHARGES),
+    delta_scheme=DELTA_SCHEME["bandwidth"],
+    over=OVER,
+    under=UNDER,
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: PoUS's vk root over the store and a receipt root a pass",
@@ -94,6 +121,9 @@ POUB = S.register(S.Scheme(
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
     charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
+    delta_scheme=DELTA_SCHEME["poub"],
+    over=OVER,
+    under=UNDER,
     settings={"refresh": False},
     hooks=("declared", "memory", "steps"),
     requests=lambda ctx: requests(ctx),
@@ -166,5 +196,5 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "GOAL", "POUB", "PROVER", "REFRESH_GOAL",
-           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "attach", "prover", "requests", "session", "settings"]
+__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "OVER", "POUB", "PROVER", "REFRESH_GOAL",
+           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "UNDER", "attach", "delta_sketch", "prover", "requests", "session", "settings"]

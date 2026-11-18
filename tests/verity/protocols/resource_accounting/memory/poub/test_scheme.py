@@ -75,12 +75,27 @@ def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is
         assert S.credited([scheme], [("Dither_v1", [(0, 4)])]) == frozenset()
 
 
-def test_neither_term_is_said_and_each_names_its_lean_constant() -> None:
+def test_each_says_its_term_as_the_sketch_bounds_error_at_its_layout_and_its_two_sides() -> None:
+    """Each term is the Lean's `δSketch g b Q P N εrank` at its receipts' layout, evaluated exactly at the four
+    parameters a caller gives; the sides are the credited bits over the tier's reads, the factor (1 − γ) cleared."""
     zero = {name: 0 for name in poub.CHARGES}
-    assert sorted(poub.DELTA_SCHEME) == ["bandwidth", "poub"]
-    assert poub.POUB.delta_scheme is None and all(c.bounded for c in poub.POUB.charges)
-    with pytest.raises(ValueError, match="delta_scheme .* is not said"):
-        S.bound(poub.POUB, Fraction(1, 100), 0, zero)
+    lean = "ResourceAccounting.Guarantees.Remote.δSketch"
+    assert {n: (t.lean, t.parameters) for n, t in poub.DELTA_SCHEME.items()} == {
+        "bandwidth": (f"{lean} 96 257", ("Q", "P", "N", "rank_tail")),
+        "poub": (f"{lean} 216 513", ("Q", "P", "N", "rank_tail"))}
+    for scheme in (poub.BANDWIDTH, poub.POUB):
+        assert scheme.delta_scheme is poub.DELTA_SCHEME[scheme.name]
+        assert (scheme.over, scheme.under) == (poub.OVER, poub.UNDER) and "n·P·N·b" in scheme.over
+    at = {"Q": 2**80, "P": 6, "N": 2**20, "rank_tail": Fraction(1, 2**100)}
+    q = 2**80 + 6
+    for name, (g, b) in {"bandwidth": (96, 257), "poub": (216, 513)}.items():
+        assert poub.DELTA_SCHEME[name].value(**at) == (
+            Fraction(2**80, 2**g) + q * (Fraction(1, 2**100) + Fraction(2**20, 2**512)) + Fraction(q * q, 2**b))
+    assert all(c.bounded for c in poub.POUB.charges)
+    got = S.bound(poub.POUB, Fraction(1, 100), 0, zero, at, epsilon=Fraction(0))
+    assert got.delta_scheme == poub.DELTA_SCHEME["poub"].value(**at) and 0 < got.delta_scheme < Fraction(1, 2**19)
+    with pytest.raises(ValueError, match=r"\['rank_tail'\] were not given"):
+        S.bound(poub.POUB, Fraction(1, 100), 0, zero, {k: v for k, v in at.items() if k != "rank_tail"}, epsilon=Fraction(0))
     assert not any(c.bounded for c in poub.BANDWIDTH.charges)
     with pytest.raises(ValueError, match="nothing bounds yet"):
         S.bound(poub.BANDWIDTH, Fraction(1, 100), 0, zero)
