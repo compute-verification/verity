@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead.rows 
 def _tree_step(ext, dom: CommitmentDomain):
     # pads and nodes read only the domain id; the row-leaf fields, the schema among them, are never hashed here, and RowStep's
     # leaf template fits the words schema (not the A one)
-    return ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
+    return ext.RowStep(dom.domain_id, bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
 
 
 def _device_top(hasher, rs, leaves, count: int, stream) -> bytes:

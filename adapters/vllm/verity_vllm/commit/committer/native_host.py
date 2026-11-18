@@ -838,7 +838,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         buf = bytes(stream) + b"\0" * (padded - used)
         n = padded // chunk
         dom = self._row_domain(step, n)
-        lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
+        lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], step_rows.step_salts(self._row_key(step), n), 8 * chunk)
         levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
         mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
         t1 = time.perf_counter()

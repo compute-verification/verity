@@ -101,7 +101,7 @@ def test_leaves_refuse_ranks_past_2_32_and_ragged_bytes(ext, hasher):
 
 
 def _root(ext, hasher, dom, leaves: list[bytes]) -> bytes:
-    rs = ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), R.SCHEMA, 64)
+    rs = ext.RowStep(dom.domain_id, bytes(128), bytes(128), bytes(128), R.SCHEMA, 64)
     n = len(leaves)
     width = 1 << max(0, (n - 1).bit_length())
     nodes = _dev(b"".join(leaves))

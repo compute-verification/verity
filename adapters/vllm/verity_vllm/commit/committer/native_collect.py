@@ -911,7 +911,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def _row_step(self, step: int, n: int, ks: bytes) -> Any:
         row_prefix, salt_prefix, leaf_prefix = self._row_consts
-        return ext().RowStep(self._row_domain(step, n).domain_id, ks, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
+        return ext().RowStep(self._row_domain(step, n).domain_id, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
 
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window

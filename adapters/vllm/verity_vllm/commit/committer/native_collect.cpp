@@ -40,7 +40,7 @@
 
 extern "C" int verity_gather_launch(const void* d_desc, int n, int blocks_per_desc, cudaStream_t stream);   // native_gather.cu
 extern "C" int verity_rows_params_bytes();                                                                              // native_rows.cu
-extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
+extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* row_prefix, const uint8_t* salt_prefix,
                                  const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
@@ -1560,21 +1560,21 @@ struct Fa3Wrap {
   }
 };
 
-// rows-sha512 (verity_vllm.commit.step_rows): one step's kernel parameters -- its frame domain's templates and midstates and its salt
-// key -- built once on the host (native_rows.cu) and passed by value to every launch of the step.
+// rows-sha512 (verity_vllm.commit.step_rows): one step's kernel parameters -- its frame domain's templates and midstates -- built once
+// on the host (native_rows.cu) and passed by value to every launch of the step.
 struct RowStep {
   std::vector<uint8_t> params;
   int64_t row_bytes = 0;
   int64_t max_blocks = 0;                        // > 0: leaves and wide levels in launches of at most this many blocks (the same bytes)
-  RowStep(const py::bytes& domain_id, const py::bytes& ks, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
+  RowStep(const py::bytes& domain_id, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
           const std::string& schema, int64_t row_bytes_)
       : row_bytes(row_bytes_) {
-    const std::string did = domain_id, k = ks, p = row_prefix, sp = salt_prefix, lp = leaf_prefix;
-    if (did.size() != 64 || k.size() != 64 || p.size() != 128 || sp.size() != 128 || lp.size() != 128)
-      throw std::runtime_error("RowStep: the domain id and the salt key are 64 bytes, the row, salt and leaf prefixes 128");
+    const std::string did = domain_id, p = row_prefix, sp = salt_prefix, lp = leaf_prefix;
+    if (did.size() != 64 || p.size() != 128 || sp.size() != 128 || lp.size() != 128)
+      throw std::runtime_error("RowStep: the domain id is 64 bytes, the row, salt and leaf prefixes 128");
     if (row_bytes <= 0 || row_bytes > (1 << 20)) throw std::runtime_error("RowStep: a row is 1 byte to 1 MiB");
     params.resize(static_cast<size_t>(verity_rows_params_bytes()));
-    if (verity_rows_build(reinterpret_cast<const uint8_t*>(did.data()), reinterpret_cast<const uint8_t*>(k.data()), reinterpret_cast<const uint8_t*>(p.data()),
+    if (verity_rows_build(reinterpret_cast<const uint8_t*>(did.data()), reinterpret_cast<const uint8_t*>(p.data()),
                           reinterpret_cast<const uint8_t*>(sp.data()), reinterpret_cast<const uint8_t*>(lp.data()), schema.data(), static_cast<int>(schema.size()),
                           static_cast<uint32_t>(row_bytes), params.data()) != 0)
       throw std::runtime_error("RowStep: the frame leaf template does not fit the schema " + schema);
@@ -1610,8 +1610,8 @@ struct StepHasher {
   }
 
   // rows-sha512: the leaves of positions first .. first + m - 1 of a step of n_total leaves (a pad at every position >= n_total), row i
-  // at rows + i * stride for i < nbytes / stride (stride 0: the step's row bytes).  Salts are derived from the step's key, or given (192 B
-  // per row: a test's).  Runs on `stream_ptr`.  -> (leaves [m, 64] uint8, b || c [m, 128] when want_bc, h [m, 64] when want_h; the last
+  // at rows + i * stride for i < nbytes / stride (stride 0: the step's row bytes), under its salts (192 B a row, 16-byte aligned on the
+  // card; required when there are rows).  Runs on `stream_ptr`.  -> (leaves [m, 64] uint8, b || c [m, 128] when want_bc, h [m, 64] when want_h; the last
   // two hold the data positions' values, and are empty when not asked for)
   py::tuple rows_leaves(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, int64_t m, int64_t n_total, at::Tensor tn, int64_t stream_ptr,
                         int64_t stride = 0, std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false, bool want_h = false) {
@@ -1624,8 +1624,9 @@ struct StepHasher {
     if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != 8192) throw std::runtime_error("rows_leaves: tn must be the 8 KB CUDA mask table");
     if (first < 0 || m < 0 || n_total < 0 || first + m > (int64_t(1) << 32)) throw std::runtime_error("rows_leaves: positions below 2^32");
     const int64_t n_rows = nbytes / stride;
-    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192))
-      throw std::runtime_error("rows_leaves: salts must be a contiguous CUDA uint8 tensor of 192 bytes per row");
+    if (n_rows && (!salts.defined() || !salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192 ||
+                   reinterpret_cast<uintptr_t>(salts.data_ptr()) % 16))
+      throw std::runtime_error("rows_leaves: salts must be a 16-byte aligned contiguous CUDA uint8 tensor of 192 bytes per row");
     at::Tensor leaves, bc, hs;
     {
       py::gil_scoped_release nogil;
@@ -1655,8 +1656,8 @@ struct StepHasher {
   }
 
   // rows_leaves in two halves, for a step whose length (and so whose frame domain) is not known while its rows are: rows_h hashes the
-  // data positions first .. first + nbytes / stride - 1 to their h (and b || c when want_bc), which needs only the step's salt key (rs
-  // may be any domain's RowStep), and rows_frame turns them into the leaves once the step's RowStep is known.  -> (h [n_rows, 64],
+  // data positions first .. first + nbytes / stride - 1 to their h (and b || c when want_bc) under their salts, which reads no frame field
+  // (rs may be any domain's RowStep), and rows_frame turns them into the leaves once the step's RowStep is known.  -> (h [n_rows, 64],
   // b || c [n_rows, 128] or empty)
   py::tuple rows_h(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, at::Tensor tn, int64_t stream_ptr, int64_t stride = 0,
                    std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false) {
@@ -1669,8 +1670,9 @@ struct StepHasher {
     if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != 8192) throw std::runtime_error("rows_h: tn must be the 8 KB CUDA mask table");
     const int64_t n_rows = nbytes / stride;
     if (first < 0 || first + n_rows > (int64_t(1) << 32)) throw std::runtime_error("rows_h: positions below 2^32");
-    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192))
-      throw std::runtime_error("rows_h: salts must be a contiguous CUDA uint8 tensor of 192 bytes per row");
+    if (n_rows && (!salts.defined() || !salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192 ||
+                   reinterpret_cast<uintptr_t>(salts.data_ptr()) % 16))
+      throw std::runtime_error("rows_h: salts must be a 16-byte aligned contiguous CUDA uint8 tensor of 192 bytes per row");
     at::Tensor hs, bc;
     {
       py::gil_scoped_release nogil;
@@ -1879,8 +1881,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("lead_leaves", &StepHasher::lead_leaves, py::arg("ls"), py::arg("values"), py::arg("value_bytes"), py::arg("n"), py::arg("last_bytes"),
            py::arg("first"), py::arg("stream_ptr"));
   py::class_<RowStep>(m, "RowStep")
-      .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
-           py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
+      .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
+           py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
       .def_readonly("row_bytes", &RowStep::row_bytes)
       .def_readwrite("max_blocks", &RowStep::max_blocks);
   py::class_<LeadStep>(m, "LeadStep").def(py::init<const py::bytes&, const std::string&>(), py::arg("domain_id"), py::arg("schema"));

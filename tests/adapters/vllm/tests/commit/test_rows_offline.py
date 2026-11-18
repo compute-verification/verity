@@ -35,7 +35,7 @@ def test_steps_commit_step_rows_trees_under_fresh_keys():
         blk = bytes(com._gpu_blocks[s][0].numpy().tobytes())
         rows = [blk[i:i + R.ROW_BYTES].ljust(R.ROW_BYTES, b"\0") for i in range(0, len(blk), R.ROW_BYTES)]
         ctx = com._ctx_digest(s)
-        tree_root = R.levels(R.domain(com.program_digest, ctx, com._geo_digest, len(rows)), rows, com.row_keys[s], 8 * R.ROW_BYTES)[-1][0]
+        tree_root = R.levels(R.domain(com.program_digest, ctx, com._geo_digest, len(rows)), rows, R.step_salts(com.row_keys[s], len(rows)), 8 * R.ROW_BYTES)[-1][0]
         assert sc.n_leaves == len(rows) and sc.merkle_root == tree_root
         assert sc.root == R.step_root(com.program_digest, ctx, com._geo_digest, com.layout_digest(com._layouts[s]), len(rows), tree_root)
     assert rc.run_root == R.run_root(com.program_digest, com._geo_digest, [s.root for s in rc.steps]) and len(rc.run_root) == R.ROOT_BYTES

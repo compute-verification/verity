@@ -470,7 +470,7 @@ def one_block_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes
     stream.extend(b"\0" * (-len(stream) % R.ROW_BYTES))
     rows = [bytes(stream[o:o + R.ROW_BYTES]) for o in range(0, len(stream), R.ROW_BYTES)]
     ctx = R.ctx_digest(RUN_ID, step)
-    tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
+    tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, R.step_salts(ks, len(rows)), 8 * R.ROW_BYTES)[-1][0]
     return R.step_root(PD, ctx, GEO, R.layout_digest(metas), len(rows), tree_root)
 
 

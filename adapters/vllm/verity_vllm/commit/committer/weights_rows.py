@@ -41,7 +41,7 @@ class WeightsRows:
             self._dev = (e.StepHasher(), torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).to(flat.device))
         H, tn = self._dev
         dom = step_rows.weights_domain(self.geo, t, entry)
-        rs = e.RowStep(dom.domain_id, step_rows.tensor_key(self.wk, t), step_rows.row_prefix(8 * RB), step_rows.INST.salt_prefix,
+        rs = e.RowStep(dom.domain_id, step_rows.row_prefix(8 * RB), step_rows.INST.salt_prefix,
                        step_rows.INST.leaf_prefix(step_rows.KEY), step_rows.SCHEMA, RB)
         n, nb = dom.count, int(flat.numel())
         full, stream = nb // RB, torch.cuda.current_stream(flat.device).cuda_stream

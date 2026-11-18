@@ -1,18 +1,18 @@
 // The rows-sha512 scheme's kernels (verity_vllm.commit.step_rows): bit for bit core's hm96-sha512/row/v2 leaves in frame-v3-sha512
 // trees.  The frame leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one row
 // commitment (verity/commitments/cuda/row_commit.cuh, `rc`); what is the committer's own is its schedule:
-//   * every per-step constant (the domain's frame templates and midstates, the salt key) is a kernel parameter (`LeafK`, rc's FrameK
-//     and Hm96K with the row prefix's midstate and the salt key, and `NodeK`, rc's, __grid_constant__) instead of __constant__ memory,
+//   * every per-step constant (the domain's frame templates and midstates) is a kernel parameter (`LeafK`, rc's FrameK and Hm96K
+//     with the row prefix's midstate, and `NodeK`, rc's, __grid_constant__) instead of __constant__ memory,
 //     so the worker's steps (one domain each) run back to back on its side stream with no symbol copy between them;
 //   * digests are stored in byte order (a [n, 64] uint8 tensor is the digests), each 8-byte word swapped on load and store;
-//   * the row digest, the derived salts (salt_prf), and the per-GPU leaf forms below.
+//   * the row digest and the per-GPU leaf forms below.
 // Kernel names contain rows_leaf (leaves and pads) or rows_level (nodes): benchmarks/served_commit/nsys_summary.py files GPU time by
 // those substrings, and any other name counts as the model's.
 // extern "C" launchers and the host builder for native_collect.cpp's StepHasher, which runs them with the GIL released.
 //
 // Per position pos of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
 //   x    = SHA-512(P(l) || row)                                   row = l / 8 bytes at rows + (pos - first) * stride
-//   y    = salt (192 bytes): given, or y_r = SHA-512(Ks || u64be(pos) || u64be(r)), r = 0, 1, 2
+//   y    = salt (192 bytes), given: 192 (pos - first) bytes into `salts`, which the caller fills before the launch
 //   c    = SHA-512(salt_prefix || y);  b = x ^ M_key y;  h = SHA-512(leaf_prefix(key) || b || c)
 //   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
@@ -46,8 +46,6 @@ constexpr int THREADS = 256;
 // rc's frame leaf and pad templates (FrameK) and hm96's constants (Hm96K), with the committer's own
 struct LeafK : rc::FrameK, rc::Hm96K {
   u64 mid_P[8];                      // after P(l)
-  u64 ks[8];                         // the salt key
-  u64 ks_m8[8];                      // state after rounds 0..7 of a salt block (its words 0..7 are the key)
   u32 lb;                            // row bytes
 };
 using rc::NodeK;
@@ -110,22 +108,8 @@ DEV void hash_after_block(const u64* cv, const uint8_t* p, u32 lb, u64* x) {
   hash_row_blocks(x, p, lb, 0, row_blocks(lb));
 }
 
-DEV void salt_prf(const LeafK& K, u64 pos, u64* Y) {
-#pragma unroll
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] = K.ks[i];
-    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
-    w[11] = w[12] = w[13] = w[14] = 0;
-    w[15] = 80 * 8;
-    sha::iv(Y + 8 * r);
-    sha::compress_from<8>(Y + 8 * r, K.ks_m8, w);
-  }
-}
-
 // A thread a position first + i (i < m): the tree leaf when i < n_rows and pos < n_total (row i of `rows`), else the pad; b || c to
-// bc[i] and h to hs[i] for a leaf when they are given.  salts: row i's given salt at 192 i, or null for derived salts.
+// bc[i] and h to hs[i] for a leaf when they are given.  salts: row i's salt at 192 i.
 __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
     rows_leaf_kernel(const __grid_constant__ LeafK K, const uint8_t* __restrict__ rows, u64 stride, u64 n_rows,
                      const uint8_t* __restrict__ salts, const uint8_t* __restrict__ Tn, u64 first, u64 m, u64 n_total,
@@ -138,8 +122,7 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
     u64 x[8], Y[24], c[8], my[8], B[16], h[8];
     u32 mk[16];
     hash_after_block(K.mid_P, rows + i * stride, K.lb, x);
-    if (salts) ld_be(salts + 192 * i, Y, 24);
-    else salt_prf(K, pos, Y);
+    ld_be(salts + 192 * i, Y, 24);
     rc::mask<false>(rc::NibTab<true>{Tn}, Y, mk);
     rc::salt_digest(K, Y, c);
     rc::mask_words(mk, my);
@@ -187,23 +170,6 @@ DEV void load_t8(const uint8_t* Tn, uint4* T8) {
   __syncthreads();
 }
 
-// salt_prf with its loop over r rolled (one compression body for the three)
-DEV void salt_prf_rolled(const LeafK& K, u64 pos, u64* Y) {
-#pragma unroll 1
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16], s[8];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] = K.ks[i];
-    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
-    w[11] = w[12] = w[13] = w[14] = 0;
-    w[15] = 80 * 8;
-    sha::iv(s);
-    sha::compress_from<8>(s, K.ks_m8, w);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) Y[8 * r + i] = s[i];
-  }
-}
-
 DEV void st_raw(u64* p, const u64* d, int n) {
 #pragma unroll
   for (int i = 0; i < n / 2; ++i) reinterpret_cast<ulonglong2*>(p)[i] = make_ulonglong2(d[2 * i], d[2 * i + 1]);
@@ -233,8 +199,7 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
   if (i < n_rows && pos < n_total) {
     u64 x[8], Y[24], c[8], my[8], B[16], h[8];
     u32 mk[16];
-    if (salts) ld_be(salts + 192 * i, Y, 24);
-    else salt_prf_rolled(K, pos, Y);
+    ld_be(salts + 192 * i, Y, 24);
     rc::mask<true>(rc::NibTab<false>{reinterpret_cast<const uint8_t*>(T)}, Y, mk);
     rc::salt_digest(K, Y, c);
     hash_after_block(K.mid_P, rows + i * stride, K.lb, x);
@@ -270,8 +235,7 @@ __global__ void __launch_bounds__(THREADS, 2)
   if (i < nd) {
     u64 Y[24], c[8], my[8], f[8];
     u32 mk[16];
-    if (salts) ld_be(salts + 192 * i, Y, 24);
-    else salt_prf(K, pos, Y);
+    ld_be(salts + 192 * i, Y, 24);
     rc::mask<true>(rc::ByteTab<17 * 16, false>{reinterpret_cast<const uint8_t*>(T8)}, Y, mk);
     rc::salt_digest(K, Y, c);
     rc::mask_words(mk, my);
@@ -476,9 +440,9 @@ constexpr int SCHEMA_LEN = 18;   // "hm96-sha512/row/v2": the leaf template's of
 
 extern "C" int verity_rows_params_bytes() { return static_cast<int>(sizeof(Params)); }
 
-// The step's parameters into `out` (verity_rows_params_bytes()): domain id (64 bytes), salt key Ks (64), P(l) (128), the salt prefix
+// The step's parameters into `out` (verity_rows_params_bytes()): domain id (64 bytes), P(l) (128), the salt prefix
 // (128), leaf_prefix(key) (128), the leaf schema (SCHEMA_LEN bytes) and the row's bytes l / 8.  0, or -1 for a schema of another length.
-extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
+extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* row_prefix, const uint8_t* salt_prefix,
                                  const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out) {
   if (schema_len != SCHEMA_LEN) return -1;
   Params p{};
@@ -488,25 +452,20 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
   rc::midstate(salt_prefix, c.mid_salt);
   rc::midstate(leaf_prefix, c.mid_leaf);
   rc::pad_schedule(256, c.kw_leafpad);
-  for (int i = 0; i < 8; ++i) c.ks[i] = rc::be64_at(ks + 8 * i);
-  {
-    u64 blk[16] = {}, st[8];
-    memcpy(blk, c.ks, 64);
-    sha::iv(st);
-    sha::rounds_prefix(st, blk, 8, c.ks_m8);
-  }
   if (rc::frame_plan(domain_id, reinterpret_cast<const uint8_t*>(schema), schema_len, c) || rc::node_plan(domain_id, p.node)) return -1;
   memcpy(out, &p, sizeof p);
   return 0;
 }
 
 // The m positions first .. first + m - 1 (rows_leaf_kernel) on `st`.  rows and stride 16-byte aligned, stride >= the row's bytes
-// rounded up to 16; first + m <= 2^32.  max_blocks > 0: in launches of at most max_blocks blocks one after another, each the same
-// kernel over the next positions, so the hashing holds at most that many blocks' SM slots and leaves the rest to other streams.
+// rounded up to 16; salts 192 bytes a row, 16-byte aligned, and refused when null with rows; first + m <= 2^32.  max_blocks > 0: in
+// launches of at most max_blocks blocks one after another, each the same kernel over the next positions, so the hashing holds at most
+// that many blocks' SM slots and leaves the rest to other streams.
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                          uint8_t* hs, uint64_t max_blocks, cudaStream_t st) {
   const Params* p = static_cast<const Params*>(params);
+  if (n_rows && !salts) return static_cast<int>(cudaErrorInvalidValue);
   const u64 chunk = max_blocks ? max_blocks * THREADS : m;
   for (u64 c = 0; c < m; c += chunk) {
     const u64 mc = m - c < chunk ? m - c : chunk;
@@ -566,7 +525,7 @@ template <bool H_ONLY>
 static int rows_forms(const Params* p, const uint8_t* rows, u64 stride, u64 n_rows, const uint8_t* salts, const uint8_t* tn, u64 first, u64 m,
                       u64 n_total, uint8_t* out, uint8_t* bc, uint8_t* hs, uint8_t* scratch, u64 max_blocks, cudaStream_t st) {
   const int form = verity_rows_leaves_form();
-  if (form < 0 || (form == 2 && !scratch) || (H_ONLY && !hs)) return static_cast<int>(cudaErrorInvalidValue);
+  if (form < 0 || (form == 2 && !scratch) || (H_ONLY && !hs) || (n_rows && !salts)) return static_cast<int>(cudaErrorInvalidValue);
   if (const int rc = rows_kernel_attributes()) return rc;
   u64 nd = n_total > first ? n_total - first : 0;
   nd = nd < n_rows ? nd : n_rows;

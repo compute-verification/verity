@@ -60,7 +60,7 @@ from verity.errors import InvalidArtifact
 __all__ = ["DOMAIN_TAG", "ID_BYTES", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG",
            "binding", "ctx_digest", "domain", "geo_digest", "hiding_leaf", "keyed_tensor_root", "layout_digest", "leaf", "levels",
            "names_digest", "offline_geo_digest", "path", "program_field", "range_shape", "row_prefix", "run_program_digest", "run_root", "salt",
-           "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
+           "step_root", "step_salts", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
 INST = hm96.SHA512
@@ -101,6 +101,11 @@ def salt(ks: bytes, pos: int) -> bytes:
     return b"".join(hashlib.sha512(ks + int(pos).to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 
 
+def step_salts(ks: bytes, n: int) -> bytes:
+    """Leaves ``0 .. n - 1``'s salts under the step's salt key, back to back: what the leaf kernels read as given salts."""
+    return b"".join(salt(ks, i) for i in range(n))
+
+
 def hiding_leaf(row: bytes, y: bytes, n_bits: int, key: bytes = KEY) -> tuple[bytes, bytes]:
     """``(b || c, h)`` for a row of ``n_bits`` bits and its salt."""
     bc = INST.commit_string(key, sha512_row_v2_digest(row, n_bits), y)
@@ -111,9 +116,13 @@ def leaf(dom: CommitmentDomain, pos: int, h: bytes) -> bytes:
     return row_leaf(dom, pos, h, SCHEMA)
 
 
-def levels(dom: CommitmentDomain, rows: Sequence[bytes], ks: bytes, n_bits: int, key: bytes = KEY) -> tuple[tuple[bytes, ...], ...]:
-    """Every level of the step's tree (leaves first, padded to a power of two), from its rows."""
-    return tree_levels(dom, [leaf(dom, i, hiding_leaf(r, salt(ks, i), n_bits, key)[1]) for i, r in enumerate(rows)])
+def levels(dom: CommitmentDomain, rows: Sequence[bytes], salts: bytes, n_bits: int, key: bytes = KEY) -> tuple[tuple[bytes, ...], ...]:
+    """Every level of the step's tree (leaves first, padded to a power of two), from its rows and their salts (``SALT_BYTES`` a row,
+    back to back), as ``native_rows.cu`` reads them."""
+    if len(salts) != SALT_BYTES * len(rows):
+        raise ValueError(f"{len(rows)} rows take {SALT_BYTES * len(rows)} bytes of salts, not {len(salts)}")
+    return tree_levels(dom, [leaf(dom, i, hiding_leaf(r, salts[SALT_BYTES * i:SALT_BYTES * (i + 1)], n_bits, key)[1])
+                             for i, r in enumerate(rows)])
 
 
 def path(lv: Sequence[Sequence[bytes]], pos: int) -> tuple[bytes, ...]:

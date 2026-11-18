@@ -104,7 +104,7 @@ def check(R: Rows, row_bytes: int) -> bool:
     data = os.urandom(n * row_bytes)
     rows = [data[i * row_bytes:(i + 1) * row_bytes] for i in range(n)]
     dom = domain(n, row_bytes)
-    want = step_rows.levels(dom, rows, ks, 8 * row_bytes)[-1][0]
+    want = step_rows.levels(dom, rows, step_rows.step_salts(ks, len(rows)), 8 * row_bytes)[-1][0]
     P, s = R.params(dom, ks, row_bytes), torch.cuda.current_stream()
     lv = torch.zeros(15, 64, dtype=torch.uint8, device="cuda")
     R.leaves(P, torch.frombuffer(bytearray(data), dtype=torch.uint8).cuda(), row_bytes, n, 8, n, lv, s)

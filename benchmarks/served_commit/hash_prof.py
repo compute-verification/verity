@@ -51,7 +51,7 @@ class Step:
         self.bound = (fold_bytes or min(ROWS_HOLD_BYTES // 2, ROWS_FOLD_BYTES)) if keep_levels else ROWS_HOLD_BYTES
         dom = R.domain(PD, CTX, GEO, n_total)
         self.dom = dom
-        self.rs = X.RowStep(dom.domain_id, ks, R.row_prefix(8 * C), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), R.SCHEMA, C)
+        self.rs = X.RowStep(dom.domain_id, R.row_prefix(8 * C), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), R.SCHEMA, C)
         self.pinned = torch.empty(sum(self.sizes) * 64, dtype=torch.uint8).pin_memory() if keep_levels else None
         self.views: list[torch.Tensor] = []
         if keep_levels:
@@ -162,7 +162,7 @@ def check_small(X: Any, H: Any, side: torch.cuda.Stream, tn: torch.Tensor) -> di
     n, W = 300, 64 * C
     ks = os.urandom(R.KEY_BYTES)
     data = os.urandom(n * C)
-    want = R.levels(R.domain(PD, CTX, GEO, n), [data[i * C:(i + 1) * C] for i in range(n)], ks, 8 * C)
+    want = R.levels(R.domain(PD, CTX, GEO, n), [data[i * C:(i + 1) * C] for i in range(n)], R.step_salts(ks, n), 8 * C)
     slot = torch.frombuffer(bytearray(data), dtype=torch.uint8).cuda()
     slots = [slot[k * W:(k + 1) * W] for k in range(-(-n * C // W))]
     out = {}

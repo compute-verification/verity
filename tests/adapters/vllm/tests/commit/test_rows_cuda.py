@@ -1,6 +1,6 @@
 """``native_rows.cu`` (the ``rows-sha512`` kernels, through ``StepHasher.rows_leaves`` / ``rows_h`` + ``rows_frame`` / ``rows_tree_window``
 / ``rows_tree``) hashes what ``verity_vllm.commit.step_rows`` does, bit for bit: frame-v3-sha512's hiding-leaf vectors and hm96-sha512's
-``sha512/row/v1`` leaf vectors (given salts), both hm96 keys' masks, the derived salts, leaves and pads at every position width, the
+``sha512/row/v1`` leaf vectors, both hm96 keys' masks, leaves and pads at every position width (every salt given, as data), the
 leaves in two halves (h, then the frame once the step's length is known) as ``rows_leaves``' bytes, nodes at large indices and high
 levels, and whole trees and windowed subtrees (one window a fold, or several with their levels copied on another stream) against
 ``step_rows.levels``."""
@@ -70,8 +70,8 @@ def _tn(key: bytes = R.KEY) -> torch.Tensor:
     return _dev(R.t_nibbles(key))
 
 
-def _step(ext, dom: CommitmentDomain, ks: bytes, prefix: bytes, row_bytes: int, key: bytes = R.KEY):
-    return ext.RowStep(dom.domain_id, ks, prefix, R.INST.salt_prefix, R.INST.leaf_prefix(key), R.SCHEMA, row_bytes)
+def _step(ext, dom: CommitmentDomain, prefix: bytes, row_bytes: int, key: bytes = R.KEY):
+    return ext.RowStep(dom.domain_id, prefix, R.INST.salt_prefix, R.INST.leaf_prefix(key), R.SCHEMA, row_bytes)
 
 
 def _vector_domain(d: dict) -> CommitmentDomain:
@@ -82,7 +82,7 @@ def _vector_domain(d: dict) -> CommitmentDomain:
 def test_hiding_leaves_are_frame_v3_sha512s_vectors(ext, hasher, vec):
     row, n_bits, y, rank = bytes.fromhex(vec["row_bytes"]), vec["n_bits"], bytes.fromhex(vec["salt"]), vec["rank"]
     dom, stride = _vector_domain(vec["domain"]), -(-len(row) // 16) * 16
-    rs = _step(ext, dom, bytes(64), R.row_prefix(n_bits), len(row))
+    rs = _step(ext, dom, R.row_prefix(n_bits), len(row))
     lv, bc, hs = hasher.rows_leaves(rs, _rows([row], stride), stride, rank, 1, dom.count, _tn(), _stream(), stride=stride, salts=_dev(y),
                                     want_bc=True, want_h=True)
     assert (_list(bc)[0].hex(), _list(hs)[0].hex(), _list(lv)[0].hex()) == (vec["bc"], vec["hm96_leaf"], vec["leaf"])
@@ -94,7 +94,7 @@ def test_row_v1_leaves_are_hm96_sha512s_vectors(ext, hasher, vec):
     prefix, value, y = (bytes.fromhex(vec[k]) for k in ("inner_prefix", "value", "salt"))
     assert len(prefix) == 128 and not vec["inner_suffix"]
     dom, stride = R.domain(PD, CTX, GEO, 1), -(-len(value) // 16) * 16
-    rs = _step(ext, dom, bytes(64), prefix, len(value))
+    rs = _step(ext, dom, prefix, len(value))
     _, bc, hs = hasher.rows_leaves(rs, _rows([value], stride), stride, 0, 1, 1, _tn(), _stream(), stride=stride, salts=_dev(y), want_bc=True,
                                    want_h=True)
     assert (_list(bc)[0].hex(), _list(hs)[0].hex()) == (vec["b"] + vec["c"], vec["leaf"])
@@ -108,7 +108,7 @@ def test_hiding_leaves_under_both_keys(ext, hasher, key, stride):
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(300)]
     ys = [rng.randbytes(R.SALT_BYTES) for _ in rows]
     dom = R.domain(PD, CTX, GEO, len(rows))
-    rs = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES, key)
+    rs = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES, key)
     lv, bc, hs = hasher.rows_leaves(rs, _rows(rows, stride), stride * len(rows), 0, len(rows), len(rows), _tn(key), _stream(), stride=stride,
                                     salts=_dev(b"".join(ys)), want_bc=True, want_h=True)
     want = [R.hiding_leaf(r, y, BITS, key) for r, y in zip(rows, ys, strict=True)]
@@ -118,35 +118,34 @@ def test_hiding_leaves_under_both_keys(ext, hasher, key, stride):
 
 @pytest.mark.parametrize("first,m,n_total", [(0, 3, 2), (250, 12, 258), (65530, 12, 65538), ((1 << 24) - 6, 12, (1 << 24) + 2),
                                              ((1 << 32) - 8, 8, (1 << 32) - 3)])
-def test_derived_salts_leaves_and_pads_at_every_position_width(ext, hasher, first, m, n_total):
-    """Salts from the step's key, leaves below n_total and pads from it on, across the 1-to-4-byte position boundaries."""
+def test_leaves_and_pads_at_every_position_width(ext, hasher, first, m, n_total):
+    """Leaves below n_total and pads from it on, across the 1-to-4-byte position boundaries."""
     rng = random.Random(first)
-    ks = rng.randbytes(R.KEY_BYTES)
     n_rows = min(m, n_total - first)
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n_rows)]
+    ys = [rng.randbytes(R.SALT_BYTES) for _ in rows]
     dom = R.domain(PD, CTX, GEO, n_total)
-    rs = _step(ext, dom, ks, R.row_prefix(BITS), R.ROW_BYTES)
-    lv, _, hs = hasher.rows_leaves(rs, _rows(rows, R.ROW_BYTES), R.ROW_BYTES * n_rows, first, m, n_total, _tn(), _stream(), want_h=True)
-    want_h = [R.hiding_leaf(r, R.salt(ks, first + i), BITS)[1] for i, r in enumerate(rows)]
+    rs = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES)
+    lv, _, hs = hasher.rows_leaves(rs, _rows(rows, R.ROW_BYTES), R.ROW_BYTES * n_rows, first, m, n_total, _tn(), _stream(),
+                                   salts=_dev(b"".join(ys)), want_h=True)
+    want_h = [R.hiding_leaf(r, y, BITS)[1] for r, y in zip(rows, ys, strict=True)]
     assert _list(hs)[:n_rows] == want_h
     assert _list(lv) == [R.leaf(dom, first + i, h) for i, h in enumerate(want_h)] + [dom.pad(p) for p in range(first + n_rows, first + m)]
 
 
-@pytest.mark.parametrize("first,m,n_total,given,cap", [(0, 300, 290, False, 0), (0, 300, 290, True, 0), (250, 12, 258, False, 0),
-                                                       (65530, 12, 65538, True, 0), ((1 << 24) - 6, 12, (1 << 24) + 2, False, 0),
-                                                       (512, 1024, 1536, False, 1), (512, 1024, 1300, True, 1)])
-def test_h_then_frame_is_rows_leaves(ext, hasher, first, m, n_total, given, cap):
+@pytest.mark.parametrize("first,m,n_total,cap", [(0, 300, 290, 0), (250, 12, 258, 0), (65530, 12, 65538, 0), ((1 << 24) - 6, 12, (1 << 24) + 2, 0),
+                                                 (512, 1024, 1536, 1), (512, 1024, 1300, 1)])
+def test_h_then_frame_is_rows_leaves(ext, hasher, first, m, n_total, cap):
     """The two halves a learning step that keeps no bytes takes (rows_h on each window before the step's length is known, rows_frame
-    after) are rows_leaves' bytes: h and b || c from a RowStep of another domain under the same salt key, the leaves and pads from the
-    step's own, with derived and given salts, across position widths, past one thread block and in capped launches."""
+    after) are rows_leaves' bytes: h and b || c from a RowStep of another domain under the same salts, the leaves and pads from the
+    step's own, across position widths, past one thread block and in capped launches."""
     rng = random.Random(first ^ m)
-    ks = rng.randbytes(R.KEY_BYTES)
     n_rows = min(m, n_total - first)
     rows = _dev(rng.randbytes(R.ROW_BYTES * n_rows))
-    salts = _dev(rng.randbytes(R.SALT_BYTES * n_rows)) if given else None
+    salts = _dev(rng.randbytes(R.SALT_BYTES * n_rows))
     tn, st = _tn(), _stream()
-    rs = _step(ext, R.domain(PD, CTX, GEO, n_total), ks, R.row_prefix(BITS), R.ROW_BYTES)
-    rs_any = _step(ext, R.domain(PD, CTX, GEO, 1), ks, R.row_prefix(BITS), R.ROW_BYTES)
+    rs = _step(ext, R.domain(PD, CTX, GEO, n_total), R.row_prefix(BITS), R.ROW_BYTES)
+    rs_any = _step(ext, R.domain(PD, CTX, GEO, 1), R.row_prefix(BITS), R.ROW_BYTES)
     rs.max_blocks = rs_any.max_blocks = cap
     lv, bc, hs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, n_total, tn, st, salts=salts, want_bc=True, want_h=True)
     h, bc2 = hasher.rows_h(rs_any, rows, R.ROW_BYTES * n_rows, first, tn, st, salts=salts, want_bc=True)
@@ -157,7 +156,7 @@ def test_h_then_frame_is_rows_leaves(ext, hasher, first, m, n_total, given, cap)
 
 
 def test_rows_frame_from_no_h_is_all_pads(ext, hasher):
-    rs = _step(ext, R.domain(PD, CTX, GEO, 3), bytes(64), R.row_prefix(BITS), R.ROW_BYTES)
+    rs = _step(ext, R.domain(PD, CTX, GEO, 3), R.row_prefix(BITS), R.ROW_BYTES)
     lv, _, _ = hasher.rows_leaves(rs, _dev(b""), 0, 3, 5, 3, _tn(), _stream())
     lv2 = hasher.rows_frame(rs, torch.empty(0, 64, dtype=torch.uint8, device="cuda"), 3, 5, 3, _stream())
     assert torch.equal(lv2, lv)
@@ -166,7 +165,7 @@ def test_rows_frame_from_no_h_is_all_pads(ext, hasher):
 def test_nodes_at_large_indices_and_high_levels(ext, hasher):
     rng = random.Random(7)
     dom = R.domain(PD, CTX, GEO, 1 << 32)
-    rs = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES)
+    rs = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES)
     first = (1 << 24) - 8
     nodes = [rng.randbytes(64) for _ in range(8)]
     host = [torch.empty(64 * (8 >> L), dtype=torch.uint8) for L in range(4)]
@@ -188,13 +187,13 @@ def test_trees_and_windowed_subtrees_are_step_rows_levels(ext, hasher, n):
     pads, every window's levels to host, the tops' tree to the root), for windows of 1, 4 and 32 leaves."""
     rng = random.Random(n)
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
-    ks = rng.randbytes(R.KEY_BYTES)
+    ys = R.step_salts(rng.randbytes(R.KEY_BYTES), n)
     dom = R.domain(PD, CTX, GEO, n)
-    want = R.levels(dom, rows, ks, BITS)
+    want = R.levels(dom, rows, ys, BITS)
     width, depth = len(want[0]), len(want) - 1
-    rs, tn, st = _step(ext, dom, ks, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
-    stream = _rows(rows, R.ROW_BYTES)
-    lv, _, _ = hasher.rows_leaves(rs, stream, R.ROW_BYTES * n, 0, width, n, tn, st)
+    rs, tn, st = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    stream, salts = _rows(rows, R.ROW_BYTES), _dev(ys)
+    lv, _, _ = hasher.rows_leaves(rs, stream, R.ROW_BYTES * n, 0, width, n, tn, st, salts=salts)
     levels, root, _ = hasher.rows_tree(rs, lv, 0, st, levels_host=True)
     assert [tuple(_list(t)) for t in levels] == list(want) and root == want[-1][0]
     for j in (0, 2, 5):
@@ -204,7 +203,8 @@ def test_trees_and_windowed_subtrees_are_step_rows_levels(ext, hasher, n):
             first = k * w
             m, n_rows = min(w, width - first), max(0, min(w, n - first))
             window = stream[R.ROW_BYTES * first:] if n_rows else _dev(b"")
-            leaves, _, _ = hasher.rows_leaves(rs, window, R.ROW_BYTES * n_rows, first, m, n, tn, st)
+            leaves, _, _ = hasher.rows_leaves(rs, window, R.ROW_BYTES * n_rows, first, m, n, tn, st,
+                                              salts=salts[R.SALT_BYTES * first:] if n_rows else None)
             host = [torch.empty(64 * (m >> L), dtype=torch.uint8) for L in range(n_levels)]
             tops.append(hasher.rows_tree_window(rs, leaves, n_levels, first, st, host))
             for L, h in enumerate(host):
@@ -220,12 +220,12 @@ def test_windows_folded_together_copy_their_levels_on_another_stream(ext, hasher
     host slices on a copy stream with no sync, the copy stream joined before the tops' tree: every level and the root are step_rows'."""
     rng = random.Random(n)
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
-    ks = rng.randbytes(R.KEY_BYTES)
+    ys = R.step_salts(rng.randbytes(R.KEY_BYTES), n)
     dom = R.domain(PD, CTX, GEO, n)
-    want = R.levels(dom, rows, ks, BITS)
+    want = R.levels(dom, rows, ys, BITS)
     width, depth = len(want[0]), len(want) - 1
-    rs, tn, st = _step(ext, dom, ks, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
-    stream = _rows(rows, R.ROW_BYTES)
+    rs, tn, st = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    stream, salts = _rows(rows, R.ROW_BYTES), _dev(ys)
     copy = torch.cuda.Stream()
     for j, g in ((0, 3), (2, 2), (2, 3), (5, 3)):
         w, n_levels = 1 << j, min(j, depth) + 1
@@ -245,7 +245,8 @@ def test_windows_folded_together_copy_their_levels_on_another_stream(ext, hasher
             first = k * w
             m, n_rows = min(w, width - first), max(0, min(w, n - first))
             window = stream[R.ROW_BYTES * first:] if n_rows else _dev(b"")
-            held.append(hasher.rows_leaves(rs, window, R.ROW_BYTES * n_rows, first, m, n, tn, st)[0])
+            held.append(hasher.rows_leaves(rs, window, R.ROW_BYTES * n_rows, first, m, n, tn, st,
+                                           salts=salts[R.SALT_BYTES * first:] if n_rows else None)[0])
             if len(held) == g:
                 fold()
         if held:
@@ -267,7 +268,7 @@ def test_wide_trees_and_windows_fold_by_the_launch_schedule(ext, hasher, n, leve
     first indices with their levels to host, all against dom.node."""
     rng = random.Random(n + level0)
     dom = R.domain(PD, CTX, GEO, 1 << 20)
-    rs, st = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES), _stream()
+    rs, st = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES), _stream()
     nodes = [rng.randbytes(64) for _ in range(n)]
     n_up = (n & -n).bit_length() - 1
     want, cur = [nodes], nodes
@@ -286,13 +287,12 @@ def test_wide_trees_and_windows_fold_by_the_launch_schedule(ext, hasher, n, leve
 
 @pytest.mark.parametrize("cap", [1, 3])
 def test_capped_launches_hash_the_whole_grids_bytes(ext, hasher, cap):
-    """RowStep.max_blocks > 0 hashes the leaves and each wide level in launches of at most that many blocks: leaves, b || c and h (given
-    and derived salts; 1000 positions from a nonzero first, the 700 rows ending inside a launch, pads after them), a window's levels from
-    2^17 nodes (a wide level) at a nonzero first index, and a whole tree's root are the whole-grid launch's."""
+    """RowStep.max_blocks > 0 hashes the leaves and each wide level in launches of at most that many blocks: leaves, b || c and h (1000
+    positions from a nonzero first, the 700 rows ending inside a launch, pads after them), a window's levels from 2^17 nodes (a wide level) at a nonzero first index, and a whole tree's root are the whole-grid launch's."""
     rng = random.Random(cap)
     first, m, n_rows, n = 3 << 10, 1000, 700, 1 << 17
     dom = R.domain(PD, CTX, GEO, 1 << 20)
-    rs, tn, st = _step(ext, dom, rng.randbytes(R.KEY_BYTES), R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    rs, tn, st = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
     rows = _rows([rng.randbytes(R.ROW_BYTES) for _ in range(n_rows)], R.ROW_BYTES)
     salts, nodes = _dev(rng.randbytes(R.SALT_BYTES * n_rows)), _dev(rng.randbytes(64 * n)).view(n, 64)
 
@@ -300,12 +300,11 @@ def test_capped_launches_hash_the_whole_grids_bytes(ext, hasher, cap):
         rs.max_blocks = max_blocks
         lv, bc, hs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, salts=salts, want_bc=True,
                                         want_h=True)
-        dlv, _, dhs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, want_h=True)
         host = [torch.empty(64 * (n >> L), dtype=torch.uint8) for L in range(18)]
         top = hasher.rows_tree_window(rs, nodes, 18, 5 * n, st, host)
         _, root, _ = hasher.rows_tree(rs, nodes, 0, st)
         torch.cuda.synchronize()
-        return [_list(t) for t in (lv, bc, hs, dlv, dhs, top)] + [h.numpy().tobytes() for h in host] + [root]
+        return [_list(t) for t in (lv, bc, hs, top)] + [h.numpy().tobytes() for h in host] + [root]
 
     assert run(cap) == run(0)
 
@@ -313,14 +312,18 @@ def test_capped_launches_hash_the_whole_grids_bytes(ext, hasher, cap):
 def test_refusals(ext, hasher):
     dom = R.domain(PD, CTX, GEO, 4)
     with pytest.raises(RuntimeError, match="64 bytes"):
-        ext.RowStep(dom.domain_id[:32], bytes(64), R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), R.SCHEMA, R.ROW_BYTES)
+        ext.RowStep(dom.domain_id[:32], R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), R.SCHEMA, R.ROW_BYTES)
     with pytest.raises(RuntimeError, match="does not fit the schema"):
-        ext.RowStep(dom.domain_id, bytes(64), R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), "hm96-sha512/row-seg/v1",
+        ext.RowStep(dom.domain_id, R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), "hm96-sha512/row-seg/v1",
                     R.ROW_BYTES)
-    rs = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES)
+    rs = _step(ext, dom, R.row_prefix(BITS), R.ROW_BYTES)
     rows = _dev(bytes(4 * R.ROW_BYTES))
     with pytest.raises(RuntimeError, match="16-byte"):
         hasher.rows_leaves(rs, rows, 4 * R.ROW_BYTES, 0, 4, 4, _tn(), _stream(), stride=R.ROW_BYTES - 16)
+    with pytest.raises(RuntimeError, match="salts must be"):
+        hasher.rows_leaves(rs, rows, 4 * R.ROW_BYTES, 0, 4, 4, _tn(), _stream())
+    with pytest.raises(RuntimeError, match="salts must be"):
+        hasher.rows_h(rs, rows, 4 * R.ROW_BYTES, 0, _tn(), _stream(), salts=_dev(bytes(3 * R.SALT_BYTES)))
     with pytest.raises(RuntimeError, match="mask table"):
         hasher.rows_leaves(rs, rows, 4 * R.ROW_BYTES, 0, 4, 4, _dev(bytes(4096)), _stream())
     with pytest.raises(RuntimeError, match="power of two"):

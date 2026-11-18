@@ -88,7 +88,7 @@ def test_tree_paths_and_roots_are_cores(n):
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
     ks = rng.randbytes(R.KEY_BYTES)
     dom = R.domain(PD, CTX, GEO, n)
-    lv = R.levels(dom, rows, ks, 8 * R.ROW_BYTES)
+    lv = R.levels(dom, rows, R.step_salts(ks, len(rows)), 8 * R.ROW_BYTES)
     hs = {i: R.hiding_leaf(r, R.salt(ks, i), 8 * R.ROW_BYTES)[1] for i, r in enumerate(rows)}
     tree = MerkleTree(dom, hs, lambda _p: R.SCHEMA)
     root = lv[-1][0]
@@ -121,7 +121,7 @@ def test_range_openings_are_cores_multiproofs(n):
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
     ks = rng.randbytes(R.KEY_BYTES)
     dom = R.domain(PD, CTX, GEO, n)
-    lv = R.levels(dom, rows, ks, 8 * R.ROW_BYTES)
+    lv = R.levels(dom, rows, R.step_salts(ks, len(rows)), 8 * R.ROW_BYTES)
     hs = [R.hiding_leaf(r, R.salt(ks, i), 8 * R.ROW_BYTES)[1] for i, r in enumerate(rows)]
     tree = MerkleTree(dom, dict(enumerate(hs)), lambda _p: R.SCHEMA)
     root = lv[-1][0]
