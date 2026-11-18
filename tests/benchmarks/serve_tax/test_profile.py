@@ -32,21 +32,58 @@ def an_h200(monkeypatch: pytest.MonkeyPatch):
     scheme resolves to, named in its place."""
     monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
-    monkeypatch.setattr(S, "feature", lambda name, stock: name if name in S.profile_features(stock) else FEATURE(name, stock))
+    monkeypatch.setattr(S, "feature", lambda words, stock: words[0] if words[0] in S.profile_features(stock)
+                        else FEATURE(words, stock))
 
 
-def test_feature_resolves_a_registered_scheme_to_the_arm_that_serves_it_through_the_one_table(
+def test_feature_names_an_applications_component_and_its_settings_as_verity_config_check_reads_them(
         monkeypatch: pytest.MonkeyPatch):
-    with pytest.raises(SystemExit, match="--feature record: --protocol 'record' is no registered compute scheme; "
-                                         "registered: dither, pearl-plus"):
-        FEATURE("record", "compiled")
-    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: the schemes' table; vllm's plugin entry "
-                                                 "that loads a named scheme inside vLLM's server$"):
-        FEATURE("pearl-plus", "prod")
-    monkeypatch.setitem(S.ARMS, "prod-record", replace(S.ARMS["prod-record"], scheme="pearl-plus"))
-    assert FEATURE("pearl-plus", "prod") == "prod-record"
+    """`--feature NAME [KEY=VALUE ...]`: the name one of `verity config check`'s components, each setting checked by that
+    component's own check (its defaults filled), refused by name otherwise; the arm found by `Arm.feature`."""
+    table = S.components()
+    with pytest.raises(SystemExit, match="^--feature record: no component of that name; an application's components: "
+                                         + ", ".join(sorted(table)) + "$"):
+        FEATURE(["record"], "compiled")
+    with pytest.raises(SystemExit, match=r"^--feature pearl-plus: unknown-key: .*levels \(known: class, tie-uniform\)$"):
+        FEATURE(["pearl-plus", "levels=2"], "prod")
+    with pytest.raises(SystemExit, match="^--feature pearl-plus: 'tie-uniform' is no KEY=VALUE$"):
+        S.feature_of(["pearl-plus", "tie-uniform"])
+    assert S.feature_of(["pearl-plus"]) == S.Feature("pearl-plus", (("tie-uniform", False),))
+    assert S.feature_of(["pearl-plus", "tie-uniform=true", "class=8,4096,512"]) == S.Feature(
+        "pearl-plus", (("class", "8,4096,512"), ("tie-uniform", True)))
+    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: no arm over prod serves "
+                                                 "pearl-plus tie-uniform=false; compute-accounting: Pearl\\+'s scheme has "
+                                                 "an attach, but vLLM's scheme plugin"):
+        FEATURE(["pearl-plus"], "prod")
+    monkeypatch.setitem(S.ARMS, "prod-record", replace(S.ARMS["prod-record"], feature=S.Feature("pearl-plus")))
+    assert FEATURE(["pearl-plus", "tie-uniform=false"], "prod") == "prod-record"
+    with pytest.raises(NotImplementedError, match="no arm over prod serves pearl-plus tie-uniform=true"):
+        FEATURE(["pearl-plus", "tie-uniform=true"], "prod")
     with pytest.raises(NotImplementedError):
-        FEATURE("pearl-plus", "compiled")
+        FEATURE(["pearl-plus"], "compiled")
+
+
+def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_declares_levels(
+        monkeypatch: pytest.MonkeyPatch):
+    """The two-stage serve's launch line is `sampled-proofs` at `levels` 2 (`Arm.feature`), which a profile names and
+    no profile code spells as an arm. `verity config check`'s `sampled-proofs` declares no parameter yet, so the name is
+    refused in its words; with a stand-in component that declares `levels` (SPOT's `spot_params_of`), it resolves."""
+    assert S.ARMS["two-stage"].feature == S.Feature("sampled-proofs", (("levels", 2),))
+    with pytest.raises(SystemExit, match=r"^--feature sampled-proofs: unknown-key: .*\['levels'\]$"):
+        FEATURE(["sampled-proofs", "levels=2"], "compiled")
+    from verity.protocols.proofs.spot.verifier import parties as SP
+
+    table = dict(S.components())
+    table["sampled-proofs"] = replace(table["sampled-proofs"], params=lambda p: {
+        k: v for k, v in SP.spot_params_of(1, "simulated", **p).items() if k == "levels"})
+    monkeypatch.setattr(S, "components", lambda: table)
+    assert FEATURE(["sampled-proofs", "levels=2"], "compiled") == "two-stage"
+    with pytest.raises(NotImplementedError, match="no arm over prod serves sampled-proofs levels=2$"):
+        FEATURE(["sampled-proofs", "levels=2"], "prod")
+    with pytest.raises(NotImplementedError, match="no arm over compiled serves sampled-proofs$"):
+        FEATURE(["sampled-proofs"], "compiled")
+    with pytest.raises(SystemExit, match="^--feature sampled-proofs: levels is 1 or 2, not 3$"):
+        FEATURE(["sampled-proofs", "levels=3"], "compiled")
 
 
 def test_without_a_profile_the_server_and_client_lines_are_mains():
@@ -232,10 +269,10 @@ def test_a_refusal_has_the_refusing_codes_words_and_the_change_on_our_side_that_
     assert S.refusals("tick-certifier")[0]["words"] == S.SERVED_GREEDY.format(arm="tick-certifier")
     # the arms that send each user's seed run as they are; no arm refuses draft tokens
     assert S.refusals("prod-tick") == S.refusals("prod-all-on") == S.refusals("prod-record") == []
-    plan = S.profile_plan("coding-agent", "glm53", "tick-unseeded", False)
+    plan = S.profile_plan("coding-agent", "glm53", ["tick-unseeded"], False)
     assert (plan["ARMS"], plan["OURS"], plan["LOADS"]) == ("prod tick-unseeded", "seeded", "agentic-256k=4")
-    assert S.profile_plan("coding-agent", "glm53", "rows-tables", False)["OURS"] == "prefix-cache-off"
-    assert S.profile_plan("coding-agent", "glm53", "prod-restore", False)["ARMS"] == ""
+    assert S.profile_plan("coding-agent", "glm53", ["rows-tables"], False)["OURS"] == "prefix-cache-off"
+    assert S.profile_plan("coding-agent", "glm53", ["prod-restore"], False)["ARMS"] == ""
     run = S.profile_run(run_args(profile="coding-agent", model_id="glm53", arm="rows-tables", loads="agentic-256k=4",
                                  ours="prefix-cache-off"))
     assert (run["ours"], run["args"], run["seeded"]) == (["prefix cache off for ours"], ["--no-enable-prefix-caching"],
@@ -280,7 +317,7 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusing: None):
     ours = [[rep(1, 90, 0.3, 0.025, 80), rep(2, 91), rep(3, 89)], [rep(1, 90), rep(2, 90.5), rep(3, 89.5)]]
     dirs = arm_dirs(tmp_path, monkeypatch, "agentic-256k", {"prod": STOCK, "tick-unseeded": ours})
-    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "tick-unseeded", False, tmp_path / "out")
+    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", ["tick-unseeded"], False, tmp_path / "out")
     assert rc == 1
     assert r["cannot_run"] == [{"piece": "sampling", "words": UNSEEDED, "change": "seeded"}]
     assert r["second"]["ours"] == ["seeded for ours"] and r["second"]["throughput"]["verdict"] == "ours slower"
@@ -307,7 +344,7 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
     assert got["within", "glm-5.3-h200-prod-coding-agent"]["value"] == r["second"]["within"]["stock"]["within"]
     assert len(got) == 2 + 2 * len(S.SIDE_FIGURES)
     # where no change on our side lets the profile through, nothing is served and there is no second line
-    rc, r, text = S.profile_result([], "coding-agent", "glm53", "prod-restore", False)
+    rc, r, text = S.profile_result([], "coding-agent", "glm53", ["prod-restore"], False)
     assert rc == 1 and "second" not in r and r["cannot_run"][0]["change"] is None
     assert text.splitlines()[1] == "no second line: no change on our side alone lets the profile's prompts through"
 
@@ -316,7 +353,7 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
                                                                      glm_at_four: None):
     ours = [[rep(1, 90, 0.3, 0.025, 80), rep(2, 91), rep(3, 89)], [rep(1, 90), rep(2, 90.5), rep(3, 89.5)]]
     dirs = arm_dirs(tmp_path, monkeypatch, "agentic-256k", {"prod": STOCK, "prod-record": ours})
-    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False, tmp_path / "res")
+    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", ["prod-record"], False, tmp_path / "res")
     assert rc == 0 and list(r)[:3] == ["throughput", "latency", "within"]
     result = json.loads((tmp_path / "res" / "result.json").read_text())
     cost = next(m for m in result["measurements"] if m["name"] == "vllm/serving-cost-glm53")
@@ -348,7 +385,7 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
         sub.mkdir()
         dirs = arm_dirs(sub, monkeypatch, "agentic-256k", {"prod": STOCK, "prod-record": same if k == 0 else ours},
                         stopped=None if k == 0 else "prod-record.2")
-        t = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False)[1]["throughput"]
+        t = S.profile_result(dirs, "coding-agent", "glm53", ["prod-record"], False)[1]["throughput"]
         assert t["verdict"] == "cannot tell"
         assert t["why"] == ("the interval widened by the noise floor holds zero" if k == 0 else
                             "the job's 120 minutes ran out: prod-record stopped before agentic-256k@4 rep 3")
@@ -383,7 +420,7 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=1+2+4+8"
     assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8+16+32+64"
     with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
-        S.profile_plan("chat", "llama32-1b", "record", False)
+        S.profile_plan("chat", "llama32-1b", ["record"], False)
     tok = {4: 100, 8: 190, 12: 260, 16: 300, 24: 300, 32: 298, 48: 295}
     reps = {c: [{**rep(r, v), "concurrency": c} for r in (1, 2, 3)] for c, v in tok.items()}
     metrics = {"arm": "compiled", "model_id": "llama32-1b", "slo": {}, "vllm": "v", "lifetime": None, "reps": 3,
@@ -450,17 +487,21 @@ def run_sh(*flags: str, **env: str) -> tuple[int, str]:
 
 def test_run_sh_takes_a_profile_and_refuses_what_it_fixes_before_it_holds_anything():
     one = ("--model", "llama32-1b", "--profile", "chat", "--find-load")
-    for flags, env in ((one, {}), (("--model", "glm53", "--profile", "coding-agent", "--feature", "prod-record"), {})):
+    for flags, env in ((one, {}), (("--model", "glm53", "--profile", "coding-agent", "--feature", "prod-record"), {}),
+                       (("--model", "llama32-1b", "--profile", "chat", "--feature", "sampled-proofs", "levels=2"), {})):
         rc, out = run_sh(*flags, **env)
         assert rc != 0 and "run this under research run" in out
     assert run_sh("--model", "llama32-1b", "--profile", "chat") == (
-        2, "serve-tax: --profile chat takes --feature SCHEME or --find-load, one of them\n")
+        2, "serve-tax: --profile chat takes --feature NAME [KEY=VALUE ...] or --find-load, one of them\n")
     assert run_sh(*one, "--feature", "record")[0] == 2
+    # --feature takes its name and the KEY=VALUE words after it, and the next flag is a flag
+    assert run_sh(*one[:4], "--feature", "sampled-proofs", "levels=2", "--find-load") == (
+        2, "serve-tax: --profile chat takes --feature NAME [KEY=VALUE ...] or --find-load, one of them\n")
     assert run_sh("--find-load") == (2, "serve-tax: --feature and --find-load are a profile's: --profile NAME\n")
     for env in ({"PROFILE": "chat"}, {"FEATURE": "record"}, {"FIND_LOAD": "1"}):
         assert run_sh("--model", "llama32-1b", **env) == (
             2, "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with "
-               "--feature SCHEME or --find-load\n")
+               "--feature NAME [KEY=VALUE ...] or --find-load\n")
     fixed = {("--loads", "chat=4"): "--loads/LOADS", ("--arms", "compiled record"): "--arms/ARMS",
              ("--reps", "6"): "--reps/REPS and LIFETIMES", ("--target", "5"): "--target/TARGET and WITH"}
     for flags, drop in fixed.items():
@@ -492,7 +533,7 @@ def test_the_card_is_the_driver_names_card_file_and_the_commit_needs_no_git(monk
     with pytest.raises(SystemExit, match="nvidia-smi names no card on this host"):
         S.profile_card("llama32-1b")
     monkeypatch.setattr(S, "card", lambda: "NVIDIA A100-SXM4-80GB")
-    with pytest.raises(SystemExit, match="0 card records .* have 'NVIDIA A100-SXM4-80GB'"):
+    with pytest.raises(SystemExit, match="0 GPU card files under .* have 'NVIDIA A100-SXM4-80GB'"):
         S.profile_card("llama32-1b")
     monkeypatch.setattr(S, "source_commit", lambda: None)
     with pytest.raises(SystemExit, match="no commit names this tree: neither RESEARCH_SOURCE_SHA .* nor "

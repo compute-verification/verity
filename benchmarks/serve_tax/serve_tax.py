@@ -76,7 +76,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`), with
   prefix caching off: a table holds its request's rows from position 0, and a request served from the cache computes
   none before its hit's end (`BoundaryWindows.install` refuses the pair). The line is this arm's data and is stated
-  nowhere else: a job that serves the two-stage audit serves this arm.
+  nowhere else: a job that serves the two-stage audit serves this arm. It serves ``sampled-proofs`` at ``levels`` 2
+  (`Arm.feature`), which is how a profile names it (``--feature sampled-proofs levels=2``).
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
   and the corpus's client serves it, standing in for the network attester.
@@ -217,6 +218,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -235,6 +237,17 @@ TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 10: 2.228, 20: 2.086,
        30: 2.042}
+
+
+class Feature(NamedTuple):
+    """An application's component by its name (`verity config check`'s components, `served_table.MANIFESTS`) and its
+    settings, each as its ``[params."<id>"]`` states it."""
+
+    name: str
+    settings: tuple[tuple[str, Any], ...] = ()
+
+    def __str__(self) -> str:
+        return " ".join([self.name, *(f"{k}={json.dumps(v)}" for k, v in self.settings)])
 
 
 @dataclass(frozen=True)
@@ -276,8 +289,9 @@ class Arm:
     off: tuple[str, ...] = ()
     #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
     catch_ups: tuple[str, ...] = ()
-    #: the registered useful-work scheme the arm serves, by its name (`feature`): none of the arms here serves one yet
-    scheme: str = ""
+    #: the application's component the arm serves and the settings it serves it at, as ``--feature`` names them
+    #: (`feature_of`): what a profile's job finds the arm by
+    feature: Feature | None = None
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -344,7 +358,8 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment, prefix caching off",
                      ("--no-enable-prefix-caching",),
-                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS,
+                     feature=Feature("sampled-proofs", (("levels", 2),))),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
@@ -4377,23 +4392,68 @@ def profile_features(stock: str) -> list[str]:
     return [n for n in ARMS if n not in STOCK and stock_of(n) == stock and not same_engine(n, stock)]
 
 
-def feature(name: str, stock: str) -> str:
-    """The arm ``--feature NAME`` serves beside ``stock``: of `profile_features`, the one whose `Arm.scheme` is the
-    registered useful-work scheme ``name``, read from the one table of schemes by name (`verity_bench.schemes`).
-    Refused for a name the table doesn't hold; `NotImplementedError` naming the goal for a scheme no arm over ``stock``
-    serves yet."""
-    kit()
-    from verity_bench import schemes
+#: what a component lacks before an arm here can serve it inside vLLM's server, whose it is to add, in words
+UNSERVED = {
+    "pearl-plus": "compute-accounting: Pearl+'s scheme has an attach, but vLLM's scheme plugin "
+                  "(verity_vllm.pipeline.scheme_plugin) hands it its declared settings alone (scheme.settings: "
+                  "tie-uniform), and its attach (pouw.scheme.Attached) refuses a run without 'coins' or 'challenger' and "
+                  "'kernel' among them; then Attached.keyed raises until vllm keys each linear weight in RegisteredValues; "
+                  "and it requests an eager engine, world 1 and no async steps, more than stock's one change",
+}
 
+
+def components() -> dict:
+    """The components an application names and how each checks its settings: `verity config check`'s
+    (`verity_cli.served_table.MANIFESTS`, each a `verity.config.Component` whose ``params`` checks its
+    ``[params."<id>"]``)."""
+    cli = str(ROOT / "tools/verity/cli")
+    if cli not in sys.path:
+        sys.path.insert(0, cli)
+    from verity_cli.served_table import MANIFESTS
+
+    return MANIFESTS
+
+
+def feature_of(words: Sequence[str]) -> Feature:
+    """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
+    each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
+    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
+    component has or a setting the component doesn't declare."""
+    name, *given = words
+    table = components()
+    if name not in table:
+        raise SystemExit(f"--feature {name}: no component of that name; an application's components: "
+                         f"{', '.join(sorted(table))}")
+    params: dict[str, Any] = {}
+    for w in given:
+        key, eq, text = w.partition("=")
+        if not eq or not key:
+            raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
+        try:
+            params[key] = tomllib.loads(f"v = {text}")["v"]
+        except tomllib.TOMLDecodeError:
+            params[key] = text
     try:
-        registered = schemes.useful_work(name)
-    except ValueError as e:
+        settings = table[name].params(params)
+    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
         raise SystemExit(f"--feature {name}: {e}") from None
-    arms = [n for n in profile_features(stock) if ARMS[n].scheme == registered.name]
-    if not arms:
-        raise NotImplementedError("benchmarks/serving-profiles-first-number: the schemes' table; vllm's plugin entry "
-                                  "that loads a named scheme inside vLLM's server")
-    return arms[0]
+    return Feature(name, tuple(sorted(settings.items())))
+
+
+def feature(words: Sequence[str], stock: str) -> str:
+    """The arm ``--feature NAME [KEY=VALUE ...]`` (`feature_of`) serves beside ``stock``: of `profile_features`, the
+    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal, and what the
+    component lacks (`UNSERVED`), for one no arm over ``stock`` serves yet."""
+    want = feature_of(words)
+    for n in profile_features(stock):
+        if (f := ARMS[n].feature) is not None and f.name == want.name:
+            try:
+                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                    return n
+            except SystemExit:
+                continue
+    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}"
+                              + (f"; {UNSERVED[want.name]}" if want.name in UNSERVED else ""))
 
 
 def refusals(name: str, rows: dict | None = None) -> list[dict]:
@@ -4470,16 +4530,17 @@ def profile_run(a: argparse.Namespace) -> dict:
             "args": ["--no-enable-prefix-caching"] if "prefix-cache-off" in ours else []}
 
 
-def profile_plan(profile: str, model_id: str, scheme: str | None, find_load: bool) -> dict[str, str]:
+def profile_plan(profile: str, model_id: str, words: Sequence[str] | None, find_load: bool) -> dict[str, str]:
     """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the profile's
     ladder (`profiles.rungs`) in one lifetime of `FIND_REPS` reps;
-    ``--feature SCHEME``, stock and the arm that serves the scheme (`feature`) at the profile's one load in
+    ``--feature NAME [KEY=VALUE ...]``, stock and the arm that serves that component at those settings (`feature`) at
+    the profile's one load in
     `FEATURE_LIFETIMES` lifetimes of `FEATURE_REPS` reps, the arm with the changes on our side its refusals need
     (``OURS``), and no arm at all where a refusal has none; and the minutes the job plans its passes within, the
     model's (``CAP_MIN``)."""
     P, doc = profile_doc(profile, model_id)
-    if (scheme is None) == (not find_load):
-        raise SystemExit(f"--profile {profile} takes --feature SCHEME or --find-load, one of them")
+    if (words is None) == (not find_load):
+        raise SystemExit(f"--profile {profile} takes --feature NAME [KEY=VALUE ...] or --find-load, one of them")
     if source_commit() is None:
         raise SystemExit(f"--profile {profile}: no commit names this tree: neither RESEARCH_SOURCE_SHA (research run's "
                          "--tree-sha) nor RESEARCH_SOURCE_COMMIT (a payload's commit) is set, and git gives no HEAD here")
@@ -4488,7 +4549,7 @@ def profile_plan(profile: str, model_id: str, scheme: str | None, find_load: boo
     if find_load:
         return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, P.rungs(doc, profile)))}", "REPS": str(FIND_REPS),
                        "LIFETIMES": "1"}
-    arm = feature(scheme, stock)
+    arm = feature(words, stock)
     try:
         point = P.load_point(doc, profile, model_id, card_)
     except P.ConfigError:
@@ -4674,7 +4735,7 @@ def profile_measured(r: dict, model_id: str, profile: str, arm: str, stock: str,
     return out
 
 
-def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | None, find_load: bool,
+def profile_result(dirs: list[Path], profile: str, model_id: str, words: Sequence[str] | None, find_load: bool,
                    out: Path | None = None) -> tuple[int, dict, str]:
     """A profile's job's result from its arms' directories: its exit status (1 where the feature cannot run, as run.sh's
     job exits 1 for an arm whose run refuses it, the result written all the same), the result and its text. With
@@ -4693,7 +4754,7 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
         name = "find_load"
         rc = 0
     else:
-        arm = feature(scheme, stock)
+        arm, named = feature(words, stock), " ".join(words)
         point = P.load_point(doc, profile, model_id, card_)
         refused = refusals(arm)
         if refused:
@@ -4714,8 +4775,8 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
             r = three_lines(by.get(stock), by.get(arm), load, point, cap)
             text = lines_text(r, bounds_text(doc, profile))
             rc = 0
-        r |= {"feature": scheme, "arm": arm, "stock": stock, "load": load, "point": point}
-        text += [f"{arm} ({scheme}) beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
+        r |= {"feature": named, "arm": arm, "stock": stock, "load": load, "point": point}
+        text += [f"{arm} ({named}) beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
                  f"{FEATURE_LIFETIMES} lifetimes of {FEATURE_REPS} reps each"]
         name = "serving_profile"
     r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by]) | {"card": card_}
@@ -4727,7 +4788,7 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
 
         w = bench.writer(out, PROFILE_KIND)
         w.fingerprint(profile=profile, version=r["version"], digest=r["digest"], model=model_id, card=card_,
-                      stock=stock, feature=scheme, arm=r.get("arm"), load=load, point=r.get("point"))
+                      stock=stock, feature=r.get("feature"), arm=r.get("arm"), load=load, point=r.get("point"))
         bench.report(name, "\n".join(text), r, measured, out=out, document=find_load)
         cost = next((m for m in measured if m["name"] == MODELS[model_id].metric and m["value"] is not None), None)
         good = find_load or cost is not None or not measured
@@ -4967,8 +5028,10 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("dirs", nargs="*", type=Path)
     pr.add_argument("--profile", required=True, choices=tuple(PROFILE))
     pr.add_argument("--model-id", required=True, choices=sorted(MODELS))
-    pr.add_argument("--feature", metavar="SCHEME", help="a registered useful-work scheme, served beside stock at the "
-                    "profile's load by the arm of ours that serves it (`feature`)")
+    pr.add_argument("--feature", nargs="+", metavar=("NAME", "KEY=VALUE"),
+                    help="an application's component by its name, with its settings as its [params] lines state them "
+                    "(sampled-proofs levels=2), served beside stock at the profile's load by the arm of ours that serves "
+                    "it (`feature`); a name no component has, or a setting it doesn't declare, is refused by name"),
     pr.add_argument("--find-load", action="store_true", help="stock alone over the ladder: where it saturates")
     pr.add_argument("--out", type=Path, help="result: write the run's result there (the kit's report), and "
                     "find_load.json with --find-load")
