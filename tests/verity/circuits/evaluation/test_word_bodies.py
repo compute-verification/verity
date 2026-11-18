@@ -139,6 +139,15 @@ def test_word_evaluator_is_its_body(fid: str) -> None:
     _check(fid)
 
 
+@pytest.mark.parametrize("fid", sorted(NO_BODY_READ))
+def test_named_limit_verifier_read_word_evaluator_without_a_body(fid: str) -> None:
+    if fid in BODIES:
+        warnings.warn(f"{fid} has a Boolean body now: strike it from NO_BODY_READ", stacklevel=1)
+        _check(fid)
+        return
+    pytest.xfail(f"named limit: {fid}'s word evaluator, read by {READERS.get(fid, [])}, has no Boolean body to hold it to")
+
+
 def test_primitives_without_a_body_are_listed() -> None:
     missing = set(PRIMS) - set(BODIES)
     read = {k for k in missing if k in READERS}
