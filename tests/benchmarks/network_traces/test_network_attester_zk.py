@@ -118,6 +118,29 @@ def test_the_one_publisher_publishes_the_gates_lines_and_no_head_salt_wiring_or_
         assert not any(v.strip('"') in text for v in private), p.name
 
 
+def test_the_drivers_summary_holds_no_cost_wiring_opened_slot_or_head(run, tmp_path, monkeypatch):
+    """``prove --dry``'s ``summary.json``, which its runner keeps in the run's output: the counts, the statement's public
+    parameters and the registration's hiding root, and no cost, wiring, opened slot or head, by key or by value. The
+    stager and the staging are stood in for, at the members' own reads."""
+    monkeypatch.setattr(wz, "stager", lambda M, B, n, out: SimpleNamespace(
+        n=n, base=0, lower_s=0.0, defn=SimpleNamespace(id="toy"),
+        st=SimpleNamespace(meta={"k_log": 22, "vus_per_block": 2}, pin="0" * 16)))
+    monkeypatch.setattr(wz, "stage", lambda M, sg, at, name: {
+        "port": "p", "ands": 1, "stage_s": 0.0, "units": "0" * 16, "opens": [True, False],
+        "predicted": None if wz.MEMBERS[name][1] else f"refused: {wz.WHY[name]}"})
+    out = tmp_path / "out"
+    assert wz.main(["prove", "--dry", "--run", str(run), "--units", str(UNITS), "--out", str(out)]) == 0
+    text = (out / "summary.json").read_text()
+    summary = json.loads(text)
+    at = wz.attestation(run, UNITS)
+    assert summary["registration_root"] == at.registration["root"] and summary["units"] == UNITS
+    assert not keys_of(summary) & {*NOT_PUBLISHED, "warden_cost", "warden_costs", "registration", "connection",
+                                   "pads", "reads", "positions", "slots", "data_rows"}
+    certified = [json.loads(x) for x in (run / "certified.jsonl").read_text().splitlines()]
+    assert at.registration["wiring"] not in text and not any(c["head"]["root"] in text for c in certified)
+    assert all(m["predicted_opens"] == 1 for m in summary["members"].values())
+
+
 def test_prove_holds_the_stagers_shape_to_flocks_zk_shape_before_it_stages(run, tmp_path, monkeypatch):
     """``prove --dry`` lowers the toy unit at the run's row width and ``--units`` and holds the statement's m, k_log
     plus the blocks' log, to 25 .. M_MAX before it stages. The stager is stood in for (lowering takes seconds, and
