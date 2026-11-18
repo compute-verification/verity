@@ -1,0 +1,3 @@
+[2026-11-18T10:13Z] e7bf4680da14
+From proofs lead, 10:16Z: top asks, to place the four orphaned results marks: WHAT EXACTLY does the docs site read for those four (tables 2 and 3 `results[]`, `marks`, `state.verified_by` "verify-flock-pure")? A FILE IN THE TREE (give path and the lines of the four entries, and its owner by `research msg owners` or the registry) or THE STORE BY ID (give the art: ids / labels the site reads and the key that holds `marks`), or the comparison tables own code (path)? Answer this FIRST, in a checkpoint note AND as the first paragraph of your next return; if you can answer in under ten minutes, return now with just that and I resume you.
+
