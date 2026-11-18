@@ -230,7 +230,7 @@ class StepNeeds:
         out.append((self.kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel), n)
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
-        device: Any = self.net.device   # φ's `device_name` as it states it: one that is no str names no tuned file (AttributeError)
+        device: Any = self.net.device   # the target's `device_name`: a target that names no card names no tuned file (AttributeError)
         cfg = fused_moe_config(E, INTER, device, "fp8_w8a8", (G, G), M)
         why: str | None
         if cfg is None:

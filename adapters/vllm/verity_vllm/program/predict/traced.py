@@ -39,7 +39,7 @@ def trace_dir(u: Any) -> str:
 def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`) under
     `registered` (`steps.Registered`), on the pinned vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of
-    at least its LP + T, under φ's GPU's name where φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads);
+    at least its LP + T, on φ's target (`--target`, whose card names the GPU whose tuned kernel configs a GPU-free host reads);
     at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`); in class G batched (`--batched`, with
     `--dsa-table-reads` under `Registered.dsa_table_reads`) at the unit's launch context (`--launch-context '{"batch": ...}'`; batch
     invariant, at its launches' max_seqlen_q where it has them, `--launch-context '[n0, n1, ...]'`), with
@@ -49,8 +49,6 @@ def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: 
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
-    # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
-    device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
     world = int(phi.tp.get("world", 1))
     batched = [] if phi.target_profile().batch_invariant else ["--batched", *(["--dsa-table-reads"] if registered.dsa_table_reads else [])]
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
@@ -67,5 +65,5 @@ def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: 
                      *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
-                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp, *batched])
+                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp, *batched])
     return cmds

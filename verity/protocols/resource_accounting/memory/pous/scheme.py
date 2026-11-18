@@ -9,23 +9,54 @@ certificate is P2's at the store's block count (`verifier.period.certificate`): 
 `Pous.SecurityProofs.P2SlackFamilyUncond`, in abstract M1 with no named assumption; above, `periodHeldAt`, which takes
 `P2RingRoundSecureWide` and `RingDeviceAt`. Onsite's soundness takes PoUS's target, `PousSound`, as a premise. A device's
 whole chip and its side channels' capacity over a round are counted in the state the ring game bounds
-(`ResourceAccounting.RealizesState`). The vLLM adapter attaches it as ``pous:p2-16448/v4``: it reads the declared build
-(``declared``) and the registered weights once resident (``memory``), and computes each linear's block with the weight
-decoded from `C*` (``blocks``).
+(`ResourceAccounting.RealizesState`); the help `perfect-isolation` admits is a known charge nothing bounds yet, so
+`bound` refuses PoUS. Its own term is `Pous.Params.εMax` (`POUS_TERM`). Its sides: over is the credited store,
+`⌊ρ·|C|⌋` bits with ρ = 18/19 (`Scheme.stateBound`); under is the bits the device holds. On a served run
+(`prover/served.py`) it reads its settings from the declared build (``declared``; the auditor's coin source is the
+launcher's, never a setting), the registered weights once resident
+(``memory``), and computes each linear's block with the weight decoded from `C*` (``blocks``), under the codec
+its ``option`` names (``pous:p2-16448/v4``, also the vLLM adapter's protocol option).
 
 **The wipe** is decided by `MemoryChallenger.WipeProtocol.protocol` (`attester/lean/MemoryAttester/WipeProtocol.lean`),
 whose row bounds the foreign bits a server may still hold after an accepted wipe, from above: a device's game with no
 block in the circuit and no adapter option. `Pous.SecurityProofs.StreamedWipe` is proved with no named assumption;
-onsite's soundness takes the wipe's target, `WipeSound`, as a premise.
+onsite's soundness takes the wipe's target, `WipeSound`, as a premise. Its sides: over is the prior content's bits kept,
+under is zero. Its own term is unsaid: `Pous.Guarantees.StreamedWipe`'s compression term `k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b)`
+has no Lean constant of its own (`StreamedWipe.bound` adds the sampling term `(g/N)^k`), and `Adv_PRF`
+(`StreamedWipe.prfAdvantage`) has no value, so no `Term` evaluates it.
 """
 
 from __future__ import annotations
+
+from fractions import Fraction
+from typing import Any
 
 from verity.commitments import domains
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
+#: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
+#: the audit's own δ = `Pous.Params.δ` = 1/100, which is the sample's
+POUS_TERM = "Pous.Params.εMax"
+#: what PoUS's help is bounded by once something bounds it: `perfect-isolation` (`schemes.p2.P2_CLAIMS`) has no Lean name
+HELP_BOUND = "perfect-isolation (a claim of schemes.p2.P2_CLAIMS; no Lean statement bounds the help yet)"
+
+
+def _pous_requests(ctx: Any) -> Any:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.requests(ctx)
+
+
+def _pous_check_settings(values: Any) -> str | None:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.check_settings(values)
+
+
+def _pous_attach(exchange: Any, ctx: Any) -> Any:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.attach(exchange, ctx, POUS.option.partition(":")[2])
+
 
 POUS = register(Scheme(
     name="pous",
@@ -37,8 +68,10 @@ POUS = register(Scheme(
                  "Pous.Period.RingDeviceAt"),
     log=(Order("weights", "salt"), Order("store", "challenges")),
     charges=(Charge("chip", "ResourceAccounting.RealizesState"),
-             Charge("side-channels", "ResourceAccounting.RealizesState")),
+             Charge("side-channels", "ResourceAccounting.RealizesState"),
+             Charge("help", HELP_BOUND, bounded=False)),
     settings={"challenges": 320},
+    check_settings=_pous_check_settings,
     option="pous:p2-16448/v4",
     hooks=("declared", "memory", "blocks"),
     requires={
@@ -50,6 +83,11 @@ POUS = register(Scheme(
         "coins-at-rate": "the memory attester's coin tree, committed before the session",
         "one-design": "its own: `challenges` indices of C*'s blocks, uniform, revealed one at a time",
     },
+    delta_scheme=Fraction(1, 2**128),
+    over="the credited store: ⌊ρ·|C|⌋ bits of C*, ρ = 18/19 (`Pous.Scheme.stateBound` at `Pous.Params.ρ`)",
+    under="the bits the device holds through the period, in bits",
+    requests=_pous_requests,
+    attach=_pous_attach,
 ))
 
 WIPE = register(Scheme(
@@ -60,6 +98,8 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
+    over="the prior content's bits kept through an accepted wipe, in bits",
+    under="zero bits: nothing is credited for what is kept",
     requires={
         "one-labelling": "its own labels, SHA-512 under a key fresh for the server and the wipe, derived by the memory "
                          "attester",
