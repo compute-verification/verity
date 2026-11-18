@@ -90,7 +90,7 @@ def test_a_launch_submits_the_payload_through_via_with_the_runs_flags_as_sbatch_
         request = tf.extractfile("request.sh").read().decode()
         copy = tf.extractfile("machines.d/vcf-node.toml").read().decode()
     assert {"tree/README", f"tree/{slurm.MARKER}", "request.sh", "machines.d/vcf-node.toml"} <= set(names)
-    for line in (f"VCF_RUN_ID={rid}", "VCF_MACHINE=vcf-node", "VCF_TIMEOUT_MIN=10", "VCF_ENV=(K=V )", "VCF_CMD=(python -c pass )"):
+    for line in (f"VCF_RUN_ID={rid}", "VCF_PROJECT=verity", "VCF_MACHINE=vcf-node", "VCF_TIMEOUT_MIN=10", "VCF_ENV=(K=V )", "VCF_CMD=(python -c pass )"):
         assert line in request.splitlines()
     assert tomllib.loads(copy) == {"machine": "vcf-node", "properties": tomllib.loads(PROPS)["properties"]}
     assert [v for v in ("vy-via", "via.invalid", "partition", "r-1") if v in copy] == []

@@ -50,6 +50,7 @@ print(json.dumps({"machine": sys.argv[1], "site": "vcf-slurm", "host": "vcf.luci
 .venv/bin/research run --runs-dir "$J/result/runs" --local-only "VCF's cluster holds no store key: vcf-job-run.sh publishes the run dir with its custody" \
   --source-identity "{\"commit\": \"$VCF_COMMIT\", \"tree\": \"$VCF_TREE\", \"dirty\": false, \"dirty_digest\": null}" \
   --remote-json "$REMOTE" --cost-json '{"provider": "vcf", "rate_usd_per_hour": null, "shared": true, "reason": "VCF cluster, no rate"}' \
-  ${VCF_TOOL:+--tool "$VCF_TOOL"} ${VCF_RUN_ID:+--id "$VCF_RUN_ID"} ${VCF_MACHINE:+--machine "$VCF_MACHINE"} \
+  ${VCF_TOOL:+--tool "$VCF_TOOL"} ${VCF_RUN_ID:+--id "$VCF_RUN_ID"} ${VCF_PROJECT:+--project "$VCF_PROJECT"} \
+  ${VCF_MACHINE:+--machine "$VCF_MACHINE"} \
   --env "RESEARCH_SOURCE_COMMIT=$VCF_COMMIT" ${ENVS[@]+"${ENVS[@]}"} \
   --tree-sha "$VCF_COMMIT" --cwd "$W/tree" --timeout "$(( ${VCF_TIMEOUT_MIN:-20} * 60 ))" -- "${VCF_CMD[@]}"

@@ -173,7 +173,7 @@ def build_payload(src: Path, run_id: str, name: str, m: dict, cmd_min: int, ns: 
     if _git(src, "status", "--porcelain", "--untracked-files=no"):
         print(f"research run --on {name}: {src} has uncommitted changes, which the payload leaves out: it carries commit "
               f"{commit[:12]} alone", file=sys.stderr)
-    args = ["bash", str(PAYLOAD_SH), commit, "--run-id", run_id, "--machine", name, "--timeout-min", str(cmd_min)]
+    args = ["bash", str(PAYLOAD_SH), commit, "--run-id", run_id, "--project", ns.project, "--machine", name, "--timeout-min", str(cmd_min)]
     args += ["--tool", ns.tool] if ns.tool else []
     for e in ns.env:
         args += ["--env", e]
@@ -195,7 +195,8 @@ def _via_ssh(via: str) -> list[str]:
 
 
 def start(via: str, run_id: str, payload: Path, job_args: list[str]) -> str:
-    """Ship the payload to `via`, start vcf-job-run.sh there in a session of its own (setsid; its pid in launch.pid), and wait (on `via`, at most
+    """Ship the payload to `via`, start vcf-job-run.sh there in a session of its own (setsid; its pid in launch.pid), and wait (on
+    `via`, at most
     SUBMIT_WAIT_S) for Slurm's job id, which it returns.  Refused when the copy fails or the job is not submitted."""
     ssh, q = _via_ssh(via), shlex.quote
     d, out = f"{VIA_LAUNCHES}/{run_id}", f"{VIA_JOBS}/{run_id}"
