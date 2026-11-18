@@ -194,10 +194,12 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
     """The scheme's device record against the panel version's statement."""
     if not scheme or not statement or not statement.startswith("pearl-c-sm120/"):
         return None
+    line, version = statement.split("/", 1)
+    promoted = line.removeprefix("pearl-c-")
     got = _family_device(scheme)
-    if got is None or got[0] != "pearl-c" or got[1] not in ("sm120", "sm120-unpromoted"):
+    if got is None or got[0] != "pearl-c" or not got[1].startswith(promoted):
         return None
-    if (got[1] == "sm120-unpromoted") != statement.split("/", 1)[1].startswith("v2"):
+    if (got[1] != promoted) != version.startswith("v2"):
         return f"scheme {scheme} isn't {statement}'s device record"
     return None
 

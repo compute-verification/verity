@@ -224,7 +224,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         scheme = entry.partition(":")[2]
         if (declared := messages.option(entry)) is not None:
             out.append(f"{entry}: names the declared scheme {declared.name}, which is attached by name on the build "
-                       "(messages.option: verity_vllm.LLM and serve-openai attach it), never installed as a protocol option")
+                       f"(verity_vllm.LLM takes {declared.name!r}), never installed as a protocol option")
             continue
         try:
             mod = adapter(name)

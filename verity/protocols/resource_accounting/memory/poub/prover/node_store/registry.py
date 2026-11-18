@@ -44,13 +44,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+
 from verity.circuits import requirement
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
-from verity.protocols.resource_accounting.memory.poub.verifier.receipts import PER_LEAF, Plan
-from verity.protocols.resource_accounting.memory.poub.verifier.store import store_salt
-
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import memory_map as mm
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
     KINDS,
@@ -71,6 +68,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.interfac
     Stale,
     WindowRecord,
 )
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import PER_LEAF, Plan
+from verity.protocols.resource_accounting.memory.poub.verifier.store import store_salt
 
 from .plan import (
     _node,
