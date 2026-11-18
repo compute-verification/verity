@@ -2239,18 +2239,18 @@ namespace OneCircuit
 /-- The refusal of a derivation from C and the partition that is not written yet. -/
 def notDerived (what : String) : String := s!"one-circuit: not derived yet: {what}"
 
-/-- **in(S)'s layout**: `inLayoutOf : C -> Partition -> Block -> Array (InputRow, [lo, hi))`, each input row of the
+/-- **in(S)'s layout**: `io : C -> Partition -> Block -> Array (InputRow, [lo, hi))`, each input row of the
 block circuit `c` that carries another block's outputs and the parameter leaves `[lo, hi)` of its unit it holds, from
 C's edges (`P`) and the partition, in O(C's description). Each row it names is read by path in its writer's output
-field's tree, never committed afresh. -/
-def inLayoutOf (_c : Circuit) (_P : Program.Prog) : V (Array (Nat × Nat × Nat)) :=
-  throw (notDerived "inLayoutOf : C -> Partition -> Block -> Array (InputRow, [lo, hi)) (in(S)'s rows of the block circuit)")
+field's tree, never committed afresh. The code's Core `Partition.io` (the boundary, `Partition.boundary`). -/
+def io (_c : Circuit) (_P : Program.Prog) : V (Array (Nat × Nat × Nat)) :=
+  throw (notDerived "io : C -> Partition -> Block -> Array (InputRow, [lo, hi)) (in(S)'s rows of the block circuit)")
 
 end OneCircuit
 
 /-! `HmOut` Linking: under a template query, with the verifier's own program C, every wire between two units of the
 statement is a check on the program. A reader whose parameter leaves are another unit's outputs reads them in an input
-row of in(S)'s layout (`OneCircuit.inLayoutOf`): an input row encoded as the one output row is, which the registered
+row of in(S)'s layout (`OneCircuit.io`): an input row encoded as the one output row is, which the registered
 reads read by path in its writer's output field's tree (`Registered.treeReads`), so the reader's row is the writer's
 committed row as one commitment, not a second commitment compared with it. -/
 namespace HmLinks
@@ -2291,7 +2291,7 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
 
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
-lies in a row of in(S)'s layout (`OneCircuit.inLayoutOf`, read only where such a leaf is); each row's leaves are either all
+lies in a row of in(S)'s layout (`OneCircuit.io`, read only where such a leaf is); each row's leaves are either all
 circuit inputs (the row is an ordinary input row) or exactly one unit's outputs in order, which its row reads by path in
 the writer's output field's tree, whether or not the writer is a unit of the file. The wires checked. -/
 def checkUnit (c : Circuit) (P : Program.Prog) (popIdx : Array Nat)
@@ -2300,7 +2300,7 @@ def checkUnit (c : Circuit) (P : Program.Prog) (popIdx : Array Nat)
   let some (k, m) := unitOf u | throw s!"links: unit {u} is outside the program's {n} units"
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
   if !ops.any (ownerOf · |>.isSome) then return 0
-  let links ← OneCircuit.inLayoutOf c P
+  let links ← OneCircuit.io c P
   for t in [0:ops.size] do
     if let some v := ownerOf ops[t]! then
       if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then

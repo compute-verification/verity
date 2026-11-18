@@ -552,13 +552,13 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
            strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S (`one_circuit.block_circuit`), and public files and its own lookup tables, the blobs'
+    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S (`one_circuit.restrict`), and public files and its own lookup tables, the blobs'
     pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
     them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
     blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
     try:
         try:
-            c = OC.block_circuit(descriptor, partition, _first(m))
+            c = OC.restrict(descriptor, partition, _first(m))
         except OC.NotDerived as e:
             raise _Refused(f"circuit: {e}") from None
         circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")

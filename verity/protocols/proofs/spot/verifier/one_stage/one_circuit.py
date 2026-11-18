@@ -8,8 +8,7 @@ from typing import Any
 
 PREFIX = "one-circuit: not derived yet: "
 
-BLOCK_CIRCUIT = "blockCircuit : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)"
-ROW_CUTS = "rowCutsOf : C -> Partition -> {template: {port: rows}} (in(S)'s row cuts)"
+RESTRICT = "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)"
 
 
 class NotDerived(ValueError):
@@ -19,12 +18,8 @@ class NotDerived(ValueError):
         super().__init__(PREFIX + what)
 
 
-def block_circuit(c: bytes, partition: Mapping[str, Any], block: int) -> bytes:
-    """C_S (`OneStageZk.blockCircuit`): the circuit file of the proof block whose first unit is `block`, the Boolean
-    lowering of its Definition in C, its ports in(S) and out(S)."""
-    raise NotDerived(BLOCK_CIRCUIT)
+def restrict(c: bytes, partition: Mapping[str, Any], block: int) -> bytes:
+    """C_S (`OneStageZk.restrict`): the circuit file of the proof block whose first unit is `block`, the Boolean
+    lowering of its Definition in C, its ports in(S) and out(S): Core's `Circuit.restrict`."""
+    raise NotDerived(RESTRICT)
 
-
-def row_cuts_of(c: Any, partition: Mapping[str, Any]) -> dict[str, dict[str, int]]:
-    """in(S)'s row cuts (`OneStageZk.rowCutsOf`): the rows each port of a block's circuit is cut into."""
-    raise NotDerived(ROW_CUTS)

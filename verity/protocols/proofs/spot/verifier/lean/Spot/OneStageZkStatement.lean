@@ -90,14 +90,15 @@ structure Own where
   registered : Option Json
   first : Nat := 0
 
-/-- **C_S**: `blockCircuit : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
-is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. -/
-def blockCircuit (_C : ByteArray) (_partition : Json) (_block : Nat) : V ByteArray :=
+/-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
+is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
+Core `Circuit.restrict`. -/
+def restrict (_C : ByteArray) (_partition : Json) (_block : Nat) : V ByteArray :=
   throw (Flock.OneCircuit.notDerived
-    "blockCircuit : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)")
+    "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)")
 
-/-- The statement's circuit file, derived from C and the partition (`blockCircuit`). -/
-def Own.circuitFile (p : Own) : V ByteArray := blockCircuit p.program p.partition p.first
+/-- The statement's circuit file, derived from C and the partition (`restrict`). -/
+def Own.circuitFile (p : Own) : V ByteArray := restrict p.program p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
 block (META `vus_per_block`) and its statement's own inputs. -/

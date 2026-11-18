@@ -46,7 +46,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   another unit; else the check refuses, before any session is verified. The public file names its ports bare; a window
   of one member registers them `<member>/<port>`, and the header is held to that member's roots with its name taken
   off (`publicPorts`); a registration of several members' roots refuses (`NOT_ONE_MEMBER`);
-* **check**: `verity-verify-proof verify --zk --statement verity/flock-circuit` with `--circuit` C_S (`blockCircuit`),
+* **check**: `verity-verify-proof verify --zk --statement verity/flock-circuit` with `--circuit` C_S (`restrict`),
   `--public`, `--partition`, `--program` C and `--registered` theta's registration, the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
@@ -76,7 +76,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"members"}`: `members` (`membersOf`) an object from each member's name to exactly
   `{"public", "registered", "units", "vus_per_block"}`: its public file and theta's registered file, as the one
   statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and its circuit's units a proof
-  block; its circuit file is C_S, derived from C and the partition (`blockCircuit`). Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  block; its circuit file is C_S, derived from C and the partition (`restrict`). Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
@@ -539,11 +539,11 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
         | none => got) (roots.getD m.name #[])
     acc.insert m.name mine) roots
 
-/-- **in(S)'s row cuts**: `rowCutsOf : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
+/-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
 circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). -/
-def rowCutsOf (_P : Flock.Program.Prog) (_rs : Array Flock.TemplateQuery.TRange) :
+def ioCuts (_P : Flock.Program.Prog) (_rs : Array Flock.TemplateQuery.TRange) :
     V (List (String × List (String × Nat))) :=
-  throw (Flock.OneCircuit.notDerived "rowCutsOf : C -> Partition -> {template: {port: rows}} (in(S)'s row cuts)")
+  throw (Flock.OneCircuit.notDerived "ioCuts : C -> Partition -> {template: {port: rows}} (in(S)'s row cuts)")
 
 /-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
 the root's nodes, arguments and parts. -/
@@ -552,10 +552,10 @@ def hasEdge (P : Flock.Program.Prog) : Bool :=
     a.seq.parts.any fun q => (Flock.Registered.partNodes q).any fun k => !Spot.Edges.isInputNode P k
 
 /-- **C's wiring under the partition**: the templates of the partition's ranges `rs`, read off C
-(`Spot.RecordText.tmplAt`), in(S)'s row cuts (`rowCutsOf`), and the wires C's root states (`Spot.Edges.edgesOf`). -/
+(`Spot.RecordText.tmplAt`), in(S)'s row cuts (`ioCuts`), and the wires C's root states (`Spot.Edges.edgesOf`). -/
 def derivedWiring (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) : V Spot.Wires.Wiring := do
   let ts ← (Spot.RecordText.unitsOf rs).mapM (Spot.RecordText.tmplAt P rs)
-  let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← rowCutsOf P rs, wires := [] }
+  let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← ioCuts P rs, wires := [] }
   return { W with wires := ← Spot.Edges.edgesOf P rs W }
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, and where C has an edge, each member's
@@ -1035,10 +1035,10 @@ private def withTables (c : ByteArray) (names : List String) : Core.Blobs :=
 private def held (lookups tables : List String) : String :=
   refusal (tablesHeld (ownOf (lookingUp lookups)) (withTables (lookingUp lookups) tables))
 
-/-- The refusal of every statement's circuit file while C_S is not derived (`blockCircuit`). -/
-private def HOLE_T : String := refusal ((fun _ => ()) <$> blockCircuit .empty Json.null 0)
+/-- The refusal of every statement's circuit file while C_S is not derived (`restrict`). -/
+private def HOLE_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
 
-#guard HOLE_T.startsWith "one-circuit: not derived yet: blockCircuit"
+#guard HOLE_T.startsWith "one-circuit: not derived yet: restrict"
 #guard held [] [] == HOLE_T
 #guard held ["ex2", "rcp"] ["rcp", "ex2"] == HOLE_T
 #guard (lookupsOf "circuit\nMETA {\"lookups\":[]}\n".toUTF8).toOption == none

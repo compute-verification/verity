@@ -425,7 +425,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the proof block whose first unit is `block`, derived from C and the partition (`one_circuit.block_circuit`); the
+    of the proof block whose first unit is `block`, derived from C and the partition (`one_circuit.restrict`); the
     findings in session order and None, or None and the refusal (``registered``: `registered` is None and the program
     reads registered values, `reads_registered`; ``circuit``: the circuit file is not the derived one, or is not derived
     yet; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
@@ -450,7 +450,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
     try:
-        derived = OC.block_circuit(program, partition, block)
+        derived = OC.restrict(program, partition, block)
     except OC.NotDerived as e:
         return None, ("circuit", str(e))
     if not (proof.circuit.is_file() and proof.public.is_file() and proof.sessions
@@ -579,7 +579,7 @@ class Member:
     """One member of a window in v2's per-member form (`OneStageZk.membersOf`): its name, its statement's files (`Proof`,
     with no session for a member the sample missed), the SHA-512 the auditor committed for its public file before any
     coin, theta's registered file for it, its units' ranges ``[lo, hi)`` of the docket's population, ascending, and its
-    circuit's ``vus_per_block``. Its circuit file is C_S, which the verifier derives (`one_circuit.block_circuit`)."""
+    circuit's ``vus_per_block``. Its circuit file is C_S, which the verifier derives (`one_circuit.restrict`)."""
     name: str
     proof: Proof
     public_sha512: str

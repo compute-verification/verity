@@ -19,7 +19,7 @@ namespace Registered
 open Lean (Json)
 
 /-- A file's format: theta's registration, each port a registered value's root, domain, leaves and row width, and no
-position: every position a unit reads is derived from C and the partition (`OneCircuit.positionOf`). An object of the
+position: every position a unit reads is derived from C and the partition (`OneCircuit.pos`). An object of the
 file holds only its keys (`FILE_KEYS`, `PORT_KEYS`). -/
 def FORMAT : String := "verity/registered-reads/v1"
 
@@ -299,11 +299,11 @@ end Registered
 
 namespace OneCircuit
 
-/-- **theta's positions**: `positionOf : C -> Partition -> Block -> Port -> Position`, the row of the registered value
+/-- **theta's positions**: `pos : C -> Partition -> Block -> Port -> Position`, the row of the registered value
 `reg` each unit of `indices` reads at `reg`'s port, from C's edges into its registered input node (`P`) and the
-partition, in O(C's description). -/
-def positionOf (_P : Program.Prog) (_indices : Array Nat) (reg : Registered.Port) : V Registered.Port :=
-  throw (notDerived s!"positionOf : C -> Partition -> Block -> Port -> Position (port {reg.name}, value {reg.value})")
+partition, in O(C's description). The code's Core `RegisteredCircuit.pos`, restricted to the boundary. -/
+def pos (_P : Program.Prog) (_indices : Array Nat) (reg : Registered.Port) : V Registered.Port :=
+  throw (notDerived s!"pos : C -> Partition -> Block -> Port -> Position (port {reg.name}, value {reg.value})")
 
 end OneCircuit
 
@@ -321,8 +321,8 @@ def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port
   let some (t, f) := reg.tree | return reg
   if f != OUT_FIELD then
     throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
-  let some (_, lo, _) := (← OneCircuit.inLayoutOf c P).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
-    | throw s!"registered reads: tree port {reg.name} is no row of in(S)'s layout (OneCircuit.inLayoutOf)"
+  let some (_, lo, _) := (← OneCircuit.io c P).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
+    | throw s!"registered reads: tree port {reg.name} is no row of in(S)'s layout (OneCircuit.io)"
   let ns := HmLinks.nodes P
   let first := indices.foldl min (indices.getD 0 0)
   let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
@@ -338,14 +338,14 @@ def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
 `pub` from C, the verifier's program `program`: a tree port's by `treeReads`, a registered value's by
-`OneCircuit.positionOf`; without the program every port is refused. -/
+`OneCircuit.pos`; without the program every port is refused. -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
     V (Option (Array Port)) := do
   let some own := own | return none
   let some b := program | throw "registered reads: a port's reads are derived from C, the verifier's program (--program)"
   let P ← Program.decode b
   let indices ← unitIndices pub
-  some <$> own.mapM fun reg => if reg.tree.isSome then treeReads c P indices reg else OneCircuit.positionOf P indices reg
+  some <$> own.mapM fun reg => if reg.tree.isSome then treeReads c P indices reg else OneCircuit.pos P indices reg
 
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
