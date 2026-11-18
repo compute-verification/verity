@@ -147,7 +147,7 @@ theorem linkTerm_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W :
   have key : ((t : ℝ) * cBe (D.record IV) x + 2 * ((setupLen (D.record IV) x + 2 * n + v + w : ℕ) : ℝ)) /
         ((2 ^ 256 : ℕ) : ℝ) + 1 / ((2 ^ 256 : ℕ) : ℝ) ≤
       t * ((linkCalls (D.record IV) x n v w : ℕ) / ((2 ^ 256 : ℕ) : ℝ)) := by
-    rw [div_add_div_same, mul_div_assoc']
+    rw [← add_div, mul_div_assoc']
     refine div_le_div_of_nonneg_right ?_ hpos.le
     unfold linkCalls
     push_cast
