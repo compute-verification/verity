@@ -363,7 +363,8 @@ attester"), and it charges a `format` failure the same.
 **Either side of the network attester.**
 - **The server's side.** What makes the id form from the engine's output is the developer's, and isn't trusted. It
   needn't be, because the gate refuses every other form and the tie checks the ids. An example is serve-openai's
-  `--protocol ids`, `IdsProtocol` in `adapters/vllm/verity_vllm/pipeline/serve_protocol.py`.
+  `--protocol ids`, `IdsProtocol` in `verity/protocols/resource_accounting/network/prover/ids_protocol.py`, and the id
+  relay (`network/prover/id_relay.py`) before vLLM's own server.
 - **The client's side.** A client's shim may rebuild OpenAI fields from the record by a public rule:
   - a response id from the run and the stream;
   - `created` from the request's release bucket;

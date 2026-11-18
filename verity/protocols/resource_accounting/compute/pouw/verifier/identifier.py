@@ -1,8 +1,8 @@
 """The proof's identifier v1: the JSON object in a Flock proof's header
 that names the oracle, the salt and the workload the proof is for.
 
-``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's registered name>, "salt": <the epoch's salt, lowercase
-hex>, "workload": <lowercase hex SHA-512 of the registered workload's canonical bytes>}``.  The scheme names the oracle H, so
+``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's name, one of `kernel_schemes.IDENTIFIED`>,
+"salt": <the epoch's salt, lowercase hex>, "workload": <lowercase hex SHA-512 of the registered workload's canonical bytes>}``.  The scheme names the oracle H, so
 there is no seed digest.  The proof binds the object through ``pub.sha``, which seeds its Fiat-Shamir transcript.  The
 verifier recomputes the bytes from the execution phase it audits (`identifier_bytes`), and Flock's verifier compares the proof's
 object with them byte for byte (``--identifier F``).
@@ -21,10 +21,8 @@ from verity.commitments import domains
 from verity.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
+from .kernel_schemes import IDENTIFIED
 from .protocol import DomainError, PoUWScheme
-
-#: the names `schemes.SCHEMES` registers, in its order (`test_pouw_identifier` holds them equal); core imports no builder
-SCHEMES = ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0")
 
 FORMAT = domains.POUW_IDENTIFIER
 SALT_BYTES = 32
@@ -60,8 +58,8 @@ def workload_digest(epoch: Epoch) -> bytes:
 
 def _name(scheme: PoUWScheme | str) -> str:
     name = scheme if isinstance(scheme, str) else getattr(scheme, "name", None)
-    if not isinstance(name, str) or name not in SCHEMES:
-        raise DomainError(f"no PoUW scheme {name!r}; registered: {', '.join(SCHEMES)}")
+    if not isinstance(name, str) or name not in IDENTIFIED:
+        raise DomainError(f"no PoUW scheme {name!r}; registered: {', '.join(IDENTIFIED)}")
     return name
 
 
@@ -78,4 +76,4 @@ def identifier_bytes(scheme: PoUWScheme | str, epoch: Epoch) -> bytes:
     return _canonical(identifier_v1(scheme, epoch))
 
 
-__all__ = ["CERTIFIED_SALT_BYTES", "FORMAT", "SALT_BYTES", "SCHEMES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]
+__all__ = ["CERTIFIED_SALT_BYTES", "FORMAT", "SALT_BYTES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]

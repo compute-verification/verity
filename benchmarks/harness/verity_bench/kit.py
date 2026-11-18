@@ -9,7 +9,7 @@
 - `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
-- `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set, else the run's machine's
+- `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
   `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
@@ -332,12 +332,18 @@ class NotListed(SystemExit):
 
 def toolkit(version: str) -> str:
     """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
-    is set, else the one the run's machine's properties (`machine_properties()`) list at exactly that version, the version
-    asked for and not the first listed. Refused by name otherwise, as `NotListed` where the properties list none."""
+    is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
+    (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
+    otherwise, as `NotListed` where the properties list none."""
     from verity_config.settings import SHARED
 
-    if SHARED.get("CUDA_HOME"):
-        return SHARED.get("CUDA_HOME")
+    if home := SHARED.get("CUDA_HOME"):
+        try:
+            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return home
+        if said == version or said.startswith(f"{version}."):
+            return home
     try:
         found = machine_properties()["toolkit"]["value"]
     except SystemExit as e:
@@ -355,16 +361,20 @@ def toolkit(version: str) -> str:
 
 
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import load_card, number
+    from verity.device import compute_capability, load_card, number
+    from verity.errors import InvalidArtifact
 
     directory = directory or cards_directory()
     card = load_card(sku, directory=directory)
     names = [d["value"] for d in card.get("driver", ())]
-    arch = re.fullmatch(r"sm_(\d+)(\d)a?", str(card.get("arch", "")))
-    if card["kind"] != "gpu" or len(names) != 1 or not arch:
+    try:
+        cc = compute_capability(card)
+    except InvalidArtifact:
+        cc = None
+    if len(names) != 1 or cc is None:
         raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
-                         f"and an `arch` sm_<major><minor>[a], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
-    return {"device_name": names[0], "compute_capability": [int(arch[1]), int(arch[2])], "num_sms": int(number(card["sm"]["count"]))}
+                         f"and an `arch` sm_<major><minor>[a|f], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
+    return {"device_name": names[0], "compute_capability": list(cc), "num_sms": int(number(card["sm"]["count"]))}
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:

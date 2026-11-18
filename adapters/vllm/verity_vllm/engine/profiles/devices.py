@@ -7,13 +7,13 @@ row's) and reads the config file that GPU does.  On a class not listed the platf
 the name fails there by name.  `FUSED_MOE_CONFIGS` holds
 the files a prediction reads without vLLM (`predict`).  Both names come from the GPU card records (`config.CARD_FILES`): a class
 is the record whose `short` is its token and reports that record's `driver` name, and a reported name is registered on the record
-whose `driver` holds it (`card_sku`)."""
+whose `driver` holds it (`card_sku`, through `verity.device`'s reader)."""
 from __future__ import annotations
 
 import json
-import tomllib
 from functools import cache
 
+from verity.device import gpu_card_reporting, load_card, skus
 from verity_vllm.config import CARD_FILES, workload_file
 from verity_vllm.target_family import device_token_of_row
 
@@ -22,22 +22,17 @@ __all__ = ["card_sku", "class_device_name", "device_name", "device_name_of_row",
 
 @cache
 def _gpu_records() -> tuple[dict, ...]:
-    """Each GPU card record under `config.CARD_FILES` (`kind = "gpu"`)."""
-    docs = (tomllib.loads(p.read_text()) for p in sorted(CARD_FILES.glob("*.toml")))
-    return tuple(doc for doc in docs if doc.get("kind") == "gpu")
+    return tuple(load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES))
 
 
 def _driver_names(record: dict) -> list[str]:
     return [d["value"] for d in record.get("driver", ())]
 
 
-def card_sku(name: str) -> str | None:
-    """The SKU of the one GPU card record whose `driver` holds `name`, the name the device reports; None where no record does.
-    Two records holding one name is refused."""
-    found = [r["sku"] for r in _gpu_records() if name in _driver_names(r)]
-    if len(found) > 1:
-        raise ValueError(f"device {name!r} is in the `driver` of {len(found)} card records under {CARD_FILES}: {found}; one is allowed")
-    return found[0] if found else None
+def card_sku(name: str) -> str:
+    """The SKU of the one GPU card file whose `driver` holds `name`, the name the device reports (`verity.device.gpu_card_reporting`);
+    refused by name (KeyError) where none or several do."""
+    return gpu_card_reporting(name, directory=CARD_FILES)["sku"]
 
 
 def class_device_name(token: str) -> str | None:
