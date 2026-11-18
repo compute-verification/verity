@@ -306,6 +306,15 @@ def full(a) -> int:
     return 0 if res["ok"] else 1
 
 
+def retain_why(retain: Path, out: Path, run_dir: str | None) -> str | None:
+    """Why `retain` can't hold the passes: it is, holds or sits inside ``--out``'s directory or the run's (`run_dir`)."""
+    p = retain.resolve()
+    for d in [out.resolve()] + ([Path(run_dir).resolve()] if run_dir else []):
+        if p == d or d in p.parents or p in d.parents:
+            return f"--retain {retain} is {d} or shares it: a pass's salts and rows never go under a run's directory"
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("mode", choices=("capture", "volunteer", "verify", "full"))
@@ -328,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--device-check", type=int, help="volunteer --device: replay every N-th tile on the CPU too (default "
                    "volunteer_pass's CROSS_CHECK)")
     a = p.parse_args(argv)
+    if why := retain_why(Path(a.retain), Path(a.out), settings.RESEARCH_RUN_DIR):
+        p.error(why)
     Path(a.out).mkdir(parents=True, exist_ok=True)
     Path(a.retain).mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(a.retain, 0o700)

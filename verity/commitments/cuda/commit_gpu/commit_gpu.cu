@@ -3,8 +3,8 @@
 // The construction is commit_gpu.cuh's header.
 //
 //   commit_gpu selftest
-//   commit_gpu check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS|prf     (writes OUT/levels.bin, OUT/bc.bin)
-//   commit_gpu check PARAMS OUT tile|tileseg M K R OPERAND SALTS|prf
+//   commit_gpu check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS         (writes OUT/levels.bin, OUT/bc.bin)
+//   commit_gpu check PARAMS OUT tile|tileseg M K R OPERAND SALTS
 //   commit_gpu bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
 //   commit_gpu bench PARAMS tile|tileseg M K R REPS [GEMM_M GEMM_N GEMM_K]
 //   commit_gpu sha REPS                                                      (raw compression rate)
@@ -72,8 +72,9 @@ static int selftest() {
 static std::string out_dir;
 
 static int check(int argc, char** argv) {
-  // check PARAMS OUT MODE N LBITS STRIDE ROWS SALTS|prf; the tile modes take M K R for N LBITS STRIDE, ROWS the operand
-  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows|seg N LBITS STRIDE | tile|tileseg M K R  ROWS SALTS|prf\n"); return 2; }
+  // check PARAMS OUT MODE N LBITS STRIDE ROWS SALTS (192 bytes a leaf in leaf order); the tile modes take M K R for N LBITS
+  // STRIDE, ROWS the operand
+  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows|seg N LBITS STRIDE | tile|tileseg M K R  ROWS SALTS\n"); return 2; }
   const Params p = read_params(argv[2]);
   out_dir = argv[3];
   const std::string mode = argv[4];
@@ -81,31 +82,30 @@ static int check(int argc, char** argv) {
   const u64 a = strtoull(argv[5], nullptr, 10), b = strtoull(argv[6], nullptr, 10), c = strtoull(argv[7], nullptr, 10);
   const u64 n = tile ? tile_leaves(a, b, c) : a, lbits = tile ? 256 * c : b, stride = tile ? 0 : c;
   const u32 lb = (u32)((lbits + 7) / 8);
-  const bool prf = !strcmp(argv[9], "prf");
   if (!tile && mode != "e2e" && (stride % 16 || stride < lb)) { fprintf(stderr, "a row stride is a multiple of 16 bytes, at least the row\n"); return 2; }
   auto rows = readf(argv[8]);
   const u64 need = tile ? a * b : mode == "e2e" ? 32 * n : (n - 1) * stride + lb;
   if (rows.size() < need) { fprintf(stderr, "rows: %zu bytes is short\n", rows.size()); return 2; }
   rows.resize(rows.size() + 32, 0);
-  uint8_t *drows, *dsalts = nullptr;
+  uint8_t *drows, *dsalts;
   CK(cudaMalloc(&drows, rows.size()));
   CK(cudaMemcpy(drows, rows.data(), rows.size(), cudaMemcpyHostToDevice));
-  if (!prf) {
-    const auto s = readf(argv[9]);
-    if (s.size() != 192 * n) { fprintf(stderr, "salts: %zu bytes for %llu leaves\n", s.size(), (unsigned long long)n); return 2; }
-    CK(cudaMalloc(&dsalts, s.size() + 16));
-    CK(cudaMemcpy(dsalts, s.data(), s.size(), cudaMemcpyHostToDevice));
-  }
   const char* sm = getenv("COMMIT_GPU_SMALL");
   const bool small = sm && !strcmp(sm, "1");
+  const auto s = readf(argv[9]);
+  if (s.size() != 192 * n) { fprintf(stderr, "salts: %zu bytes for %llu leaves\n", s.size(), (unsigned long long)n); return 2; }
+  // the small path salts two slots and commits under slot 1: both take the case's salts
+  const int salt_slots = small ? 2 : 1;
+  CK(cudaMalloc(&dsalts, s.size() * salt_slots));
+  for (int j = 0; j < salt_slots; ++j) CK(cudaMemcpy(dsalts + s.size() * j, s.data(), s.size(), cudaMemcpyHostToDevice));
   const int slot = small ? 1 : 0;
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits, small ? 1 : 0, small, small ? 2 : 1);
+  cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits, small ? 1 : 0, small, salt_slots);
   const char* fz = getenv("COMMIT_GPU_FUSE");
   cm.fuse_top = small && fz && !strcmp(fz, "1");
   const char* pz = getenv("COMMIT_GPU_PREFETCH");
   cm.prefetch = pz && !strcmp(pz, "1");
-  prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
+  cm.salts(dsalts, 0);
   if (tile) {
     cm.tiles(drows, a, b, (u32)c, seg, 0, slot);
   } else if (mode == "seg") {
@@ -266,9 +266,12 @@ static int bench(int argc, char** argv) {
   const u32 lb = (u32)((lbits + 7) / 8);
   const u64 data = tile ? a * b : mode == "e2e" ? 32 * n : (u64)lb * n;   // operand bytes the commitment covers
   if (!tile && mode != "e2e" && lb % 16) { fprintf(stderr, "bench rows and seg: a multiple of 128 bits\n"); return 2; }
-  uint8_t* src;
+  uint8_t *src, *salts;
   CK(cudaMalloc(&src, data + 64));
   fill<<<1024, 256>>>(src, data + 64, 7u);
+  // a timing run commits filled bytes and hides nothing, so its salts are a fill too
+  CK(cudaMalloc(&salts, 192 * n));
+  fill<<<1024, 256>>>(salts, 192 * n, 5u);
   cudaStream_t sc, sg, sp;
   CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
   CK(cudaStreamCreateWithFlags(&sg, cudaStreamNonBlocking));
@@ -291,7 +294,7 @@ static int bench(int argc, char** argv) {
   Nv nv;
   int dev; cudaDeviceProp prop;
   CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
-  for (int w = 0; w < 2; ++w) { cm.salts<true>(nullptr, sc); commit(sc, -1); }
+  for (int w = 0; w < 2; ++w) { cm.salts(salts, sc); commit(sc, -1); }
   CK(cudaStreamSynchronize(sc));
   CK(cudaGetLastError());
   // the data phase as one CUDA graph (a small commitment is a dozen short kernels, and their launch gaps count): to the
@@ -314,7 +317,7 @@ static int bench(int argc, char** argv) {
   std::vector<double> t_salt, t_all, t_leaf, t_graph, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
-    cm.salts<true>(nullptr, sc);
+    cm.salts(salts, sc);
     CK(cudaEventRecord(e[1], sc));
     leaves(sc);
     CK(cudaEventRecord(e[2], sc));
@@ -360,8 +363,8 @@ static int bench(int argc, char** argv) {
                            : seg ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
                                  : blocks(lb);
   // the data phase: row, hm96 leaf (2), frame leaf (2) a leaf, and a node (2) a node (the pads' left out); the salt phase:
-  // salt (3) and c (2) a leaf
-  const double comps = n * (row_comps + 4.0) + 2.0 * (cm.width - 1), salt_comps = 5.0 * n;
+  // c (2) a leaf
+  const double comps = n * (row_comps + 4.0) + 2.0 * (cm.width - 1), salt_comps = 2.0 * n;
   printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"sha_roll\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
          "\"tile_m\": %llu, \"tile_k\": %llu, \"tile_r\": %u, \"graph_from\": \"producer\", "
          "\"depth\": %d, \"operand_bytes\": %llu, \"salt_ms\": %.5f, \"salt_compressions\": %.0f, \"commit_ms\": %.5f, "

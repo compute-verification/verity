@@ -10,13 +10,12 @@ BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.  The tile m
 operand's :func:`permute` rows, leaf pos the block of r rows x 32 values at (pos % ceil(m/r), pos // ceil(m/r)), so the
 spot check's 128-row tile at one 32-step is the 128/r adjacent leaves :func:`tile_leaves` names.
 
-Salts are the committer's secret.  commit_gpu takes them from a file or derives them on the device by SHA-512 alone, the
-one hash: ``y = SHA-512(Ks || u64be(pos) || u64be(0)) || ... || SHA-512(Ks || u64be(pos) || u64be(2))`` (:func:`prf_salt`),
-Ks a 64-byte salt key.  Either way the root and openings are the reference's for those salts.
+Salts are the committer's secret, fresh operating-system bytes (``hm96.SHA512.fresh_salt()``) its caller hands
+commit_gpu as data: 192 bytes a leaf in leaf order.  A case's salts are a seeded test vector in its ``salts.bin``, and
+the root and openings are the reference's for those salts.
 
-    python3 reference.py params OUT N N_BITS [--fresh-key] [--seg] [--ks-seed S]   the CGP1 file for an n-leaf
-                                                              domain of n_bits rows (--seg: sha512/row-seg/v1 rows; --ks-seed:
-                                                              Ks from seed S, so domains can share it, else random)
+    python3 reference.py params OUT N N_BITS [--fresh-key] [--seg]   the CGP2 file for an n-leaf domain of n_bits rows
+                                                              (--seg: sha512/row-seg/v1 rows)
     python3 reference.py prepare WORK [quick|full]            every case's inputs and the reference's levels, b || c and leaf
                                                               digests (WORK/cNNN; CPU only, before a GPU lease)
     python3 reference.py check BIN WORK TAG                   BIN's `check` on every prepared case, compared with the
@@ -26,7 +25,6 @@ Run from the source tree's root with ``PYTHONPATH=.``; stdlib only.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -85,22 +83,18 @@ def check_t_table(key: bytes, t: bytes) -> None:
                 raise AssertionError(f"T table differs from byte_tables at p {p}, v {v}")
 
 
-def params(n: int, n_bits: int, ks: bytes, key: bytes = KEY, seg: bool = False, domain_id: bytes | None = None) -> bytes:
-    """commit_gpu's CGP1 file: P(n_bits) (row-seg: Q(n_bits)), the salt prefix, leaf_prefix(key), the domain id (default
-    :func:`domain`'s; a caller's own ``CommitmentDomain(...).domain_id`` commits under its label), Ks and T."""
+def params(n: int, n_bits: int, key: bytes = KEY, seg: bool = False, domain_id: bytes | None = None) -> bytes:
+    """commit_gpu's CGP2 file: P(n_bits) (row-seg: Q(n_bits)), the salt prefix, leaf_prefix(key), the domain id (default
+    :func:`domain`'s; a caller's own ``CommitmentDomain(...).domain_id`` commits under its label) and T."""
 
     t = t_table(key)
     check_t_table(key, t)
     p = sha512_row_seg_prefix(n_bits) if seg else sha512_row_v2_prefix(n_bits)
     did = domain(n).domain_id if domain_id is None else domain_id
     assert len(did) == 64
-    out = b"CGP1" + p + INST.salt_prefix + INST.leaf_prefix(key) + did + ks + t
-    assert len(out) == 4 + 128 * 3 + 64 * 2 + 65536
+    out = b"CGP2" + p + INST.salt_prefix + INST.leaf_prefix(key) + did + t
+    assert len(out) == 4 + 128 * 3 + 64 + 65536
     return out
-
-
-def prf_salt(ks: bytes, pos: int) -> bytes:
-    return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 
 
 def tile_count(m: int, k: int, r: int) -> int:
@@ -163,7 +157,7 @@ def _leaves(span: tuple[int, int]) -> tuple[bytes, list[bytes], list[bytes]]:
             row = e2e_row(c["rows"], pos)
         else:
             row = c["rows"][pos * c["stride"]:pos * c["stride"] + (c["n_bits"] + 7) // 8]
-        salt = prf_salt(c["ks"], pos) if c["salts"] is None else c["salts"][192 * pos:192 * pos + 192]
+        salt = c["salts"][192 * pos:192 * pos + 192]
         x = (sha512_row_seg_digest if c["mode"] == "seg" else sha512_row_v2_digest)(row, c["n_bits"])
         bc = INST.commit_string(c["key"], x, salt)
         h = INST.tree_leaf(c["key"], bc)
@@ -188,7 +182,7 @@ def _rows_for(mode: str, n: int, n_bits: int, stride: int, rng: random.Random) -
     return bytes(rows)
 
 
-def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: str, key: bytes, seed: int) -> dict:
+def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, key: bytes, seed: int) -> dict:
     """The case's inputs (params, rows, salts) and the reference's levels, b || c and hm96 leaf digests, under ``work``.
     The tile modes take (m, k, r) for (n, n_bits, stride): rows.bin is the m x k operand, and the reference commits its
     :func:`permute` rows (sha512/row/v2 for ``tile``, sha512/row-seg/v1 for ``tileseg``)."""
@@ -206,11 +200,10 @@ def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: 
     else:
         rows = operand = _rows_for(mode, n, n_bits, stride, rng)
         base = mode
-    ks = rng.randbytes(64)
-    salt_bytes = None if salts == "prf" else rng.randbytes(192 * n)
+    salt_bytes = rng.randbytes(192 * n)
     t0 = time.perf_counter()
     _CASE.clear()
-    _CASE.update(mode=base, n=n, n_bits=n_bits, stride=stride, rows=rows, salts=salt_bytes, ks=ks, key=key)
+    _CASE.update(mode=base, n=n, n_bits=n_bits, stride=stride, rows=rows, salts=salt_bytes, key=key)
     step = max(1, min(4096, -(-n // (4 * (os.cpu_count() or 1)))))
     spans = [(a, min(n, a + step)) for a in range(0, n, step)]
     if n < 2048:
@@ -219,14 +212,14 @@ def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: 
         with mp.get_context("fork").Pool() as pool:   # forked after _CASE is set: the workers read it
             parts = pool.map(_leaves, spans)
     levels = tree_levels(domain(n), [x for p in parts for x in p[1]])
-    files = {"params.bin": params(n, n_bits, ks, key, base == "seg"), "rows.bin": operand, "salts.bin": salt_bytes or b"",
+    files = {"params.bin": params(n, n_bits, key, base == "seg"), "rows.bin": operand, "salts.bin": salt_bytes,
              "ref_levels.bin": b"".join(b"".join(level) for level in levels), "ref_bc.bin": b"".join(p[0] for p in parts),
              "ref_h.bin": b"".join(x for p in parts for x in p[2])}
     os.makedirs(work, exist_ok=True)
     for name, data in files.items():
         with open(os.path.join(work, name), "wb") as f:
             f.write(data)
-    case = {"mode": mode, "n": n, "n_bits": n_bits, "stride": stride, "salts": salts, "key": "default" if key == KEY else "fresh",
+    case = {"mode": mode, "n": n, "n_bits": n_bits, "stride": stride, "key": "default" if key == KEY else "fresh",
             "seed": seed, "ref_s": round(time.perf_counter() - t0, 3), **tile}
     if tile:
         case["footprint_tiles"] = footprint
@@ -247,7 +240,7 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
     t0 = time.perf_counter()
     shape = (case["m"], case["k"], case["r"]) if "r" in case else (n, case["n_bits"], case["stride"])
     gpu = subprocess.run([binary, "check", f"{work}/params.bin", out, case["mode"], *map(str, shape), f"{work}/rows.bin",
-                          "prf" if case["salts"] == "prf" else f"{work}/salts.bin"], capture_output=True, text=True)
+                          f"{work}/salts.bin"], capture_output=True, text=True)
     result = {**case, "tag": tag, "gpu_s": round(time.perf_counter() - t0, 3)}
     if gpu.returncode:
         return {**result, "ok": False, "error": gpu.stderr.strip()[-400:]}
@@ -288,52 +281,47 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
 
 
 def cases(kind: str) -> list[tuple]:
-    """(mode, n, n_bits, stride, salts, key), the tile modes (mode, m, k, r, salts, key): ragged leaf counts (pads), every
-    padding boundary of a row's last block, given
-    and derived salts, a fresh key; row-seg rows from the empty row (no segment) through a short, a full and a one-bit
-    last segment to 64 segments; ``full`` adds the e2e slice's o_proj call (2^20 leaves) and int8 rows of 4096 values as
-    v2 and as row-seg rows."""
+    """(mode, n, n_bits, stride, key), the tile modes (mode, m, k, r, key): ragged leaf counts (pads), every padding
+    boundary of a row's last block, a fresh key; row-seg rows from the empty row (no segment) through a short, a full and a
+    one-bit last segment to 64 segments; ``full`` adds the e2e slice's o_proj call (2^20 leaves) and int8 rows of 4096
+    values as v2 and as row-seg rows."""
 
     fresh = INST.fresh_key()
-    out = [("e2e", n, E2E_BITS, 0, s, KEY) for n in (1, 2, 3, 5, 7, 8, 255, 256, 257, 511, 513, 1000) for s in ("prf", "given")]
-    out += [("e2e", n, E2E_BITS, 0, "prf", KEY) for n in (4095, 4097, 65537)]
-    out += [("e2e", 777, E2E_BITS, 0, "given", fresh)]
+    out = [("e2e", n, E2E_BITS, 0, KEY) for n in (1, 2, 3, 5, 7, 8, 255, 256, 257, 511, 513, 1000, 4095, 4097, 65537)]
+    out += [("e2e", 777, E2E_BITS, 0, fresh)]
     for n_bits in (0, 1, 7, 8, 13, 256, 888, 889, 896, 903, 960, 1016, 1024, 1025, 1913, 8192, 32768):
         lb = (n_bits + 7) // 8
         stride = max(16, -(-lb // 16) * 16)
-        out += [("rows", 37, n_bits, stride, "given", KEY), ("rows", 300, n_bits, stride + 16, "prf", KEY)]
-    out += [("rows", 1025, 256, 32, "prf", fresh)]
+        out += [("rows", 37, n_bits, stride, KEY), ("rows", 300, n_bits, stride + 16, KEY)]
+    out += [("rows", 1025, 256, 32, fresh)]
     for n_bits in (0, 1, 13, 1016, 1024, 8184, 8191, 8192, 8193, 9095, 16384, 3 * 8192 + 5, 32768, 65536):
         stride = max(16, -(-((n_bits + 7) // 8) // 16) * 16)
-        out += [("seg", 37, n_bits, stride, "given", KEY), ("seg", 300, n_bits, stride + 16, "prf", KEY)]
-    out += [("seg", 64, 64 * 8192, 65536, "given", KEY), ("seg", 513, 8192 + 128, 1040, "prf", fresh)]
+        out += [("seg", 37, n_bits, stride, KEY), ("seg", 300, n_bits, stride + 16, KEY)]
+    out += [("seg", 64, 64 * 8192, 65536, KEY), ("seg", 513, 8192 + 128, 1040, fresh)]
     # tile leaves (m, k, r): ragged m, r not dividing 128, a row/v2 leaf whose padding fits its last block (r 3) or not
     # (r 4), row-seg leaves of one partial, one full, 2, 3, 4 and 64 segments, one leaf, a fresh key
-    out += [("tile", m, k, r, s, KEY) for m, k, r, s in ((130, 96, 16, "given"), (7, 32, 4, "prf"), (7, 32, 3, "given"),
-                                                        (200, 64, 64, "prf"), (1, 32, 1, "prf"), (1000, 128, 128, "prf"),
-                                                        (256, 256, 32, "given"), (129, 64, 128, "given"))]
-    out += [("tile", 64, 32, 5, "given", fresh)]
-    out += [("tileseg", m, k, r, s, KEY) for m, k, r, s in ((31, 64, 31, "given"), (130, 96, 32, "prf"), (100, 64, 33, "prf"),
-                                                           (130, 96, 64, "given"), (300, 32, 65, "prf"), (64, 32, 2048, "given"))]
-    out += [("tileseg", 257, 32, 128, "prf", fresh)]
+    out += [("tile", m, k, r, KEY) for m, k, r in ((130, 96, 16), (7, 32, 4), (7, 32, 3), (200, 64, 64), (1, 32, 1),
+                                                   (1000, 128, 128), (256, 256, 32), (129, 64, 128))]
+    out += [("tile", 64, 32, 5, fresh)]
+    out += [("tileseg", m, k, r, KEY) for m, k, r in ((31, 64, 31), (130, 96, 32), (100, 64, 33), (130, 96, 64), (300, 32, 65),
+                                                      (64, 32, 2048))]
+    out += [("tileseg", 257, 32, 128, fresh)]
     if kind == "full":
-        out += [("e2e", 1 << 20, E2E_BITS, 0, "prf", KEY), ("e2e", (1 << 20) - 3, E2E_BITS, 0, "given", KEY),
-                ("rows", 8192, 32768, 4096, "prf", KEY), ("rows", 100003, 256, 32, "prf", KEY),
-                ("seg", 8192, 32768, 4096, "prf", KEY), ("seg", 8189, 65536, 8192, "given", KEY)]
+        out += [("e2e", 1 << 20, E2E_BITS, 0, KEY), ("e2e", (1 << 20) - 3, E2E_BITS, 0, KEY),
+                ("rows", 8192, 32768, 4096, KEY), ("rows", 100003, 256, 32, KEY),
+                ("seg", 8192, 32768, 4096, KEY), ("seg", 8189, 65536, 8192, KEY)]
         # o_proj's operand at 2K and 8K prefill chunks, as the sweep commits it
-        out += [("tile", 2048, 4096, r, "prf", KEY) for r in (16, 32, 64, 128)]
-        out += [("tile", 8192, 4096, 16, "given", KEY), ("tile", 8192, 4096, 64, "prf", KEY), ("tile", 8191, 4096, 128, "given", fresh)]
-        out += [("tileseg", 2048, 4096, r, "prf", KEY) for r in (64, 128)]
-        out += [("tileseg", 8192, 4096, 128, "prf", KEY), ("tileseg", 2047, 4096, 128, "given", KEY)]
+        out += [("tile", 2048, 4096, r, KEY) for r in (16, 32, 64, 128)]
+        out += [("tile", 8192, 4096, 16, KEY), ("tile", 8192, 4096, 64, KEY), ("tile", 8191, 4096, 128, fresh)]
+        out += [("tileseg", 2048, 4096, r, KEY) for r in (64, 128)]
+        out += [("tileseg", 8192, 4096, 128, KEY), ("tileseg", 2047, 4096, 128, KEY)]
     return out
-
 
 def main(argv: list[str]) -> int:
     if len(argv) >= 5 and argv[1] == "params":
         key = INST.fresh_key() if "--fresh-key" in argv else KEY
-        ks = random.Random(int(argv[argv.index("--ks-seed") + 1])).randbytes(64) if "--ks-seed" in argv else os.urandom(64)
         with open(argv[2], "wb") as f:
-            f.write(params(int(argv[3]), int(argv[4]), ks, key, "--seg" in argv, domain(int(argv[3])).domain_id))
+            f.write(params(int(argv[3]), int(argv[4]), key, "--seg" in argv, domain(int(argv[3])).domain_id))
         return 0
     if len(argv) >= 3 and argv[1] == "prepare":
         kind = argv[3] if len(argv) > 3 else "quick"

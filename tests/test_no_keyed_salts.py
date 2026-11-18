@@ -1,18 +1,25 @@
-"""No source under `verity/`, `integrations/` or `adapters/` derives a hiding leaf's salt from a key, by any function: every
-leaf's salt is fresh operating-system bytes, drawn once for its leaf (`verity.commitments.hm96.SHA512.fresh_salt()`), and
-handed on as data.
+"""A hiding leaf's salt under `verity/`, `integrations/` or `adapters/` is one of two things, and either needs no entry
+here: fresh operating-system bytes drawn for its leaf (`verity.commitments.hm96.SHA512.fresh_salt()`) and handed on as
+data; or the one keyed stream the Lean lists (`KeyedUniform`), `verity.commitments.randomness`'s `stream` under a key its
+`derive` makes from fresh operating-system bytes, drawn fresh for the unit it salts (a step, a pass, a registration) and
+never reused. Any other derivation of a salt from a key is a third one. A leaf that hides nothing may take a public salt,
+derived by SHA-512 from public names alone and said to be public where it is made; it is outside the rule. The rule is
+stated in `verity/commitments/hm96/PROTOCOL.md`, section 3, "Randomness" (`RULE`).
 
-The scan reads tracked Python, Lean, CUDA, C and Rust sources for the keyed derivations found by reading the tree, by
-name or by the domain label each hashes under (`NAMES`): the hm96 salt function and the ChaCha20 block it is built on,
-keyed salt tables, Flock's keyed staging salts, the ZK server's value salts, the SHA-512 salt PRF of `commit_gpu` and
-its twins, PoUB's store salts, and a salt key under any spelling. A file that names one fails unless `ALLOWED` lists it
-with the lane that owns its switch. `ALLOWED` only shrinks: an entry whose file names none any more is stale, and its
-line goes.
+The scan reads tracked Python, Lean, CUDA, C and Rust sources for the third derivations found by reading the tree, by name
+or by the domain label each hashes under (`NAMES`): the hm96 salt function and the ChaCha20 block it is built on, keyed
+salt tables, Flock's keyed staging salts, the ZK server's value salts, the SHA-512 salt PRF (`prf_salt`, `salt_prf`),
+PoUB's store salts and payload key, and a salt key under any spelling. A file that names one fails unless a list
+holds it:
 
-A keyed derivation a ruling admits is in `RULED`, not `ALLOWED`: each entry names its owner and the rulings it rests on,
-each ruling its condition and the place in the tree that states it (`STATED`), and no line of the ruling's module writes,
-sends, logs or serializes a key it names (`WRITTEN` holds the files that still do, and only shrinks). `RULED` does not
-shrink by itself: an entry goes when its owner moves the tree to fresh bytes a leaf, or the ruling changes.
+* `ALLOWED`: derivations still to be removed, each with the lane that removes it. It only shrinks: an entry whose file
+  names none any more is stale, and its line goes.
+* `RULED`: derivations a ruling keeps for now, each with its owner and the rulings it rests on; each ruling has its
+  condition and the place in the tree that states it (`STATED`), and `None` there warns until the owner writes that
+  sentence. No line of a ruled module writes, sends, logs or serializes a key it names, except a step-rows key a replay
+  must reopen rows with, under the private replay store its condition names (`WRITTEN` holds the files that write one
+  anywhere else or where this test cannot tell, and only shrinks). An entry goes when its owner moves to an allowed form or
+  the ruling changes.
 
 The scan catches a new use of a derivation it knows by name; it cannot see a derivation under a name or label it does not
 know, nor whether a ruled key is drawn as often as its ruling says, so a green run says no known derivation spread, not
@@ -29,7 +36,7 @@ SCOPES = ("verity/", "integrations/", "adapters/")
 SUFFIXES = (".py", ".lean", ".cu", ".cuh", ".c", ".cc", ".cpp", ".h", ".hpp", ".rs")
 #: a salt key in any spelling (`salt_key`, `saltKey`, `hm96_salt_key`, `--salt-key`, `FC_ZK_SERVER_SALT_KEY`), not a salt
 #: object's keys; the hm96 salt function and the ChaCha20 block it is built on; keyed salt tables; `stage_salts`' keyed
-#: branch and the ZK server's `saltOf` by their domain labels; `commit_gpu`'s SHA-512 salt PRF and its twins; PoUB's
+#: branch and the ZK server's `saltOf` by their domain labels; the SHA-512 salt PRF (`prf_salt`, `salt_prf`); PoUB's
 #: `store_salt` under a key, and its payload key; and the vllm committer's `salt(ks, pos)`
 NAMES = re.compile(r"(?i:(?:salt|payload)[_-]?key)(?![sS])|\bhm96_salt\b|\bhm96Salt\b|\bkeyed_salts\b|\bchacha20_block\b|\bchacha20Block\b"
                    r"|flock-circuit/stage-salt/v1|zk-server/value-salt|\bprf_salt\b|\bsalt_prf\b|\bstore_salt\(\s*key\b"
@@ -44,15 +51,10 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
-    # the step rows run on a card under a fresh OS key a step, expanded there by SHA-512; a change of that kernel can't be
-    # gated until a card holds it to the reference, so these two stay by ruling until then
-    "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
+    # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/crypto/chacha20.py": "@proofs",
-    "verity/commitments/cuda/commit_gpu/commit_gpu.cuh": "@proofs",
-    "verity/commitments/cuda/commit_gpu/reference.py": "@proofs",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
@@ -64,8 +66,9 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
     "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py": "@proofs",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@kernels",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@kernels",
+    # both keep ChaCha20 only for compute-accounting's callers that pass a key and a nonce and no salts
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
@@ -75,20 +78,27 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": "@memory-accounting",
 }
 #: the rulings that admit a keyed derivation: {ruling: its condition}
 PASS_TREE = ("the bandwidth audit's pass tree: its leaves' salts are expanded on the card from a key drawn fresh from the "
              "operating system for each pass, never reused and never written")
 PAYLOAD_TREE = ("the bandwidth audit's payload tree: its salts are expanded from the prover's own key, drawn from the "
                 "operating system, which the verifier neither chooses nor receives and which is never written")
+STEP_ROWS = ("the step rows: their salts are expanded on the card by their own SHA-512 expansion, until the shared expander "
+             "of the listed stream exists, from a key drawn fresh from the operating system for each step and never reused; "
+             "a key a replay must reopen rows with may be written to one place only: the store's private directory, outside "
+             "every run's output, on the adapter's private list, refused by custody, and never sent to a verifier")
+#: where the tree states the salts' rule and its ruled derivations: hm96's protocol, section 3, "Randomness"
+RULE = ("verity/commitments/hm96/PROTOCOL.md", "derivations kept for now by a ruling, each with its condition")
 #: {ruling: (the file in the tree that states it as a rule, a phrase of that statement), or None while nothing does}
-STATED: dict[str, tuple[str, str] | None] = {PASS_TREE: None, PAYLOAD_TREE: None}
+STATED: dict[str, tuple[str, str] | None] = {PASS_TREE: RULE, PAYLOAD_TREE: RULE, STEP_ROWS: RULE}
 #: {ruling: (the module it covers, the names its keys go by there)}
 SCOPE = {PASS_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("salt_key", "salt-key")),
-         PAYLOAD_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("payload_key", "payload-key"))}
+         PAYLOAD_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("payload_key", "payload-key")),
+         STEP_ROWS: ("adapters/vllm/verity_vllm/commit/", ("keys.bin",))}
 #: {file whose keyed derivation a ruling admits: (the lane that owns it, the rulings it rests on)}
 RULED: dict[str, tuple[str, tuple[str, ...]]] = {
+    "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": ("@vllm", (STEP_ROWS,)),
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py": ("@memory-accounting", (PASS_TREE,)),
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py": ("@memory-accounting", (PASS_TREE,)),
     "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py": ("@memory-accounting",
@@ -98,8 +108,15 @@ RULED: dict[str, tuple[str, tuple[str, ...]]] = {
 #: a line that writes, sends, logs or serializes what it names: a writer's call, a key's hex, or the name as a string's
 #: field (a manifest's or a message's)
 WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|savez|tofile)\(|\bprint\(|\blog(?:ger)?\.|\.hex\(\)")
-#: {file of a ruled module that still writes or sends a ruled key: the lane that stops it}
-WRITTEN: dict[str, str] = {}
+#: {file of a ruled module that still writes or sends a ruled key where its ruling does not admit it: the lane that stops it}
+#: A step-rows key is admitted only under the private replay store, which no single line shows: a file can leave only once
+#: its writer takes its directory from one function that names that store, outside every run's output, and the file's name
+#: is on the adapter's private list (`verity_vllm.pipeline.research_outputs.PRIVATE`), with a check here that reads both.
+WRITTEN: dict[str, str] = {
+    # `keys.bin` goes into the replay bundle, `<out>/replay_bundle_p<pair>/store/`, inside the commit's output, private by the
+    # bundle directory's name alone
+    "adapters/vllm/verity_vllm/commit/store_dump.py": "@vllm",
+}
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}
 
 
@@ -166,7 +183,8 @@ def _written() -> dict[str, list[str]]:
 def test_a_ruled_key_is_never_written() -> None:
     new = {path: lines for path, lines in _written().items() if path not in WRITTEN}
     assert not new, ("a ruled key is never written, sent, logged or serialized: it is drawn from the operating system "
-                     "and dropped (RULED in tests/test_no_keyed_salts.py):\n"
+                     "and dropped, except a step-rows key a replay needs, written only under the private replay store "
+                     "(STEP_ROWS in tests/test_no_keyed_salts.py):\n"
                      + "\n".join(f"  {path}: {line}" for path, lines in sorted(new.items()) for line in lines))
 
 
@@ -211,6 +229,7 @@ def test_the_write_check_reads_each_form(line: str, written: bool) -> None:
     ("WINDOW_SALT_KEYS = ('coins', 'epoch')", False),
     ("HM96_SALT = 192", False),
     ("salt = SHA512.fresh_salt()", False),
+    ('salts = derive(os.urandom(32), "verity/vllm/step-salt/v1", {"step": step}).stream(("leaf", i))', False),
 ])
 def test_the_scan_reads_each_spelling(text: str, named: bool) -> None:
     assert bool(NAMES.search(text)) is named

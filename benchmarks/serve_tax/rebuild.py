@@ -1651,6 +1651,9 @@ def main(argv: list[str] | None = None) -> int:
                          "run's directory")
     a = ap.parse_args(argv)
     a.private = S.outside(a.private.resolve(), a.out)
+    for flag, d in (("--kv-dir", a.kv_dir), ("--mirror-out", a.mirror_out)):
+        if d:
+            S.outside(d, a.out, flag)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):
         raise SystemExit("either --arm-dir with --kv-dir (one GPU), or --served with --scratch (tp_restore.py serve's)")
     if a.served and (a.mirror_out or a.from_mirror):

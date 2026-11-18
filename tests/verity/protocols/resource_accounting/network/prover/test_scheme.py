@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from verity import hooks as H
 from verity.circuits.defs import REGISTRY, CompositeDefinition
 from verity.protocols.compose import schemes
@@ -60,8 +62,18 @@ def test_requests_are_the_id_relay_unless_admission_is_configured() -> None:
     ex = _Exchange()
     NS.NETWORK_ATTESTER.attach(ex, {})
     assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
-    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"admit": {}}) == ()
+    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"settings": {"order": "release-order"}}) == ()
     assert set(NS.NETWORK_ATTESTER.processes) == {"id-relay"}
+
+
+def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admission_would() -> None:
+    assert NS.settings({}) == NS.SETTINGS and NS.settings({"order": "release-order"})["hold_ms"] == 5000
+    tick = {"order": "tick", "sat_us": 30_000, "free_us": 40_000}
+    assert NS.settings(tick)["bucket_us"] == 100_000
+    for bad in ({"feed": "f"}, {"hold_ms": 1.5}, {"order": "fifo"}, {"hold_ms": 0}, {"order": "tick"},
+                {**tick, "catch_up": "open"}):
+        with pytest.raises(ValueError):
+            NS.settings(bad)
 
 
 class _Hooks(_Exchange):
@@ -98,3 +110,16 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
         {"key": "a", "run": "r", "n": 0, "bucket": 3}, {"key": "b", "run": "r", "n": 1, "bucket": 3},
         {"run": "r", "n": 1, "passed": True}]
     assert isinstance(admitter, A.Admitter) and admitter.gate is not None and admitter.front is None
+
+
+@pytest.mark.parametrize("lanes,outputs,every", [(4, 64, 16), (2, 8, 4)])
+def test_the_scan_states_port_lays_its_row_out_as_the_scan_does(lanes, outputs, every) -> None:
+    from verity.protocols.resource_accounting import scheme as S
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+
+    shape = {"B": 512, "r": 4, "lanes": lanes, "C": 47, "IDB": 17, "EVERY": every, "WITHIN": 12, "D": 12 + every - 1,
+             "KO": outputs, "KI": 1024}
+    cls = IS.Class(**shape)
+    got = S.layout(NS.NETWORK_ATTESTER, "scan-state", shape)
+    assert got.bits == IS.state_bits(cls) and dict(got.fields) == IS.layout(cls)
+    assert dict(got.counts) == {"K0": cls.K0, "K": cls.K}

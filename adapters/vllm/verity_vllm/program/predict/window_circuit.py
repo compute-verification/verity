@@ -204,9 +204,8 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-          wired: bool = True, provable: bool = True, tables: FixedLoad | None = None) -> Lowered:
-    """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
-    wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`). With ``tables``,
+          provable: bool = True, tables: FixedLoad | None = None) -> Lowered:
+    """`class_circuit`'s circuit with its lowering (`Lowered`). With ``tables``,
     refused unless the class is one boundary; with H1's, unless round 0's rows (each slot's prompt) fit a table's ``m`` rows
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
     linears are the first's (`window_cut.linears`)."""
@@ -236,8 +235,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                                 "calls a round")
         if layout is not None and set(r.linears) != {len(layout.calls)}:
             raise Unexpressible(f"{r.name}: linears cut by position {r.linears}, not the layout's {len(layout.calls)} calls")
-    if wired:
-        b.settle()
+    b.settle()
     roots, openings = b.merged()
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
     if isinstance(tables, Tables):
