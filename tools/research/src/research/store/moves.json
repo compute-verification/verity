@@ -5377,6 +5377,11 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/protocols/poub/remote.py": "verity/protocols/resource_accounting/memory/poub/prover/commit_session.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
         "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
       }

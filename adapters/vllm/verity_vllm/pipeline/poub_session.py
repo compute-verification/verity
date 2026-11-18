@@ -1,13 +1,16 @@
 """The Commit's PoUB session (``--remote-verifier HOST:PORT``), from its ``--remote-*`` options to its lines in the Commit's
 record: the audited run's row entry, the verdict's ``poub_session`` and the Commit's last line, whose rejection fails the
 Commit (`pipeline.commit.main`).  The session is the process registered as `SESSION` (`scheme.PROCESSES`, once every
-declaration is loaded), so this package imports no PoUB code."""
+declaration is loaded), so this package imports no PoUB code: it hands the session the exchange of the build about to be
+made (`messages.current`), on which the session attaches its scheme, and drives what it gets back."""
 from __future__ import annotations
 
 from typing import Any
 
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme
+
+from verity_vllm import messages
 
 #: the process a PoUB scheme starts beside the Commit's engine
 SESSION = "poub-session"
@@ -21,7 +24,7 @@ def commit_session(opts: Any, out: Any, kv_pages: int | None) -> Any:
     if (start := scheme.PROCESSES.get(SESSION)) is None:
         raise NotImplementedError(f"vllm/adapter-imports-no-protocol: memory-accounting registers the Commit's PoUB session "
                                   f"as process {SESSION!r} (Scheme.processes); no scheme has")
-    return start(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
+    return start(opts.remote_verifier, exchange=messages.current, plan=opts.remote_plan, kv_pages=kv_pages,
                  weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib,
                  out=out, node=opts.remote_node, step_ms=opts.remote_step_ms,
                  filler_gib=opts.remote_filler_gib, log=lambda m: print(m, flush=True))
