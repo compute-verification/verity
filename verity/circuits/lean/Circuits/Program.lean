@@ -588,8 +588,11 @@ def recordFunctionIds (fid : String) : Array String :=
 earlier node (any node, for the return) of another width than its own type gives that position is a silent
 reinterpretation, and the decoder refuses the Definition as it finishes decoding it, with the codec's message. A reference
 to the node itself or a later one is not this check's. The check reads the description: each reference part is compared
-by the structure of the two types, and leaves are walked one by one only where the structure doesn't decide, at most
-`WALK` of them in a Program, past which it is refused (`E_REINTERPRET unchecked`). -/
+by the structure of the two types, against the widths its own slice of the type it is read as gives it. A strided or
+grid part is decided lane by lane, by the source's widths between the lane's extremes or by the residues the lane
+reaches in the period of the array holding them (`laneWidth`); one neither decides is refused by name as not decided
+by structure (`E_REINTERPRET unchecked`), never walked. Only an affine part's elements are walked where its two types'
+shapes differ, and the first wrong leaf of a refused part is found leaf by leaf, at most `WALK` of them in a Program. -/
 
 namespace Widths
 
@@ -706,6 +709,56 @@ def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
   if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
   else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
 
+/-- `{(x + y) mod L : x ∈ A, y ∈ B}`. -/
+def sumMod (L : Nat) (A B : List Nat) : List Nat := (A.flatMap fun x => B.map fun y => (x + y) % L).eraseDups
+
+/-- The residues mod `L` that `Lane.leafAt`'s levels `lv` add at the periods they count, where each level's and each
+sum's have at most `cap` members. -/
+def levelRes (L cap : Nat) : List (Nat × Int) → Option (List Nat)
+  | [] => some [0]
+  | [(r, d)] => residues d r L cap
+  | (r, d) :: rest => do
+    let A ← residues d r L cap
+    let B ← levelRes L cap rest
+    if A.length * B.length ≤ cap then some (sumMod L A B) else none
+
+/-- The residues mod `L`, from leaf `off` on, of the leaves `b + o · e + ⋯` a lane of runs of `run` reaches over its
+levels `lv` (a strided part is the lane of runs of `inner` with one level), where each set has at most `cap` members. -/
+def laneRes (b : Int) (off run : Nat) (e : Int) (lv : List (Nat × Int)) (L cap : Nat) : Option (List Nat) := do
+  let O ← residues e run L cap
+  let G ← levelRes L cap lv
+  if O.length * G.length ≤ cap then
+    some ((sumMod L O G).map fun x => (((b - (off : Int)) % (L : Int)).toNat + x) % L)
+  else none
+
+/-- The most residues a lane is decided by. -/
+def RCAP : Nat := 2 ^ 16
+
+/-- Whether every leaf of `S` that a lane reaches between its extremes `lo … hi` has width `w`, by structure: `S`'s
+widths between the extremes, or the residues the lane reaches in the period of the array holding them all. `none`
+where neither decides; `some false` only where a leaf the lane reaches has another width. -/
+def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : List (Nat × Int)) : Option Bool :=
+  match rangeWidths S lo (hi + 1) with
+  | [x] => some (x == w)
+  | _ =>
+    match cover S lo (hi + 1) with
+    | (.array _ f, off) =>
+      if f.leaves == 0 then none else
+      match laneRes b off run e lv f.leaves RCAP with
+      | some R => if R.all fun r => wAt f r == w then some true else none
+      | none => none
+    | _ => none
+
+def formName : Part → String
+  | .affine .. => "affine"
+  | .strided .. => "strided"
+  | .explicit .. => "explicit"
+  | .grid .. => "grid"
+
+/-- The refusal of a part whose widths the structure of its types does not decide, which the check never walks. -/
+def undecided (q : Part) (why : String) : String :=
+  s!"a {formName q} part of {q.count} references, not decided by structure: {why}"
+
 /-- Whether `t`'s leaves `a … a + n - 1` have the widths of `S`'s leaves `b … b + n - 1`. -/
 def eqRange : Nat → Ty → Nat → Ty → Nat → Nat → M Bool
   | 0, _, _, _, _, _ => throw UNCHECKED
@@ -783,44 +836,29 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
   | .strided p i base inner os is n =>
     let some S := s.ty? p i | return true
     if n == 0 || (ht.isSome && ht == s.homo? p i) then return true
-    let at_ := fun (k : Nat) => (base + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat
-    if let some w := ht then
-      let q' := (n - 1) / inner
-      let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
-        (if q' > 0 then [(q' - 1, inner - 1)] else [])
-      let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
-      let lo := vals.foldl min vals.head!
-      let hi := vals.foldl max vals.head!
-      if rangeWidths S lo (hi + 1) == [w] then return true
-      let (cs, off) := cover S lo (hi + 1)
-      if let .array _ f := cs then
-        let L := f.leaves
-        if L > 0 then
-          if let (some A, some B) := (residues os ((n + inner - 1) / inner) L 4096, residues is inner L 4096) then
-            if A.length * B.length ≤ 4096 then
-              let r0 := (base - (off : Int)) % (L : Int)
-              if A.all fun x => B.all fun y => wAt f ((r0 + x + y) % (L : Int)).toNat == w then return true
-    for k in [0:n] do
-      step
-      if wAt S (at_ k) != wAt t (a + k) then return false
-    return true
+    let some w := ht | throw (undecided q "the type it is read as has leaves of several widths along it")
+    let q' := (n - 1) / inner
+    let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
+      (if q' > 0 then [(q' - 1, inner - 1)] else [])
+    let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
+    let lo := vals.foldl min vals.head!
+    let hi := vals.foldl max vals.head!
+    match laneWidth S w lo hi base inner is [((n + inner - 1) / inner, os)] with
+    | some true => return true
+    | some false => return false
+    | none => throw (undecided q s!"the leaves of {if p then "parameter" else "node"} {i} it reads are of several widths")
   | .grid run lanes =>
-    -- lane by lane: the source's one width, or one width over the leaves between the lane's extremes; else leaf by
-    -- leaf
-    let laneOk := fun (w : Nat) (l : Lane) => match s.ty? l.p l.i with
-      | none => true
+    let some w := ht | throw (undecided q "the type it is read as has leaves of several widths along it")
+    let verdict := fun (l : Lane) => match s.ty? l.p l.i with
+      | none => some true
       | some S =>
-        s.homo? l.p l.i == some w ||
+        if s.homo? l.p l.i == some w then some true else
         let (lo, hi) := l.bounds run
-        rangeWidths S lo.toNat (hi.toNat + 1) == [w]
-    if let some w := ht then
-      if lanes.all (laneOk w) then return true
-    for k in [0:q.count] do
-      step
-      let r := q.get k
-      if let some S := s.ty? r.p r.i then
-        if wAt S r.j != wAt t (a + k) then return false
-    return true
+        laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv
+    let vs := lanes.map verdict
+    if vs.all (· == some true) then return true
+    if vs.any (· == some false) then return false
+    throw (undecided q "a lane reads leaves of several widths")
 
 /-- The first leaf of part `q`, read as `t`'s leaves `a …`, that names a leaf of another width than `t` gives it, as an
 offset into `q`, where `partOk` found one: an affine part's by bisection over its prefixes (`eqRange` on each), any
@@ -849,8 +887,8 @@ def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
 
 /-- The first part of the references `seq`, read as a `t`, that names leaves of another width, with the leaf it starts at. -/
 def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
-  let ht := homo t
   for q in seq.parts, a in seq.starts do
+    let ht := match rangeWidths t a (a + q.count) with | [w] => some w | _ => none
     if !(← partOk s t ht a q) then return some (a, q)
   return none
 
