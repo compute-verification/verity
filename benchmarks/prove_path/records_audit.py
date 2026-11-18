@@ -36,7 +36,7 @@ its window's ingress the window figure beside it, with the premise it rests on n
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
 ``registered_value.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
-member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
+member's ``--registered`` file comes from the record and those entries alone (`interface.registered_file`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port
 committed afresh); a5 adds the member's other ports at the docket's roots (`rows.own_reads`). The reads
@@ -71,7 +71,7 @@ window record of its retained timed rounds, written after the retention and befo
 docket, chained right after W, registers each as
 W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
-roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
+roots (each pinned at W's entry, `interface.registered_file`) and nothing of them is registered afresh. Their readers are
 sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
 The summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict,
 the prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
@@ -204,7 +204,6 @@ from verity.protocols.registration.verifier import registration as G  # noqa: E4
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
@@ -535,7 +534,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
 def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
     """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
     (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
-    `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
+    `interface.registered_file` opens against. Refused (ValueError) where a root isn't hex digits."""
     pins = {v: e["root"] for v, e in entries.items()}
     IF.held_params(pins, {})
     return pins
@@ -593,7 +592,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     """The window's tie to ``w`` (``--tie``: W, the earlier docket that registered first the values the circuit's
     program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
-    pins of the values, each W's entry under the value's name, which `interface.registered_reads` holds to the rows the
+    pins of the values, each W's entry under the value's name, which `interface.registered_file` holds to the rows the
     value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
     `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
@@ -1110,7 +1109,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted(set(histories) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's history tables")
         pins |= histories
-        reads = IF.registered_reads(doc, mine, pins, registered=REG)
+        reads = IF.registered_file(doc, mine, pins)
         if a.day_ledger:
             from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
