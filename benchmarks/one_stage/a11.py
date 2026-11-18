@@ -635,7 +635,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
-def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
+def stage_tampered(st, rows: dict, out_dir: Path, indices, set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
     from types import SimpleNamespace
     iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
@@ -649,9 +649,9 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     outs = {f"o{j}": got[:, at[j]:at[j + 1]].copy() for j in range(len(st.out_words))}
     st.reference_check(rows, outs)
     outs["o0"][:, 0] ^= 1
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     out_dir.mkdir(parents=True, exist_ok=True)
-    FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+    FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin",
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
              digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
     return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
@@ -887,7 +887,6 @@ def main() -> int:
         t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
         form = a0.templated(st, sdir, a.tmpl_unit_bin)
-        salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
             kv, t1 = rows_of_kind[f], time.time()
@@ -895,7 +894,7 @@ def main() -> int:
             if n > cap:
                 raise SystemExit(f"{f}: {n} units over the statement cap {cap}; lower --per-kind")
             d, set_name = sdir / f, f"{st.iset.name}-{f}"
-            got = st.stage(kv["rows"], d, salt_key, indices=range(base + lo, base + lo + n), set_name=set_name)
+            got = st.stage(kv["rows"], d, indices=range(base + lo, base + lo + n), set_name=set_name)
             (d / "inst.bin").rename(d / f"inst-{n}.bin")
             (d / "pub.bin").rename(d / f"pub-{n}.bin")
             (d / "tables").mkdir(exist_ok=True)
@@ -908,7 +907,7 @@ def main() -> int:
                   "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
                   "partition_file": out / "partition.json", "program_file": out / "program.json", **form}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
-                            "header": a0.public_header(d, n), "salt_key": salt_key, "rows": kv["rows"]})
+                            "header": a0.public_header(d, n), "rows": kv["rows"]})
             print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
                   f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
             lo += n
@@ -1049,7 +1048,7 @@ def main() -> int:
                                 bind={"partition": P.digest(tpart), "program": tpart["program"]}, layout=a.layout,
                                 structural=a.structural)
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
-        stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
+        stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, range(tn), set_name)
         (d / "inst.bin").rename(d / f"inst-{tn}.bin")
         (d / "pub.bin").rename(d / f"pub-{tn}.bin")
         (d / "tables").mkdir(exist_ok=True)

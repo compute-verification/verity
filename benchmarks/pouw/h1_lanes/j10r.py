@@ -254,7 +254,7 @@ def statement(ctx: Ctx, tag: str, w: World, ln: int | None, ch: int | None) -> d
     reg = {p: {"value": o["value"], "positions": [o["position"]], "paths": [o["path"]]} for p, o in {**ins, **outs}.items()}
     t0 = time.time()
     d = ctx.work / "st" / tag
-    got = st.stage(rows, d, os.urandom(32), salts={p: [o["salt"]] for p, o in {**ins, **outs}.items()}, indices=[0],
+    got = st.stage(rows, d, salts={p: [o["salt"]] for p, o in {**ins, **outs}.items()}, indices=[0],
                    set_name=f"h1-lanes-{tag}", tables=rows, refs={p: [0] for p in rows}, registered=reg)
     (d / "circuit.txt").unlink(missing_ok=True)
     (d / "circuit.txt").symlink_to(st.circuit)

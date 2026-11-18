@@ -135,7 +135,7 @@ def test_shared_rows_are_tables_and_refs(tmp_path):
     pick, j = [0, 1, 0, 1], meta["input_ports"]
     rows = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for nm, _ in ports[:j]}
     outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for p in s.subcircuit.outputs}
-    head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, share_rows=True, rows=rows, outs=outs)
+    head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", share_rows=True, rows=rows, outs=outs)
     assert head["shared_rows"] == {nm: 2 if k < j else 4 for k, (nm, _) in enumerate(ports)}, "an output row is its instance's own"
     assert_public_only(text, *((tmp_path / f).read_bytes() for f in ("inst.bin", "pub.bin")))
     prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
@@ -148,7 +148,7 @@ def test_shared_rows_are_tables_and_refs(tmp_path):
         table = np.frombuffer(prover[at:at + 2 * head["shared_rows"][nm] * w], dtype="<u2").reshape(-1, w)
         assert (table[:, :rows[nm].shape[1]] == rows[nm][:2]).all() if k < j else (table[:, :outs[nm].shape[1]] == outs[nm]).all()
         at += table.nbytes
-    per = FC.write(text, s, 0, 4, None, tmp_path / "per.bin", b"k" * 32, rows=rows, outs=outs)
+    per = FC.write(text, s, 0, 4, None, tmp_path / "per.bin", rows=rows, outs=outs)
     assert "shared_rows" not in per and per["frame_v3"]["roots"] != head["frame_v3"]["roots"]
 
 
@@ -226,14 +226,14 @@ def test_the_header_carries_an_rfc8785_identifier(tmp_path):
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
     ident = {"scheme": "test/identifier/v0", "s": 7, "U": [3, 1, 2], "nested": {"b": None}}
-    assert FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, identifier=ident)["identifier"] == ident
+    assert FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", identifier=ident)["identifier"] == ident
     for f in ("inst.bin", "pub.bin"):
         assert json.loads((tmp_path / f).read_bytes().split(b"\n", 1)[0])["identifier"] == ident
-    assert "identifier" not in FC.write(text, s, 0, 4, None, tmp_path / "plain.bin", b"k" * 32)
+    assert "identifier" not in FC.write(text, s, 0, 4, None, tmp_path / "plain.bin")
     for bad, match in (([1], "not a JSON object"), ({"s": 1.5}, "a float"), ({"s": 2 ** 53}, r"exceeds 2\^53"),
                        ({"s": "café"}, "not ASCII")):
         with pytest.raises(ValueError, match=match):
-            FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", b"k" * 32, identifier=bad)
+            FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", identifier=bad)
 
 
 PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
