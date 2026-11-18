@@ -86,6 +86,17 @@ def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
   let h := (data.get! 0).toNat * 256 + (data.get! 1).toNat
   return (Array.range (16 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
+/-- The source kind a supplied input's `le` value takes (`ofMark`): its bytes, read by `leLeaves`. No scheme names it. -/
+def LE : String := "le"
+
+/-- `registered.le_leaves`, §5.4's `le`: `data` as one little-endian bit string (bit `t` is bit `t mod 8` of byte
+`t / 8`), leaf `i` its bits `[i·bits, (i+1)·bits)`. -/
+def leLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
+  if !([1, 8, 16, 32, 64].contains bits && (8 * data.size) % bits == 0) then
+    throw s!"{data.size} bytes are no whole leaves of {bits} bits"
+  let x := data.toList.reverse.foldl (fun acc b => acc * 256 + b.toNat) 0
+  return (Array.range (8 * data.size / bits)).map fun i => x / 2 ^ (bits * i) % 2 ^ bits
+
 /-- A row's bytes as the parameter's leaves of `bits` bits: one 16-bit half's (`halfLeaves`) where it is two bytes,
 else its 32-bit halves' (`bytesLeaves`). -/
 def leavesOf (data : ByteArray) (bits : Nat) : V (Array Nat) :=
@@ -140,7 +151,7 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
     if kind == "window" then
       if name.isEmpty then throw s!"supplied value {value}: window {name} is no bytes"
       return (← runSalt (← Flock.unhex name) binding (getD rec "window"))
-    let text ← if kind == "bytes" then pure (Json.str name) else do
+    let text ← if kind == "bytes" || kind == LE then pure (Json.str name) else do
       if kind == "value" && supplied.contains name then
         throw s!"supplied value {value} reads supplied value {name}'s root"
       let (field, key) := if kind == "port" then ("roots", "port") else ("registered", "value")
@@ -160,7 +171,8 @@ def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
     let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
-    if digests p.ty then digestLeaves data else leavesOf data w
+    if !r.isEmpty && r.all (·.1 == LE) then leLeaves data w
+    else if digests p.ty then digestLeaves data else leavesOf data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
 def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=
@@ -202,5 +214,105 @@ def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (
     Flock.Registered.leafAs schema dom i (Flock.Hm96.Default512.treeLeaf
       (Flock.Hm96.Default512.commitString (rowDigest schema r want.wordBits) (salt program value i)))
   return Flock.hexOf (Flock.FV3.root dom leaves Flock.Sha512.hash)
+
+/-! The registry (`verity/circuits/PROTOCOL.md` §5.4): every function a supplied input of C may name, and the bodies the
+verifier evaluates. C names the function in its input's mark, under its digest, so no scheme passes one. -/
+
+/-- Every function a mark may name, the format's closed list (`verity.circuits.supplied.FUNCTIONS` names the same). -/
+def FUNCTIONS : List String :=
+  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.setup.salt/v1",
+   "poub.read.pub/v1", "poub.read.signs/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
+   "record.root/v1", "log.base/v1", "const.u16/v1"]
+def LAYOUTS : List String := ["le", "halves", "digest"]
+/-- A supplied value is short: at most this many bits, whatever the population; what grows with it is computed in C. -/
+def SHORT_BITS : Nat := 65536
+def SUPPLIED_PREFIX : String := "SuppliedInput"
+
+/-- An input's mark: its function, its arguments, its layout and its value's bits. -/
+structure Mark where
+  fn : String
+  args : Array (String × Json)
+  layout : String
+  bits : Nat
+deriving Inhabited
+
+/-- `registered.mark_of`: a top-level input's mark `{"supplied", "args", "layout", "bits"}`; an error on any other form,
+on a function the registry lacks and on a value that isn't short. -/
+def markOf (name : String) (j : Json) : V Mark := do
+  let .obj kvs := j | throw s!"supplied input {name}: its mark is not an object"
+  let ks := kvs.toArray.map (·.1)
+  if ks.qsort (· < ·) != #["args", "bits", "layout", "supplied"] then
+    throw s!"supplied input {name}: its mark is \{supplied, args, layout, bits}, not {ks.toList}"
+  let .str fn := getD j "supplied" | throw s!"supplied input {name}: its function is not a string"
+  let .obj args := getD j "args" | throw s!"supplied input {name}: its args are not an object"
+  let .str layout := getD j "layout" | throw s!"supplied input {name}: its layout is not a string"
+  let some bits := nat? (getD j "bits") | throw s!"supplied input {name}: its bits are not a natural number"
+  if !FUNCTIONS.contains fn then throw s!"supplied input {name}: {fn} is no supplied function"
+  if !LAYOUTS.contains layout then throw s!"supplied input {name}: {layout} is no layout"
+  if bits == 0 || bits > SHORT_BITS then
+    throw s!"supplied input {name}: {bits} bits is no short value (at most {SHORT_BITS}): a value that grows with the population is computed in C"
+  return { fn, args := args.toArray, layout, bits }
+
+private def callee (callees : Array Json) (n : Json) : String :=
+  match nat? (getD n "fn") with
+  | some i => match callees[i]? with | some (.str s) => s | _ => ""
+  | none => ""
+
+/-- The marks of the program descriptor `desc`'s top-level `inputs` (`[name, nodes]`, a supplied one's
+`[name, nodes, mark]`), by input, each marked input's root nodes all `SuppliedInput<w>_v1` and no other input's one; none
+where it has no `inputs`. -/
+def marks (desc : Json) : V (Array (String × Mark)) := do
+  let .arr xs := getD desc "inputs" | return #[]
+  let .str root := getD desc "root" | throw "the program names no root"
+  let .arr nodes := getD (getD (getD (getD desc "definitions") root) "body") "nodes"
+    | throw "the program's root has no nodes"
+  let .arr callees := getD desc "callees" | throw "the program has no callees"
+  let mut k := 0
+  let mut out := #[]
+  for x in xs do
+    let .arr e := x | throw "an input is not [name, nodes] or [name, nodes, mark]"
+    let some (Json.str name) := e[0]? | throw "an input is not [name, nodes] or [name, nodes, mark]"
+    let some n := e[1]?.bind nat? | throw s!"input {name}: its nodes are not a natural number"
+    let ids := (nodes.extract k (k + n)).map (callee callees)
+    if ids.size != n then throw s!"input {name}: the root has no nodes {k}..{k + n - 1}"
+    let supplied := ids.map (·.startsWith SUPPLIED_PREFIX)
+    match e[2]?, e.size with
+    | none, 2 =>
+      if supplied.any id then throw s!"input {name}: supplied input nodes and no mark naming their function"
+    | some m, 3 =>
+      if !supplied.all id then throw s!"input {name}: marked supplied, and its nodes are not all supplied inputs"
+      out := out.push (name, ← markOf name m)
+    | _, _ => throw s!"input {name}: an input is [name, nodes] or [name, nodes, mark]"
+    k := k + n
+  return out
+
+private def argNat (v : String) (m : Mark) (a : String) : V Nat := do
+  if m.args.map (·.1) != #[a] then throw s!"supplied input {v}: {m.fn} takes the args [{a}]"
+  let some x := (m.args.find? (·.1 == a)).bind (nat? ·.2) | throw s!"supplied input {v}: {m.fn}'s {a} is no natural"
+  return x
+
+/-- A function's value: `const.u16/v1`'s `value` as a u16 little-endian; `pous.setup.salt/v1` the coin the verifier holds
+for it, 24 bytes (`coins`, the memory attester's salt, drawn after W's commitment). "no statement" for any function whose
+body isn't written. -/
+def value (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V ByteArray := do
+  match m.fn with
+  | "const.u16/v1" =>
+    let x ← argNat v m "value"
+    if x ≥ 2 ^ 16 then throw s!"supplied input {v}: no statement: {x} is no u16"
+    return ⟨#[(x % 256).toUInt8, (x / 256).toUInt8]⟩
+  | "pous.setup.salt/v1" =>
+    if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
+    let some (_, c) := coins.find? (·.1 == m.fn) | throw s!"supplied input {v}: no statement: the verifier holds no coin for {m.fn}"
+    if c.size != 24 then throw s!"supplied input {v}: no statement: {m.fn}'s coin is {c.size} bytes, not 24"
+    return c
+  | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
+
+/-- A supplied input's one row of sources (`Rows`): its value under its layout, `le` as the `le` source and `halves` and
+`digest` as the verifier's bytes, its bits the mark's. -/
+def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Rows := do
+  let data ← value coins v m
+  if 8 * data.size != m.bits then
+    throw s!"supplied input {v}: {m.fn}'s value is {8 * data.size} bits, and the mark says {m.bits}"
+  return #[#[(if m.layout == "le" then LE else "bytes", Flock.hexOf data)]]
 
 end Spot.Supplied

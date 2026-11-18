@@ -65,13 +65,15 @@ proof block's seed then reads the roots its operands are committed under, which 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-from verity.circuits.codec import canonical_json, jcs_domain_error
+from verity.circuits import supplied as SU
+from verity.circuits.codec import canonical_json, descriptor_chunks, jcs_domain_error
 from verity.circuits.partition_object import TemplatePartition
 from verity.circuits.program import Program
 from verity.circuits.refs import runs as ref_runs
@@ -98,6 +100,10 @@ WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
 SOURCES = ("port", "value", "bytes", "position", "window")
+#: the source kind a supplied input's `le` value takes (`of_mark`), read by `le_leaves`; no scheme names it
+LE = "le"
+#: a supplied value is short: at most this many bits, whatever the population (`Supplied.SHORT_BITS`)
+SHORT_BITS = 65536
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
 _DEC = re.compile(r"0|[1-9][0-9]*")
@@ -323,6 +329,11 @@ def half_leaves(data: bytes, bits: int) -> list[int]:
     return [(h >> (bits * j)) & ((1 << bits) - 1) for j in range(16 // bits)]
 
 
+def le_leaves(data: bytes, bits: int) -> list[int]:
+    """§5.4's `le` (`Supplied.leLeaves`, `verity.circuits.supplied.leaves`)."""
+    return SU.leaves("le", data, bits)
+
+
 def leaves_of(data: bytes, bits: int) -> list[int]:
     """A row's bytes as the parameter's leaves of `bits` bits: one 16-bit half's (`half_leaves`) where it is two bytes,
     else its 32-bit halves' (`bytes_leaves`; `Supplied.leavesOf`)."""
@@ -393,7 +404,7 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
     own, a position after the log's, or the verifier's coin bound to its binding and the record's window; ValueError
     where there is none."""
     rec = rec if isinstance(rec, Mapping) else {}
-    if kind == "bytes":
+    if kind in ("bytes", LE):
         return _hex_bytes(value, kind, name, name)
     if kind == "window":
         return window_salt(_hex_bytes(value, kind, name, name), rec.get("window"), binding)
@@ -427,8 +438,119 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    leaves = digest_leaves if digests(t) else (lambda data: leaves_of(data, w))
-    return [leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row)) for row in rows]
+    def leaves(row: Sequence[tuple[str, str]], data: bytes) -> list[int]:
+        if row and all(k == LE for k, _ in row):
+            return le_leaves(data, w)
+        return digest_leaves(data) if digests(t) else leaves_of(data, w)
+    return [leaves(row, b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row))
+            for row in rows]
+
+
+def marks(desc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The marks of a program descriptor's top-level `inputs` by input, each marked input's root nodes all
+    `SuppliedInput<w>_v1` and no other input's one (`Supplied.marks`); ValueError otherwise, and on a function the registry
+    lacks or a value that is not short."""
+    xs = desc.get("inputs")
+    if xs is None:
+        return {}
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    callees = desc["callees"]
+    out, k = {}, 0
+    for e in xs:
+        name, n = e[0], e[1]
+        ids = [callees[nd["fn"]] for nd in nodes[k:k + n]]
+        if len(ids) != n:
+            raise ValueError(f"input {name}: the root has no nodes {k}..{k + n - 1}")
+        supplied = [i.startswith("SuppliedInput") for i in ids]
+        if len(e) == 2:
+            if any(supplied):
+                raise ValueError(f"input {name}: supplied input nodes and no mark naming their function")
+        elif len(e) == 3:
+            if not all(supplied):
+                raise ValueError(f"input {name}: marked supplied, and its nodes are not all supplied inputs")
+            out[name] = mark_of(name, e[2])
+        else:
+            raise ValueError(f"input {name}: an input is [name, nodes] or [name, nodes, mark]")
+        k += n
+    return out
+
+
+def mark_of(name: str, m: Any) -> dict[str, Any]:
+    """A top-level input's mark (`Supplied.markOf`): `{"supplied", "args", "layout", "bits"}`, its function one of the
+    registry's, its value short."""
+    if not (isinstance(m, Mapping) and set(m) == {"supplied", "args", "layout", "bits"}):
+        raise ValueError(f"supplied input {name}: its mark is {{supplied, args, layout, bits}}, not {m!r}")
+    if m["supplied"] not in SU.FUNCTIONS:
+        raise ValueError(f"supplied input {name}: {m['supplied']} is no supplied function")
+    if m["layout"] not in SU.LAYOUTS:
+        raise ValueError(f"supplied input {name}: {m['layout']} is no layout")
+    if not (type(m["bits"]) is int and 0 < m["bits"] <= SHORT_BITS):
+        raise ValueError(f"supplied input {name}: {m['bits']} bits is no short value (at most {SHORT_BITS}): a value that "
+                         "grows with the population is computed in C")
+    return dict(m)
+
+
+def mark_value(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> bytes:
+    """A supplied function's value (`Supplied.value`): `const.u16/v1`'s `value` as a u16 little-endian, and
+    `pous.setup.salt/v1` the verifier's coin for it, 24 bytes; ValueError naming "no statement" for any other."""
+    if m["supplied"] == "const.u16/v1":
+        x = m["args"].get("value") if set(m["args"]) == {"value"} else None
+        if type(x) is not int or x < 0:
+            raise ValueError(f"supplied input {name}: const.u16/v1 takes the args [value]")
+        if x >= 1 << 16:
+            raise ValueError(f"supplied input {name}: no statement: {x} is no u16")
+        return x.to_bytes(2, "little")
+    if m["supplied"] == "pous.setup.salt/v1":
+        if m["args"]:
+            raise ValueError(f"supplied input {name}: pous.setup.salt/v1 takes no args")
+        c = coins.get(m["supplied"])
+        if c is None:
+            raise ValueError(f"supplied input {name}: no statement: the verifier holds no coin for pous.setup.salt/v1")
+        if len(c) != 24:
+            raise ValueError(f"supplied input {name}: no statement: pous.setup.salt/v1's coin is {len(c)} bytes, not 24")
+        return bytes(c)
+    raise ValueError(f"supplied input {name}: no statement: {m['supplied']}'s body is not the verifier's yet")
+
+
+def of_mark(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list[list[tuple[str, str]]]:
+    """A supplied input's one row of sources (`Supplied.ofMark`): its value, `le` as the `LE` source, else as the
+    verifier's bytes."""
+    data = mark_value(coins, name, m)
+    if 8 * len(data) != m["bits"]:
+        raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * len(data)} bits, and the mark says "
+                         f"{m['bits']}")
+    return [[(LE if m["layout"] == "le" else "bytes", data.hex())]]
+
+
+def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],
+                coins: Mapping[str, str] | None) -> dict[str, list[list[tuple[str, str]]]]:
+    """The rows of `program`'s supplied inputs (`marks`), each its function's value under the verifier's `coins`
+    (`{function: hex}`; `OneStage.markedRows`): ValueError where the verifier registers no read of the input, where
+    `supplied` (the scheme's) has rows for it too, or where its layout is `digest` and its leaves aren't whole digests or
+    the other way round."""
+    got = marks(json.loads(b"".join(descriptor_chunks(program))))
+    if not isinstance(coins or {}, Mapping):
+        raise ValueError("coins are an object of hex by supplied function")
+    held = {}
+    for f, h in (coins or {}).items():
+        if f not in SU.FUNCTIONS:
+            raise ValueError(f"coins: {f} is no supplied function")
+        held[f] = _hex_bytes(f, "coin", f, h)
+    params = dict(program.fn.signature()[0])
+    out = {}
+    for v, m in got.items():
+        if v not in registered:
+            raise ValueError(f"supplied input {v}: the verifier registers no read of it: a supplied input is read only "
+                             "through a port of the verifier's own registered reads")
+        if v in supplied:
+            raise ValueError(f"supplied input {v}: C's mark names its function, and the scheme supplies rows for it too")
+        if v not in params:
+            raise ValueError(f"supplied input {v} is not a parameter of the program")
+        if (m["layout"] == "digest") != digests(params[v]):
+            raise ValueError(f"supplied input {v}: layout {m['layout']} reads whole digests only into a parameter of "
+                             "whole digests")
+        out[v] = of_mark(held, v, m)
+    return out
 
 
 def _in_format(program: Program, value: str, got: list[list[int]], word_bits: int, schema: str) -> list[list[int]]:
