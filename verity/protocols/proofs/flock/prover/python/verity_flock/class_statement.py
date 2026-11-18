@@ -214,7 +214,9 @@ class Wiring:
 
     ``tree`` (`registered.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
     instance's ``out`` row is its leaf's row under its leaf's salt, and each link row the writer's leaf, opened by path in
-    the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement."""
+    the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement.
+    Since a verifier given registered reads reads every port by path, each other input port is registered too, a value of
+    the statement's own table rows; `stage` returns the verifier's ports as ``registered_reads``."""
     program: Any
     query: dict
     indices: Sequence[int]
@@ -786,6 +788,16 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                 at.append(w)
             if tree is not None:
                 registered[f"p{i}"] = {"value": tree.value, "positions": at, "paths": [tree.path(w).hex() for w in at]}
+        if tree is not None:
+            own_reads = {out_name: {**tree.entry(), "reads": [leaf.get(u) for u in range(tp.population)]}}
+            own_reads |= {f"p{i}": {**tree.entry(), "tree": {"template": definition, "field": out_name}, "reads": []}
+                          for i, ws in enumerate(writers) if ws is not None}
+            for p in sorted(set(tables) - set(registered)):
+                reg = type(tree).commit(tree.program, f"{definition}/{name}/{p}", tables[p].tolist(), salts=salts[p])
+                registered[p] = {"value": reg.value, "positions": list(range(reg.leaves)),
+                                 "paths": [reg.path(r).hex() for r in range(reg.leaves)]}
+                at = dict(zip(wiring.indices, (int(x) for x in refs[p])))
+                own_reads[p] = {**reg.entry(), "reads": [at.get(u) for u in range(tp.population)]}
     if not share_rows and tree is None:
         tables = refs = None
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", rows=per_port, outs={"out": outs},
@@ -797,7 +809,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
         ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {}) | \
-        ({"links": links, "definition": definition} if wiring is not None else {})
+        ({"links": links, "definition": definition} if wiring is not None else {}) | \
+        ({"registered_reads": own_reads} if tree is not None else {})
 
 
 def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,

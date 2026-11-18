@@ -116,14 +116,6 @@ def _cut(lanes: tuple, lo: int, hi: int) -> tuple:
     return tuple([p[lo:hi] for p in part] for part in lanes)
 
 
-def _reads(tree: RG.Registered, template: str, port: str | None) -> dict:
-    """The verifier's own `--registered` file for a statement of this program: every unit's output row at its leaf, and the
-    link row ``port`` a tree port of the template's output field."""
-    ext = {**RG.width_entry(RG.WORD_BITS), **RG.schema_entry(RG.SCHEMA)}
-    ports = {} if port is None else {port: {**tree.entry(), **ext, "tree": {"template": template, "field": "out"}, "reads": []}}
-    return {"format": RG.READS, "ports": {**ports, "out": {**tree.entry(), **ext, "reads": list(range(tree.leaves))}}}
-
-
 def _stage(topo, d: Path, wired: bool):
     """The program, its partition and the stagings: honest (with `Wiring`), and with ``wired`` the writers (layer 0, its
     output rows the tree's), the two cheats among layer 1's statements (x reads layer 0's outputs flipped; the honest rows
@@ -168,8 +160,8 @@ def _stage(topo, d: Path, wired: bool):
         _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
         bc = hm96.SHA512.commit_string(hm96.SHA512.default_key, RG.row_digest([1 - b for b in tree.rows[0]]), tree.salts[0])
         _edit(d / "honest", d / "other_words", N, port, rows={0: bc})
-        (d / "writers.reads.json").write_text(json.dumps(_reads(tree, template, None)))
-        (d / "readers.reads.json").write_text(json.dumps(_reads(tree, template, port)))
+        for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
+            (d / f"{name}.reads.json").write_text(json.dumps({"format": RG.READS, "ports": st[k]["registered_reads"]}))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
@@ -283,8 +275,8 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
 
     ok, out = at("writers", *bound, reads="writers.reads.json")
     assert ok is not None and ok["partition_check"]["units"] == "derived", out
-    for name in ("honest", "own"):
-        ok, out = at(name, *bound)
+    for name, reads in (("honest", "readers.reads.json"), ("own", "own.reads.json")):
+        ok, out = at(name, *bound, reads=reads)
         assert ok is not None, out
         note = ok["partition_check"]["note"]
         assert ok["partition_check"]["units"] == "derived" and f"Linking checked: {N} cut wire(s)" in note and "unit-class/" in note
