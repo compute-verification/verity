@@ -856,7 +856,7 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
       | some S =>
         if s.homo? l.p l.i == some w then some true else
         let (lo, hi) := l.bounds run
-        if lo < 0 then none else laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv true
+        laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv true
     let vs := lanes.map verdict
     if vs.all (· == some true) then return true
     if vs.any (· == some false) then return false

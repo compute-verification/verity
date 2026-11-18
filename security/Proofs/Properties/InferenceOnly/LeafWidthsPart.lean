@@ -454,6 +454,9 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     have ht' : k / (lanes.size * run) < (lanes[m]!).periods := by
       rw [hgr _ hlmem]; exact Nat.div_lt_of_lt_mul hk
     have hmem := Walk.leafAt_mem (lanes[m]!) (Nat.mod_lt k hrun) ht'
+    have hnn : 0 ≤ (lanes[m]!).leafAt (k / (lanes.size * run)) (k % run) := by
+      have hq' : ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o := hq
+      exact hq' _ hlmem _ (by rw [hP]; exact Nat.div_lt_of_lt_mul hk) _ (Nat.mod_lt k hrun)
     obtain ⟨t₀, ht₀, o₀, ho₀, he₀⟩ := Walk.leafAt_top (lanes[m]!) hrun (Nat.lt_of_le_of_lt (Nat.zero_le _) ht')
     obtain ⟨i1, i2, i3⟩ := grid_index lanes.size run m o₀ t₀ hm ho₀
     have hk₀ : t₀ * (lanes.size * run) + (m * run + o₀) < (Part.grid run lanes).count := by
@@ -494,7 +497,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
         have hl := hall m (by rw [Array.size_map]; exact hm)
         simp only [Array.getElem_map] at hl
         rw [← getElem!_pos lanes _ hm] at hl
-        generalize lanes[m]! = l at hl hmem hS hhomo hj hj₀ ht' ⊢
+        generalize lanes[m]! = l at hl hmem hnn hS hhomo hj hj₀ ht' ⊢
         try dsimp only at hl
         rw [hS] at hl
         try dsimp only at hl
@@ -504,15 +507,13 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
           rcases hbd : l.bounds run with ⟨lo, hi'⟩
           simp only [hbd] at hl hmem hj₀
           try dsimp only at hl hmem hj₀
-          split at hl
-          next => simp at hl
-          next hlo0 =>
-            have hlo : 0 ≤ lo := by omega
-            have hl' : Widths.laneWidth S wd lo.toNat hi'.toNat l.b run l.e l.lv true = some true := by
-              simpa using hl
-            exact laneWidth_sound hl' hj₀ ht' (Nat.mod_lt k hrun)
-              (by rw [Int.toNat_of_nonneg hlo]; exact hmem.1)
-              (le_trans hmem.2 (Int.self_le_toNat hi'))
+          have hl' : Widths.laneWidth S wd lo.toNat hi'.toNat l.b run l.e l.lv true = some true := by
+            simpa using hl
+          have hlo : ((lo.toNat : ℕ) : ℤ) ≤ l.leafAt (k / (lanes.size * run)) (k % run) := by
+            rcases le_or_gt 0 lo with h0 | h0
+            · rw [Int.toNat_of_nonneg h0]; exact hmem.1
+            · rw [Int.toNat_of_nonpos h0.le]; exact_mod_cast hnn
+          exact laneWidth_sound hl' hj₀ ht' (Nat.mod_lt k hrun) hlo (le_trans hmem.2 (Int.self_le_toNat hi'))
       next =>
         split at h
         next => exact absurd (m_pure h).1 (by simp)
