@@ -19,18 +19,18 @@ through an instance yet: each still stands in its own form.
   work) sets `over` the credit and `under` the spend. The sides are naturals: a guarantee with a factor rescales its
   own side into the common unit, and the structure carries no factor.
 * `Scheme.missable`: the largest cost of a block set a sample misses with probability above a cutoff.
-* `AuditBoundAt`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is
+* `AuditBound`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is
   accepted while its design's sample misses its incorrect blocks with probability at most `δ`, with probability at
   most `δ + ε`, `ε` the audit's own error. The design is the run's: a scheme whose design follows what the run
   recorded before the coin (a prover's declarations) reads it from the run, and whoever proves the bound shows the
-  design was fixed before the coin. `AuditBound` is the same under one design for every run. The incorrect blocks are
+  design was fixed before the coin; an audit with one design passes `fun _ => L`. The incorrect blocks are
   those of the run's committed values, so an accepted run's committed values are correct outside a set the sample
   would likely have hit. A scheme that bounds something other than a
   cost (the bits an accepted record can carry) reads this directly.
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
   log meets the scheme's conditions has `over` above `under` by more than the missable cost under its own design plus
   the charges with probability at most `δ` plus the audit's error plus the scheme's own term.
-* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBoundAt` at its accepted
+* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
   runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
 * `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer`: the same over a period of execution phases, by the union bound over
   the phases: the probability is `T` times one phase's, and the phases' provers may adapt to one another.
@@ -52,14 +52,9 @@ open scoped ENNReal
 /-- **What the audit gives every scheme**: under each run's sampling design `L r` over the blocks `U` and the audit
 game's probability `pr` on runs, at every cutoff `δ` a run is accepted while its design's sample misses its incorrect
 blocks with probability at most `δ`, with probability at most `δ + ε`. -/
-def AuditBoundAt {U Run : Type} (L : Run → SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
+def AuditBound {U Run : Type} (L : Run → SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
     (incorrect : Run → Finset U) (ε : ℝ≥0∞) : Prop :=
   ∀ δ : ℝ≥0∞, pr (fun r => accepts r ∧ (L r).missProb (incorrect r) ≤ δ) ≤ δ + ε
-
-/-- **The audit's bound under one design**: `AuditBoundAt` where every run's design is `L`. -/
-def AuditBound {U Run : Type} (L : SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
-    (incorrect : Run → Finset U) (ε : ℝ≥0∞) : Prop :=
-  AuditBoundAt (fun _ => L) pr accepts incorrect ε
 
 /-- **A scheme**: what a resource accounting protocol supplies to the proof layers. -/
 structure Scheme where
@@ -114,7 +109,7 @@ def AccountingLayer : Prop :=
   ∀ (S : Scheme) (L : S.Run → SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (ε : ℝ≥0∞),
     (∀ p q : S.Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
     (∀ p q : S.Run → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
-    AuditBoundAt L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
+    AuditBound L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
 
 /-- **What a scheme gets back over a period** of `T` execution phases, each a run of the scheme read from the period's
 run `r` by `phase t`: at cutoff `δ`, some phase is accepted with a log that meets the conditions and has `over` above

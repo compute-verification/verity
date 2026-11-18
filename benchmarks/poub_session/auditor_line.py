@@ -56,7 +56,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
-  descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
+  descriptor of the verifier that ran it, `<audit.PROTOCOL_ID> verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/protocols/resource_accounting/memory/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
