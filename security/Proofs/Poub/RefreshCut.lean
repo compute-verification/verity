@@ -143,8 +143,8 @@ theorem prefix_origin_reads_key :
   · intro a κ κ' h
     by_cases ha : a = 4
     · subst ha
-      simp only [if_true, h 3 (by decide)]
-    · simp only [ha, if_false]
+      simp only [ite_true, h 3 (by decide)]
+    · simp only [ha, ite_false]
   · intro a b hab
     have : (a : ℕ) ≤ b := hab
     dsimp only
