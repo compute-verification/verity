@@ -422,11 +422,11 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
-    ms = [replace(m, tables=tuple((p, m.n) for p, _ in m.rows)) if not m.tables and n_of[m.template] != m.n else m for m in ms]
+    ms = CH.shared_tables(ms)
     program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
-        table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
+        table = {PO.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
     sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
     window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
@@ -675,7 +675,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                   arrivals: dict[str, int] | None = None, weight_values: Mapping[str, Any] | None = None,
                   tables: Mapping[str, Any] | None = None, histories: Any = None, on: bool = False) -> tuple[
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
-                      IF.Registered | None]:
+                      IF.Registered | None, CS.Binding]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
     with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
     holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
@@ -683,7 +683,8 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
     header entries, the registered roots, ``salts_of`` and ``strings_of`` (`rows.commit`'s: a history writer's rows its
-    table's), each member's index entries and the history tables' declarations (`history_rows.declarations`))."""
+    table's), each member's index entries, the history tables' declarations (`history_rows.declarations`) and ``window``
+    with each port given by reference named in its member's ``values``)."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     if on != (histories is not None):
@@ -713,13 +714,14 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
+    window = WT.valued(window, data)
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
         salts_of = {**salts_of, **hs}
         roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp}}
-    return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg
+    return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg, window
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
@@ -755,8 +757,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                               rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
-    data, entries, roots, salts_of, strings_of, idx, hreg = window_values(window, rows, store, weights, arrivals, weight_values,
-                                                                          tables, histories, HR.on(pf))
+    data, entries, roots, salts_of, strings_of, idx, hreg, window = window_values(window, rows, store, weights, arrivals,
+                                                                                  weight_values, tables, histories, HR.on(pf))
     t_read = time.perf_counter()
     c = CS.commit(window, data, table_salts=rt.get("salts"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1), salts_of=salts_of, strings_of=strings_of)

@@ -104,4 +104,21 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
     "calibration/hardware/cards",
+    # a profile's --feature is one of verity config check's components, each setting checked by that component's own
+    # check (serve_tax.components): the served table and what it imports; the scheme plugin's table of schemes
+    "tools/verity/cli/verity_cli/__init__.py",
+    "tools/verity/cli/verity_cli/served_table.py",
+    "verity/config.py",
+    "verity/party.py",
+    "verity/runtime",
+    "verity/protocols/compose/__init__.py",
+    "verity/protocols/compose/schemes.py",
+    "verity/protocols/registration",
+    "verity/protocols/workload_classification",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/serving.py",
+    "verity/protocols/resource_accounting/memory/poub",
+    "verity/protocols/resource_accounting/memory/pous/attester",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
 ]

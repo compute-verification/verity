@@ -299,7 +299,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     lsock.close()
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(),
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(a.figures_node),
                               source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
@@ -371,6 +371,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plan", default="serve", help="serve, or servedrop:K")
     ap.add_argument("--codec", default="p512/k2", help="the registration's codec (`wire.codec_named`)")
     ap.add_argument("--node", default="verity-vllm/serve-tiny", help="the node's name in the hello")
+    ap.add_argument("--figures-node", metavar="KIND",
+                    help="with --local: the node file whose figures the verifier reads (`sheets.figures`)")
     ap.add_argument("--windows", type=int, help="with --local (default 3); with --fit: the session's windows")
     ap.add_argument("--window-ns", type=int, default=6, help="with --local: passes a window, a tick each")
     ap.add_argument("--samples", type=int, default=4096, help="with --local")
@@ -397,6 +399,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.prover_rc is None:
             ap.error("--verdict takes --prover-rc")
         return verdict_main(a)
+    if a.local and a.figures_node is None:
+        ap.error("--local takes --figures-node KIND, the node file whose figures its verifier reads")
     if a.windows is None:
         a.windows = 3
     if "," in a.plan:

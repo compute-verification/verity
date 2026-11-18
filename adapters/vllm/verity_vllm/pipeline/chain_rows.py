@@ -45,8 +45,8 @@ that factor and ``in3`` = the O of column block c before it, and returns ``o0`` 
 scores unit's lanes (a split's end its running max too) and the last values unit of its column block's O.  The window wires
 each of those rows to the output row of the unit that wrote it (`wire`, `commit.wiring`), so a sampled proof block's inputs are the
 committed outputs of the units before it: a wire reads its writer's row whole, which is why a split ends in column blocks.  A
-scores or values unit's wired rows have no tree of their own (`rows.Member.wired_trees`): each is its writer's committed
-output row, so every head's units of a key block read its keys from one committed row a column block."""
+wired row has no tree of its own: it is a leaf of its writer template's output tree (`wiring.Wired`), so every head's units
+of a key block read its keys from one committed row a column block."""
 from __future__ import annotations
 
 import re
@@ -497,9 +497,9 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     for m in ms:
         if m.template in writers:
             lo = m.base - base[m.template]
-            m = replace(m, wired=m.wired + tuple((p, o, tuple(int(x) for x in w[lo:lo + m.n])) for p, o, w in writers[m.template]))
+            m = replace(m, wired=m.wired + tuple(x for p, o, w in writers[m.template] for x in pieces(ms, m, p, o, w[lo:lo + m.n])))
         out.append(m)
-    return _held(out, {t for t in of if kind(template(t)) in ("scores", "values")})
+    return out
 
 
 def _key_reads(p: Place, statics: dict[str, Any]) -> list[tuple[str, int]]:
@@ -512,66 +512,116 @@ def _key_reads(p: Place, statics: dict[str, Any]) -> list[tuple[str, int]]:
     return [("kv", p.col)] if p.key[0] == "values" else []
 
 
-def _held(ms: list[CS.Member], held: set[str]) -> list[CS.Member]:
-    """``ms`` with each member of a ``held`` template holding its wired ports in their writers' trees (``wired_trees``
-    false, each such port's table its writer member's units, `rows.Binding.held`): cut where any wired port's writer member
-    changes, until no cut moves another's writers, each cut template's members then named in order (``<template>/c<j>``)."""
-    if not held:
-        return ms
-    while True:
-        at, out, moved = WI.bases(ms), [], False
-        for t, mine in _by_template(ms):
-            if t not in held:
-                out += mine
-                continue
-            pieces = []
-            for m in mine:
-                cut = np.zeros(m.n, dtype=bool)
-                for _p, _o, ws in m.wired:
-                    k = np.searchsorted(at, np.asarray(ws, dtype=np.int64), side="right")
-                    cut[1:] |= k[1:] != k[:-1]
-                ends = [0, *np.flatnonzero(cut).tolist(), m.n]
-                pieces += [replace(m, base=m.base + a, n=b - a, wired=tuple((p, o, ws[a:b]) for p, o, ws in m.wired))
-                           for a, b in zip(ends, ends[1:])]
-            if len(pieces) != len(mine):
-                moved = True
-                pieces = [replace(m, name=f"{t}/c{j}") for j, m in enumerate(pieces)]
-            out += pieces
-        ms = out
-        if not moved:
-            break
-    at = WI.bases(ms)
-
-    def tables(m: CS.Member) -> tuple[tuple[str, int], ...]:
-        of = {p: WI.writers(ms, ws, at)[0][0].n for p, _o, ws in m.wired}
-        return tuple((p, of.get(p, m.n)) for p, _w in m.rows)
-
-    return [replace(m, wired_trees=False, tables=tables(m)) if m.template in held and m.wired else m for m in ms]
-
-
-def _by_template(ms: Sequence[CS.Member]) -> list[tuple[str, list[CS.Member]]]:
-    out: dict[str, list[CS.Member]] = {}
+def owns(ms: Sequence[CS.Member]) -> dict[str, int]:
+    """Each member's first unit among its template's own, by key (``ms`` in root order: `rows.Binding.owns`)."""
+    out, seen = {}, {}
     for m in ms:
-        out.setdefault(m.template, []).append(m)
-    return list(out.items())
+        out[m.key], seen[m.template] = seen.get(m.template, 0), seen.get(m.template, 0) + m.n
+    return out
+
+
+def pieces(ms: Sequence[CS.Member], m: CS.Member, port: str, out: str, writers: Sequence[int]) -> tuple[WI.Wired, ...]:
+    """Member ``m``'s ``port`` wired to output ``out`` of the units ``writers`` (one a unit of ``m``, units of ``ms`` by
+    `Member.base`) as pieces into their template's tree (`wiring.Wired`), each a run of ``m``'s units whose leaves step
+    evenly. Refused where they are units of no member or of two templates: a port reads one tree."""
+    by = sorted(ms, key=lambda x: x.base)
+    starts, own = np.array([x.base for x in by], dtype=np.int64), owns(ms)
+    g = np.asarray(writers, dtype=np.int64)
+    j = np.searchsorted(starts, g, side="right") - 1
+    if len(g) != m.n or (j < 0).any() or (g >= starts[j] + np.array([by[k].n for k in j])).any():
+        raise ValueError(f"{m.key} {port}: its writers {g[:4].tolist()}... are not one unit of a member each of its {m.n}")
+    tids = {by[k].template for k in set(j.tolist())}
+    if len(tids) != 1:
+        raise ValueError(f"{m.key} {port}: its units read {out!r} rows of templates {sorted(tids)}: a wired port reads one "
+                         "template's tree")
+    leaves = g - starts[j] + np.array([own[by[k].key] for k in j], dtype=np.int64)
+    writer, at, res, i = tids.pop(), own[m.key], [], 0
+    while i < m.n:
+        e = i + 1
+        d = int(leaves[e] - leaves[i]) if e < m.n else 0
+        while e < m.n and leaves[e] - leaves[e - 1] == d:
+            e += 1
+        res.append(WI.Wired(port, writer, out, at + i, (e - i,), int(leaves[i]), (d if e - i > 1 else 0,)))
+        i = e
+    return tuple(res)
+
+
+def validate(ms: Sequence[CS.Member]) -> None:
+    """`wiring.validate` over ``ms`` (in root order) as the whole of their templates' units."""
+    n_of: dict[str, int] = {}
+    for m in ms:
+        n_of[m.template] = n_of.get(m.template, 0) + m.n
+    WI.validate(ms, n_of, owns(ms))
+
+
+def writer_units(ms: Sequence[CS.Member], m: CS.Member) -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    """``m``'s wired ports as ``(port, out, the writer units its units read)``, units of ``ms`` by `Member.base` (`pieces`
+    inverted)."""
+    own = owns(ms)
+
+    def unit(t: str, leaf: int) -> int:
+        (x,) = [x for x in ms if x.template == t and own[x.key] <= leaf < own[x.key] + x.n]
+        return x.base + leaf - own[x.key]
+
+    out = []
+    for port in dict.fromkeys(w.port for w in m.wired):
+        ps = [w for w in m.wired if w.port == port]
+        out.append((port, ps[0].out, tuple(unit(ps[0].writer, int(v)) for v in WI.reads(ps, own[m.key], m.n))))
+    return tuple(out)
+
+
+def shared_tables(ms: Sequence[CS.Member]) -> list[CS.Member]:
+    """``ms`` with each member whose rows lie in trees others share (`rows.Binding.shared`: wired ports, or a template of
+    several members) a shared-row member: a wired port's table the leaves its units read (`wiring.table`), any other
+    port's its table as given, else its units' own rows."""
+    n_of, own = {}, owns(ms)
+    for m in ms:
+        n_of[m.template] = n_of.get(m.template, 0) + m.n
+    out = []
+    for m in ms:
+        if not m.wired and n_of[m.template] == m.n:
+            out.append(m)
+            continue
+        given = dict(m.tables)
+        wired = {w.port: len(WI.table(WI.reads([x for x in m.wired if x.port == w.port], own[m.key], m.n))[0])
+                 for w in m.wired}
+        out.append(replace(m, tables=tuple((p, wired.get(p, given.get(p, m.n))) for p, _w in m.rows)))
+    return out
+
+
+def check_held(ms: Sequence[CS.Member], data: Sequence[dict[str, Any]]) -> None:
+    """Refused where a wired port's rows as read (``data``, each member's, `rows.commit`'s) are not the leaves of its
+    writer's tree its units read (``ms`` in root order)."""
+    trees: dict[tuple[str, str], np.ndarray] = {}
+    own = owns(ms)
+
+    def tree(t: str, o: str) -> np.ndarray:
+        if (t, o) not in trees:
+            trees[t, o] = np.concatenate([np.asarray(d["outs"][o]) for wm, d in zip(ms, data, strict=True) if wm.template == t])
+        return trees[t, o]
+
+    for m, d in zip(ms, data, strict=True):
+        for p in dict.fromkeys(w.port for w in m.wired):
+            ps = [w for w in m.wired if w.port == p]
+            rows = d["rows"].get(p)
+            if rows is not None and not np.array_equal(rows, tree(ps[0].writer, ps[0].out)[WI.reads(ps, own[m.key], m.n)]):
+                raise ValueError(f"{m.key}: its {p!r} rows are not the {ps[0].out!r} rows of the {ps[0].writer} units that "
+                                 "write them")
 
 
 def held_rows(window: CS.Binding, data: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """``data`` (each member's rows as read, `rows.commit`'s) with each port a member holds in its writer's tree
-    (`rows.Binding.held`) given as `rows.WIRED`, the member's ``refs`` each port's leaves (`rows.Binding.held_leaves`);
-    refused where a held port's rows as read are not its writer units' output rows."""
-    outs = {wm.port(o): (j, o) for j, wm in enumerate(window.members) for o, _w in wm.outs}
+    """``data`` (each member's rows as read, `rows.commit`'s) with each wired port given as `rows.WIRED` and each
+    shared-row member's ``refs`` its wired ports' (`rows.Binding.refs`) beside the refs it was read with; refused where
+    `check_held` refuses."""
+    check_held(window.members, data)
     out = []
     for m, d in zip(window.members, data, strict=True):
-        if m.wired_trees or not m.wired:
+        if not m.tables:
             out.append(d)
             continue
-        rows = dict(d["rows"])
-        for p, _o, _ws in m.wired:
-            j, o = outs[window.held(m, p)]
-            if not np.array_equal(rows[p], np.asarray(data[j]["outs"][o])[list(window.held_leaves(m, p))]):
-                raise ValueError(f"{m.key}: its {p!r} rows are not the {o!r} rows of the {window.members[j].key} units that write them")
-            rows[p] = CS.WIRED
-        refs = np.stack([np.asarray(window.held_leaves(m, p), dtype=np.int64) for p, _w in m.rows], axis=1)
+        rows, names = dict(d["rows"]), [p for p, _w in m.rows]
+        refs = np.array(d["refs"], dtype=np.int64) if "refs" in d else np.repeat(np.arange(m.n)[:, None], len(names), axis=1)
+        for p in dict.fromkeys(w.port for w in m.wired):
+            rows[p], refs[:, names.index(p)] = CS.WIRED, window.refs(m, p)
         out.append({**d, "rows": rows, "refs": refs})
     return out

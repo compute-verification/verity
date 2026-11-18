@@ -93,6 +93,16 @@ def reads(members: Sequence[CS.Member], rows: Sequence[list[Row]],
     return IF.Registered({p: params[p] for p in sorted({x.param for x in got})}, reads=tuple(got)) if got else None
 
 
+def valued(window: CS.Binding, data: Sequence[dict[str, Any]]) -> CS.Binding:
+    """``window`` with each member's ports that ``data`` (`by_reference`'s) gives as `rows.ValueRows` named in its
+    ``values``."""
+    vs = [tuple(p for p, _w in m.rows if isinstance(d["rows"].get(p), CS.ValueRows))
+          for m, d in zip(window.members, data, strict=True)]
+    if not any(vs):
+        return window
+    return replace(window, members=tuple(replace(m, values=v) for m, v in zip(window.members, vs, strict=True)))
+
+
 def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Sequence[dict[str, Any]],
                  values: Mapping[str, Any] | None, ranges: Sequence[tuple[str, int, int]]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str],
                                                             dict[str, bytes]]:

@@ -120,8 +120,10 @@ else:
     os.makedirs(os.path.dirname(record), exist_ok=True)
     commit = os.path.dirname(record)
     os.makedirs(f"{commit}/windows/w0", exist_ok=True)
-    for name, body in (("verdict.json", "{}"), ("summary.md", "ok"), ("commit.log", "ok"), ("windows/w0/rows.salts", "s"),
-                       ("dump_step0_pair0_x.bin", "v"), ("sampled_replay_p0.json", "{}"), ("binding_map_p0.json", "{}")):
+    for name, body in (("verdict.json", "{}"), ("steps.jsonl", "{}"), ("runs.jsonl", '{"tokens_digest": "00"}'),
+                       ("summary.json", "{}"), ("summary.md", "ok"), ("commit.log", "ok"), ("versions.json", "{}"),
+                       ("windows/w0/rows.salts", "s"), ("dump_step0_pair0_x.bin", "v"), ("sampled_replay_p0.json", "{}"),
+                       ("binding_map_p0.json", "{}"), ("memory_map.jsonl", "{}")):
         with open(f"{commit}/{name}", "w") as f:
             f.write(body)
 if mode in ("crash", "commitfail"):
@@ -228,7 +230,8 @@ class Node:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
-                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0"}
+                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
+                "NODE_KIND": "rtx-pro-6000-server-x8"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
 
@@ -424,7 +427,8 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     # kv.cu's build, the Build with no GPU visible and the verifier all before the lease; the Commit alone under it
     assert calls == [nvcc, "row build", "verifier", lease, "row commit"]
     kept = sorted(str(f.relative_to(node.out / "row")) for f in (node.out / "row").rglob("*") if f.is_file())
-    assert kept == [f"commit/{n}" for n in ("commit.log", "remote_session.json", "summary.md", "verdict.json")], kept
+    assert kept == [f"commit/{n}" for n in ("remote_session.json", "steps.jsonl", "verdict.json")], kept
+    assert not (node.out / "row" / "commit" / "runs.jsonl").exists()
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
     assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
@@ -703,7 +707,8 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
-            "--lean-exe", str(lv.build())]
+            "--lean-exe", str(lv.build()),
+            "--figures", str(ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json")]
     verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
