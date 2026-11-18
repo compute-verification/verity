@@ -191,7 +191,10 @@ def prove_block(member: Any) -> dict[str, Any]:
         raise Stop(f"prove: the prover's C_S for block {member.base} ({R.__file__}:restrict): {e}") from e
     values = by_gate(block)
     D = R.program(block.descriptor)
-    fn = D.defs[D.program_fn_id]
+    calls = [n.fn for n in D.root.body.nodes if n.form == "call"]
+    if len(calls) != 1:
+        raise AssertionError(f"C_S's root makes {len(calls)} calls, not one of the block's Definition")
+    fn = calls[0]
     params, ret = fn.signature()
     if any(t.homogeneous_width() != 16 for _p, t in [*params, (None, ret)]):
         raise Stop(f"prove: C_S of block {member.base} has a port of other than 16-bit words")
