@@ -131,10 +131,12 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
         return {**SP.python_answer(doc), "drawn": doc["draws"], **kw}
 
     values = {"python": sys.executable, "commit": "0" * 7}
-    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(honest), "dir": str(honest.parent)}) for x in c]
+    said_honest = V.verdicts_dir(tmp_path / "run", "transcripts/arm/shape/manifest.json")
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(honest), "dir": str(honest.parent),
+                                               "verdicts": str(said_honest)}) for x in c]
                           for c in OA.verifier()["commands"])
     twin = run(twin_cmd, "--test-instance")
-    doc = json.loads((honest.parent / "pearlplus-verify.json").read_text())
+    doc = json.loads((said_honest / "pearlplus-verify.json").read_text())
     assert twin["exit"] == 0 and doc["answer"]["verdict"] == "accept", twin["lines"]
     assert V.judge(honest, [twin], "shape")["why"] == f"no line starting ACCEPT names sha256:{V.sha256_file(honest)}"
     agreed = lean(lean_cmd, printout(doc), 0)
@@ -147,10 +149,12 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
         assert V.judge(honest, [twin, refused], "shape") == {"sha256": V.sha256_file(honest), "exits": [0, 2],
                                                              "accepted": False, "why": "a verifier command exited [0, 2]"}
 
-    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(control), "dir": str(control.parent)}) for x in c]
+    said_control = V.verdicts_dir(tmp_path / "run", "negative/arm/shape/manifest.json")
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(control), "dir": str(control.parent),
+                                               "verdicts": str(said_control)}) for x in c]
                           for c in OA.verifier()["commands"])
     twin = run(twin_cmd, "--test-instance")
-    doc = json.loads((control.parent / "pearlplus-verify.json").read_text())
+    doc = json.loads((said_control / "pearlplus-verify.json").read_text())
     assert twin["exit"] == 1 and doc["answer"]["verdict"] == "reject", twin["lines"]
     assert not V.judge_control(control, [twin])["rejected"]
     agreed = lean(lean_cmd, printout(doc), 1)
@@ -471,21 +475,28 @@ def test_the_torch_call_probe_sees_torch_s_python_and_c_calls():
     assert _torch_calls(lambda: t.data_ptr()) and _torch_calls(lambda: torch.zeros(1)) and not _torch_calls(lambda: len([t]))
 
 
+def _salts(yt) -> list[bytes]:
+    """The salts `_YTree` drew for y's rows, `audit.HM96_SALT` bytes each in row order."""
+    kept = yt.salts.cpu().numpy().tobytes()
+    return [kept[i:i + audit.HM96_SALT] for i in range(0, len(kept), audit.HM96_SALT)]
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("m, n", Y_SHAPES)
 def test_the_arm_s_y_tree_is_commit_rows_s_on_the_host_twin(twin_trees, m, n):
     """The arm's y commitment, `_YTree`'s launches from its buffers made beforehand over y's BF16 rows, writes
-    `commit_y`'s whole tree, whose root is `audit.commit_rows`'s over y's FP32 rows under `y_binding` at nonce
-    `HM96_Y` + index, the root the verifier opens y's rows under; and its launch allocates nothing and calls no torch."""
+    `commit_y`'s whole tree under the salts it drew (``salts``), whose root is `audit.commit_rows`'s over y's FP32 rows
+    under `y_binding` and those salts, the root the verifier opens y's rows under; and its launch allocates nothing and
+    calls no torch."""
     import torch
     yt, y, dev = OA._YTree(twin_trees, m, n, OA.INDEX), _y(m, n), twin_trees.run.kernel.dev
     raw = y.contiguous().view(torch.uint8).numpy().tobytes()
     allocs, at, ptr = dev.allocs, len(dev.launched), y.data_ptr()
     assert _torch_calls(lambda: yt.launch(ptr)) == [] and dev.allocs == allocs
-    want = SY.commit_y(raw, n, SALT, OA.INDEX, SALT_KEY)
+    salts = _salts(yt)
+    want = SY.commit_y(raw, n, SALT, OA.INDEX, salts)
     assert yt.tree.numpy().tobytes() == want[1]
-    rows = audit.commit_rows(SY.y_binding(SALT, OA.INDEX), OA.INDEX, SY.f32_rows(raw, n), audit.HM96, SALT_KEY,
-                             SY.HM96_Y + OA.INDEX)
+    rows = audit.commit_rows(SY.y_binding(SALT, OA.INDEX), OA.INDEX, SY.f32_rows(raw, n), audit.HM96, salts)
     assert yt.tree.numpy()[-64:].tobytes() == want[0] == rows.commitment.root
     assert dev.launched[at:].count("widen_a") == -(-m // SY.chunk_rows(m, n))
 
@@ -503,7 +514,7 @@ def test_a_y_tree_whose_rows_were_never_widened_is_not_commit_y_s(host):
         t.fill_(0xA5)
     yt.launch(y.data_ptr())
     raw = y.contiguous().view(torch.uint8).numpy().tobytes()
-    assert yt.tree.numpy()[-64:].tobytes() != SY.commit_y(raw, n, SALT, OA.INDEX, SALT_KEY)[0]
+    assert yt.tree.numpy()[-64:].tobytes() != SY.commit_y(raw, n, SALT, OA.INDEX, _salts(yt))[0]
 
 
 @pytest.mark.parametrize("m, n", [(80, 8192), (384, 57344), (16, 128256), (4100, 4096)])

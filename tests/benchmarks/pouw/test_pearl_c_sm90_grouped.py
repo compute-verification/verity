@@ -14,7 +14,7 @@ from conftest import load
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT, weights_root  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
@@ -329,7 +329,9 @@ def test_a_retained_grouped_calls_units_commit_the_rows_of_y_it_returns(tmp_path
     for u, f, mm in zip(us, files, mms, strict=True):
         got = (tmp_path / "grouped" / f["y"]["rows"]["path"]).read_bytes()
         assert got == y[u.src:u.src + u.m].contiguous().view(torch.uint8).numpy().tobytes() and len(got) == 2 * u.m * n
-        assert f["y"]["root"] == SY.commit_y(got, n, run.salt, mm.index, run.salt_key)[0].hex()
+        kept = (tmp_path / "grouped" / f["y"]["salts"]["path"]).read_bytes()
+        salts = [kept[i:i + HM96_SALT] for i in range(0, len(kept), HM96_SALT)]
+        assert f["y"]["root"] == SY.commit_y(got, n, run.salt, mm.index, salts)[0].hex()
 
 
 @pytest.mark.parametrize("schedule", ["deferred", "deferred-caller", "deferred-a"])
