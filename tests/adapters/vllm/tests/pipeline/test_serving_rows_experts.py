@@ -53,7 +53,6 @@ from verity.commitments import salt_file as SF
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
 
 E, TOPK, K, N, G, KB, NR, T = 8, 2, 64, 4, 32, 32, 2, 2
 NB, KG, B, P = -(-N // G), K // G, N // NR, T * TOPK
@@ -319,7 +318,7 @@ def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_cou
     assert {(r.reader, r.port, r.of, r.at, r.units) for r in reg.roots} == {
         (t, p, of, at, n) for t in (READ_W, READ_WS) for at, n, _b, _param, _l in plan.tables(t)
         for p, of in (("in1", "root"), ("in2", "domain"))}
-    values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
+    values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64)}
     got = SRW.read_all(ms, layer.rows, layer.store, None, tables=tables)
     data, entries, roots, salts_of = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
                                                      IF.member_ranges(ms))
@@ -480,7 +479,7 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
     reg = EX.declarations(plan)
     assert {(o.reader, o.key, o.ports, o.verdict, o.at, o.units) for o in reg.openings} == {
         (t, "in0", ("in3", "in4", "in5"), "o1", at, n) for t in (READ_WS, FU) for at, n, _b, _param, _l in plan.tables(t)}
-    values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
+    values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64)}
     got = SRW.read_all(ms, rows, ns.store, None, tables=tables)
     data, entries, roots, _salts = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
                                                      IF.member_ranges(ms))
