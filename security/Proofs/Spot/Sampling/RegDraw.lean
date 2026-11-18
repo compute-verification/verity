@@ -12,8 +12,8 @@ binds the registration, such as the PoUW window key's receipt digest, is a sampl
 
 * `atReg σ`: the strategy of `audit (L (reg σ))` that registers `σ`'s `R` and plays its continuation.
 * `prob_auditReg`: **it has the same outcome probabilities** (`rfl`), since the registration is the strategy's first move,
-  fixed before the coin. So every guarantee about `audit L_c` applies to `auditReg L`, strategy by strategy, at
-  `c := R`, with its hypotheses taken for every `R`.
+  fixed before the coin. So every guarantee about `audit L_c` applies to `Pouw.Window.auditReg L`, strategy by strategy,
+  at `c := R`, with its hypotheses taken for every `R`.
 -/
 
 @[expose] public section

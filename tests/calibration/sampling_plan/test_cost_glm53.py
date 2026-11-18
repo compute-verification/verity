@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from verity.protocols.proofs.spot.prover.cost import glm53 as G
+import glm53 as G
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
 
 CARD = G.load()
