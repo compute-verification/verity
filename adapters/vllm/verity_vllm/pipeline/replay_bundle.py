@@ -167,9 +167,9 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
     C2 site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests
     without waiting for both in turn.  The registered tensors the bundle carries (`weights_extra`, read from the device) and the engine's
     facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
-    one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over its bound."""
+    one (its reads come from the challenge), a retention other than host, or a store over its bound."""
     if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
-            or C2.live_only_entry(protocols) or C2.retention_of(com, args) != "host"
+            or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
     from verity_vllm.check.replay.driver import engine_facts_of_record

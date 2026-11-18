@@ -2,7 +2,8 @@
 slice's ``rows`` bit holds the replay to through its ``srv`` row. Were that row the prover's own word, a prover who served
 user-1's admission at the sixth ask could put six passes there, and the slice accepts it at 0x3F with a 5-bit code against
 the honest 8. With the row registered here in ``srv``, ``rows`` refuses it; with any other
-row, the verifier's b‖c check does.
+row, the b‖c check against its registered leaf (`leaf_ok`) would, and that check exists in our compiler and only its
+tests call it.
 
 **The rows.** The server keeps each step's rows as the model runner laid them out (`verity_vllm.commit.served_record`'s
 `SamplerInputsSource.rows`: the runner's request id, its token rows [lo, hi) of the step's flattened batch, its first
@@ -22,12 +23,14 @@ block's bits as u16 words, as a proof commits a row, under `binding` of the run 
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
 the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
 
-**The verifier's side.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
+**The check.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
 j), as the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads
-take it (`verity-verify-proof verify --registered`), each proof block's leaf its own.
+take it (`verity-verify-proof verify --registered`), each proof block's leaf its own. Both exist in our compiler and
+only their tests call them.
 
-That the served rows are the rows the served compute ran is the tie's to bind (`served_tie`: each row's valid, start and
-n against its step's Program, and the ids IoTieRequest's); nothing here checks it.
+The tie states that the served rows are the rows the served compute ran (`served_tie` and `served_statics`: each row's
+valid, start and n against its step's Program, and the ids IoTieRequest's); no proof of it runs, so today the rows
+registered at serve time are the prover's word, and nothing here checks it.
 """
 from __future__ import annotations
 

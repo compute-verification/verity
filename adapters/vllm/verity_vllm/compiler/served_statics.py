@@ -1,7 +1,8 @@
-"""The served rows held to their steps' Programs: each block of G steps of a window's committed served rows (`served_rows`,
-one registered row a block) against the RoPE statics of the Programs those steps ran, so a prover can't register cheaper
-rows at serve time than the batch it ran. The six-pass run's rows (user-1 never admitted) give step 6 no row for
-the 29 prefill tokens its Program computes, and the tie refuses them.
+"""The served rows against their steps' Programs, a Definition: it states that each block of G steps of a window's
+committed served rows (`served_rows`, one registered row a block) is the RoPE statics of the Programs those steps ran,
+which is built to keep a prover from registering cheaper rows at serve time than the batch it ran; no proof of it runs,
+so today the rows registered at serve time are the prover's word. The six-pass run's rows (user-1 never admitted) give
+step 6 no row for the 29 prefill tokens its Program computes, and `check` refuses them.
 
     ServedStaticsTie_v1{R, G, IW, L, T} (pub, srb) -> verdict[16]
         ServedStaticsStep_v1{R, L, T} (rows, statics) -> (count, pos)
@@ -15,10 +16,11 @@ step's statics are zero.
 **The rows** (each zero-padded to whole 16-bit words):
 - ``pub``, public: the block's G steps' statics, each step R slots of (valid, start, n), `served_tie._tie_fields`' order,
   opened to the verifier's own copy;
-- ``srb``, the block's served rows, leaf w·(P / G) + j of the served-rows registration (`served_rows.block_bits`: G steps of
-  R slots of (valid, request, kind, start, n), `compile_slice.rows_bits`' packing). Its b‖c is held to that leaf by the Lean
-  verifier's registered reads (`served_rows.reads_port`, ``verity-verify-proof verify --registered``), so the proof block
-  hashes the block's rows and no more.
+- ``srb``, the block's served rows, leaf w·(P / G) + j of the served-rows registration (`served_rows.block_bits`: G
+  steps of R slots of (valid, request, kind, start, n), `compile_slice.rows_bits`' packing). A proof of the tie would
+  have its b‖c held to that leaf by the Lean verifier's registered reads (`served_rows.reads_port`,
+  ``verity-verify-proof verify --registered``), so the proof block hashes the block's rows and no more; no proof of it
+  runs.
 
 **The statement** (`check`). For every step of the block and every slot k: bit 0 ``count``, the served row's valid and n
 are the statics'; bit 1 ``pos``, its start is the statics'. ``ACCEPT`` = 0x3. A slot the Program has no row in is zero in
@@ -28,10 +30,12 @@ sample.
 
 **Positions.** The tie reads the Program's positions, not the Commit's: on vLLM's eager path no Program reads a committed
 position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.program.predict.compiled`); there
-the committed positions are what the compute read, and `served_tie`'s routed form holds the served rows to them.
+the committed positions are what the compute read, and `served_tie`'s routed form states that the served rows are
+them; no proof of it runs either.
 
-**Selection: every proof block, always proved**, the idle blocks too (`Selection` All, as a transfer-gate proof block
-is). The tie is a binding, not a check on work: a block left untied makes its served rows the prover's word, and the
+**Selection: every proof block**, the idle blocks too (`Selection` All, as a transfer-gate proof block is), under a
+proof of the tie; no proof of it runs, so today every block's rows are the prover's word, the idle ones' too. The tie
+is a binding, not a check on work: a block left untied makes its served rows the prover's word, and the
 compile slice reads every step's rows, an idle one's included, so nothing but its tie shows an idle block's rows zero.
 The charge feeds the network verdict, an AND over every window with no ε. A window is its P / G proof blocks, block j =
 0 … P / G − 1 each once, under one template.

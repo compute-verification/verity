@@ -100,6 +100,7 @@ parts = 7
 # `tests/benchmarks/one_stage/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
 # adapter's test of the two-stage driver on its dockets.
 # block_record derives the record's subprotocols from the onsite application
+# `adapters/vllm/workloads/SHA256SUMS`: the workloads' digests verity_vllm's config reads as the served window's circuit loads
 inputs = ["applications/onsite_full.toml", "tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "tests/benchmarks/pouw/test_pearl_c_vllm.py", "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
@@ -130,7 +131,7 @@ inputs = ["applications/onsite_full.toml", "tools/config/verity_config", "verity
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-          "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
+          "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm", "adapters/vllm/workloads/SHA256SUMS",
           "tests/benchmarks/one_stage/test_two_stage_driver.py", "benchmarks/kernels/machine.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",

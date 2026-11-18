@@ -2566,8 +2566,9 @@ def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, An
     leaves, the builder over ``record`` with no wires, so its root nodes, order, templates and counts, and so the members'
     bases, are the wired Program's. The inference-only reader reads the same record's wires. Ends when the cut-wire rule
     takes a registered tree port (cure 1); the served route then takes the wired Program. `population.cut_wires` is this
-    transform but refuses a record with registered values (E_REINTERPRET); once it takes them, this body is
-    ``return cut_wires(wired_population_program(templates, record)[0], record)[:2]``."""
+    transform, but it builds the wired Program's body, which a registered value the Program takes, read at another leaf
+    width, refuses (E_REINTERPRET), as this Program's body does once built; once the builder takes such a read, this body
+    is ``return cut_wires(wired_population_program(templates, record)[0], record)[:2]``."""
     # the wired build refuses a record whose wires don't fit its templates (wire-width), which the cut never sees
     wired_population_program(templates, record)
     return wired_population_program(templates, {**record, "wires": []})

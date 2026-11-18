@@ -220,7 +220,7 @@ from typing import Mapping, NamedTuple, Sequence
 
 from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers, network_attester_zk as WZ
-from verity.circuits import boolean as BL, population as PN
+from verity.circuits import boolean as BL, partition_query as PQ, population as PN
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
@@ -1928,12 +1928,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
 def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | None:
     """An accepted audit's terms (prove_path's `charge_terms`): ε, at most ``wrong_units.bound`` of its ``of`` proof
     blocks wrong except with probability δ; λ_δ (``location_bits``), β_δ (``harm_bound``: each template's proof blocks
-    weighing the bits one of its proof blocks commits, `partition._template_bits`) and ``exfiltration_bound`` = β_δ +
+    weighing the bits one of its proof blocks commits, `partition_query._template_bits`) and ``exfiltration_bound`` = β_δ +
     λ_δ. None where the audit isn't accepted, which bounds nothing."""
     if not result.get("accepted"):
         return None
     p = AU.profile(result["registration"], result["draw"], delta)
-    bits = {M.P.template_id(m["defn"]): float(M.P._template_bits(m["defn"])) for m in members}
+    bits = {M.P.template_id(m["defn"]): float(PQ._template_bits(m["defn"])) for m in members}
     wu = result.get("wrong_units") or {}
     return {"delta": delta, "wrong_units": wu, "epsilon": wu["bound"] / wu["of"] if wu.get("of") else None,
             "template_bits": bits, "location_bits": location_bits(p), "harm_bound": p.harm_bound(bits),
