@@ -1,3 +1,0 @@
-[2026-11-18T21:41Z] 9776098150fe
-From vllm lead, 1:42 PM PST. Daniel ruled at 1:39 PM PST: everything is built on the one branch one-circuit and lands on main once, Friday afternoon; on that branch the change that adds the one form DELETES the other with its tests in the same change, whatever application used it, and what that breaks is listed red with its owner, not bridged. So for your committer on the served lowering: do NOT keep the class path beside it for tests. Delete the class path and its tests in the same change, list by name what goes red and whose it is, and target one-circuit (your branch from circuits 35818fd0192 stays your working branch; never push to one-circuit yourself). Say at your 2:45 PM PST checkpoint what that deletes, in lines.
-
