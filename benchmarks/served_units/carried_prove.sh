@@ -25,7 +25,7 @@ rc=$?
 printf 'name\texit\twall_s\tpeak_mib\n' > "$OUT/summary.tsv"
 for d in "$S"/statements/*/; do
   nm=$(basename "$d"); o=$OUT/pt/out/${PT_DEVICE:-gpu}/$nm; k=$OUT/kept/$nm; mkdir -p "$k"
-  cp -r "$d/sessions" "$k/" 2>/dev/null; for f in pub.bin partition.json tables; do [ -e "$d/$f" ] && cp -r "$d/$f" "$k/"; done
+  cp -rL "$d/sessions" "$k/" 2>/dev/null; for f in pub.bin partition.json tables; do [ -e "$d/$f" ] && cp -rL "$d/$f" "$k/"; done
   x=$(cat "$o/exit" 2>/dev/null || echo none); echo "$x" > "$k/exit"
   w=$(python3 -c 'import sys; print(round(float(open(sys.argv[2]).read()) - float(open(sys.argv[1]).read()), 1))' "$o/start" "$o/done" 2>/dev/null)
   m=$(cut -f2 "$o/smi.tsv" 2>/dev/null | cut -d, -f2 | tr -d ' ' | grep -E '^[0-9]+$' | sort -n | tail -1)
