@@ -68,6 +68,7 @@ def test_with_refresh_unset_no_message_and_no_result_holds_the_word(sent):
     assert [r["accepted"] for r in rs] == [True, True]
     assert [h["type"] for h in sent].count("session") == 2
     assert "refresh" not in json.dumps(sent) and "refresh" not in json.dumps(rs)
+    assert "fresh_slots" not in json.dumps(sent) and "fresh_slots" not in json.dumps(rs)
     assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "lifetime", "pace"}] * 2
 
 
@@ -87,13 +88,19 @@ def test_the_session_set_to_refresh_is_told_so_and_the_one_before_it_is_not(para
     rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     first, second = [h for h in sent if h["type"] == "session"]
     assert "refresh" not in first and second["refresh"] is True
-    assert rs[0]["accepted"] and "refresh" not in rs[0] and rs[1]["refresh"] is True
+    assert "fresh_slots" not in first and type(second["fresh_slots"]) is int and second["fresh_slots"] >= 1
+    assert rs[0]["accepted"] and "refresh" not in rs[0] and "fresh_slots" not in rs[0]
+    assert rs[1]["refresh"] is True and rs[1]["fresh_slots"] == second["fresh_slots"]
 
 
 def test_the_lean_verifiers_parameters_name_refresh_only_when_it_is_on(params_with_refresh):
     off, on = params_with_refresh(8, 1, 2, lifetime=2), params_with_refresh(8, 1, 2, lifetime=2, refresh=True)
     assert "refresh" not in lv.params_json(off) and lv.params_json(on)["refresh"] is True
-    assert {k: v for k, v in lv.params_json(on).items() if k != "refresh"} == lv.params_json(off)
+    assert {k: v for k, v in lv.params_json(on).items() if k not in ("refresh", "fresh_slots")} == lv.params_json(off)
+    assert "fresh_slots" not in lv.params_json(off)
+    if "fresh_slots" in {f.name for f in dataclasses.fields(params_with_refresh)}:
+        slotted = params_with_refresh(8, 1, 2, lifetime=2, refresh=True, fresh_slots=4)
+        assert lv.params_json(slotted)["fresh_slots"] == 4
 
 
 def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_never_accepted(params_with_refresh):

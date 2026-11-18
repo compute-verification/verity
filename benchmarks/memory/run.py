@@ -358,7 +358,8 @@ def parameters(v: dict, vs: dict) -> dict:
             "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2"),
             "passes": passes if type(passes) is int else
             sum(passes) if isinstance(passes, list) and passes and all(type(x) is int for x in passes) else None,
-            **({"refresh": True} if vs.get("refresh") is True else {})}
+            **({"refresh": True} | ({"fresh_slots": vs["fresh_slots"]} if "fresh_slots" in vs else {})
+               if vs.get("refresh") is True else {})}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
