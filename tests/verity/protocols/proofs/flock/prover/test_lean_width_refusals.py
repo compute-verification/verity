@@ -60,4 +60,4 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
                         "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "recut": 88, "neither": 126}

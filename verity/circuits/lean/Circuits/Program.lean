@@ -485,6 +485,8 @@ structure Body where
   nodes : Array Node
   ret : Seq
   offsets : Array Nat
+  /-- the input nodes the body reads at another width, each with its `q` (`defs.Body.recut`) -/
+  recut : Array (Nat × Nat) := #[]
   deriving Inhabited
 
 structure Defn where
@@ -759,6 +761,10 @@ structure Src where
   hp : Array (Option Nat)
   hn : Array (Option Nat)
   below : Nat
+  /-- each node's leaf width where it is an input node (PROTOCOL.md §5.2), else none -/
+  inp : Array (Option Nat) := #[]
+  /-- each input node's first reader width in `defs.Builder.finish`'s order, where one reads it -/
+  first : Array (Option Nat) := #[]
 
 def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
   if p then s.params[i]? else if i < s.below then s.nodes[i]? else none
@@ -766,9 +772,235 @@ def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
 def Src.homo? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
   if p then (s.hp[i]?).join else (s.hn[i]?).join
 
+/-! #### §4.4's read at another width
+
+An input node of `N` leaves of width `W` read at a width `w` that divides `W`, `q = W / w`: its references index its `N·q`
+leaves of width `w`, leaf `j` the bits `[(j mod q)·w, (j mod q + 1)·w)` of its leaf `j div q`. `recutOk` is `defs`'s width
+check's input-node path (`_Widths.other`, through `misread`'s cut of a part into runs of one width, and a grid's pieces),
+and `recut` is `refs.recut` on one such run, refused by the codec's names and words: `recut-width`, `recut-boundary`,
+`recut-overrun`. Decided by structure, but where a strided run falls apart into single references, a grid lane overruns
+its node, or a grid is read as leaves of more than one width. -/
+
+/-- The leaf width of source `(p, i)` where it is an input node below `s.below`. -/
+def Src.inW? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
+  if p || s.below ≤ i then none else (s.inp[i]?).join
+
+private def pySpace (p : Bool) : String := if p then "'p'" else "'n'"
+
+/-- `part.to_json()` as Python prints it in a message. -/
+def pyPart : Part → String
+  | .affine p i b c => s!"\{'affine': [{pySpace p}, {i}, {b}, {c}]}"
+  | .strided p i b inner os is c => s!"\{'strided': [{pySpace p}, {i}, {b}, {inner}, {os}, {is}, {c}]}"
+  | .explicit it => "{'explicit': [" ++ ", ".intercalate (it.toList.map fun r => s!"[{pySpace r.p}, {r.i}, {r.j}]") ++ "]}"
+  | .grid run lanes => s!"\{'grid': [{run}, [" ++ ", ".intercalate (lanes.toList.map fun l =>
+      s!"[{pySpace l.p}, {l.i}, {l.b}, {l.e}, [" ++ ", ".intercalate (l.lv.map fun (r, d) => s!"[{r}, {d}]") ++ "]]") ++
+      "]]}"
+
+/-- `refs.recut(W, w, sl, N)`, then `_recut(i, q)` against the node's first reader width `w0`: input node `i` of `N` leaves of
+width `W` read by `sl` (an affine or strided part, or an explicit one of one reference, not empty) as leaves of width `w`. -/
+def recut (i N W w w0 : Nat) (sl : Part) : M Unit := do
+  if w == 0 || W % w != 0 then
+    throw s!"recut-width: an input node of {W}-bit leaves read in {w}-bit leaves: the reader's width divides the registered width"
+  let q := W / w
+  let qi : Int := q
+  -- `refs.as_grid`'s one lane: its run, base, inner stride and levels; and `lane_bounds`, or a strided part's corners
+  let (run, b, e, lv, lo, hi) : Nat × Int × Int × List (Nat × Int) × Int × Int := match sl with
+    | .affine _ _ b c => (c, b, 1, [], b, (b : Int) + c - 1)
+    | .strided _ _ b inner os is c =>
+      let k := (c - 1) / inner
+      let corners : List (Nat × Nat) :=
+        [(0, 0), (0, min inner c - 1), (k, 0), (k, (c - 1) % inner)] ++ (if k > 0 then [(k - 1, inner - 1)] else [])
+      let vals := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
+      (inner, b, is, if (c + inner - 1) / inner > 1 then [((c + inner - 1) / inner, os)] else [],
+        vals.foldl min vals.head!, vals.foldl max vals.head!)
+    | .explicit it => let j : Int := (it[0]!).j; (1, j, 0, [], j, j)
+    | .grid .. => (0, 0, 0, [], 0, 0)
+  if q > 1 && !(e == 1 && b % qi == 0 && run % q == 0 && sl.count % q == 0 && lv.all fun (_, d) => d % qi == 0) then
+    throw (s!"recut-boundary: {pyPart sl} reads an input node of {W}-bit leaves in {w}-bit leaves other than whole " ++
+      "registered leaves")
+  if !(0 ≤ lo && hi < ((N * q : Nat) : Int)) then
+    throw s!"recut-overrun: {pyPart sl} reads past the {N} {W}-bit leaves of its input node"
+  if w != w0 then
+    throw s!"recut-width: input node {i} read in leaves of two widths; an input node is read at one"
+
+/-- References `lo … hi - 1` of part `q` as a part (`Refs.slice`): an affine or strided part's run, else its references. -/
+def sliceOf (q : Part) (lo hi : Nat) : Part :=
+  match q with
+  | .affine p i b c => .affine p i (b + min lo c) (min hi c - min lo c)
+  | .strided p i b inner os is c =>
+    let hi := min hi c
+    if hi ≤ lo then .explicit #[]
+    else if lo % inner == 0 && (hi % inner == 0 || hi == c) then
+      .strided p i (b + ((lo / inner : Nat) : Int) * os) inner os is (hi - lo)
+    else if hi - lo ≤ inner - lo % inner then
+      if is == 1 then .affine p i (q.get lo).j (hi - lo) else .strided p i (q.get lo).j 1 is 0 (hi - lo)
+    else .explicit ((Array.range (hi - lo)).map fun k => q.get (lo + k))
+  | .explicit it => .explicit (it.extract lo hi)
+  | g => g
+
+/-- `misread`'s cut of `t`'s leaves `pos … pos + n - 1` into runs of one width, in order, each given to `f` as
+`(pos, n, w)`: a run of one width whole, else the smallest part of `t` holding them cut at its elements or fields. -/
+def bySlices (f : Nat → Nat → Nat → M Unit) : Nat → Ty → Nat → Nat → M Unit
+  | 0, _, _, _ => throw UNCHECKED
+  | fuel + 1, t, pos, n => do
+    if n == 0 then return
+    match rangeWidths t pos (pos + n) with
+    | [w] => f pos n w
+    | _ =>
+      let (c, off) := cover t pos (pos + n)
+      let pieces : Array (Nat × Nat) := match c with
+        | .array _ e =>
+          let L := e.leaves
+          if L == 0 then #[] else
+            let first := (pos - off) / L
+            (Array.range ((pos + n - 1 - off) / L + 1 - first)).map fun k => (off + (first + k) * L, L)
+        | _ => (childLeaves c).foldl (fun (acc : Array (Nat × Nat) × Nat) m => (acc.1.push (acc.2, m), acc.2 + m)) (#[], off) |>.1
+      for (o, m) in pieces do
+        let a := max pos o
+        let b := min (pos + n) (o + m)
+        if a < b then bySlices f fuel t a (b - a)
+
+/-- A grid's piece: lane `l`'s run of period `t` (`Grid.pieces`). -/
+def gridPiece (run : Nat) (l : Lane) (t : Nat) : Part :=
+  let leaf := (l.leafAt t 0).toNat
+  if l.e == 1 || run == 1 then .affine l.p l.i leaf run else .strided l.p l.i leaf run 0 l.e run
+
+/-- The first period of a lane of runs of `run` reading an input node at `q` that `refs.recut` refuses as off whole leaves,
+where one is: `0` if its first run is, else the first period that steps a level by a whole number of leaves short. -/
+def offWhole (run q : Nat) (l : Lane) : Option Nat :=
+  let qi : Int := q
+  if q ≤ 1 then none
+  else if !((l.e == 1 || run == 1) && run % q == 0 && l.b % qi == 0) then some 0
+  else (l.lv.foldl (fun (acc : Option Nat × Nat) (r, d) => match acc.1 with
+      | some t => (some t, acc.2)
+      | none => (if d % qi != 0 then some acc.2 else none, acc.2 * r)) (none, 1)).1
+
+/-- The read at another width of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one): `none` where
+`q` reads no input node, and the rest of `partOk` decides it; else refused by name, `some false` where it names a leaf of
+another source at another width, or `some true`. An explicit part's input nodes are checked here and its other leaves by
+`partOk`. -/
+def recutOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M (Option Bool) := do
+  let N := fun (i : Nat) => ((s.nodes[i]?).map Ty.leaves).getD 0
+  let w0 := fun (i w : Nat) => ((s.first[i]?).join).getD w
+  match q with
+  | .affine p i _ n | .strided p i _ _ _ _ n =>
+    let some W := s.inW? p i | return none
+    bySlices (fun x m w => recut i (N i) W w (w0 i w) (sliceOf q (x - a) (x - a + m))) DEPTH t a n
+    return some true
+  | .explicit items =>
+    if !items.any (fun r => (s.inW? r.p r.i).isSome) then return none
+    for k in [0:items.size] do
+      let r := items[k]!
+      if let some W := s.inW? r.p r.i then
+        recut r.i (N r.i) W (wAt t (a + k)) (w0 r.i (wAt t (a + k))) (.explicit #[r])
+    return none
+  | .grid run lanes =>
+    if !lanes.any (fun l => (s.inW? l.p l.i).isSome) then return none
+    let g := lanes.size
+    let P := (lanes[0]?.map Lane.periods).getD 0
+    let some w := ht | do
+      -- read as leaves of more than one width: piece by piece, in `Grid.pieces`' order
+      for t' in [0:P] do
+        for j in [0:g] do
+          step
+          let l := lanes[j]!
+          let pos := a + (t' * g + j) * run
+          match s.inW? l.p l.i with
+          | some W =>
+            let f := fun x m w => recut l.i (N l.i) W w (w0 l.i w) (sliceOf (gridPiece run l t') (x - pos) (x - pos + m))
+            bySlices f DEPTH t pos run
+          | none => for o in [0:run] do
+              if let some S := s.ty? l.p l.i then
+                if wAt S (l.leafAt t' o).toNat != wAt t (pos + o) then return some false
+      return some true
+    -- one width: each input lane's first piece refused, at its place in `Grid.pieces`' order; the earliest is the refusal
+    let mut first : Option (Nat × Nat × Nat) := none
+    for j in [0:g] do
+      let l := lanes[j]!
+      let some W := s.inW? l.p l.i | continue
+      let q := if w == 0 then 0 else W / w
+      let fits := fun (lo hi : Int) => 0 ≤ lo && hi < ((N l.i * q : Nat) : Int)
+      let over ← if w == 0 || W % w != 0 || fits (l.bounds run).1 (l.bounds run).2 then pure none else do
+        let t' := (List.range (min P (WALK + 1))).find? fun t' =>
+          let (lo, hi) := Lane.bounds run { l with b := l.leafAt t' 0, lv := [] }
+          !fits lo hi
+        if t'.isNone then throw UNCHECKED
+        pure t'
+      let bad := if w == 0 || W % w != 0 then [0] else
+        [offWhole run q l, over, if w != w0 l.i w then some 0 else none].filterMap id
+      if let some t' := bad.min? then
+        let at_ := t' * g + j
+        if first.all (at_ < ·.1) then first := some (at_, j, t')
+    if let some (_, j, t') := first then
+      let l := lanes[j]!
+      recut l.i (N l.i) ((s.inW? l.p l.i).getD 0) w (w0 l.i w) (gridPiece run l t')
+    -- every other lane: its source's one width, or one width over the leaves between its extremes
+    return some (lanes.all fun l => (s.inW? l.p l.i).isSome || match s.ty? l.p l.i with
+      | none => true
+      | some S => s.homo? l.p l.i == some w ||
+        let (lo, hi) := l.bounds run
+        rangeWidths S lo.toNat (hi.toNat + 1) == [w])
+
+/-- `recutOk`'s verdict on part `q` of a 16-bit input node of 4 leaves, read as a `t`, its first reader width `w0`. -/
+private def recutAt (w0 : Nat) (t : Ty) (q : Part) : String :=
+  let s : Src := { params := #[], nodes := #[.array 4 (.value 16)], hp := #[], hn := #[some 16], below := 1,
+                   inp := #[some 16], first := #[some w0] }
+  match (recutOk s t (homo t) 0 q).run 0 with
+  | .ok (some b) _ => toString b
+  | .ok none _ => "none"
+  | .error e _ => e
+
+-- the codec's verdicts (`refs.recut`) on the same reads
+#guard recutAt 8 (.array 8 (.value 8)) (.affine false 0 0 8) == "true"
+#guard recutAt 8 (.array 4 (.value 8)) (.strided false 0 2 2 4 1 4) == "true"
+#guard recutAt 16 (.array 3 (.value 16)) (.affine false 0 1 3) == "true"
+#guard recutAt 32 (.array 1 (.value 32)) (.affine false 0 0 1) ==
+  "recut-width: an input node of 16-bit leaves read in 32-bit leaves: the reader's width divides the registered width"
+#guard recutAt 8 (.array 4 (.value 8)) (.affine false 0 1 4) == "recut-boundary: {'affine': ['n', 0, 1, 4]} reads an " ++
+  "input node of 16-bit leaves in 8-bit leaves other than whole registered leaves"
+#guard recutAt 8 (.array 1 (.value 8)) (.explicit #[⟨false, 0, 2⟩]) == "recut-boundary: {'explicit': [['n', 0, 2]]} " ++
+  "reads an input node of 16-bit leaves in 8-bit leaves other than whole registered leaves"
+#guard recutAt 8 (.array 6 (.value 8)) (.affine false 0 4 6) ==
+  "recut-overrun: {'affine': ['n', 0, 4, 6]} reads past the 4 16-bit leaves of its input node"
+#guard recutAt 8 (.array 4 (.value 4)) (.affine false 0 0 4) ==
+  "recut-width: input node 0 read in leaves of two widths; an input node is read at one"
+#guard recutAt 16 (.array 2 (.value 16)) (.grid 1 #[⟨false, 0, 0, 0, [(2, 1)]⟩]) == "true"
+
+/-- Each input node's first reader width in `defs.Builder.finish`'s order (each node's arguments, then the return), over
+the sources `s` gives each: of a part's first reference into it. -/
+def firstReads (inp : Array (Option Nat)) (B : Body) : Array (Option Nat) := Id.run do
+  let mut first : Array (Option Nat) := Array.replicate B.nodes.size none
+  let seqs : Array (Nat × Ty × Seq) :=
+    (B.nodes.mapIdx fun k nd => nd.args.map fun a => (k, a.ty, a.seq)).flatten.push (B.nodes.size, B.retType, B.ret)
+  for (below, t, seq) in seqs do
+    for q in seq.parts, a in seq.starts do
+      let reads : List (Bool × Nat × Nat) := match q with
+        | .affine p i _ n | .strided p i _ _ _ _ n => if n == 0 then [] else [(p, i, a)]
+        | .explicit it => (List.range it.size).map fun k => (it[k]!.p, it[k]!.i, a + k)
+        | .grid run lanes => (List.range lanes.size).map fun j => (lanes[j]!.p, lanes[j]!.i, a + j * run)
+      for (p, i, pos) in reads do
+        if !p && i < below && ((inp[i]?).join).isSome && ((first[i]?).join).isNone then
+          first := first.set! i (some (wAt t pos))
+  return first
+
+/-- Each node's leaf width where it is an input node (`defs._Widths.input_width`): a call of an input primitive, its
+output of one width. -/
+def inputWidths (defs : Array Defn) (B : Body) : Array (Option Nat) :=
+  B.nodes.map fun nd => match defs[nd.fn]? with
+    | some c => if c.prim && c.binding.isSome then homo nd.out else none
+    | none => none
+
+/-- The input nodes body `B` reads at another width, each with its `q` above 1 (`Body.recut`), in node order. -/
+def recutOf (defs : Array Defn) (B : Body) : Array (Nat × Nat) :=
+  let inp := inputWidths defs B
+  ((firstReads inp B).zip inp).zipIdx.filterMap fun ((f, W), i) => match f, W with
+    | some w, some W => if 0 < w && W % w == 0 && W / w > 1 then some (i, W / w) else none
+    | _, _ => none
+
 /-- Whether the references of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one), name leaves of
 the widths `t` gives them. -/
 def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool := do
+  if let some r ← recutOk s t ht a q then return r
   match q with
   | .explicit items =>
     return (List.range items.size).all fun k =>
@@ -828,7 +1060,7 @@ other's leaf by leaf. -/
 def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
   let bad := fun (k : Nat) => let r := q.get k
     match s.ty? r.p r.i with
-    | some S => wAt S r.j != wAt t (a + k)
+    | some S => (s.inW? r.p r.i).isNone && wAt S r.j != wAt t (a + k)
     | none => false
   match q with
   | .affine p i base n =>
@@ -874,8 +1106,9 @@ def refusal (B : Body) (key what : String) (s : Src) (t : Ty) (a : Nat) (q : Par
 arguments, then the return), as its refusal; `defs` holds its callees. -/
 def bodyBad (defs : Array Defn) (key : String) (B : Body) : M (Option String) := do
   let outs := B.nodes.map (·.out)
+  let inp := inputWidths defs B
   let s : Src := { params := B.params.map (·.2), nodes := outs, hp := B.params.map (homo ·.2), hn := outs.map homo,
-                   below := 0 }
+                   below := 0, inp, first := firstReads inp B }
   for k in [0:B.nodes.size] do
     let node := B.nodes[k]!
     let callee := defs[node.fn]!
@@ -975,6 +1208,17 @@ private def buildNode (fid : String) (k : Nat) (form : Form) (callee : Defn) (ar
     if lengths.size > 1 then throw s!"{pre}: scan {callee.key}: xs lengths differ {lengths.qsort (· < ·)}"
     if lengths.size == 1 && lengths[0]! != n then throw s!"{pre}: scan: explicit n disagrees with xs length"
     return (.tuple #[carry, .array n y], out)
+
+/-- The leaf counts references are parsed against (`codec`'s `leaves`): an input node among `nodes` as leaves of one bit, `N·W`
+(§4.4: read at a width that divides `W`, `refs.recut` then holds its references under `N·q`), every other collection
+as `leaves` gives it. -/
+private def inputLeaves (defs : Array Defn) (nodes : Array Node) (leaves : Bool → Nat → Option Nat) :
+    Bool → Nat → Option Nat := fun p i =>
+  match p, nodes[i]? with
+  | false, some nd => match defs[nd.fn]? with
+    | some c => if c.prim && c.binding.isSome then some (nd.out.leaves * (Widths.homo nd.out).getD 1) else leaves p i
+    | none => leaves p i
+  | _, _ => leaves p i
 
 private def nodeKeys : Form → List String
   | .batch => ["args", "axes", "fn", "form", "n", "out"]
@@ -1078,9 +1322,10 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
         | none => throw s!"{pre}: scan counts"
       else pure 0
     let earlier := fun (k2 a : Nat) => if k2 < nodes.size then nodes[k2]!.args[a]?.map (·.seq) else none
+    let leavesK := inputLeaves (← get).defs nodes leaves
     let args ← liftV (ajs.mapM fun aj => do
       let ty ← at_ desc.types ((aj.getObjVal? "type").toOption.getD Json.null) "types"
-      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leaves earlier with
+      let ps ← match parseParts ((aj.getObjVal? "refs").toOption.getD Json.null) leavesK earlier with
         | .ok ps => pure ps
         | .error e => throw s!"{pre}: {e}"
       let seq := Seq.ofParts ps
@@ -1092,7 +1337,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
     nodes := nodes.push node
     offsets := offsets.push (offsets.back! + (if form == .prim then 1 else node.members * callee.gates))
   let earlier := fun (k2 a : Nat) => nodes[k2]?.bind fun x => x.args[a]?.map (·.seq)
-  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) leaves earlier with
+  let ret ← match parseParts ((b.getObjVal? "ret").toOption.getD Json.null) (inputLeaves (← get).defs nodes leaves) earlier with
     | .ok ps => pure (Seq.ofParts ps)
     | .error e => throw s!"definition '{fid}' ret: {e}"
   if ret.count != retType.leaves then
@@ -1102,7 +1347,8 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
   match (Widths.bodyBad st.defs fid body).run st.walked with
   | .ok (some m) _ => throw m
   | .ok none w => set { st with walked := w }
-  | .error e _ => throw s!"definition '{fid}': E_REINTERPRET unchecked: {e}"
+  | .error e _ => throw (if e.startsWith "recut-" then e else s!"definition '{fid}': E_REINTERPRET unchecked: {e}")
+  let body := { body with recut := Widths.recutOf st.defs body }
   return { key := fid, id, prim := false, params, ret := retType, body,
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
 
@@ -1171,6 +1417,7 @@ def decode (bytes : ByteArray) : V Prog := do
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
+
 
 /-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
 reader of a descriptor starts with it (`decode_eq_of`). -/
