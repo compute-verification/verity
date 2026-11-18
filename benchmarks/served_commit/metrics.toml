@@ -8,7 +8,7 @@ owner = "circuits"
 unit = "times stock"
 axis = "Output tokens a second of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
 better = "higher"
-command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-served-arm@rtx-pro-6000 bash benchmarks/served_commit/run.sh"
 every = "7d"
 
 [[metric]]
@@ -18,7 +18,7 @@ owner = "circuits"
 unit = "times stock"
 axis = "Time to first token of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
 better = "lower"
-command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-served-arm@rtx-pro-6000 bash benchmarks/served_commit/run.sh"
 every = "7d"
 
 [[metric]]

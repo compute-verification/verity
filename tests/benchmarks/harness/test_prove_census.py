@@ -42,7 +42,7 @@ def request(prefill: int, decode: int, gemm: int, norm: int, attn: int = 0) -> d
     tokens = prefill + decode
     definitions = {
         GEMM: {"family": "ScaledMmS8Coordinate_v1", "k_log": 23, "ands": 273417, "macs": 0,
-               "of": {"ScaledMmS8_v1": "split"}, "prefill": gemm * prefill, "decode": gemm * decode},
+               "of": {"ScaledMmS8_v3": "split"}, "prefill": gemm * prefill, "decode": gemm * decode},
         NORM: {"family": "RMSNormFusedCuda_v2", "k_log": 26, "ands": 19668368, "macs": 0,
                "of": {"RMSNormFusedCuda_v2": "row"}, "prefill": norm * prefill, "decode": norm * decode}}
     if attn:

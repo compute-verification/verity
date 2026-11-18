@@ -15,8 +15,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_
 
 
 def test_each_is_registered_under_its_one_name() -> None:
-    loaded = schemes.load()
-    assert loaded["bandwidth"] is poub.BANDWIDTH and loaded["poub"] is poub.POUB
+    assert schemes.get("bandwidth") is poub.BANDWIDTH and schemes.get("poub") is poub.POUB
 
 
 def test_bandwidth_is_the_p2_verifiers_component() -> None:

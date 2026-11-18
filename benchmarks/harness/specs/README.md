@@ -5,9 +5,10 @@ other, and the points it sweeps over. `verity-bench` ([`benchmarks/harness`](../
 a spec or a sweep, and this file says what each one is for.
 
 - A **spec** (`verity-bench/vllm-spec/v0`) is one measurement: a preset (the model at a pinned revision or a node-local
-  checkpoint with its digest, its precision, the GPU, the vLLM pin and the engine settings), the arms timed against each
-  other, the sweep it runs over, its reps, and its admission. Every ratio is over its baseline: `stock-fp8` when it runs,
-  else `stock`, else its first arm.
+  checkpoint with its digest, its precision, its GPU count, the vLLM pin and the engine settings), the cards it runs on
+  (`cards`, each card's `short`), the arms timed against each other, the sweep it runs over, its reps, and its admission.
+  What a card needs in place of the spec's own (its env, setup or admission) is under `[card_settings.SHORT]`, only where
+  that card differs. Every ratio is over its baseline: `stock-fp8` when it runs, else `stock`, else its first arm.
 - A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
   and traffic shapes, every request sampled greedily. A spec names one by its id.
 - A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
@@ -20,7 +21,10 @@ verity-bench run SPEC      # in a research run: its point without a passing run,
 verity-bench check SPEC    # exit 0 only when every point has a passing run
 ~~~
 
-SPEC is a spec's id or its path. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
+SPEC is a spec's id or its path, and `SPEC@CARD` names the card a run is on. Without one, a run is on the spec's one card,
+else on the card the driver reports, and a card the spec doesn't list is refused by name. A point's identity holds its
+card. A spec id from before its spec named no card (`llama32-1b-1gpu-pouw-protocol-served-h100`) names a stored run's spec
+alone: `verity_bench/data/former_spec_ids.toml` says which spec and card it is now, and no launch takes it. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
 its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## Stock serving
@@ -33,13 +37,11 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `llama31-8b-fp8-1gpu-commit-served`: the Commit (`rows-sha512`) against stock FP8, eager and compiled, each against its
   own stock.
-- `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32.
-- `llama31-8b-fp8-1gpu-commit-served-width-h200`: the same on one H200.
+- `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32, on one RTX
+  PRO 6000 or H200.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
-- `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
-- `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200.
-- `llama32-1b-bf16-h100-served-arm`: the same on one H100.
+- `llama32-1b-bf16-served-arm`: the same on Llama-3.2-1B in BF16, on one RTX PRO 6000, H200 or H100.
 - `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
 - `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
   don't fit one GPU beside the Commit's buffers.
@@ -50,10 +52,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
 - `llama31-8b-1gpu-pearl-c-whole-served-h200`: the whole-step arm on one H200, against compiled stock FP8.
-- `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
-  on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
-  (`served_pearlplus.sh`'s step).
-- `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
+- `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
+  on Llama-3.2-1B's BF16 checkpoint on one H200 or H100, against eager and compiled stock FP8 at batch 32, 8,192 tokens a
+  step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-stock-served-h100`: its two stock arms alone, with no setup: a served point on an H100 whose machine
   has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 

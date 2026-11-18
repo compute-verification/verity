@@ -50,9 +50,9 @@ theorem paramsOfJson_families {j : Json} {p : Params} (h : paramsOfJson j = .ok 
 
 /-- **An accepted check on two windows found the stages' sessions in order on one ledger** (`stagesOrdered_order` at
 the accepted check's `stagesOrdered`). -/
-theorem accepted_order {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_order {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof)
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof)
     {k : Spot.Challenger.ChallengerKey} {label w₁ w₂ : String} (hk : p.audit.base.challenger = some (k, label))
     (h1 : p.boundary.verifier.windowRoot = some w₁) (h2 : p.audit.base.verifier.windowRoot = some w₂)
     (hne : w₁ ≠ w₂) :

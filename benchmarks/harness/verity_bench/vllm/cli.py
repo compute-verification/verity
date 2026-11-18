@@ -19,7 +19,7 @@ from verity_config import sha256
 
 from verity_bench import kit, settings
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import expand_sweep, load_spec, local_checkpoint, served
+from verity_bench.vllm.presets import expand_sweep, load_spec, local_checkpoint, resolve_spec, served
 from verity_bench.vllm.result import record, write
 from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
@@ -27,7 +27,7 @@ from verity_bench.vllm.table import render
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--preset", required=True, help="a spec under benchmarks/harness/specs, by name")
+    parser.add_argument("--preset", required=True, help="a spec under benchmarks/harness/specs, by name; NAME@CARD names its card, else the one it lists or the card here")
     parser.add_argument("--model-path", type=Path, default=None,
                         help="machine-local checkpoint override; every file is hashed into the result identity")
     parser.add_argument("--arms", default=None,
@@ -49,7 +49,7 @@ def run(a: Any) -> int:
     sweep = spec.sweep if a.sweep is None else a.sweep
     if reps < 1:
         raise ValueError("--reps must be positive")
-    preset = spec.preset
+    preset = resolve_spec(a.preset).preset
     if a.model_path is not None:
         preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)

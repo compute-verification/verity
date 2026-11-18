@@ -481,7 +481,11 @@ def test_an_arms_sessions_pass_is_read_from_its_users_own_results(tmp_path: Path
 
 
 def kept_ids(d: Path, lines: list[tuple[str, list[int]]], gz: bool = False) -> None:
-    """An arm's server's kept ids (`servetax_plugin.ServedIds`'s lines): each request's id and the ids it was served."""
+    """An arm's server's kept ids (`servetax_plugin.ServedIds`'s lines) in its private directory, d/private: each
+    request's id and the ids it was served."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "meta.json").write_text(json.dumps({"private": str(d / "private")}))
+    d = d / "private"
     (d / "server").mkdir(parents=True, exist_ok=True)
     text = "".join(json.dumps({"id": rid, "prompt_ids": [1, 2, 3], "output_ids": out}) + "\n" for rid, out in lines)
     if gz:
@@ -513,9 +517,12 @@ def test_the_requests_that_went_on_past_an_end_of_text_token_are_counted_where_t
             "agentic@2-r10": {"ids_kept": 1, "past_end": 1, "after_end_tokens": 1}}
     assert S.past_end(d, ["agentic@2-r1", "agentic@2-r10"], [7, 8, 9]) == want
     assert S.past_end(d, ["agentic@2-r1"], [7, 8, 9]) == {"agentic@2-r1": want["agentic@2-r1"]}
-    # no end-of-text id named, or no ids kept: nothing; a gzipped file reads as a plain one
+    # no end-of-text id named, or no ids kept (an arm whose meta names no private directory): nothing; a gzipped file
+    # reads as a plain one
+    (tmp_path / "prod").mkdir()
+    (tmp_path / "prod" / "meta.json").write_text(json.dumps({"private": None}))
     assert S.past_end(d, ["agentic@2-r1"], []) == {} == S.past_end(tmp_path / "prod", ["agentic@2-r1"], [9])
-    (d / "server" / "ids.7.jsonl").unlink()
+    (d / "private" / "server" / "ids.7.jsonl").unlink()
     kept_ids(d, lines, gz=True)
     assert S.past_end(d, ["agentic@2-r1", "agentic@2-r10"], [7, 8, 9]) == want
     # an arm's metrics have them for each rep whose ids its server kept, where its meta names the ids
@@ -527,7 +534,7 @@ def test_the_requests_that_went_on_past_an_end_of_text_token_are_counted_where_t
     (rep / S.RESULT).write_text(json.dumps(S.merged(users)))
     (rep / "meta.json").write_text(json.dumps({"rate": None, "concurrency": 2, "unfinished": 0, "tag": "agentic@2-r1"}))
     meta = {"arm": "prod-record", "model_id": "glm53", "rates": {}, "passes": {"agentic@2": {"load": "agentic", "concurrency": 2}}}
-    (d / "meta.json").write_text(json.dumps(meta | {"end_of_text_ids": [7, 8, 9]}))
+    (d / "meta.json").write_text(json.dumps(meta | {"end_of_text_ids": [7, 8, 9], "private": str(d / "private")}))
     (one,) = S.arm_metrics(d)["loads"]["agentic@2"]
     assert (one["ids_kept"], one["past_end"], one["after_end_tokens"]) == (3, 1, 3)
     (d / "meta.json").write_text(json.dumps(meta))            # a directory served before its meta named them
@@ -805,3 +812,21 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
     # arms that served no sessions load are costed as before, over compiled
     assert S.session_cost([served("compiled", [2.0] * 6, load="chat"), served("record", OURS, load="chat")], "record",
                           "compiled") is None
+
+
+def test_an_arms_public_steps_hold_each_rows_start_and_tokens_and_no_request_id_emitted_count_or_stop_reason(tmp_path: Path):
+    d, kept = tmp_path / "prod-record", tmp_path / "private"
+    d.mkdir()
+    (d / "meta.json").write_text(json.dumps({"private": str(kept)}))
+    (kept / "server").mkdir(parents=True)
+    trace = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 3}, "model": "m"}},
+             {"kind": "arrive", "request": "cmpl-a-0-0-aa", "before_step": 0},
+             {"kind": "step", "step": 0, "T": 9, "t": 1.5, "order": "runner", "rows": [["cmpl-a-0-0-aa", 0, 8], ["b", 40, 1]],
+              "emitted": {"b": 1}, "finished": {"b": {"reason": "stop", "stop_reason": "Human:"}}}]
+    with gzip.open(kept / "server" / "step_trace.41.jsonl.gz", "wt") as f:
+        f.write("".join(json.dumps(r) + "\n" for r in trace))
+    (got,) = S.public_steps(d)
+    assert got == d / "server" / "steps.41.jsonl.gz"
+    with gzip.open(got, "rt") as f:
+        assert [json.loads(x) for x in f] == [{"kind": "header", "num_speculative_tokens": 3},
+                                              {"kind": "step", "step": 0, "T": 9, "t": 1.5, "rows": [[0, 8], [40, 1]]}]
