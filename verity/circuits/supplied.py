@@ -76,31 +76,32 @@ def _bits(f: Callable[[Mapping[str, Any]], int]) -> Callable[[Mapping[str, Any]]
 
 
 #: every function a supplied input may name. A name is versioned: a function whose value changes takes a new name. Each
-#: one's body is the verifier's (§5.4), its arguments fixed in C.
+#: one's body is the verifier's (§5.4), its arguments fixed in C. A value is short: what is a function of a unit's index
+#: and a short value is computed inside the unit, from the supplied value and the unit's index, a constant of C.
 FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     # storage session: round j's coin opened against the released session commitment, u32be(j) ‖ u64be(i_j)
     Function("pous.session.round_coin/v1", "supplied", ("coin", "commitment"), ("round",), _fixed(12)),
     # storage session: the signed header and context, as the session commitment releases them
     Function("pous.session.header/v1", "supplied", ("commitment",), (), _fixed(756)),
     Function("pous.session.context/v1", "supplied", ("commitment",), (), _fixed(106)),
-    # storage setup: draw `draw`'s block u, its keys' prefix (L bytes, from the parameters and the attester's salt) then
-    # u64be(s) ‖ u64be(v), (s, v) = divmod(u, blocks a segment)
-    Function("pous.setup.base/v1", "supplied", ("coin", "sample", "constant"), ("draw", "L"),
-             _bits(lambda a: 8 * a["L"])),
-    # storage setup: draw `draw`'s slot, u mod n, as one 16-bit leaf
-    Function("pous.setup.slot/v1", "supplied", ("sample", "constant"), ("draw", "n"), _fixed(2)),
-    # bandwidth audit: sample `draw`'s public row, its 20 fields in order, reading the pass root the prover released
+    # storage setup: the memory attester's salt, drawn after the weights' commitment and before the store's
+    Function("pous.setup.salt/v1", "supplied", ("coin",), (), _fixed(24)),
+    # bandwidth audit: draw `draw`'s public row, its 20 fields in order, reading the pass root the prover released
     Function("poub.read.pub/v1", "supplied", ("coin", "commitment", "constant"), ("draw", "K", "masked", "N"),
              _bits(lambda a: 4320 + (2 + a["K"] + a["masked"]) * a["N"])),
-    # bandwidth audit: sample `draw`'s pass's sketch rows' sign bits
-    Function("poub.read.signs/v1", "supplied", ("coin", "constant"), ("draw", "rows", "bytes"),
-             _bits(lambda a: 8 * a["rows"] * a["bytes"])),
-    # the window's live salt, bound to the verifier's stream and prover and the record's window: a coin itself
+    # bandwidth audit: draw `draw`'s pass's sketch rows' sign bits
+    Function("poub.read.signs/v1", "supplied", ("coin", "constant"), ("draw", "sketch_rows", "bytes"),
+             _bits(lambda a: 8 * a["sketch_rows"] * a["bytes"])),
+    # useful work: the execution phase's live salt, bound to the verifier's stream and prover and the record's window
     Function("window.salt/v1", "coin", ("coin",), (), _fixed(64)),
-    # the root a commitment registered before the coin holds: a record's port, or a registered value
-    Function("commitment.root/v1", "supplied", ("commitment",), ("commitment",), _fixed(64)),
-    # unit `unit`'s position, after every unit of the log's records, as a u64 big-endian
-    Function("unit.position/v1", "supplied", ("commitment",), ("unit",), _fixed(8)),
+    # useful work: the epoch's live salt of Pearl+ (the first 32 bytes of its salt stream)
+    Function("pouw.pearlplus.salt/v1", "coin", ("coin",), (), _fixed(32)),
+    # the root the registration holds for registered value `value`: the verifier's pin of it, never a prover's row
+    Function("registered.root/v1", "supplied", ("commitment",), ("value",), _fixed(64)),
+    # the root the record names for port `port`, registered before the coin
+    Function("record.root/v1", "supplied", ("commitment",), ("port",), _fixed(64)),
+    # the first position after every unit of the log's records, a u64 big-endian: a unit's position adds its index
+    Function("log.base/v1", "supplied", ("commitment",), (), _fixed(8)),
     # a constant u16 word, what a held output is held to (an opening's verdict, a check's ok)
     Function("const.u16/v1", "supplied", ("constant",), ("value",), lambda a: 2 if a["value"] < 1 << 16 else None),
 )}
