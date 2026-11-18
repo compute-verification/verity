@@ -8,7 +8,7 @@
   "verity_flock"
  ],
  "word_primitives": 303,
- "no_body": 46,
+ "no_body": 45,
  "by_place": {
   "the circuits' catalogue": [
    "PouwAdd64Hi_v1",
@@ -47,7 +47,6 @@
    "F32ErfRn_v1",
    "F32TanhRn_v1",
    "GeluErfBf16_v1",
-   "GumbelNoiseLane_v2",
    "I32Mul_v1",
    "NcpAbsMax_v1",
    "NcpDot16I7_v1",
@@ -123,11 +122,6 @@
    "id": "GeluErfBf16_v1",
    "place": "the vLLM adapter",
    "module": "verity_vllm.definitions.registry.act"
-  },
-  {
-   "id": "GumbelNoiseLane_v2",
-   "place": "the vLLM adapter",
-   "module": "verity_vllm.definitions.registry.sampling"
   },
   {
    "id": "I32Mul_v1",
