@@ -16,13 +16,12 @@ MANIFESTS = {"sampled-proofs": SP.MANIFEST, "inference-only": IO.MANIFEST}
 
 
 def _id(name: str) -> str:
-    s = schemes.get(name)
-    return s.composed_protocol or s.protocol
+    return schemes.get(name).protocol
 
 
 def test_the_verifiers_composite_ids_are_the_one_tables() -> None:
     wrong = [f"parties.SUBPROTOCOLS[{c!r}][{n!r}] is {i!r}, and the one table declares {_id(n)!r}: set it to "
-             f"{_id(n)!r}, or the declaration's composed_protocol to {i!r}"
+             f"that"
              for c, subs in sorted(SP.SUBPROTOCOLS.items()) for n, i in sorted(subs.items())
              if n in schemes.DECLARATIONS and i != _id(n)]
     assert not wrong, "\n".join(wrong)
@@ -30,8 +29,9 @@ def test_the_verifiers_composite_ids_are_the_one_tables() -> None:
 
 def test_the_undeclared_composite_names_only_shrink() -> None:
     names = {n for subs in SP.SUBPROTOCOLS.values() for n in subs if n not in schemes.DECLARATIONS}
-    assert not names - set(UNDECLARED), (f"{sorted(names - set(UNDECLARED))} are in parties.SUBPROTOCOLS and not in the "
-                                         "one table (verity.protocols.compose.schemes): declare each one there")
+    grown = sorted(names - set(UNDECLARED))
+    assert not grown, (f"{grown} are in parties.SUBPROTOCOLS and not in the one table "
+                       "(verity.protocols.compose.schemes): declare each one there")
     assert not set(UNDECLARED) - names, (f"{sorted(set(UNDECLARED) - names)} are declared now: delete each from "
                                          "UNDECLARED here")
 
