@@ -4,6 +4,7 @@ public import Flock.Sigma
 public import Flock.TemplateQuery
 public import Spot.Wires
 public import Spot.Edges
+meta import Spot.Wires
 
 /-!
 # What an execution phase's circuit record's text declares
