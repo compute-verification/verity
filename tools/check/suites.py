@@ -309,8 +309,10 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
-#: failure no PR caused
-LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+#: failure no PR caused. It holds the tree's one Lake build lock, the file every test-time build takes
+#: (`verity_difftest.BUILD_LOCK`), since Lake builds a package's path requires in their own `.lake`
+LAKE_BUILD = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
+                     'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" lake build')
 #: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
 #: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
 #: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;

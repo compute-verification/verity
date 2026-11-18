@@ -2524,15 +2524,17 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
 
 def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
     """On a node every run of a commit shares its source tree, so two runs could build the verifier's `.lake` there at once.
-    `lake` runs under
-    `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
+    `lake` runs under the tree's one Lake build lock, the file every test-time build takes (`verity_difftest.BUILD_LOCK`,
+    under the tree's root however deep the package), so a second build of the tree, or a test's, waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
     lean = tmp_path / "verity" / "core" / "service" / "flock"
     lean.mkdir(parents=True)
+    (tmp_path / "verity" / "circuits" / "difftest").mkdir(parents=True)
     (lean / "lakefile.toml").write_text('name = "f"\n')
+    lock = tmp_path / "verity" / "circuits" / "difftest" / ".lake" / "harness-build.lock"
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    (bin_ / "lake").write_text('#!/bin/sh\nflock -n .lake/verity-build.lock true && echo unlocked || echo locked\n')
+    (bin_ / "lake").write_text(f'#!/bin/sh\nflock -n "{lock}" true && echo unlocked || echo locked\n')
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("HOME", str(tmp_path))                       # ELAN puts $HOME/.elan/bin first
