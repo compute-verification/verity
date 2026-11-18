@@ -44,7 +44,7 @@ import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -54,7 +54,6 @@ from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import Scheme, declared, settings
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
@@ -173,18 +172,15 @@ def _declared(name: str, check: Callable[[Scheme, str, Mapping[str, Any]], dict[
 #: the components no scheme declares yet, each with its row in the record, which only shrinks
 #: (`tests/tools/verity/cli/test_undeclared_rows.py`)
 UNDECLARED: dict[str, tuple[Component, str]] = {c.name: (c, row) for c, row in (
-    (Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-               needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-     "integrity"),
     (Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                 Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work"),
-    (Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-     "inference-only"),
 )}
 MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()}, **{c.name: c for c in (
+    replace(_declared("sampled-proofs"), sampling_design=_design, default_sampling_design="rate:1/3481648"),
+    _declared("inference-only"),
     _declared("pearl-plus", _pearlplus_params),
     _declared("pous"),
     _declared("bandwidth"),
