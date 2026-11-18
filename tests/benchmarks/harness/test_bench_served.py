@@ -241,14 +241,15 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 
     run = Run()
     option = SimpleNamespace(end_pass=run.end_pass, release=lambda: None)
-    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None))
+    plain = SimpleNamespace(release=lambda: None)
+    llm = SimpleNamespace(protocols=SimpleNamespace(installed=[plain, option]))
     assert _pearl_c_run(llm) is run
     assert _pass_totals(run) == dict.fromkeys(("passes", *PASS_COUNTS), 0)
     run.end_pass()
     run.end_pass()
     assert _pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
                                         "failing_rows": 0, "unsure_rows": 2}
-    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)))
+    other = SimpleNamespace(protocols=SimpleNamespace(installed=[plain]))
     assert _pearl_c_run(other) is None
     assert _pearl_c_run(SimpleNamespace(protocols=None)) is None
 
