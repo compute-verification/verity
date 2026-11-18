@@ -831,15 +831,17 @@ class RunEnv:
                                   help="put on the stages' PATH after the interpreter's directory (default: <cuda-home>/bin)")
     native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
                                               help="collector build dir (default: the release's, else --native-collect-default)")
-    native_collect_default: str = option("--native-collect-default")
+    build_root: str = option("--build-root", env="VERITY_BUILD_ROOT",
+                             help="the pod's build root: the collector build and the tap builds below are under it")
+    native_collect_default: str | None = option("--native-collect-default", default=None, help="(default: <build-root>/nc_build)")
     hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
-    hidden_so_fa2: str = option("--hidden-so-fa2")
-    hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
-    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
+    hidden_so_fa2: str | None = option("--hidden-so-fa2", default=None)
+    hidden_so_fa3: str | None = option("--hidden-so-fa3", default=None)
+    hidden_so_fa2_guarded: str | None = option("--hidden-so-fa2-guarded", default=None, help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    hidden_so_fa3_guarded: str | None = option("--hidden-so-fa3-guarded", default=None, help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
+    router_tap_so: str | None = option("--router-tap-so", default=None, help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
@@ -849,3 +851,21 @@ class RunEnv:
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
     pod_guard: str = option("--pod-guard", help="the pod guard shell library (the tree's copy when absent)")
     environ: Mapping[str, str] = environ_snapshot()
+
+    def __post_init__(self) -> None:
+        for name, below in BUILT.items():
+            if getattr(self, name) is None:
+                object.__setattr__(self, name, os.path.join(self.build_root, below))
+
+
+#: Each build `RunEnv` takes, below its build root: the collector's (``commit/committer/native_jit.py``) and the taps'
+#: (``ops/pod_fa2_tap.sh``, ``pod_fa3_tap.sh``, ``pod_norm_tap.sh``, ``pod_router_tap.sh``).
+BUILT: dict[str, str] = {
+    "native_collect_default": "nc_build",
+    "hidden_so_fa2": "fa2/build/matReq/verity_fa2_matReq.so",
+    "hidden_so_fa3": "fa2/build/fa3_matReq/verity_fa3_matReq.so",
+    "hidden_so_fa2_guarded": "fa2/build/matReqG/verity_fa2_matReqG.so",
+    "hidden_so_fa3_guarded": "fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
+    "norm_tap_so": "norm_tap/build/verity_norm_tap.so",
+    "router_tap_so": "router_tap/build/verity_router_tap.so",
+}
