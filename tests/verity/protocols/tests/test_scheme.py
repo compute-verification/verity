@@ -142,7 +142,7 @@ def test_a_said_term_says_both_sides() -> None:
     assert _toy().over and _toy().under
     with pytest.raises(ValueError, match="says its two sides"):
         _toy(under="")
-    assert _toy("silent", delta_scheme=None, over="", under="").over == ""
+    assert _toy("silent", delta_scheme=S.UNDECLARED, over="", under="").over == ""
 
 
 def test_a_named_term_is_evaluated_at_the_parameters_its_caller_gives() -> None:
@@ -167,7 +167,7 @@ def test_a_named_term_is_evaluated_at_the_parameters_its_caller_gives() -> None:
 
 
 def test_scheme_term_not_said_refuses_a_bound() -> None:
-    s = _toy("silent", delta_scheme=None)
+    s = _toy("silent", delta_scheme=S.Lacks("its term has no Lean constant"))
     assert S.register(s) is S.SCHEMES["silent"]
     with pytest.raises(ValueError, match=r"silent: its delta_scheme \(Verity.Scheme.δscheme\) is not said"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
@@ -209,6 +209,27 @@ def test_ports() -> None:
     assert _toy(ports=(port,)).ports == (port,)
     with pytest.raises(ValueError, match="not its blocks' Definitions"):
         _toy(ports=(S.Port("scan state", "input", "IngressScanBucket_v1", "state"),))
+
+
+def test_a_field_no_declaration_fills_is_refused_by_its_name() -> None:
+    toy = _toy(record="toy", symbol=S.Lacks("it certifies nothing yet"))
+    assert S.declared(toy, "record") == "toy"
+    with pytest.raises(LookupError, match="toy-bandwidth declares no symbol: it certifies nothing yet"):
+        S.declared(toy, "symbol")
+    with pytest.raises(LookupError, match="toy-bandwidth declares no parties$"):
+        S.declared(toy, "parties")
+
+
+def test_every_declaration_fills_each_field_or_says_why_not() -> None:
+    probe = ("import json\n"
+             "from verity.protocols.compose import schemes as C\n"
+             "from verity.protocols.resource_accounting import scheme as S\n"
+             "C.load()\n"
+             "F = ('parties', 'channels', 'colocated', 'needs', 'depends', 'record', 'symbol', 'record_unit', 'title',\n"
+             "     'record_owner')\n"
+             "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"
 
 
 def test_a_ports_layout_at_a_shape() -> None:

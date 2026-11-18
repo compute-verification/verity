@@ -77,6 +77,7 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from verity.hooks import HOOKS
+from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -89,6 +90,19 @@ def _attaches_nothing(exchange: Any, ctx: Any) -> None:
 
 def _no_settings_check(values: Mapping[str, Any]) -> str | None:
     return None
+
+
+@dataclass(frozen=True)
+class Lacks:
+    """What a declaration doesn't fill, and why: read through `declared`, a field holding it refuses by its name. A field
+    no declaration sets holds `UNDECLARED`, so nothing unset reads as declared."""
+
+    why: str = ""
+
+
+UNDECLARED = Lacks()
+#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
+VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -229,7 +243,16 @@ class Scheme:
     declaration: a number, zero where none can fail, or a `Term` where it depends on public parameters; None, not said,
     lets a scheme be registered and read but not bounded (`bound`). ``over`` and ``under`` are `Verity.Scheme.over` and
     `under` in words, each with its natural unit: the bound is that ``over`` exceeds ``under`` by at most the incorrect
-    blocks' cost and the charges; a scheme whose term is said says both."""
+    blocks' cost and the charges; a scheme whose term is said says both.
+
+    What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
+    the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
+    `VERIFIER` is the party its answer goes to), ``colocated``, the pairs of its parties on one machine, ``needs``, what
+    the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``), ``depends``, the
+    schemes it runs beside, ``record``, its row's name in the record, ``symbol`` and ``record_unit``, its certified
+    quantity's symbol and the unit the record publishes it in, which may be another measure of ``unit``
+    (`Core.Account.Measure`), ``title``, its name in the record's sentences, and ``record_owner``, the lane the record
+    names as answering for its row."""
 
     name: str
     protocol: str
@@ -244,7 +267,7 @@ class Scheme:
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
     ports: tuple[Port, ...] = ()
-    delta_scheme: Fraction | Term | None = None
+    delta_scheme: Fraction | Term | Lacks = UNDECLARED
     over: str = ""
     under: str = ""
     requests: Callable[[Any], Sequence[Any]] = _no_requests
@@ -253,6 +276,16 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
+    parties: tuple[Role, ...] | Lacks = UNDECLARED
+    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
+    needs: frozenset[str] | Lacks = UNDECLARED
+    depends: tuple[str, ...] | Lacks = UNDECLARED
+    record: str | Lacks = UNDECLARED
+    symbol: str | Lacks = UNDECLARED
+    record_unit: str | Lacks = UNDECLARED
+    title: str | Lacks = UNDECLARED
+    record_owner: str | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -270,9 +303,10 @@ class Scheme:
             raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
         if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
             raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
-        if self.delta_scheme is not None and not isinstance(self.delta_scheme, Term) and not 0 <= self.delta_scheme < 1:
+        said = not isinstance(self.delta_scheme, Lacks)
+        if said and not isinstance(self.delta_scheme, Term) and not 0 <= self.delta_scheme < 1:
             raise ValueError(f"{self.name}: its own term δscheme lies in [0, 1), not {self.delta_scheme}")
-        if self.delta_scheme is not None and not (self.over and self.under):
+        if said and not (self.over and self.under):
             raise ValueError(f"{self.name}: a scheme whose term is said says its two sides (Verity.Scheme.over and under) "
                              "in words, each with its unit")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
@@ -340,9 +374,10 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
         raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
                          "without them would read as complete")
-    if scheme.delta_scheme is None:
+    if isinstance(scheme.delta_scheme, Lacks):
         raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
-                         "own term by name, zero where none of its assumptions can fail")
+                         "own term by name, zero where none of its assumptions can fail"
+                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""))
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     if epsilon is None or not 0 <= epsilon < 1:
@@ -370,6 +405,15 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
 #: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through
 #: `verity.protocols.compose.schemes.get`
 SCHEMES: dict[str, Scheme] = {}
+
+
+def declared(scheme: Scheme, name: str) -> Any:
+    """``scheme``'s field ``name``, refused (LookupError, naming the scheme, the field and what the declaration says it
+    lacks) where it holds a `Lacks`."""
+    value = getattr(scheme, name)
+    if isinstance(value, Lacks):
+        raise LookupError(f"{scheme.name} declares no {name}" + (f": {value.why}" if value.why else ""))
+    return value
 
 
 def layout(scheme: Scheme, port: str, shape: Mapping[str, int]) -> Layout:
@@ -452,6 +496,6 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Layout",
-           "Order", "Port", "Scheme", "Term", "bound", "credited", "layout", "register", "register_circuits",
-           "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
+           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Scheme", "Term", "bound", "credited", "declared",
+           "layout", "register", "register_circuits", "register_process", "settings"]

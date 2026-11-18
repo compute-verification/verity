@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Order, Scheme, register
 
+#: why dither fills no field a configuration, a launcher or a record reads
+_NOT_RUN = Lacks("experimental: no application lists dither and it has no verifier")
 #: `Pouw.Dither.Prover.epsWorkSound`: the error of `Pouw.Guarantees.Dither.WorkSound`, over every term of ε_skip
 _EPS = "Pouw.Dither.Prover.epsWorkSound"
 
@@ -31,4 +33,6 @@ DITHER = register(Scheme(
     log=(Order("operand roots", "seeds"), Order("value roots", "check")),
     charges=(Charge("sample", _EPS), Charge("egress", _EPS), Charge("answers", _EPS)),
     attach=attach,
+    **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "record_unit", "title",
+                     "record_owner"), _NOT_RUN),
 ))
