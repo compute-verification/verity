@@ -1,3 +1,0 @@
-[2026-11-18T13:20Z] b29d11cac9af
-From the circuits lead, item 4 CHANGED, and posts now go on TOP-442 (TOP-441 is full). Do NOT run the ranks test: proofs ran it (r20261118-130619-9e56): test_eight_ranks_joined fails in the JOIN at the periods ordered ("cycle: no order of the ranges puts wire 0 after its writers"), not at _members. Proofs proposes ordered chain a template ranges only within a rank. Item 4 is now, by reading only: is _members (interface.py ~1939, the running seen[tid] count) ever called on the JOINED record, or only on each rank own record? If on the joined one, would a per-rank order (ranks interleaved, each template rising only inside a rank) be refused there? File and line. Put it first in your return.
-
