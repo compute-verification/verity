@@ -70,6 +70,13 @@ whose row is its verdict's output under no pin (`ROW_UNPINNED`), refused with th
 Then one template in two root nodes (`SPLITS`): the served shape's `Norm` batch split into two root nodes of half
 its members each, side by side and with `Gemm`'s node between, each taken with the served shape's verdict, its units
 numbered across the two; and the record stating one unit fewer than their sum, refused with its templates.
+Then the edges (`EDGED`): toys whose root's units read earlier units' outputs, the record stating no wire, each
+under no pin, the largest limits and a log of no registered value. Taken: an edge member to member at one and at
+two slots, across slots, into a call, and from a writer's second output in one strided part and in two parts.
+Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
+port the record cuts, a partial row, and one template in two root nodes with an edge each way, its order stated or
+not (`wires`), a row of another width (`program`), ingress or a registered read onto an edge's row (`inputs`), and
+a reference to a later node (`not-topological`).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -92,6 +99,7 @@ import verity.commitments.periods.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program
+from verity.circuits.program import Program
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 
@@ -1977,6 +1985,174 @@ def _forward(inst: dict) -> bool:
     return False
 
 
+#: the toys of a root whose units read earlier units' outputs (`EDGED`)
+EU4 = Array(4, Value(16))
+EA = template("EdgeA", [("x", EU4), ("h", EU4)], [EU4], [[("op", 16, [(0, k), (1, k)]) for k in range(4)]])
+EA2 = template("EdgePair", [("x", EU4), ("h", EU4)], [EU4, EU4],
+               [[("op", 16, [(0, k)]) for k in range(4)], [("op", 16, [(1, k)]) for k in range(4)]])
+EB = template("EdgeB", [("y", EU4)], [EU4], [[("op", 16, [(0, k)]) for k in range(4)]])
+EWIDE = template("EdgeWide", [("y", Array(8, Value(16)))], [EU4],
+                 [[("op", 16, [(0, k), (0, k + 4)]) for k in range(4)]])
+ENARROW = template("EdgeNarrow", [("y", Array(4, Value(8)))], [Value(16)], [[("op", 16, [(0, 0)])]])
+
+
+class Edged(Circuit):
+    """A circuit whose root is `body` over the input arrays `inputs` (`(name, type)` each), its templates and units
+    `units` (`(Definition, units, entries)` each, `Circuit.add`'s entries)."""
+
+    def __init__(self, slots: int, inputs: list, ret, body, units: list) -> None:
+        super().__init__("Edged", slots)
+        self.inputs, self.ret, self.body = inputs, ret, body
+        for fn, _n, entries in units:
+            self.add(fn, entries)
+
+    def program(self) -> tuple[str, str]:
+        sig = (tuple(self.inputs), self.ret)
+        root = CompositeDefinition(self.name, 1, (), lambda S: sig, self.body, register=False)
+        desc = codec.encode_program(Program(bind(root)))
+        return codec.canonical_json(desc).decode(), codec.program_digest(desc)
+
+
+def _units(slots: int, n: int) -> list:
+    """`n` units, unit `i` in slot `i % slots`."""
+    return [([n], ["slot"], 0)] if n == slots else [([n // slots, slots], ["x", "slot"], 0)]
+
+
+def _ab(body, n: int = 2, m: int = 2, slots: int = 1, reader=EB, writer=EA, ret=None) -> Edged:
+    """`writer` batched over `n` members' `x` and `h`, then `reader` as `body` has it, `m` units."""
+    return Edged(slots, [("x", Array(n, EU4)), ("h", Array(n, EU4))], ret or Array(m, EU4), body,
+                 [(writer, n, _units(slots, n)), (reader, m, _units(slots, m))])
+
+
+def _mapped(B, S, x, h):
+    return B.batch(EB, B.batch(EA, x, h, axes=(0, 0)), axes=(0,))
+
+
+def _shifted(B, S, x, h):
+    """`EdgeB`'s member `m` reads `EdgeA`'s member `m + 1`."""
+    a = B.batch(EA, x, h, axes=(0, 0))
+    return B.batch(EB, array_of([a[1], a[2]]), axes=(0,))
+
+
+def _fanout(B, S, x, h):
+    """Every member of `EdgeB` reads `EdgeA`'s member 0."""
+    a = B.batch(EA, x, h, axes=(0, 0))
+    return B.batch(EB, a[0], axes=(None,), n=2)
+
+
+def _called(reader=EB):
+    """`reader` called once, on `EdgeA`'s member 1."""
+    return lambda B, S, x, h: B.call(reader, B.batch(EA, x, h, axes=(0, 0))[1])
+
+
+def _first_two(B, S, x, h):
+    """`EdgeB`'s member `m` reads `EdgeA`'s member `m`, of three."""
+    a = B.batch(EA, x, h, axes=(0, 0))
+    return B.batch(EB, array_of([a[0], a[1]]), axes=(0,))
+
+
+def _second(B, S, x, h):
+    """`EdgeB`'s member `m` reads the second output of `EdgePair`'s member `m`."""
+    a = B.batch(EA2, x, h, axes=(0, 0))
+    return B.batch(EB, array_of([a[0][1], a[1][1]]), axes=(0,))
+
+
+def _half(B, S, x, h):
+    """`EdgeWide` called on `EdgeA`'s member 0 then `x`'s member 1: half an edge, half input gates."""
+    a = B.batch(EA, x, h, axes=(0, 0))
+    return B.call(EWIDE, array_of([*(a[0][k] for k in range(4)), *(x[1][k] for k in range(4))]))
+
+
+def _twice(B, S, x, h):
+    """`EdgeA` batched twice, on `x`'s first two members then its last two, the second reading `EdgeB`'s outputs: one
+    template in two root nodes."""
+    a = B.batch(EA, array_of([x[0], x[1]]), h, axes=(0, 0))
+    b = B.batch(EB, a, axes=(0,))
+    return B.batch(EA, array_of([x[2], x[3]]), b, axes=(0, 0))
+
+
+def _two_nodes() -> Edged:
+    return Edged(1, [("x", Array(4, EU4)), ("h", Array(2, EU4))], Array(2, EU4), _twice,
+                 [(EA, 4, _units(1, 4)), (EB, 2, _units(1, 2))])
+
+
+def _narrow() -> Edged:
+    """`EdgeA` batched, and `EdgeNarrow` called on 8-bit inputs of its own, which the toy repoints to `EdgeA`'s
+    member 1."""
+    def body(B, S, x, h, z):
+        B.batch(EA, x, h, axes=(0, 0))
+        return B.call(ENARROW, z)
+    return Edged(1, [("x", Array(2, EU4)), ("h", Array(2, EU4)), ("z", Array(4, Value(8)))], Value(16), body,
+                 [(EA, 2, _units(1, 2)), (ENARROW, 1, _units(1, 1))])
+
+
+def _repoint(refs: list, k: int, j: int = 0, form: str = "affine"):
+    """The edit that sets root node `k`'s argument `j` to the references `refs` of the form `form`."""
+    def edit(nodes: list) -> None:
+        nodes[k]["args"][j]["refs"] = {form: refs}
+    return edit
+
+
+#: each toy: its circuit, the edit of its Program's root (or None), the edit of its record (or None), and the stage
+#: that refuses it, None where it is taken
+EDGED = {
+    "an edge, member to member, one slot": (lambda: _ab(_mapped), None, None, None),
+    "an edge, member to member, two slots": (lambda: _ab(_mapped, slots=2), None, None, None),
+    "an edge across slots": (lambda: _ab(_shifted, n=4, slots=2), None, None, None),
+    "an edge every member reads, unbatched": (lambda: _ab(_fanout), None, None, "own-rows"),
+    "an edge into a call": (lambda: _ab(_called(), m=1, ret=EU4), None, None, None),
+    "an edge from a writer's second output, strided": (lambda: _ab(_second, writer=EA2),
+                                                       _repoint(["n", 2, 4, 4, 8, 1, 8], 3, form="strided"), None,
+                                                       None),
+    "an edge from a writer's second output, in two parts": (lambda: _ab(_second, writer=EA2), None, None, None),
+    "an edge into a port the record cuts": (lambda: _ab(_mapped), None,
+                                            lambda d: d.update(cuts={"EdgeB_v1": {"y": 2}}), "wires"),
+    "one template in two root nodes, an edge each way, the record's order unread": (_two_nodes, None, lambda d: d.update(
+        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), "wires"),
+    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, "wires"),
+    "a partial row": (lambda: _ab(_first_two, n=3, m=2), _repoint(["n", 2, 2, 8], 3), None, "wires"),
+    "a row of another width": (_narrow, _repoint(["n", 3, 4, 4], 4), None, "program"),
+    "a row half its own input and half an edge": (lambda: _ab(_half, m=1, reader=EWIDE, ret=EU4), None, None,
+                                                  "own-rows"),
+    "ingress onto an edge's row": (lambda: _ab(_mapped), None, lambda d: d.update(
+        ingress=[{"reader": "EdgeB_v1", "port": "y", "at": 0, "units": 1, "step": 0}]), "inputs"),
+    "a registered read onto an edge's row": (lambda: _ab(_mapped), None, lambda d: d.update(registered={
+        "params": {"weights/w": 8}, "tables": [], "roots": [], "openings": [],
+        "reads": [{"reader": "EdgeB_v1", "port": "y", "param": "weights/w", "at": 1, "radix": [1], "base": 0,
+                   "step": [0]}]}), "inputs"),
+    "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "not-topological"),
+}
+
+
+def edged_case(what: str) -> dict:
+    """The case of toy `what` (`EDGED`): its instance under no pin, every limit the largest, a registration log of no
+    registered value, and every input row of every unit."""
+    make, root, record, _ = EDGED[what]
+    c = make()
+    text, digest = c.program()
+    if root is not None:
+        desc = json.loads(text)
+        root(desc["definitions"][desc["root"]]["body"]["nodes"])
+        text, digest = codec.canonical_json(desc).decode(), codec.program_digest(desc)
+    doc = c.doc(digest)
+    if record is not None:
+        record(doc)
+    text_record = IF.circuit_bytes(doc).decode()
+    rng = random.Random(what)
+    inst = {"program": text, "record": text_record, "gamma": BIG, "alpha": [BIG, 1], "pins": []}
+    tids = sorted({codec.descriptor_id(fn) for fn, _ in c.templates})
+    prims = sorted({p for fn, _ in c.templates for p in ref.template_gates(fn)})
+    rows = [[codec.descriptor_id(fn), p, u, 0] for fn, n in c.templates for p, _ in fn.signature()[0] for u in range(n)]
+    return {"instance": inst, "trusted": trusted(rng, digest, text_record, {}, {}), "spot": None, "rows": rows,
+            "count": {"table": dict.fromkeys(prims, 1), "c": BIG, "k": BIG, "n": BIG},
+            "block_rows": {"table": dict.fromkeys(tids, 1), "gamma": BIG, "alpha": [BIG, 1]}}
+
+
+def edged() -> list[dict]:
+    """`EDGED`'s cases, as `shaped()` gives its own."""
+    return [{"shape": what, "case": edged_case(what)} for what in EDGED]
+
+
 def line(obj) -> str:
     return json.dumps(obj, separators=(",", ":"), sort_keys=True) + "\n"
 
@@ -1985,8 +2161,8 @@ NAMES = ("cases", "python")
 
 
 def total() -> int:
-    """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
+    """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
+    return len(EDGED) + COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
 
 
 def results(case: dict) -> dict:
@@ -2008,7 +2184,7 @@ def write(out: Path, count: int | None = None) -> dict[str, Path]:
     paths = {f"record_difftest/{n}.jsonl": d / f"{n}.jsonl" for n in NAMES}
     files = [open(paths[f"record_difftest/{n}.jsonl"], "w") for n in NAMES]
     try:
-        late = shaped() if count > COUNT else []
+        late = shaped() + edged() if count > COUNT else []
         for seed in range(count):
             made = (late[seed - COUNT] if seed >= COUNT else case(seed))["case"]
             for f, obj in zip(files, (made, results(made)), strict=True):

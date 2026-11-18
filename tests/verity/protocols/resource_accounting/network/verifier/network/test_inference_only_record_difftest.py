@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 711 cases (600 random circuits,
-two in five broken in one way, and 111 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 727 cases (600 random circuits,
+two in five broken in one way, 111 shaped ones, most in the shape of a served class, and 16 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -36,7 +36,8 @@ every slot's units, with an opening's ports off the count only where the opening
 format is held to the registration log: a value read in leaves of another width than 16 bits is registered in leaves of
 that width. The eighteenth is the row an opening may declare: the first of its reader's two outputs, the second
 its verdict, of a reader of six input rows, by which nothing is filled or counted. The nineteenth is the opening whose
-row is its verdict's own output: refused with the declarations, under its reader's pin and under none.
+row is its verdict's own output: refused with the declarations, under its reader's pin and under none. The twentieth is
+the edges (`EDGED`): each toy taken or refused at the stage it states, and a taken one's every unit counted in a block.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -129,7 +130,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 711 cases and the reference's results, byte for byte as the record pins them."""
+    """All 727 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -1148,3 +1149,17 @@ def test_a_template_in_two_root_nodes(shaped):
             assert got["detail"] == {"error": "templates"}, what
         else:
             assert got["detail"] == base["detail"] and got["chosen"] == base["chosen"], what
+
+
+def test_a_units_row_may_be_an_earlier_units_output():
+    """The edges (`EDGED`): each toy is taken, or refused at the stage it states, by the record, its count and its
+    rows rule alike; a taken one counts every unit of the circuit in its blocks."""
+    for what, (make, _, _, stage) in vectors.EDGED.items():
+        case = vectors.edged_case(what)
+        r = vectors.results(case)
+        assert r["detail"].get("error") == stage, (what, r["detail"])
+        if stage is None:
+            assert r["detail"]["blocks"] >= 1 and isinstance(r["kinds"], list), what
+            assert "error" not in r["count"] and "error" not in r["block_rows"], what
+        else:
+            assert r["count"] == r["block_rows"] == {"error": stage}, what
