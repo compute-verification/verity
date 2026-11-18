@@ -22,7 +22,7 @@
   "benchmarks/pouw/edited_gemm/run.sh": 1,
   "benchmarks/pouw/floored_gemm/run.sh": 1,
   "benchmarks/pouw/floored_gemm/tb_run.sh": 1,
-  "benchmarks/pouw/harness/native/build.sh": 4,
+  "benchmarks/pouw/harness/native/build.sh": 1,
   "benchmarks/pouw/hidden_zk/registered.sh": 1,
   "benchmarks/pouw/masked_gemm/run.sh": 1,
   "benchmarks/pouw/pearl_c4/ship.sh": 1,
