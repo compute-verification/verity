@@ -1,6 +1,0 @@
-# Dither's J10-R workspace front end (verity/protocols/experimental/dither/prover/j10r_ws.py) on stand-in builds.
-[tool.pytest.ini_options]
-testpaths = ["."]
-
-[tool.verity.tests]
-inputs = ["verity"]
