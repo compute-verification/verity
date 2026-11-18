@@ -64,7 +64,7 @@ from verity.commitments.periods import interface as IF
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 import class_rows as CR  # noqa: E402
-from verity.protocols.proofs.spot.prover.audit import class_size as CS  # noqa: E402
+from benchmarks.prove_path import class_size as CS  # noqa: E402
 
 SOURCES = json.loads((HERE / "sources.json").read_text())
 

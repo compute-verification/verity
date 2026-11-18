@@ -29,7 +29,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
 
 sys.path.insert(0, str(((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path"))))
-from verity.protocols.proofs.spot.prover.audit import class_size as CZ  # noqa: E402
+from benchmarks.prove_path import class_size as CZ  # noqa: E402
 
 SOURCES = json.loads((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "sources.json").read_text())
 
