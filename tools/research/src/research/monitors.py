@@ -1383,8 +1383,14 @@ def agent_ids(reg: dict, handle: str) -> list[str]:
     return next((BC_ID_RE.findall(h.get("holder") or "") for h in reg["handles"] if h["handle"] == handle), [])
 
 
-def lane_of(reg: dict, branch: str) -> str | None:
-    """The handle whose holder's agent id ends in `branch`'s suffix (`cursor/x-558b`: the agent bc-…558b)."""
+def lane_of(reg: dict, branch: str, body: str = "") -> str | None:
+    """A PR's lane: the handle its body's `Lane NAME` line names, as the queue reads it (`queue.LANE_RE`), when the registry
+    has that handle; else the handle whose holder's agent id ends in `branch`'s suffix (`cursor/x-558b`: the agent bc-…558b)."""
+    from .queue import LANE_RE as BODY_LANE_RE
+
+    handles = {h["handle"] for h in reg["handles"]}
+    if (named := BODY_LANE_RE.search(body or "")) and named[1] in handles:
+        return named[1]
     m = LANE_RE.search(branch)
     return next((h["handle"] for h in reg["handles"] if m and any(i.endswith(m[1]) for i in BC_ID_RE.findall(h.get("holder") or ""))),
                 None)
@@ -1403,24 +1409,24 @@ def train_prs(subjects: list[str]) -> list[int]:
 
 
 def _pr(ctx: Ctx, n: int) -> dict:
-    """PR ``n``'s state and head branch (`gh pr view`)."""
-    return json.loads(ctx.sh(["gh", "-R", REPO_SLUG, "pr", "view", str(n), "--json", "headRefName,state"], timeout=30))
+    """PR ``n``'s state, head branch and body (`gh pr view`)."""
+    return json.loads(ctx.sh(["gh", "-R", REPO_SLUG, "pr", "view", str(n), "--json", "headRefName,state,body"], timeout=30))
 
 
-def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
-    """(number, branch) of each open PR the run checks: a candidate's, else the PR whose head it is."""
+def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str, str]]:
+    """(number, branch, body) of each open PR the run checks: a candidate's, else the PR whose head it is."""
     gh = ["gh", "-R", REPO_SLUG, "pr"]
     if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
         out = []
         for n in nums:
             pr = _pr(ctx, n)
             if pr.get("state") == "OPEN":
-                out.append((n, pr.get("headRefName") or ""))
+                out.append((n, pr.get("headRefName") or "", pr.get("body") or ""))
         return out
     if not row.get("sha"):
         return []
-    got = json.loads(ctx.sh([*gh, "list", "--state", "open", "--search", row["sha"], "--json", "number,headRefName"], timeout=30))
-    return [(p["number"], p.get("headRefName") or "") for p in got]
+    got = json.loads(ctx.sh([*gh, "list", "--state", "open", "--search", row["sha"], "--json", "number,headRefName,body"], timeout=30))
+    return [(p["number"], p.get("headRefName") or "", p.get("body") or "") for p in got]
 
 
 def _raw(ctx: Ctx, path: str, sha: str | None) -> str:
@@ -1496,7 +1502,8 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
         return None
     try:
         prs, unread = _open_prs(ctx, row), ""
-        gate = [(n, _pr(ctx, n).get("headRefName") or "") for n in ratchet_prs("\n".join(row.get("ratchet") or ()))]
+        gate = [(n, (pr := _pr(ctx, n)).get("headRefName") or "", pr.get("body") or "")
+                for n in ratchet_prs("\n".join(row.get("ratchet") or ()))]
     except Exception as e:  # noqa: BLE001  (the lander still hears of it)
         prs, gate, unread = [], [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
     jobs = [j for j in (row.get("step"), RATCHET_STEP if "ratchet" in row else None) if j]
@@ -1514,10 +1521,11 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
         how = "was killed" if row.get("state") == "cancelled" or (row.get("rc") or 0) > 128 else f"ended rc {row.get('rc')}"
         what = (f"*Check `{run}` {how} on {machine}* at {_hm(row.get('ended'))}, before any step failed "
                 f"({row.get('class') or 'unclassified'}): {clean(row.get('why')) or 'no reason recorded'}.")
-    lanes, named = [lane_of(reg, b) for _, b in prs], [lane_of(reg, b) for _, b in gate]
+    lanes, named = [lane_of(reg, b, body) for _, b, body in prs], [lane_of(reg, b, body) for _, b, body in gate]
 
-    def listed(pairs: list[tuple[int, str]], hs: list[str | None]) -> str:
-        return ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(pairs, hs)) + "."
+    def listed(pairs: list[tuple[int, str, str]], hs: list[str | None]) -> str:
+        return ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in its body or the registry)")
+                         for (n, b, _), h in zip(pairs, hs)) + "."
 
     if prs:
         what += (f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: "

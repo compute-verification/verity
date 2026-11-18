@@ -570,24 +570,51 @@ def test_the_call_check_compares_under_the_salt():
 
 
 def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
-    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    """`retained_differences`: two retained passes the same but for one call's A rows names that call, its matmul and
     its entry's differing field, and the one file on disk; two passes the same are ok."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
-    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
-             for i in range(3)]
-    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4, "sha256": "a"}} for i in range(3)]
+    moved = [*files[:1], {**files[1], "rows": {**files[1]["rows"], "sha256": "b"}}, *files[2:]]
     dirs = [tmp_path / "eager", tmp_path / "replayed"]
-    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+    for d, rows in zip(dirs, (b"x", b"y"), strict=True):
         (d / "calls").mkdir(parents=True)
-        (d / "calls" / "1.tree").write_bytes(tree)
+        (d / "calls" / "1.rows.bf16").write_bytes(rows)
     want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
     assert E2E.retained_differences(want, got, dirs) == {
-        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.rows.bf16"]},
         "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
-                       "fields": ["tree.sha256"]}}
+                       "fields": ["rows.sha256"]}}
     assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
+
+
+def test_the_whole_retained_check_sets_aside_what_fresh_salts_make_differ(tmp_path):
+    """Each pass draws its own salts, so two retained passes of the same calls differ in A's tree and salts and y's root,
+    tree and salts, in their entries and on disk: `retained_differences` passes them, and still names a y rows file that
+    differs."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(0, Shape(16, 2048, 3072), 7)]
+
+    def call(tag: str, y_rows: str = "r") -> dict:
+        return {"rows": {"path": "calls/0.rows.bf16", "bytes": 4},
+                "tree": {"path": "calls/0.tree", "bytes": 8, "sha256": tag}, "salts": {"path": "calls/0.salts", "bytes": 4},
+                "y": {"root": tag, "rows": {"path": "y/0.rows.bf16", "bytes": 4, "sha256": y_rows},
+                      "tree": {"path": "y/0.tree", "bytes": 8, "sha256": tag}, "salts": {"path": "y/0.salts", "bytes": 4}}}
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, salt in zip(dirs, (b"s", b"t"), strict=True):
+        for sub in ("calls", "y"):
+            (d / sub).mkdir(parents=True)
+            (d / sub / "0.rows.bf16").write_bytes(b"rows")
+            for name in ("0.tree", "0.salts"):
+                (d / sub / name).write_bytes(salt)
+    want = ([None], [call("a")], {"digests": "d", "units": 1, "tiles": 1}, mms)
+    assert E2E.retained_differences(want, ([None], [call("b")], want[2], mms), dirs) == {"ok": True}
+    (dirs[1] / "y" / "0.rows.bf16").write_bytes(b"rowz")
+    got = E2E.retained_differences(want, ([None], [call("b", "q")], want[2], mms), dirs)
+    assert got["disk"] == {"differ": 1, "first": ["y/0.rows.bf16"]} and got["call_files"]["fields"] == ["y.rows.sha256"]
+    assert not E2E.retained_differences(want, ([None], [call("a")], {**want[2], "digests": "e"}, mms), dirs)["ok"]
 
 
 def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
@@ -602,7 +629,7 @@ def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
         return {"tiles": 2, "manifest": "m"}
 
     run = types.SimpleNamespace(cur=cur, end=end)
-    assert E2E.retained_end(run, ("tiles",)) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
+    assert E2E.retained_end(run, lambda _, e: {"tiles": e["tiles"]}) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
 
 
 # ---- one pass per engine step, through Pearl+ attached by name (`pouw.scheme.Attached`) ---------------------------------

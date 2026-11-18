@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from verity.circuits import restrict as R
 from verity.circuits.codec import descriptor_chunks
 from verity.commitments.periods import interface as I
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -81,12 +82,13 @@ def drawn(win: Any) -> Any:
 
 
 def c_s(member: Any) -> bytes:
-    """The drawn block's circuit file C_S, which prover and verifier both derive from C and the partition."""
+    """The drawn block's C_S, which prover and verifier both derive from C and the block's units: the block's Program
+    (`restrict.restrict`), its descriptor's bytes."""
     r = registered()
     try:
-        return OC.restrict(r["C"], r["partition"], member.base)
-    except OC.NotDerived as e:
-        raise Stop(f"prove: the prover's C_S for block {member.base} ({OC.__file__}:restrict): {e}") from e
+        return R.restrict(r["C"], r["partition"], [(member.base, member.base + member.n)]).descriptor
+    except R.Refused as e:
+        raise Stop(f"prove: the prover's C_S for block {member.base} ({R.__file__}:restrict): {e}") from e
 
 
 def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
