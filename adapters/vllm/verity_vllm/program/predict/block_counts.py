@@ -66,8 +66,10 @@ from verity_vllm.records.weights_registration import WeightsRegistration
 
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     """A window circuit record's session Program, whose function is the session Definition (module docstring), its slots m and
-    steps T. Refused (ValueError) where the record states no inference blocks or its entries don't tile its templates
-    (`interface.Blocks.of`)."""
+    steps T: the wired Program (`wired_population_program`, as `interface.served_program` registers the window's C) of the
+    record's share of one slot (`session_record`), so a row the record's wires fill is an edge of it and no parameter.
+    Refused (ValueError) where the record states no inference blocks, its entries don't tile its templates
+    (`interface.Blocks.of`), or `session_record` refuses it."""
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
@@ -75,13 +77,93 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     if not blocks.uniform:
         raise ValueError(f"{doc.get('name')}: a served window's blocks, a request each of its own positions, have no one "
                          "session Definition; a class circuit's do")
-    per: Counter[str]
-    m, per = blocks.slots, Counter()
-    for e in blocks.inference:
-        per[e.template] += e.units // m
-    members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
-    program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
-    return program, m, blocks.steps
+    rec = session_record(doc, blocks)
+    program, _ = wired_population_program([(resolve(t), n) for t, n in rec["templates"]], rec)
+    return program, blocks.slots, blocks.steps
+
+
+#: the fields of a record's ``registered`` that `session_record` carries over whole: what the slot's reads read, not
+#: which units read it
+_WHOLE = ("params", "tables", "values", "formats")
+
+
+def session_record(doc: Mapping[str, Any], blocks: IF.Blocks) -> dict[str, Any]:
+    """The record ``doc``'s share of slot 0, as a record of its own over each template's units of that slot, each unit
+    numbered by its place among them: its wires, registered reads, table reads, openings, ingress and order kept where
+    their reader is one of the slot's units, each a row of a unit (`interface.coalesce` merges them back into runs); its
+    cuts and what its registration registers, whole. The window is m copies of it: refused (ValueError), by name, where a
+    wire's writer is another slot's unit (``cross-slot``), where another slot's share is not slot 0's but for which leaves
+    of a registered parameter its reads read (``slot-unlike``), a slot's units of an opening or of the order are not one
+    run (``slot-split``), or the record declares what this reads no share of (boundary reads, named free rows, ranks,
+    histories, supplied values)."""
+    import numpy as np
+
+    reg = dict(doc.get("registered") or {})
+    if extra := sorted({"boundary_reads", "free", "ranks"} & set(doc)) + sorted({"histories", "supplied"} & set(reg)):
+        raise ValueError(f"{doc.get('name')}: a session's share of {extra} is not read")
+    m, slot, local = blocks.slots, {}, {}
+    for t, n in doc["templates"]:
+        slot[t] = blocks.slots_steps(t, 0, int(n))[0]
+        local[t] = np.empty(int(n), dtype=np.int64)
+        for s in range(m):
+            at = np.flatnonzero(slot[t] == s)
+            local[t][at] = np.arange(len(at))
+
+    def rows(p: Mapping[str, Any], s: int, writer: str | None) -> list[dict[str, Any]]:
+        pat = (IF.Wire.of(p) if writer else IF.Read.of(p))
+        c0, c = pat.cut
+        i = np.arange(pat.units, dtype=np.int64)
+        u, src = pat.at + i // c, pat.source(i)
+        if writer is not None and (bad := np.flatnonzero(slot[pat.reader][u] != slot[writer][src])).size:
+            k = int(bad[0])
+            raise ValueError(f"cross-slot: wire {p} fills unit {int(u[k])} of {pat.reader} from unit {int(src[k])} of "
+                             f"{writer}, another slot's")
+        keep = np.flatnonzero(slot[pat.reader][u] == s)
+        base = local[writer][src] if writer else src
+        head = {k: p[k] for k in (("reader", "port", "writer", "out") if writer else ("reader", "port", "param"))}
+        return [{**head, "at": int(local[pat.reader][u[k]]), "radix": [1], "base": int(base[k]), "step": [0],
+                 **({"cut": [int(c0 + k % c), 1]} if pat.cut != (0, 1) else {})} for k in keep]
+
+    def runs(e: Mapping[str, Any], s: int, whole: bool) -> list[dict[str, Any]]:
+        mine = [int(local[e["reader"]][u]) for u in range(e["at"], e["at"] + e["units"]) if slot[e["reader"]][u] == s]
+        out = [[x, 1] for x in mine[:1]]
+        for x in mine[1:]:
+            if x == out[-1][0] + out[-1][1]:
+                out[-1][1] += 1
+            else:
+                out.append([x, 1])
+        if whole and len(out) > 1:
+            raise ValueError(f"slot-split: slot {s}'s units of {e} are not one run")
+        return [{**e, "at": a, "units": n} for a, n in out]
+
+    def share(s: int) -> dict[str, Any]:
+        wires = IF.coalesce([IF.Wire.of(w) for p in doc.get("wires", ()) for w in rows(p, s, p["writer"])])
+        reads = IF.coalesce([IF.Read.of(r) for p in reg.get("reads", ()) for r in rows(p, s, None)])
+        order = []
+        for t, lo, n in doc.get("order") or ():
+            for r in runs({"reader": t, "at": lo, "units": n}, s, False):
+                if order and order[-1][0] == t and order[-1][1] + order[-1][2] == r["at"]:
+                    order[-1][2] += r["units"]
+                else:
+                    order.append([t, r["at"], r["units"]])
+        registered = {**{k: reg[k] for k in _WHOLE if k in reg}, "reads": [r.doc() for r in reads],
+                      "roots": [x for e in reg.get("roots", ()) for x in runs(e, s, False)],
+                      "openings": [x for e in reg.get("openings", ()) for x in runs(e, s, True)]}
+        return {"templates": [[t, int((slot[t] == s).sum())] for t, _ in doc["templates"]],
+                "wires": [w.doc() for w in wires], **({"cuts": doc["cuts"]} if "cuts" in doc else {}),
+                **({"registered": registered} if "registered" in doc else {}),
+                **({"ingress": [x for e in doc["ingress"] for x in runs(e, s, False)]} if "ingress" in doc else {}),
+                **({"order": order} if "order" in doc else {})}
+
+    def unlike(rec: dict[str, Any]) -> str:
+        reads = [{k: v for k, v in r.items() if k != "base"} for r in rec.get("registered", {}).get("reads", ())]
+        return json.dumps({**rec, "registered": {**rec.get("registered", {}), "reads": reads}}, sort_keys=True)
+
+    first = share(0)
+    for s in range(1, m):
+        if unlike(share(s)) != unlike(first):
+            raise ValueError(f"slot-unlike: {doc.get('name')}'s share of slot {s} is not slot 0's")
+    return first
 
 
 def resolve(tid: str) -> Any:
