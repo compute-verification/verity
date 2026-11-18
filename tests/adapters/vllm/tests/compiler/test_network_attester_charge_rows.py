@@ -15,8 +15,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.resource_accounting.network.verifier import charge_check as CK
 from verity_vllm.compiler import charge_rows as CR
 
-FIXTURE = (Path(__file__).parents[4] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures"
-           / "arith_encode_vectors.json")
+FIXTURE = ([p for p in Path(__file__).resolve().parents if p.name == "tests"][-1] / "verity" / "protocols"
+           / "resource_accounting" / "network" / "verifier" / "fixtures" / "arith_encode_vectors.json")
 PROGRAM, REGISTRATION = "charge-chain-test", "ab" * 64
 
 
