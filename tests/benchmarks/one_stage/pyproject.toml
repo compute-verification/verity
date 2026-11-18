@@ -108,6 +108,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "tests/benchmarks/pouw/test_pearl_c_vllm.py", "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
           "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
           "benchmarks/pouw/settings.py", "verity", "calibration/hardware/cards",
+          # inference_only's session reads its H200 card's architecture through the kit (`kit.gpu_target`)
+          "calibration/hardware/architectures/sm_90a.toml",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/compose/verifier/live_challenger",
