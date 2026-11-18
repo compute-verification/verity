@@ -160,7 +160,8 @@ hypergeometric factor. -/
 theorem tileStratumAcceptProb : TileStratumAcceptProb := by
   intro nB mB σ k hk sT B
   have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
-      fun π => ∀ v ∈ (Verity.SamplingDesign.permPrefix (tileCount σ sT) (k sT)).draw π, v ∉ tilesIn σ sT B :=
+      fun π : Equiv.Perm (Fin (tileCount σ sT)) =>
+        ∀ v ∈ (Verity.SamplingDesign.permPrefix (tileCount σ sT) (k sT)).draw π, v ∉ tilesIn σ sT B :=
     funext fun π => propext (disjoint_tileDraw_iff σ k hk sT π B)
   rw [h, miss_eq (k sT) (tileCount σ sT) _ (hk sT), card_tilesIn]
 
