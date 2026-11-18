@@ -80,20 +80,18 @@ class BatchDependent(Unexpressible):
 # --- the templates ---------------------------------------------------------------------------------------------------------------
 
 
-def registered_phi(role: str, target: str) -> Phi:
-    """A registration of ``role``'s model, its config as the engine profile ships it (`find_hf_config`), on the device class the
-    row-id token ``target`` names (`config.TARGETS`, `config.TARGET_NUM_SMS`)."""
+def registered_phi(role: str, card: str) -> Phi:
+    """A registration of ``role``'s model, its config as the engine profile ships it (`find_hf_config`), on ``card``, a file
+    of calibration/hardware/cards, whose capability and SM count its Build target reads."""
     import json
 
-    from verity_vllm.config import TARGET_NUM_SMS, TARGETS
     from verity_vllm.engine.profiles.dense_generic import find_hf_config
     found = find_hf_config(role)
-    if found is None or target not in TARGET_NUM_SMS:
-        raise Unexpressible(f"{role!r} on {target!r}: no shipped config, or a device class whose SM count varies")
+    if found is None:
+        raise Unexpressible(f"{role!r}: no shipped config")
     cfg = json.loads(found[0].read_text())
     return Phi(model={"repo": (found[2] or {}).get("repo", role), "revision": "registered", "hf_config": cfg},
-               workload={"requests": []}, target={"compute_capability": list(TARGETS[target]), "num_sms": TARGET_NUM_SMS[target]},
-               execution="bi-eager")
+               workload={"requests": []}, target={"card": card}, execution="bi-eager")
 
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
