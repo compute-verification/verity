@@ -1,8 +1,8 @@
-"""`verity_vllm.definitions.registry.boolean_transcendental`'s `F32ExpRn_v2` and `F32LogRn_v2`, `ref_prims`' `F32ExpRn_v1` and
-`F32LogRn_v1` on bits: each is Boolean, names its word primitive and is its Boolean version, its gates and its Flock rows and
+"""`verity_vllm.definitions.registry.boolean_transcendental`'s `F32ExpRn_v2`, `F32LogRn_v2` and `F32TanhRn_v2`, `ref_prims`'
+`F32ExpRn_v1`, `F32LogRn_v1` and `F32TanhRn_v1` on bits: each is Boolean, names its word primitive and is its Boolean version, its gates and its Flock rows and
 nonzeros are pinned, and it agrees with the word on edges, every binade's ends, its thresholds or the words near 1, the
 words whose result lies nearest a rounding boundary, and random words. Each is held on every one of the 2^32 words by
-`calibration/f32_exhaustive/run.py boolean F32ExpRn` and `... boolean F32LogRn`."""
+`calibration/f32_exhaustive/run.py boolean F32ExpRn`, `... boolean F32LogRn` and `... boolean F32TanhRn`."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,11 +13,13 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean.versions import boolean_version
 
+from verity_vllm.definitions.registry import boolean_tanh as BTH
 from verity_vllm.definitions.registry import boolean_transcendental as BT
 from verity_vllm.definitions.registry import ref_prims as RP
 
 #: per Definition: (And, Xor, Not) gates, and the Flock unit's rows (ANDs and committed bits) and nonzeros in A and B
-PINS = {"F32ExpRn": ((6055, 45190, 192), (6484, 445332)), "F32LogRn": ((3080, 27298, 293), (3541, 103111))}
+PINS = {"F32ExpRn": ((6055, 45190, 192), (6484, 445332)), "F32LogRn": ((3080, 27298, 293), (3541, 103111)),
+        "F32TanhRn": ((15719, 43891, 954), (15719, 15808669))}
 M32 = (1 << 32) - 1
 F32_EDGES = [0, 1 << 31, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000, 0x3F800000, 0xBF800000, 0x7F7FFFFF,
              0xFF7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001, 0xFF800001, 0x7FFFFFFF, M32]
@@ -37,7 +39,8 @@ LOG_HARDEST = [0x65D890D3, 0x4C5D65A5, 0x4D604EBE, 0x66A8C860, 0x41178FEB, 0x1F1
 
 @pytest.mark.parametrize("name", sorted(PINS))
 def test_it_is_boolean_names_its_word_and_is_its_boolean_version(name: str) -> None:
-    d, word, construction = getattr(BT, name), getattr(RP, name), {"F32ExpRn": BT.exp_rn, "F32LogRn": BT.log_rn}[name]
+    d, word, construction = getattr(BT, name), getattr(RP, name), {"F32ExpRn": BT.exp_rn, "F32LogRn": BT.log_rn,
+                                                                  "F32TanhRn": lambda C, x: BTH.tanh_f32(C, x, *BTH.TANH_FN)}[name]
     gates, flock = PINS[name]
     assert word_of(d) is word and d.id == f"{name}_v2"
     assert BL.is_boolean(d.bind()) and boolean_version(word).id == d.bind().id
@@ -82,3 +85,16 @@ def test_log_agrees_with_the_word_on_edges_near_1_the_hardest_words_and_random_w
                             rng.integers(0, 1 << 32, 1 << 13, dtype=np.uint64),
                             rng.integers(0, 0x7F800000, 1 << 13, dtype=np.uint64),
                             rng.integers(1, 0x00800000, 1 << 11, dtype=np.uint64)]))
+
+
+def test_tanh_agrees_with_the_word_on_edges_its_cutoffs_and_random_words() -> None:
+    """The edges and every binade's first and last word, both signs; the words beside the cutoffs (x below `TANH_RN_LO` is its
+    own tanh, `TANH_RN_HI` and above ±1, and the word's own 9.2); random words over all 2^32 and dense between the cutoffs."""
+    binades = [s | e << 23 | m for s in (0, 1 << 31) for e in range(256) for m in (0, 0x7FFFFF)]
+    cutoffs = [s | (t + k) for s in (0, 1 << 31) for t in (BTH.TANH_RN_LO, BTH.TANH_RN_HI, 0x41133333) for k in range(-3, 4)]
+    rng = np.random.default_rng(20261118)
+    _agrees(BT.F32TanhRn, RP.F32TanhRn,
+            np.concatenate([np.array(F32_EDGES + binades + cutoffs, dtype=np.uint64),
+                            rng.integers(0, 1 << 32, 1 << 13, dtype=np.uint64),
+                            rng.integers(BTH.TANH_RN_LO, BTH.TANH_RN_HI, 1 << 13, dtype=np.uint64) | (
+                                rng.integers(0, 2, 1 << 13, dtype=np.uint64) << np.uint64(31))]))

@@ -97,13 +97,14 @@ code, and fails when the code has one this list lacks.
 | --- | --- |
 | Arms | a protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`), a built-in such as `stock-fp8`, or an experimental arm a spec names by its module |
 | Gates before timing | `tokens` (an arm gives its control's tokens exactly), `kv-pool` (an arm and its control get the same KV-cache pool), `arm` (the arm's own gate) |
-| Gates after timing | `timed-tokens`, `engine-identity`, `arm-closing` |
+| Gates after timing | `timed-tokens`, `engine-identity`, `arm-closing`, `host-quiet` |
 | Modes | `resident`, every arm's engine on the GPU at once and the arms interleaved rep by rep; else `blocks`, an engine for each arm in turn |
 | Metrics of a timed rep | `time_per_output_token_s`, `time_to_first_token_s`, `tokens_per_s`, `peak_gpu_memory_bytes`; and where every rep has them, `decode_time_per_token_s`, `inter_token_latency_p50_s`, `inter_token_latency_p99_s` |
 | A result | `verity-bench/vllm-overhead/v1`: its identity, its baseline, its sweep, its gates, how it ran, and its points |
 | A point | one recorded `research run` of `verity-bench run SPEC`; queued, of the kind `vllm-bench-1gpu` |
 
-One failed gate times nothing. Every metric is reported as a mean and as a ratio to the baseline paired by rep.
+One failed gate times nothing. `host-quiet` fails an arm's point when any of its timed reps opened at a one-minute load
+average over half the processors the machine's record gives (`cpus`, which a point refuses to run without). Every metric is reported as a mean and as a ratio to the baseline paired by rep.
 
 Every gate is the benchmark's own check, run by its process on the served node: each stored gate says so as
 `checked_by: piece`, and the result's table prints it. `checked_by` takes proofs' runners and no word of our own
