@@ -27,6 +27,12 @@ an output.
 
 Its cost is the block's parameter and return leaves, each resolved down the call hierarchy, and the Definitions it reaches,
 each once: the descriptor and the block's boundary, never a gate of the block's interior.
+
+`program` is the block's Program on bits, the value `Flock.Lower.lower` takes: each word composite the units reach lifted
+as circuits' `versions.lift` lifts it (`bitTy`, `bitAt`, `liftSeq`), each word primitive's node a node of its Boolean
+Definition, and the block Definition, whose parameters are the input ports and whose return is the output ports, each a
+port's bits. Its references are equal to the lift's leaf by leaf, not yet part by part; the encoder that writes them as the
+codec does follows circuits' written rule for the block's root, whose key `BLOCK` stands in for until then.
 -/
 
 @[expose] public section

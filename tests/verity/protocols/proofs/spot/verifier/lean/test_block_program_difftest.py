@@ -76,6 +76,13 @@ def text(program) -> str:
 
 
 @cache
+def holding(fn) -> str:
+    """The descriptor of a Program whose root calls ``fn`` once, so ``fn`` is a Definition of it under its own key."""
+    params, ret = fn.signature()
+    return text(Program(_c("BHold" + fn.name, params, ret, lambda B, S, *xs: B.call(fn, *xs))))
+
+
+@cache
 def top():
     program = Program(Top)
     return program, text(program)
@@ -126,7 +133,7 @@ def block_reference(pieces, units: list[int]) -> dict:
                 outs.add((g, w))
                 made.setdefault(g, (t, off(j)))
         callee = descriptor_id(lifted(fn) if fn.name in OURS else fn)
-        gates = json.loads(pieces.call("definition", {"descriptor": txt if fn.name not in OURS else text(Program(lifted(fn))),
+        gates = json.loads(pieces.call("definition", {"descriptor": txt if fn.name not in OURS else holding(lifted(fn)),
                                                       "key": callee})[1])["gates"]
         nodes.append({"fn": callee, "form": "call", "refs": refs, "gates": gates})
     ret = [["n", made[g][0], made[g][1] + b] for g, w in sorted(outs) for b in range(w)]
@@ -158,7 +165,7 @@ def test_the_block_program_agrees(pieces, units):
     assert set(out["lifted"]) == {descriptor_id(lifted(fn)) for fn in ours}
     for fn in ours:
         key = descriptor_id(lifted(fn))
-        ref = pieces.call("definition", {"descriptor": text(Program(lifted(fn))), "key": key})
+        ref = pieces.call("definition", {"descriptor": holding(lifted(fn)), "key": key})
         assert ("output", D.canonical(out["lifted"][key])) == ref, key
 
 
