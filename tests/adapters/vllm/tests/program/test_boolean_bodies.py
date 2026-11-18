@@ -16,9 +16,6 @@ from verity.circuits.program import is_word_primitive
 ROOTS = ("verity", "verity_vllm", "verity_torch", "verity_flock")
 
 _ADAPTER = "the adapter's registry: no Boolean body written yet"
-_BYTE = ("byte `at` of a SHA-512 compression, its word form one gate a byte (pearl_c_noise): the compression's Boolean "
-         "version is its whole `_v2`, and a body a byte would be a whole compression a byte")
-
 #: the word primitives without a Boolean body: id -> why; only shrinks
 BODYLESS: dict[str, str] = {
     **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (
@@ -27,7 +24,6 @@ BODYLESS: dict[str, str] = {
         ("E2m1x2Hi", "marlin_moe"), ("E2m1x2Lo", "marlin_moe"), ("E8m0DequantBf16", "marlin_moe"), ("F32ErfRn", "ref_prims"),
         ("F32TanhRn", "ref_prims"), ("GeluErfBf16", "act"), ("I32Mul", "marlin_moe"), ("NcpAbsMax", "pouw_rows"),
         ("NcpDot16I7", "pouw_rows"), ("NcpRneClampI7", "pouw_rows"))},
-    **{f"PearlC{n}Byte_v1": _BYTE for n in ("LineKey", "LineRaw", "RowBlock", "RowSeedHead", "RowSeedTail", "SeedB", "ShaBlock")},
 }
 
 
