@@ -177,3 +177,20 @@ def test_a_card_no_record_holds_is_refused_by_name():
 
     with pytest.raises(SystemExit, match=r"^0 card records under .* have 'NVIDIA A100-SXM4-80GB'"):
         kit.card_arch("NVIDIA A100-SXM4-80GB", directory=CARD_FILES)
+
+
+def test_the_machines_arch_is_its_cards_records(tmp_path, monkeypatch):
+    from verity_bench.overhead import CARD_FILES
+
+    _run(tmp_path, monkeypatch, "one-card")
+    assert kit.machine_arch(directory=CARD_FILES) == "sm_90a"
+
+
+def test_a_machine_whose_card_is_unread_is_refused_by_name(tmp_path, monkeypatch):
+    from verity_bench.overhead import CARD_FILES
+
+    _run(tmp_path, monkeypatch, "slurm-node")
+    table = (MACHINES / "slurm-node.toml").read_text().split("[properties]", 1)[1]
+    (tmp_path / "inputs" / "slurm-node.toml").write_text(f'machine = "slurm-node"\n\n[properties]{table}')
+    with pytest.raises(SystemExit, match=r"^machine 'slurm-node': its \[properties\] have card unread"):
+        kit.machine_arch(directory=CARD_FILES)
