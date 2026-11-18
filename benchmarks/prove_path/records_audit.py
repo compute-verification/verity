@@ -196,6 +196,7 @@ from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
@@ -212,7 +213,17 @@ REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
-PHASE_OWN = frozenset(p.value for p in schemes.get("network-attester").ports if p.name == "scan-state")
+def port_value(scheme: Any, port: str) -> str:
+    """The value ``scheme``'s port ``port`` registers: refused (ValueError) naming both unless it declares that port
+    exactly once, with a value."""
+    got = [p.value for p in scheme.ports if p.name == port]
+    if len(got) != 1 or not got[0]:
+        raise ValueError(f"the {scheme.name} declaration declares the port {port!r} with a value {len(got)} times, "
+                         "not once: records_audit reads the execution phase's own value from it")
+    return got[0]
+
+
+PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")})
 
 
 def catalog_resolve(tid: str) -> Any:
@@ -692,7 +703,7 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
     w = tied["log"][0]
     scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
+    pearl = isinstance(scheme, str) and getattr(BY_NAME.get(scheme), "family", None) == "pearl-c"
     return {"record": DD.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 
