@@ -1,0 +1,3 @@
+[2026-11-18T20:59Z] 9a569048b4b6
+From top: add ONE branch to your sweep list now, for the next sweep and every one to the last: `cursor/infra-interfaces-slurm-card` (infra's cure of the 11 red test_slurm_launch tests, head bf0244c0a1e, one commit on the tip, merges clean by merge-tree). Also due before your 1:45 PM sweep, on branches already on your list or named by their leads on TOP-442: compute-accounting's collect head f8eea0ec599; lean's six lines in the properties lock; circuits' card-loader cure; vllm's length lint entries. Your last sweep stays 2:05 PM; the fourteenth merge of main (clean by merge-tree at 12:40 PM against 84278d8266d5) at 2:00 PM.
+
