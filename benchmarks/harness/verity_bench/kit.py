@@ -436,14 +436,17 @@ def toolkit(version: str) -> str:
     """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
     is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
     (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
-    otherwise, as `NotListed` where the properties list none."""
+    otherwise, as `NotListed` where the properties list none, and where ``$CUDA_HOME``'s ``version.json`` gives no
+    ``cuda.version``."""
     from verity_config.settings import SHARED
 
     if home := SHARED.get("CUDA_HOME"):
-        try:
-            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
-        except (OSError, ValueError, KeyError, TypeError):
+        if not (said_in := Path(home) / "version.json").is_file():
             return home
+        try:
+            said = json.loads(said_in.read_text())["cuda"]["version"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SystemExit(f"CUDA_HOME={home}: {said_in} gives no cuda.version ({type(e).__name__}: {e})") from None
         if said == version or said.startswith(f"{version}."):
             return home
     try:

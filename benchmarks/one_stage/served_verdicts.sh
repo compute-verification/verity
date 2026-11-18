@@ -1108,7 +1108,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   while [ "$i" -lt "${#h1[@]}" ]; do
     if [ "${h1[$i]}" = --protocols-config ]; then cfg=${h1[$((i + 1))]}; i=$((i + 2)); else rest+=("${h1[$i]}"); i=$((i + 1)); fi
   done
-  h1=("${rest[@]}" --protocols-config "$("$PY" -c 'from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER as N; import json, sys; v = sys.argv[1]; d = (json.loads(v) if v.lstrip().startswith("{") else json.load(open(v))) if v else {}; print(json.dumps({**d, N.name: {**d.get(N.name, {}), "order": "release-order"}}))' "$cfg")")
+  "$PY" -m verity.protocols.compose.schemes network-attester settings > /dev/null || return 9
+  h1=("${rest[@]}" --protocols-config "$("$PY" -c 'import json, sys; v, n = sys.argv[1:]; d = (json.loads(v) if v.lstrip().startswith("{") else json.load(open(v))) if v else {}; print(json.dumps({**d, n: {**d.get(n, {}), "order": "release-order"}}))' "$cfg" network-attester)")
   local polls=450
   if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit
     h1+=(--h1-window-commit "cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh tie \"\$@\"")
@@ -1140,11 +1141,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; (cd "$TREE" && inference_policy); pearl_period open; }
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
+    --precision "$PRECISION" --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" "${day[@]}" \
     --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
-    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
+    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" \
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; pearl_period close; exit 143' TERM INT

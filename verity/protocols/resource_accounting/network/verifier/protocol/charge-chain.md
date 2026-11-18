@@ -10,24 +10,26 @@ Every later carry is a function of the session's decisions so far: a value, comm
 **The chain.** Each execution phase (`window` in the code) has a produced value `replay-charge` of two hiding commitments (frame-v3-sha512, `hm96-sha512/row/v2`,
 96 bits each: n0 3×15, n1 3×15, run 2, zero padding): its carry-in (row 0) and its carry-out (row 1).
 
-- Execution phase w's row 0 is execution phase w − 1's row 1 under the same salt, so its opening b‖c is the same.
-- Execution phase 0's row 0 is the priors' row under the value's public salt (`registered_value.supplied_salts`), whose opening the
-  verifier computes from the registered book.
+- The honest prover commits execution phase w's row 0 as execution phase w − 1's row 1 under the same salt, so its
+  opening b‖c is the same.
+- The honest prover commits execution phase 0's row 0 as the priors' row under the value's public salt
+  (`registered_value.supplied_salts`), whose opening is computable from the registered book.
 - Row 1 is under a fresh salt.
 - The charging proof block reads both rows. `ChargeLink_v1{N}` is `ChargeCount_v1{N}` run from row 0's carry, and its ok
-  also requires that the charge's carry' is row 1.
-- The verifier checks the openings on every session (`check_chain`): `CH-first`, execution phase 0's carry-in isn't the priors
-  under their public salt; `CH-carry`, an execution phase's carry-in isn't the previous one's carry-out; `CH-rows`, an
-  execution phase isn't two rows.
+  also requires that the charge's carry' is row 1. It takes any carry-in.
+- `charge_check`'s `check_chain` checks the openings of a session: `CH-first`, execution phase 0's carry-in isn't the
+  priors under their public salt; `CH-carry`, an execution phase's carry-in isn't the previous one's carry-out;
+  `CH-rows`, an execution phase isn't two rows. No verifier calls it.
 
-**A restart is refused.** By induction over the execution phases, the carry each is charged from is the one `code_v1`
-carries over the whole session. Execution phase 0's carry-in is the priors (`CH-first`). Each one's carry-out is its charge's
-carry' from its carry-in (the proof block's ok). Each later carry-in is the previous carry-out (`CH-carry`). A prover
-that restarts the counts mid-session, at the priors or at counts fitted to the coming execution phase, either breaks the chain,
-which the verifier refuses, or claims a proof block whose ok is 0, which fails that proof block's proof. On the
-fixture's async-kv-pressure stream, execution phase 1 costs 23 bits from execution phase 0's carry, 20 from the priors and 16 from fitted
-counts. The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the
-public start salt, and whether execution phase 0's carry-out claims it.
+**A restart is not refused.** Each execution phase's carry-out is its charge's carry' from its carry-in (the proof
+block's ok), and nothing else is checked: no verifier holds one execution phase's carry-out row to the next one's
+carry-in, or execution phase 0's carry-in to the priors, so the chain is the honest prover's and not a checked fact. A
+prover that restarts the counts, at the priors or at counts fitted to the coming execution phase, passes the proof block
+and is charged less. So the coded charge `A_c` is the honest prover's and is not established as a bound for any period;
+the network attester scheme's declared advice charge is the free inputs at full width (`scans[].free`) and does not read
+the carry. On the fixture's async-kv-pressure stream, execution phase 1 costs 23 bits from execution phase 0's carry, 20
+from the priors and 16 from fitted counts. The tests check that `check_chain` refuses each forged carry, whether it is
+committed under a fresh salt or under the public start salt, and whether execution phase 0's carry-out claims it.
 
 **Why a value of its own.** The carry-out isn't a field of `verity_vllm.compiler.replay_chain`'s execution-phase row.
 `ReplayLoad` writes that row and checks it in full at the execution phase's start, before any decision is coded, so a carry-out
@@ -156,10 +158,12 @@ count of 0.
 
 **The carry** is v1's 92 bits (n0[3], n1[3], run), then pos (32 bits) and rank (25 bits). Each field is least significant
 bit first, and the 149 bits are zero-padded to a 160-bit row (`ROW_BITS`). The session's first carry is the book's priors,
-run 0, pos 0 and rank 0. The carry is chained as `replay-charge`'s above, under its own produced value `window-charge`:
+run 0, pos 0 and rank 0. The honest prover chains the carry as `replay-charge`'s above, under its own produced value
+`window-charge`:
 - two rows, the carry-in and the carry-out;
 - execution phase 0's carry-in under the value's public salt;
-- the verifier's `CH-first`, `CH-carry` and `CH-rows` (`charge_check.window_check_chain`).
+- `CH-first`, `CH-carry` and `CH-rows` are `charge_check`'s `window_check_chain`, which no verifier calls, so this chain
+  is unheld as `replay-charge`'s is ("A restart is not refused").
 
 `ChargeLink_v2{N, H, O, L}` is `ChargeCount_v2` run from row 0, and its ok also requires that carry' is row 1. After
 each decision, each hit, and each order entry's gap and rank step, the carried words are committed. So no AND operand
