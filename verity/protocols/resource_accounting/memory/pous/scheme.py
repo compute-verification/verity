@@ -131,6 +131,7 @@ POUS = register(Scheme(
     needs=frozenset({"store"}),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     record="space",
     symbol="S0",
     published=("bits", Fraction(1)),
@@ -187,6 +188,7 @@ WIPE = register(Scheme(
     needs=frozenset(),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     record="wipe",
     # the wipe holds labels from a key fresh for the wipe, and closes its store and the card's memory before the attach
     # returns: it touches no weight and keeps nothing resident

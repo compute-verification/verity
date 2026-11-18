@@ -1,4 +1,4 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
+"""The routed tie (`served_tie.ServedRowsTie_v2`) checked natively, in plain, on a sealed served window's real rows.
 
     python benchmarks/prove_path/served_tie_window.py --serve-run DIR --window K --out DIR
 
