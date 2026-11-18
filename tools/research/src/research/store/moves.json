@@ -5283,6 +5283,11 @@
       "paths": {
         "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml": "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/llama32-1b-bf16-served-arm.toml"
+      }
     }
   ]
 }
