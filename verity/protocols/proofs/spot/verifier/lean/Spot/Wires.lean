@@ -16,7 +16,8 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint, which compiled code decides by a sweep in the order of reader port and first unit, comparing only
+the wires whose reader units meet (`pairwiseDisjoint_eq_sweep`). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -192,6 +193,120 @@ def disjoint (a b : Wire) : Bool :=
 def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
+
+/-! ### The sweep compiled code runs for `pairwiseDisjoint`
+
+Sorted by `(sweepKey, start)`, a wire meets only the wires after it of its key that start inside its reader units
+(`near`): every later wire has another key, so another reader or port, or starts past its units. A key is a hash of the
+reader and port, so a collision only adds pairs `disjoint` passes. The work is the sort and the pairs whose reader
+units meet, never every pair. -/
+
+/-- A wire's reader and port, hashed: wires of one reader port share it. -/
+def sweepKey (w : Wire) : Nat := (hash (w.reader, w.port)).toNat
+
+/-- The sweep's order: by key, then by first reader unit. -/
+def sweepLe (a b : Wire) : Bool :=
+  decide (sweepKey a < sweepKey b) || (sweepKey a == sweepKey b && decide (a.start ≤ b.start))
+
+/-- `v`, after `w` in the sweep's order, has `w`'s key and starts inside `w`'s reader units. -/
+def near (w v : Wire) : Bool := sweepKey v == sweepKey w && decide (v.start < w.start + w.readerUnits)
+
+/-- `pairwiseDisjoint` on wires in the sweep's order, each held only to the wires `near` it. -/
+def sweepSorted : List Wire → Bool
+  | [] => true
+  | w :: ws => (ws.takeWhile (near w)).all (disjoint w) && sweepSorted ws
+
+/-- `pairwiseDisjoint` by the sweep: sort, then `sweepSorted`. -/
+def pairwiseDisjointSweep (ws : List Wire) : Bool := sweepSorted (ws.mergeSort sweepLe)
+
+theorem disjoint_true_iff (a b : Wire) : disjoint a b = true ↔
+    a.reader ≠ b.reader ∨ a.port ≠ b.port ∨ a.start + a.readerUnits ≤ b.start ∨ b.start + b.readerUnits ≤ a.start ∨
+      a.cut0 + a.cuts ≤ b.cut0 ∨ b.cut0 + b.cuts ≤ a.cut0 := by
+  simp [disjoint, or_assoc]
+
+theorem disjoint_symm {a b : Wire} (h : disjoint a b = true) : disjoint b a = true := by
+  rw [disjoint_true_iff] at h ⊢
+  rcases h with h | h | h | h | h | h
+  · exact Or.inl (Ne.symm h)
+  · exact Or.inr (Or.inl (Ne.symm h))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h))))
+
+theorem sweepLe_true_iff (a b : Wire) : sweepLe a b = true ↔
+    sweepKey a < sweepKey b ∨ (sweepKey a = sweepKey b ∧ a.start ≤ b.start) := by
+  simp [sweepLe]
+
+theorem near_false_iff (w v : Wire) : near w v = false ↔
+    ¬(sweepKey v = sweepKey w ∧ v.start < w.start + w.readerUnits) := by
+  simp [near]
+
+theorem pairwiseDisjoint_true_iff : ∀ ws : List Wire,
+    pairwiseDisjoint ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true)
+  | [] => by simp [pairwiseDisjoint]
+  | w :: ws => by
+    simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_true_iff ws]
+
+/-- A wire past `w`'s window (`near` fails on `u`, and `v` is `u` or after it) is disjoint from `w`. -/
+theorem disjoint_past {w u v : Wire} (hwu : sweepLe w u = true) (hn : near w u = false)
+    (huv : v = u ∨ sweepLe u v = true) : disjoint w v = true := by
+  rw [sweepLe_true_iff] at hwu
+  rw [near_false_iff] at hn
+  have key : sweepKey v ≠ sweepKey w ∨ w.start + w.readerUnits ≤ v.start := by
+    rcases huv with rfl | huv
+    · omega
+    · rw [sweepLe_true_iff] at huv
+      omega
+  rw [disjoint_true_iff]
+  rcases key with hk | hk
+  · by_cases hr : w.reader = v.reader
+    · by_cases hp : w.port = v.port
+      · exact absurd (by simp [sweepKey, hr, hp]) hk
+      · exact Or.inr (Or.inl hp)
+    · exact Or.inl hr
+  · exact Or.inr (Or.inr (Or.inl hk))
+
+theorem window_all (w : Wire) : ∀ ws : List Wire, (∀ v ∈ ws, sweepLe w v = true) →
+    ws.Pairwise (fun a b => sweepLe a b = true) → (ws.takeWhile (near w)).all (disjoint w) = ws.all (disjoint w)
+  | [], _, _ => rfl
+  | u :: us, hw, hs => by
+    rw [List.pairwise_cons] at hs
+    cases hn : near w u
+    · have hu : (u :: us).all (disjoint w) = true := by
+        rw [List.all_eq_true]
+        intro v hv
+        rcases List.mem_cons.1 hv with hv | hv
+        · exact disjoint_past (hw u (List.mem_cons_self ..)) hn (Or.inl hv)
+        · exact disjoint_past (hw u (List.mem_cons_self ..)) hn (Or.inr (hs.1 v hv))
+      rw [hu, List.takeWhile_cons, hn]
+      rfl
+    · rw [List.takeWhile_cons, hn]
+      simp only [ite_true, List.all_cons]
+      rw [window_all w us (fun v hv => hw v (List.mem_cons_of_mem _ hv)) hs.2]
+
+theorem sweepSorted_eq : ∀ ws : List Wire, ws.Pairwise (fun a b => sweepLe a b = true) →
+    sweepSorted ws = pairwiseDisjoint ws
+  | [], _ => rfl
+  | w :: ws, h => by
+    rw [List.pairwise_cons] at h
+    simp only [sweepSorted, pairwiseDisjoint, window_all w ws h.1 h.2, sweepSorted_eq ws h.2]
+
+theorem sweepLe_trans (a b c : Wire) (hab : sweepLe a b = true) (hbc : sweepLe b c = true) : sweepLe a c = true := by
+  rw [sweepLe_true_iff] at hab hbc ⊢
+  omega
+
+theorem sweepLe_total (a b : Wire) : (sweepLe a b || sweepLe b a) = true := by
+  rw [Bool.or_eq_true, sweepLe_true_iff, sweepLe_true_iff]
+  omega
+
+/-- Compiled code runs the sweep; the kernel and every proof see `pairwiseDisjoint`. `@[csimp]` rewrites only code
+compiled after it, so it stays directly below `pairwiseDisjoint`. -/
+@[csimp] theorem pairwiseDisjoint_eq_sweep : @pairwiseDisjoint = @pairwiseDisjointSweep := by
+  funext ws
+  rw [pairwiseDisjointSweep, sweepSorted_eq _ (List.pairwise_mergeSort sweepLe_trans sweepLe_total ws),
+    Bool.eq_iff_iff, pairwiseDisjoint_true_iff, pairwiseDisjoint_true_iff]
+  exact ((List.mergeSort_perm ws sweepLe).pairwise_iff disjoint_symm).symm
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
