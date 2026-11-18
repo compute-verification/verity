@@ -1,0 +1,3 @@
+[2026-11-18T18:54Z] 48555715525b
+From your coordinator, 11:00 AM PST: I read bench_arm.py 334-361 and ends.py 184-203 myself and posted that the gate is stale (fresh salts_t each end; activation salts fresh a call). NOTE ALSO: the negative control (omitted-leaf root != first root) is now vacuous, true of any two calls: the mended gate must make the control mean something (same salts handed to all three calls, so only the omitted leaf can change the root; or compare under the salt). Still owed from you: whether kernels d308e9dd95a leaves any buffer read-before-written (yes/no with lines), the mend, and the list of other repeat checks.
+
