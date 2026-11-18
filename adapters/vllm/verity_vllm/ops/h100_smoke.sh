@@ -77,7 +77,7 @@ if [ "$SCHEME" = pearl-plus ]; then
   REQS=$slots
   export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
   SP=benchmarks/pouw/pearl_c_vllm/served_passes.py SPP=$PYTHONPATH:$TREE/benchmarks/harness
-  PYTHONPATH=$SPP "$PY" "$SP" arm --out "$SR/pearlplus-config.json" > "$SR/pearlplus-arm.log" 2>&1 \
+  PYTHONPATH=$SPP "$PY" "$SP" arm --spec llama32-1b-1gpu-pouw-protocol-served@h100 --out "$SR/pearlplus-config.json" > "$SR/pearlplus-arm.log" 2>&1 \
     || { say "SMOKE FAILED pearl-plus arm: served_passes.py arm ($SR/pearlplus-arm.log)"; cat "$SR/pearlplus-arm.log"; exit 1; }
   echo "PEARL+ CONFIG: $(tail -1 "$SR/pearlplus-arm.log")"
   PP=(--protocols pearl-plus --protocols-config "$SR/pearlplus-config.json")
