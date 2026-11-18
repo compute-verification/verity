@@ -4455,11 +4455,23 @@ def components() -> dict:
     return MANIFESTS
 
 
+def settings_of(name: str, params: dict[str, Any]) -> dict[str, Any] | Exception:
+    """Component ``name``'s settings at ``params`` as its own check returns them, its defaults filled; the check's
+    refusal where it refuses them: `verity.config`'s `verity.channel.Refused`, or the ValueError of a protocol's own
+    parameters check (SPOT's `spot_params_of`)."""
+    from verity.channel import Refused
+
+    try:
+        return dict(components()[name].params(params))
+    except (Refused, ValueError) as e:
+        return e
+
+
 def feature_of(words: Sequence[str]) -> Feature:
     """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
     each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
-    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
-    component has or a setting the component doesn't declare."""
+    string), the settings as the component's own check returns them (`settings_of`). Refused by name for a name no
+    component has or a setting the component refuses."""
     name, *given = words
     table = components()
     if name not in table:
@@ -4475,10 +4487,8 @@ def feature_of(words: Sequence[str]) -> Feature:
         except tomllib.TOMLDecodeError as e:
             print(f"[serve-tax] --feature {name}: {key}={text!r} is no TOML ({e}), read as that string", file=sys.stderr)
             params[key] = text
-    try:
-        settings = table[name].params(params)
-    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
-        raise SystemExit(f"--feature {name}: {e}") from None
+    if isinstance(settings := settings_of(name, params), Exception):
+        raise SystemExit(f"--feature {name}: {settings}")
     return Feature(name, tuple(sorted(settings.items())))
 
 

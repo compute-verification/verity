@@ -234,6 +234,25 @@ def sel (label : String) (ps : List (String × String)) : List ByteArray :=
     | some (l, r) => if l = label then some r else none
     | none => none
 
+/-- The coin index a root's line `a` names, as `releasedLogOf` reads it. -/
+def indexOf (a : String) : Option Nat := (event a).toOption.bind fun r => Spot.nat? (Spot.getD r "index")
+
+/-- The coin indices the root lines of the pairs `ps` name, of family `label` and root `x`, in order. -/
+def selI (label : String) (x : ByteArray) (ps : List (String × String)) : List Nat :=
+  ps.filterMap fun q => match rootOf q.1, indexOf q.1 with
+    | some (l, r), some i => if l = label ∧ r = x then some i else none
+    | _, _ => none
+
+theorem indexOf_eq {a : String} {r : Json} {i : Nat} (he : event a = .ok r) (hi : Spot.nat? (Spot.getD r "index") = some i) :
+    indexOf a = some i := by
+  simp [indexOf, he, Except.toOption, hi]
+
+theorem selI_snoc (ℓ : String) (x : ByteArray) (ps : List (String × String)) {a b l : String} {r : ByteArray} {i : Nat}
+    (ha : rootOf a = some (l, r)) (hi : indexOf a = some i) :
+    selI ℓ x (ps ++ [(a, b)]) = selI ℓ x ps ++ (if l = ℓ ∧ r = x then [i] else []) := by
+  unfold selI
+  by_cases h : l = ℓ ∧ r = x <;> simp [List.filterMap_append, ha, hi, h]
+
 theorem rootOf_eq {a : String} {r : Json} {label root : String} {bytes : ByteArray} (he : event a = .ok r)
     (hl : Spot.getD r "label" = .str label) (hr : Spot.getD r "root" = .str root)
     (hb : (Flock.unhex root).toOption = some bytes) : rootOf a = some (label, bytes) := by
@@ -288,22 +307,24 @@ def Inv (c : LiveCommitment) (P : List String) (out : Array Entry) (pending : Op
     (∀ ℓ, c.family ℓ = none → look out.toList ℓ = []) ∧
     (∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length) ∧
     match pending with
-    | none => PairsOk none P ∧ ∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)
-    | some p => p.kind = .recorded ∧ c.family p.label ≠ none ∧ ∃ Q a, P = Q ++ [a] ∧ PairsOk none Q ∧ rootOf a = some (p.label, p.root) ∧
-        ∀ ℓ, look out.toList ℓ = sel ℓ (pairs Q)
+    | none => PairsOk none P ∧ (∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)) ∧
+        ∀ ℓ x, releasedAfter out.toList ℓ x = selI ℓ x (pairs P)
+    | some p => p.kind = .recorded ∧ c.family p.label ≠ none ∧ ∃ Q a, P = Q ++ [a] ∧ PairsOk none Q ∧
+        rootOf a = some (p.label, p.root) ∧ indexOf a = some p.index ∧ (∀ ℓ, look out.toList ℓ = sel ℓ (pairs Q)) ∧
+        ∀ ℓ x, releasedAfter out.toList ℓ x = selI ℓ x (pairs Q)
 
-theorem inv_init {c : LiveCommitment} : Inv c [] #[] none := fun _ => ⟨fun _ _ => rfl, fun _ _ => rfl, trivial, fun _ => rfl⟩
+theorem inv_init {c : LiveCommitment} : Inv c [] #[] none := fun _ => ⟨fun _ _ => rfl, fun _ _ => rfl, trivial, fun _ => rfl, fun _ _ => rfl⟩
 
 theorem inv_root {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {a root label : String}
     {r : Json} {bytes : ByteArray} {count index t i : Nat} (hI : Inv c P out q) (hq : ¬q.isSome = true)
     (he : event a = .ok r)
     (hl : Spot.getD r "label" = .str label) (hf : c.family label = some count) (hr : Spot.getD r "root" = .str root)
-    (hb : (Flock.unhex root).toOption = some bytes) :
+    (hb : (Flock.unhex root).toOption = some bytes) (hi : Spot.nat? (Spot.getD r "index") = some index) :
     Inv c (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) := by
   obtain rfl : q = none := by cases q <;> simp_all
   intro hc
-  obtain ⟨hF, hB, hP, hL⟩ := hI hc
-  exact ⟨hF, hB, rfl, by simp [hf], P, a, rfl, hP, rootOf_eq he hl hr hb, hL⟩
+  obtain ⟨hF, hB, hP, hL, hE⟩ := hI hc
+  exact ⟨hF, hB, rfl, by simp [hf], P, a, rfl, hP, rootOf_eq he hl hr hb, indexOf_eq he hi, hL, hE⟩
 
 theorem inv_release {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {p : Entry}
     (b : String) (t i : Nat) (hI : Inv c P out q) (hq : q = some p) :
@@ -313,10 +334,10 @@ theorem inv_release {c : LiveCommitment} {P : List String} {out : Array Entry} {
   have hc0 : out.toList.any (·.kind == .committed) = false := by
     simp only [Array.toList_push, List.any_append, Bool.or_eq_false_iff] at hc
     exact hc.1.1
-  obtain ⟨hF, hB, hk, hf, Q, a, rfl, hQ, ha, hL⟩ := hI hc0
+  obtain ⟨hF, hB, hk, hf, Q, a, rfl, hQ, ha, hi, hL, hE⟩ := hI hc0
   obtain ⟨hQ', hpairs⟩ := pairsOk_snoc Q hQ b (by rw [ha]; rfl)
   have e : Q ++ [a] ++ [b] = Q ++ [a, b] := by simp
-  refine ⟨fun ℓ hℓ => ?_, fun ℓ x => ?_, e ▸ hQ', fun ℓ => ?_⟩
+  refine ⟨fun ℓ hℓ => ?_, fun ℓ x => ?_, e ▸ hQ', fun ℓ => ?_, fun ℓ x => ?_⟩
   · have hn : p.label ≠ ℓ := fun h => hf (h ▸ hℓ)
     rw [look_push _ hk rfl, hF ℓ hℓ]
     simp [hn]
@@ -331,6 +352,7 @@ theorem inv_release {c : LiveCommitment} {P : List String} {out : Array Entry} {
         simp [hl, hr, this]
     · simp [hl]
   · rw [e, look_push _ hk rfl, hpairs, sel_snoc ℓ _ ha, hL]
+  · rw [e, releasedAfter_push _ _ _ hk, hpairs, selI_snoc ℓ x _ ha hi, hE]
 
 theorem inv_commit {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {l : String}
     {k t i : Nat} {b : ByteArray} : Inv c P (out.push ⟨.committed, l, k, b, t, i⟩) q := by
@@ -358,11 +380,12 @@ theorem inv_final {c : LiveCommitment} {log : List String} {out : Array Entry} {
     PairsOk none (log.tail.filter fun l => !treeLine l) ∧
       (∀ ℓ, look out.toList ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
       (∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length) ∧
-      ∀ ℓ, c.family ℓ = none → look out.toList ℓ = [] := by
+      (∀ ℓ, c.family ℓ = none → look out.toList ℓ = []) ∧
+      ∀ ℓ x, releasedAfter out.toList ℓ x = selI ℓ x (pairs (log.tail.filter fun l => !treeLine l)) := by
   obtain rfl : q = none := by cases q <;> simp_all
   rw [rest_lines_tail] at hI
-  obtain ⟨hF, hB, hP, hL⟩ := hI hc
-  exact ⟨hP, hL, hB, hF⟩
+  obtain ⟨hF, hB, hP, hL, hE⟩ := hI hc
+  exact ⟨hP, hL, hB, hF, hE⟩
 
 /-- `Inv` at `releasedLogOf`'s loop state: the lines of the entries `pre` read so far, its entries and its root still
 to release. -/
@@ -375,18 +398,20 @@ set_option maxHeartbeats 4000000 in
 commit no root, its lines after its head, its coin trees' lines aside, are a root's line and its release's in turn,
 each root's line reading with its family and root; each family's recorded roots are those its pairs' root lines show;
 each family's releases after a root are as many as its records of that root; and a family that isn't `c`'s has
-no records. -/
+no records; and each family's releases after a root are the coins its pairs' root lines of that root name. -/
 theorem releasedLogOf_ok {c : LiveCommitment} {log : List String} {out : Log} (h : releasedLogOf c log = .ok out)
     (hc : out.any (·.kind == .committed) = false) :
     PairsOk none (log.tail.filter fun l => !treeLine l) ∧
       (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
       (∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ∧
-      ∀ ℓ, c.family ℓ = none → look out ℓ = [] := by
+      (∀ ℓ, c.family ℓ = none → look out ℓ = []) ∧
+      ∀ ℓ x, releasedAfter out ℓ x = selI ℓ x (pairs (log.tail.filter fun l => !treeLine l)) := by
   refine of_triple (Q := fun out => out.any (·.kind == .committed) = false →
       PairsOk none (log.tail.filter fun l => !treeLine l) ∧
       (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
       (∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ∧
-      ∀ ℓ, c.family ℓ = none → look out ℓ = []) ?_ h hc
+      (∀ ℓ, c.family ℓ = none → look out ℓ = []) ∧
+      ∀ ℓ x, releasedAfter out ℓ x = selI ℓ x (pairs (log.tail.filter fun l => !treeLine l))) ?_ h hc
   clear h hc
   mvcgen [releasedLogOf, -Spec.throw_Except, throw_spec, event_spec] invariants
   · ⇓? ⟨cur, st⟩ => ⌜InvS c cur.prefix st⌝
@@ -395,8 +420,79 @@ theorem releasedLogOf_ok {c : LiveCommitment} {log : List String} {out : Log} (h
     | exact inv_init
     | exact inv_commit
     | exact inv_release _ _ _ ‹_› ‹_›
-    | exact inv_root ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
+    | exact inv_root ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
     | exact fun hc => inv_final ‹_› ‹_› hc
+
+/-- What `releasedLogOf`'s loop holds of a log whose lines are no commit's: no entry commits a root, the root still
+to release is recorded, and each line `P` read so far parses. -/
+def NoCommit (P : List String) (out : Array Entry) (pending : Option Entry) : Prop :=
+  out.toList.any (·.kind == .committed) = false ∧ (∀ p, pending = some p → p.kind = .recorded) ∧
+    ∀ x ∈ P, ∃ j, event x = .ok j
+
+def NoCommitS (pre : List (String × Nat))
+    (st : Array (String × Nat) × List (String × Nat) × Array Entry × Option Entry) : Prop :=
+  NoCommit (pre.map (·.1)) st.2.2.1 st.2.2.2
+
+theorem lines_init : NoCommit [] #[] none := ⟨rfl, fun _ h => (by cases h), fun _ h => (by cases h)⟩
+
+theorem lines_snoc {P : List String} {a : String} {r : Json} (hP : ∀ x ∈ P, ∃ j, event x = .ok j)
+    (he : event a = .ok r) : ∀ x ∈ P ++ [a], ∃ j, event x = .ok j := by
+  intro x hx
+  rcases List.mem_append.1 hx with hx | hx
+  · exact hP x hx
+  · rw [List.mem_singleton.1 hx]
+    exact ⟨r, he⟩
+
+theorem lines_root {P : List String} {out : Array Entry} {q : Option Entry} {a label : String} {r : Json}
+    {bytes : ByteArray} {index t i : Nat} (hI : NoCommit P out q) (he : event a = .ok r) :
+    NoCommit (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) :=
+  ⟨hI.1, fun _ h => (by cases h; rfl), lines_snoc hI.2.2 he⟩
+
+theorem lines_release {P : List String} {out : Array Entry} {q : Option Entry} {p : Entry} {b : String} {r : Json}
+    {t i : Nat} (hI : NoCommit P out q) (hq : q = some p) (he : event b = .ok r) :
+    NoCommit (P ++ [b]) ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩) none := by
+  subst hq
+  refine ⟨?_, fun _ h => (by cases h), lines_snoc hI.2.2 he⟩
+  simp [Array.toList_push, List.any_append, hI.1, hI.2.1 _ rfl]
+
+theorem mem_rest {log : List String} {pre suf : List (String × Nat)} {cur : String × Nat}
+    (h : ((log.zipIdx.drop 1).filter fun (x, _) => !treeLine x) = pre ++ cur :: suf) :
+    cur.1 ∈ log.tail.filter fun l => !treeLine l := by
+  rw [← rest_lines_tail, h]
+  simp
+
+theorem lines_commit {L : List String} {a : String} {r : Json}
+    (hl : ∀ x ∈ L, ∀ j, event x = .ok j → Spot.jsonStrIs (Spot.getD j "event") "commit" = false) (hm : a ∈ L)
+    (he : event a = .ok r) (hc : Spot.jsonStrIs (Spot.getD r "event") "commit" = true) : False := by
+  rw [hl a hm r he] at hc
+  cases hc
+
+theorem lines_final {log : List String} {out : Array Entry} {q : Option Entry}
+    (hI : NoCommit (((log.zipIdx.drop 1).filter fun (x, _) => !treeLine x).map (·.1)) out q) :
+    out.toList.any (·.kind == .committed) = false ∧
+      ∀ x ∈ log.tail.filter (fun l => !treeLine l), ∃ j, event x = .ok j := by
+  rw [rest_lines_tail] at hI
+  exact ⟨hI.1, hI.2.2⟩
+
+set_option maxHeartbeats 4000000 in
+/-- **A log with no commit line commits no root**: where `releasedLogOf` reads the release log's lines, none of them,
+its coin trees' aside, a commit's, its entries commit no root, and each of those lines parses. -/
+theorem releasedLogOf_lines {c : LiveCommitment} {log : List String} {out : Log} (h : releasedLogOf c log = .ok out)
+    (hl : ∀ x ∈ log.tail.filter (fun l => !treeLine l), ∀ j, event x = .ok j →
+      Spot.jsonStrIs (Spot.getD j "event") "commit" = false) :
+    out.any (·.kind == .committed) = false ∧ ∀ x ∈ log.tail.filter (fun l => !treeLine l), ∃ j, event x = .ok j := by
+  refine of_triple (Q := fun out => out.any (·.kind == .committed) = false ∧
+      ∀ x ∈ log.tail.filter (fun l => !treeLine l), ∃ j, event x = .ok j) ?_ h
+  clear h
+  mvcgen [releasedLogOf, -Spec.throw_Except, throw_spec, event_spec] invariants
+  · ⇓? ⟨cur, st⟩ => ⌜NoCommitS cur.prefix st⌝
+  all_goals try simp only [NoCommitS, List.map_append, List.map_cons, List.map_nil] at *
+  all_goals first
+    | exact lines_init
+    | exact (lines_commit hl (mem_rest ‹_›) ‹_› ‹_›).elim
+    | exact lines_release ‹_› ‹_› ‹_›
+    | exact lines_root ‹_› ‹_›
+    | exact lines_final ‹_›
 
 /-! ## What the read shows -/
 

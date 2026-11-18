@@ -22,6 +22,13 @@
 "qwen3-8b-bf16-rtx-served-arm-eager" = { spec = "qwen3-8b-bf16-served-arm-eager", card = "rtx-pro-6000" }
 "qwen3-8b-bf16-rtx-served-arm" = { spec = "qwen3-8b-bf16-served-arm", card = "rtx-pro-6000" }
 
+# Each arm id a run was recorded under before its arm took the declared scheme's name, as the arm id it is now
+# (`presets.former_arm`). A stored run's points read under the new id; no launch takes a former arm id. The specs that ran
+# it moved their config digests with it (llama32-1b-1gpu-pouw-protocol-served@h200, @h100 and
+# llama32-1b-1gpu-pearl-c-whole-served), which no lookup of a stored run reads.
+[former_arms]
+"pouw:pearl-c-h100-v1-h3" = "pearl-plus"
+
 # Each spec deleted with no successor, as why a launch of it is refused (`presets.retired_spec`); its stored runs read
 # under its id.
 [retired]

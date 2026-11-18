@@ -3,26 +3,44 @@ before, and its reader reads what it read before."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
-from verity.channel import Refused
 from verity.protocols.resource_accounting import scheme as schemes
 
+from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
+from verity_vllm.pipeline import serve_day as SD
+from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
     with pytest.raises(Refused, match="unknown-type"):
         M.body("Summary", b"{}")
+
+
+@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
+def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
+    type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
+    narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
+                            for s in M.types().schemas.values())
+    monkeypatch.setattr(M, "types", lambda: narrowed)
+    (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
+    day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
+    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
+            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
+    with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
+        call()
 
 
 def test_run_totals_bytes_unchanged(tmp_path):
@@ -390,3 +408,56 @@ def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
     with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
         M.providing("nothing")
+
+
+def _declared(name: str, **declared) -> NS:
+    attached = []
+    return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
+                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
+                 "needs": frozenset(), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+
+
+STORE = {"resource": "memory", "needs": frozenset({"store"})}
+
+
+@pytest.mark.parametrize("order", [("store", "copy"), ("copy", "store")])
+def test_storage_beside_a_scheme_keeping_a_weight_copy_is_refused_by_both_names_before_any_attaches(order):
+    made = {"store": _declared("storage", **STORE), "copy": _declared("keeps-copy", keeps_weight_copy=True)}
+    listed = [made[k] for k in order]
+    assert M.listed_refusals(listed) == [
+        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy resident for the "
+        "serve's life (keeps_weight_copy), so keeps-copy's GEMMs would not read the weights storage holds: the two are "
+        "not attached in one process while the pairing awaits a decision"]
+    with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert made["store"].attached == made["copy"].attached == []
+
+
+@pytest.mark.parametrize("order", [("store", "other"), ("other", "store")])
+def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_is_refused_naming_the_declaration(order):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other")}
+    assert M.listed_refusals([made[k] for k in order]) == [
+        "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
+        "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
+        "that, and a scheme that keeps one beside storage awaits a decision"]
+
+
+def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():
+    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False), _declared("keeps-copy", keeps_weight_copy=True)
+    wipe = _declared("wipe", resource="memory")
+    for listed in ([store, plain], [plain, store], [copy, plain], [copy, wipe]):
+        assert M.listed_refusals(listed) == []
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
+
+
+def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
+    pous, attester = M.named("pous"), M.named("network-attester")
+    assert attester.keeps_weight_copy is False and M.storage(pous)
+    assert M.weight_copy_refusals([pous, attester]) == M.weight_copy_refusals([attester, pous]) == []
+
+
+def test_the_declared_storage_and_weight_copy_schemes_are_refused_together():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
+    assert M.listed_refusals([pous, pearl]) == M.listed_refusals([pearl, pous]) != []

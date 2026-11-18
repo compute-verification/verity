@@ -53,9 +53,9 @@ import hashlib
 import json
 import multiprocessing as mp
 import os
+import secrets
 import socket
 import struct
-import secrets
 import subprocess
 import sys
 import time
@@ -74,16 +74,15 @@ STAGE = (ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stag
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.merkle import merkle_depth
+from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES
@@ -369,9 +368,7 @@ def _segment_paths(args: tuple) -> dict[int, tuple[bytes, ...]]:
     rows = Path(rows_path).read_bytes()
     if len(rows) != DIGEST * bps:
         raise ValueError(f"{rows_path} is not {bps} row digests")
-    head = b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little")
-    level = [hashlib.sha512(head + v.to_bytes(2, "little") + rows[DIGEST * v:DIGEST * (v + 1)]).digest()
-             for v in range(bps)]
+    level = V.row_leaves(salt, s, rows)
     levels = [level]
     while len(level) > 1:
         level = [V.node_hash(level[i], level[i + 1]) for i in range(0, len(level), 2)]
