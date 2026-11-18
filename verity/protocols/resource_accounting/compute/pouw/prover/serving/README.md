@@ -20,4 +20,7 @@ module's docstring says what it holds.
 | Pearl-C | `pearl_c/` |
 | NCP (`ncp-v1`, `ncp-v2`) | `ncp.py` |
 
+The live coins every scheme's window draws (its challenger, sample session, request rows and salt names) are in
+`coins/`.
+
 There is nothing here to run on its own: the vLLM adapter drives it while serving.
