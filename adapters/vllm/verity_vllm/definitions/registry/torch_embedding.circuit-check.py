@@ -14,6 +14,7 @@ def _boolean_roots() -> list[Any]:
     the run scan on each kernel and the sort path's segment scan over 12 tokens, since past its gate budget circuit-check
     checks only a family's smallest binding."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import torch_embedding as TE
 
     return [

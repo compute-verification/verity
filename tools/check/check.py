@@ -484,18 +484,16 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
 #: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
-    # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
-    (("lean-agreement",), 460),
+    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
-    # thirds and the rest of lean-suites (105 + 15%)
+    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's second
+    # third and the rest of lean-suites
     (("circuit-check",), 340),
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
     (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
+    (("lean-suites:verity-flock:3/6",), 330),                    # beside lean-build, Flock's other four sixths, vLLM's last third: 140
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
@@ -523,8 +521,8 @@ def ask_gb(gib: int) -> str:
 
 def slot_wrap(priority: bool = False, twin: str | None = None, after: int = 0) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (the verified queue's records run's and its
-    candidates' checks', so they take the next slot ahead of unranked priority checks), --twin for one of a check's twins and --twin-after ``after``
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
+    they take the next slot ahead of unranked priority checks), --twin for one of a check's twins and --twin-after ``after``
     for a twin off its home that waits that long before joining its line."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
@@ -1228,7 +1226,37 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
 
 def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof)."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof).  The run directory
+    keeps its verdicts and records (`agreement_prune`), not the gigabytes of work tree beside them."""
+    rc = 1
+    try:
+        rc = _lean_agreement(out, upstream, inputs, verify)
+    finally:
+        agreement_prune(out / "flock-agreement", red=rc != 0)
+    return rc
+
+
+def agreement_prune(w: Path, red: bool) -> None:
+    if not w.is_dir():
+        return
+    for p in (w / "upstream", w / "inputs"):
+        shutil.rmtree(p, ignore_errors=True)
+    for p in [p for p in w.rglob("archive") if p.is_dir()]:
+        shutil.rmtree(p, ignore_errors=True)
+    cases = sorted(p for p in w.rglob("*") if p.is_file() and (p.name == "session.json" or p.suffix == ".bin"))
+    if red and cases:
+        with tarfile.open(w / "cases.tar.gz", "w:gz", compresslevel=6) as t:
+            for p in cases:
+                t.add(p, arcname=str(p.relative_to(w)))
+    for p in cases:
+        p.unlink()
+    kept = [p for p in w.rglob("*") if p.is_file()]
+    print(f"check: lean-agreement: kept {len(kept)} files ({sum(p.stat().st_size for p in kept) >> 10} KiB) of its work tree in "
+          f"{w}: the pinned build and inputs and their copies are fetched again by art id, and each case's session and circuits "
+          + ("are in cases.tar.gz" if red and cases else "are dropped on a pass"), flush=True)
+
+
+def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None) -> int:
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -2867,11 +2895,13 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree) under this interpreter when it has pytest, else under `uv run --locked`
+    (a shipped tree's system python3 has none), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    python = [sys.executable] if uv is None or importlib.util.find_spec("pytest") else [uv, "run", "--locked", "python"]
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-lints", [*python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
             ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 

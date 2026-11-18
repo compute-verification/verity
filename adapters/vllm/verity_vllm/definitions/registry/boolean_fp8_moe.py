@@ -24,14 +24,15 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean.gather import gather
+from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, concat, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as SC
-from verity.circuits.boolean.gather import gather
-from verity.circuits.boolean.trace import definition
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_gather as BGA
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import fp8 as F8

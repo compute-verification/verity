@@ -281,16 +281,17 @@ def heavy_shards(driver: Landing, sha: str, n: int, doc: dict | None = None) -> 
     return set(range(1, n + 1))
 
 
-def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
+def replaced(lines: Iterable[dict], members: Iterable[int], now: float, of: Iterable[str] = ()) -> dict[str, float]:
     """The runs a check of a candidate holding ``members`` replaces (`start`'s ``after``), each by when the loop cancelled it:
-    of each line of the loop's log (``lines``) in the last `CARRY_WAIT_S` that cancelled the check of a candidate sharing a
+    of each line of the loop's log (``lines``) that cancelled the check of a candidate ``of`` names (those it rebuilds,
+    `vqueue.Build.replaces`), whatever its age, or, in the last `CARRY_WAIT_S`, of a candidate sharing a
     member, a drop's or one's that cancelled a check still launching at its drop (`Loop._launched`), its runs
     (``beside_cancelled``, those that had ended already among them) but one its cancel left running (`KEEP_RUNS`), which
     no wait would see end."""
-    want, out = set(members), {}
+    want, of, out = set(members), set(of), {}
     for r in lines:
         at = _epoch(r.get("at"))
-        if at is None or now - at > CARRY_WAIT_S or not want & set(r.get("members") or ()):
+        if at is None or not (r.get("sha") in of or now - at <= CARRY_WAIT_S and want & set(r.get("members") or ())):
             continue
         kept = {i for i, why in (r.get("beside_cancel_failed") or {}).items() if str(why).startswith("left running")}
         for rid in r.get("beside_cancelled") or ():
@@ -377,7 +378,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow).  Every launch leaves out the tests the loop's list ``deselect`` names (`deselection`), each
     shard's alike; the nightly uncached check, which reads no list, runs them.
-    With ``after`` (`replaced`: the runs of dropped candidates' checks it replaces, by when each was cancelled), it names them
+    With ``after`` (`replaced`: the runs of dropped candidates' checks it replaces, by when each was cancelled; or, started
+    again, its own check's runs, by when it was), it names them
     to its launch (`CARRY_ENV`, ``carry``), so its check reuses their passes first, and launches only once `left` finds each
     one's record or `CARRY_WAIT_S` has passed since its cancel: until then the record holds ``wait`` and no ids, and the
     `judge` that finds the wait over launches it, ``at`` then, naming each run it went without (``carry_without``)."""
@@ -583,6 +585,19 @@ def abandon(rec: dict) -> None:
     if (plan := rec.get("plan")) and "made" not in plan:
         shutil.rmtree(plan["dir"], ignore_errors=True)
         _unplan(rec)
+
+
+def shards_registered(driver: Landing, rec: dict) -> list[str]:
+    """The run ids each shard of ``rec`` still launching registered since it was last read, its launch dropped from it once it
+    ended (`Landing._resolve`, which reads a launch once): a dropped candidate's, whose runs are cancelled as they register,
+    whatever its other shards' launches did (`Loop._launched`)."""
+    new: list[str] = []
+    for k, shard in enumerate(rec.get("shards") or (), 1):
+        if "launch" in shard:
+            shard.setdefault("at", rec["at"])
+            driver._resolve(shard, f"shard {k} of dropped candidate {rec['tip'][:12]}'s run")
+            new += [] if "launch" in shard else shard.get("ids") or []
+    return new
 
 
 def _planned(driver: Landing, rec: dict, what: str) -> Verdict:

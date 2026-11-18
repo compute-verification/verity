@@ -114,7 +114,7 @@ class Server:
         self.runner = Runner()
         self.engine = self.engine_of(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
-        self.trace = sc.advice_trace(out, self.engine.sched)
+        self.trace = so.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop, self.admitted = so.EngineLoop(self.engine, self.windows), {}

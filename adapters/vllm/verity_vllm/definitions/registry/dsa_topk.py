@@ -65,8 +65,16 @@ from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
-from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16, SelectI32
+from verity_vllm.definitions.registry.prims import (
+    BF16,
+    BIT,
+    F32,
+    I32,
+    SelectBf16,
+    SelectI32,
+)
 
 M32 = 0xFFFFFFFF
 
