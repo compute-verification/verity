@@ -1139,7 +1139,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
   let st ← get
   match (Widths.bodyBad st.defs fid body).run st.walked with
   | .ok (some m) _ => throw m
-  | .ok none w => set { st with walked := w }
+  | .ok none w => dbgTrace s!"WALKTOTAL\t{w}" fun _ => set { st with walked := w }
   | .error e _ => throw s!"definition '{fid}': E_REINTERPRET unchecked: {e}"
   return { key := fid, id, prim := false, params, ret := retType, body,
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
