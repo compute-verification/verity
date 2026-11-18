@@ -3,8 +3,8 @@ slot's coarsest fitting option, else a gap with its finest option's reason; a ``
 cost; no proof block
 for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole; a ``KEY_BLOCKS``
 row's units, the window circuit's cut of its heads, short or long), the slots of each
-kind of split the serving rows' tables name, and the census's counts per
-Definition, phase, token and request over the ranks, one request at a time for a row of several request shapes. The sized units are stand-ins: nothing is bound or lowered."""
+kind of split the serving rows' tables name, each block's Definition on bits and its kind's largest block, and the census's counts per
+Definition, phase, token and request over the ranks, one request at a time for a row of several request shapes. The sized units are stand-ins: nothing is lowered."""
 
 from __future__ import annotations
 
@@ -164,6 +164,47 @@ def test_an_attention_row_short_or_long_is_its_heads_key_blocks_and_ends(T, bn, 
     for est_log in (22, 28):
         kind, got, _why = B.cut(row, family(row, units, est_log=est_log))
         assert (kind, [(u["spec"], u["n"]) for u in got]) == ("split", list(templates[1:]))
+
+
+HEAD_END = 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}'
+
+
+def first(nvis, bn, v=1):
+    return f'AttnBlockFirst_v{2 * v - 1}{{D=64,NVIS={nvis},BN={bn},DOT={{"fn":"HopperBF16WgmmaDot16_v{v}"}}}}'
+
+
+def s8(k, v=1):
+    return f'ScaledMmS8Coordinate_v{v}{{K={k},DOT={{"fn":"BlackwellS8ImmaDot32_v{v}"}}}}'
+
+
+def sized(k_log=22, ands=1000, in_bits=64, out_bits=16):
+    return {"k_log": k_log, "ands": ands, "in_bits": in_bits, "out_bits": out_bits}
+
+
+def test_a_word_block_is_proved_as_its_version_on_bits_and_bounded_by_its_kinds_largest_block():
+    """``proved_as``: the block's Definition on bits at its own statics, function-valued statics on bits too, absent for a
+    Definition on bits or of no version on bits; ``bounded_by``: on each block of a kind at several sizes that the kind's
+    largest (most ANDs) differs from only in integer statics and is at least in k, ANDs, input and output bits, that one's
+    ``proved_as``; absent on the largest, on a block of another flag and on a block it doesn't bound."""
+    block = 'AttnBlock_v{}{{D=64,NVIS=128,FIRST=false,BN=128,DOT={{"fn":"HopperBF16WgmmaDot16_v{}"}},CHECK={}}}'
+    defs = {first(190, 192): sized(26, 10**7, 900, 600), first(7, 128): sized(22, 10**5, 500, 600),
+            block.format(4, 1, "true"): sized(ands=1001), block.format(4, 1, "false"): sized(), HEAD_END: sized(),
+            s8(8192): sized(24, 10**6), s8(2048): sized(25, 10**5), "EmbeddingRead_v1{V=4,H=8}": sized(), "Lin_v1{N=1}": sized()}
+    B.proved(defs)
+    assert {s: {k: d[k] for k in ("proved_as", "bounded_by") if k in d} for s, d in defs.items()} == {
+        first(190, 192): {"proved_as": first(190, 192, 2)},
+        first(7, 128): {"proved_as": first(7, 128, 2), "bounded_by": first(190, 192, 2)},
+        block.format(4, 1, "true"): {"proved_as": block.format(9, 2, "true")},
+        block.format(4, 1, "false"): {"proved_as": block.format(9, 2, "false")},
+        HEAD_END: {"proved_as": 'AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'},
+        s8(8192): {"proved_as": s8(8192, 2)}, s8(2048): {"proved_as": s8(2048, 2)},
+        "EmbeddingRead_v1{V=4,H=8}": {}, "Lin_v1{N=1}": {}}
+
+
+def test_the_census_names_each_blocks_definition_on_bits():
+    c = B.census([doc(0, {HEAD_END: family(HEAD_END), "Lin_v1{N=1}": family("Lin_v1{N=1}")})])
+    assert c["definitions"][HEAD_END]["proved_as"] == 'AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'
+    assert "proved_as" not in c["definitions"]["Lin_v1{N=1}"]
 
 
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():

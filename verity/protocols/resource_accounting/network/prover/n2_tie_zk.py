@@ -72,7 +72,8 @@ from verity.protocols.resource_accounting.network.verifier import tie_service as
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, partition as P
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class
@@ -440,6 +441,16 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 
 # --- the rounds -------------------------------------------------------------------------------------------------------
 
+def registration(tie: TS.IngressTie, head: WR.CellsHead, previous: str | None = None) -> dict:
+    """One-stage's record of the execution phase: the network attester's root of its rows, from its head
+    (`network_attester_rows.check_registration`'s, the network attester's signed registration as the challenger reads it),
+    and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
+    tie._held(head)
+    roots = [{"port": TS.VALUE, "root": head.root.hex(), **tie.ports(head.window)[TS.VALUE]}]
+    return R.record(tie._program, tie.query, {"law": "subset", "k": tie.T}, S.SCHEME, roots,
+                    tie.provenance(head.window), previous=previous)
+
+
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
     """The member's execution phases on its own stream, in order: the network attester registers, the challenger
@@ -461,7 +472,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     previous, rows = None, []
     for j, x in enumerate(rd.windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = tie.register(stream, tie.registration(x.head, previous))
+        reg = tie.register(stream, registration(tie, x.head, previous))
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.head.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the network attester's")
