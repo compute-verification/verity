@@ -60,7 +60,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      fetch's own (`network_attester_chain.own_record`), as every check below reads it. The case's files go to a 0700 scratch
      directory beside the unpacked run, removed once the check has answered, so the records reach no hold.
   2. The window's requests are attested ones: each window request's user names one of the network attester's attested
-     requests (`network_attester_chain.io`), with the same prompt and streamed ids; else reject.
+     requests (`network_attester_chain.io`), with the same prompt and streamed ids in the serve's own log
+     (``requests.jsonl``), not the Commit; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's network attester path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
@@ -203,13 +204,14 @@ SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
 #: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
-#: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
+#: and how its negatives came out, and the scan's tied form as the report reads it (`chain_record.tied_form`).
+#: Everything else stays in the kept run: the scan's answers (its registration and
 #: each execution phase's answer and row registrations, the period check's evidence less its attestations: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
 #: opening time and its advice's bits), of which only a padded count may be public, report.md and the report's other
 #: keys (the attested I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
 #: and response lengths, the tie's prompt lengths and releases, the network attester's check of its witness).
-PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
+PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused", "tied_form",
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"
