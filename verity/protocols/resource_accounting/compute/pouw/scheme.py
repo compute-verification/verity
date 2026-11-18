@@ -15,6 +15,8 @@ record states.
 
 from __future__ import annotations
 
+import os
+import re
 from collections.abc import Callable, Mapping
 from fractions import Fraction
 from pathlib import Path
@@ -84,6 +86,38 @@ def registration(scheme: Any, refused: type[Exception]) -> dict[str, Any]:
     return {**out, "registered": True}
 
 
+#: The file in the scheme's private directory (``ctx["private"]``) that holds the last salt epoch number it spent
+EPOCH_FILE = "epoch"
+
+
+def spend_epoch(private: str | os.PathLike[str]) -> int:
+    """The next salt epoch's number (`salt.epoch_open_root`'s k), written to ``private``'s `EPOCH_FILE`, synced with its
+    directory, before it is returned: a killed server's number is never handed out again, so no later server opens a
+    session on a root already used (the gate's one session a root); a number may be skipped."""
+    path = Path(private) / EPOCH_FILE
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        k = 0
+    else:
+        if not re.fullmatch(r"(0|[1-9][0-9]*)\n", text) or int(text) >= 2**64 - 1:
+            raise ValueError(f"pearl-plus: {path} holds {text[:40]!r}, not the last salt epoch number spent below 2^64 - 1: "
+                             "refused rather than risk a number already used")
+        k = int(text) + 1
+    tmp = path.with_name(f"{EPOCH_FILE}.next")
+    with open(tmp, "w") as f:
+        f.write(f"{k}\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return k
+
+
 def requests(ctx: Any) -> tuple[H.RequireProperty, ...]:
     return (H.RequireProperty("eager", True, "its kernel at each linear block is not graph-capturable"),
             H.RequireProperty("world", 1, "its passes and transcript are per rank, which is not wired"))
@@ -100,12 +134,17 @@ class Attached:
 
         self.own: Mapping[str, Any] = settings(PEARL_PLUS, ctx.get("settings") or {})
         self.gate: Any = ctx.get("gate")
+        self.private: Any = ctx.get("private")
         if not self.own["coins"] and not self.own["challenger"]:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
         if self.own["challenger"] and not callable(self.gate):
             raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], gate(session, root): the "
                              "gate's open of the reserved session on the salt epoch's root (serving.h1.window.Gate)")
+        if self.own["challenger"] and self.private is None:
+            raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['private'], the scheme's private "
+                             "directory: the salt epoch's number must survive a restart, or a later server would open a "
+                             "session on a root already used")
         if not self.own["kernel"]:
             raise ValueError("pearl-plus: no 'kernel' among its settings (ctx['settings']): its run computes on the device, through "
                              "the kernel's library")
@@ -181,8 +220,9 @@ class Attached:
         """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
         ``transcript_dir``, and ``coins`` or ``challenger`` with its ``session``, which the launcher's gate opens):
         their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one session
-        for the server's life, closed at `release`; else the in-process coins), and the run's pass limit, retained
-        passes and ``registration``, what it claims of the weights it serves."""
+        for the server's life, closed at `release`, on an epoch number first spent in ``ctx["private"]``,
+        `spend_epoch`; else the in-process coins), and the run's pass limit, retained passes and ``registration``,
+        what it claims of the weights it serves."""
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
 
@@ -194,7 +234,8 @@ class Attached:
         k, carried = None, None
         if own["challenger"]:
             given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]), gate=self.gate)
-            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True)
+            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
+                                                                          epoch=spend_epoch(self.private))
         else:
             held = SV.in_process_coins(0)
             coins, opening = held.commitment, held.open("salt", SV.weights_root(roots))
