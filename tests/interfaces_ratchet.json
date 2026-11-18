@@ -198,7 +198,6 @@
   "benchmarks/pouw/pearl_c_sm90/fixture.py": 6,
   "benchmarks/pouw/pearl_c_sm90/glm53.py": 6,
   "benchmarks/pouw/pearl_c_sm90/glm53_passes.py": 8,
-  "benchmarks/pouw/pearl_c_sm90/glm53_profile.py": 1,
   "benchmarks/pouw/pearl_c_sm90/glm53_slices.py": 2,
   "benchmarks/pouw/pearl_c_sm90/glm53_timing.py": 6,
   "benchmarks/pouw/pearl_c_sm90/llama32_1b.py": 1,
