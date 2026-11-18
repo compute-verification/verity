@@ -156,7 +156,7 @@ Two kinds of committed run:
   H1's steps, the class's outputs), and the window's docket ``--out``/registration.json is chained right after W
   and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
   With ``--window-registration W`` (Pearl+'s window record, ``served_passes.py retain --window-record W``) and
-  ``--pearl-passes DIR`` (the window's passes, serve_pearl's ``pearl/w<k>/``), the circuit is cut at its linears
+  ``--pearl-passes DIR`` (the window's passes, Pearl+'s ``pearl/w<k>/`` under serve-openai's ``--out``), the circuit is cut at its linears
   (`window_class.PearlTables` under W's scheme; its rounds the window's steps, the class's outputs), each cut linear's y
   taken as served, and the docket is chained right after W and registers W's values (`pearl_c.window.reuse`),
   refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
@@ -1687,7 +1687,7 @@ def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
 
 
 def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
-    """With ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
+    """With ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
     manifests, their rounds and the circuit's tables of them (`window_class.PearlTables` under W's scheme); None without.
     ValueError without ``--window-registration``, beside ``--h1-key``, for a W of no Pearl-C scheme, or where the rounds

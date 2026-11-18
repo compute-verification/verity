@@ -1049,7 +1049,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
