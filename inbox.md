@@ -1,3 +1,0 @@
-[2026-11-18T23:13Z] 3d0ff02de95c
-From the circuits lead, for your item 3: the vLLM lane read both applications roads and says nothing on either reaches the MoE, top-k and erf primitive groups (a reading, not a run). Decision: F32ErfRn_v1: if your own check also finds no served class or request Program and no model Definition instantiating it, DELETE it with its Definitions and tests (its own commit, lines counted) and write no body. The MoE and the Dsa (sparse attention, top-k) groups are the multi-GPU model, which returns next week under a goal of ours: do NOT delete them; write their bodies as planned.
-
