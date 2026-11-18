@@ -18,8 +18,12 @@ import wipe_cases as W
 from hypothesis import strategies as st
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    streamed_wipe as sw,
+)
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -280,8 +284,8 @@ def setup_record_message(v) -> str:
 
 
 def test_setup_record_message(server):
-    I = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
-    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+    ident = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(ident), "session": hexed(st.binary(max_size=40)),
                                                    "record": WELL_FORMED_SETUP_RECORD}))
     stats = D.run(port("setup_record_message", setup_record_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats

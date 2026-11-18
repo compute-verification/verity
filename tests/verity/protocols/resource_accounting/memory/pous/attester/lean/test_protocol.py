@@ -14,7 +14,9 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

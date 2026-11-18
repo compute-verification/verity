@@ -25,7 +25,9 @@ from hypothesis import strategies as st
 from verity_difftest import protocol as P
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"

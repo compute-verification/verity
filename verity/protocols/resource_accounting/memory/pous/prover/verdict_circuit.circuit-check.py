@@ -10,7 +10,9 @@ def _pous_roots() -> list[Any]:
     allowed and Δ + RTT = 500 µs (`audit.CHALLENGES`, `DEADLINE_NS + RTT_ALLOWANCE_NS`), and at 4 rounds with one miss
     allowed, small enough to lower whole."""
     from verity.circuits.defs import bind
-    from verity.protocols.resource_accounting.memory.pous.prover.verdict_circuit import PousVerdict
+    from verity.protocols.resource_accounting.memory.pous.prover.verdict_circuit import (
+        PousVerdict,
+    )
 
     return [
         bind(PousVerdict, K=132, M=0, LIMIT=500_000),

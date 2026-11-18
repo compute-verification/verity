@@ -19,7 +19,11 @@ def _pous_roots() -> list[Any]:
     their rows (the last row half empty), the header's bytes before its pad, the context and the timing of each record."""
     from verity.circuits.defs import bind
     from verity.commitments.crypto.lms import TOY_N
-    from verity.protocols.resource_accounting.memory.pous.prover.session_circuit import PousRound, PousSessionDigest, PousSessionSig
+    from verity.protocols.resource_accounting.memory.pous.prover.session_circuit import (
+        PousRound,
+        PousSessionDigest,
+        PousSessionSig,
+    )
 
     return [
         bind(PousSessionSig, N=TOY_N, W=1, H=1),

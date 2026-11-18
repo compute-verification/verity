@@ -34,7 +34,12 @@ from verity.circuits.boolean.trace import part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.commitments import hm96
-from verity.commitments.gates.sha512 import compress_gadget, midstate, pad_tail, words_be
+from verity.commitments.gates.sha512 import (
+    compress_gadget,
+    midstate,
+    pad_tail,
+    words_be,
+)
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 from .circuit import _check, _traced_body, bits

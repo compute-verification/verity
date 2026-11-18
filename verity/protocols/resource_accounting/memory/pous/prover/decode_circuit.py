@@ -71,9 +71,10 @@ def _iv_bits():
     return [f for w in IV for f in const_bits(w, 64)]
 
 
-def ctr_chunk(C, L: int, D: int, I: int, cv, rest):
-    """Chunk I of the stream: one compression of the base's rest, D, u32be(I) and the padding, as its 64 bytes."""
-    tail = bytes([D]) + I.to_bytes(4, "big") + pad_tail(L + 5)
+def ctr_chunk(C, L: int, D: int, index: int, cv, rest):
+    """Chunk I (`index`) of the stream: one compression of the base's rest, D, u32be(I) and the padding, as its 64
+    bytes."""
+    tail = bytes([D]) + index.to_bytes(4, "big") + pad_tail(L + 5)
     out = compress(C, cv, list(rest) + [f for byte in tail for f in const_bits(byte, 8)])
     return from_words([out[64 * i:64 * i + 64] for i in range(8)])
 

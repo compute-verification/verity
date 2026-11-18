@@ -37,7 +37,7 @@ digests of C's labels at the opened coins.
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR

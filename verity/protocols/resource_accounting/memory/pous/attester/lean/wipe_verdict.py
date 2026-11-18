@@ -31,7 +31,9 @@ from typing import Any
 
 import verity_difftest as D
 
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    streamed_wipe as sw,
+)
 
 PACKAGE = Path(__file__).resolve().parent
 EXE = "streamed-wipe-verdict"

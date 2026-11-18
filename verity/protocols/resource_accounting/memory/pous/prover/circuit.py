@@ -46,8 +46,8 @@ integers are the reference (the tests).
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
+from functools import cache, lru_cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
@@ -238,7 +238,7 @@ def _check(name: str, **kw: int) -> None:
             raise ValueError(f"{name}'s {k} is an int >= 1, not {v!r}")
 
 
-@lru_cache(maxsize=None)
+@cache
 def _traced(key: tuple, build: Callable, params: tuple[Type, ...], ret: Type) -> TR.Traced:
     return TR.trace(build, list(params), ret)
 

@@ -9,7 +9,9 @@ def _pous_roots() -> list[Any]:
     """PoUS's per-answer opening (`verity.protocols.resource_accounting.memory.pous.prover.answer_circuit`) of a 264-byte row reaches the row
     digest's head, a middle compression and a tail with its rest."""
     from verity.circuits.defs import bind
-    from verity.protocols.resource_accounting.memory.pous.prover.answer_circuit import PousAnswerOpens
+    from verity.protocols.resource_accounting.memory.pous.prover.answer_circuit import (
+        PousAnswerOpens,
+    )
 
     return [
         bind(PousAnswerOpens, N=264),

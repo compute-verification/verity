@@ -10,7 +10,9 @@ def _pous_roots() -> list[Any]:
     takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
     package's tests check it against Python's integers at P2's width and pin its gate counts there."""
     from verity.circuits.defs import bind
-    from verity.protocols.resource_accounting.memory.pous.prover.circuit import PousModSquare
+    from verity.protocols.resource_accounting.memory.pous.prover.circuit import (
+        PousModSquare,
+    )
 
     return [
         bind(PousModSquare, W=128, C0=21065),

@@ -12,7 +12,9 @@ def _pous_roots() -> list[Any]:
     lowering's budget, so the family's struct budget in the pins (``struct_max_gates``) has its structural lowering compared
     with the reference on the vectors."""
     from verity.circuits.defs import bind
-    from verity.protocols.resource_accounting.memory.pous.prover.setup_circuit import PousP2SetupCheck
+    from verity.protocols.resource_accounting.memory.pous.prover.setup_circuit import (
+        PousP2SetupCheck,
+    )
 
     return [
         bind(PousP2SetupCheck, W=64, C0=189, L=144, N=16),
