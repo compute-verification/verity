@@ -47185,7 +47185,7 @@
    }
   },
   "PouwPearlPlus.Protocol": {
-   "digest": "b47b9b49625365820608395a57b11283bfab67041733b7e1b7ed82a20cbe5ecc",
+   "digest": "68053204f9e671719ee269bbf6c949c2812157bb42a35903d6e8ca09420162a5",
    "definitions": {
     "PouwVerifier.PearlPlus.Protocol.Commitment": "b4d30ef7412ddbf6bf7ad29021d2ce6c01e266c87694ab468a0edab45aea6973",
     "PouwVerifier.PearlPlus.Protocol.Commitment.bytes": "4bd189fade9f505cec849f401a2ef5241a791188eafd09ca742fda2c8b34fd61",
@@ -47206,8 +47206,11 @@
     "PouwVerifier.PearlPlus.Protocol.Profile.drawn": "e0feb41780d64f5293c14048400a759c68f4c8931472f2b5f72119a16acf5bc3",
     "PouwVerifier.PearlPlus.Protocol.Profile.draws": "2858b4791677911d3a83d9feefbb0b8c267ef2677e8a0d04666fbdb4afe34544",
     "PouwVerifier.PearlPlus.Protocol.Profile.passes": "40e510a0e0d4d2c52ef441ff76d91f9d6f31eb645e97aaf9656b9542ddee9ced",
+    "PouwVerifier.PearlPlus.Protocol.Public": "a13e52433aa3c4a4627da54881f64390bce59c27c2f809f2d14cb5bc6601c8bc",
+    "PouwVerifier.PearlPlus.Protocol.Public.credit": "bc849d4fa3b4d97ff556ec31b5ba1cac8f11e897ece998a56f8f8b5494944620",
+    "PouwVerifier.PearlPlus.Protocol.Public.salts": "8817fe864d1c77ba6b8fb03c076279c54ffd6351cc24975f6ff2835bfadd25bf",
     "PouwVerifier.PearlPlus.Protocol.bytesOf": "bdd685ef81cf0e2efaa2ef131aa22b9c683e0996c9e513ff42cd486ad7364fba",
-    "PouwVerifier.PearlPlus.Protocol.checkBlobs": "531d90d41a49c62955196e6ea1d586d881c28197776dfc8b820573e517a3daa6",
+    "PouwVerifier.PearlPlus.Protocol.checkBlobs": "4ee387fe05949a4ed98b39ad3c8c9d6b5991bb1c1055ed4d23c2c4e83685d3b0",
     "PouwVerifier.PearlPlus.Protocol.commitmentKeys": "5dce9d7fbfc654f8849a3ce49845163d53d384209e64ae03e05b4cb834e81b3d",
     "PouwVerifier.PearlPlus.Protocol.commitmentOf": "22e0d105c9b20e765d90798be55717d9789cfb19d447bd99d0bcd4ebff652513",
     "PouwVerifier.PearlPlus.Protocol.commitmentTag": "7561d427aa8d6e35698a344e1a0086fcb6a45e6c17fa220449a65368e8778c1a",
@@ -47220,9 +47223,9 @@
     "PouwVerifier.PearlPlus.Protocol.paramsKeys": "ca61cf34d6b4d94499eaf61b04bef6697e58982709d5dabca1013605dd0b535b",
     "PouwVerifier.PearlPlus.Protocol.paramsOf": "2b46006b358a1d1ad39735eaceada79ea3251771deff00630230e0128710595e",
     "PouwVerifier.PearlPlus.Protocol.profileJson": "06c124da7f0bf46daa24bf13eccb7ca02675fc638e5cad0bb779573c5319ff4b",
-    "PouwVerifier.PearlPlus.Protocol.protocol": "abdf4c38e838beca1edb136108afea5bece79b1f45cfae4d1ab4c4883e32f832",
+    "PouwVerifier.PearlPlus.Protocol.protocol": "dd2f7152d7d3d37ba0f9fb0a581c5e88bd8e35d301ed9fa3d63b570a3351b54a",
     "PouwVerifier.PearlPlus.Protocol.protocolId": "4e08cea3221b810549bff3eecfbb721d8243d4f101cf38e3471cf2ce7274343f",
-    "PouwVerifier.PearlPlus.Protocol.publicJson": "2d262d433ad233b54b06b3cd678a42a4bbb3b6e24f4191f938816cbf16b0db8d",
+    "PouwVerifier.PearlPlus.Protocol.publicJson": "0f926c34ab176467c27befc6ab1b38e0fa7f735dd8ddde116a3f3c51e894cea1",
     "PouwVerifier.PearlPlus.Protocol.recordKeys": "923a7079f72820b0370718e69b2821db307a7a833e37f33f30a3fd585788a7fe"
    }
   },
@@ -47342,7 +47345,7 @@
    }
   },
   "PouwPearlPlus.Run": {
-   "digest": "73856407e6cf752a53410145829b1bedb3ddbc4adcc33ac7a7afd3b4bf778df2",
+   "digest": "a662328e453143c23f0ffecbd0d8712e9e2f3ab4886350013a00d8c8bbc03dc9",
    "definitions": {
     "PouwVerifier.PearlPlus.AFTER_COIN": "d81caeee3d2a1b7876116ed7fd9a7a5806bbdb7419a61e4d4f30ff66d76f9775",
     "PouwVerifier.PearlPlus.COIN_SCHEMA": "8d38d506e4426e372cf06b4c513df28abe4dfa396c60d490e1f4610e0a62c9ad",
@@ -47374,7 +47377,7 @@
     "PouwVerifier.PearlPlus.drawKey": "b3c008b58be6c4f2c4690bb0b440f5599edb7f24ecb11d96a469222c3da152b6",
     "PouwVerifier.PearlPlus.instInhabitedPass": "ef250973b73aa858532211826f6bfe973273609668a385530962faad065d2895",
     "PouwVerifier.PearlPlus.instInhabitedPass.default": "fd709db03414bfc9b6694ad7bf445bd068dce60a6fd9169ff97590fb66283232",
-    "PouwVerifier.PearlPlus.runCommitment": "1ce192ded6b263e74051b1411f693e248c79d8c8d42c92980a8cd9f2587bedb9",
+    "PouwVerifier.PearlPlus.runCommitment": "74e093f18019af70dc5a6444f4187b2056883fdc6610ca9ab26cc3d306e34c8d",
     "PouwVerifier.PearlPlus.ticketWeight": "96363d108e844e945f8dbfb44b47573f152166420f73f579056ce5727fcd8a34",
     "PouwVerifier.PearlPlus.tickets": "4f350be31d6f11b4504ab0f44147abcde86270a5610e7be687611ed79deb32e5",
     "PouwVerifier.PearlPlus.todo": "f7425a77e987c91778f21a9d643f41d6a9a4813ccbbdb793d29e49e4cf61b7ba"
@@ -57847,7 +57850,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "8b193595914c78d1fd9532f6e95f1b9725731828ad567894ca583b19d64fd742",
+   "digest": "c703f658273c6e33c2683074d0bd0c4162a4809929a971ea866a4bdb417b62f3",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -57889,7 +57892,7 @@
     "Verity.OpenTree.opened": "0f66a787128cce0ddf79a66283a3836130d6ae808dc16bd806964061659ae293",
     "Verity.OpenTree.sample": "ab865c962d6b2209c066c1235cfb45350dcf3536f435076f8f5812605be75dfc",
     "Verity.OpenTree.spec": "8e66dae6dc1b8f7efc231580793221be0a85973f47f7da66703a3b521b336770",
-    "Verity.PearlPlusCredits": "5af49da974e6bcf3dd10d1aabe573e7ccd0d0fc1f7220f8a7b1f8a22f7fbf89c",
+    "Verity.PearlPlusCredits": "a2683ffdf6060f3b874f1886d8e533fcc0df08be1794c1fb7ba9374f8f30347b",
     "Verity.Place": "59eb10b318d4fdd238353e69bceb330d383baba61f89e0b51a2b32d71c9cb6f3",
     "Verity.Place.offset": "973a677062cf9c4986ec3a0d7dfd9f838b30c70bf2b7e5cc6e9740365881f131",
     "Verity.Place.rank": "cb402e8ec2166d85d7c0503ee2035f41668a85198ba7ed018d49db370633a19f",
