@@ -54,9 +54,7 @@ theorem miss_eq (K N : ℕ) (B : Finset (Fin N)) (hK : K ≤ N) :
     show (fun π : (Verity.SamplingDesign.permPrefix N K).Ω => Disjoint ((Verity.SamplingDesign.permPrefix N K).draw π) B) =
       fun π => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B from
       funext fun π => propext Finset.disjoint_left] at h
-  first
-    | exact h
-    | (unfold Claims.Pr at h; convert h using 2)
+  exact h
 
 /-- **The miss bound**: a uniform permutation's `K`-subset misses `B` with probability at most `(1 − |B|/N)^K`. For
 `K ≤ N` it is `miss_eq`'s factor, which `C(N − |B|, K)·N^K ≤ C(N, K)·(N − |B|)^K` bounds; for `K > N` the prefix is every
