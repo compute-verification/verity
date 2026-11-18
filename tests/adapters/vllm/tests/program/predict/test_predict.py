@@ -66,15 +66,15 @@ def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
 
 
 @pytest.mark.parametrize("model,digest", [
-    ("smollm2-135m", "d469f1d4eefafff23e468803ca7894d762d80f8eb81cc2eb10e689629207497d2b4967993360d9c1bb535b3faa3c95f5aa7b18bf4ffd5752935e8a62d18b7ee4"),
-    ("llama32-1b", "5e34739ca3f59dda9febb8dc7c89ab8f4bf146945168079d83c420dc4dd49676034115612e78a3642471d3ebca1e1573e8618d795c31d7e6f118292ccb40e903"),
-    ("tinyllama-11b", "18372d884c9c7551bca643d830ab55c7c8e53568c7ee2528819ba997a657e1f7fc97b82068a3de2a3d373cc8a328fa9108115e440f311c17209800e695769d83"),
-    ("qwen25-05b", "bff68977892d274b710782a1b5db23e4c5485f716f1aa23b9872744d50cb43692f878fd0d20c83bec28f2b261ac833019cf0a1a80ae3f678cc54f92ffc6e73e9"),
-    ("phi3-mini", "3c7404516954d1a8cfb4dcc00c2a8a10d8ecce091c4e7c04ff5ae3f8659e57faa630797df41e5659bda9ad24225cdc2f8f1a6a08633aa3790a04532c169cda43"),
-    ("qwen3-4b", "424f31562fc5c47ffcf92f885185c46c1f81914a4d6ea2b7615f08c2ee8e94a9a81ede55594ee919fe90a1cc3e165838b144823baf13ea7bb692221a23a3761b"),
-    ("olmoe-1b-7b", "67b6a189e59333a6613287cbc1e035aeb898870b90276c4eeda4c9ac0096cdeae9675bacc00c84dda8204d274b41ff4c73e05800209e3a274c2c6fd6a460d058"),
-    ("qwen3-30b-a3b", "9022c3110e66548ba855863705cae93bca9f7262049ef3ce309425afb6187874c585397314c7b4e55a46ee1319b659e3f059985105ed7fd5eb0f453d45841934"),
-    ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
+    ("smollm2-135m", "c3fccb15a8daec8f573d5dd95fc012c0acd3cc1d0d88b4578f84dfe364a181b6f69f0d0ffd2988f0cc02728d942d3c2641eabb69b676656519c3a73d71ae0d88"),
+    ("llama32-1b", "af2574da8ac1c38c12cb022b9a3f1e5bdd62869c57cecf0ecade142eca124a168fa440c413a5e7c68c9a1637d7bb99fb4fefd88942340e357fed293e62952c3c"),
+    ("tinyllama-11b", "2a8bee32041927d0a2978c925360319a74e6b5dc492e89ae9eb1046e8428be605953858c99ab25b7a57b645c4641d7ab291b9f08d416541c7b8debcdbf3b71eb"),
+    ("qwen25-05b", "278cf9ddf3d46a7fe57cef6a1b6430603a5b5756b26beaf9c69ae3c3d9b6a76da9250b0298caeeb10fcb86899a4c96330cf3b38b3879aab79f2323373bf96f6e"),
+    ("phi3-mini", "d06e4c508379231cad05e05cffdd60581010882258fc92447c1c2b50b9dc6ac470e36be3aeec30d3d36d488ecf243a3dae6f01d58c64e6795717b324d2cbe095"),
+    ("qwen3-4b", "cfc1ce91aa29288c2e480eeb299e72c46eb02c2236ca5388d08f71b638b8076fc2ed8d5d58ae97d0e84d030dc3a90bb0e9fe129973105f29384823e2e6663684"),
+    ("olmoe-1b-7b", "ae54a3fde31a57b61b48f09ef77838b8c24238e8f223d9d6b16c3edea30385538f95c6588e9719694663b32e94f2cfd60a71c7fed05150be3ba89fdf71282bb8"),
+    ("qwen3-30b-a3b", "a3e6e95551920a8583751442cf11ff8bea82d69dcb3a4e6b5ad0e0044c07915aebbcc97a40e968702fbe223f4ace250af6e9882ab823b9885e11decef4741728"),
+    ("gemma2-2b", "a5ec0d9212dee862f849ec9332dabfb2429341abc268f4ba9e2298f5a70e731c680731853d202e6069eee950f5f40c39e8d090d015de0c8ad49204957a90ed73"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
@@ -97,14 +97,14 @@ def test_request_and_workload_programs_equal_the_traced_build():
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "3e1e44f5367000d4696ccb03551c70801dc794a69030e28eeeb156c9533ebf774b4dc40f11a9057f28a83340d96a10467814c6cbc7160f1178e670822a0f2764"),
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "a80fefc8ead7c8d09c2bf2b43ca6ed34296ec4db8d9891b71a850a90613cae6a77a4be0cde7b22a9a0f693c650684380712438a452e6eeb0287ddfdf037b4b6a"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "3af7a5544449ff2ebef6c4959ddbd927860584fedf39b11f137053bc6b178b6b52345869185d725efc1280db5e3203f8214c9d03949d63603c8c4c560723f074"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "081f73cd80e91a8536309c9b99a94c1dda7f17cea0fd980a9f6568a33ed238ddfef9e6484b43d004f1acd55352371d382cd9c56e337d092f5dde2c44043d66bc"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "7e1eb5ef961eee0624dcaa342a431bfefc2d1db8f645a716411441944043773f3d5130ce516e6f0303f3e1e3803b756ea0d4434e35a3e013739c856c36c16542"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "d06092a14690787d3b505c2f07cd5ee176bc77cc4d411819b78186899d724a0b87d0da41e24917b52919b4e0114be948ccf30c413a96f5c604831a6fa4941490"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "a96055dbae7e4ff741181c4fe29e222074541ed56b9a91fb5879cbf12b00cb574a8d5a9f6284a0731285f8556d5a08ae88132c92d37d02df0846aead8887df53"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "d2ac2f2f20834ab53a2046b37ad0a1adac6028e8c409790bd6f229e46f283e23636b6e49fa1ee24be2c68aeecf27d552e2de220a62ce5f14d49a7f39fa74b2aa"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "1b021232b0d3ab2a3e433dd5d9aaf82c07598b897d165093d454e14044b2dbd3c21d35e4b4fcb5e875818c452b0adcf531b29452c8080378a1c1197cb2f9aa60"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "b12ecf5e2a5b995218d1133ce12172353edb32766df283ab1fcb63cf25500fe3c45ff8291c8aa5289dc617b879bc629a2d30ed78f203e5be219cff6b30ffd2e9"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "1105d3f8e9932d7fa4753e78acd8eba53ab4de9368e908157f32682990f18d99d4a56dd483a70403a5c8da73e72986c144b63dba856276d3324c54adbfdc1161"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "be534afc7a520559229475e6ddd491ef731bcff1ca946a5c01fb575bba26d8401001301ad7a96d8ae366fb77cae7aae03e066964d00cfdb038842027b9dc95fa"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "3a80f8e277c8fcafee8063b1a0948d25064b91daa86821fd9537132a4d459934e0c989381228cf2ddf5d58d3de44bb2dc6fe9e2b739ecc278d33367d0f6fb0f6"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "dd3e5ed28881c73e9b709990019e1e628c21cdcc218df8b8c005ec122dc663108db7a8f414c71e143d793984d0e4246db7fe26e4f412c72dba1ab05fc22e6479"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -341,7 +341,7 @@ def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "cbfc83a7ecd96ac573e80ab31e5b9cd54e25aaaa35c0d53df0d503901ad7419c62cb5f702e41323204d7278278aacb87f394f3155e3a9a5afdaae3e730e4df27"),
+    ({**STOCH}, 8, "f781cb0ee763e5a457e1b41566a75403bc52fb805a62febd6bbdb479ea4021baf9a0d4895c19f871a9d4baef8ea8d85186a2abf8a1f5fffe916780065547fb17"),
     pytest.param({**STOCH, "top_p": 1.0}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
                  marks=pytest.mark.slow),
 ])
