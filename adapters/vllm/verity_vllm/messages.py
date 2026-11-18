@@ -41,9 +41,18 @@ class Exchange:
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
-        self.step = 0
+        self._step: int | None = None
         #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
         self.readers: Mapping[str, Callable[..., Any]] = {}
+
+    @property
+    def step(self) -> int:
+        """The workload's step: 0 before serving begins."""
+        return 0 if self._step is None else self._step
+
+    @step.setter
+    def step(self, value: int) -> None:
+        self._step = value
 
     def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
         """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
@@ -59,8 +68,8 @@ class Exchange:
         kind = type(request).__name__
         if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
-        if self.step > 0:
-            raise Refused(name, f"files {kind} after serving began (step {self.step}); file it before the first step")
+        if self._step is not None:
+            raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
         self.requests.append((name, request))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
@@ -125,6 +134,15 @@ class Exchange:
     def pending(self) -> bool:
         """Whether a gate holds an input not yet started."""
         return any(r.gate.pending() for _, r in self._filed(H.StartOnBoundary))
+
+    def ready(self, due: H.StepDue) -> bool:
+        """Whether step ``due.step`` may run: every gate is asked, and may start inputs."""
+        return all([r.gate.ready(due) for _, r in self._filed(H.StartOnBoundary)])
+
+    def open(self, why: str) -> None:
+        """Every gate starts what it holds, and every later input at once."""
+        for _, r in self._filed(H.StartOnBoundary):
+            r.gate.open(why)
 
     def held(self, input: str, step: int) -> bool:
         """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
