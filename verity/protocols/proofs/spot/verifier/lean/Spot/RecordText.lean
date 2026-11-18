@@ -474,9 +474,11 @@ structure Grid where
   q : Nat
   deriving Inhabited
 
-/-- One inference entry, `{template, at, radix, axes}`: its template and its grid. Refused (`blocks`) unless it has one
-radix a digit, each at least 1, and exactly one digit that `axes` name `slot`, of radix `S`. -/
+/-- One inference entry, `{template, at, radix, axes}`: its template and its grid. Refused (`blocks`) where it writes a
+`slot` base, and unless it has one radix a digit, each at least 1, and exactly one digit that `axes` name `slot`, of
+radix `S`: a base is never written 0, and a base above 0 puts the entry's slots past the class's `S`. -/
 def gridOf (S : Nat) (e : Json) : Except String (String × Grid) := do
+  if (e.getObjVal? "slot").toOption.isSome then throw "blocks"
   let some tid := stringAt e "template" | throw "blocks"
   let some start := nat? (valueAt e "at") | throw "blocks"
   let .arr radixJ := valueAt e "radix" | throw "blocks"
@@ -614,5 +616,40 @@ def declared (P : Prog) (doc : Json) (r : Row) : Option Declared :=
     | .ok x => x.declared r
     | .error _ => none
   | _, _ => none
+
+/-- The slots `gridsOf` gives units `0 … 3` of template `T`, under a class of `S` slots whose entries are `es`, or
+the refusal. -/
+def slotsOfEntries (S : Nat) (es : String) : Except String (List (Option Nat)) := do
+  let doc ← Json.parse s!"\{\"blocks\":\{\"inference\":\{\"slots\":{S},\"entries\":{es}}}}"
+  let (S, grids) ← gridsOf [{ tid := "T", defn := 0, units := 4, rows := [], outs := [] }] doc
+  return (List.range 4).map (slotIn S grids "T")
+
+def slotsGiven (S : Nat) (es : String) (want : List Nat) : Bool :=
+  match slotsOfEntries S es with
+  | .ok got => got == want.map some
+  | .error _ => false
+
+def blocksRefused (S : Nat) (es : String) : Bool :=
+  match slotsOfEntries S es with
+  | .ok _ => false
+  | .error e => e == "blocks"
+
+/-- The inference entries of template `T`, `(first unit, radix, axes, further fields)` each, as text. -/
+def entriesText (es : List (Nat × String × String × String)) : String :=
+  "[" ++ ",".intercalate (es.map fun (first, radix, axes, more) =>
+    "{\"template\":\"T\",\"at\":" ++ toString first ++ ",\"radix\":" ++ radix ++ ",\"axes\":" ++ axes ++
+      ",\"step\":0" ++ more ++ "}") ++ "]"
+
+def stepSlot : String := "[\"step\",\"slot\"]"
+def slotAxis : String := "[\"slot\"]"
+
+#guard slotsGiven 2 (entriesText [(0, "[2,2]", stepSlot, "")]) [0, 1, 0, 1]
+#guard slotsGiven 2 (entriesText [(0, "[2]", slotAxis, ""), (2, "[2]", slotAxis, "")]) [0, 1, 0, 1]
+#guard blocksRefused 2 (entriesText [(0, "[2,2]", stepSlot, ",\"slot\":0")])
+#guard blocksRefused 2 (entriesText [(0, "[2,2]", stepSlot, ",\"slot\":1")])
+#guard blocksRefused 2 (entriesText [(0, "[2,2]", stepSlot, ",\"slot\":-1")])
+#guard blocksRefused 2 (entriesText [(0, "[2,2]", stepSlot, ",\"slot\":null")])
+#guard blocksRefused 4 (entriesText [(0, "[2]", slotAxis, ""), (2, "[2]", slotAxis, ",\"slot\":2")])
+#guard blocksRefused 4 (entriesText [(0, "[2]", slotAxis, ""), (2, "[2]", slotAxis, "")])
 
 end Spot.RecordText
