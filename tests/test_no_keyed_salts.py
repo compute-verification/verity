@@ -72,8 +72,8 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py": "@memory-accounting",
+    # the card's pass and payload salts: keyed under the prover's own operating-system keys until the ruling and a card
     "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py": "@memory-accounting",
-    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/poub/verifier/store.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": "@memory-accounting",
 }
