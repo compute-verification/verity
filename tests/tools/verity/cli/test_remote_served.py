@@ -179,7 +179,7 @@ def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
         rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"tie-uniform": asked}))
         assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
     rc, _, err = dry(capsys, config=remote(tmp_path, {"tie-uniform": 1}))
-    assert rc == 2 and "refused params: tie-uniform is true or false" in err
+    assert rc == 2 and "refused params: pearl-plus.tie-uniform is a bool, not 1" in err
 
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
