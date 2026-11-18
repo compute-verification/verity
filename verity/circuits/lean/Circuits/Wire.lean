@@ -6,7 +6,7 @@ A wire states, once for many units, that reader template `reader`'s units read r
 row `out` of a unit of template `writer`. Reader index `i < units` (the product of `radix`) is reader unit
 `start + i / cuts`, row `cut0 + i % cuts`; its writer is unit `base + Σ_k d_k · step_k` of `writer`, `d` the digits of `i`
 in mixed radix `radix` (the first digit the slowest). Each index counts its own template's units, and a writer unit is
-also the writer's leaf in its template's output tree of `out`. With reader steps `rstep` (an uncut wire, one a digit),
+also the writer's leaf in its template's output tree of `out`. The reader row is the writer's row from its word `offset`. With reader steps `rstep` (an uncut wire, one a digit),
 index `i` is reader unit `start + Σ_k d_k · rstep_k` instead, row 0: strided on both sides by the one sum (`accum`).
 -/
 module
@@ -30,6 +30,7 @@ structure Wire where
   cut0 : Nat
   cuts : Nat
   rstep : List Int := []
+  offset : Nat := 0
   deriving Repr, DecidableEq
 
 namespace Wire
@@ -123,11 +124,11 @@ def leafAt (w : Wire) (u row : Nat) : Option Nat :=
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 
-/-- Every reader row the wire covers, `(template, unit, port, row)`, with its writer `(template, unit, out)`, index by
-index. -/
-def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String)) :=
+/-- Every reader row the wire covers, `(template, unit, port, row)`, with its writer `(template, unit, out, offset)`,
+index by index. -/
+def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String × Nat)) :=
   (List.range w.units).map fun i =>
-    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
+    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out, w.offset))
 
 end Wire
 
@@ -185,14 +186,15 @@ def sameKeys (j : Json) (ks : List String) (what : String) : Except String Unit 
 end Json
 
 open Json in
-/-- A wire's record: `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`. -/
+/-- A wire's record: `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]` and
+`offset: n`. -/
 def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
 
 open Json in
 /-- The one reader of a wire's record (`WIRE_KEYS`), which SPOT's wiring and Flock's registered reads both read. -/
 def Wire.ofJson (j : Lean.Json) : Except String Wire := do
   let ks := (keysOf j).getD []
-  if ks.contains "cut" then sameKeys j ("cut" :: WIRE_KEYS) "a wire" else sameKeys j WIRE_KEYS "a wire"
+  sameKeys j ((["cut", "offset"].filter ks.contains) ++ WIRE_KEYS) "a wire"
   let s := fun k => do strOf k (← field j k)
   let radix ← (← arrOf "radix" (← field j "radix")).mapM (natOf "a radix")
   let step ← (← arrOf "step" (← field j "step")).mapM (intOf "a step")
@@ -205,7 +207,8 @@ def Wire.ofJson (j : Lean.Json) : Except String Wire := do
       | [a, b] => if 1 ≤ b then pure (a, b) else throw "a wire's cut is [c0, C], C at least 1"
       | _ => throw "a wire's cut is [c0, C]"
     | .error _ => pure (0, 1)
+  let offset ← if ks.contains "offset" then natAt j "offset" else pure 0
   return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
-           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts }
+           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts, offset }
 
 end Circuits

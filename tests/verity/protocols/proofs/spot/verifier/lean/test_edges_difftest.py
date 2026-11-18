@@ -65,7 +65,7 @@ def _of(toy, cuts=None, b_refs=None) -> dict:
     at = [k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] in (ta, tb)]
     if b_refs is not None:
         _nodes(desc)[at[1]]["args"][0]["refs"] = b_refs(at[0], at[2])
-    template = {"units": 4, "rows": {"x": [2, 2]}, "outs": {"o0": 2}}
+    template = {"units": 4, "rows": {"x": [2, 2]}, "outs": {"out": 2}}
     return {"program": desc, "ranges": [[at[0], ta, 0, 2], [at[1], tb, 2, 2], [at[2], ta, 4, 2]],
             "wiring": {"templates": {ta: template, tb: template}, "cuts": cuts or {}, "wires": []}}
 
@@ -74,33 +74,36 @@ def _affine(*parts):
     return {"concat": [{"affine": ["n", k, b, c]} for k, b, c in parts]}
 
 
-def _wire(r, w, o, at, base, cut0=0) -> dict:
-    return {"reader": r, "port": "x", "writer": w, "out": o, "at": at, "radix": [2],
-            "base": base, "step": [1], "cut": [cut0, 1]}
+def _wire(r, w, offset, at, base, cut0=0) -> dict:
+    return {"reader": r, "port": "x", "writer": w, "out": "out", "at": at, "radix": [2],
+            "base": base, "step": [1], "cut": [cut0, 1], "offset": offset}
 
 
 _, TA, TB = ARR
 _, UA, UB = TUP
 
 CASES = [
-    ("A, B, A", _of(ARR), {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
+    ("A, B, A", _of(ARR), {"wires": [_wire(TB, TA, 0, 0, 0), _wire(TA, TB, 0, 2, 0)]}),
     ("B's argument offset by half a row", _of(ARR, b_refs=lambda a, a2: _affine((a, 1, 3), (a, 0, 1))),
      {"refusal": "edge-rows"}),
     ("a two-part argument", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 2))),
-     {"wires": [{**_wire(TB, TA, "o0", 0, 0), "radix": [1], "step": [0]},
-                {**_wire(TB, TA, "o0", 1, 1), "radix": [1], "step": [0]}, _wire(TA, TB, "o0", 2, 0)]}),
+     {"wires": [{**_wire(TB, TA, 0, 0, 0), "radix": [1], "step": [0]},
+                {**_wire(TB, TA, 0, 1, 1), "radix": [1], "step": [0]}, _wire(TA, TB, 0, 2, 0)]}),
     ("a strided part whose members step inside its run",
      _of(ARR, b_refs=lambda a, a2: {"strided": ["n", a, 0, 4, 0, 1, 4]}),
-     {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
+     {"wires": [_wire(TB, TA, 0, 0, 0), _wire(TA, TB, 0, 2, 0)]}),
     ("an argument over the parts bound", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 1), (a, 3, 1))),
      {"refusal": "edge-parts"}),
     ("an explicit read of a node that is no input node",
      _of(ARR, b_refs=lambda a, a2: {"explicit": [["n", a, i] for i in range(4)]}), {"refusal": "edge-rows"}),
     ("a read of a later node", _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]}), {"refusal": "not-topological"}),
     ("a cut port's rows", _of(TUP, cuts={UA: {"x": 2}, UB: {"x": 2}}),
-     {"wires": [_wire(UB, UA, "o0", 0, 0, 0), _wire(UB, UA, "o1", 0, 0, 1),
-                _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
-    ("an uncut port over two fields", _of(TUP), {"refusal": "edge-fields"}),
+     {"wires": [_wire(UB, UA, 0, 0, 0, 0), _wire(UB, UA, 1, 0, 0, 1),
+                _wire(UA, UB, 0, 2, 0, 0), _wire(UA, UB, 1, 2, 0, 1)]}),
+    ("an uncut port over two fields of one unit, one run", _of(TUP),
+     {"wires": [_wire(UB, UA, 0, 0, 0), _wire(UA, UB, 0, 2, 0)]}),
+    ("rows straddling two writer units", _of(ARR, b_refs=lambda a, a2: _affine((a, 1, 2), (a, 1, 2))),
+     {"refusal": "edge-units"}),
     ("a template the wiring doesn't list", {**_of(ARR), "wiring": {**_of(ARR)["wiring"], "templates": {}}},
      {"refusal": "edge-template"}),
 ]
@@ -132,7 +135,7 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
     w = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tw)
     r = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tr)
     _nodes(desc)[r]["args"][0]["refs"] = part(w)
-    template = {"units": 4, "rows": {"x": [1, 1]}, "outs": {"o0": 1}}
+    template = {"units": 4, "rows": {"x": [1, 1]}, "outs": {"out": 1}}
     return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, readers]],
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
@@ -140,20 +143,27 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
 ONE_FIELD = _fields_toy("CoreEdgesOneField", 4, 32, Array(32, Value(16)),
                         lambda w: {"strided": ["n", w, 0, 32, 128, 1, 128]})
 
+ROWS32 = _fields_toy("CoreEdgesRows", 48, 64, Array(2048, Value(16)),
+                     lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 8192]})
+
 #: circuits' two parts, each reading several output fields of one writer member
 FIELDS_CASES = [
     ("a part stepping inside a writer member across its fields",
      _fields_toy("CoreEdgesStep", 4, 32, Value(16), lambda w: {"strided": ["n", w, 0, 4, 0, 160, 4]}),
-     {"refusal": "edge-fields"}),
-    ("a part whose rows are 32 fields of a writer member",
-     _fields_toy("CoreEdgesRows", 48, 64, Array(2048, Value(16)), lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 8192]}),
-     {"refusal": "edge-fields"}),
+     {"refusal": "edge-run"}),
+    ("a part whose rows are 32 fields of a writer member, one run", ROWS32,
+     {"wires": [{"reader": ROWS32["ranges"][1][1], "port": "x", "writer": ROWS32["ranges"][0][1], "out": "out",
+                 "at": 0, "radix": [4], "base": 0, "step": [1], "cut": [0, 1], "offset": 0}]}),
     ("a part across fields whose members leave its run",
      _fields_toy("CoreEdgesRun", 4, 32, Value(16), lambda w: {"strided": ["n", w, 0, 4, 0, 160, 8]}, readers=8),
-     {"refusal": "edge-fields"}),
+     {"refusal": "edge-rows"}),
     ("a strided part over one field", ONE_FIELD,
-     {"wires": [{"reader": ONE_FIELD["ranges"][1][1], "port": "x", "writer": ONE_FIELD["ranges"][0][1], "out": "o0",
-                 "at": 0, "radix": [4], "base": 0, "step": [1], "cut": [0, 1]}]}),
+     {"wires": [{"reader": ONE_FIELD["ranges"][1][1], "port": "x", "writer": ONE_FIELD["ranges"][0][1], "out": "out",
+                 "at": 0, "radix": [4], "base": 0, "step": [1], "cut": [0, 1], "offset": 0}]}),
+    ("a part over the third field of each writer unit",
+     _fields_toy("CoreEdgesThird", 4, 32, Array(32, Value(16)), lambda w: {"strided": ["n", w, 64, 32, 128, 1, 128]}),
+     {"wires": [{"reader": "CoreEdgesThirdR_v0", "port": "x", "writer": "CoreEdgesThirdW_v0", "out": "out",
+                 "at": 0, "radix": [4], "base": 0, "step": [1], "cut": [0, 1], "offset": 64}]}),
 ]
 
 
@@ -166,12 +176,12 @@ _CUT = {UA: {"x": 2}, UB: {"x": 2}}
 #: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Spot.Edges.partLanes`)
 GRID_CASES = [
     ("two lanes over a cut port", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
-     {"wires": [_wire(UB, UA, "o0", 0, 0, 0), {**_wire(UB, UA, "o1", 0, 1, 1), "step": [-1]},
-                _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
-    ("a lane that does not fill a row", _of(TUP, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
-     {"refusal": "edge-fields"}),
+     {"wires": [_wire(UB, UA, 0, 0, 0, 0), {**_wire(UB, UA, 1, 0, 1, 1), "step": [-1]},
+                _wire(UA, UB, 0, 2, 0, 0), _wire(UA, UB, 1, 2, 0, 1)]}),
+    ("a row whose lanes read two writer units", _of(TUP, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
+     {"refusal": "edge-units"}),
     ("a grid over an input node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", 0, 0, 0, [[2, 2]]), ("n", 0, 3, 0, [[2, -2]]))),
-     {"wires": [_wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
+     {"wires": [_wire(UA, UB, 0, 2, 0, 0), _wire(UA, UB, 1, 2, 0, 1)]}),
     ("lanes of two period counts", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 0, 0, [[4, 1]]))),
      {"refusal": "edge-parts"}),
     ("a lane past its writer node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 4]]), ("n", None, 3, 0, [[2, -2]]))),
@@ -210,9 +220,9 @@ def test_the_named_cases(pieces, name, j, want):
 
 
 @pytest.mark.parametrize("name, j, want", FIELDS_CASES, ids=[c[0] for c in FIELDS_CASES])
-def test_one_field_a_part(pieces, name, j, want):
-    """A part reading more than one output field of one writer is refused `edge-fields`, in Lean and in the twin; one
-    over one field is a wire."""
+def test_one_run_a_row(pieces, name, j, want):
+    """A row reading whole fields of one writer unit is a wire from their first word, in Lean and in the twin; one
+    reading part of a field is refused `edge-run`, and members whose rows are no one place in their units `edge-rows`."""
     assert reference(j) == want
     assert pieces.call("edges", j) == ("output", D.canonical(want))
 

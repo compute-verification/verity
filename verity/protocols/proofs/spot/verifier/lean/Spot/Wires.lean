@@ -3,7 +3,8 @@ A window circuit's wires, checked at the size of their description (`verity.comm
 
 A window's circuit is a population of template instances (`TemplatePopulations_v1`), whose inputs are all Input gates: the
 program holds no dataflow between units. The wires are that dataflow. A wire states, once for many units, that reader
-template `reader`'s units read rows of their parameter `port` whole as row `out` of a unit of template `writer`:
+template `reader`'s units read rows of their parameter `port` whole as the words of row `out` of a unit of template
+`writer` from its word `offset`:
 
 * **The reader rows a wire covers.** A reader port is cut into `k` rows (`cuts`, default 1): row `j` is the run of the
   parameter's outer elements `[j·n/k, (j+1)·n/k)`, `k` dividing the outer length `n` and the port's words, each its own
@@ -26,7 +27,7 @@ and `wires_unrolled` pieces) holds both to the same Python reference. The verifi
 The refusals, in the order checked (`Code`): `cuts` (a cut names no template or port, or `k` is 0 or doesn't divide the
 port's outer length and words), then wire by wire `template` (its reader or writer is no template), `port` (its port is no
 input of the reader, or `out` no output of the writer), `cut` (its rows are not among the port's, or the last digit isn't
-`cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
+`cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words from `offset` run past the writer row's), `bounds` (a reader unit or a writer outside its
 template), then `overlap` (some reader row wired twice), then the order (the section of that name): `order` (the circuit's
 order names no template, or its ranges of a template don't tile the template's units; or, naming it, the first wire the
 order doesn't put after its writers) or, with no order stated, `cycle` (the templates' wires have a cycle; naming a wire
@@ -115,7 +116,7 @@ def shape (c : Wiring) (w : Wire) : Except Code (Template × Template) :=
       let k := c.cutsOf w.reader w.port
       if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
           w.units % w.cuts == 0) then .error .cut
-      else if p.words / k != ow then .error .width
+      else if w.offset + p.words / k > ow then .error .width
       else .ok (rt, wt)
     | _, _ => .error .port
   | _, _ => .error .template
@@ -277,9 +278,11 @@ def check (c : Wiring) : Except Refusal Summary :=
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
-/-- The writer `(template, unit, out)` of reader row `(tid, u, port, row)`, by the wires alone; none when no wire covers it. -/
-def Summary.writerOf (s : Summary) (tid : String) (u : Nat) (port : String) (row : Nat) : Option (String × Int × String) :=
-  s.wires.findSome? fun w => (w.indexOf tid u port row).map fun i => (w.writer, w.writerAt i, w.out)
+/-- The writer `(template, unit, out, offset)` of reader row `(tid, u, port, row)`, by the wires alone: the reader row is
+that unit's row `out` from its word `offset`; none when no wire covers it. -/
+def Summary.writerOf (s : Summary) (tid : String) (u : Nat) (port : String) (row : Nat) :
+    Option (String × Int × String × Nat) :=
+  s.wires.findSome? fun w => (w.indexOf tid u port row).map fun i => (w.writer, w.writerAt i, w.out, w.offset)
 
 /-- The reader rows wired, multiplied through. -/
 def Summary.wiredRows (s : Summary) : Nat := (s.wires.map Wire.units).sum
@@ -291,12 +294,12 @@ def Summary.wiredBits (s : Summary) : Nat := ((s.wires.zip s.rowWords).map fun (
 
 The verifier never runs it: it is what `check` is held to, by the difftest and the agreement lemmas. -/
 
-/-- A reader row `(template, unit, port, row)` and its writer `(template, unit, out)`. -/
-abbrev Entry := (String × Nat × String × Nat) × (String × Int × String)
+/-- A reader row `(template, unit, port, row)` and its writer `(template, unit, out, offset)`. -/
+abbrev Entry := (String × Nat × String × Nat) × (String × Int × String × Nat)
 
 /-- The bounds entry by entry. -/
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
-  w.entries.all fun ((_, u, _, _), (_, v, _)) => u < rt.units && 0 ≤ v && v < (wt.units : Int)
+  w.entries.all fun ((_, u, _, _), (_, v, _, _)) => u < rt.units && 0 ≤ v && v < (wt.units : Int)
 
 def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
   match shape c w with
@@ -334,15 +337,15 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
 * `templates`: `{tid: {"units", "rows": {port: [words, outer]}, "outs": {out: words}}}`, every number a natural, `units`
   and `words` at least 1;
 * `cuts`: `{tid: {port: k}}`;
-* `wires`: V3a's wire records, `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`: strings,
-  `at` a natural, `radix` at least one natural each at least 1, `base` an integer, `step` one integer a digit, and `C` at
-  least 1;
+* `wires`: V3a's wire records, `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]` and
+  `offset`: strings, `at` and `offset` naturals, `radix` at least one natural each at least 1, `base` an integer, `step`
+  one integer a digit, and `C` at least 1;
 * `queries`: reader rows `[tid, unit, port, row]` to look up (a sampled proof block's);
 * `order`: ranges `[tid, at, n]`, a string and two naturals each (`UnitRange`).
 
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per
-query its writer `[tid, unit, out]` or null. -/
+query its writer `[tid, unit, out, offset]` or null. -/
 
 def Template.ofJson (j : Json) : Except String Template := do
   sameKeys j ["units", "rows", "outs"] "a template"
@@ -390,8 +393,8 @@ def queriesOf (j : Json) : Except String (List (String × Nat × String × Nat))
 def refusalJson (r : Refusal) : Json :=
   Json.mkObj [("ok", false), ("code", r.code.name), ("wire", match r.wire with | some i => toJson i | none => Json.null)]
 
-def writerJson : Option (String × Int × String) → Json
-  | some (t, v, o) => Json.arr #[toJson t, toJson v, toJson o]
+def writerJson : Option (String × Int × String × Nat) → Json
+  | some (t, v, o, f) => Json.arr #[toJson t, toJson v, toJson o, toJson f]
   | none => Json.null
 
 def instanceCheck (sameKeysOk : Json → Except String Unit) (j : Json) : Except String (Wiring × List (String × Nat × String × Nat)) := do
