@@ -19,6 +19,7 @@
   "match_stoch.json": ["@vllm", "the sampler value check's rows"],
   "sampled_replay*.json": ["@vllm", "the C2 replay's executed-prefix facts"],
   "requests.jsonl": ["@vllm", "a served run's requests"],
+  "request_users.jsonl": ["@vllm", "each request's user as the client sent it, a request value"],
   "step_trace.*": ["@vllm", "a step trace: each request's prompt length, sampling parameters and emitted ids"],
   "ids.*jsonl*": ["@vllm", "a served run's served token ids"],
   "outputs.*jsonl*": ["@vllm", "a served run's step outputs: sampled ids and logprob bits"],

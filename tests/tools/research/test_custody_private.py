@@ -71,8 +71,11 @@ def _private_run(runs: Path) -> Path:
 def test_every_rule_has_a_one_line_reason_and_an_owning_lanes_handle():
     doc = json.loads(P.floor_text())
     assert P.FLOOR_UNREAD is None and P.FLOOR_ROOTS[0] / P.TREE_NAMES == Path(__file__).resolve().parents[3] / P.TREE_NAMES
-    assert doc["schema"] == "verity/private-names/v1" and set(doc["why"]) == {*doc["kept_apart"], *doc["private"]}, \
-        "each entry has its why, and no more"
+    assert doc["schema"] == "verity/private-names/v1"
+    listed = {*doc["kept_apart"], *doc["private"]}
+    assert set(doc["why"]) == listed, (f"{P.TREE_NAMES}: give each name its line in `why`, {{name: [owner's handle, one-line reason]}}, "
+                                      f"and no other; without one: {sorted(listed - set(doc['why']))}, "
+                                      f"with one and not listed: {sorted(set(doc['why']) - listed)}")
     assert len(set(doc["private"])) == len(doc["private"]), "a name is listed once"
     assert all(len(w) == 2 for w in doc["why"].values()), "why: {glob: [owner, reason]}"
     assert len({r.what for r in P.RULES}) == len(P.RULES), "two rules print alike"
