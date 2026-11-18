@@ -120,8 +120,10 @@ else:
     os.makedirs(os.path.dirname(record), exist_ok=True)
     commit = os.path.dirname(record)
     os.makedirs(f"{commit}/windows/w0", exist_ok=True)
-    for name, body in (("verdict.json", "{}"), ("summary.md", "ok"), ("commit.log", "ok"), ("windows/w0/rows.salts", "s"),
-                       ("dump_step0_pair0_x.bin", "v"), ("sampled_replay_p0.json", "{}"), ("binding_map_p0.json", "{}")):
+    for name, body in (("verdict.json", "{}"), ("steps.jsonl", "{}"), ("runs.jsonl", '{"tokens_digest": "00"}'),
+                       ("summary.json", "{}"), ("summary.md", "ok"), ("commit.log", "ok"), ("versions.json", "{}"),
+                       ("windows/w0/rows.salts", "s"), ("dump_step0_pair0_x.bin", "v"), ("sampled_replay_p0.json", "{}"),
+                       ("binding_map_p0.json", "{}"), ("memory_map.jsonl", "{}")):
         with open(f"{commit}/{name}", "w") as f:
             f.write(body)
 if mode in ("crash", "commitfail"):
@@ -424,7 +426,8 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     # kv.cu's build, the Build with no GPU visible and the verifier all before the lease; the Commit alone under it
     assert calls == [nvcc, "row build", "verifier", lease, "row commit"]
     kept = sorted(str(f.relative_to(node.out / "row")) for f in (node.out / "row").rglob("*") if f.is_file())
-    assert kept == [f"commit/{n}" for n in ("commit.log", "remote_session.json", "summary.md", "verdict.json")], kept
+    assert kept == [f"commit/{n}" for n in ("remote_session.json", "steps.jsonl", "verdict.json")], kept
+    assert not (node.out / "row" / "commit" / "runs.jsonl").exists()
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
     assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
