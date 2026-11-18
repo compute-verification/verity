@@ -119,7 +119,6 @@
     "stager/unit": "structure",
     "stager/k_log": "structure",
     "stager/pin": "structure",
-    "stager/circuit_sha512": "structure",
     "stager/bits/*": "structure",
     "stager/ands": "structure",
     "staging/statements": "structure",
