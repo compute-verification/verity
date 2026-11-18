@@ -676,6 +676,18 @@ theorem runsOf_shared {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P pa
       · cases hre
   · cases h
 
+/-- **Two nonempty runs of parts `runsOf` reads that hold one leaf of one node are one run.** -/
+theorem run_eq_of_gate {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P parts = some R)
+    {q q' : Part} (hq : q ∈ parts) (hq' : q' ∈ parts) {x y : Nat × Nat × Nat} {bx byy : Bool}
+    (hx : partRun P q = some (x, bx)) (hy : partRun P q' = some (y, byy)) (hx0 : 0 < x.2.2) (hy0 : 0 < y.2.2)
+    {jx jy : Nat} (hjx : x.2.1 ≤ jx ∧ jx < x.2.1 + x.2.2) (hjy : y.2.1 ≤ jy ∧ jy < y.2.1 + y.2.2)
+    (hgate : x.1 = y.1 ∧ jx = jy) : x = y := by
+  rcases runsOf_eqOrApart h hq hq' hx hy hx0 hy0 with e | hne | hle | hle
+  · exact e
+  · exact absurd hgate.1 hne
+  · omega
+  · omega
+
 /-- **A unit's parameter leaf in a shared run is read by a part of its argument over that run.** A leaf of member `m`
 of a unit node `k`, parameter `i`, that lies in a shared run `x` of `rowRuns`: the node has that argument, and one of
 its parts is a run of `x` (`partRun`), strided parts and parts read more than once included. Open: the leaf lemma of
