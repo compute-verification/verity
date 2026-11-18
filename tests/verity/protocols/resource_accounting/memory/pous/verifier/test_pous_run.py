@@ -11,6 +11,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import run
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
@@ -45,7 +46,7 @@ def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.l
                             salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(k)])
     clock = Clock(1_000_000)
     c = mc.MemoryAttester(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
-                            binding=binding, clock=clock)
+                            binding=binding, device=Device(signer.public_key.hex(), clock, 1, 0))
 
     def answer(i: int) -> bytes:
         clock.now += spend
@@ -165,7 +166,7 @@ def test_check_is_the_deployed_point_under_s1s_lms():
     setup = run.Setup(q.blocks, SETUP.commitment, root, SALT)
     signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock(1_000_000)
     c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
-                            clock=clock)
+                            device=Device(signer.public_key.hex(), clock, 1, 0))
 
     def answer(i: int) -> bytes:
         clock.now += 20_000

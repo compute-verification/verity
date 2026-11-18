@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from test_p2_party import SESSION_ID, TOY, Lying, Prover, exe, request, run, signer, store  # noqa: F401
-from verity.clock import Reading
+from verity.clock import Device, Reading
 from verity.commitments import domains
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_bytes
@@ -357,9 +357,10 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
     held = period_prover.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
                              store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
                              pous.setup_case(q, reg.commitment, reg.salt, encoded))
-    space = period_prover.audit("n0", held, COINS, signer=S.TestSigner(b"the memory challenger", directory=tmp_path),
+    signer = S.TestSigner(b"the memory challenger", directory=tmp_path)
+    space = period_prover.audit("n0", held, COINS, signer=signer,
                        log=S.session_log(tmp_path), schemes=S.SCHEMES, protocol=mc.TEST_PREFIX + pous.PROTOCOL,
-                       clock=lambda: 10 ** 9)
+                       device=Device(signer.public_key.hex(), lambda: 10 ** 9, 1, 0))
     assert R.Setup.from_json(json.loads(bytes.fromhex(space.case["commitment"]))).root == reg.root
     answer, case = session(exe, store)
     assert answer["verdict"] == "accept"

@@ -312,7 +312,7 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     return Session(signed, c.commitment, c.openings(), expected, (signer.public_key,), signer)
 
 
-def _at(t: Reading, ns: int) -> Reading:
+def _moved(t: Reading, ns: int) -> Reading:
     return dataclasses.replace(t, ns=ns)
 
 
@@ -384,7 +384,7 @@ MUTATIONS = [
     lambda s, x: s.resign(commitment=dataclasses.replace(s.commitment, binding=s.commitment.binding + b"x")),
     lambda s, x: dataclasses.replace(s, commitment=dataclasses.replace(s.commitment, k=s.commitment.k + 1)),
     lambda s, x: dataclasses.replace(s, commitment=dataclasses.replace(s.commitment, coin_root=_flip(s.commitment.coin_root, x))),
-    lambda s, x: _unsigned(s, rounds=_round(s, x, receipt=lambda r: _at(r.receipt, r.receipt.ns + 1)).signed.rounds),
+    lambda s, x: _unsigned(s, rounds=_round(s, x, receipt=lambda r: _moved(r.receipt, r.receipt.ns + 1)).signed.rounds),
     lambda s, x: _openings(s, lambda o: o[::-1]),
     lambda s, x: _openings(s, lambda o: o[:-1]),
     lambda s, x: _openings(s, lambda o: o + [dataclasses.replace(o[x % len(o)], index=o[x % len(o)].index + 1)]),
@@ -403,10 +403,10 @@ MUTATIONS = [
     lambda s, x: _round(s, x, j=lambda r: 2 ** 32 + r.j),
     lambda s, x: _round(s, x, digest=lambda r: _flip(r.digest, x)),
     lambda s, x: _round(s, x, digest=lambda r: r.digest[:-1]),
-    lambda s, x: _round(s, x, receipt=lambda r: _at(r.receipt, r.send.ns + s.commitment.limit_ns + 1 + x)),
-    lambda s, x: _round(s, x, receipt=lambda r: _at(r.receipt, r.send.ns - 1 if r.send.ns else 0)),
-    lambda s, x: _round(s, x, send=lambda r: _at(r.send, r.receipt.ns + 1)),
-    lambda s, x: _round(s, x, send=lambda r: _at(r.send, 2 ** 64)),
+    lambda s, x: _round(s, x, receipt=lambda r: _moved(r.receipt, r.send.ns + s.commitment.limit_ns + 1 + x)),
+    lambda s, x: _round(s, x, receipt=lambda r: _moved(r.receipt, r.send.ns - 1 if r.send.ns else 0)),
+    lambda s, x: _round(s, x, send=lambda r: _moved(r.send, r.receipt.ns + 1)),
+    lambda s, x: _round(s, x, send=lambda r: _moved(r.send, 2 ** 64)),
     lambda s, x: s.resign(rounds=s.signed.rounds + s.signed.rounds[-1:]),
     lambda s, x: s.resign(rounds=s.signed.rounds[:-1]),
     lambda s, x: s.resign(rounds=()),

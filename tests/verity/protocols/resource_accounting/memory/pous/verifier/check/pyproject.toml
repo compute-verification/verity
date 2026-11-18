@@ -48,7 +48,7 @@ untraced = [
 # `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/clock.py",
           "verity/protocols/resource_accounting/memory/pous", 
           "verity/protocols/resource_accounting/memory/pous/prover", "tools/difftest", 
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",

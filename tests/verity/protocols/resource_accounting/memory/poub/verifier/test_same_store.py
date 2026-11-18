@@ -14,6 +14,7 @@ from types import ModuleType
 
 import pytest
 
+from verity.clock import Device
 from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
 from verity.protocols.resource_accounting.memory.poub.prover import period_prover as PP
@@ -99,8 +100,9 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     """PoUS's audit of the committed `C*` and its honest run on another store (a test signer's), PoUB-P2's case on the
     committed `C*`, and the generic PoUB's honest session on its own store."""
     tmp, S = tmp_path_factory.mktemp("same-store"), _signer()
-    kw = {"signer": S.TestSigner(b"the memory challenger", directory=tmp), "log": S.session_log(tmp),
-          "schemes": S.SCHEMES, "protocol": mc.TEST_PREFIX + pous.PROTOCOL, "clock": lambda: 10 ** 9}
+    signer = S.TestSigner(b"the memory challenger", directory=tmp)
+    kw = {"signer": signer, "log": S.session_log(tmp), "schemes": S.SCHEMES, "protocol": mc.TEST_PREFIX + pous.PROTOCOL,
+          "device": Device(signer.public_key.hex(), lambda: 10 ** 9, 1, 0)}
     store = _committed()
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment

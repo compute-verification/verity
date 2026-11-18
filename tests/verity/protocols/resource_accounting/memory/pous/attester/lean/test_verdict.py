@@ -146,11 +146,20 @@ def _salt(s: M.Session, j: int) -> M.Session:
                                                  for o in s.openings))
 
 
+def _signed_before_sent(s: M.Session, j: int) -> M.Session:
+    """`s` re-signed with round `j`'s receipt a nanosecond before its send: a record no device's clock writes, since
+    `verity.clock.stamp` refuses a reading that runs backwards, so it is forged."""
+    r = s.signed.rounds[j]
+    moved = dataclasses.replace(r, receipt=dataclasses.replace(r.receipt, ns=r.send.ns - 1))
+    return s.resign(rounds=s.signed.rounds[:j] + (moved,) + s.signed.rounds[j + 1:])
+
+
 def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
     """The negative controls, each a session and the reasons its verdict gives, beside the honest session."""
     s = _honest()
     limit = s.commitment.limit_ns
     blocks = s.commitment.blocks
+    late = _honest(spends=[1, limit + 1, 1])
     return {
         "honest": (s, ()),
         "bad signature": (M._signature(s, M._flip(s.signed.signature, 100)), ("the signature does not verify",)),
@@ -162,9 +171,9 @@ def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
         "incomplete session": (s.resign(rounds=s.signed.rounds[:-1]), ("the session ended complete after 2 of 3 rounds",)),
         "wrong coin": (_salt(s, 1), ("round 1's index is not its committed coin",)),
         "wrong digest": (M._round(s, 2, digest=lambda r: M._flip(r.digest, 3)), ("1 answers are not their blocks of C",)),
-        "late": (_honest(spends=[1, limit + 1, 1]),
+        "late": (late,
                  ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
-        "negative elapsed": (_honest(spends=[1, -1, 1]),
+        "negative elapsed": (_signed_before_sent(late, 1),
                              ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
         "out-of-range index": (M._round(s, 0, index=lambda r: r.index + blocks),
                                ("round 0's index is not its committed coin", "1 answers are not their blocks of C")),
@@ -192,6 +201,8 @@ def test_refusals():
     args = (s.signed, s.commitment, s.openings, expected_of(s))
     with pytest.raises(ValueError, match="not a scheme this port verifies"):
         V.verdict(*args, trusted=set(s.trusted), schemes={**M.ts.SCHEMES, "an unknown scheme": None})
-    bad = dataclasses.replace(s.signed, rounds=(dataclasses.replace(s.signed.rounds[0], receipt_ns=-1),) + s.signed.rounds[1:])
+    first = s.signed.rounds[0]
+    bad = dataclasses.replace(s.signed, rounds=(dataclasses.replace(first, receipt=dataclasses.replace(first.receipt, ns=-1)),)
+                              + s.signed.rounds[1:])
     with pytest.raises(ValueError, match="refuses the record"):
         V.verdict(bad, s.commitment, s.openings, expected_of(s), trusted=set(s.trusted), schemes=M.ts.SCHEMES)
