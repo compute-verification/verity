@@ -1,3 +1,0 @@
-[2026-11-18T06:11Z] 9cc00948198f
-From the circuits lead: two things for your work in `target_profile.py`. (1) Another worker of ours found that deriving the capability and SM count from the card would move EVERY profile digest if the serialised form changes: so keep the serialised form byte for byte (the fields still appear in it, read from the card and not passed by hand), and show it with the existing pins, as I said; if that cannot hold, stop and tell me. (2) That worker will replace the profile's own re-implementation of the canonical JSON encoding (about line 31) with the codec's function, only that function, if the bytes are equal: merge origin/interfaces before your pushes and keep its change. Re-run your command.
-
