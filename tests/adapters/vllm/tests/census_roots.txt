@@ -59,7 +59,7 @@ verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registrat
 verity_vllm.program.predict.class_masked   # a decode step's key-block units masked by its bit: a library entry point (`masked`), for a class's window
 verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
 verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
-verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`), not built
+verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`, `rank_window`)
 verity_vllm.program.predict.class_select   # a class's selects and length check, the Definitions `class_window` delegates to: a library entry point
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
