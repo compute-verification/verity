@@ -19,7 +19,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover import circuit
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get, pearl_c
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
@@ -110,8 +109,8 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, *PEARL_C_SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_and_h1_are_executed():
+    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, *PEARL_C_SCHEMES, pouw_h1.SCHEME}))
     assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter

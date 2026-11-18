@@ -12,9 +12,8 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     `unit.py`: the pinned lowering of one tensor-core transition unit.
   - `ir_lower.py`: the generic Program lowering, a Definition composed from the per-op circuit pieces of `fp.py` (over
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's proof blocks leave outside.
-  - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
-    (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
-    digests, not in the Lean verifier).
+  - `templates/`: one lowering per subcircuit template; `ir_sampling.py`: the sampling template's lane unit and the
+    native cut words of `verity/flock-ir-sampling/v1`.
   - `partition_units.py`: every size class of an arbitrary partition (`verity.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
@@ -37,7 +36,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     one `serve --zk --queue -` per block type; a session's verdict of record runs off the provers' path.
   - `instance_file.py`: a spine input set's range as the instance file (`flock-pure-instances/v1`) a cell's prover and verifier
     read, with its frame-v3 statement commitments.
-  - `bench.py`, `ir_bench.py`, `register.py`, `instances.py`: the benchmark sweeps, cell registration and the bench's
+  - `bench.py`, `register.py`, `instances.py`: the benchmark sweeps, cell registration and the bench's
     frozen input sets.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
@@ -69,7 +68,8 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
 `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
 
 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
-   `bash verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+   `bash verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=$SM FLOCK_WORK=/workspace/jobs/<lane>`,
+   `SM` the session card's (`SM=$(python3 benchmarks/kernels/machine.py arch "NVIDIA RTX PRO 6000 Blackwell Server Edition" | tr -dc 0-9)`).
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
 3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the

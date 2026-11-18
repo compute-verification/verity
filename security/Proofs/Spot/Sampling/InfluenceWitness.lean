@@ -22,6 +22,12 @@ others show only that the hypotheses can be met.
   accepts with probability `1`.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
   exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
+* `N`: a sampling design that samples every unit, a session that always accepts, and a prover that registers the input
+  bit `m` and commits `W`'s transcript on it. Every unit is correct and extraction returns the committed transcript, so
+  `KnowledgeSound 0` and `BindSound 0` hold; the inputs are not the anchors', so `AnchorsSound 0` fails, and both bounds
+  fail: the delivered value lies outside the influence set, and a one-bit message gets through with probability `1`.
+* `Partition.audit_influence_honest`, `Partition.audit_exfiltration_honest`: the premises at `A` and `Ex`;
+  `Partition.audit_influence_nontrivial`, `Partition.audit_exfiltration_nontrivial`: at `N`.
 -/
 
 @[expose] public section
@@ -51,7 +57,7 @@ abbrev unitOf : Fin 4 → Option (Fin 2) := ![none, some 0, some 1, some 0]
 
 abbrev P : Partition C 2 where
   unit := unitOf
-  input_iff := by decide
+  input_iff := (by decide : ∀ g : Fin C.N, unitOf g = none ↔ (C.op g).isInput = true)
 
 def D : Finset (Fin C.N) := {2}
 def B : Finset (Fin 2) := {0}
@@ -233,6 +239,12 @@ theorem accepts (σ : Strategy (audit L Unit session)) :
     prob (fun o => o.1 = true) (audit L Unit session) σ = 1 := by
   simp [audit, prob, session, Game.map, L]
 
+theorem hk : L.miss (2 + 1) < 1 / 2 := by
+  have h0 : L.miss (2 + 1) = 0 :=
+    le_antisymm (iSup₂_le fun B hB => absurd (hB.trans (card_le_univ B)) (by simp)) zero_le
+  rw [h0]
+  exact ENNReal.div_pos one_ne_zero (by simp)
+
 end A
 
 namespace Ex
@@ -268,4 +280,194 @@ theorem exfil (δ : ℝ≥0∞) (hδ : 0 < δ) (σ : Bool → Strategy (audit A.
 
 end Ex
 
+namespace N
+
+open W
+
+def L : SamplingDesign 2 := { Ω := Unit, draw := fun _ => univ }
+
+def session : Finset (Fin 2) → Bool → Game Bool := fun _ _ => .ret true
+
+/-- `W`'s transcript on the input bit `m`. -/
+def T (m : Bool) : Fin C.N → Bool := ![m, !m, m, !m]
+
+def Xc : (R : Bool) → Cont L Bool session R → (Fin C.N → Bool) := fun R _ => T R
+
+def ext : (S : Finset (Fin 2)) → (R : Bool) → Strategy (session S R) → Fin 2 → Option (Fin C.N → Bool) :=
+  fun _ R _ _ => some (T R)
+
+def σ (m : Bool) : Strategy (audit L Bool session) := ⟨m, fun _ => PUnit.unit⟩
+
+def g (y : D → Bool) : Bool := y ⟨2, by simp [D]⟩
+
+theorem correct (m : Bool) (u : Fin 2) : P.Correct (T m) u := by
+  intro x hxc hx
+  clear hxc
+  have h : (x = 1 ∧ u = 0) ∨ (x = 3 ∧ u = 0) ∨ (x = 2 ∧ u = 1) := by
+    revert hx
+    revert x
+    revert u
+    decide
+  rcases h with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  · rw [P.localEval_of_mem (T m) (show P.unit 1 = some 0 by decide)]
+    show T m 1 = !(P.localEval (T m) 0 0)
+    rw [P.localEval_of_not_mem (T m) (show P.unit 0 ≠ some 0 by decide)]
+    cases m <;> rfl
+  · rw [P.localEval_of_mem (T m) (show P.unit 3 = some 0 by decide)]
+    show T m 3 = !(P.localEval (T m) 0 0)
+    rw [P.localEval_of_not_mem (T m) (show P.unit 0 ≠ some 0 by decide)]
+    cases m <;> rfl
+  · rw [P.localEval_of_mem (T m) (show P.unit 2 = some 1 by decide)]
+    show T m 2 = !(P.localEval (T m) 1 1)
+    rw [P.localEval_of_not_mem (T m) (show P.unit 1 ≠ some 1 by decide)]
+    cases m <;> rfl
+
+theorem hks : (P.analysis Xc ext).KnowledgeSound 0 := by
+  intro R τ tgt
+  refine (avg_mono fun ω => ?_).trans (avg_const (0 : ℝ≥0∞)).le
+  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
+  rintro ok ⟨_, u, _, _, hf⟩
+  exact hf (T R) rfl (correct R u)
+
+theorem hlink : (P.analysis Xc ext).BindSound 0 := by
+  intro R τ tgt
+  refine (avg_mono fun ω => ?_).trans (avg_const (0 : ℝ≥0∞)).le
+  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
+  rintro ok ⟨_, u, _, _, Y, hY, _, x, _, hne⟩
+  cases Option.some.inj hY
+  exact hne rfl
+
+open Classical in
+theorem prob_audit (p : Bool × Finset (Fin 2) → Prop) (s : Strategy (audit L Bool session)) :
+    prob p (audit L Bool session) s = if p (true, univ) then 1 else 0 := by
+  simp [audit, prob, session, Game.map, L]
+
+theorem not_hin : ¬ Partition.AnchorsSound Xc a 0 := by
+  intro h
+  have h1 := h (σ true)
+  have hna : ¬ C.InputsAgree (T true) a := fun hia => absurd (hia 0 rfl) (by decide)
+  rw [prob_audit] at h1
+  simp [reg, σ, Xc, hna] at h1
+
+theorem missProb_ne {B : Finset (Fin 2)} (hB : B ≠ ∅) : L.missProb B = 0 := by
+  have hnd : ¬ Disjoint (univ : Finset (Fin 2)) B := fun hd => by
+    obtain ⟨x, hx⟩ := Finset.nonempty_iff_ne_empty.2 hB
+    exact Finset.disjoint_left.1 hd (mem_univ x) hx
+  simp [Verity.SamplingDesign.missProb, Verity.Game.prCoin, Verity.Game.avg, L, hnd]
+
+theorem out_not_mem : Partition.out D (T true) ∉ P.influenceSet D L.missProb a (1 / 2) := by
+  intro h
+  simp only [Partition.influenceSet, mem_biUnion, mem_filter, mem_univ, true_and] at h
+  obtain ⟨B, hB, hy⟩ := h
+  by_cases hB0 : B = ∅
+  · subst hB0
+    simp only [Partition.delivered, mem_filter, mem_univ, true_and] at hy
+    obtain ⟨X, hia, hinc, hout⟩ := hy
+    have hc : ∀ u, P.Correct X u := fun u => by
+      by_contra hw
+      exact notMem_empty u (hinc (P.mem_incorrect.2 hw))
+    have h0 : X 0 = false := hia 0 rfl
+    have h1 : X 1 = !(X 0) := by
+      have := hc 0 1 (hK (by simp [K])) (by decide)
+      rw [P.localEval_of_mem X (show P.unit 1 = some 0 by decide)] at this
+      change X 1 = !(P.localEval X 0 0) at this
+      rwa [P.localEval_of_not_mem X (show P.unit 0 ≠ some 0 by decide)] at this
+    have h2 : X 2 = !(X 1) := by
+      have := hc 1 2 (hD (by simp [D])) (by decide)
+      rw [P.localEval_of_mem X (show P.unit 2 = some 1 by decide)] at this
+      change X 2 = !(P.localEval X 1 1) at this
+      rwa [P.localEval_of_not_mem X (show P.unit 1 ≠ some 1 by decide)] at this
+    have h3 : X 2 = true := congrFun hout ⟨2, by simp [D]⟩
+    rw [h2, h1, h0] at h3
+    exact absurd h3 (by decide)
+  · rw [missProb_ne hB0] at hB
+    exact absurd hB (by simp)
+
+theorem hH : IsHarmBound L (fun u => ((P.exits {u}).card : ℝ)) (1 / 4) ((0 : ℕ) : ℝ) := by
+  intro B hB
+  by_cases hB0 : B = ∅
+  · subst hB0
+    simp
+  · rw [missProb_ne hB0] at hB
+    exact absurd hB (by simp)
+
+theorem hk : L.miss (0 + 1) < 1 / 4 := by
+  have h0 : L.miss (0 + 1) = 0 :=
+    le_antisymm (iSup₂_le fun B hB => (missProb_ne (by rintro rfl; simp at hB)).le) (zero_le)
+  rw [h0]
+  exact ENNReal.div_pos one_ne_zero (by simp)
+
+end N
+
 end Spot.Sampling.InfluenceWitness
+
+namespace Spot.Sampling
+
+open InfluenceWitness
+
+/-- **`audit_influence`'s premises hold together** at `A`: `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`. -/
+theorem Partition.audit_influence_honest :
+    (W.P.analysis A.Xc A.ext).KnowledgeSound 0 ∧ (W.P.analysis A.Xc A.ext).BindSound 0 ∧
+      Partition.AnchorsSound A.Xc W.a 0 :=
+  ⟨A.hks, A.hlink, A.hin⟩
+
+/-- **`audit_influence` needs `AnchorsSound`**: at `N`, `KnowledgeSound 0` and `BindSound 0` hold, `AnchorsSound 0`
+fails, and the audit accepts with the delivered value outside the influence set at `1/2` with probability `1`. -/
+theorem Partition.audit_influence_nontrivial :
+    (W.P.analysis N.Xc N.ext).KnowledgeSound 0 ∧ (W.P.analysis N.Xc N.ext).BindSound 0 ∧
+      ¬ Partition.AnchorsSound N.Xc W.a 0 ∧
+      ¬ prob (fun o => o.1 = true ∧ Partition.out W.D (N.Xc (reg (N.σ true)) (cont (N.σ true))) ∉
+          W.P.influenceSet W.D N.L.missProb W.a (1 / 2)) (audit N.L Bool N.session) (N.σ true) ≤
+        1 / 2 + 0 + 0 + 0 := by
+  refine ⟨N.hks, N.hlink, N.not_hin, ?_⟩
+  rw [N.prob_audit]
+  split_ifs with hc
+  · rw [add_zero, add_zero, add_zero, not_le]
+    exact ENNReal.half_lt_self one_ne_zero ENNReal.one_ne_top
+  · exact absurd ⟨rfl, N.out_not_mem⟩ hc
+
+/-- **`audit_exfiltration`'s premises hold together** at `A` and `Ex`, at `δ = 1/2`. -/
+theorem Partition.audit_exfiltration_honest :
+    (W.P.analysis A.Xc A.ext).KnowledgeSound 0 ∧ (W.P.analysis A.Xc A.ext).BindSound 0 ∧
+      Partition.AnchorsSound A.Xc W.a 0 ∧ W.D ⊆ W.P.committed ∧ (∀ B, W.P.exits B ⊆ W.P.committed) ∧
+      (∀ B, W.P.Separates (W.P.exits B) B W.D) ∧
+      (∀ B, (W.P.exits B).card ≤ ∑ u ∈ B, (W.P.exits {u}).card) ∧
+      IsHarmBound A.L (fun u => ((W.P.exits {u}).card : ℝ)) (1 / 2) ((∑ u, (W.P.exits {u}).card : ℕ) : ℝ) ∧
+      A.L.miss (2 + 1) < 1 / 2 :=
+  ⟨A.hks, A.hlink, A.hin, W.hD, fun _ => filter_subset _ _, fun B => W.P.separates_exits B W.hD,
+    Gen.exits_card_le W.P, Ex.hH _, A.hk⟩
+
+/-- **`audit_exfiltration` needs `AnchorsSound`**: at `N`, with `W`'s exits as separators, harm bound `0` and
+`k = 0` at `δ = 1/4`, every other premise holds, `AnchorsSound 0` fails, and a one-bit message carried in the
+unanchored input gets through with probability `1`, above the bound `1/2 + 1/4`. -/
+theorem Partition.audit_exfiltration_nontrivial :
+    (W.P.analysis N.Xc N.ext).KnowledgeSound 0 ∧ (W.P.analysis N.Xc N.ext).BindSound 0 ∧
+      ¬ Partition.AnchorsSound N.Xc W.a 0 ∧ W.D ⊆ W.P.committed ∧ (∀ B, W.P.exits B ⊆ W.P.committed) ∧
+      (∀ B, W.P.Separates (W.P.exits B) B W.D) ∧
+      (∀ B, (W.P.exits B).card ≤ ∑ u ∈ B, (W.P.exits {u}).card) ∧
+      IsHarmBound N.L (fun u => ((W.P.exits {u}).card : ℝ)) (1 / 4) ((0 : ℕ) : ℝ) ∧ N.L.miss (0 + 1) < 1 / 4 ∧
+      ¬ avg (fun m => prob (fun o => o.1 = true ∧
+            N.g (Partition.out W.D (N.Xc (reg (N.σ m)) (cont (N.σ m)))) = m)
+          (audit N.L Bool N.session) (N.σ m)) ≤
+        ((2 ^ 0 * ∑ j ∈ range (0 + 1), (2 : ℕ).choose j : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) +
+          (1 / 4 + 0 + 0 + 0) := by
+  refine ⟨N.hks, N.hlink, N.not_hin, W.hD, fun _ => filter_subset _ _, fun B => W.P.separates_exits B W.hD,
+    Gen.exits_card_le W.P, N.hH, N.hk, ?_⟩
+  have hp : ∀ m, prob (fun o => o.1 = true ∧
+      N.g (Partition.out W.D (N.Xc (reg (N.σ m)) (cont (N.σ m)))) = m)
+      (audit N.L Bool N.session) (N.σ m) = 1 := fun m => by
+    rw [N.prob_audit]
+    split_ifs with hc
+    · rfl
+    · exact absurd ⟨rfl, by cases m <;> rfl⟩ hc
+  simp only [hp, avg_const]
+  have h4 : (1 / 4 : ℝ≥0∞) < 2⁻¹ := by
+    rw [one_div]
+    exact ENNReal.inv_lt_inv.2 (by norm_num)
+  refine not_le.2 ?_
+  calc ((2 ^ 0 * ∑ j ∈ range (0 + 1), (2 : ℕ).choose j : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) +
+        (1 / 4 + 0 + 0 + 0) = 2⁻¹ + 1 / 4 := by simp
+    _ < 2⁻¹ + 2⁻¹ := ENNReal.add_lt_add_left (by simp) h4
+    _ = 1 := ENNReal.inv_two_add_inv_two
+
+end Spot.Sampling

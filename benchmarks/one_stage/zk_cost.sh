@@ -40,7 +40,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python:$REPO/benchmarks/harness:$REPO/tools/config
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
@@ -55,28 +55,14 @@ if [ -n "${ZK_UNITS:-}" ]; then
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-# else its packages unpacked under FLOCK_WORK without root, as 71-gemm-slowdown.sh does (an R580 driver runs 13.3)
-if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
-  CR=$FLOCK_WORK/cuda-root
-  todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
-  while [ -n "$todo" ]; do
-    set -- $todo; q=$1; shift; todo="$*"
-    case " $seen " in *" $q "*) continue ;; esac
-    seen="$seen $q"
-    todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
-      | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
-  done
-  (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || {
-    mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
-      echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) \
-      && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
-  [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
-fi
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+# CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+# verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK without root (an R580 driver
+# runs 13.3), one unpacking at a time
+[ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$O/cuda-unpack.log") \
+  || { CUDA_TK=; (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh) \
+         >> "$O/cuda-unpack.log" 2>&1 && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda-unpack.log" 2>&1; }
+[ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
+export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 
 log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
 OUT=$O/build bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &

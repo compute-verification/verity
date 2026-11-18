@@ -22,6 +22,13 @@ WRITES = {
     "benchmarks/prod_repro/priced.py": {
         ("main", "a.out / 'priced.json'"): "public",
     },
+    "benchmarks/prod_repro/stage.py": {
+        ("record", "tmp"): "public",
+        ("main", "a.out / SUMMARY"): "public",
+    },
+    "benchmarks/prod_repro/topk_units.py": {
+        ("main", "out / UNITS"): "public",
+    },
     "benchmarks/prod_repro/prod_repro.py": {
         ("keep_topk_files", "out / TOPK_FILES / name / f.name"): "public",
         ("topk_kept", "f"): "public",

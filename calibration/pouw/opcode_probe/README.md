@@ -71,8 +71,12 @@ The probes in `../dc/`, `../facet_break/` and `../sass_census/` are written and 
 
    ~~~bash
    python probe.py build --out /tmp/p probes/my.cu && python probe.py gate /tmp/p/my
-   research run --on MACHINE --project verity --source <tree> --cwd source \
-     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/opcode_probe/run.sh calibration/pouw/opcode_probe/probes/my.cu
+   research run --on auto --wait -- bash calibration/pouw/dc/emp.sh build SKU calibration/pouw/opcode_probe/probes/my.cu
+   research run --on MACHINE --project verity --source <tree> --cwd source --send bins.tgz \
+     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/dc/emp.sh time
    ~~~
+
+   `emp.sh build` builds and gates on a CPU node for the card file `calibration/hardware/cards/SKU.toml`; `emp.sh time`
+   times the build's `bins.tgz` on the card under one gpu-lease (its header has the options).
 
 `probe.py --help` lists the harness's commands.
