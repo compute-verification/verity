@@ -30,11 +30,8 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 export PATH="$(dirname "$NVCC"):$PATH" PYTHONPATH=$PWD PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=8
 PY=${PY:-python3}
 ARCH=$("$PY" "$HERE/../opcode_probe/probe.py" arch "${CARD[@]}") || exit 2
-case "$ARCH" in
-  sm_90a) FAMS=${*:-mma wg wg64 wg128 wg256} ;;
-  sm_100a) FAMS=${*:-mma tc} ;;
-  *) echo "s8_mma.sh: the card's target is $ARCH, and s8_mma has forms for sm_90a and sm_100a only: nothing built" >&2; exit 2 ;;
-esac
+FORMS=$("$PY" "$HERE/archs.py" "$ARCH" s8_forms) || exit 2
+FAMS=${*:-$(echo $FORMS)}
 GENCODE=$("$PY" "$HERE/../opcode_probe/probe.py" gencode "${CARD[@]}") || exit 2
 build() {  # $1: the binary; writes $1.nvcc beside it
   "$NVCC" --version | tail -2 > "$1.nvcc"

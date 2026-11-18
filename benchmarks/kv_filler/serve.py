@@ -444,7 +444,7 @@ def main() -> int:
     # stream (execute_model returns None when sample_tokens finishes the step)
     ex_orig, st_orig = runner.execute_model, getattr(runner, "sample_tokens", None)
 
-    def mark() -> "torch.cuda.Event":
+    def mark() -> torch.cuda.Event:
         e = torch.cuda.Event(enable_timing=True)
         e.record()
         return e

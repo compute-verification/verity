@@ -103,7 +103,7 @@ def grouped(n=128, k=1024, experts=4, rows=1024, count=16):
     sizes = {**G.sizes(R, rows, count, n, k), **{x: 1 << 30 for x in G.STACKED}, "salts_a": R.HM_SALT * rows}
     b = {x: (j + 1) << 32 for j, x in enumerate(sorted(sizes))}
     keys = {"hm": (7 << 40) + 256}
-    return G.Grouped(R, dev, n, k, experts, rows, count, b, keys), dev, b, keys
+    return G.Grouped(R, dev, n, k, experts, rows, count, {**b, "salts_a": (b["salts_a"], sizes["salts_a"])}, keys), dev, b, keys
 
 
 @pytest.mark.parametrize("split", [False, True])
@@ -130,7 +130,7 @@ def test_each_units_record_is_its_own_calls_launches(split):
                 "seeds_a": b["seeds_a"] + 32 * u.row, "lkeys_a": b["lkeys_a"] + 32 * u.row, "pd_count": b["pd_count"] + 16 * j,
                 "seed_a": b["seed_a"] + 32 * j, "line_a": b["line_a"] + 32 * j, "ea_codes": b["ea_codes"] + 32 * u.row,
                 "c": b["c"] + 4 * n * u.row, "u": b["u"] + 4 * n * u.row, "leaves": leaves + 64 * u.tile,
-                "salts_a": b["salts_a"] + R.HM_SALT * u.row}
+                "salts_a": (b["salts_a"] + R.HM_SALT * u.row, R.HM_SALT * u.m16)}
         full = {"dom_a": key, "unit": key + 64, "dom_b": 0, "dom_t": 0, "line_b": 0, **kk}
         pipe = R.Pipeline(dev, u.seg, n, k, "h100", full, b["xa"] + 4 * k * u.row, 0, bufs=bufs, m_real=u.m16,
                           split_a=split, fillers=not split)

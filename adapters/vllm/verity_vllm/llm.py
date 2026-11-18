@@ -68,8 +68,9 @@ SUPPORTED: dict[str, Supported] = {
     "attention_config": Supported((dict, type(None)), None, "vLLM attention settings, such as {'flash_attn_version': 2}"),
     "moe_backend": Supported((str, type(None)), None, "vLLM's MoE backend, such as triton (default: vLLM's auto)"),
     "seed": Supported(int, 0, "the engine seed"),
-    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>' "
-                                                             "or {name: scheme} (verity_vllm.protocols); default none"),
+    "protocols": Supported((str, dict, list, tuple), None, "declared schemes attached by name, and protocol options "
+                                                             "installed on the engine: 'pouw:<scheme>' or {name: scheme} "
+                                                             "(verity_vllm.protocols); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
@@ -130,8 +131,8 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
-    """The settings of the scheme ``entry`` names (`messages.option`): ``doc``'s entry under its protocol less its
-    ``device``, which is ``cuda`` (``ValueError`` otherwise)."""
+    """The settings of the declared scheme ``entry`` names (its name, or its option's protocol): ``doc``'s entry under
+    that less its ``device``, which is ``cuda`` (``ValueError`` otherwise)."""
     own = dict(doc.get(entry.partition(":")[0], {}))
     if own.pop("device", "cuda") != "cuda":
         raise ValueError(f"{entry} runs on cuda")
@@ -139,19 +140,20 @@ def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def listed_by_name(value: Any) -> tuple[list[str], list[str]]:
-    """``protocols``' entries that name a declared scheme (`messages.option`), in their order, and the rest, which the
-    selector's grammar reads (`config.parse_protocols`): a declared scheme attaches by name whether or not the selector
-    has its protocol.  ``ValueError`` where two entries name one protocol."""
+    """``protocols``' entries that are a declared scheme's name, in their order, and the rest, which the selector's
+    grammar reads (`config.parse_protocols`), refusing a declared scheme's option (`protocols.refusals`).
+    ``ValueError`` where an entry names the protocol a declared scheme's option names."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
         return [], []
     items = ([f"{k}:{v}" for k, v in value.items()] if isinstance(value, Mapping)
              else [x.strip() for x in value.split(",")] if isinstance(value, str) else [str(x).strip() for x in value])
-    named = [e for e in items if messages.option(e) is not None]
+    declared = messages.declarations.load()
+    named = [e for e in items if e in declared]
     for e in named:
         for other in items:
-            if other != e and other.partition(":")[0] == e.partition(":")[0]:
-                raise ValueError(f"protocol {e.partition(':')[0]!r} is enabled twice ({e!r} and {other!r}); a run enables "
-                                 "one scheme per protocol")
+            if other != e and declared[e].option and other.partition(":")[0] == declared[e].option.partition(":")[0]:
+                raise ValueError(f"protocol {other.partition(':')[0]!r} is enabled twice ({e!r} and {other!r}); a run "
+                                 "enables one scheme per protocol")
     return named, [e for e in items if e not in named]
 
 
@@ -259,8 +261,8 @@ class LLM:
     set, and the execution vLLM reports back.  ``protocols`` is the installed
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
     ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  An entry of ``protocols`` that
-    names a declared scheme (`messages.option`: Pearl+'s ``pouw:pearl-c-h100-v1-h3``) is attached by name on the build
-    instead, every such entry in its order (`messages.attach_listed`), with `option_settings`, its coins in-process
+    is a declared scheme's name (``pearl-plus``, ``pous``) is attached by name on the build instead, with its settings
+    under that name, every such entry in its order (`messages.attach_listed`), with `option_settings`, its coins in-process
     unless they name a ``challenger``; ``schemes`` is what each attach returned, and ``close()`` releases them.  The engine is always built
     here; an engine built elsewhere is not accepted.  Each LLM's build has its own exchange (`messages.build`), on which
     its protocols' requests are filed before the build and which is the exchange in scope while it generates.
@@ -276,14 +278,14 @@ class LLM:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
         by_name, selected = listed_by_name(opts["protocols"])
         enabled = config.parse_protocols(selected)
-        named = {e: messages.option(e) for e in by_name}
+        named = {e: messages.declarations.load()[e] for e in by_name}
         doc = PO.load_settings(opts["protocols_config"])
         listed = [(s, option_settings(e, doc)) for e, s in named.items()]
         for s, own in listed:
             if "coins" in s.settings and not own.get("challenger"):
                 own.setdefault("coins", "in-process")
         if named:
-            rest = {k: v for k, v in doc.items() if k not in {e.partition(":")[0] for e in named}}
+            rest = {k: v for k, v in doc.items() if k not in named}
             opts = {**opts, "protocols": [e for e in enabled if e not in named], "protocols_config": rest or None}
         self._served = opts
         ctx = protocol_context(opts, options)

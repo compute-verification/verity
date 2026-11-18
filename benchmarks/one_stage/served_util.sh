@@ -47,9 +47,10 @@
 # serve-openai scans its samples every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
-# Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
-# and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
-# bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
+# Published ($OUT): util.json and util.txt (the steady state's aggregates, `served_util.py`), steps.txt, heads.txt. The
+# profile, the GPU's identity, the tools' output, the step trace, serve.json, summary.json, pauses.jsonl, the loads'
+# timings files, request bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in
+# UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
 for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
@@ -69,7 +70,7 @@ NSYS=${NSYS:-$CUDA_HOME/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
 export TREE ARM CARD LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT CUDA_HOME
-say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
+say() { echo "$*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
@@ -84,22 +85,22 @@ if [ "${1:-}" != leased ]; then
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
     (cd "$TREE/adapters/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
       PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src \
-      "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+      "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$SCR/predict_row.json" 2> "$SCR/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
-      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
-    say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$OUT/predict_row.json")"
+      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$SCR/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
+    say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$SCR/predict_row.json")"
   fi
   if [ "$ARM" = h1 ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-      | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) >> "$OUT/lean.txt" 2>&1
-    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
+      | sh -s -- -y --default-toolchain none > "$SCR/lean.txt" 2>&1
+    (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) >> "$SCR/lean.txt" 2>&1
+    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $(tail -1 "$SCR/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
   if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then
-    uv pip install -q --target "$ROOT/tools/pyspy" --python "$PY" py-spy==0.4.2 >> "$OUT/pyspy.txt" 2>&1 || { say "PYSPY: install failed"; exit 3; }
+    uv pip install -q --target "$ROOT/tools/pyspy" --python "$PY" py-spy==0.4.2 >> "$SCR/pyspy.txt" 2>&1 || { say "PYSPY: install failed"; exit 3; }
   fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
@@ -109,12 +110,12 @@ if [ "${1:-}" != leased ]; then
   rc=$?
   say "LEASED PART rc=$rc"
   PYTHONPATH=$TREE:$TREE/benchmarks/harness:$TREE/tools/config "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --card "$CARD" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --card "$CARD" --out "$OUT/util.json" > "$OUT/util.txt" 2> "$SCR/util.err"
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
-      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
-    say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$SCR/pyspy_steps.json" > "$SCR/pyspy_steps.txt" 2>&1
+    say "PYSPY ANALYSIS rc=$? (its steps in the scratch)"
   fi
   if [ -d "$D/windows" ]; then
     say "SEALED $(du -sh "$D/windows/" | cut -f1)$([ -L "$D/windows" ] && echo ' on /dev/shm'), deleted"
@@ -131,15 +132,14 @@ export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
-nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
-args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
-      --window-requests "$SEQS" --max-num-seqs "$SEQS"
-      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
+nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$SCR/gpu.txt" 2>&1
+args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --window-requests "$SEQS" --max-num-seqs "$SEQS"
+      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1)
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
-commit=(--scheme rows-sha512 --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
-        --window-gb 32 --seal-hold-gb "${SEAL_HOLD_GB:-32}" --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
+commit=(--hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
+        --seal-hold-gb "${SEAL_HOLD_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
   stock) args+=(--no-commit) ;;
@@ -216,7 +216,7 @@ while True:
                 os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
                 done.add((k, p))
                 print(f"w{k} {p}", flush=True)
-    time.sleep(poll)' "$D" "$STANDIN_SAMPLES" "${STANDIN_POLL_S:-0.2}" > "$OUT/standin_samples.txt" 2>&1 &
+    time.sleep(poll)' "$D" "$STANDIN_SAMPLES" "${STANDIN_POLL_S:-0.2}" > "$SCR/standin_samples.txt" 2>&1 &
   drawer=$!
 fi
 spid=
@@ -238,10 +238,10 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|UTIL (engine|row)|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
-  log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
-  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
+  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; rc=$?
+  say "SERVE: $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" not-listening "$SCR/serve.log" "$rc")"
+  [ -n "$drawer" ] && kill "$drawer"; exit 10
 fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
@@ -251,11 +251,11 @@ load() {  # $1 requests, $2 seed, $3 name
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
 "$NSYS" start --session="$SESS" -o "$SCR/prof" --force-overwrite=true --sample="$sample" --cpuctxsw=none \
-  --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$OUT/nsys_start.txt" 2>&1
+  --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$SCR/nsys_start.txt" 2>&1
 say "CAPTURE start (exit $?)"
 load "$N" 1 main; lrc=$?
 say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
-"$NSYS" stop --session="$SESS" > "$OUT/nsys_stop.txt" 2>&1
+"$NSYS" stop --session="$SESS" > "$SCR/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
 # the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
 pspid=; [ "${PYSPY:-0}" = 1 ] && [ -n "$spid" ] && pspid=$(ps -o ppid= -p "$spid" | tr -d ' ')
@@ -268,12 +268,8 @@ fi
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
 reap
-[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_samples.txt") ($STANDIN_SAMPLES, the step-input port only)"; }
+[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$SCR/standin_samples.txt") ($STANDIN_SAMPLES, the step-input port only)"; }
 trap - TERM INT
-log
-"$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
+"$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$SCR/nsys_export.txt" 2>&1
 say "EXPORT (exit $?): $(du -sh "$SCR/prof.nsys-rep" "$SCR/prof.sqlite" 2>/dev/null | tr '\n' ' ')"
-cp "$SCR/prof.nsys-rep" "$OUT/"
-for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-cp "$SCR/warm.timings.json" "$SCR/main.timings.json" "$OUT/" 2>/dev/null
 [ "$lrc" = 0 ]

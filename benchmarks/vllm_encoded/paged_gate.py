@@ -39,9 +39,9 @@ sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
 import paged as P  # noqa: E402
-from paged import K, KB  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
+from paged import KB, K  # noqa: E402
 
 sys.path.insert(0, str(HERE.parents[1]))
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as RC  # noqa: E402

@@ -23,6 +23,7 @@ import verity
 from verity.commitments import docket_digest as DD
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
+from verity.protocols.resource_accounting.network.prover import n2_tie_zk as N2T
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_request as Q, service as SVC, \
     tie_service as TS, network_attester as W, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
@@ -88,7 +89,7 @@ class Run:
                       for w, rec in enumerate(served.records)]
 
     def sample(self, w):
-        reg = self.tie.register(self.stream, self.tie.registration(self.cells[w].head, self.previous))
+        reg = self.tie.register(self.stream, N2T.registration(self.tie, self.cells[w].head, self.previous))
         self.previous = reg.digest
         return self.stream.select(reg)
 
@@ -298,10 +299,10 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_inputs_refuses_every_wi
     assert run.verdict(inputs).accepted == (False,)
 
     run = Run(tmp_path / "order")
-    reg = run.stream.register(run.tie.registration(run.cells[1].head), run.tie.ports(1))
+    reg = run.stream.register(N2T.registration(run.tie, run.cells[1].head), run.tie.ports(1))
     assert reg.record["window"] == run.tie.provenance(1)
     with pytest.raises(S.Refused):
-        run.tie.register(run.stream, run.tie.registration(run.cells[0].head, reg.digest))
+        run.tie.register(run.stream, N2T.registration(run.tie, run.cells[0].head, reg.digest))
     assert run.verdict(inputs).accepted == (False,)
 
     run = Run(tmp_path / "past")

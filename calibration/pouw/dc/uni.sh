@@ -28,11 +28,7 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 CARD=(${DC_SKU:+--sku "$DC_SKU"})
 ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
-case "$ARCH" in
-  sm_90a) FAM=sm90 ;;
-  sm_100a) FAM=sm100 ;;
-  *) echo "uni.sh: the card's target is $ARCH, and uni.sh has probes for sm_90a and sm_100a only: nothing built" >&2; exit 2 ;;
-esac
+FAM=$(python3 "$HERE/archs.py" "$ARCH" family) || exit 2
 
 if [ "${DC_LEASED:-}" != 1 ]; then
   WORK=$(mktemp -d)
