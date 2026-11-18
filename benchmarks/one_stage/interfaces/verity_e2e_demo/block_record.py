@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tomllib
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -69,12 +70,42 @@ from verity.commitments.domains import ONSITE_PROTOCOL
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
-SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
+#: the onsite application, whose components the record's subprotocols are (`RUNNER_KEYS`)
+ONSITE_APPLICATION = Path(__file__).resolve().parents[4] / "applications" / "onsite_full.toml"
+#: the stored format's word for a verifier row (a declaration's ``record``) where it isn't the row's own, and for a row
+#: the format keeps although its component charges nothing: the words the stored records read, kept so their bytes
+#: stay. It isn't a scheme's name (the application's word) nor its row (the verifier's): network-attester's row is
+#: ``communication``, stored as ``certifier``, which stored fixtures read
+STORED: Mapping[str, str] = {"communication": "certifier", "work": "pouw", "space": "pous", "integrity": "integrity"}
 #: keys and a label stored records hold under their older words: a record's subprotocols, an integrity quantity's (and
 #: a member's) count of sampled proof blocks, and the integrity bound's unit
 BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
-#: the runner's protocol keys, by subprotocol
-RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+
+
+def _runner_keys() -> dict[str, str]:
+    """Each subprotocol's verifier row, by its key in the record: the onsite application's components in its order,
+    each through its declared ``record`` and `STORED`. A component that charges nothing (``resource`` a `Lacks`) is a
+    subprotocol only where `STORED` keeps its row; one no scheme declares only under a word of `STORED`, whose row
+    that entry gives."""
+    out: dict[str, str] = {}
+    for name in tomllib.loads(ONSITE_APPLICATION.read_text())["protocols"]:
+        if name not in schemes.DECLARATIONS:
+            row = next((r for r, word in STORED.items() if word == name), None)
+            if row is None:
+                raise ValueError(f"{name}: no scheme declares it and block_record.STORED has no row stored as {name!r}: "
+                                 "declare its scheme, with its record")
+            out[name] = row
+            continue
+        scheme = schemes.get(name)
+        row = S.declared(scheme, "record")
+        if not isinstance(scheme.resource, S.Lacks) or row in STORED:
+            out[STORED.get(row, row)] = row
+    return out
+
+
+#: the runner's protocol keys, by subprotocol (`_runner_keys`), and the subprotocols, in the onsite application's order
+RUNNER_KEYS = _runner_keys()
+SUBPROTOCOLS = tuple(RUNNER_KEYS)
 #: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
 #: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
 BY_NAME = ("integrity", "pouw")
@@ -378,7 +409,6 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
         row = report["protocols"].get(key)
         subprotocols[name] = None if row is None else subprotocol(name, row, server=server, runs=row.get("runs") or [report["run"]],
                                                   source=source)
-    subprotocols["wipe"] = None
     for name, x in (extra or {}).items():
         subprotocols[name] = subprotocol(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
     if ran := dropped_ran(subprotocols, product):
