@@ -1,4 +1,4 @@
-"""ship_nvcc.sh (the nvcc this directory's build.sh and the other ship builds compile with), without nvcc: a stand-in
+"""ship_nvcc.sh (the nvcc the ship builds compile with), without nvcc: a stand-in
 toolkit whose nvcc prints a dry run of nvcc's shape and whose gcc, cicc and ptxas record what they are given. What cicc is
 handed for one source at two places in a tree is the same to the byte, and a dry run the wrapper can't follow, or a text
 that names the file it is in, is refused before cicc runs. job_nvcc.sh (the nvcc a job's own libraries compile with) is that
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-SHIP_NVCC = Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "ship_nvcc.sh"
+SHIP_NVCC = Path(__file__).resolve().parents[3] / "benchmarks" / "kernels" / "ship_nvcc.sh"
 JOB_NVCC = SHIP_NVCC.with_name("job_nvcc.sh")
 SHIP_PROBE = SHIP_NVCC.with_name("ship_probe.sh")
 TEMP = "tmpxft_0000aaaa_00000000"

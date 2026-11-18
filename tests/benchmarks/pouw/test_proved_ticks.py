@@ -49,18 +49,22 @@ def test_work_outside_the_designs_products_is_refused(census):
         P.units(census, S)
 
 
-def test_every_headline_familys_sheet_reads_its_cards_sm_clock_and_names_no_card_in_code():
-    """Each family `headline.toml` names gets its sheet with f_max its own card's `clock.sm`, read through
-    `verity.device.load_card`, and the default sheet is the machine model's own family's."""
+def test_only_the_machine_models_own_family_has_an_approved_f_max():
+    """The default sheet is the machine model's own family's, at its card's `clock.sm` (`verity.device.load_card`);
+    every other family `headline.toml` names is refused by name, its f_max not approved."""
     import tomllib
 
     from verity.device import load_card, number
-    from verity_machine_model.model import CARD_FILES, data_device, device
+    from verity_machine_model.model import CARD_FILES, DATA, data_device
 
-    assert S.family == data_device()
-    for family in P.headline.spec()["family"]:
-        sku = tomllib.loads((device(family) / "model.toml").read_text())["card"]
-        assert P.sheet(family).fmax_mhz == int(number(load_card(sku, directory=CARD_FILES)["clock"]["sm"]))
+    sku = tomllib.loads((DATA / "model.toml").read_text())["card"]
+    assert (S.family, S.fmax_mhz) == (data_device(), int(number(load_card(sku, directory=CARD_FILES)["clock"]["sm"])))
+    others = [f for f in P.headline.spec()["family"] if f != data_device()]
+    assert others
+    for family in others:
+        with pytest.raises(ValueError, match=f"^no approved data-sheet f_max for {family}: only {data_device()}'s"):
+            P.sheet(family)
+
 
 
 def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_other_work_is_refused():

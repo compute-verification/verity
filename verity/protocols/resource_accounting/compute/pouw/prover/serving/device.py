@@ -203,7 +203,7 @@ def tile_lowbyte_host(xs: np.ndarray, ys: np.ndarray, c0: np.ndarray, steps: int
 
 
 def units_root_twin(leaves: bytes) -> bytes:
-    """`pouw_circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`)."""
+    """`circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`)."""
     root = np.zeros(32, np.uint8)
     host().ncp2_units_root_fast(np.frombuffer(leaves, np.uint8).copy(), len(leaves) // 32, root)
     return root.tobytes()
