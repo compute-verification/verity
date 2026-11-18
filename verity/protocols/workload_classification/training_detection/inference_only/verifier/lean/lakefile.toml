@@ -58,6 +58,10 @@ name = "inference-only-record-difftest"
 root = "InferenceOnlyVerifier.RecordDifftestMain"
 
 [[lean_exe]]
+name = "inference-only-record-wired-difftest"
+root = "InferenceOnlyVerifier.RecordWiredDifftestMain"
+
+[[lean_exe]]
 name = "inference-only-record-check"
 root = "InferenceOnlyVerifier.RecordCheckMain"
 

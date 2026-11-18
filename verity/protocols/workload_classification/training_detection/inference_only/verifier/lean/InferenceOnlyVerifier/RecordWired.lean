@@ -183,7 +183,8 @@ def finishWired (f : Front) (es : List Spot.Wires.Wire) (pin : String → Option
   if !(Spot.Wires.pairwiseDisjoint (ds.map (·.w)) &&
       ds.all fun d => c.x.decls.all fun d' => Spot.Wires.disjoint d.w d'.w) then throw "inputs"
   return { c with x := { c.x with decls := c.x.decls ++ ds },
-                  inside := c.inside ++ (es.map fun w => sameSlot c.S (c.gridsAt w.reader) (c.gridsAt w.writer) w).toArray }
+                  inside := c.inside ++
+                    (es.map fun w => sameSlot c.S (c.gridsAt w.reader) (c.gridsAt w.writer) w).toArray }
 
 /-- **The wired reading**: `Record.read` with the root's edges (`frontWired`, `finishWired`), or the first refusal's
 code. -/
@@ -194,10 +195,9 @@ def readWired (j tr : Json) : Except String Case := do
     | .error _ => Json.null
   finishWired f es (pinOf desc f.i.pins)
 
-/-- The reader row `r`'s edge, of the edges `es`: the writer's template, its unit and its output row; none where no
-edge fills `r`. -/
-def edgeAt (es : List Spot.Wires.Wire) (r : Row) : Option (String × Nat × String) :=
-  es.findSome? fun w => (w.indexOf r.tid r.unit r.port r.row).map fun i => (w.writer, (w.writerAt i).toNat, w.out)
+/-- The edges `es` as a wiring's summary: its `writerOf` gives each reader row its edge's writer, its unit and its
+output row. -/
+def edges (es : List Spot.Wires.Wire) : Spot.Wires.Summary := { wires := es, rowWords := [] }
 
 /-- `Record.evaluate` on the wired reading: the summary with the rate rule's verdict, or the first refusal's code. -/
 def evaluate (j tr : Json) : Except String Json := do
