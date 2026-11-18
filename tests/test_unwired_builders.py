@@ -42,7 +42,6 @@ CALLERS: dict[str, str] = {
     "benchmarks/one_stage/served_cases.py": "replay",
     "benchmarks/one_stage/toy.py": "new-run",
     "benchmarks/proof_throughput/verity_proof_throughput/population.py": "replay",
-    "benchmarks/verifier_cost/whole_run.py": "new-run",
     "verity/circuits/ops/boolean/gemm.circuit-check.py": "check",
     "verity/circuits/population.circuit-check.py": "check",
     "verity/commitments/periods/population.py": "new-run",
