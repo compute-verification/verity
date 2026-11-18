@@ -16,6 +16,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_norms as BN
 from verity_vllm.definitions.registry.boolean_norms import BF16, CUDA_WORD, F32
 
