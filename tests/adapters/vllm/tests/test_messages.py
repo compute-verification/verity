@@ -158,14 +158,14 @@ def test_exchange_answers_requests_by_name_before_serving():
     seen = []
     ex.subscribe("a", "declared", seen.append)
     ex.request("a", H.RequireProperty("eager", True, "its taps read eager modules", fixes=True))
-    ex.request("b", H.RefuseProperty("world", 2, "one rank only"))
+    ex.request("b", H.RequireProperty("world", 1, "one rank only"))
     declared = H.Declared("card:h100", {"eager": True, "world": 2})
-    with pytest.raises(Refused, match="b: refuses world = 2: one rank only"):
+    with pytest.raises(Refused, match="b: requires world = 1: one rank only"):
         ex.answer(declared)
     ex.requests.pop()
     assert ex.answer(declared) is True and seen == [declared]
     with pytest.raises(Refused, match="after the build was answered"):
-        ex.request("c", H.RefuseProperty("world", 1, "one rank"))
+        ex.request("c", H.RequireProperty("world", 1, "one rank"))
     off = ex.subscribe("c", "values", seen.append)
     ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
     off()
@@ -206,14 +206,12 @@ def test_exchange_starts_through_every_gate_and_holds():
     ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
     ex.request("a", H.StartOnBoundary(g1))
     ex.request("b", H.StartOnBoundary(g2))
-    ex.request("b", H.HoldResident(7, 3))
     ex.start("in-0", lambda: started.append("in-0"))
     assert ex.pending() and not started
     g1.held.pop()()
     assert not started
     g2.held.pop()()
     assert started == ["in-0"] and not ex.pending()
-    assert ex.resident(7, 2) and not ex.resident(7, 3)
 
 
 def test_one_exchange_a_build_and_the_build_in_scope_is_current():
@@ -232,7 +230,7 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     assert M.current() is not ex
 
 
-def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once():
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path):
     """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
     the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
     setting it does not have is refused."""
@@ -248,12 +246,15 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
     pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
     ex = M.Exchange()
     assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
-    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "submit": print}]
+    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
+                     "submit": print}]
     assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
     assert ex.reports == {"pearl": "front"}
     assert M.Exchange().key != ex.key
     with pytest.raises(ValueError, match=r"pearl has no setting \['salt'\]"):
         ex.attach(pearl, {"salt": 1})
+    ex.attach(pearl, private=tmp_path)
+    assert seen[-1]["private"] == tmp_path / "pearl" and (tmp_path / "pearl").is_dir()
 
 
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
@@ -280,8 +281,8 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
         ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
     ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
     ex.step = 0
-    with pytest.raises(Refused, match=r"pouw: files HoldResident after serving began \(step 0\)"):
-        ex.request("pouw", H.HoldResident(0, 3))
+    with pytest.raises(Refused, match=r"pouw: files ReuseOldestFreed after serving began \(step 0\)"):
+        ex.request("pouw", H.ReuseOldestFreed())
 
 
 def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():

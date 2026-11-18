@@ -16,7 +16,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
+| `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
@@ -517,6 +517,12 @@ fixed-size's at 1,024 tokens) and the bounds a request is counted within. The fl
 refused if given too, each refusal naming the flag to drop. `--profile`, `--feature` and `--find-load` are flags alone:
 `PROFILE`, `FEATURE` and `FIND_LOAD` in the environment are refused. Without `--profile` the job is as it was.
 
+On this branch the profiles stand beside the free-form path; they do not replace it yet. The dashboard's serving-cost
+line (`vllm/serving-cost-glm53`) still runs on the free-form path: `two-stage` against `compiled` over `chat,long`.
+Three things make it one path: `--feature sampled-proofs levels=2` resolving on GLM-5.3's stock (`verity config
+check`'s `sampled-proofs` declaring `levels`, and an arm over `prod` that serves it), found loads for chat and
+fixed-size on the H200, and the free-form `long` load going when the free-form path goes.
+
 A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
 (`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
 never a flag or a machine's name. The same command runs on a machine that is not ours, under `research run --local-only`
@@ -525,14 +531,22 @@ never a flag or a machine's name. The same command runs on a machine that is not
 place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
 no `.git` needed. A tree that none of these names is refused before anything is served.
 
-- `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
-  It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
-  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
-  profile whose load is still `not found yet` refuses `--feature` until that line is in.
-- `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
-  by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
-  the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
-  `NotImplementedError` (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+- `--find-load` serves stock alone over the profile's ladder (`[profiles.NAME.ladder]`): the load's unit, users for
+  coding-agent and requests in flight for chat and fixed-size, from `start`, each rung `factor` times the last, up to
+  `most`. The load is the fewest at which doubling raises stock's output tokens a second by less than `gain` (5%); where
+  they rise by 5% or more at every rung served, it cannot tell. It prints the file's line for this host's card, the
+  profile's version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no
+  file. A profile whose load is still `not found yet` refuses `--feature` until that line is in: every load is, GLM-5.3's
+  coding-agent load on the H200 among them. The production run `r20261117-112411-576f` stays a point at 4 users: its
+  +2.11 points over prod-trace (+2.27% against stock) are the cost at 4 users, a load no ladder found.
+- `--feature NAME [KEY=VALUE ...]` names an application's component and its settings as the application's
+  `protocols` and `[params."<id>"]` lines state them (`--feature pearl-plus`, `--feature sampled-proofs levels=2`):
+  the name one of `verity config check`'s components, each setting checked by that component's own check. A name no
+  component has, or a setting it doesn't declare, is refused by name. The job serves the arm of ours whose `feature`
+  is that component at those settings (`serve_tax.feature`); `two-stage` serves `sampled-proofs` at `levels` 2, which
+  the config check refuses until its `sampled-proofs` declares `levels`. A component that no arm over the model's
+  stock serves yet raises `NotImplementedError`, naming the goal and what it lacks (Pearl+: the settings its attach
+  needs under vLLM's scheme plugin). It serves stock and that arm in turn at the profile's one load:
   two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
   through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
   stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
@@ -562,8 +576,50 @@ short makes the first line `cannot tell`.
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
   --profile coding-agent --find-load
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
-  --profile coding-agent --feature pearl-plus
+  --profile chat --feature sampled-proofs levels=2
 ~~~
+
+The first number, coding-agent on one card with Llama 3.2 1B and Pearl+, in order. `NODE` is an H100 or H200 node of
+ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the same card model.
+
+1. Stock alone over coding-agent's ladder (1 to 64 users). It prints the line for `llama32-1b.h200` (or `.h100`)
+   under `[profiles.coding-agent.users]`, the version to raise (2 to 3) and the pin for
+   `tests/benchmarks/harness/test_profiles.py`, and keeps them in `OUT/find_load.json`. Write the three into the
+   tree and land them; until then `--feature` refuses with "the load is not found yet".
+
+   ~~~text
+   research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+     --profile coding-agent --find-load
+   ~~~
+
+2. Two salt-only sessions reserved at infra's challenger gate, one for each of the Pearl+ arm's two server lifetimes
+   (a reserved session opens once). Run this from a machine that holds the lane's gate key. `GATE` is the gate command
+   (`ssh -i KEY -o IdentitiesOnly=yes research@HOST`), `LANE` the lane whose key it holds, and `PEER` the node's name
+   among the auditor device's peers. Run it once per session, close enough to the launch that neither reserve expires
+   (`expires_utc`) before its lifetime opens it.
+
+   ~~~text
+   uv run python -c 'import json, sys
+   from verity_vllm.pipeline.commit_coins import ChallengerGate
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window import reserve_salt
+   g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
+     "$GATE" LANE PEER
+   ~~~
+
+3. The pair, stock (`compiled`) and `pearl-plus` (the same server, eager, Pearl+ turned on by name through vllm's
+   scheme plugin), at the found load: two lifetimes each, three reps a lifetime, in the model's 20 minutes.
+   `SCHEME_SETTINGS` holds one object per lifetime: the gate command, Pearl+'s kernel directory in the run's tree,
+   the challenger at the node's `127.0.0.1` (the port comes from the gate's open), and that lifetime's reserve
+   answer. The plan refuses a missing or shared session by name before any GPU is held.
+
+   ~~~text
+   research run --on NODE --source . --cwd source \
+     --env 'SCHEME_SETTINGS=[{"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_1}}, {"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_2}}]' \
+     -- bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent --feature pearl-plus
+   ~~~
+
+GLM-5.3's `prod-pearl-plus` is refused at the plan, naming vllm's goal `vllm/scheme-on-in-vllm-server`: the scheme
+plugin turns schemes on in a one-GPU server, and GLM-5.3 serves on 8.
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at

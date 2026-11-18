@@ -437,22 +437,22 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
 /-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
 check's `interiorUnshown` passed, the interior audit's parameters name the challenger key `k` and the family `label`,
 the boundary's window is `w` and not the interior audit's, the interior registration's digest is `after` and the
-first session `e.coins` names on `w` under `k` has the roots `roots`, those roots show no coin of `label` released
+first session `e.coins` names on `w` under `k` has the log `log`, its roots by family show no coin of `label` released
 after `after`. -/
 theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p e = .ok ()) {w label : String}
     {after : ByteArray} {k : Spot.Challenger.ChallengerKey} {c : Spot.Challenger.LiveCommitment}
-    {roots : Spot.Challenger.Roots} (hk : p.audit.base.challenger = some (k, label))
+    {log : Spot.Challenger.Log} (hk : p.audit.base.challenger = some (k, label))
     (hw : p.boundary.verifier.windowRoot = some w)
     (hne : some w ≠ p.audit.base.verifier.windowRoot)
     (ha : Spot.Docket.digest e.record = .ok after)
     (ht : Spot.Challenger.trustedChallengePhaseOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
-      (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
-    interiorShown roots label after = false := by
+      (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, log)) :
+    interiorShown (Spot.Challenger.byFamily c log) label after = false := by
   have hb : (some w == p.audit.base.verifier.windowRoot) = false := by simpa using hne
   unfold interiorUnshown at h
   rw [hk, hw] at h
   simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, ht, bind, Except.bind] at h
-  cases hc : interiorShown roots label after
+  cases hc : interiorShown (Spot.Challenger.byFamily c log) label after
   · rfl
   · rw [hc] at h
     simp at h

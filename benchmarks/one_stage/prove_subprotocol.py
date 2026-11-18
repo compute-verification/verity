@@ -843,7 +843,9 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
-    pro = TargetProfile(compute_capability=(12, 0), num_sms=188)
+    from verity_bench import kit
+    t = kit.gpu_target("rtx-pro-6000-server")
+    pro = TargetProfile(compute_capability=tuple(t["compute_capability"]), num_sms=t["num_sms"])
     a = int(arg[0]) if arg else None
     H, D, V = L["H"], L["D"], a or L["V"]
     if fam == "gemm":

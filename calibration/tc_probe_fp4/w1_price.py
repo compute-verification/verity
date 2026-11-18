@@ -71,7 +71,6 @@ import sparse as S  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
 SOURCE = "w1_price.cu"
-ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/w1-price-fp4/v2"
 NSETS, NACC, WORDS, LAT_UNROLL = 4, 8, 12, 8
 BODY = NSETS * NACC
@@ -480,7 +479,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--corrupt-word", action="store_true", help="gate self-test: one flipped output word must fail the run")
     ap.add_argument("--fake-silicon", action="store_true")
     ap.add_argument("--sass-only", action="store_true")
+    ap.add_argument("--card", default=None, help="--sass-only or --fake-silicon: the card to build for, as nvidia-smi names it "
+                    "(default: the run's card)")
     args = ap.parse_args(argv)
+    if args.card and not (args.sass_only or args.fake_silicon):
+        ap.error("--card names the card of a --sass-only or --fake-silicon build; a run builds for the card it opened")
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     rows = [r for r in args.rows.split(",") if r]
@@ -498,8 +501,9 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(f"the plan takes about {planned_s:.0f} s > --max-seconds {args.max_seconds:g}")
     t_all = time.time()
 
-    have_nvcc = Path(P.nvcc_bin()).is_file()
-    so, nvcc = (P.build(ARCH, out, SOURCE) if (have_nvcc or not args.fake_silicon) else (None, "not built (fake silicon)"))
+    have_nvcc = P.has_nvcc()
+    so, nvcc = (P.build(P.target(args.card, SOURCE)[0], out, SOURCE) if (have_nvcc or not args.fake_silicon)
+                else (None, "not built (fake silicon)"))
     sass = sass_gate(so, rows, scale_update) if so is not None else {"ok": None, "kernels": {}, "note": "no nvcc"}
     ops_sass = ops_sass_gate(so, ops) if so is not None else {"ok": None, "kernels": {}, "note": "no nvcc"}
     dev = FakeW1() if args.fake_silicon else (None if args.sass_only else W1Device(so))

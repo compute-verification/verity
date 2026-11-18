@@ -450,8 +450,11 @@ check() {
 import json, sys
 from verity_vllm import TargetProfile
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_bench import kit
+t = kit.gpu_target("h200-sxm-141gb")
 doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
-       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132).to_json(),
+       "target": TargetProfile.default().with_overrides(compute_capability=tuple(t["compute_capability"]),
+                                                        num_sms=t["num_sms"]).to_json(),
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))

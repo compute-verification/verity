@@ -165,8 +165,8 @@ from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E40
 
 import sheets  # noqa: E402
 
-FIGURES = sheets.figures()
-"""The node's figures, from its data sheets (`sheets.figures`)."""
+FIGURES = sheets.figures("rtx-pro-6000-server-x8")
+"""The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
 RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read

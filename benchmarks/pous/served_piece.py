@@ -409,7 +409,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
              private: Path | None = None, pins: Sequence[Path] = PINS, protocol: str = period.PROTOCOL,
              rounds: int = ROUNDS, bw_party: str | None = None, bw_host: str = BW_PARTY_HOST,
              bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
-             bw_private: Path | None = None, bw_trusted_sha512: str | None = None,
+             bw_private: Path | None = None, bw_trusted_sha512: str | None = None, bw_card: str | None = None,
              deployment: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
     of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
@@ -417,7 +417,8 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
     written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
-    ``SERVE_DIR/private/bandwidth``). `Refusal` when no answer can be made."""
+    ``SERVE_DIR/private/bandwidth``). The bandwidth session's γ is against the data sheet of ``bw_card``, the card's name
+    as nvidia-smi gives it (by default torch's for a CUDA ``device``). `Refusal` when no answer can be made."""
     repo, rev, reg_sha, bind = _window(serve_dir, window)
     snapshot = hf_home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev
     if not snapshot.is_dir():
@@ -451,6 +452,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
         return done(_no("reject", why, None, protocol))
     dev = torch.device(device)
+    bw_card = bw_card or (torch.cuda.get_device_name(dev) if dev.type == "cuda" else None)
     model, outside = linears(ck, dev)
     total = sum(ck.bytes_of(k) for k in ck.tensors)
     del ck
@@ -513,10 +515,13 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             del store
             bandwidth = None
             if bw_party is not None:
+                if bw_card is None:
+                    raise Refusal(f"no card on {device} whose data sheet's memory bandwidth the bandwidth session is "
+                                  "against: name it with --bw-card")
                 _stamp(out, "PoUB's session start")
                 t = time.monotonic()
                 deployed = from_runner() if deployment is None else deployment
-                HB.held(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
+                HB.held(s, node=node, card=bw_card, party=bw_party, party_host=bw_host, sid=sid,
                         request_=bw_request or HB.request(node.encode()), private=bw_private,
                         trusted_sha512=HB.key_of(deployed, bw_trusted_sha512))
                 bandwidth = {"session_s": round(time.monotonic() - t, 3)}
@@ -645,13 +650,13 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,
-        case_exe: str | None = None, bw_trusted_sha512: str | None = None) -> dict[str, Any]:
+        case_exe: str | None = None, bw_trusted_sha512: str | None = None, bw_card: str | None = None) -> dict[str, Any]:
     """The piece (module docstring) in one process, `sessions` and then `answers`: its answer, written with
     ``pous.json`` to ``out``; `Refusal` when none can be made."""
     early = sessions(serve_dir, window, out, hf_home=hf_home, device=device, p2_lib=p2_lib, node=node, party=party,
                      private=private, pins=pins, protocol=protocol, rounds=rounds, bw_party=bw_party, bw_host=bw_host,
                      bw_request=bw_request, bw_out=bw_out, bw_private=bw_private,
-                     bw_trusted_sha512=bw_trusted_sha512, deployment=deployment)
+                     bw_trusted_sha512=bw_trusted_sha512, bw_card=bw_card, deployment=deployment)
     if early is not None:
         return early
     return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, deployment=deployment, private=private,
@@ -721,6 +726,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-trusted-sha512", help="the SHA-512 of the key the bandwidth session's close is trusted under, "
                                                 "a rehearsal's (default: the one VERITY_PINS pins for the bandwidth "
                                                 "verifier's bandwidth sessions; none: no session has a case)")
+    bw.add_argument("--bw-card", help="the card's name as nvidia-smi gives it, whose data sheet's memory bandwidth γ is "
+                                      "against (default: torch's for a CUDA --device)")
     bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
@@ -730,7 +737,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw_request = HB.request(node.encode(), windows=a.bw_windows, passes=a.bw_passes, samples=a.bw_samples,
                             window_s=a.bw_window_s, deadline_s=a.bw_deadline_s)
     card = {"hf_home": a.hf_home, "device": a.device, "p2_lib": a.p2_lib, "node": node, "party": party,
-            "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request}
+            "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request,
+            "bw_card": a.bw_card}
     both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private,
             "bw_trusted_sha512": a.bw_trusted_sha512}
     none = {"trusted_sha512": a.trusted_sha512, "bw_case_exe": a.bw_case_exe, "case_exe": a.case_exe}

@@ -64,8 +64,6 @@ UNIT, BLOCK, DIGEST = p2.UNIT_BLOCKS, p2.BLOCK_BYTES, receipts.DIGEST_BYTES
 SALT, PER_LEAF = receipts.SALT_BYTES, receipts.PER_LEAF
 WINDOWS, PASSES, SAMPLES = (p2_parties.SESSION[k] for k in ("windows", "passes", "samples"))
 WINDOW_S, DEADLINE_S = p2_parties.SESSION["window_ns"] / 1e9, p2_parties.SESSION["deadline_ns"] / 1e9
-#: an H200's specified HBM read rate, bytes a second: what γ is against
-R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"
 #: the session's record, and its case until `decide` answers it, in the private directory
 SESSION, HELD = "session.json", "held-case.json"
@@ -240,7 +238,7 @@ def key_of(deployment: Mapping[str, Any], trusted_sha512: str | None = None) -> 
     return trusted_sha512 or min(pinned, default=None)
 
 
-def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
+def held(store: Any, *, node: str, card: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
          private: Path, trusted_sha512: str | None = None) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
     ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
@@ -248,7 +246,12 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
     at `party_host`), under `request_`:
     the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
     opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to
-    `private` (0700, files 0600), for `decide`. This is the part that reads the store."""
+    `private` (0700, files 0600), for `decide`. This is the part that reads the store. γ is against the data sheet's
+    stated memory bandwidth of `card`, the name nvidia-smi gives the card (`kit.datasheet_bandwidth`), read before the
+    session starts and refused by name where its record has none."""
+    from verity_bench import kit
+
+    r_bytes_per_s = kit.datasheet_bandwidth(card)
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
     (private / HELD).unlink(missing_ok=True)   # an earlier session's case is never this one's
@@ -282,7 +285,7 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
         "registration": None if prover is None else p2_parties.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
         "pous_session": sid.hex(), "session": None if p2_session is None else p2_session.hex(), "party": command,
-        "party_host": party_host,
+        "party_host": party_host, "card": card, "r_bytes_per_s": r_bytes_per_s,
         "setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3)}, 0o600)
 
 
@@ -301,7 +304,7 @@ def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping
 
 
 def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
-           case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S, trusted_sha512: str | None = None,
+           case_exe: str | None = None, trusted_sha512: str | None = None,
            deployment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
     `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
@@ -318,6 +321,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     trusted_sha512 = key_of(deployed, trusted_sha512)
     doc = json.loads((private / SESSION).read_text())
     answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
+    r_bytes_per_s = doc["r_bytes_per_s"]
     kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
     summary: dict[str, Any] = {"window": window, "request": doc["request"], "party_host": doc["party_host"],
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",

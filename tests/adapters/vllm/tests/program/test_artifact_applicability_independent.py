@@ -768,7 +768,7 @@ for k, v in req.items():
     if k in fields:
         kw[k] = tuple(v) if isinstance(v, list) else v
 try:
-    prof = TP(**kw)
+    prof = TP.default().with_overrides(**kw)
 except Exception as e:
     out["err"] = f"TargetProfile({{kw}}) failed: {{e!r}}"; print(json.dumps(out)); sys.exit(0)
 out["profile_kw"] = kw

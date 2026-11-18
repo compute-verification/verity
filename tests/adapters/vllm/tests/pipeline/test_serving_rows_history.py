@@ -128,7 +128,7 @@ def cut(rows, histories=True, caps=CAPS):
 
 def binding(ms) -> CS.Binding:
     n = {t: sum(m.n for m in ms if m.template == t) for t in TMPLS}
-    return CS.Binding(*CS.population_program([(SRW.template(t).fn, n[t]) for t in TMPLS], several=True),
+    return CS.Binding(*IF.listed_program([(SRW.template(t).fn, n[t]) for t in TMPLS], ()),
                       D.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
 
 
@@ -249,8 +249,8 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
     def check(rows, ms, data, roots, salts_of, strings_of, hreg):
         nonlocal held
         w = binding(ms)
-        c = CS.commit(w, data, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
-        full = CS.commit(w, data, salt_key=bytes(32), salts_of=salts_of)
+        c = CS.commit(w, data, salts_of=salts_of, strings_of=strings_of)
+        full = CS.commit(w, data, salts_of=salts_of)
         assert full.roots == c.roots and full.bc == c.bc
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))
