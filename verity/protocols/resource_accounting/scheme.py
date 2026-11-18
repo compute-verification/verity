@@ -328,7 +328,8 @@ class Scheme:
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
     says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
-    is checked, and the line says nothing for it.
+    is checked, and the line says nothing for it. ``parts``, by name, the entries (``module:attribute``, a module's
+    submodule among them) of what code outside the protocol reads of it, read through `part`; empty where it lists none.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -383,6 +384,7 @@ class Scheme:
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
     unchecked: Mapping[str, str] = field(default_factory=dict)
+    parts: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -445,6 +447,9 @@ class Scheme:
         object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
         object.__setattr__(self, "unchecked", MappingProxyType(dict(self.unchecked)))
+        if bad := [n for n, e in self.parts.items() if not isinstance(e, str) or not _ENTRY.fullmatch(e)]:
+            raise ValueError(f"{self.name}: part {bad[0]!r} is an entry, module:attribute, not {self.parts[bad[0]]!r}")
+        object.__setattr__(self, "parts", MappingProxyType(dict(self.parts)))
         sentences(self)
 
     @property
@@ -611,6 +616,18 @@ def answering(scheme: Scheme) -> Answers:
     return Answers(**getattr(import_module(module), name))
 
 
+def part(scheme: Scheme, name: str) -> Any:
+    """What ``scheme``'s ``parts`` names ``name``, its module imported on first use (an attribute that is a submodule
+    imported as one); refused by scheme and name (LookupError) where the declaration lists no such part."""
+    from importlib import import_module
+
+    if name not in scheme.parts:
+        raise LookupError(f"{scheme.name} declares no part {name!r}: its parts are {sorted(scheme.parts)}")
+    module, _, attribute = scheme.parts[name].partition(":")
+    owner = import_module(module)
+    return getattr(owner, attribute) if hasattr(owner, attribute) else import_module(f"{module}.{attribute}")
+
+
 def layout(scheme: Scheme, port: str, shape: Mapping[str, int]) -> Layout:
     """``port``'s `Layout` at ``shape``, as ``scheme`` declares it; KeyError naming the scheme's ports, or ValueError when
     the port declares no layout."""
@@ -700,5 +717,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 __all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
            "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
-           "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
+           "answering", "credited", "declared", "layout", "order_refusals", "part", "register", "register_process", "settings",
            "unbounded"]

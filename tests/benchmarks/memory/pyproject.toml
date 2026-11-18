@@ -31,4 +31,10 @@ inputs = ["benchmarks/memory", "benchmarks/poub_session/summary.py", "benchmarks
     "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
     "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
     "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+    # refresh.py reads the codec and the memory map as the bandwidth audit's declared parts: the table, the declaration
+    # and what it loads
+    "verity/protocols/compose/__init__.py", "verity/protocols/compose/schemes.py", "verity/protocols/resource_accounting/scheme.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/hooks.py", "verity/party.py",
+    "verity/protocols/resource_accounting/memory/pous/__init__.py", "verity/protocols/resource_accounting/memory/pous/attester",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
 ]

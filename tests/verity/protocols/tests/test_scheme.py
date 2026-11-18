@@ -275,6 +275,29 @@ def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_na
         S.answering(_toy(answers=S.Lacks("it keeps no session")))
 
 
+def test_a_part_is_its_listed_entry_loaded_an_unlisted_name_refused_and_a_malformed_entry_refused_at_declaration() -> None:
+    from fractions import Fraction as F
+    toy = _toy(parts={"fraction": "fractions:Fraction", "dom": "xml:dom"})
+    assert S.part(toy, "fraction") is F and S.part(toy, "dom").__name__ == "xml.dom"   # a submodule, imported as one
+    with pytest.raises(TypeError):
+        toy.parts["fraction"] = "fractions:Decimal"  # type: ignore[index]
+    with pytest.raises(LookupError, match=r"toy-bandwidth declares no part 'codec': its parts are \['dom', 'fraction'\]"):
+        S.part(toy, "codec")
+    assert dict(_toy().parts) == {}
+    for entry in ("fractions.Fraction", "fractions:", ":Fraction", 7):
+        with pytest.raises(ValueError, match="toy-bandwidth: part 'fraction' is an entry, module:attribute"):
+            _toy(parts={"fraction": entry})
+
+
+def test_the_bandwidth_audits_parts_are_poubs_codec_and_memory_map() -> None:
+    probe = ("from verity.protocols.compose import schemes as C\n"
+             "from verity.protocols.resource_accounting import scheme as S\n"
+             "print(*(S.part(C.get('bandwidth'), n).__name__ for n in ('codec', 'memory-map')))\n")
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout.split()
+    poub = "verity.protocols.resource_accounting.memory.poub.verifier"
+    assert out == [f"{poub}.codec", f"{poub}.memory_map"]
+
+
 def test_the_bandwidth_audit_is_answered_through_its_entry_in_a_process_with_no_exchange(tmp_path: Path) -> None:
     probe = ("import json, sys\n"
              "from pathlib import Path\n"

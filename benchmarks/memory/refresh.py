@@ -37,7 +37,10 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec, memory_map
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+codec, memory_map = (part(schemes.get("bandwidth"), n) for n in ("codec", "memory-map"))
 
 BLOCK = codec.BLOCK_BYTES
 P512_K2 = codec.Codec(codec.P512, 2, False)
