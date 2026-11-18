@@ -13,9 +13,11 @@ proofs=$root/security/Proofs
 pkg=$(cd "${1:-$proofs}" && pwd)
 one=$(mktemp)
 two=$(mktemp)
+# `lean --run` prints a file's errors on stdout, which goes to the vectors' file: on a failure, show it.
 (cd "$pkg" && lake build Proofs.Spot.Sampling.Influence Proofs.Spot.Sampling.StratifiedMiss \
-  Proofs.Flock.SamplingGeneric.TwoTable >&2 && lake env lean --run "$here/ExfiltrationVectors.lean" > "$one" &&
-  lake env lean --run "$here/ExfiltrationTwoVectors.lean" > "$two")
+  Proofs.Flock.SamplingGeneric.TwoTable >&2 &&
+  { lake env lean --run "$here/ExfiltrationVectors.lean" > "$one" || { cat "$one" >&2; exit 1; }; } &&
+  { lake env lean --run "$here/ExfiltrationTwoVectors.lean" > "$two" || { cat "$two" >&2; exit 1; }; })
 python3 - "$one" "$two" "$here" "$pkg" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
