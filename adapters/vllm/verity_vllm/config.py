@@ -43,7 +43,7 @@ from verity_vllm.records import workload as workload_record
 #: The names the library's other modules read here.
 __all__ = [
     "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
-    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
     "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
     "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
@@ -57,6 +57,21 @@ CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
 CARD_FILES = ROOT.parents[1] / "calibration/hardware/cards"
+
+
+def card_arch(sku: str) -> str:
+    """Card `sku`'s `arch` (sm_90a), refused unless it is a GPU card's sm_<major><minor>[a|f]."""
+    from verity.device import compute_capability, load_card  # read here: the pipeline's top-level process has no `verity`
+
+    card = load_card(sku, directory=CARD_FILES)
+    compute_capability(card)
+    return card["arch"]
+
+
+def cuda_arch(sku: str) -> str:
+    """The `TORCH_CUDA_ARCH_LIST` entry of card `sku`'s `arch` (sm_90a -> 9.0a), which an extension built for it compiles to."""
+    m = re.fullmatch(r"sm_(\d+)(\d)([af]?)", card_arch(sku))
+    return f"{m[1]}.{m[2]}{m[3]}"
 
 
 def checkpoints_hf_home() -> str | None:
