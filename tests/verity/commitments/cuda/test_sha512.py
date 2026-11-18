@@ -82,7 +82,7 @@ def test_every_form_on_the_host_is_sha512(host: ctypes.CDLL) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(cuda_build.gpu_arch() is None, reason="no nvcc or no CUDA device")
+@pytest.mark.skipif(cuda_build.gpu_name() is None, reason="no nvcc or no CUDA device")
 @pytest.mark.parametrize("knobs", list(KNOBS))
 def test_every_form_on_the_device_is_sha512(knobs: str) -> None:
     """Slow for its nvcc build of every form, where the cache has none: the device's pipe choices, which the host lacks."""
@@ -98,3 +98,11 @@ def test_every_form_on_the_device_is_sha512(knobs: str) -> None:
         if n_bad := sum(out.raw[64 * i:64 * i + 64] != w for i, w in enumerate(want)):
             bad[lib.sha512_form_name(f).decode()] = n_bad
     assert not bad, bad
+
+
+def test_a_device_build_is_for_its_card_files_target_and_no_other() -> None:
+    names = {"NVIDIA H100 80GB HBM3": "90a", "NVIDIA H200": "90a", "NVIDIA B200": "100a",
+             "NVIDIA RTX PRO 6000 Blackwell Server Edition": "120a"}
+    assert {n: cuda_build.arch(n) for n in names} == names
+    with pytest.raises(KeyError, match="NVIDIA Tesla T4"):
+        cuda_build.arch("NVIDIA Tesla T4")
