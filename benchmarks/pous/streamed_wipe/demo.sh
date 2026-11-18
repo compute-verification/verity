@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One streamed wipe of one GPU's memory, as one Attempt. wipe_run's subprotocol on this node: the prover keeps the
+# One streamed wipe of one GPU's memory, as one Attempt. The wipe scheme attached on this node (Exchange.attach,
+# wipe_served.attach, which runs wipe_run's subprotocol): the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory attester
 # streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
@@ -24,11 +25,11 @@
 #                        there, e.g. 'python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory attester's public key, in 128 lowercase hex digits: the one key
-#                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
-#                        challenger here signs under a key this run makes, trusted without it. trusted-device never
+#                        the verifier trusts, a session signed under another rejected. --challenger takes it, and only
+#                        it: a challenger here signs under a key this run makes (run_keys). trusted-device never
 #                        holds: under a committed configuration (VERITY_CONFIGURATION, its hash), for a key its pins
-#                        give the wipe (VERITY_PINS, its [[pin]] entries as JSON), which period.json's deployment
-#                        carries, the record says the key matched the pins this machine was handed; under any other, a
+#                        give the wipe (VERITY_PINS, its [[pin]] entries as JSON), which the attach is handed,
+#                        the record says the key matched the pins this machine was handed; under any other, a
 #                        rehearsal; either way no bound
 #   --simulated          the memory attester here, named the stand-in for one on its own host (placement
 #                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
@@ -69,7 +70,9 @@
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, disk.txt (with --disk: the block devices,
-# filesystems, swap and each disk's driver), lake-build.log, period.json, wipe.json, wipe.case.json, summary.json.
+# filesystems, swap and each disk's driver), lake-build.log, period.json, wipe.json, summary.json. The case
+# (wipe.case.json), with period.json and wipe.json, goes to the wipe's private directory, $WIPE_PRIVATE/wipe
+# (default $OUT/private/wipe).
 # summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
 # connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
 # undeclared tiers, the egress: uncounted, or the evidence writer's count, which certifies no wipe). Scratch (the
@@ -124,6 +127,8 @@ else
   if [ -n "$CH$CH_ADDR$CH_CMD" ] && [ -z "$CH" -o -z "$CH_ADDR" -o -z "$CH_CMD" ]; then
     echo "demo.sh: --challenger, --challenger-address and --challenger-command go together"; exit 2
   fi
+  [ -n "$TRUSTED" ] && [ -z "$CH" ] && {
+    echo "demo.sh: --trusted-sha512 goes with --challenger: a challenger here signs under the key this run makes"; exit 2; }
   [ -n "$CH" ] && [ -z "$TRUSTED" ] && {
     echo "demo.sh: --challenger takes --trusted-sha512: a challenger on its own host is trusted only under its pinned key"; exit 2; }
   [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
@@ -194,9 +199,8 @@ EOF
       || { tail -30 "$O/lake-build.log"; echo "REFUSED: wipe-protocol doesn't build"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$ROOT/$L/.lake/build/bin/wipe-protocol\"}"
   fi
-  mkdir -p "$S/periods/p0"
-  uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
-    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
+  uv run --no-sync python - "$S/attach.json" "$TOOLS" "$STORE" "${SEGMENTS:-0}" "$RESERVE" "${THREADS:-0}" \
+    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:--1}" "${READS:-0}" "${CTRL_DEV:-}" \
     "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" "$TRUSTED" <<'EOF'
 import json, os, shlex, sys
 from fractions import Fraction
@@ -210,21 +214,19 @@ for spec in filter(None, specs.splitlines()):
     if not (name and to and via):
         sys.exit(f"demo.sh: --link is NAME=TO@VIA, not {spec!r}")
     links.append({"name": name, "to": to, "via": via})
-doc = {"tools": json.loads(tools),
-       "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(Fraction(reserve) * 2 ** 30),
-                "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
-                "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
-                "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
-                "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram),
-                "trusted_sha512": trusted or None},
-       "deployment": {"configuration": os.environ.get("VERITY_CONFIGURATION") or None,
-                      "pins": json.loads(os.environ.get("VERITY_PINS") or "[]")}}
+settings = {"store": store, "segments": int(segments), "reserve_bytes": int(Fraction(reserve) * 2 ** 30),
+            "threads": int(threads), "limit_ns": int(limit), "foreign_past_bound": foreign == "fM",
+            "foreign_bytes": 0 if foreign == "fM" else int(Fraction(foreign) * 10 ** 9), "simulated": simulated == "1",
+            "egress_bits": int(egress), "reads": int(reads), "links": links, "disk": json.loads(disk) or {},
+            "dram": json.loads(dram) or {}, "run_keys": not ch}
 if ch:
-    doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
-open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
+    settings |= {"host": ch, "address": addr, "command": shlex.split(cmd)}
+open(path, "w").write(json.dumps({"settings": settings, "pins": json.loads(os.environ.get("VERITY_PINS") or "[]"),
+                                  "configuration": os.environ.get("VERITY_CONFIGURATION") or None,
+                                  "trusted": trusted or None, "judge": json.loads(tools).get("wipe-protocol")},
+                                 indent=1, sort_keys=True))
 EOF
-  cp "$S/periods/p0/period.json" "$O/period.json"
-  export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_CARD=$CARD DEMO_EXPECT=$EXPECT
+  export DEMO_ATTACH=$S/attach.json DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_CARD=$CARD DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
     LEASE_MEM=()
     [ "$DRAM" = 1 ] && LEASE_MEM=(--mem-gb "$(awk '/^MemTotal:/ {printf "%d", $2 / 1048576 - 2}' /proc/meminfo)")
@@ -247,7 +249,22 @@ if [ "$DEMO_STORE" = cuda ]; then
   fi
 fi
 rc=0
-uv run --no-sync python benchmarks/pous/streamed_wipe/wipe_on_node.py --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
-  --expect "$DEMO_EXPECT" > "$O/summary.json" || rc=$?
+uv run --no-sync python - "$DEMO_ATTACH" "$O" "${WIPE_PRIVATE:-$O/private}" "$DEMO_NODE" "$DEMO_EXPECT" > "$O/summary.json" <<'EOF' || rc=$?
+import json, shutil, sys
+from pathlib import Path
+from verity import hooks as H
+from verity.protocols.compose import schemes
+from verity.runtime.stream import Side
+from verity_vllm.messages import Exchange
+attach, out, private, node, expect = sys.argv[1:]
+a = json.loads(Path(attach).read_text())
+got = Exchange().attach(schemes.get("wipe"), a["settings"], private=private, process=H.ENGINE, side_of=Side.of,
+                        pins=a["pins"], configuration=a["configuration"], trusted=a["trusted"], node=node,
+                        judge=a["judge"])
+shutil.copy(Path(private) / "wipe" / "period.json", Path(out) / "period.json")
+(Path(out) / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
+print(json.dumps(got.summary(), indent=1, sort_keys=True), flush=True)
+sys.exit(0 if got.answer["verdict"] == expect else 1)
+EOF
 cat "$O/summary.json"
 exit $rc

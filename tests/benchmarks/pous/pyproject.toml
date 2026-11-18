@@ -86,7 +86,10 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/commitments/salt_file.py",
           # the lease script served_piece.sh and served_wipe.sh take where a node has no gpu-lease: their tests check
           # that it is where the scripts look for it
-          "tools/research/src/research/pods/sh/gpu_lease.sh", "benchmarks/pous"]
+          "tools/research/src/research/pods/sh/gpu_lease.sh", "benchmarks/pous",
+          # demo.sh's last step attaches the wipe through the adapter's Exchange, and what that module imports
+          "adapters/vllm/verity_vllm/messages.py", "verity/protocols/proofs/spot/prover/__init__.py",
+          "verity/protocols/proofs/spot/prover/workload.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
