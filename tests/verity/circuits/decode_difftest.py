@@ -4,9 +4,10 @@ decoder (`Circuits/Program.lean`'s `decode`).
     uv run python tests/verity/circuits/decode_difftest.py --out DIR
 
 Writes `DIR/decode_difftest/`, one line per case: `cases.jsonl`, `{"name", "descriptor"}`, the descriptor's text as the
-decoder reads it; `python.jsonl`, `{"name", "ok", "error", "message", "program_digest", "boolean"}`, `codec.decode_program`'s
-verdict on that text: on a refusal its first `E_` code (none for a refusal without one) and its message, on an accept the
-program's digest and its Boolean map; and `digests.json`, each file's SHA-256.
+decoder reads it; `python.jsonl`, `{"name", "ok", "error", "message", "program_digest", "boolean", "inputs",
+"definition_digests"}`, `codec.decode_program`'s verdict on that text: on a refusal its first `E_` code (none for a refusal
+without one) and its message, on an accept the program's digest, its Boolean map, its `inputs` and each definition's digest
+(§4.8); and `digests.json`, each file's SHA-256.
 
 The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `registered_program`'s), each of
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
@@ -58,7 +59,8 @@ def verdict(text: str, registry) -> dict:
     except Exception as e:  # noqa: BLE001
         m = re.search(r"\bE_[A-Z_]+", str(e))
         return {"ok": False, "error": m[0] if m else None, "message": f"{type(e).__name__}: {e}"}
-    return {"ok": True, "program_digest": codec.program_digest(p.desc), "boolean": p.desc["boolean"]}
+    return {"ok": True, "program_digest": codec.program_digest(p.desc), "boolean": p.desc["boolean"], "inputs": p.inputs,
+            "definition_digests": dict(sorted(codec.definition_digests(p.desc).items()))}
 
 
 def main() -> None:

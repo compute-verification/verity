@@ -1560,7 +1560,7 @@
   ],
   [
    "counts unlike the root's input nodes",
-   "ValueError: E_INPUTS_COUNT: `inputs` counts 2 input nodes; the root's body leads with 3, and holds no input node after them"
+   "ValueError: E_INPUTS_COUNT: `inputs` counts 2 input nodes, where the root's body leads with 3 and holds no input node after them"
   ],
   [
    "a parameter mixing run and registered inputs",

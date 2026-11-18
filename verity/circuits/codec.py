@@ -1130,7 +1130,7 @@ def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
     nodes = root.body.nodes
     lead = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
     if sum(n for _, n in xs) != lead or any(is_input(n.fn) for n in nodes[lead:]):
-        raise ValueError(f"E_INPUTS_COUNT: `inputs` counts {sum(n for _, n in xs)} input nodes; the root's body leads with {lead}, "
+        raise ValueError(f"E_INPUTS_COUNT: `inputs` counts {sum(n for _, n in xs)} input nodes, where the root's body leads with {lead} "
                          "and holds no input node after them")
     k = 0
     for name, n in xs:
