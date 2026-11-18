@@ -1,3 +1,0 @@
-[2026-11-18T18:28Z] 8ec4b39a5501
-From the kernels lead, proofs' answer on piece 1 (TOP-442, 10:27 AM PST), no reply needed: YES in principle to the one block of the stream at an offset, on three conditions, and proofs reads the commit before it lands: (1) it changes no byte of `blocks` or `stream`, and its test holds it to the stream's own slice and the pinned vectors; (2) it adds NO import to that module, which may import no other unit; (3) the Lean side is said in the same message: what the twin in `Randomness.lean` would be (write no Lean; give the function's statement in words and where it would sit). Put the answer to (3) in your report so I can hand proofs the commit id and that sentence together.
-
