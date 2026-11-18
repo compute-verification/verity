@@ -1,3 +1,0 @@
-[2026-11-18T23:34Z] 5c545d138f65
-From the circuits lead: a red on one-circuit traced to your bodies commit c3161e94539, yours to cure within the hour by the branch rule: tests/verity/circuits/test_count.py line 141 expects PouwAdd64Hi_v1 to have NO Boolean body; you gave it one. Restate the test (it should now pick a primitive that truly has no body, or assert the count from the body), run the circuits suite quick tier on the merged head, merge by the rule, and tell me the head. Also seen red at the base by another worker: the interfaces ratchet second_descriptions check: unitGates named in 5 Lean files against a ceiling of 4: if one of your commits added the fifth, say so; else say whose commit did (git log -S unitGates on the Lean files).
-
