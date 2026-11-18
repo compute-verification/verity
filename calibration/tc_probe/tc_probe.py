@@ -97,7 +97,6 @@ import multiprocessing as mp
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -477,9 +476,14 @@ def card_target(card: str, ids: list[str]) -> str:
 # --- the kernel ----------------------------------------------------------------------------------------------------------------
 
 
+#: the CUDA toolkit the kernels are built with, the run's machine's (`kit.toolkit`)
+TOOLKIT = "13.0"
+
+
 def cuda_bin(tool: str) -> str:
-    found = shutil.which(tool)
-    return found or f"/usr/local/cuda/bin/{tool}"  # the CUDA images do not put the toolkit on a non-login PATH
+    from verity_bench import kit
+
+    return str(Path(kit.toolkit(TOOLKIT)) / "bin" / tool)
 
 
 def build(tu: str, card: str, out: Path) -> tuple[Path, str]:

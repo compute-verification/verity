@@ -255,7 +255,7 @@ def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypa
         ran.append((self.W, self.config_run))
         return 0
     monkeypatch.setattr(TpRow, "run", run)
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], {})
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], {"CUDA_HOME": "/a/toolkit"})
     assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
 
 

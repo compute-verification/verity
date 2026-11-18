@@ -14,7 +14,6 @@ import pytest
 from tests.pipeline import tokenizers_stand_in
 from verity_vllm.config import (
     ROOT,
-    TARGETS,
     VLLM,
     WORKLOAD_SCHEMA,
     WORKLOADS,
@@ -26,6 +25,7 @@ from verity_vllm.config import (
     row_file,
     row_path,
     row_target,
+    target_tokens,
     row_world,
     stored_workloads,
     workload_files,
@@ -480,7 +480,7 @@ def test_a_target_serving_the_int8_attention_states_why_its_backend_is_custom(tm
     assert "reasons" not in linears["engine"] and "attention_backend" not in linears["engine"]["args"]
 
 
-@pytest.mark.parametrize("target", sorted(TARGETS))
+@pytest.mark.parametrize("target", target_tokens())
 def test_a_tp_workload_states_disable_custom_all_reduce_for_every_target(tmp_path, target):
     args = _generate(tmp_path, f"x__bf16__{target}__tp2__b1__i256__o32__mixed__greedy__bi-eager")["engine"]["args"]
     assert args["disable_custom_all_reduce"] is (target in P2P_SYS_TARGETS)

@@ -11,9 +11,9 @@ first `of` of a process.  It declares the ``POUW_`` variables these directories 
 distribution's other directories read too.
 
 The Pearl-C runners and the SASS gate (`STANDALONE`) run outside the tree with stdlib alone: a runner beside its cubin on the
-card, or loaded by path from a kernel directory (the vLLM integration's ``pearl_c``), the gate and ieee_pin.py copied beside a
-build.  So they read the environment themselves; each name they read is declared here, and ``tests/test_settings.py`` holds
-their reads to these declarations.
+card, or loaded by path from a kernel directory (the vLLM integration's ``pearl_c``), the gate copied beside a build.  So
+they read the environment themselves; each name they read is declared here, and ``tests/test_settings.py`` holds their
+reads to these declarations.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
               "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
 
 
 def places(raw: str) -> frozenset[str]:

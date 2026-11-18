@@ -332,7 +332,6 @@ def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
-    arch = args.arch or "sm_120a"
     collect_dir = Path(os.path.expandvars(args.collect)) if getattr(args, "collect", None) else None
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
@@ -383,6 +382,7 @@ def main(args: argparse.Namespace) -> int:
         so = Path(os.path.expandvars(args.prebuilt)) if args.prebuilt else None
         chunk = json.loads((collect_dir / "probe_results.json").read_text())
         identity = dict(chunk.get("identity") or {})
+        arch = identity.get("arch")
         results["collected_from"] = {"dir": str(collect_dir), "probe_results_sha256": sha256(collect_dir / "probe_results.json"),
                                      "dumps_sha256": sha256(collect_dir / "dumps.npz"), "kept": "chunk/"}
         (out / "chunk").mkdir(exist_ok=True)
@@ -404,14 +404,15 @@ def main(args: argparse.Namespace) -> int:
             failures.append(f"the chunk loaded {(chunk.get('library') or {}).get('sha256')}, not {so} ({sha256(so)})")
         results["expect_uuid"] = chunk.get("expect_uuid")
     elif args.fake_silicon:
-        so, nvcc, dev = None, "not built (fake silicon)", FakeLow7(args.fake_silicon)
+        so, nvcc, arch, dev = None, "not built (fake silicon)", None, FakeLow7(args.fake_silicon)
         identity = dev.identity()
     else:
+        card, arch = P.target(args.card, P.SOURCE[ROW])
         if args.prebuilt:
             so = Path(os.path.expandvars(args.prebuilt))
             nvcc = f"prebuilt {so.name} sha256 {sha256(so)}"
         else:
-            so, nvcc = P.build(arch, out, P.SOURCE[ROW])
+            so, nvcc = P.build(card, out, P.SOURCE[ROW])
         dev = P.Probe(so)
         identity = dev.identity()
     identity.update(nvcc=nvcc, arch=arch)

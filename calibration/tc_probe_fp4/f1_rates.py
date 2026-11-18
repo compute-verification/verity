@@ -4,7 +4,7 @@ The FP4-tile model claims that no sm_120 instruction multiplies faster than the 
 tile per nonzero product.  This tool measures that claim over every ``mma.sync`` / ``mma.sp::ordered_metadata`` kind, shape,
 type and sparsity ptxas accepts for sm_120a, and over the CUDA-core multipliers, each in the same process as dense NVFP4:
 
-    python calibration/tc_probe_fp4/f1_rates.py build --out DIR                  # ptxas acceptance of every form + the timed .so + SASS gates
+    python calibration/tc_probe_fp4/f1_rates.py build --card NAME --out DIR      # ptxas acceptance of every form + the timed .so + SASS gates
     python calibration/tc_probe_fp4/f1_rates.py run --build DIR --family fp4 --out DIR2 --expect-uuid GPU-... --locked-mhz 2100
     python calibration/tc_probe_fp4/f1_rates.py scan-libs --out DIR [--libs a.so,b.so]   # every sm_120 opcode in NVIDIA's libraries
     python calibration/tc_probe_fp4/f1_rates.py collect --build DIR --runs D1,D2,... [--libscan DIR] --out DIR3   # the price table
@@ -62,7 +62,6 @@ import probe as P  # noqa: E402
 # verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
-ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f1-rates-sm120/v1"
 NSETS, NACC = 4, 8
 BODY = NSETS * NACC
@@ -616,11 +615,11 @@ def _flags_ok(flags: list[str]) -> bool:
     return not any(re.search(r"ftz|fast-math|fast_math", x, re.I) for x in flags)
 
 
-def accept_one(name: str, work: Path) -> dict:
+def accept_one(name: str, work: Path, card: str) -> dict:
     """ptxas acceptance of one form alone, and its timed loop's opcode histogram."""
     src, cubin = work / f"{name}.cu", work / f"{name}.cubin"
     src.write_text(PRELUDE + kernel_source(BY_NAME[name]))
-    cmd = [_nvcc(), *NVCC_FLAGS, *P.arch_flags(ARCH), "-cubin", "-o", str(cubin), str(src)]
+    cmd = [_nvcc(), *NVCC_FLAGS, *P.card_flags(card), "-cubin", "-o", str(cubin), str(src)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     rec = {"accepted": r.returncode == 0}
     if r.returncode != 0:
@@ -729,28 +728,29 @@ def form_gate(form: Form | SimtMultiplier, hist: dict, calls: list | None = None
     return {"ok": got == want, "expected_opcode": form.opcode, "expected": want, "got": got, "loop_opcodes": hist}
 
 
-def build(out: Path, names: list[str] | None = None, jobs: int = 8) -> dict:
+def build(out: Path, card: str, names: list[str] | None = None, jobs: int = 8) -> dict:
     """Acceptance of every form, then the library of the accepted ones, its SASS gate and its FTZ scan; writes build.json."""
     if not _flags_ok(NVCC_FLAGS):
         raise SystemExit("refused: an -ftz / fast-math flag in NVCC_FLAGS")
+    card, arch = P.target(card, "f1_rates.py")
     out.mkdir(parents=True, exist_ok=True)
     work = out / "accept"
     work.mkdir(exist_ok=True)
     names = names or [f.name for f in FORMS]
     with cf.ThreadPoolExecutor(jobs) as ex:
-        accept = dict(zip(names, ex.map(lambda n: accept_one(n, work), names)))
+        accept = dict(zip(names, ex.map(lambda n: accept_one(n, work, card), names)))
     ok_names = [n for n in names if accept[n]["accepted"]]
     src = out / "f1_rates_gen.cu"
     src.write_text(library_source(ok_names))
-    so = out / f"libf1_rates_{ARCH}.so"
-    cmd = [_nvcc(), *NVCC_FLAGS, *P.arch_flags(ARCH), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(src)]
+    so = out / f"libf1_rates_{arch}.so"
+    cmd = [_nvcc(), *NVCC_FLAGS, *P.card_flags(card), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(src)]
     subprocess.run(cmd, check=True)
     nvcc = subprocess.run([_nvcc(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     sass = subprocess.run([_cuobjdump(), "-sass", str(so)], capture_output=True, text=True, check=True).stdout
     loops, calls = loops_of(sass), calls_of(sass)
     gates = {n: form_gate(BY_NAME[n], loops.get(f"f1_{n}", {}), calls.get(f"f1_{n}")) for n in ok_names}
     ftz = sorted(set(m.group(0) for m in FTZ_RE.finditer(sass)))
-    rec = {"schema": SCHEMA + "/build", "arch": ARCH, "nvcc": " / ".join(x.strip() for x in nvcc), "nvcc_flags": NVCC_FLAGS,
+    rec = {"schema": SCHEMA + "/build", "card": card, "arch": arch, "nvcc": " / ".join(x.strip() for x in nvcc), "nvcc_flags": NVCC_FLAGS,
            "kernels": ok_names, "so": so.name, "so_sha256": hashlib.sha256(so.read_bytes()).hexdigest(),
            "source_sha256": hashlib.sha256(src.read_bytes()).hexdigest(), "accept": accept, "gate": gates, "ftz_fp32": ftz,
            "ok": (not ftz) and all(g["ok"] for g in gates.values()),
@@ -1177,11 +1177,9 @@ def finish(out: Path, rec: dict, failures: list[str], args: argparse.Namespace, 
 
 # -------------------------------------------------------------------------------------------------------------------- scan-libs
 
-#: node 2's CUDA 13.0 libraries, and DCGM's newer cuBLASLt and its cuSPARSELt (NVIDIA's sparse FP4 / FP8 GEMMs)
-DEFAULT_LIBS = ("/usr/local/cuda/lib64/libcublasLt.so", "/usr/local/cuda/lib64/libcublas.so", "/usr/local/cuda/lib64/libcusparse.so",
-                "/usr/local/cuda/lib64/libcufft.so", "/usr/local/cuda/lib64/libcusolver.so",
-                "/usr/libexec/datacenter-gpu-manager-4/cuda13/lib/libcublasLt.so.13.4.0.1",
-                "/usr/libexec/datacenter-gpu-manager-4/cuda13/lib/libcusparseLt.so.0.9.1.1")
+#: the libraries of the toolkit (`probe.TOOLKIT`, the run's machine's) `scan-libs` reads unless ``--libs`` names others, such as
+#: DCGM's newer cuBLASLt and its cuSPARSELt (NVIDIA's sparse FP4 / FP8 GEMMs)
+TOOLKIT_LIBS = ("libcublasLt.so", "libcublas.so", "libcusparse.so", "libcufft.so", "libcusolver.so")
 OPCODE_LINE = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)")
 
 
@@ -1220,7 +1218,7 @@ def scan_lib(path: str, arch: str = "sm_120", timeout_s: float = 1200.0) -> dict
 def scan_libs(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
-    libs = [x for x in (args.libs.split(",") if args.libs else DEFAULT_LIBS) if x]
+    libs = [x for x in (args.libs.split(",") if args.libs else (str(Path(P.nvcc_bin()).parents[1] / "lib64" / n) for n in TOOLKIT_LIBS)) if x]
     with cf.ThreadPoolExecutor(min(len(libs), args.jobs)) as ex:
         recs = list(ex.map(lambda p: scan_lib(p, timeout_s=args.timeout_s), libs))
     seen: dict = {}
@@ -1354,7 +1352,7 @@ def collect(args: argparse.Namespace) -> int:
 def build_cmd(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     names = [x for x in args.forms.split(",") if x] if args.forms else None
-    rec = build(out, names, args.jobs)
+    rec = build(out, args.card, names, args.jobs)
     print(f"F1 BUILD {'ok' if rec['ok'] else 'FAILED'}: {len(rec['kernels'])} accepted, {len(rec['refused'])} refused by ptxas, "
           f"FTZ {rec['ftz_fp32'] or 'none'}", flush=True)
     for n, g in rec["gate"].items():
@@ -1366,7 +1364,7 @@ def build_cmd(args: argparse.Namespace) -> int:
         print(f"  refused {n}: {(m or [''])[0][:140]}")
     res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "label": "Measured (ptxas acceptance and SASS of each form; no device)",
-           "method": "each F1 form compiled alone for sm_120a, then the accepted forms as one library; loop opcode histograms from cuobjdump",
+           "method": f"each F1 form compiled alone for {rec['arch']}, then the accepted forms as one library; loop opcode histograms from cuobjdump",
            "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "build", "so_sha256": rec["so_sha256"],
                                     "source_sha256": rec["source_sha256"], "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if rec["ok"] else "failed", "checker": "SASS per timed loop; no FADD/FFMA/FMUL .FTZ in the library",
@@ -1383,6 +1381,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
+    b.add_argument("--card", required=True, help="the card to build for, as nvidia-smi names it (a build needs no device)")
     b.add_argument("--out", required=True)
     b.add_argument("--forms", default=None, help="comma list (default: every form)")
     b.add_argument("--jobs", type=int, default=8)
