@@ -34,8 +34,8 @@ closes a window once its steps have committed that many
 bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
 sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
 yet absorbed); a request may still span windows. ``disk`` (`serve_guard.DiskFloor`) refuses the seal of a window that would take the
-filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies the records
-into the run's ``$OUT`` after each close and each seal.
+filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies into the
+run's ``$OUT``, after each close and each seal, the fields `PUBLIC` names of the records it lists, and nothing else.
 
 With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
 also commits the step rows the window ran
@@ -51,7 +51,6 @@ from __future__ import annotations
 import functools
 import json
 import os
-import shutil
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -98,19 +97,72 @@ def user_of(body: Any) -> str | None:
 #: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
-#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
-#: traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the serve dir with
-#: the served rows' salts, and what reads them runs there
-MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
+#: the kinds of field that may leave the node (AGENTS.md's public kinds): protocol structure, the protocol's outputs, the
+#: verifier's coins and draws, and hiding commitments
+KINDS = ("structure", "output", "coin", "commitment")
+
+#: `TargetProfile.to_json`'s fields but ``card`` (a file's name)
+_TARGET = {k: "structure" for k in (
+    "compute_capability", "num_sms", "batch_invariant", "attention_backend", "vllm_revision", "numerics_profile",
+    "flash_attn_version", "compilation", "fp8_block_gemm", "int8_exact", "moe_backend", "async_scheduling", "moe_construction",
+    "fa3_construction", "weight_only_calls", "sampler_construction", "fp8_scale_construction", "protocols", "ir",
+    "registered_values")}
+#: `served_statics`' names (`compile_slice.statics`)
+_STATICS = {k: "structure" for k in (
+    "R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW", "Q", "D", "P", "K", "CN", "CTW",
+    "CU", "G")}
+
+#: Every field of the serve dir's records that may leave it for the run's ``$OUT`` (`Mirror`), by file, each with its kind
+#: (`KINDS`); a mapping names a record's nested fields. A field not named, and a file not here, stays in the serve dir: the
+#: requests and their users, counts, sizes, timings, paths, hosts, error text and whole dumped dictionaries among them.
+#: ``seed_coin`` (flipped in-process by every stored run) and ``binding_map_digest`` (unsalted) stay out until soundness
+#: rules on them. ``served_rows``' G and n_bits are the statics' (a row is G = P steps, each step's bits at R, W and A,
+#: idle steps zero), not the window's.
+PUBLIC: dict[str, dict[str, Any]] = {
+    "serve.json": {"precision": "structure", "protocol": "structure", "default_seed": "structure", "scheme": "structure",
+                   "window_steps": "structure", "window_requests": "structure", "window_gb": "structure",
+                   "served_rows_statics": _STATICS, "seal_off_loop": "structure", "seal_hold_gb": "structure",
+                   "target": _TARGET, "model": "structure", "revision": "structure", "weights": {"root": "commitment"}},
+    "windows.jsonl": {"window": "structure", "run_id": "structure", "run_root": "commitment", "step_roots": "commitment",
+                      "served_rows": {"binding": "commitment", "root": "commitment", "G": "structure", "n_bits": "structure"},
+                      "passed": "output"},
+    "seals.jsonl": {"window": "structure", "run_id": "structure", "run_root": "commitment", "commit_scheme": "structure"},
+}
+
+#: the records mirrored into the run's $OUT, each as `PUBLIC` projects it
+MIRRORED = tuple(PUBLIC)
+
+_SCALARS = (str, int, float, bool, type(None))
+_DROP = object()
+
+
+def project(value: Any, spec: Any) -> Any:
+    """``value`` as `PUBLIC`'s ``spec`` lets it leave: under a kind, a JSON scalar or a list of them, anything else dropped;
+    under a mapping of names, those fields of a mapping (or of each mapping in a list), each projected in turn."""
+    if isinstance(spec, str):
+        if isinstance(value, _SCALARS) or (isinstance(value, list) and all(isinstance(x, _SCALARS) for x in value)):
+            return value
+        return _DROP
+    if isinstance(value, list):
+        got = [project(x, spec) for x in value]
+        return [x for x in got if x is not _DROP]
+    if not isinstance(value, Mapping):
+        return _DROP
+    got = {k: project(value[k], s) for k, s in spec.items() if k in value}
+    return {k: v for k, v in got.items() if v is not _DROP}
 
 
 class Mirror:
-    """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
+    """The serve dir's records (`MIRRORED`), each record projected through `PUBLIC`, written into ``dst`` (the run's ``$OUT``,
+    which custody uploads), so their public fields outlive the serve dir: a JSON-lines file up to its last whole line, appended
+    from where the last call read; any other file whole. A line that isn't a JSON object is left out (``errors``). Any thread."""
 
     def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
+        if unlisted := [n for n in names if n not in PUBLIC]:
+            raise ValueError(f"{unlisted}: a record mirrors only as PUBLIC projects it, and PUBLIC lists none of its fields")
         self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
         self.errors: list[str] = []
+        self._read: dict[str, int] = {}
         self._lock = threading.Lock()
 
     def __call__(self) -> None:
@@ -118,29 +170,42 @@ class Mirror:
             self.dst.mkdir(parents=True, exist_ok=True)
             for name in self.names:
                 try:
-                    self._one(self.src / name, self.dst / name)
+                    self._one(name)
                 except OSError as e:
                     self.errors.append(f"{name}: {type(e).__name__}: {e}"[:300])
 
-    @staticmethod
-    def _one(s: Path, d: Path) -> None:
+    def _record(self, name: str, raw: bytes) -> bytes | None:
+        try:
+            rec = json.loads(raw)
+        except ValueError:
+            rec = None
+        if not isinstance(rec, Mapping):
+            self.errors.append(f"{name}: a record that isn't a JSON object, left out")
+            return None
+        return json.dumps(project(rec, PUBLIC[name])).encode()
+
+    def _one(self, name: str) -> None:
+        s, d = self.src / name, self.dst / name
         if not s.is_file():
             return
         if s.suffix != ".jsonl":
-            part = d.with_name(d.name + ".part")
-            shutil.copyfile(s, part)
-            os.replace(part, d)
+            if (got := self._record(name, s.read_bytes())) is not None:
+                part = d.with_name(d.name + ".part")
+                part.write_bytes(got + b"\n")
+                os.replace(part, d)
             return
-        have = d.stat().st_size if d.is_file() else 0
+        have = self._read.get(name, 0)
         with open(s, "rb") as f:
             size = os.fstat(f.fileno()).st_size
-            have = have if have <= size else 0          # the serve dir's file is not the one copied so far: copy it again whole
+            have = have if have <= size else 0          # the serve dir's file is not the one read so far: project it again whole
             f.seek(have)
             data = f.read(size - have)
         data = data[:data.rfind(b"\n") + 1]
+        lines = [got for x in data.splitlines() if x.strip() and (got := self._record(name, x)) is not None]
         if data or not have:
             with open(d, "ab" if have else "wb") as g:
-                g.write(data)
+                g.write(b"".join(x + b"\n" for x in lines))
+        self._read[name] = have + len(data)
 
 
 def records_mirror(out: Path, dst: str | None) -> Mirror | None:

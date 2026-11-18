@@ -180,5 +180,5 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
     assert w._extras_of(com, SimpleNamespace(weight_registration={"root": "ab"})) == ("tree", ["bytes"]) and len(calls) == 1
 
 
-def test_the_sessions_record_is_mirrored_and_its_memory_map_is_not():
-    assert "remote_session.json" in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED
+def test_neither_the_sessions_record_nor_its_memory_map_is_mirrored():
+    assert "remote_session.json" not in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED
