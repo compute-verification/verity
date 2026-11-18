@@ -450,7 +450,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
     ('verity_vllm.definitions.registry.lifted', '_LIFTED_COMPOSITES'),
     ('verity_vllm.definitions.registry.lifted', '_UNLIFTED_OF'),
-    ('verity_vllm.definitions.registry.prims', '_silu_f32_bits'),
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),

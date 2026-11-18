@@ -14,8 +14,6 @@ software 0x7FC0. `MufuTanh` (the FA2 softcap's `tanh.approx.f32`) stays a primit
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
 from verity.circuits.defs import Coll, bind, composite, primitive
 from verity.circuits.refs import (
@@ -29,6 +27,9 @@ from verity.circuits.refs import (
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.types import Array, Tuple, Value
 
+from verity.circuits.ops.fp32 import GELU_BETA_BITS as BETA_BITS, GELU_HALF_BITS as HALF_BITS, GELU_KAPPA_BITS as KAPPA_BITS
+from verity.circuits.ops.fp32 import GELU_ONE_BITS as ONE_BITS, bf16_gelu_tanh_bits as gelu_tanh_bf16_bits
+from verity.circuits.ops.fp32 import f32_tanh_bits as tanh_f32_bits
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import (
     ZERO16,
@@ -334,20 +335,6 @@ def Bf16DivScalar(B, S, x, inv=None):
 
 
 
-def tanh_f32_bits(x: int) -> int:
-    c, v = P._decode(x)
-    if c == 2:
-        return P.F32_NAN
-    if c == 1:
-        return 0x3F800000
-    if c == -1:
-        return 0xBF800000
-    if v == 0:
-        return x & 0x80000000
-    f = float(v)
-    if abs(f) >= 10.0:
-        return 0x3F800000 if f > 0 else 0xBF800000
-    return P.bits_of(math.tanh(f))
 
 
 @primitive("TanhF32Rn", 1, [("x", F32)], F32,
@@ -429,21 +416,6 @@ GELU_TANH_MUL_SASS = """
     FMUL R3, R16, R3 ; F2FP.BF16.F32.PACK_AB R0, RZ, R3 ; STG.E.U16                                   ; bf16((y+0)*act)
 """
 
-BETA_BITS = 0x3F4C422A       # f32(M_SQRT2 * M_2_SQRTPI * 0.5)
-KAPPA_BITS = 0x3D372713      # f32(0.044715)
-HALF_BITS = 0x3F000000
-ONE_BITS = 0x3F800000
-
-
-def gelu_tanh_bf16_bits(g: int) -> int:
-    """`(T)gelu_tanh_kernel((float)g)`: the activation word before the multiply."""
-    f = P.bf16_to_f32_bits(g)
-    x2 = P.f32_mul_bits(f, f)
-    x3 = P.f32_mul_bits(x2, f)
-    inner = P.f32_mul_bits(BETA_BITS, P.f32_fma_bits(KAPPA_BITS, x3, f))
-    t = tanh_f32_bits(inner)
-    act = P.f32_mul_bits(P.f32_mul_bits(HALF_BITS, f), P.f32_add_bits(ONE_BITS, t))
-    return P.f32_to_bf16_rn_bits(act, P.BF16_NAN_F2FP)
 
 
 ZERO_BITS = 0x00000000
