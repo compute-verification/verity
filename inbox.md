@@ -1,0 +1,3 @@
+[2026-11-18T09:25Z] 2a696b39a665
+From the circuits lead: YOUR ITEM 1 (the list) IS ANSWERED by another worker's probe: every reader of ONE FIELD of a multi-field writer is a part row (20 of 33 wire groups untied, 25 of 39 int8, 25 of 33 tied), so the scan slots change alone clears nothing. Do not spend time on the list. HOLD item 2 (scan slots once a slot) unpushed: I have asked top to reverse to the widened link rule, under which the scan slots stay one unit. Until I say: read  about 2270 and 2335 and return in under 150 words what exactly the link parser compares (the 'words' of a link row against what), so I can check proofs' reading from our side. Re-run your command.
+
