@@ -1568,6 +1568,24 @@ def coin_of_empty_slot(r: Run) -> None:
     honest_refresh(r)
 
 
+def opening_input(r: Run, t: int, k: int, slots: dict[int, int] | None = None) -> dict:
+    """`openingFn`'s input: sample k of window t of `r`'s session, closed, with its honest opening, under the session's
+    appends as `AuditRun` holds them, each append's slot σ named `slots[σ]` where `slots` has it."""
+    s, slots = r.s, slots or {}
+    w = s.windows[t]
+    i, p = w.draws[k]
+    previous = s.windows[t - 1].roots[-1] if t > 0 else s.registration.digest
+    return {"registration": registration_json(r.store.registration),
+            "appends": [{"first": first, "count": c.count, "root": c.root.hex(), "coin": coin.hex(),
+                         "origin": origin_json(o), "slot": slots.get(σ, σ)}
+                        for (first, _, c, coin), o, σ in zip(s._appends, s._origins, s._slots)],
+            "window": {"index": t, "challenge": w.challenge.hex(), "previous": previous.hex(),
+                       "passes": [{"root": root.hex(), "runs": [list(x) for x in plan.runs],
+                                   "head": None if head is None else head.hex()}
+                                  for root, plan, head in zip(w.roots, w.plans, w.heads)]},
+            "i": i, "p": p, "opening": opening_json(r.openings(t)[k])}
+
+
 def on_rekey(o: audit.Opening) -> bool:
     return o.origin_position is not None
 

@@ -385,3 +385,28 @@ def test_an_empty_slots_coin_is_never_released_and_a_later_append_takes_its_own_
     kind, lean = D.replay(PORT, copy.deepcopy(case), server)
     assert kind == "output" and json.loads(lean)["outcome"] == outcome == M.REFRESH_SCENARIOS[name][3]
 
+
+def test_a_rekeys_block_whose_origin_slot_holds_no_append_is_refused_origin_by_both(server) -> None:
+    """Window 2's opening of a block of K1, slot 0's re-key, checks on both sides; with slot 0's fresh append named in
+    the empty slot 2, K1's origin slot holds no append, and both refuse `origin`: neither opens the block under K1's own
+    root."""
+    r = M.Run(M.World(), **M.REFRESH)
+    M._refresh_to(r, 5)
+    r.boundary()
+    for t in range(3):
+        assert isinstance(r.close(t), tuple)
+    k1 = next(n for n, o in enumerate(r.s._origins) if o == ("append", 0))
+    first, count = r.s._appends[k1][0], r.s._appends[k1][2].count
+    w = r.s.windows[2]
+    k = next(k for k, (i, p) in enumerate(w.draws) if first <= w.plans[i].block(p) < first + count)
+    i, p = w.draws[k]
+    o, key = r.openings(2)[k], r.s.registration.key
+
+    def both(slots: dict[int, int]) -> tuple:
+        kind, text = server.call("opening", M.opening_input(r, 2, k, slots))
+        assert kind == "output", text
+        return r.s._check(2, i, p, o, key, {}), json.loads(text)
+
+    assert both({}) == (None, None)
+    r.s._slotted[2] = r.s._slotted.pop(0)
+    assert both({0: 2}) == ("origin", "origin")

@@ -13,8 +13,10 @@ prover's openings of them, in the order sampled. Each opening, in `_check`'s ord
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
    path sibling not 64 bytes, or a payload digest `d_j` present for a registered block or absent for an appended one;
-   an origin position present for a block not of a re-key append, absent for one, or not its origin's leaf (`originLeaf`);
-   or receipts not the size of the position's leaf;
+   `origin` for a block of a re-key append whose origin slot holds no append, so it has no origin leaf (only a fresh
+   append's block opens under its own append's root); then `malformed` for an origin position present for a block not
+   of a re-key append, absent for one, or not its origin's leaf (`originLeaf`), or receipts not the size of the
+   position's leaf;
 2. `receipt-path`: the leaf, under its salt and path, not that leaf of the pass's receipt tree (bound to the pass's seed
    and plan) under the pass's root;
 3. `codec`: the block not canonical, or its decoding under the seed's key (a registered block) or under the bound key
@@ -249,6 +251,7 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
   let j := pr.plan.block p
   if o.digest.size ≠ (if j < N then 0 else DIGEST_BYTES) then return some .malformed
   let origin := if j < N then none else (appendOf appends j).bind (originLeaf reg digest appends · j)
+  if origin.isNone && j ≥ N && (appendOf appends j).any (·.origin != .fresh) then return some .origin
   if o.originPosition != origin.map (·.1) then return some .malformed
   let s := w.seedOf i
   let some y := leafReceipt o.leaf p pr.plan.length | return some .malformed

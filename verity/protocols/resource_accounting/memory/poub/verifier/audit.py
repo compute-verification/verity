@@ -1333,6 +1333,8 @@ class AuditRun:
         j = plan.block(p)
         if type(o.digest) is not bytes or len(o.digest) != (0 if j < N else DIGEST_BYTES):
             return "malformed"
+        if not self._origin_held(j):
+            return "origin"
         domain, commitment, coin, origin = self._committed(j)
         if (o.origin_position is not None and type(o.origin_position) is not int) or o.origin_position != origin:
             return "malformed"
@@ -1376,6 +1378,14 @@ class AuditRun:
             out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
                                       w.roots[i], domain, commitment, coin, origin))
         return tuple(out)
+
+    def _origin_held(self, j: int) -> bool:
+        """Whether block j's origin is held: false only for a block of a re-key whose origin slot holds no append, which
+        has no origin leaf and never opens under its own append's root (`Poub.checkOpening`)."""
+        if j < self.params.blocks:
+            return True
+        o = self._origins[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
+        return o is None or o[0] == "registered" or o[1] in self._slotted
 
     def _committed(self, j: int) -> tuple[CommitmentDomain, Commitment, bytes | None, int | None]:
         """Block j's payload's commitment, its append's coin (None registered), and for a block of a re-key its
