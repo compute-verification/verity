@@ -310,7 +310,8 @@ def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_p
             "summary.json": {"rounds": {f"{r}-0": {"audit": {"why": "x"}} for r in ("tampered", "chain")}},
             "joint/program.json": {"templates": []}, "tampered-0/registration.json": reg,
             "chain-0/registration.json": reg, "honest-0/verifier/program.json": {"units": 3},
-            "honest-0/verifier/registration.json": reg})
+            "honest-0/verifier/registration.json": reg, "honest-0/session-start/prove.log": "LIVE\t{}\n",
+            "honest-0/session-start/lean-verify.log": "inputs: 1 ms\n", "honest-0/session-start/sessions/s.json": {}})
     stub = tmp_path / "scan_zk_stub.sh"
     stub.write_text(LOG + 'W=$INNER/$(basename "$RESEARCH_RUN_DIR") OUT=$RESEARCH_RUN_DIR/out PY=$REAL_PY rc=0\n'
                     'mkdir -p "$OUT"\n' + block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  SC_WARDEN_RUN")
@@ -345,6 +346,8 @@ def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_p
                   "sczk/joint/program.json"])) for f in fs)
     assert not [p for p in opened if p.is_relative_to(out)]
     keep = w / "keep"
+    assert sorted(p.relative_to(keep).as_posix() for p in keep.rglob("*.log")) == [   # benchmarks/scan_cost's stages
+        f"{r}/sczk/honest-0/session-start/{f}" for r in ("honest", "late") for f in ("lean-verify.log", "prove.log")]
     assert {oct(p.stat().st_mode & 0o777) for p in keep.rglob("*") if p.is_file()} == {"0o600"}
     assert {oct(p.stat().st_mode & 0o777) for p in [keep / "honest", *keep.rglob("*")] if p.is_dir()} == {"0o700"}
     for run_ in ("honest", "late"):

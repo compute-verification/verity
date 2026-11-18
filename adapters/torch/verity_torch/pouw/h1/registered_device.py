@@ -1,7 +1,7 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
 frame-v3-sha512 tree, computed by `verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
-rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
-under the domain id the host computes (`registered_value.domain`).
+rows' words, under the salts the caller hands in (its fresh bytes, 192 a row, copied to the device and read there as
+data) or a public table's, derived on the device, under the domain id the host computes (`registered_value.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
@@ -61,7 +61,7 @@ ZY_SEGS = 8
 HM_KEY = hm96.SHA512.default_key
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
-#: rows a value may have: row j's salt is ChaCha20 blocks 3j .. 3j + 2 under a 32-bit low counter word
+#: rows a value may have, the kernels' bound
 MAX_ROWS = (1 << 32) // 3
 #: a public salt head's words (`registered_rows.cuh`'s ``PUB_WORDS``)
 PUB_WORDS = 40
@@ -74,9 +74,9 @@ class Table(ctypes.Structure):
                 ("did", ctypes.c_uint64 * 8)]
 
 
-def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_id: bytes) -> Table:
-    """The layout of a value of ``n`` rows of ``row_bytes`` bytes under ``domain_id``, its salts given (``salted``) or
-    ChaCha20's under the 32-byte ``key`` at the u64 ``nonce``; the rows' and salts' addresses zero until bound."""
+def table(n: int, row_bytes: int, domain_id: bytes) -> Table:
+    """The layout of a value of ``n`` rows of ``row_bytes`` bytes under ``domain_id``, its salts given or public; the rows'
+    and salts' addresses zero until bound, and every launch binds the salts'."""
     if not 0 < n <= MAX_ROWS or row_bytes < 1 or len(domain_id) != 64:
         raise ValueError(f"{n} rows of {row_bytes} bytes under a {len(domain_id)}-byte domain id: not 1 to {MAX_ROWS} rows "
                          "under a 64-byte id")
@@ -84,11 +84,6 @@ def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_i
     t.n, t.row_bytes = n, row_bytes
     t.W = 1 << max(0, (n - 1).bit_length())
     t.depth = t.W.bit_length() - 1
-    if not salted:
-        if len(key) != 32 or not 0 <= nonce < 1 << 64:
-            raise ValueError("ChaCha20's salts take a 32-byte key and a u64 nonce")
-        t.key[:] = np.frombuffer(key, "<u4").tolist()
-        t.nonce[:] = [0, nonce & 0xFFFFFFFF, nonce >> 32, 0]
     t.did[:] = np.frombuffer(domain_id, ">u8").tolist()
     return t
 
@@ -231,21 +226,10 @@ def _root(words: np.ndarray) -> bytes:
     return np.asarray(words).view(np.uint64).astype(">u8").tobytes()
 
 
-def _zy_salts(row_salts: bytes | None, also: tuple[bytes, Any], n: int) -> tuple[bytes, np.ndarray, np.ndarray]:
-    """``also``'s domain id, then the call table's and the value's salts as ``n`` x 192 bytes each. Each table's leaves
-    take that table's own fresh salts as data; a caller that hands a nonce where the call table's salts go, or no salts for
-    the value, still expects them derived from a key, which nothing does."""
+def _zy_salts(row_salts: bytes, also: tuple[bytes, bytes], n: int) -> tuple[bytes, np.ndarray, np.ndarray]:
+    """``also``'s domain id, then the call table's and the value's salts as ``n`` x 192 bytes each: each table's leaves
+    take that table's own fresh salts as data."""
     did, call_salts = also
-    data = isinstance(call_salts, (bytes, bytearray, memoryview))
-    if row_salts is None or not data:
-        raise NotImplementedError(
-            "also: a call's z table and its zy@<c> value are each committed under their own fresh salts, handed in as "
-            f"data: ``row_salts`` the value's and ``also`` (domain id, the call table's salts), each {192 * n} bytes "
-            "here, one verity.commitments.hm96.SHA512.fresh_salt() a record of a table. This caller handed "
-            f"{'no salts for the value' if row_salts is None else 'the value its salts'} and "
-            f"{'salts' if data else 'a ' + type(call_salts).__name__} for the call table: H1's prover still names a salt "
-            "key and nonces, and drawing and keeping its tables' salts is compute-accounting's switch of PoUW's prover "
-            "to fresh salts (its lines of ALLOWED in tests/test_no_keyed_salts.py)")
     return bytes(did), _salts(bytes(call_salts), n), _salts(bytes(row_salts), n)
 
 
@@ -257,7 +241,7 @@ def host_zy(words: np.ndarray, row_salts: bytes, domain_id: bytes, also: tuple[b
     rows = _rows(words)
     n, rb = rows.shape
     did, call_salts, reg_salts = _zy_salts(row_salts, also, n)
-    t = table(n, rb, b"", 0, True, domain_id)
+    t = table(n, rb, domain_id)
     a = zy_args(n, rb, did, domain_id)
     call, bcs, levels = (np.empty(k, np.uint64) for k in (8 * (2 * t.W - 1), 16 * n, 8 * (2 * t.W - 1)))
     rc = zy_host_lib().zy_commit_host(ctypes.byref(a), ctypes.byref(t), rows.ctypes.data, call_salts.ctypes.data,
@@ -291,15 +275,14 @@ def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Nodes, tuple[Node
     return Nodes(bcs.byteswap().view(np.uint8), 128), tuple(out)
 
 
-def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
-    """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
-    path's twin."""
+def host_commit(words: np.ndarray, row_salts: bytes, domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
+    """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 under ``row_salts`` by the kernels' functions on
+    the CPU: the device path's twin."""
     rows = _rows(words)
     n = rows.shape[0]
-    t = table(n, rows.shape[1], key, nonce, row_salts is not None, domain_id)
-    salts = None if row_salts is None else _salts(row_salts, n)
-    t.rows, t.salts = rows.ctypes.data, 0 if salts is None else salts.ctypes.data
+    t = table(n, rows.shape[1], domain_id)
+    salts = _salts(row_salts, n)
+    t.rows, t.salts = rows.ctypes.data, salts.ctypes.data
     bcs, levels = np.empty(16 * n, np.uint64), np.empty(8 * (2 * t.W - 1), np.uint64)
     rc = host_lib().rr_commit_host(ctypes.byref(t), RTD.hm_tables(), RTD.leaf_prefixes(), bcs, levels)
     if rc:
@@ -397,25 +380,24 @@ class Hashing:
         return _root(self._also.numpy())
 
 
-def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
-                  domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
+def device_commit(words: Any, row_salts: bytes, domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s strings and levels, waited for."""
-    return device_hash(words, key, nonce, row_salts, domain_id).result()
+    return device_hash(words, row_salts, domain_id).result()
 
 
-def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
+def device_hash(words: Any, row_salts: bytes | None, domain_id: bytes,
                 public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Hashing:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
     stream, nothing waiting on the host but a host ``words``' copy. ``words`` on the host are copied there; a u16 tensor
     on that device is read in place, after everything its current stream has enqueued (the stream that wrote it), and is
-    held until the hash is done. ``public`` ``(head, first, ok)``: the rows' salts are the public salts from position
+    held until the hash is done. ``row_salts``: the rows' salts, n x 192 bytes, copied to the device and read there as
+    data. ``public`` ``(head, first, ok)``: the rows' salts are the public salts from position
     ``first`` under ``head`` (`device_public_salts`'), derived on the stream where the hash reads them, ``row_salts``
     unread. ``also`` ``(domain id, salts)``: the same rows are a call's z table too (`pouw_h1_tables_device`'s
     ``hm96-sha512/row-seg/v1`` rows, under that table's own ``salts``, n x 192 bytes), committed from the same read of
     each row (`zy_commit.cu`), its root `Hashing.also`: rows on the device, of whole segments (`zy_fits`), 16-byte
     aligned, the value's leaves under ``row_salts`` (given, no ``public``); both tables' salts are the caller's fresh
-    bytes, copied to the device and read there as data, ``key`` and ``nonce`` unread (`_zy_salts` refuses a caller that
-    hands a nonce for them)."""
+    bytes, copied to the device and read there as data."""
     import torch
 
     d = _device(torch)
@@ -425,7 +407,9 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
         raise ValueError(f"words {tuple(words.shape)} of {words.dtype} on {words.device}: not (n, W) u16 on {dev}")
     rows = words.contiguous().view(torch.uint8) if held else _rows(words)
     n, rb = (int(v) for v in rows.shape)
-    t = table(n, rb, key, nonce, row_salts is not None or public is not None, domain_id)
+    if (row_salts is None) == (public is None):
+        raise ValueError("a value's salts are given (row_salts) or public, one of the two")
+    t = table(n, rb, domain_id)
     per = max(1, CHUNK_BYTES // rb)
     if also is not None and not (held and public is None and zy_fits(n, rb) and rows.data_ptr() % 16 == 0):
         raise ValueError(f"also: {n} rows of {rb} bytes ({'on the device' if held else 'on the host'}, "
@@ -443,8 +427,8 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
         if public is not None:
             salts = _public_salts(d, pub(public[0], public[1], n), public[2])
         else:
-            salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
-        t.salts = 0 if salts is None else salts.data_ptr()
+            salts = torch.from_numpy(_salts(row_salts, n)).to(dev)
+        t.salts = salts.data_ptr()
         bcs = torch.empty(16 * n, dtype=torch.int64, device=dev)
         levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, device=dev)
         chunks = []
