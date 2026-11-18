@@ -65,6 +65,7 @@ theorem runOf_some {P : Prog} {q : Part} {r : Nat × Nat × Nat} (h : runOf P q 
       · cases h
   | strided p i base inner os is count => cases h
   | explicit items => cases h
+  | grid run lanes => cases h
 
 /-- Where `removeAxis` strips an axis of a type, `axisDims` has that axis' length. -/
 theorem axisDims_of_removeAxis : ∀ (ax : Nat) (t : Ty) {n : Nat} {mt : Ty}, t.removeAxis ax = some (n, mt) →
@@ -119,6 +120,8 @@ def edgeOf (P : Prog) : Part → Bool
     ((P.defs[P.root]!).body.nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
   | .explicit it =>
     it.any fun r => !r.p && ((P.defs[P.root]!).body.nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
+  | .grid _ lanes =>
+    lanes.any fun l => !l.p && ((P.defs[P.root]!).body.nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
   | _ => false
 
 /-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
