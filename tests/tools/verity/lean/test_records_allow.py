@@ -180,8 +180,8 @@ def test_without_the_allowance_the_same_failure_fails_the_run(lane, tmp_path):
 def test_update_keeps_the_record_of_an_allowed_package_outside_record_and_says_where(lane, tmp_path, monkeypatch, hold):
     """`s` fails on a record difference and on an allowed failure. `--update` settles the difference and the allowed
     failure is the only one left, so the run regenerates the record it can and keeps it under `allowed-record/`, which the
-    records gate does not read; `record/` holds only its requirer's, whose only failure was a record difference, audited on
-    the record regenerated for `s`. A line says where each is."""
+    records gate does not read; `record/` holds only its requirer's, whose only failure was a record difference, updated
+    by the same check.py. A line says where each is."""
     root, run_dir, calls, standing, _ = lane
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
     for p, text in OLD.items():
@@ -190,7 +190,7 @@ def test_update_keeps_the_record_of_an_allowed_package_outside_record_and_says_w
     said = []
     assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append,
                             allow=["witnesses.unwitnessed-changed:G"]) == LC.ALLOWED_RC
-    assert calls == [(S, True), (P, False), (P, True)]
+    assert calls == [(S, True), (P, True)]
     out = run_dir / "lean-audit"
     kept = out / "allowed-record" / S / LC.LOCK
     assert kept.read_text() == BUILT[S]
@@ -229,9 +229,9 @@ def test_an_unrecorded_run_writes_no_record_of_an_allowed_package_into_the_check
     assert not (out / "record" / S / LC.LOCK).exists() and not (out / "record" / LC.LOCK).exists()
 
 
-def test_a_requirer_failing_on_record_differences_beside_an_allowed_failure_is_audited_again_with_update(lane, tmp_path):
-    """The requirer's first audit, without `--update`, fails on a record difference and on an allowed failure: it is
-    audited again with `--update`, which settles the difference, and ends `allowed` with its record outside `record/`.
+def test_a_requirer_with_a_record_difference_beside_an_allowed_failure_ends_allowed_under_update(lane, tmp_path):
+    """The requirer has a record difference and an allowed failure: its `--update` audit, in PKG's check.py, settles the
+    difference, and it ends `allowed` with its record outside `record/`.
     `s`, whose only failure was a record difference, is `regenerated` as ever, with its pass and its record in `record/`."""
     root, run_dir, calls, standing, _ = lane
     for p, text in OLD.items():
@@ -240,8 +240,7 @@ def test_a_requirer_failing_on_record_differences_beside_an_allowed_failure_is_a
     said = []
     assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append,
                             allow=["trees.reads:Proofs.Sampled"]) == LC.ALLOWED_RC
-    assert calls == [(S, True), (P, False), (P, True)]
-    assert any(f"{P} requires {S}" in s and "or one --allow names" in s for s in said)
+    assert calls == [(S, True), (P, True)]
     out = run_dir / "lean-audit"
     assert (out / "allowed-record" / P / LC.LOCK).read_text() == BUILT[P] and not (out / "record" / P).exists()
     assert (out / "record" / S / LC.LOCK).read_text() == BUILT[S] == (out / "record" / LC.LOCK).read_text()
@@ -472,10 +471,13 @@ def test_a_package_with_an_allowed_failure_in_a_prover_audited_beside_it_keeps_n
     assert not keys(root, S) & (set(doc["passes"]) | passes_kept()) and set(doc["passes"].values()) == {P}
 
 
-def test_a_package_another_audit_reports_an_allowed_failure_of_loses_its_pass_and_its_record_leaves_record(lane, tmp_path):
-    """`s` passes its own audit with a regenerated record, and its requirer's audit, which audits it beside, reports an
-    allowed failure of it: no pass of `s` is kept, and its record moves out of `record/`."""
+def test_a_package_another_audit_reports_an_allowed_failure_of_loses_its_pass_and_its_record_leaves_record(lane, tmp_path,
+                                                                                                           monkeypatch):
+    """`s` passes its own audit with a regenerated record, and its requirer's audit, in a check.py of its own (as packages
+    whose reports would share a directory's name have, `batches`), reports an allowed failure of it: no pass of `s` is
+    kept, and its record moves out of `record/`."""
     root, run_dir, _, _, beside = lane
+    monkeypatch.setattr(LC, "batches", lambda todo, update: [(update, [p]) for p in todo])
     (root / S / LC.LOCK).write_text(OLD[S])
     beside[P] = {S: [CHANGED]}
     said = []
