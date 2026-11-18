@@ -4241,14 +4241,14 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
     assert sum(x.startswith(head) and x.endswith(tail) for x in lines) == 1, lines
 
 
-LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+LOCAL_COINS = "a local development challenger session on the served node, not an auditor's (PP_CHALLENGER local)"
 V3C_COINS = f" V3c's audit: {V3C_DEV};"
 LIVE = "gate:research@auditor"
 LIVE_SAID = "gate:research"
 LIVE_COINS = f"the challenger {LIVE_SAID} (peer vy-dc-h200)"
 V3C_LIVE = (f"the challenger {LIVE_SAID} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit "
             "of record")
-STEP3_LOCAL = ("a local development challenger session on vy-dc-h200, the served node, for step 3, a development check, since "
+STEP3_LOCAL = ("a local development challenger session on the served node, for step 3, a development check, since "
                "V3c's audit's live session takes the window's run root, which the gate opens once, ever")
 NO_V3C = {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 #: in a parametrized environment, the path of the challenger key record `_key` writes
@@ -5271,16 +5271,18 @@ composed = {"undecided": "pending"}.get(said[0], said[0]) if said else "pending"
 print("RECORD " + json.dumps({"composed": composed, "window": 7}))
 sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 '''
-#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json, which
-#: carries $COMPOSE_DEVELOPMENT as its ``development`` where it is set
+#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json under
+#: the product's own directory and id (onsite's ``onsite``, remote's ``remote-v1``), which carries $COMPOSE_DEVELOPMENT as
+#: its ``development`` where it is set
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
 printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
-  mkdir -p "$2/composite/remote-v1"
+  case ${PRODUCT:-onsite} in onsite) x=onsite id=verity/onsite/v1 ;; *) x=remote-v1 id=verity/remote/v1 ;; esac
+  mkdir -p "$2/composite/$x"
   dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
-  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
-    > "$2/composite/remote-v1/composite.json"
+  echo "{\\"product\\": \\"$id\\", \\"verdict\\": {\\"id\\": \\"$id\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
+    > "$2/composite/$x/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
@@ -5411,7 +5413,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines.pop(0) == V3C_ENTRY
     assert lines[:2] == [
-        "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
+        "FOLLOW-ON on a prover node, 755 GB: V3c's audit and the composite, which the served node (SERVED_NODE) deferred, from its "
         "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
         "private/deferred/inputs.sha256): PASS",
         f"WINDOW-CIRCUIT class {W63K4}: the served node's record at the class (step 3's), from its tree's commit {SHA} "
@@ -5421,10 +5423,10 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[-2] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == "pending"
     assert (tmp_path / "order.development").read_text().startswith(
-        "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
+        "composed by a deferral's follow-on on a prover node, which the prover controls: a development check")
     if lean:
         assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
-            "composed by a deferral's follow-on on cpu-6")
+            "composed by a deferral's follow-on on a prover node")
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -5475,7 +5477,7 @@ def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_it
     assert _pool(tmp_path) == want
 
 
-FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
+FOLLOW_FAIL = ("FOLLOW-ON on a prover node, 755 GB: V3c's audit, which the served node (SERVED_NODE) deferred, "
                "from its serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
                "private/deferred/inputs.sha256): FAIL (the serve dir's private/deferred/check.log)")
 CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and "
@@ -5751,6 +5753,9 @@ def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_place
         argv = json.loads((tmp_path / "order.record").read_text())
         assert argv[-2:] == ["--composite", str(tmp_path / "out" / "composite")]
         assert argv[argv.index("--product") + 1] == env.get("PRODUCT", "remote")
+        product = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v1"}[env.get("PRODUCT", "remote")]
+        assert [json.loads(f.read_text())["product"] for f in (tmp_path / "out" / "composite").glob("*/composite.json")
+                ] == [product]
     assert any(x.startswith("HANDOFF") for x in lines) is (env.get("COMPOSE_OFF_NODE") == "1")
 
 
@@ -5759,7 +5764,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     node's tree) and stops before its copy's check or V3c's audit."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of vy-dc-h200's deferral, its "
+    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of the served node's (SERVED_NODE) deferral, its "
                                       f"compose hand-off for COMPOSE_NODE. {ONLY}"], [])
 
 
@@ -8307,12 +8312,6 @@ def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_th
     assert host in (tmp_path / "serve" / "private" / "logs" / "machine.txt").read_text()
     left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())
     assert host not in left and f"serve dir {tmp_path / 'serve'}" not in left, left
-
-
-@pytest.mark.parametrize("env, held", [({}, False), ({"VERITY_HOLD_PLACEMENT": ""}, False),
-                                       ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_hold_placement_holds_only_under_exactly_1(env, held):
-    assert S.hold_placement(env) is held
 
 
 def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):

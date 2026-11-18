@@ -694,7 +694,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
 
 #: COINS lines' sampled-proofs parts that name no live challenger, as served_verdicts.sh says them
 DEVELOPMENT = {
-    "served": (f"a local development challenger session on {NODE}, the served node, not an auditor's (PP_CHALLENGER "
+    "served": ("a local development challenger session on the served node, not an auditor's (PP_CHALLENGER "
                "local)"),
     "deferred": ("a local development challenger session on the follow-on's node, where step 6 defers V3c's audit, not "
                  "an auditor's (PP_CHALLENGER local)"),
