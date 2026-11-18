@@ -241,12 +241,13 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
     from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import class_circuit
+    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
     from verity_vllm.program.predict.window_class import PearlTables
 
     try:
         circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
                                 tables=PearlTables(scheme) if scheme else None)
+        check_provable(circuit)
     except Unexpressible as e:
         raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
     doc = {**circuit.description(), "name": circuit.name, "partition": "",

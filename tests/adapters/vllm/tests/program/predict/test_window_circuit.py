@@ -46,6 +46,7 @@ from verity_vllm.program.predict.window_circuit import (
     CLASS_OF_RECORD,
     Grain,
     WindowClass,
+    check_provable,
     class_circuit,
     window_circuit,
 )
@@ -90,7 +91,7 @@ def _label(fn) -> str:
 
 def _circuit(window, grain: Grain = GRAIN, cls: WindowClass = CLASS, placed=None):
     reg = S._registered()
-    return window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain, placed=placed, provable=False)
+    return window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain, placed=placed)
 
 
 def _bytes(circuit) -> bytes:
@@ -124,7 +125,7 @@ def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window)
     and their circuits' descriptions (units, wires, cuts, registered reads), blocks, templates and external ports are
     byte for byte the class's circuit: the blocks' slots are the class's 2 whatever the window's requests."""
     circuit, _ = window
-    cls = class_circuit(S._registered(), CLASS, None, GRAIN, provable=False)
+    cls = class_circuit(S._registered(), CLASS, None, GRAIN)
     for other in (_circuit(OTHER), _circuit(ONE), cls):
         assert _bytes(other) == _bytes(circuit) and _blocks(other) == _blocks(circuit)
         assert (other.ids, other.external) == (circuit.ids, circuit.external)
@@ -212,7 +213,7 @@ def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     token, slot, head and the entry's occupancy word (4 at 2 Programs, both lane 0's, and 4 a lane at 8), whatever the
     boundaries."""
     reg = S._registered()
-    two, eight = (class_circuit(reg, SLOTS, n, GRAIN, provable=False) for n in (2, None))
+    two, eight = (class_circuit(reg, SLOTS, n, GRAIN) for n in (2, None))
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
               len(c.blocks.inference), len(c.order)) for c in (two, eight)]
     assert shape == [(122, 88, 2, 1, 59, 159), (134, 88, 2, 1, 59, 159)] and two.ids == eight.ids
@@ -475,13 +476,13 @@ def test_past_126_keys_a_key_block_is_refused_by_name():
     largest unit exactly 256 rows, and at 129 (position 128 the first past one key block of 128) the first blocks of 127 and
     128 keys and the full block `AttnBlock_v5{NVIS=128}` are refused by name, together."""
     reg, grain = S._registered({**S.TINY, "max_position_embeddings": 2048}), Grain(gemm_words=1024, rows=256, select=64)
-    assert max(_unit_rows(class_circuit(reg, WindowClass(1, 125, 2), 1, grain, provable=False)).values()) == 256
+    assert max(_unit_rows(class_circuit(reg, WindowClass(1, 125, 2), 1, grain)).values()) == 256
     first = "AttnBlockFirst_v1{{D=16,NVIS={},BN=128,DOT=HopperBF16WgmmaDot16_v1}}: {} rows in and out, past a unit's 256"
     with pytest.raises(Unexpressible, match=re.escape(
             f"3 templates the window can't hold, each port cut once a writer row: {first.format(127, 258)}; "
             f"{first.format(128, 260)}; AttnBlock_v5{{D=16,NVIS=128,FIRST=False,BN=128,DOT=HopperBF16WgmmaDot16_v1,"
             "CHECK=False}: 263 rows in and out, past a unit's 256")):
-        class_circuit(reg, WindowClass(1, 128, 2), 1, grain, provable=False)
+        class_circuit(reg, WindowClass(1, 128, 2), 1, grain)
 
 
 def _labels(circuit) -> dict[str, np.ndarray]:
@@ -794,7 +795,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     assert (rec["of_record"], rec["complete"], rec["n_fields"], rec["unresolved"]) == (True, True, 23, [])
     program = WC.class_program(reg, WW.WEIGHTS_CLASS).program
     assert [f["field"] for f in rec["fields"]] == [n for n, _ in dict(program.fn.signature()[0])[WC.WEIGHTS].fields]
-    every, shapes = class_circuit(reg, WW.WEIGHTS_CLASS, grain=GRAIN, provable=False).registered.params, rec["registered_entries"]
+    every, shapes = class_circuit(reg, WW.WEIGHTS_CLASS, grain=GRAIN).registered.params, rec["registered_entries"]
     params = {p: every[p] for p in WW.weight_params(every)}
     assert set(every) - set(params) == {SS.SCAN_STATE}
     assert rec["grain"] == vars(GRAIN) and set(shapes) | set(rec["unrooted"]) == set(params)
@@ -851,7 +852,7 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
     reg = S._registered()
 
     def refused(window, cls=CLASS, grain=GRAIN):
-        return lambda: window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain, provable=False)
+        return lambda: window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain)
 
     three = ([(2, 2, G2)] * 3, [[(0, 0, 2), (1, 0, 2), (2, 0, 2)], [(0, 2, 1), (1, 2, 1), (2, 2, 1)]])
     long = ([(5, 2, G2)], [[(0, 0, 5)], [(0, 5, 1)]])
@@ -878,7 +879,7 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
     assert (cls.boundaries, cls.buckets, cls.anchor(0), cls.anchor(1)) == ((0, 16), 32, 0, 16)
     ok = _circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 31)])
-    assert _bytes(ok) == _bytes(class_circuit(S._registered(), cls, None, GRAIN, provable=False))
+    assert _bytes(ok) == _bytes(class_circuit(S._registered(), cls, None, GRAIN))
     assert _bytes(_circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 47)])) == _bytes(ok)
     assert [(r.at, r.radix, r.base, r.step) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [
         (0, (2,), 0, (16 * 2277,))]
@@ -933,17 +934,17 @@ def _widest_row(circuit) -> dict[str, int]:
 def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_wouldnt_compose(window):
     """Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
     last SHA-512 block, so the block's SHA range holds no slot), one of more than 256 rows, or one past 2^27 bits
-    (`interface.check_proof_block`), and the class builder refuses such a unit at lowering, naming each. TINY's class is too
-    small to prove: 12 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head end), the token
-    select's group units at 64 logits a unit (4 groups), its combines with the I/O shell's words at 4 prompt ids and 2
-    outputs (the collectors, the entry) and the feed, so its tests lower it with ``provable=False``. Every other template has
-    a wider row."""
+    (`interface.check_proof_block`), and `check_provable` refuses such a unit of a lowered circuit, naming each. TINY's
+    class is too small to prove: 12 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head
+    end), the token select's group units at 64 logits a unit (4 groups), its combines with the I/O shell's words at 4
+    prompt ids and 2 outputs (the collectors, the entry) and the feed, so its tests lower it and don't check it. Every
+    other template has a wider row."""
     circuit, _ = window
     short = {lab: b for lab, b in _widest_row(circuit).items() if b <= 111}
     assert short == {"RoPEHead_v1{D=16}": 32, **{f"AttnBlockFirst_v1{{D=16,NVIS={t},BN=128}}": 64 for t in range(1, 6)},
                      "AttnHeadEnd_v1{D=16}": 64, GROUPS: 32, COLLECT0: 16, COLLECT: 16, FEED: 20, ENTRY: 16}
     with pytest.raises(Unexpressible) as refused:
-        class_circuit(S._registered(), CLASS, None, GRAIN)
+        check_provable(class_circuit(S._registered(), CLASS, None, GRAIN))
     why = str(refused.value)
     assert why.startswith(f"{len(short)} templates Flock's composer wouldn't prove: ")
     named = {_label(fn) for fn, _ in circuit.templates if re.search(re.escape(IF.descriptor_id(fn)) + "(: | cut )", why)}
@@ -960,11 +961,12 @@ PROVABLE_CLASS, PROVABLE_GRAIN = WindowClass(2, 27, 1), Grain(gemm_words=8192, r
 
 
 def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
-    """At `PROVABLE`'s model, class and grain the class builder's check passes (`interface.check_proof_block`): its 3,996
+    """At `PROVABLE`'s model, class and grain `check_provable` passes (`interface.check_proof_block`): its 3,996
     units of 43 templates each have a row past 111 bytes and are proof blocks Flock's composer takes, its token selects
     a `TokenSelectGroups_v1{512, 16}` unit and a combine with the position's collector a position a slot, the last
     position's with the entry."""
     circuit = class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN)
+    check_provable(circuit)
     n = {_label(fn): k for fn, k in circuit.templates}
     assert (sum(n.values()), len(n)) == (3996, 43) and min(_widest_row(circuit).values()) > 111
     assert all(IF.check_proof_block(fn, circuit.cuts.get(IF.descriptor_id(fn))) <= 27 for fn, _ in circuit.templates)
@@ -1006,7 +1008,7 @@ def _add(at: int) -> str:
 
 @pytest.fixture(scope="module")
 def split():
-    return class_circuit(S._registered(SPLIT), CLASS, None, SPLIT_GRAIN, provable=False)
+    return class_circuit(S._registered(SPLIT), CLASS, None, SPLIT_GRAIN)
 
 
 def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_order_of_at(split):
@@ -1170,7 +1172,7 @@ def wired_matches_by_hand(circuit: IF.Circuit, prog: Any) -> None:
 
 @pytest.fixture(scope="module")
 def tiny_wired():
-    circuit = class_circuit(S._registered(), CLASS, None, GRAIN, provable=False)
+    circuit = class_circuit(S._registered(), CLASS, None, GRAIN)
     return circuit, *wired(circuit)
 
 
