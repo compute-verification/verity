@@ -52,12 +52,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.memory.pous import POUS
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
 from verity_vllm.protocols.interface import Context, Option, Target
 
-NAME = "pous"
-DEFAULT_SCHEME = "p2-16448/v4"
+NAME, _, DEFAULT_SCHEME = POUS.option.partition(":")
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
 
