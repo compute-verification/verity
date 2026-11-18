@@ -36,7 +36,6 @@ untraced = [
     "test_compute_local_pair.py",
     "test_composite.py", "test_member_seconds.py", "test_members_tables.py",
     "test_served_advice_day.py",
-    "test_served_bandwidth.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_proof_layers_script.py", "test_kept_bootstrap.py",
@@ -70,9 +69,8 @@ parts = 7
 # `verity/protocols/compose/verifier/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
-# `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
-# serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
-# verifier, `poub-verifier`, which `p2_parties` has `lake` build in poub/lean, is under `verity`.
+# `benchmarks/pous/p2_v1` and p2_stage's modules: the bandwidth answer the composed record reads (`bandwidth.public_answer`)
+# and the P2 store its module loads; its party's Lean verifier, `poub-verifier`, is under `verity`.
 # `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `adapters/vllm/verity_vllm`, `benchmarks/network_traces`: a5_network_attester's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_network_attester_serve._run`).
@@ -133,14 +131,14 @@ inputs = ["applications/onsite_full.toml", "tools/config/verity_config", "verity
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
-          "tests/benchmarks/one_stage/test_two_stage_driver.py",
+          "tests/benchmarks/one_stage/test_two_stage_driver.py", "benchmarks/kernels/machine.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-vectors.json",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
-          "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
+          "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/run.sh", "benchmarks/prove_path/sources.json",
           "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
           "adapters/vllm/manifests/checkpoints-local.json", "benchmarks/one_stage"]

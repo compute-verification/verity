@@ -150,6 +150,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
 from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
@@ -766,7 +767,7 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
     except ValueError as e:
         raise _refused("level", str(e)) from None
     window = {"kind": "served", "context": params["context"], "public": {**commitment["items"], **extra}}
-    rec = R.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
+    rec = DK.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
     for v in (S.check_public(spec_of(params, ell), rec), public_problem(params, rec)):
         if not v.ok:
             raise S.Refused(v)

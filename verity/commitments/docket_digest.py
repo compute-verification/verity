@@ -8,6 +8,9 @@ from typing import Any, Mapping
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains as DM
 
+#: the kinds a docket's window names (its record's ``window.kind``)
+KINDS = ("served", "stand-in")
+
 
 def record_digest(tag: str, canon: bytes) -> bytes:
     """The one docket digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
@@ -21,4 +24,4 @@ def digest(rec: Mapping[str, Any]) -> str:
     return record_digest(tag, canonical_json(dict(rec))).hex()
 
 
-__all__ = ["digest", "record_digest"]
+__all__ = ["KINDS", "digest", "record_digest"]

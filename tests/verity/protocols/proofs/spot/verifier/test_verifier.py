@@ -30,6 +30,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 
@@ -131,7 +132,7 @@ def _window(design: dict, counts=(2, 18)) -> tuple:
     ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
              for p, leaves in (("x", n), ("out", 2 * n))}
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return (R.record(program, query, design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}), program, query,
+    return (DK.record(program, query, design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}), program, query,
             ports)
 
 

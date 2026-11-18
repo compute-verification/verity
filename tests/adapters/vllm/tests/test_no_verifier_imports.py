@@ -25,24 +25,17 @@ LANES = {
 
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "proofs": {
-        # Needs, outside spot's verifier/ and device/: the docket's and partition's digests and template ids, the sampling
+        # Needs, outside spot's verifier/ and device/: the partition's digests and template ids, the sampling
         # design's rate table, the second stage's row links, registration's `Declaration`, and the challenger's client
         # types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/boundary_rows.py": ("proofs.spot.verifier.one_stage.docket",),
-        "verity_vllm/pipeline/boundary_stop.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/commit_coins.py": (
             "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.live_reason",
             "proofs.spot.verifier.challenger.remote",
         ),
-        "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/serving_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.service",
-        ),
-        "verity_vllm/program/predict/weights_tie.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.draw",
-        ),
+        "verity_vllm/pipeline/serving_rows.py": ("proofs.spot.verifier.service",),
+        "verity_vllm/program/predict/weights_tie.py": ("proofs.spot.verifier.one_stage.draw",),
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },

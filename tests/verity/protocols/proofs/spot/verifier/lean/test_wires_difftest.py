@@ -18,6 +18,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+from verity.commitments.periods import interface as I
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 PIECES = "spot-difftest"
@@ -484,6 +485,15 @@ def _self(order=None, base: int = 0) -> dict:
     return j | ({"order": order} if order is not None else {})
 
 
+def _ranks() -> dict:
+    """Two ranks of two steps of `G`, rank r's units ``2r`` and ``2r + 1``, as `interface.ordered` orders them given the
+    ranks: a template's ranges rise inside each rank, not across them."""
+    return {"templates": {"G": {"units": 4, "rows": {"x": [2, 1]}, "outs": {"o0": 2}}}, "cuts": {}, "queries": [],
+            "wires": [{"reader": "G", "port": "x", "writer": "G", "out": "o0", "at": 1, "radix": [1], "base": 2, "step": [0]},
+                      {"reader": "G", "port": "x", "writer": "G", "out": "o0", "at": 3, "radix": [1], "base": 0, "step": [0]}],
+            "order": [["G", 0, 1], ["G", 2, 1], ["G", 1, 1], ["G", 3, 1]]}
+
+
 @pytest.mark.parametrize("name, j, want", [
     ("templates that read each other", _back(), refusal("cycle", 0)),
     ("a template that reads an earlier instance of itself", _self(), True),
@@ -500,6 +510,7 @@ def _self(order=None, base: int = 0) -> dict:
      refusal("order", 0)),
     ("an order of the gather with its reader first", _gather(order=[["A", 0, 2], ["G", 0, 6]]), refusal("order", 0)),
     ("an order of the gather", _gather(order=[["G", 0, 6], ["A", 0, 2]]), True),
+    ("two ranks' ranges alternating by step, each rank's step 1 reading the other's step 0", _ranks(), True),
     ("an order with a range of no units", _gather(order=[["G", 0, 6], ["A", 0, 0], ["A", 0, 2]]), refusal("order")),
     ("an order of no template", _gather(order=[["G", 0, 6], ["A", 0, 2], ["Z", 0, 1]]), refusal("order")),
     ("an order short of a template's units", _gather(order=[["G", 0, 5], ["A", 0, 2]]), refusal("order")),
@@ -513,3 +524,41 @@ def test_the_order(pieces, name, j, want):
     assert got["ok"] is True if want is True else got == want
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(got)), fn
+
+
+def _joined() -> tuple[dict, list]:
+    """Two ranks of two steps of `G` joined as `node_window_join.join` lays them, rank r's units ``2r`` and ``2r + 1``:
+    each rank's own wire first (its step 1 reads its step 0's ``o0`` as ``c``), then the join's (each rank's step 1 reads
+    the other rank's step 0 as ``x``), and the order `interface.ordered` gives over the ranks' first units."""
+    units, starts, ranks = {"G": 4}, {"G": range(4)}, {"G": [0, 2]}
+    wires = [I.Wire("G", port, "G", "o0", at=at, radix=(1,), base=base, step=(0,))
+             for port, at, base in (("c", 1, 0), ("c", 3, 2), ("x", 1, 2), ("x", 3, 0))]
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, wires, starts)
+    order = I.ordered(units, wires, starts, ranks)
+    j = {"templates": {"G": {"units": 4, "rows": {"x": [2, 1], "c": [2, 1]}, "outs": {"o0": 2}}}, "cuts": {},
+         "queries": [], "wires": [dict(w.doc(), cut=list(w.cut)) for w in wires], "order": [list(b) for b in order]}
+    return j, wires
+
+
+def test_a_joined_records_order_passes_both_sides(pieces):
+    """The joined record's order, a template's ranges rising only inside each rank, passes `interface.check_order`, the
+    reference and both Lean pieces alike."""
+    j, wires = _joined()
+    assert j["order"] == [["G", 0, 1], ["G", 2, 1], ["G", 1, 1], ["G", 3, 1]]
+    I.check_order({"G": 4}, wires, [tuple(b) for b in j["order"]])
+    assert reference(j)["ok"] is True
+    for fn in ("wires", "wires_unrolled"):
+        assert pieces.call(fn, j) == ("output", D.canonical(reference(j))), fn
+
+
+def test_a_joined_order_against_a_ranks_own_rise_is_refused_alike(pieces):
+    """The same record with rank 0's step 1 ranked before its step 0, which it reads: `interface.check_order`, the
+    reference and both Lean pieces refuse it by ``order``, naming wire 0."""
+    j, wires = _joined()
+    j["order"] = [["G", 1, 1], ["G", 0, 1], ["G", 2, 1], ["G", 3, 1]]
+    with pytest.raises(ValueError, match="order: wire 0 "):
+        I.check_order({"G": 4}, wires, [tuple(b) for b in j["order"]])
+    assert reference(j) == refusal("order", 0)
+    for fn in ("wires", "wires_unrolled"):
+        assert pieces.call(fn, j) == ("output", D.canonical(refusal("order", 0))), fn
