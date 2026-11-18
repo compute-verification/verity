@@ -14,11 +14,13 @@
 #   stopped, --fast --jobs VJOBS (16), and holds the passes to no window record; PEARLPLUS_TIE=1 adds the tie as a second
 #   step after it accepts: `served_passes.py retain --window-record W` (pearl/window-record.json), then `verify --tie W
 #   --class 4,27,2` ($OUT/pearlplus-verify-tie.json).
+#   VERIFY=0 (default 1) stops once pearl/w0 holds its passes and report, leaving every verify to the launcher.
 set -euo pipefail
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-} PEARLPLUS_TIE=${PEARLPLUS_TIE:-0} VJOBS=${VJOBS:-16}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} SCHEME=${SCHEME:-} PEARLPLUS_TIE=${PEARLPLUS_TIE:-0} VJOBS=${VJOBS:-16} VERIFY=${VERIFY:-1}
+case $VERIFY in 0|1) ;; *) echo "SMOKE REFUSED verify: VERIFY is 0 or 1, not $VERIFY"; exit 3 ;; esac
 case $SCHEME in ""|pearl-plus) ;; *) echo "SMOKE REFUSED scheme: SCHEME is empty or pearl-plus, not $SCHEME"; exit 3 ;; esac
 NSO=/workspace/cp/norm_tap/build/verity_norm_tap.so
 SERVER= SCRATCH=
@@ -174,6 +176,7 @@ assert passes and os.path.exists(f"{d}/pearl/w0/coins.json"), f"{d}/pearl/w0 hol
 print(f"; PEARL+ epoch 0 kept {len(passes)} pass file(s) under pearl/w0, its commitment {json.dumps(c, default=str)[:120]}")
 EOF
 ) || { say "SMOKE FAILED pearl-plus: no report or no passes ($D/schemes/pearl-plus, $D/pearl/w0)"; exit 1; }
+  if [ "$VERIFY" = 0 ]; then said+="; PEARL+ VERIFY left to the launcher (VERIFY=0): served_passes.py verify --passes $D/pearl/w0"; say "$said"; exit 0; fi
   CUDA_VISIBLE_DEVICES= PYTHONPATH=$SPP "$PY" "$SP" verify --passes "$D/pearl/w0" --fast --jobs "$VJOBS" \
     --out "$OUT/pearlplus-verify.json" > "$SR/pearlplus-verify.log" 2>&1 \
     || { say "SMOKE FAILED pearl-plus verify: served_passes.py verify over pearl/w0 ($SR/pearlplus-verify.log)"; exit 1; }
