@@ -203,7 +203,7 @@ theorem check_true {why : String} : Record.check true why = .ok () := rfl
 
 /-- **The custody checks pass** when each of their five comparisons holds. -/
 theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)}
+    {mids : List (Hash.Msg × Coin)}
     (hB : (lv.rootB.toList == link.1) = true) (hP : (lv.publics.toList == link.2) = true)
     (hX : (lv.points == pointsOf spec c₁) = true)
     (hN : ((lv.streams.toList.flatMap (·.toList)).length == mids.length) = true)
@@ -215,8 +215,8 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
 
 /-- **B's checks pass** when each does: the statement, the sample, the live session's custody, the scope, a sampled
 session, and the record's canonical text (S0). -/
-theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}
+theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} {lv : Live}
     (hS : (f.stmt == x) = true)
     (hD : sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true)
     (hL : liveOf spec f.record = .ok lv) (hC : custody spec lv link c₁ mids = .ok ())

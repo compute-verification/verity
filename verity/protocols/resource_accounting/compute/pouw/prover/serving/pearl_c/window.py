@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -46,8 +47,9 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.commitments import registered_value as RV
 
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
@@ -97,19 +99,25 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
             "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
+def tables() -> tuple[str, ...]:
+    """W's tables, of A rows, y and B rows: Pearl+'s (`Scheme.tables`)."""
+    from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
+    return declared(PEARL_PLUS, "tables")
+
+
 def a_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s A rows."""
-    return f"pearl-a/{s}/{c}"
+    return f"{tables()[0]}/{s}/{c}"
 
 
 def y_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s y."""
-    return f"pearl-y/{s}/{c}"
+    return f"{tables()[1]}/{s}/{c}"
 
 
 def b_value(w: int) -> str:
     """Weight ``w``'s B rows."""
-    return f"pearl-b/{w}"
+    return f"{tables()[2]}/{w}"
 
 
 def _hm96(man: Mapping[str, Any], s: int) -> None:
@@ -129,9 +137,9 @@ def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
         y = SY.y_domain(salt, u["index"], u["real_rows"])
         out += [{"value": a_value(s, c), "root": u["root_a"], "leaves": u["m"], "words": u["k"],
-                 "domain": a.domain_id.hex(), G.WIDTH_KEY: WORD_BITS},
+                 "domain": a.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS},
                 {"value": y_value(s, c), "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
-                 "domain": y.domain_id.hex(), G.WIDTH_KEY: WORD_BITS}]
+                 "domain": y.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS}]
     return out
 
 
@@ -152,7 +160,7 @@ def b_entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         if "root" not in man.get("weights", {}).get(str(w), {}):
             raise ValueError(f"round {s}'s pass commits no root of weight {w}, whose B rows W registers")
         out.append({"value": b_value(w), "root": bytes.fromhex(man["weights"][str(w)]["root"]).hex(), "leaves": n,
-                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), G.WIDTH_KEY: WORD_BITS})
+                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), RV.WIDTH_KEY: WORD_BITS})
     return out
 
 
@@ -229,7 +237,7 @@ def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
         raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
     at = _rounds(manifests, rounds)
     tied = version == VERSION
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"],
                        **({"version": VERSION} if tied else {}), **named},
             "registered": [*(e for s, m in zip(at, manifests) for e in entries(m, s)),
@@ -263,7 +271,7 @@ def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequenc
 
 
 @dataclass(frozen=True)
-class Committed(G.Registered):
+class Committed(RV.Registered):
     """A call's A rows or y as a registered value of the audited circuit (`reuse`): its FP32 words in ``row-seg/v1`` rows,
     salted as Pearl+ salts them, in a tree under ``call_domain``, the ``frame-v3-sha512`` domain of the call's binding,
     index and rows (W's entry's domain id), so its entry is W's."""
@@ -310,10 +318,10 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
                 e = next(want)
                 n, k = e["leaves"], e["words"]
                 words = np.ascontiguousarray(rows_of(e["value"], n, np.zeros(2 * k, np.uint16)), "<u2").view("<u4")
-                base_value = G.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
+                base_value = RV.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
                                                  word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
                 dom = rows_domain(binding, i, n, "sha512")
-                levels = tree_levels(dom, [G.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
+                levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
                 got = out[e["value"]] = Committed(**{**{f.name: getattr(base_value, f.name) for f in fields(base_value)},
                                                      "levels": levels}, call_domain=dom)
                 if got.entry() != e:

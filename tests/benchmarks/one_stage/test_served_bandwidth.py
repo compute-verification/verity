@@ -192,7 +192,7 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
     monkeypatch.chdir(ROOT)
     out = tmp_path / "pieces" / "bandwidth"
     assert SB.main(["answer", "--session", str(out / "session" / "session.json"), "--serve-dir", str(tmp_path / "none"),
-                    "--window", "0", "--out", str(out)]) == 1
+                    "--window", "0", "--out", str(out), "--card", "h200-sxm-141gb"]) == 1
     row = S.piece_row("bandwidth", tmp_path / "pieces")
     assert row["verdict"] == "reject" and row["quantity"] is None and "no session record" in row["reason"]
     assert "with no served window: window 0 of " in row["reason"] and "beside the served window" not in row["reason"]

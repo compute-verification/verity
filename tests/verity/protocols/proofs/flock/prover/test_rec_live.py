@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_live as RL
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 
 def _counter_rand():
@@ -115,7 +115,7 @@ def test_a_rounds_message_is_one_row_of_whole_blocks_committed_as_a_registered_r
     assert RL.message_rows([]) == [] and len(RL.message_rows(vs[:8])[0]) == RL.ROW_WORDS
     other = RL.message_rows(vs[:3])[0][:RL.ROW_WORDS] * 2
     salts = [bytes([i]) * 192 for i in range(1, 3)]
-    reg = G.Registered.commit("00" * 64, "msgs", [row, other], salts)
+    reg = RV.Registered.commit("00" * 64, "msgs", [row, other], salts)
     assert RL.commit_rows([row, other], salts) == list(reg.bcs)
 
 
@@ -126,7 +126,7 @@ def test_a_top_is_committed_node_by_node_as_registered_rows():
     assert len(rows) == 2 and all(len(r) == RL.ROW_WORDS and r[32:] == [0] * 32 for r in rows)
     assert bytes(b for w in rows[1][:32] for b in w.to_bytes(2, "little")) == CAP0[64:]
     salts = [bytes([i]) * 192 for i in range(1, 3)]
-    reg = G.Registered.commit("00" * 64, "rec-top-L0", rows, salts)
+    reg = RV.Registered.commit("00" * 64, "rec-top-L0", rows, salts)
     assert RL.commit_top(CAP0, salts) == list(reg.bcs)
     with pytest.raises(ValueError, match="whole"):
         RL.top_rows(CAP0[:100])

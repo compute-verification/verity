@@ -137,7 +137,7 @@ def tEnd (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (tr : Trace) (t : 
   ⟨t.rounds, t.k, pF (proof m cs tr).finalB (pF (proof m cs tr).finalA t.pending)⟩
 
 /-- The coins of the replies to the sends from the `L`-th on. -/
-def coinsAt (resp : ℕ → Claims.Msg) (L : ℕ) : Challenges :=
+def coinsAt (resp : ℕ → Hash.Msg) (L : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), coinOf (resp (L + 2)), fun i => coinOf (resp (L + 3 + i))⟩
 
 end Zc
@@ -145,8 +145,8 @@ end Zc
 open Zc
 
 /-- **The prover's zerocheck, in closed form**, at the coins of the replies to its sends. -/
-theorem zerocheckP_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (tr : Trace)
-    (t : Transcript) (l : Array Claims.Msg) :
+theorem zerocheckP_go (resp : ℕ → Hash.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (tr : Trace)
+    (t : Transcript) (l : Array Hash.Msg) :
     ∃ l', l'.size = l.size + 3 + (m - 6) ∧
       ((zerocheckP (asksS resp) m digest cap tr).run t).go l =
         (.ok ((proof m (coinsAt resp l.size) tr, out m (coinsAt resp l.size) tr),

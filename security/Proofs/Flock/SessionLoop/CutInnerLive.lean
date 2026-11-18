@@ -85,17 +85,17 @@ open FlockSoundness.Refine (Frame encs)
 /-- **The inner proof's body at its round `i`**, after a squeeze: round 0 its label and `final_c`, round 1 the
 triple's openings, round 2 `τ`'s commitment, round 3 `Y`, each with the squeeze's header (`N` batching coins at round
 1, `Q` query coins at round 3). -/
-def innerCutBody (finalC : F128) (src : RepSrc) (N : ℕ) : ℕ → Claims.Msg
+def innerCutBody (finalC : F128) (src : RepSrc) (N : ℕ) : ℕ → Hash.Msg
   | 0 => encs [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one finalC] ++ (Frame.sq 1 1).enc
   | 1 => encs [.vec [src.rhoIn, src.sigmaIn]] ++ (Frame.sq 2 N).enc
   | 2 => encs [.bytes src.tauCom] ++ (Frame.sq 1 1).enc
   | _ => encs [.vec src.y.toList] ++ (Frame.sq 2 _root_.Flock.Zk.Q).enc
 
-theorem push_at {L : Array Claims.Msg} (b : Claims.Msg) {k : ℕ} (hk : k = L.size) : (L.push b)[k]! = b := by
+theorem push_at {L : Array Hash.Msg} (b : Hash.Msg) {k : ℕ} (hk : k = L.size) : (L.push b)[k]! = b := by
   subst hk
   exact Claims.ZKServer.Loop.getElem!_push_size b
 
-theorem sampleVecP_cut_err (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
+theorem sampleVecP_cut_err (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg}
     (hl : n ≤ l.size) :
     ((sampleVecP (asksCut coin n) k).run t).go l =
       (.error "past the openings", l.push (Claims.toMsg (_root_.Flock.Transcript.framed t 2 k))) := by
@@ -124,7 +124,7 @@ set_option maxHeartbeats 2000000 in
 pending bytes and with `β ≠ 0` where round 3 is reached, it stops at round `i` and sends there `innerCutBody … i`,
 with the constraints and the triple's `N` batching coins. -/
 theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src : RepSrc)
-    (cons : Array (String × Zk.Lin)) {t : Transcript} (ht : t.pending = ByteArray.empty) (l : Array Claims.Msg)
+    (cons : Array (String × Zk.Lin)) {t : Transcript} (ht : t.pending = ByteArray.empty) (l : Array Hash.Msg)
     {i : ℕ} (hi : i < 4) {N : ℕ} (hN : cons.size + 3 = N) {n : ℕ} (hn : n = l.size + i)
     (hb : i = 3 → (coin (l.size + 2) 0).isZero = false) :
     ∃ L, ((innerCut (asksCut coin n) lay ic finalC src cons).run t).go l = (.error "past the openings", L) ∧
@@ -201,7 +201,7 @@ a `--zk` schedule of `m ∈ [25, 35]` and a fold defined at every point of the l
 level-0 commitment, pads commitment and extra claims, the rep stops there and sends `innerCutBody … i` at the source's
 masked `final_c`, wherever its rank check passes, its pair's coins are independent and, at `i = 3`, its `β` is
 nonzero. -/
-theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m) (hkk : st.kLog = st.fold.kLog)
     (hfold : ∀ (a b : F128) (lw ρ ts : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
@@ -209,7 +209,7 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
       ∃ v, st.fold.fold a lw ρ = .ok v)
     {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ)
-    (l : Array Claims.Msg) {i : ℕ} (hi : i < 4) {n : ℕ} (hn : n = CutEq.innerAt l.size st sch extras + i)
+    (l : Array Hash.Msg) {i : ℕ} (hi : i < 4) {n : ℕ} (hn : n = CutEq.innerAt l.size st sch extras + i)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest (flat cm0.cap) ic.root (Zk.PadLayout.new st.m st.kLog sch.k0)
           src.masked).run (Transcript.init #[] dom)).go l = (.ok ((zp, zc), t₁), l₁) →

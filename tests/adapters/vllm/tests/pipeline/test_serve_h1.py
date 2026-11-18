@@ -905,8 +905,8 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
-        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more],
-                         environ={})
+        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path),
+                                          *more], environ={})
         try:
             so.preflight(opts, which=lambda _: "/v/bin/ninja")
         except cli.UsageError as e:

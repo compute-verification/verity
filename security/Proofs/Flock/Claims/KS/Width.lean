@@ -208,9 +208,9 @@ theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun}
 
 /-- **A run accepts at its own messages**: where the rounds accept, the verifier's step accepts the prover's messages
 the trace records. -/
-theorem stepWith_acc_msgs {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
-    (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
+theorem stepWith_acc_msgs {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
+    (vnext : List Hash.Msg → Claims.OC Claims.Out) :
+    ∀ (n : ℕ) (hist : List (Hash.Msg × Hash.Msg)) (as : List Hash.Msg) (t : Claims.Transcript),
       t.msgs.map Prod.fst = as → (Claims.stepWith H P x ω vnext n hist as t).out = .acc →
         ((vnext ((Claims.stepWith H P x ω vnext n hist as t).msgs.map Prod.fst)).eval H).1 = .acc := by
   intro n
@@ -227,8 +227,8 @@ theorem stepWith_acc_msgs {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claim
       simp only [heq, List.map_append, ht, List.map_cons, List.map_nil]
     · simp at h
 
-theorem run_acc_next {Ω Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω)
-    (V : Claims.Verifier Coin) (x : Claims.Msg) (ω : Ω) (r : Fin (V.k x) → Coin)
+theorem run_acc_next {Ω Coin : Type} [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω)
+    (V : Claims.Verifier Coin) (x : Hash.Msg) (ω : Ω) (r : Fin (V.k x) → Coin)
     (h : (Claims.run H P V x ω r).out = .acc) :
     ((V.next x ((Claims.run H P V x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run H P V x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r))).eval H).1 = .acc :=
@@ -239,9 +239,9 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **A decision is on the last message.** -/
-theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem act_decide_final {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     as.getLast?.bind finalOf = some f := by
   unfold act at h
   split at h
@@ -252,9 +252,9 @@ theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs
 end Gen
 
 /-- **A decision is on the last message.** -/
-theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem act_decide_final {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     as.getLast?.bind finalOf = some f :=
   Gen.act_decide_final (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
     (link := link) (c₁ := c₁) (mids := mids) (f := f) (h := h)
@@ -264,7 +264,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
-theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem acc_last {zk : Bool} {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
     ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
       f.stmt = x := by
@@ -284,7 +284,7 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
 end Gen
 
 /-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
-theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem acc_last {zk : Bool} {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
     ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
       f.stmt = x :=
@@ -292,7 +292,7 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
 
 /-! ## `ColsOk` at both records -/
 
-theorem tables_head {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem tables_head {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (hst : sts[0]? = some st) : (tables zk x).head? = some (spec, st) := by
   unfold tables
   rw [hs]
@@ -303,7 +303,7 @@ theorem tables_head {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} 
     rfl
 
 /-- **An accepted run opens columns of the reader's table 0**: each has the statement's table 0's level-0 width. -/
-theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem acc_cols {zk : Bool} {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen 0) q = some u) :
     ∃ spec st, (tables zk x).head? = some (spec, st) ∧
@@ -326,7 +326,7 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
       rw [zkRunCols_width hp, hm, hw rfl]
   · simp [Claims.Flock.lookCol] at hu
 
-theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem zeroCol_length {zk : Bool} {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h : (tables zk x).head? = some (spec, st)) :
     (zeroCol zk x).length =
       2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
@@ -335,7 +335,7 @@ theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : S
   cases zk <;> simp
 
 /-- **`ColsOk` at the plain record**: an accepted run opens only columns of the zero column's width. -/
-theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem plain_colsOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployPlain rel) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
   obtain ⟨spec, st, hh, hl⟩ := acc_cols (zk := false) hacc hu
@@ -344,7 +344,7 @@ theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
 
 /-- **`ColsOk` at the masked record**: an accepted run opens only columns of the zero column's width, the witness
 lanes. -/
-theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem zk_colsOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployZk rel) (wordLen true) (wide true) := by
   intro x Ω P ω r q u hacc _ hu
   obtain ⟨spec, st, hh, hl⟩ := acc_cols (zk := true) hacc hu

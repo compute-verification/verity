@@ -58,7 +58,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FlockDeploy.FinalP} {x : Claims.Msg} {ms : List Claims.Msg}
+variable {rd : Hash.Msg → Option FlockDeploy.FinalP} {x : Hash.Msg} {ms : List Hash.Msg}
   {cs : List FlockDeploy.Coin} (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- **Rep `r` of table `i`'s side at the decision**: the table's schedule, and the rep's decided cap and Ligerito
@@ -75,8 +75,8 @@ theorem rowD_of_pieces
     (hfast : Flock.fast100 (D.files cls i).st.m = some (D.files cls i).sch)
     (hdec : decodeProof (shapeOf (D.files cls i).st (D.files cls i).sch (D.files cls i).extras.size)
       ((D.files cls i).bytes r) = .ok ((D.files cls i).proof r))
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (posAt : Claims.Msg → List FlockDeploy.Coin → OpenPiece → ℕ)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (posAt : Hash.Msg → List FlockDeploy.Coin → OpenPiece → ℕ)
     (hholds : ∀ q ∈ pieces, openHolds sideAt posAt q x ms cs)
     (hside : ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ v info kappa,

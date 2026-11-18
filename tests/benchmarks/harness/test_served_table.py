@@ -9,7 +9,7 @@ import pytest
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
+from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
@@ -607,17 +607,14 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
         for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
                      "admission"):
             assert getattr(member, name) == getattr(r6, name), (spec, name)
-        settings = {k: v for k, v in member.preset.engine_settings.items() if k != "batch_invariant"}
-        assert settings == dict(r6.preset.engine_settings), spec
+        assert dict(member.preset.engine_settings) == dict(r6.preset.engine_settings), spec
         assert dict(member.env) == {k: v for k, v in r6.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}, spec
         assert (member.preset.gpu_id, member.preset.gpu_count, member.preset.precision, member.preset.vllm_pin) == (
             "h200", 1, r6.preset.precision, r6.preset.vllm_pin), spec
     big, small = resolve_spec(BIG).preset, resolve_spec(SMALL).preset
-    assert (big.model, big.revision, big.case, big.model_digest) == (
-        r6.preset.model, r6.preset.revision, r6.preset.case, r6.preset.model_digest)
+    assert (big.model, big.revision, big.case) == (r6.preset.model, r6.preset.revision, r6.preset.case)
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
-    assert (small.model, small.revision, small.case, small.model_digest) == (
-        pinned.model, pinned.revision, pinned.case, None)
+    assert (small.model, small.revision, small.case) == (pinned.model, pinned.revision, pinned.case)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
     assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
 

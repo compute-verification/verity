@@ -54,7 +54,7 @@ theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Por
 
 /-- **The datum that opens a row's bit under the deployed commitment** at a leaf map `L` (`opens_commitDepL`'s): the
 opening's salt `y`, row `r`'s registration path at `L` padded to `L.d` levels, and the row's bits `v`. -/
-def dataAt (c : Flock.Circuit) (L : LeafMap) (r : RowAt) {W : ℕ} (v : BitVal W) (y : List UInt8) : Claims.Msg :=
+def dataAt (c : Flock.Circuit) (L : LeafMap) (r : RowAt) {W : ℕ} (v : BitVal W) (y : List UInt8) : Hash.Msg :=
   dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf) (L.d - Flock.log2ceil (L.cnt r.port))
     (List.ofFn fun k : Fin r.width => v.get k.val)
 
@@ -205,7 +205,7 @@ theorem transports_shapedP (R : Reg) (hrows : RowsOk c)
     (hy : y.length = saltLen)
     (he : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).com (p, v, y) =
       (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).cs R ((vbP dj y₀ ht hc hscope hU hpi hpub).pos g)) :
-    ∃ d : Claims.Msg, (commitDepL ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi))
+    ∃ d : Hash.Msg, (commitDepL ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi))
         (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
         (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)) g,
