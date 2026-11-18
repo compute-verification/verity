@@ -112,7 +112,7 @@ def Work.and (w : Work) (a b : Form) : Work × Form :=
   else if b.atoms.isEmpty then (w, if b.one then a else {})
   else w.row a b
 
-def Work.gate (w : Work) (g : Gate) (ops : Array Form) : V (Work × Form) :=
+def Work.op (w : Work) (g : Gate) (ops : Array Form) : V (Work × Form) :=
   match g with
   | .const_ b => pure (w, Form.const b)
   | .not_ => match ops[0]? with
@@ -210,7 +210,7 @@ def gateDef (P : Prog) (f : Nat) : M (Nat × Array Nat) := do
   let callee := P.defs[f]!
   let some g := gateOf? callee.id | throw s!"{callee.id}: not a Boolean gate (PROTOCOL.md §9)"
   let ins := callee.paramLeaves
-  let (w, o) ← ({} : Work).gate g ((Array.range ins).map Form.input)
+  let (w, o) ← ({} : Work).op g ((Array.range ins).map Form.input)
   let (w, c) := w.commitOwn o
   let r ← emit (w.finish ins) #[c]
   modify fun s => { s with gates := s.gates.insert f r }
@@ -265,7 +265,7 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
           let mut ops := #[]
           for a in x.args do
             for t in [0:a.seq.count] do ops := ops.push (← liftM (w.formOf st (a.seq.get t)))
-          let (w', f) ← liftM (w.gate g ops)
+          let (w', f) ← liftM (w.op g ops)
           w := { w' with outs := w'.outs.push (.gate f) }
       else
         let (e, rets) ← lowerDef P fuel x.fn
