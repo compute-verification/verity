@@ -883,6 +883,32 @@ def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmp
     assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
 
 
+def test_a_merged_tree_survives_a_prune_of_the_clone_s_worktrees_while_a_build_uses_it(tmp_path, monkeypatch):
+    """A detached quick tier's or auto plan's `git worktree prune` takes no lock, and one racing a registered worktree's add
+    deleted part of its registration (its `gitdir`) and left the rest, which the next prune removed while the build still
+    used the tree (`git add -u`: gitfile does not point to a valid repository).  The tree is registered nowhere in the clone,
+    so neither step reaches it, and it leaves nothing behind."""
+    from research import queue
+
+    repo = tmp_path / "repo"
+    monkeypatch.setattr(queue, "MERGED_ROOT", tmp_path / "fast")
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "f.txt").write_text("x\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "f")
+    head = _git(repo, "rev-parse", "HEAD")
+    with queue.merged_worktree(repo, head) as wt:
+        for reg in (repo / ".git" / "worktrees").glob("*"):
+            (reg / "gitdir").unlink(missing_ok=True)
+        _git(repo, "worktree", "prune")
+        (wt / "f.txt").write_text("y\n")
+        _git(wt, "add", "-u")
+        assert _git(wt, "diff", "--cached", "--name-only", head) == "f.txt"
+        assert _git(repo, "cat-file", "-p", f"{_git(wt, 'write-tree')}:f.txt") == "y"
+        assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+    assert not list((tmp_path / "fast").iterdir()) and _git(repo, "status", "--porcelain") == ""
+
+
 def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
     """A queue's clone of a `main` holding stub move scripts: `rename.py` writes its working directory to ``ran`` and adds
     `moved.txt`, `move_check.py` certifies; (the queue, `main`, a move PR naming the map)."""
