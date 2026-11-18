@@ -106,6 +106,10 @@ class NoCatalog(ValueError):
     run` runs the point on this alone, saying so; any other error of a lookup is the launch's."""
 
 
+def _utc(t: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+
+
 def _show(root: Path, commit: str, field: str) -> str:
     try:
         process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True,
@@ -124,9 +128,9 @@ class StoreCompletion:
     unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
-                 log: Callable[[str], None] | None = None):
-        self._store, self.root, self.local_only = store, root, local_only
-        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
+                 log: Callable[[str], None] | None = None, clock: Callable[[], float] = time.time):
+        self._store, self.root, self.local_only, self._clock = store, root, local_only, clock
+        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr, flush=True))
         self._pulled: set[str] = set()
 
     @property
@@ -203,10 +207,15 @@ class StoreCompletion:
 
         from research.store import labels_sync
 
-        remote = self._remote()
-        report = labels_sync.sync(self.store, push=False)
-        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
-                  f"({report['already']} of {report['remote_before']} were here)")
+        remote, start = self._remote(), self._clock()
+        self._log(f"{_utc(start)} pulling labels from {remote.describe()} into {self.store.root}")
+        theirs = labels_sync.remote_labels(remote)
+        listed = self._clock()
+        report = labels_sync.sync(self.store, push=False, theirs=theirs)
+        end = self._clock()
+        self._log(f"{_utc(end)} pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here, {report['pack']} of them from the labels "
+                  f"pack): listed in {listed - start:.0f} s, synced in {end - listed:.0f} s")
         for line in report["bad"][:5]:
             self._log(f"skipped label {line}")
         return len(report["pulled"])

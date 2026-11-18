@@ -82,13 +82,12 @@ import scoring as S
 
 #: what the arms' runners read
 __all__ = [
-    "A", "LIBS", "NVFLAGS", "REPO", "S", "arm_doc", "build", "control", "fmt", "record", "report", "rows", "sh",
-    "nvcc", "show", "smi",
+    "A", "LIBS", "REPO", "S", "arm_doc", "build", "control", "fmt", "record", "report", "rows", "sh",
+    "nvcc", "nvflags", "show", "smi",
 ]
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
 LIBS = ["-lcublasLt", "-lnvidia-ml", "-ldl"]
 GATES = ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact")
 SMI_FIELDS = ("clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,"
@@ -129,11 +128,21 @@ def nvcc() -> str:
     return got
 
 
+@functools.cache
+def nvflags() -> list[str]:
+    """nvcc's flags for the scorer's builds, ``-gencode`` the target of the run's machine's card
+    (`verity_bench.kit.machine_arch`)."""
+    sys.path[:0] = [str(REPO / "benchmarks" / "harness"), str(REPO / "tools" / "config")]
+    from verity_bench import kit
+
+    return ["-O3", "-std=c++17", "-gencode", kit.arch_gencode(kit.machine_arch()), "-Xptxas", "-v"]
+
+
 def build(bdir: Path, out: Path) -> dict:
     log = out / "build.log"
     rec = {"nvcc": subprocess.run([nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]}
     for name, src in (("dcap", REPO / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler" / "dcap.cu"), ("dscore", HERE / "dscore.cu")):
-        rc = sh([nvcc(), *NVFLAGS, "-o", str(bdir / name), str(src), *LIBS], out=log, err=log)
+        rc = sh([nvcc(), *nvflags(), "-o", str(bdir / name), str(src), *LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of {name} failed (rc {rc}); see {log}")
     text = log.read_text()
@@ -177,7 +186,7 @@ def program_build(bdir: Path, out: Path, log: Path) -> dict:
     for s in doc.get("sources") or ():
         p = REPO / s
         if p.suffix == ".cu" and p.name not in ("dcap.cu", "dscore.cu"):
-            rc = sh([nvcc(), *NVFLAGS, "-o", str(bdir / p.stem), str(p), *LIBS], out=log, err=log)
+            rc = sh([nvcc(), *nvflags(), "-o", str(bdir / p.stem), str(p), *LIBS], out=log, err=log)
             if rc:
                 unbuilt[p.stem] = f"build rc {rc}"
             else:

@@ -190,6 +190,7 @@ trusted = true
 paths = [
     "verity/channel.py",
     "verity/party.py",
+    "verity/release.py",
     "verity/runtime/__init__.py",
     "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
@@ -204,6 +205,10 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
+    "verity/protocols/resource_accounting/network/prover/admission.py",
+    "verity/protocols/resource_accounting/network/prover/id_relay.py",
+    "verity/protocols/resource_accounting/network/prover/ids_protocol.py",
+    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
 ]
 
@@ -907,7 +912,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/scheme.py",
 ]
