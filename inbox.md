@@ -1,0 +1,3 @@
+[2026-11-18T08:03Z] 6b50cf80ca91
+From coordinator: a FIFTH field from benchmarks, to go in with your four: the root a scheme salt coin is opened after, as a declared function of the weights root and the epoch (today pouw.verifier.salt.epoch_open_root). The harness imports that from our verifier to record which root a served run coin followed; it is its last import of a scheme package in harness serving code. Add the field (Lacks when unset), fill it for Pearl+ pointing at the existing function (do not duplicate the function), and return the harness import site so benchmarks can swap it. Verifying the swap needs a card; say so, do not run one.
+
