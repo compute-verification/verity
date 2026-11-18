@@ -119,3 +119,8 @@ def test_attaching_moves_no_digest(desc):
 def test_merge_layers_later_fields_win():
     m = A.merge(ann({"key": "def:APair_v1", "name": "pair", "description": "d"}), ann({"key": "def:APair_v1", "name": "sum pair"}))
     assert m["entries"] == [{"key": "def:APair_v1", "name": "sum pair", "description": "d"}]
+
+
+def test_only_a_v2_descriptor_is_resolved_against():
+    with pytest.raises(ValueError, match="verity-ir/descriptor/v2"):
+        A.validate(ann({"key": "def:AMaxAbs_v1"}), codec.encode_program(Program(Top), codec.SCHEMA_V0))

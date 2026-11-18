@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from .codec import definition_digest
+from .codec import SCHEMA, definition_digest
 from .program import input_id
 from .types import type_from_json
 
@@ -51,7 +51,7 @@ def _stem(fid: str) -> str:
 
 
 def _callee(desc: Mapping[str, Any], node: Mapping[str, Any]) -> str:
-    return desc["callees"][node["fn"]] if "callees" in desc else node["fn"]
+    return desc["callees"][node["fn"]]
 
 
 def _in_definition(desc: Mapping[str, Any], fid: str, kind: str, rest: str) -> str | None:
@@ -91,6 +91,9 @@ class _Program:
     """What keys resolve against: one descriptor (and, for ``call`` keys, its program digest)."""
 
     def __init__(self, desc: Mapping[str, Any], digest: str | None) -> None:
+        if desc.get("schema") != SCHEMA:
+            raise ValueError(f"metadata resolves against a {SCHEMA} descriptor, not {desc.get('schema')!r}: "
+                             "`codec.encode_program` writes one")
         self.desc, self.digest = desc, digest
         root = desc["definitions"][desc["root"]]["body"]["nodes"]
         self.calls = {k for k, n in enumerate(root) if input_id(_callee(desc, n)) is None}
