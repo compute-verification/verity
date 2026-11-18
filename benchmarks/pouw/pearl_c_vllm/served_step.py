@@ -123,6 +123,23 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
+def _pearl_c(entry: str):
+    """The Pearl-C kernel row a protocol entry ``name:scheme`` names (`kernel_schemes`), else None."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
+    row = BY_NAME.get(entry.partition(":")[2])
+    return row if row is not None and row.family == "pearl-c" else None
+
+
+def undeclared(entries) -> str | None:
+    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry whose kernel row names no declared scheme
+    (``scheme``), as the RTX PRO 6000's names none, which no served path serves; None when there is none."""
+    for e in entries:
+        if (row := _pearl_c(e)) is not None and not row.scheme:
+            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+                    "benchmarks (bench_arm.py, e2e.py) run it directly")
+    return None
+
+
 def _live(arm):
     """`arm` with its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
     ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option
@@ -131,9 +148,8 @@ def _live(arm):
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
     env = PearlCArm()
-    if not any(e.partition(":")[2] in kernel_names("pearl-c") for e in arm.protocols):
+    if not any(_pearl_c(e) for e in arm.protocols):
         return arm, None
     config = dict(arm.protocols_config or {})
     try:
@@ -151,7 +167,6 @@ def _engine(spec_name: str, arm_id: str):
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
-    from benchmarks.pouw.pearl_c_vllm.served_passes import undeclared
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
