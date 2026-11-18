@@ -17,6 +17,11 @@ Exactly one of the two inequalities is strict, and either must be: with slack in
 (`joined (seen a) + L ≤ w + 1`, `not_seen_le_of_slack_probation`) or in the cap (`w ≤ joined a' + L`,
 `not_seen_le_of_slack_cap`), two appends joining one window break the order. A fresh append's own tiles are never read
 under refresh (`fresh_not_read`): `seen a = a ≠ 0` puts `joined a + L ≤ w < joined a + L`.
+
+`cut`, `cut_strict` and `fresh_not_read` read the origins at the coins and need nothing of how they were chosen.
+`cut_choices` needs them fixed before every coin: origins read only from the coins of the appends before each append
+let the prover choose, after a tile's key coin, which committed payload another tile of the pass carries
+(`prefix_origin_reads_key`).
 -/
 
 @[expose] public section
@@ -118,5 +123,49 @@ theorem fresh_not_read {n P N m ρ h ks G d T M L : ℕ} {Y : Type}
   · rwa [hfresh] at h
   · rw [hfresh] at h
     omega
+
+/-- **Origins read from the coins before the append let a payload read a key of its pass**: `cut_choices` needs the
+origins fixed before every coin, not only read from the coins of the appends before each append. Appends `1` and `2`
+are fresh, joining window `0`, with payloads `false` and `true`; appends `3` and `4` are re-keys joining window `1`,
+`3` of append `1` and `4` of append `1` or `2` as append `3`'s coin falls. At `L = 1` a pass of window `1` reading both
+re-keys meets every condition of the cut, append `4`'s origin reads only the coins before it, and the cut's order
+holds, yet the payload read at append `4` is append `3`'s coin, the key of the other tile of the pass. -/
+theorem prefix_origin_reads_key :
+    ∃ (seen : (Fin 5 → Bool) → Fin 5 → Fin 5) (pay : Fin 5 → Bool) (joined : Fin 5 → ℕ),
+      (∀ (a : Fin 5) (κ κ' : Fin 5 → Bool), (∀ b < a, κ b = κ' b) → seen κ a = seen κ' a) ∧
+      Monotone joined ∧
+      (∀ a : Fin 5, 3 ≤ a → joined a ≤ 1 ∧ 1 < joined a + 1) ∧
+      (∀ κ, ∀ a : Fin 5, 3 ≤ a → (seen κ a : ℕ) = 0 ∨ joined (seen κ a) + 1 ≤ 1) ∧
+      (∀ κ, seen κ 4 ≤ 3) ∧
+      ∀ κ, pay (seen κ 4) = κ 3 := by
+  refine ⟨fun κ a => if a = 4 then (if κ 3 then 2 else 1) else if a = 3 then 1 else a,
+    fun a => decide (a = 2), fun a => if (a : ℕ) < 3 then 0 else 1, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro a κ κ' h
+    by_cases ha : a = 4
+    · subst ha
+      simp only [ite_true, h 3 (by decide)]
+    · simp only [ha, ite_false]
+  · intro a b hab
+    have : (a : ℕ) ≤ b := hab
+    dsimp only
+    split_ifs <;> omega
+  · intro a ha
+    have : 3 ≤ (a : ℕ) := ha
+    dsimp only
+    split_ifs <;> constructor <;> omega
+  · intro κ a ha
+    have h3 : 3 ≤ (a : ℕ) := ha
+    right
+    by_cases h4 : a = 4
+    · subst h4
+      cases h : κ 3 <;> simp [h]
+    · have h4' : (a : ℕ) ≠ 4 := fun h => h4 (Fin.ext h)
+      have : a = 3 := Fin.ext (by have := a.isLt; omega)
+      subst this
+      simp
+  · intro κ
+    cases h : κ 3 <;> simp [h]
+  · intro κ
+    cases h : κ 3 <;> simp [h]
 
 end ResourceAccounting.SecurityProofs.Refresh
