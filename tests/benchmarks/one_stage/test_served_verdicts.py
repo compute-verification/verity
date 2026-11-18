@@ -7285,7 +7285,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
     that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote v1, which
     composes beside onsite under POUW=pearlplus and composes neither protocol, is handed its three cases and misses
-    none; and the exit is 0, each product's Lean having
+    none, its cite not covering SPOT's coins, simulated where no key is pinned; and the exit is 0, each product's Lean having
     answered. A case of the protocol in another directory beside the piece's own (a second window's; the wipe's left
     by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
     OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
@@ -7336,6 +7336,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE remote-v1: VERDICT verity/remote/v1 reject stand-in", *UNSHOWN["remote-v1"],
+        "COMPOSITE remote-v1: NOT_COVERED verity/sampled-proofs/v1 coins: simulated on unnamed: "
+        "Verity.remote_soundness_of_subprotocols does not cover it",
         *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
         "COMPOSITE onsite: VERDICT verity/onsite/v1 reject stand-in", *UNSHOWN["onsite"]]
     assert str(tmp_path) not in said
