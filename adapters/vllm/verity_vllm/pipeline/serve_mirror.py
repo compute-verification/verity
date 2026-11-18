@@ -10,9 +10,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-#: the kinds of field that may leave the node (AGENTS.md's public kinds): protocol structure, the protocol's outputs, the
-#: verifier's coins and draws, and hiding commitments
-KINDS = ("structure", "output", "coin", "commitment")
+from verity.channel import PUBLIC as KINDS
 
 #: The two lists below are written out, not read from their sources, so that a field added at a source stays in the serve
 #: dir until it is listed here; a test holds each name to its source, and `LEFT_OUT` states what each source has that its
@@ -57,7 +55,7 @@ def check_kinds(table: Mapping[str, Any]) -> None:
             for k, s in spec.items():
                 walk(name, f"{path}.{k}" if path else k, s)
         elif spec not in KINDS:
-            raise ValueError(f"{name}: {path}: kind {spec!r} is not one of KINDS")
+            raise ValueError(f"{name}: {path}: kind {spec!r} is not one of verity.channel's public kinds {sorted(KINDS)}")
     for name, spec in table.items():
         walk(name, "", spec)
 

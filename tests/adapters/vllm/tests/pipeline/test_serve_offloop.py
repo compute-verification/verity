@@ -874,10 +874,13 @@ def test_the_mirror_copies_only_the_fields_public_names_at_every_level_and_no_ot
     """The rule, not the list: whatever `PUBLIC` holds, a record mirrors as exactly its named fields, an unnamed one planted at
     the top, in a nested record, in each element of a list of records, or as a record inside a named field, left out; a file
     `PUBLIC` doesn't list is not mirrored, nor can a mirror be asked for one; and a table with a field of any other kind than
-    `KINDS` is refused, naming its file, field and kind, by the check the module runs on `PUBLIC` at import."""
+    `KINDS` (`verity.channel.PUBLIC`) is refused, naming its file, field and kind, by the check the module runs on `PUBLIC`
+    at import."""
     sm.check_kinds(sm.PUBLIC)
-    with pytest.raises(ValueError, match=r"windows\.jsonl: served_rows\.root: kind 'undecided' is not one of KINDS"):
-        sm.check_kinds({**sm.PUBLIC, "windows.jsonl": {"window": sm.KINDS[0], "served_rows": {"root": "undecided"}}})
+    for bad in ("undecided", "coin", "private"):
+        with pytest.raises(ValueError, match=rf"windows\.jsonl: served_rows\.root: kind '{bad}' is not one of verity\.channel's"):
+            sm.check_kinds({**sm.PUBLIC, "windows.jsonl": {"window": "structure", "served_rows": {"root": bad}}})
+    sm.check_kinds({"windows.jsonl": {k: k for k in sm.KINDS}})
     assert sm.MIRRORED == tuple(sm.PUBLIC)
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
