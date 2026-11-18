@@ -20,18 +20,30 @@ from __future__ import annotations
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import cast as BC
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.refs import Coll, concat
-from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
 from verity_vllm.definitions.registry.boolean_attention import _Bits
-from verity_vllm.definitions.registry.boolean_dsa import F32CeilFtzV2, I32SubV2, U32AndV2, flat
-from verity_vllm.definitions.registry.boolean_flashmla import BIT_T, E8, F32, NvExp2fV2, NvLog2fV2
+from verity_vllm.definitions.registry.boolean_dsa import (
+    F32CeilFtzV2,
+    I32SubV2,
+    U32AndV2,
+    flat,
+)
+from verity_vllm.definitions.registry.boolean_flashmla import (
+    BIT_T,
+    E8,
+    F32,
+    NvExp2fV2,
+    NvLog2fV2,
+)
 
 #: the stages of the right shift by 31 - k, largest first, each with the low bits its later stages read
 _STAGES = ((16, 23), (8, 15), (4, 11), (2, 9), (1, 8))

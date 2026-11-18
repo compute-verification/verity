@@ -15,13 +15,13 @@ import struct
 
 import numpy as np
 import pytest
-from verity.circuits import requirement
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
-from verity.protocols.resource_accounting.memory.poub.verifier.memory_map import MemoryMapError, Replay
 
+from verity.circuits import requirement
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import Append, PageLayout
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.memory_map import LIFETIME, Lines
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import ArrayBacking, NodeMemory
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
+from verity.protocols.resource_accounting.memory.poub.verifier.memory_map import MemoryMapError, Replay
 
 from .test_registry import CODEC, RECEIPT
 
