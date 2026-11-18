@@ -46,12 +46,13 @@ namespace Vocab
 variable {d : ℕ} {α : Type} (V : Vocab d α)
 
 /-- Unit `u` carries its inputs in `X`: at each committed gate it reads, whose position `named` gives, the value is
-the committed output of the writer unit's gate at that position, bit for bit. -/
+the value the writer unit's gate at that position is committed to, bit for bit. -/
 def Carries (named : (θ : ByteArray) → (F : Array ByteArray) → Fin (V.circuitOf θ F).N → Option Place)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (X : (V.circuitOf θ F).Trace) (u : Fin (V.units θ F)) : Prop :=
   ∀ g ∈ (V.partsOf θ F).io u, ∀ q, named θ F g = some q →
     ∀ (h : Fin (V.circuitOf θ F).N) (v : Fin (V.units θ F)), V.place θ F c h = some q →
-      (V.partsOf θ F).unit h = some v → h ∈ (V.partsOf θ F).io v → ∀ i, (X g).getLsbD i = (X h).getLsbD i
+      (V.partsOf θ F).unit h = some v → h ∈ (V.partsOf θ F).io v →
+        ∀ b, V.Opens θ F c h b → ∀ i, (X g).getLsbD i = b.getLsbD i
 
 open Classical in
 /-- The units `X` doesn't bind or that don't carry their inputs. -/
