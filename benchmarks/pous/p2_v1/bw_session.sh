@@ -28,7 +28,7 @@ set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pous/p2_v1
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-CUDA=${CUDA:-/usr/local/cuda-13.0}
+CUDA=${CUDA:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)} || { echo "no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
 ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
 NODE=${NODE:-vy-dc-h200-2}
 REG=verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json
