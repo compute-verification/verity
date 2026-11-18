@@ -101,6 +101,7 @@
   "Properties.InferenceOnly.RecordForm",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Poub.Remote",
+  "Properties.Poub.Remote.Refresh",
   "Properties.Poub.Remote.Coins",
   "Properties.Poub.Remote.Shared",
   "Properties.Poub.Remote.Pooled",

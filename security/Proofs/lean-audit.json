@@ -84,6 +84,7 @@
   "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.ResourceAccounting.Requirement",
   "Proofs.Properties.Poub.Remote",
+  "Proofs.Properties.Poub.Remote.Refresh",
   "Proofs.Properties.Poub.Remote.Coins",
   "Proofs.Properties.Poub.Remote.Frozen",
   "Proofs.Properties.Poub.Remote.Order",
