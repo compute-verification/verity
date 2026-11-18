@@ -20,6 +20,8 @@ HASHES = {
                    "6bc3bb0d9254e98c6650e473c14b52f5616fdfee8736d9bf0266d2c7124d0be9",
     "onsite_network": "41676c2b8ed781e6e8f4fcc85d8b708dce2b6d3a825edbc42a7ce354ed8cec12"
                       "cdf15a3f66e7156a39a3eecd99c725dd09f857218a4a09e19a3bb37765b212bb",
+    "onsite_network_front": "63790fee2ba24390935db6d5a862cdd726e18675b1f50583e8d18aa0ff2c6ab4"
+                            "19f297d3b14a5933c55339e82c2eef829538b2e3d43ef91d671cf6a9e3666151",
     "remote": "0b0611e7cbff2cd20514e26a4fe3feb1af746b33d061f3be43ff4679657429ed"
               "ef66a8d47b5c59600dc835865cb92442eac0c6f278b27481eef742782b5762ed",
 }
