@@ -189,14 +189,6 @@ def exceptions(product: str) -> list[str]:
     return [EXCEPTIONS[i] for i in COMPONENTS[product] if i in EXCEPTIONS]
 
 
-def file_sha512(path: Path) -> str:
-    h = hashlib.sha512()
-    with open(path, "rb") as f:
-        while chunk := f.read(1 << 20):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     """What ran the check: the tree's commit (``commit``, None outside a git checkout) and whether its tracked files are
     that commit's (``clean``), the executable's SHA-512 (``verifier_sha512``), and the guarantee the product's accept
@@ -213,7 +205,9 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
         g = audit.get("guarantees", {}).get(cites)
         lock = {"listed": g is not None, "deployed": cites in audit.get("deployed", []),
                 "open": sorted(((g or {}).get("premises") or {}).get("open", []))}
-    return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
+    with open(exe, "rb") as f:
+        verifier = hashlib.file_digest(f, "sha512").hexdigest()
+    return {"commit": commit, "clean": clean, "verifier_sha512": verifier, "cites": cites, "lock": lock}
 
 
 def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:

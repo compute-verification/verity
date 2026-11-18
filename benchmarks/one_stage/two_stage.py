@@ -966,11 +966,9 @@ def read_record(defn: SpecializedDefinition, circuit: Path, sha512: str) -> dict
 
     if not read_tmpl.is_read(defn):
         return None
-    h = hashlib.sha512()
     with open(circuit, "rb") as f:
-        while chunk := f.read(1 << 24):
-            h.update(chunk)
-    if h.hexdigest() != sha512:
+        got = hashlib.file_digest(f, "sha512").hexdigest()
+    if got != sha512:
         raise ValueError(f"{circuit} is not the circuit file of SHA-512 {sha512}")
     V, H = int(defn.statics["V"]), int(defn.statics["H"])
     return {"V": V, "H": H} if read_tmpl.check(V, H, circuit) is None else None
