@@ -23,7 +23,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
@@ -900,7 +900,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
         c = win.close()
         prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
                 "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: state.entry()}}}
-        win.write(c, tmp_path / name, prov, registrar=REG, index_salt=salt)
+        win.write(c, tmp_path / name, prov, registrar=DK, index_salt=salt)
         pub[name] = _public(c, tmp_path / name)
     assert pub["served"] == pub["other"]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])
@@ -922,7 +922,7 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
     win.supply()
     WR.Rows(low, slots, vals).record(win)
-    win.write(win.close(), tmp_path, {}, registrar=REG)
+    win.write(win.close(), tmp_path, {}, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     kept = (tmp_path / CS.INDEX_SALT).read_bytes()
     assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
