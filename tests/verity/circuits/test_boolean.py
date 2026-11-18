@@ -163,14 +163,13 @@ def test_an_n_input_gate_decodes_by_id():
     text = codec.canonical_json(codec.encode_program(Program(bind(outer)))).decode()
     D = codec.decode_program(json.loads(text), DefinitionTable())
     assert [g.prim for g in map(D.circuit.gate, range(D.circuit.size)) if g.prim.id != "Input1_v1"] == [BL.and_gate(5)]
-    with pytest.raises(ValueError, match=r"E_BODY_MISSING: the word primitives \['And05_v1'\]"):
+    with pytest.raises(KeyError):
         codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), DefinitionTable())
 
 
 def test_a_family_member_has_one_spelling(pinned):
     """A gate or constant id decodes only as the member's own id: a near miss of the pattern, a value of 2^w or more, and
-    every other spelling of the hex or the width are refused, in the decoder too, where such an id is a word primitive without
-    its Boolean body."""
+    every other spelling of the hex or the width are refused, in the decoder too."""
     assert [i for i, k in pinned["gate_ids"] if k] == ["And2_v1", "Xor3_v1", "And10_v1", "Not_v1"]
     assert [i for i, c in pinned["constant_ids"] if c] == CONSTANT_IDS[:9]
     for fid, wb in pinned["constant_ids"]:
@@ -185,7 +184,7 @@ def test_a_family_member_has_one_spelling(pinned):
         d = json.loads(json.dumps(desc))
         d["definitions"][new] = dict(d["definitions"].pop(old), id=new)
         d["callees"][d["callees"].index(old)] = new
-        with pytest.raises(ValueError, match="E_BODY_MISSING"):
+        with pytest.raises(KeyError, match="is not in the registry"):
             codec.decode_program(d, REGISTRY)
 
 

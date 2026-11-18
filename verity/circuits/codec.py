@@ -909,12 +909,7 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
         if d["form"] == "primitive":
             if d["id"] != fid:
                 raise ValueError(f"definition {fid!r}: a primitive is keyed by its id, not {d['id']!r}")
-            try:
-                p = _lookup_primitive(registry, d["id"])
-            except KeyError:
-                if not (isinstance(bm := desc.get("boolean"), dict) and fid in bm):
-                    raise ValueError(f"E_BODY_MISSING: the word primitives {[fid]} have no Boolean body in `boolean`") from None
-                raise
+            p = _lookup_primitive(registry, d["id"])
             if [[n, t.to_json()] for n, t in p.params] != d["params"] or p.ret.to_json() != d["ret"]:
                 raise ValueError(f"primitive {fid} signature differs from the registry")
             if d.get("ports") != P.declared(p):

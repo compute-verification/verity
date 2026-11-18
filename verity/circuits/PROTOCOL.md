@@ -261,7 +261,7 @@ functions `program_fn`'s record names, then the Boolean map's bodies in key orde
 any tables whose entries are valid; the order matters only to reproduce a writer's bytes.
 
 `decode_program` refuses, with `ValueError` (`KeyError` for an id without a definition, or a primitive the registry does not
-have whose body `boolean` names; one whose body it does not name is a word primitive without its body, `E_BODY_MISSING`):
+have):
 
 - a `schema` other than `verity-ir/descriptor/v2`: a v0 or v1 descriptor, which holds no Boolean bodies, is refused by name
   (`E_SCHEMA`) and never read as v2;
@@ -557,7 +557,7 @@ matches its family's pattern, and the member it denotes carries exactly that id.
 v zero-padded to ⌊w/4⌋ digits, at least one (Python's `f"{v:0{w // 4}x}"`): `Const32[0x3f800000]_v1`, `Const16[0x3f80]_v1`,
 `Const5[0x5]_v1`, `Const5[0x1f]_v1`, `Const1[0x0]_v1`. So `And02_v1`, `And1_v1`, `And2_v1\n`, `Const32[0x0]_v1`,
 `Const32[0x03f800000]_v1`, `Const32[0x3F800000]_v1`, `Const5[0x05]_v1`, `Const032[0x3f800000]_v1`, `Const0[0x0]_v1` and
-`Const1[0x00]_v1` denote nothing (`KeyError`; in a descriptor, a word primitive without its body, `E_BODY_MISSING`), and `Const1[0x2]_v1` and `Const8[0x100]_v1`, whose values are 2^w or more,
+`Const1[0x00]_v1` denote nothing (`KeyError`), and `Const1[0x2]_v1` and `Const8[0x100]_v1`, whose values are 2^w or more,
 are refused (`ValueError`).
 
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least

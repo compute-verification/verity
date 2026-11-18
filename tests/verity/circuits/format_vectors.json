@@ -1380,11 +1380,11 @@
   ],
   [
    "an Input id with a leading zero",
-   "ValueError: E_BODY_MISSING: the word primitives ['Input016_v1'] have no Boolean body in `boolean`"
+   "KeyError: 'primitive Input016_v1 is not in the registry'"
   ],
   [
    "an Input id with a trailing newline",
-   "ValueError: E_BODY_MISSING: the word primitives ['Input16_v1\\n'] have no Boolean body in `boolean`"
+   "KeyError: 'primitive Input16_v1\\n is not in the registry'"
   ],
   [
    "a primitive keyed by another id",
