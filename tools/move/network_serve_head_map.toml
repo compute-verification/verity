@@ -23,3 +23,6 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TR
            "tools/move/**", "tests/tools/move/**", "archive/**", "tools/research/src/research/store/moves.json",
            "**/lean-audit.json"]
 include = []
+
+[modules]
+"verity_vllm.pipeline.serve_head" = "verity.protocols.resource_accounting.network.prover.serve_head"
