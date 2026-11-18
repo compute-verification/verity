@@ -24,8 +24,9 @@ advice: the gates holding θ's values, which were committed beforehand.
   prove, nested in `𝓘` (`Partition.Refines`), and where its values are committed (`L`, a `Layout`: the registered
   values' rows, and each gate's phase, none after the `phases` so far). A gate's position is `P.pos L`.
 * **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks and each proof
-  block's inference block. Appending it (`Compiler.Output.append`) puts its gates in phase `o.phases + 1`, registers
-  none of them, and keeps every earlier gate's position.
+  block's inference block. Appending it (`Compiler.Output.append`) puts its gates in phase `o.phases + 1` and
+  registers none of them. Each window value is committed in the phase that writes it, so a phase that reads only
+  earlier boundary values and declares no earlier gate an output keeps every earlier position.
 * **The compiler** (`Compiler`): its advice cap, its output at setup on θ, and its output on each phase's advice over
   the circuit so far. It is what the registration's builder item holds (`Registration.Builder`).
 
