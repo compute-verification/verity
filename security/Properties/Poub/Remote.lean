@@ -107,7 +107,8 @@ plan:
    leaf `p / 16` of pass `i`'s receipt tree under the pass's root, in the domain of the pass's seed and plan;
 3. and 4. its block decodes to a payload: a registered block (`j < N`) under the registration's key, the payload's leaf
    under its salt and path at `j` under the payload root; an appended block under the bound key of its digest and its
-   append's coin, and, for a fresh append (the append holding `j`, `appendOf`), the payload's leaf at `j` under its
+   append's coin (an append's coin keys only its own blocks: `checkOpening` decodes block `j` under the coin of the
+   append holding `j`, never another's), and, for a fresh append (the append holding `j`, `appendOf`), the payload's leaf at `j` under its
    append's root, or, for a re-key, wherever it has an origin leaf (`originLeaf`), the opening names the origin's
    position `q` and the payload's leaf is leaf `q` under the origin's root. For a re-key's block this gives the origin's
    leaf under whatever append the list holds in the origin's slot, and nothing for a re-key whose origin slot holds none
