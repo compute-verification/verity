@@ -139,7 +139,8 @@ def qk_at(p: int, k: int) -> int:
 def cmp92() -> I.Circuit:
     """The class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
     H = 16, its row ops stood in by catalog units, rows gathered by the wire cut. At step p,
-    slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, units (p·S + j)·H + c);
+    slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, a registered value of
+    its own read as bits, units (p·S + j)·H + c);
     per layer l, six ``Gemm_v2{16, 16}`` head rows (q0 q1 k0 k1 v0 v1, units ((p·L + l)·S + j)·6 + r) reading the H
     coordinates cut a row each, QKᵀ as ``GemmCoordinate_v2{16}`` over every key so far in the plan's order (head, key, slot:
     at L·S·p(p+1) + 2l(p+1)S, the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``,
@@ -150,8 +151,8 @@ def cmp92() -> I.Circuit:
     (``WordBits_v1{16}``), each coordinate reaching the head rows as a word (``BitsWord_v1{16}``), each wire carrying one
     width. Its templates read one another, so it states an order, a range
     each inference entry's step (`ordered`)."""
-    pos, layer = T * H, 8 * H * H
-    qw = {0: pos, 1: pos + layer}
+    layer = 8 * H * H
+    qw = {0: 0, 1: layer}
     ow = {k: qw[k] + 6 * H * H for k in (0, 1)}
     wires = [I.Wire(OID, "x", QID, "o0", at=0, radix=(T * LAYERS * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
              I.Wire(HID, "x", OID, "o0", at=0, radix=(O, S, H), base=((NP - 1) * LAYERS + LAYERS - 1) * S * H,
@@ -169,12 +170,12 @@ def cmp92() -> I.Circuit:
                       I.Wire(KID, "wrow", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * k * S + 2,
                              step=(1, 6 * LAYERS * S, 6))]
     reads = [I.Read(EID, "a", "request", at=0, radix=(NP, S, H), base=1, step=(1, 1 + NP, 0)),
-             I.Read(EID, "b", "weights", at=0, radix=(T, S, H), base=0, step=(H, 0, 1)),
+             I.Read(EID, "b", "positions", at=0, radix=(T, S, H), base=0, step=(H, 0, 1)),
              I.Read(HID, "o0", "response", at=0, radix=(O, S), base=0, step=(1, O)),
              I.Read(QID, "w", "weights", at=0, radix=(T, LAYERS, S, 6), base=qw[0], step=(0, layer, 0, H * H)),
              I.Read(OID, "wrow", "weights", at=0, radix=(T, LAYERS, S, H), base=ow[0], step=(0, layer, 0, 2 * H)),
              I.Read(HID, "w", "weights", at=0, radix=(O * S,), base=ow[1] + 2 * H * H, step=(0,))]
-    params = {"request": S * (1 + NP), "response": S * O, "weights": pos + 2 * layer + H}
+    params = {"request": S * (1 + NP), "response": S * O, "positions": T * H, "weights": 2 * layer + H}
     inference = (I.InferenceEntry(EID, 0, (T, S, H), ("step", "slot", "-"), 0),
                  I.InferenceEntry(QID, 0, (T, LAYERS, S, 6), ("step", "-", "slot", "-"), 0),
                  *(I.InferenceEntry(KID, qk_at(p, k), (2, p + 1, S), ("-", "-", "slot"), p)
@@ -218,7 +219,7 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
     assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S, (T - NP) * S, H * T * S]
     assert {"template": KID, "at": LAYERS * S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in circuit.blocks.inference]
-    count = I.input_count(json.loads(json.dumps(circuit.description())), **held("weights", "request"))
+    count = I.input_count(json.loads(json.dumps(circuit.description())), **held("positions", "weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
     assert circuit.blocks_record()["proof"] == {"units": 17548,
                                                 "partition": I.descriptor_record(circuit, 1 << 20)["partition"]}
