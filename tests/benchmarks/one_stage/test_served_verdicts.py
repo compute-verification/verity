@@ -2817,7 +2817,10 @@ def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refu
     from verity.protocols.compose import schemes
 
     pearl, get = schemes.get("pearl-plus"), schemes.get
-    assert S.declared_unchecked(pearl.protocol) == "coins' signatures checked on the served node only; not checked by the auditor"
+    assert S.declared_unchecked(pearl.protocol) == (
+        "coins' signatures checked on the served node only; not checked by the auditor; the tie covers a workload served "
+        "eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a step's linear runs at the capture size, "
+        "with rows no request owns, and those rows are outside what the tie covers")
     stand_in = dataclasses.replace(pearl, unchecked={})
     monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
     assert S.declared_unchecked(pearl.protocol) == ""
