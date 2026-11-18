@@ -1364,16 +1364,27 @@ class World:
 
     def _lands(self, c: str) -> bool:
         """Whether ``c`` is an open PR's head, its current one or an older one, whose own land verdict there counts and no hold
-        keeps (`StoreLabels.lands`, without its owners' verdicts), in the labels this tick reads."""
+        keeps (`StoreLabels.lands`, without its owners' verdicts), nor one at a later head of that PR (`_voided`), in the
+        labels this tick reads."""
         for n in self.labels.at(c):
             if n not in self.open():
                 continue
             try:
-                if self.labels.lands(n, c):
+                if self.labels.lands(n, c) and not self._voided(n, c):
                     return True
             except QueueError as e:
                 self.log(f"research queue vqueue: #{n}'s verdicts at {c[:12]} can't be read, so no carry trusts it now: {e}")
         return False
+
+    def _voided(self, n: int, c: str) -> str | None:
+        """The later head of #``n`` than ``c`` whose hold voids ``c``'s land for whatever carries from it (`carry.voided`): a head
+        whose reviewers' newest verdicts hold it (`unreviewed`), logged; None when none does."""
+        held = [h for h, labs in self.labels._other_heads(n, c, vocab.REVIEWED).items()
+                if (unreviewed(self.labels._verified(n, h, labs)[0], ()) or "").startswith("held")]
+        if later := carry.voided(self.repo, c, held):
+            self.log(f"research queue vqueue: #{n}'s land at {c[:12]} trusts no merge of it: the hold at {later[:12]}, a later "
+                     "head, voids it")
+        return later
 
     def wide(self) -> frozenset[int]:
         """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is

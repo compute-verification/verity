@@ -69,6 +69,9 @@ class Labels:
     def lands(self, n: int, head: str) -> bool:
         return Q.unreviewed(self.verdicts.get((n, head), []), (f"lane-{n}",)) is None
 
+    def _verified(self, n: int, head: str, labs: list) -> tuple[list, list[str]]:
+        return labs, []
+
     def ready_by(self, n: int, head: str) -> str:
         return f"lane-{n}"
 
@@ -1817,6 +1820,27 @@ def test_a_merge_of_another_pr_s_older_head_carries_when_that_head_has_its_own_l
     recs = env.loop(policy).tick()
     (rec,) = [r for r in recs if r["action"] == "carry" and r["number"] == 1]
     assert rec["carries"] is carries and (carries or f"untrusted-parent: {new1[:12]} merges {old2[:12]}" in rec["why"])
+
+
+@pytest.mark.parametrize("held_at, carries", [("later", False), ("earlier", True)])
+def test_a_merge_of_another_pr_s_older_head_is_trusted_no_more_once_a_later_head_of_that_pr_is_held(env, held_at, carries):
+    """#1 merges #2's older head, which has its own land there: a hold at a later head of #2, though older than that land,
+    voids it for whatever carries from it (`carry.voided`), so #1's land doesn't carry; a hold at an earlier head of #2,
+    which the older head answered, leaves the trust."""
+    earlier2 = env.o.change({"b.txt": "1\n"})
+    old2 = env.o.change({"b.txt": "2\n"}, base=earlier2)
+    new2 = env.o.change({"b.txt": "2, re-headed\n"}, base=old2)
+    old1 = env.o.change({"a.txt": "1\n"})
+    _carry_main(env, "on")
+    new1 = _merge(env.o, old1, old2)
+    env.o.gh.put(1, new1)
+    env.o.gh.put(2, new2)
+    hold = [Lab("other", "hold", "2026-01-01T00:00:00Z", "a fault")]
+    env.labels.verdicts |= {(1, old1): [LAND], (1, new1): [], (2, old2): [Lab("reviewer", "land", "2026-01-02T00:00:00Z")],
+                            (2, new2): hold if held_at == "later" else [], (2, earlier2): hold if held_at == "earlier" else []}
+    recs = env.loop(policy).tick()
+    (rec,) = [r for r in recs if r["action"] == "carry" and r["number"] == 1]
+    assert rec["carries"] is carries and (carries or f"untrusted-parent: {new1[:12]} merges {old2[:12]}" in rec["why"]), rec
 
 
 def test_a_land_carries_to_a_new_head_of_a_pr_ci_owns_as_to_any_lanes(env):
