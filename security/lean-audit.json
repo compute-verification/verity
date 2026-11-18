@@ -3222,12 +3222,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.WiresSound": {
-   "owner": "@lean",
-   "digest": "0c489865a6d45dcdae0b5bf99e6fc00e8fa7d1535279d17ba21ebcd2ec65994f",
-   "issue": "LEAN-238",
-   "due": "2026-11-24"
-  },
   "Verity.Wipe.OfRun.Preserves": {
    "owner": "@lean",
    "digest": "e53bc266fa535839efba6e56109da557edaa11b26284cf3c35161edc69f46396",

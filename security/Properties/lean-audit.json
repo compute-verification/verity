@@ -342,6 +342,27 @@
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
+  "InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsEdges": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
   "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
    "digest": "d434ab65e32b6c16ceb04058891eae6f56894487f5893ba83192d2da1fa1c83b",
@@ -923,6 +944,13 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.ReadsByPath": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "remote soundness concludes the policy on the case as sent; its conclusion on the committed files waits on it"
+  },
   "Verity.Vocab.SpotSound": {
    "owner": "@proofs",
    "digest": "1e347ff1bc9991e036883a66c3e2296df9bed857caa8fe0d93264f57e907cd0b",
@@ -940,12 +968,6 @@
    "digest": "0cd2ace1aa9508d51f8785e7321099c129982a972ade0670af90a86b8da98a75",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.Vocab.WiresSound": {
-   "owner": "@lean",
-   "digest": "0c489865a6d45dcdae0b5bf99e6fc00e8fa7d1535279d17ba21ebcd2ec65994f",
-   "issue": "LEAN-238",
-   "due": "2026-11-24"
   },
   "Verity.Wipe.SurvivorBound": {
    "owner": "@soundness",
@@ -1032,7 +1054,7 @@
    "ResourceAccounting.Compose.PrefixOf",
    "ResourceAccounting.Compose.Scope"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
