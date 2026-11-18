@@ -82,7 +82,6 @@
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
   "Properties.Verity.Committed",
-  "Properties.Verity.Unwired",
   "Properties.Flock.Circuit.GateARow",
   "Properties.Ties",
   "Properties.Flock.Nets",
