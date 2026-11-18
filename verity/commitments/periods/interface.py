@@ -1689,9 +1689,8 @@ class Circuit:
                                       "wires": [w.doc() for w in self.wires], **self.declared()}))
 
     def program(self) -> tuple[Any, dict[str, Any]]:
-        """The circuit the period registers and its template query: its wired Program (`wired_population_program`), each
-        range of its order one batch and each wire an edge of it."""
-        return wired_population_program(list(self.templates), {**self.description(), "external": list(self.external)})
+        """The circuit the period registers and its template query, as the served route proves it (`served_program`)."""
+        return served_program(list(self.templates), {**self.description(), "external": list(self.external)})
 
     def template(self, tid: str) -> Any:
         """The template of descriptor id ``tid``."""
@@ -2554,11 +2553,22 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
     return w
 
 
+def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """The Program and template query the served route registers, commits and proves for the circuit record ``record``
+    over ``templates``: its wired Program (`wired_population_program`) with every wire cut to an input row of the same
+    leaves, the builder over ``record`` with no wires, so its root nodes, order, templates and counts, and so the members'
+    bases, are the wired Program's. The inference-only reader reads the same record's wires. Ends when the cut-wire rule
+    takes a registered tree port (cure 1); the served route then takes the wired Program. Circuits' `cut_wires` is this
+    transform, and once it is in `verity.circuits.population` this body is
+    ``return cut_wires(wired_population_program(templates, record)[0], record)[:2]``."""
+    return wired_population_program(templates, {**record, "wires": []})
+
+
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
-    """The wired Program and template query a period's ``circuit.json`` registers (`Circuit.program`; a record that lists
-    its members, `listed_program`), each template's Definition by ``resolve``."""
+    """The Program and template query a period's ``circuit.json`` registers (`Circuit.program`, `served_program`; a
+    record that lists its members, `listed_program`), each template's Definition by ``resolve``."""
     defs = _templates_of(doc, resolve)
-    return wired_population_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
+    return served_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
 
 
 def listed_program(templates: Sequence[tuple[Any, int]], external: Sequence[str]) -> tuple[Any, dict[str, Any]]:
