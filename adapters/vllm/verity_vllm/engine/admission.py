@@ -11,7 +11,8 @@ engine itself, asks its `Hook.ready` before each step.
 An input is a request, by its key (``key`` reads it from vLLM's request id), and an output a token. What each vLLM point
 emits, and what it asks:
 
-- ``add_request``: `InputArrived`, with the request's count of prompt ids; the request goes into the scheduler once every
+- ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line and headers the server
+  gave for it (`Hook.arrive`); the request goes into the scheduler once every
   gate a scheme filed (`StartOnBoundary`) starts it (`Exchange.start`), and one still held when it is finished from
   outside never reaches the scheduler, which is never handed its id;
 - before each step, on each pass of the engine core's input loop: every gate is asked (`Exchange.ready`, with the
@@ -27,7 +28,7 @@ from __future__ import annotations
 import collections
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from verity import hooks as H
@@ -73,14 +74,16 @@ class Hook(scheduler_step.Part):
         self.held: dict[str, str] = {}                      # vLLM's request id -> its input, until a gate starts it
         self.live: dict[str, str] = {}                      # vLLM's request id -> its input, in the scheduler
         self.sent: dict[str, int] = {}                      # vLLM's request id -> its tokens released so far
+        self.heads: dict[str, tuple[str, Mapping[str, str]]] = {}   # input -> its first line and headers, until added
         self._removal: scheduler_step.Removal | None = None
 
     def around_add_request(self, call: Callable[..., Any], request: Any, *a: Any, **kw: Any) -> Any:
         rid = request.request_id
         input_ = self.held[rid] = self.key(rid)
+        first_line, headers = self.heads.pop(input_, ("", {}))
         if self.ex.wants("steps"):
             n = int(getattr(request, "num_prompt_tokens", 0) or len(getattr(request, "prompt_token_ids", None) or ()))
-            self.ex.emit(H.InputArrived(input_, n, self.step))
+            self.ex.emit(H.InputArrived(input_, n, self.step, headers, first_line))
 
         def start() -> None:
             if self.held.pop(rid, None) is not None:
@@ -148,6 +151,11 @@ class Hook(scheduler_step.Part):
             for input_ in ended:
                 self.ex.emit(H.OutputsComplete(input_, self.step))
         return call(rest, finished_status, *a, **kw)
+
+    def arrive(self, input: str, first_line: str, headers: Mapping[str, str]) -> None:
+        """The first line and headers (names lower-cased) input ``input`` came with, for its `InputArrived`: the
+        server's, called before the input reaches the scheduler."""
+        self.heads[input] = (first_line, headers)
 
     # --- the engine core's gate (`core_gate.Gate`) ----------------------------------------------------------------------
 
