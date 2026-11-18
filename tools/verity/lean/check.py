@@ -5838,9 +5838,15 @@ def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked
     on its share: the walk is pure Python, which threads would run under one interpreter lock. RuntimeError, with the
     process's last words, where one exits other than 0 or answers other than once per job: no key is computed another
     way. ``walked`` adds the modules, the processes and the walks' own seconds, summed over the processes."""
-    items = sorted(jobs.items())
-    n = max(1, min(len(items), int(cores() * WALK_CORE_SHARE)))
-    chunks = [items[i::n] for i in range(n)]
+    n = max(1, min(len(jobs), int(cores() * WALK_CORE_SHARE)))
+    size = {k: sum(f.stat().st_size for f in files.values()) for k, (_, files) in jobs.items()}
+    chunks: list[list] = [[] for _ in range(n)]
+    load = [0] * n
+    # a walk's time grows with its parts' size, which spans orders of magnitude: largest first, onto the least loaded
+    for item in sorted(jobs.items(), key=lambda it: (-size[it[0]], it[0])):
+        i = load.index(min(load))
+        chunks[i].append(item)
+        load[i] += size[item[0]]
 
     def walk(chunk) -> dict:
         doc = [[source, {p: str(f) for p, f in files.items()}] for _, (source, files) in chunk]
@@ -5858,7 +5864,7 @@ def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked
     with ThreadPoolExecutor(max_workers=n) as ex:
         done = list(ex.map(walk, chunks))
     if walked is not None:
-        walked["modules"] = walked.get("modules", 0) + len(items)
+        walked["modules"] = walked.get("modules", 0) + len(jobs)
         walked["processes"] = max(walked.get("processes", 0), n)
         walked["seconds"] = round(walked.get("seconds", 0) + sum(d["seconds"] for d in done), 1)
     return {k: g for chunk, d in zip(chunks, done) for (k, _), g in zip(chunk, d["graphs"])}
