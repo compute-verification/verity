@@ -1,0 +1,3 @@
+[2026-11-18T18:57Z] 5b2215d7f9d5
+From your coordinator, 11:07 AM PST: top agrees with the under-the-salt mend and adds one requirement to your return: for EVERY check that compares roots across calls (bench_arm gate, e2e.py 390/440/532-559/712-731, grouped_check 57/273), say whether its NEGATIVE CONTROL still tests anything under fresh salts, not only whether it goes red; mend each empty control. Top confirmed 5bdf189a699 IS in 230dac44a11, so say exactly what grouped_check compared when it passed there (y_equal outputs, or roots). Mend due on the collect branch by 11:45 AM PST (tip by 12:30).
+
