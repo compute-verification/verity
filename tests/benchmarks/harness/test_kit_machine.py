@@ -80,3 +80,30 @@ def test_an_entry_that_is_not_a_value_and_its_read_is_refused(tmp_path, old, new
     d = _record(tmp_path, old, new)
     with pytest.raises(SystemExit, match=re.escape("gives python as ") + r".*not \{ value, read \}"):
         kit.machine_properties("m", directory=d)
+
+
+def _run(tmp_path: Path, monkeypatch, machine: str | None) -> Path:
+    """A run directory as `research run --on` leaves it: the copy of one-card's [properties] in inputs/."""
+    (tmp_path / "inputs").mkdir()
+    table = (MACHINES / "one-card.toml").read_text().split("[properties]", 1)[1]
+    (tmp_path / "inputs" / "one-card.toml").write_text(f'machine = "one-card"\n\n[properties]{table}')
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    if machine is None:
+        monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
+    else:
+        monkeypatch.setenv("RESEARCH_MACHINE", machine)
+    return tmp_path
+
+
+def test_unnamed_it_reads_the_copy_the_launch_put_in_the_run(tmp_path, monkeypatch):
+    _run(tmp_path, monkeypatch, "one-card")
+    assert kit.machine_properties() == kit.machine_properties("one-card", directory=MACHINES)
+
+
+def test_unnamed_it_refuses_a_run_with_no_machine_or_no_copy_by_name(tmp_path, monkeypatch):
+    _run(tmp_path, monkeypatch, None)
+    with pytest.raises(SystemExit, match=r"^no machine named: RESEARCH_MACHINE is unset"):
+        kit.machine_properties()
+    monkeypatch.setenv("RESEARCH_MACHINE", "bare")
+    with pytest.raises(SystemExit, match=r"^machine 'bare': .*inputs/bare\.toml is not there: .*only where its record has the table"):
+        kit.machine_properties()
