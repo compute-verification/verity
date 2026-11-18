@@ -342,8 +342,8 @@ def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_en
 
 
 class RankExecutor:
-    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool` and `boundary.rank_take`, rank 2's
-    root different."""
+    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool`, `boundary.rank_salted` and
+    `boundary.rank_take`, rank 2's root different."""
 
     def __init__(self):
         self.calls: list = []
@@ -353,12 +353,14 @@ class RankExecutor:
 
         self.calls.append((fn.__name__, args))
         if fn is B.rank_pool:
-            return [{"rank": r, "bytes": 10} for r in (1, 0)]
+            return [{"rank": r, "bytes": 10, "salt_rows": {"kv.0": 2}} for r in (1, 0)]
+        if fn is B.rank_salted:
+            return [{"rank": r, "build_s": 0.5 + r} for r in (1, 0)]
         return [{"rank": r, "root": "aa" if r < 2 else "bb", "hash_kernel_ms": 4.0 + r, "copy_ms": 9.0 if r == 0 else None,
                  "copied_bytes": 10 if r == 0 else 0, "kv_s": 0.5, "runner_s": 0.1 * r} for r in (2, 0, 1)]
 
 
-def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch):
+def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch, tmp_path):
     import boundary as B
     import pytest
 
@@ -370,12 +372,15 @@ def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(mon
     with pytest.raises(RuntimeError, match="no save_kv"):
         P.ranks_take(core, {"out": "x", "save_kv": [1]}, NS(scheduled=7), None, None, [None], lambda: now[0],
                      record=recs.append)
-    take = P.ranks_take(core, {"out": "x", "kv_copy": "first"}, NS(scheduled=7), None, None, ["medium2"],
-                        lambda: now[0], key=lambda: b"k" * 32, record=recs.append)
-    assert calls == [("rank_pool", (4, "first"))] and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    take = P.ranks_take(core, {"out": "x", "kv_copy": "first", "kv_dir": str(tmp_path / "kv")}, NS(scheduled=7), None,
+                        None, ["medium2"], lambda: now[0], record=recs.append)
+    salts = tmp_path / "kv" / B.SALTS
+    assert calls == [("rank_pool", (4, "first")), ("rank_salted", (str(salts),))]
+    assert B.SF.params(salts) == {"kv.0": 2} and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    assert recs[0]["build_s"] == 1.5
     now[0] = 12.5
     take(NS(edge=0), {"edge": 0, "due_t": 12.0, "drained_t": 12.25, "drain_calls": 2})
-    assert calls[-1] == ("rank_take", (b"k" * 32,))
+    assert calls[-1] == ("rank_take", ())
     r = recs[-1]
     assert (r["edge"], r["load"], r["next_step"], r["drain_s"], r["pause_s"]) == (0, "medium2", 7, 0.25, 0.25)
     assert [x["rank"] for x in r["ranks"]] == [0, 1, 2] and r["state_requests_bytes"] == 3
@@ -396,7 +401,8 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
     monkeypatch.setattr(B, "capture", lambda core, runner=True: {"requests": b""})
     core = NS(scheduler=sched, model_executor=RankExecutor(), batch_queue=[])
     now, steps = [0.0], []
-    edges = P.edges_of(core, {"out": str(tmp_path), "every_s": 30.0, "kv_copy": "first"}, lambda: now[0])
+    edges = P.edges_of(core, {"out": str(tmp_path), "private": str(tmp_path / "p"), "every_s": 30.0, "kv_copy": "first"},
+                       lambda: now[0])
 
     def step(t: float) -> None:
         now[0] = t

@@ -38,7 +38,7 @@ and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag`
 (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy`` is false the GPU's
 busy time each step since the last edge) is written off the engine loop. With the uniprocess executor, so are its
 `boundary.dump_core` and block fingerprints (``private``/server/edges/) and its state (``kv_dir``, by default that
-directory, /edge-K.state.pkl), and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
+directory, /edge-K.state.pkl, beside the KV pool's salt file, `boundary.SALTS`), and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
 step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
@@ -490,6 +490,7 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     save_kv = set(int(k) for k in cfg.get("save_kv", (0,)))
     kv_dir = Path(cfg.get("kv_dir") or d)
     kv_dir.mkdir(parents=True, exist_ok=True)
+    kv.salted(B.draw_salts(kv_dir / B.SALTS, kv.salt_rows()))
     record = _lines(out / f"edges.{pid}.jsonl")
     t = clock()
     kv.take()
@@ -560,11 +561,11 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
 
 
 def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: list[float] | None, load: list,
-               clock: Callable[[], float], key: Callable[[], bytes] = lambda: os.urandom(32),
-               record: Callable[[dict], None] | None = None) -> Callable[[Any, dict], None]:
+               clock: Callable[[], float], record: Callable[[dict], None] | None = None) -> Callable[[Any, dict], None]:
     """`edges_of`'s take for a tensor-parallel executor, whose ranks the engine core reaches only through
-    ``collective_rpc``: the engine core's state taken here, and on every rank its KV pool hashed under a fresh key, the
-    same on every rank, so that ranks holding the same bytes give the same root (`boundary.rank_take`), copied to host
+    ``collective_rpc``: the engine core's state taken here, and on every rank its KV pool hashed under the pool's salts,
+    drawn here once into ``kv_dir`` and read by every rank, so that ranks holding the same bytes give the same root
+    (`boundary.rank_salted`, `boundary.rank_take`), copied to host
     memory on the ranks ``kv_copy`` names (`boundary.KV_COPY`), and its runner rows and generators taken. Each part is
     kept where it was taken until the next edge replaces it; nothing is written but the edge's record, and the record's
     pause runs to the engine core's next step."""
@@ -578,7 +579,13 @@ def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     record = record or _lines_behind(Path(cfg["out"]) / f"edges.{os.getpid()}.jsonl")
     t = clock()
     init = rpc(B.rank_pool, args=(len(pool.blocks), cfg.get("kv_copy", "all")))
-    record({"hash_build_s": clock() - t, "ranks": init})
+    rows = [r.pop("salt_rows") for r in init]
+    if any(x != rows[0] for x in rows):
+        raise RuntimeError(f"the ranks' pools hash different rows, so no salt file serves them all: {rows}")
+    kv_dir = Path(cfg.get("kv_dir") or _kept(cfg, "edges"))
+    salts = B.draw_salts(kv_dir / B.SALTS, rows[0])
+    built = rpc(B.rank_salted, args=(str(salts),))
+    record({"hash_build_s": clock() - t, "ranks": init, "build_s": max(r["build_s"] for r in built)})
     pool_bytes = sum(r["bytes"] for r in init)
     kept: dict[str, Any] = {}
 
@@ -588,7 +595,7 @@ def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
         kept["state"] = B.capture(core, runner=False)
         kept["state"]["next_step"] = trace.scheduled
         t1 = clock()
-        ranks = sorted(rpc(B.rank_take, args=(key(),)), key=lambda r: r["rank"])
+        ranks = sorted(rpc(B.rank_take), key=lambda r: r["rank"])
         t2 = clock()
         roots = {r.pop("root") for r in ranks}
         copied = [r["copy_ms"] for r in ranks if r["copy_ms"] is not None]
