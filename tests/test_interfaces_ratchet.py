@@ -169,6 +169,7 @@ def _python_hits(text: str, names: frozenset[str], fold: bool = False) -> set[in
                 or prev in ("{", ",") and nxt == ":" or prev == "[" and nxt == "]"
                 or prev == "(" and i >= 2 and toks[i - 2].string == "startswith"
                 or prev == "(" and i >= 3 and toks[i - 2].string in _GETTERS and toks[i - 3].string == "."
+                and not (i >= 4 and toks[i - 4].string == "schemes")  # the one table's own reader
                 or prev in ("(", "[", "{", ",") and _in_membership(toks, i)):
             out.add(t.start[0])
     return out
@@ -359,8 +360,6 @@ def failure(ratchet: str, s: Scan, keys: list[str], held: dict[str, int]) -> str
     head = (f"{ratchet}: new second paths. Go through {INTERFACE[ratchet]}; or, only if it truly cannot, have top "
             f"regenerate the list (`{ME} --init`) with the reason in the pull request. A cleanup needs no edit to "
             f"tests/interfaces_ratchet.json (`{ME} --prune` drops stale entries).")
-    if ratchet == "toolkit_paths":
-        head += " No card, node or architecture file carries a toolkit's path; kernels owns the machine records."
     rows = []
     for k in keys:
         got = s.found[ratchet][k]
@@ -411,6 +410,7 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("scheme_name_tables", "benchmarks/a.py", '"""keys: {"pous": 1}, s == "pous"."""\n# s == "pous"\nNAME = "pous"\n'
                                               'f(protocol="pous")\nx = ["pous", "dither"]\n'
                                               'for p in ("pous", "dither"):\n    pass\n', 0),
+    ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = compose.schemes.get("dither")\n', 0),
     ("scheme_name_tables", "verity/protocols/x/scheme.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/tests/a.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/a.sh", '# [ "$p" == "pous" ]\necho "pous"\n', 0),
