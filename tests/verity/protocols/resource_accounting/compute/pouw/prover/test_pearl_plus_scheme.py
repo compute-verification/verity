@@ -26,6 +26,27 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_its_window_record_values_are_named_in_the_tables_it_declares() -> None:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+
+    assert S.declared(PS.PEARL_PLUS, "tables") == PWR.tables() == ("pearl-a", "pearl-y", "pearl-b")
+    assert (PWR.a_value(2, 3), PWR.y_value(2, 3), PWR.b_value(5)) == ("pearl-a/2/3", "pearl-y/2/3", "pearl-b/5")
+
+
+def test_it_hands_the_model_a_committed_bf16_y_and_opens_its_salt_after_the_epoch_root() -> None:
+    assert (S.declared(PS.PEARL_PLUS, "number_format"), S.declared(PS.PEARL_PLUS, "y_committed")) == ("bf16", True)
+    assert S.declared(PS.PEARL_PLUS, "salt_open_root") is PSALT.epoch_open_root
+    assert PSALT.epoch_open_root(bytes(64), 3) != PSALT.epoch_open_root(bytes(64), 4)
+
+
+def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
+    """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
+    assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
+    assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
+    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
+        S.declared(PS.PEARL_PLUS, "channel_schemas")
+
+
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
     from verity.protocols.compose import schemes
 
