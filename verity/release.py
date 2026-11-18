@@ -1,9 +1,10 @@
-"""The release order's wire formats, between a network attester and its server. Each request a network attester releases reaches the server with three headers:
-`x-verity-release: N`, N its 0-based index in the attester run's release order (dense: each released request once, a
-request a fault drops before its release unnumbered); `x-verity-release-run: ID`, the run's id in hex; and, from the
-network attester, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So a
-server under the network attester's order `release-order` adds requests to its engine in the order the attester
-released them, whatever order it reads their bodies in, and the advice needn't carry the permutation between the two.
+"""The formats of a network attester's release of a request: its headers and its watermark. Each request a network
+attester releases reaches the server with three headers: `x-verity-release: N`, N its 0-based index in the attester
+run's release order (dense: each released request once, a request a fault drops before its release unnumbered);
+`x-verity-release-run: ID`, the run's id in hex; and, from the network attester, `x-verity-release-bucket: A`, the
+bucket of the release, counted from 0 at the run's origin. So a server under the network attester's order
+`release-order` adds requests to its engine in the order the attester released them, whatever order it reads their
+bodies in, and the advice needn't carry the permutation between the two.
 
 **The watermark** is a stream on which the server learns that a bucket has closed. The network attester opens one
 connection to the server for it and sends one HTTP/1.1 request, `POST /verity/watermark`, whose head (`watermark_head`)
