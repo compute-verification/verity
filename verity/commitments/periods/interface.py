@@ -62,7 +62,7 @@ the first three as registered reads at public positions (`Window`'s ``registered
 units read a registered value is a shared-row member, each read port a table of the registered rows its units read,
 committed under the registered value's salts (core's ``one_stage.registered``), so each row's public string is the
 registered one, and its header names each row's position and path to the value's root; the verifier's ``--registered``
-file of the member comes from the record and the roots it pinned alone (`registered_reads`), and Lean's registered reads
+file of the member is theta's registration, the roots it pinned and no position (Lean derives them, `Registered.withPositions`), and Lean's registered reads
 open each row against them, in the parameter's row format (`value_format`: 16-bit leaves in ``hm96-sha512/row/v2`` rows, a
 table's in ``row-seg/v1`` rows, or the one `Registered.formats` declares, such as Pearl+'s FP32 words in ``row-seg/v1``
 rows, which is its readers' ports' row schema). A table is a registered parameter of its own, every row of it; a table
@@ -134,7 +134,7 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.population import cut_wires, wired_population_program
+from verity.circuits.population import wired_population_program
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
@@ -1352,7 +1352,7 @@ def supplied_param(table: Table | History, of: str) -> str:
 
 
 def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
-    """Every registered read a period commits (`Window.close`) and its verifier opens (`registered_reads`): the circuit's
+    """Every registered read a period commits (`Window.close`) and its verifier opens (`Registered.withPositions`): the circuit's
     reads (`Read`); each table read, of its table's supplied root or domain id; and each opening's verdict, of its table's
     supplied 1 (an output row, so a verdict of 0 opens no root: `gates.embedding`'s ``ok``). A table read or verdict reads
     one row for all its units; an opening's other ports are its units' own rows, which its verdict holds to the table's
@@ -1398,7 +1398,7 @@ def _seg(registered: Registered | None, wires: Sequence[Wire] = (),
 def member_reads(members: Sequence[CS.Member], registered: Registered | None,
                  ranges: Sequence[tuple[str, int, int]]) -> list[dict[str, tuple[str, list[int], np.ndarray]]]:
     """Each of ``members``' ports a committed read fills (`committed_reads`), as `Window.close` commits them and
-    `registered_reads` opens them, each member's own units by its circuit's ``ranges`` (`own_units`, `ranges_of`): by port, the parameter, the distinct
+    `Registered.withPositions` opens them, each member's own units by its circuit's ``ranges`` (`own_units`, `ranges_of`): by port, the parameter, the distinct
     registered rows its units read in first-read order and each unit's ref into them (`_reads_of`, which refuses a read
     covering part of a member). The work is per member and the reads that cover it, never per read for every member."""
     index = _ReadIndex(committed_reads(registered))
@@ -2156,7 +2156,7 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
     takes them), by ``(index among members, port)``, each the parameter whose rows fill it: a model's weights, read at
     public positions, or a table's parameter, whose supplied root and domain id its table reads fill and whose row at a
     hidden key its openings' ports hold. Every declaration covers whole members of its reader, since a member's port is
-    one value's rows (`registered_reads`). A read (`Read`) is uncut, of its parameter's leaves at a base and steps that are
+    one value's rows (`Registered.withPositions`). A read (`Read`) is uncut, of its parameter's leaves at a base and steps that are
     multiples of its port's words (`_reads_of`); its port is an output row, which it fills none of, or an input row no
     wire or row table fills: its units' own rows, or a shared-row table of the registered rows they read (``tables``, as
     `members` makes a stated record's). A table (`Table`) is its registered parameter's every row, since its reads take
@@ -2474,44 +2474,6 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
             "ingress": 0, WINDOW_INGRESS: window, "free": inputs - wired - registered}
 
 
-def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]], *,
-                     registered: Any) -> dict[str, dict[str, Any]]:
-    """The Lean verifier's ``--registered`` file of each member reading a registered parameter (``registered-reads/v1``, in
-    the format of ``registered``, core's ``one_stage.registered``, by member key), from the record ``doc``, stated or
-    listed, and its period ``w`` (`window_of_record`'s) alone, but for each parameter's entry from ``pins`` (``{param: entry}``: the value's
-    ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned them before the run): each read
-    port (`committed_reads`) reads its parameter's rows in the port's row format, its leaves the parameter's format's
-    width (`value_format`), and unit ``m.base + i`` the row its ``i``-th unit reads (`_reads_of`). A table's supplied
-    values the verifier makes itself from its pin of the table's parameter (`supplied`, under ``w``'s partition digest).
-    Refused (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's in that width."""
-    _wires, _cuts_, reg, _ingress = declarations(doc)
-    reads = committed_reads(reg)
-    if not reads:
-        return {}
-    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
-    out: dict[str, dict[str, Any]] = {}
-    index = _ReadIndex(reads)
-    for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
-        got = _reads_of(m.template, a, m.n, index, dict(m.rows + m.outs))
-        if not got:
-            continue
-        ports = {}
-        for p, (param, positions, refs) in sorted(got.items()):
-            e = pins.get(param)
-            words = dict(m.rows + m.outs)[p]
-            if e is None:
-                raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
-            n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
-            if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
-                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
-                                 f"the port's {words} 16-bit words in {want}-bit leaves")
-            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
-                        "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
-                        "reads": [positions[int(i)] for i in refs], RV.READS_FROM: m.base}
-        out[m.key] = {"format": registered.READS_V1, "ports": ports}
-    return out
-
-
 def _frozen(x: Any) -> Any:
     """A JSON value with every list a tuple, as a row table's keys and labels are held."""
     return tuple(_frozen(v) for v in x) if isinstance(x, list) else x
@@ -2561,13 +2523,10 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
 
 
 def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
-    """The Program and template query the served route registers, commits and proves for the circuit record ``record``
-    over ``templates``: its wired Program (`wired_population_program`, which refuses wires that don't fit its templates)
-    with every wire cut to an input row of the same leaves (`population.cut_wires`), so its root nodes, order, templates
-    and counts, and so the members' bases, are the wired Program's. The inference-only reader reads the same record's
-    wires. Ends when the cut-wire rule takes a registered tree port (cure 1); the served route then takes the wired
-    Program."""
-    return cut_wires(wired_population_program(templates, record)[0], record)[:2]
+    """C, the Program and template query the served route registers, commits and proves for the circuit record
+    ``record`` over ``templates``: its wired Program (`wired_population_program`, which refuses wires that don't fit its
+    templates), whose wires are its edges. The inference-only reader reads the same record's wires."""
+    return wired_population_program(templates, record)[:2]
 
 
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:

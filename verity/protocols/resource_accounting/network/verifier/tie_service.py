@@ -569,7 +569,7 @@ class IngressTie:
         lanes = self.lanes(inputs, releases, w) if ok_head else None
         reads = None if lanes is None else self.registered(head, lanes)
         if reads is not None:
-            findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
+            findings, refused = PF.verify(delivered.proof, program=self.program,
                                           partition=self._partition, registered=reads)
             units = list(sample.units)
             proved = refused is None and self.proved(findings) and all(list(f.units) == units for f in findings)

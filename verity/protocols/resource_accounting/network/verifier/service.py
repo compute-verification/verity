@@ -859,7 +859,7 @@ class TransferBlocks:
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
         differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the execution phase is
         rejected, with deadline 0."""
-        findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
+        findings, refused = PF.verify(delivered.proof, program=self.program,
                                       partition=self._partition)
         findings = None if refused is not None else findings
         sessions = delivered.sessions()

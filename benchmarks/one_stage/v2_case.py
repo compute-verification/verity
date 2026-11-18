@@ -141,7 +141,7 @@ def case(window: Path, scratch: Path) -> tuple[dict | None, str, int]:
     else:
         digest = "case-v2.json's, taken when the audit staged the file, before the sample"
     how = f"circuit file {how}; public digest {digest}"
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=pin, public=public, registered=reads,
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), public=public, registered=reads,
                     tables=tables)
     return v2, how, len(sessions)
 

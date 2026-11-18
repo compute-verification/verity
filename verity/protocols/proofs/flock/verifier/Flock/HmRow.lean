@@ -1435,10 +1435,8 @@ def workSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) (table : Arr
   | .error e => throw s!"work: {e}"
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
-and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). A
-statement with public outputs has no output row to link, so META `links` (`HmOut`) is refused. -/
+and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
 def checkPublic (c : Circuit) (pub : Public) : V Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != hexOf (Sha512.hash Hm96.Default512.key) then
@@ -2234,45 +2232,30 @@ def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
 
 end HmIn
 
-/-! `HmOut` Linking: under a template query, with the verifier's own program, every cut wire between two units of
-the statement is a check on the program. A reader whose parameter leaves are another unit's outputs reads them in a link
-row (META `links`): an input row encoded as the one output row is, which the registered reads read by path in its writer's
-output field's tree (`Registered.checkLinked`, a wired port's positions `Registered.Port.readAt`'s closed form), so the
-reader's row is the writer's committed row as one commitment, not a second commitment compared with it. The wiring is
-read from the verifier's own program, so in this model the topology is public, a known leak that later work removes. -/
+/-! The holes of the one circuit: what the verifier is to derive from C (the registered Program) and the partition, and
+does not yet. Each refuses by name (`notDerived`) wherever the verifier would read it. -/
+namespace OneCircuit
+
+/-- The refusal of a derivation from C and the partition that is not written yet. -/
+def notDerived (what : String) : String := s!"one-circuit: not derived yet: {what}"
+
+/-- **in(S)'s layout**: `inLayoutOf : C -> Partition -> Block -> Array (InputRow, [lo, hi))`, each input row of the
+block circuit `c` that carries another block's outputs and the parameter leaves `[lo, hi)` of its unit it holds, from
+C's edges (`P`) and the partition, in O(C's description). Each row it names is read by path in its writer's output
+field's tree, never committed afresh. -/
+def inLayoutOf (_c : Circuit) (_P : Program.Prog) : V (Array (Nat × Nat × Nat)) :=
+  throw (notDerived "inLayoutOf : C -> Partition -> Block -> Array (InputRow, [lo, hi)) (in(S)'s rows of the block circuit)")
+
+end OneCircuit
+
+/-! `HmOut` Linking: under a template query, with the verifier's own program C, every wire between two units of the
+statement is a check on the program. A reader whose parameter leaves are another unit's outputs reads them in an input
+row of in(S)'s layout (`OneCircuit.inLayoutOf`): an input row encoded as the one output row is, which the registered
+reads read by path in its writer's output field's tree (`Registered.treeReads`), so the reader's row is the writer's
+committed row as one commitment, not a second commitment compared with it. -/
 namespace HmLinks
 
 open HmRow
-
-/-- META `links`: each `{port, leaves: [lo, hi]}`, an input row by name that holds template parameter leaves `[lo, hi)` as
-the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words (neither a bit row nor segmented); a row
-once, the ranges disjoint, at least one. None without the key. -/
-def parse (c : Circuit) : V (Array (Nat × Nat × Nat)) := do
-  let some lj := (c.metaJ.getObjVal? "links").toOption | return #[]
-  let xs ← J.asArr lj "META links"
-  let k := HmOut.nIn c
-  let out := c.ports.getD k default
-  if c.outRowPorts.size != 1 || out.v2 || out.segs.isSome then
-    throw "META links: a statement with links has one output row, a hm96-sha512/row/v1 row"
-  if xs.isEmpty then throw "META links: an empty list (a statement without links has no key)"
-  let mut r := #[]
-  for x in xs do
-    let keys := match x with
-      | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
-      | _ => #[]
-    if keys != #["leaves", "port"] then throw "META links: a link is exactly {port, leaves}"
-    let name ← J.str x "port" "META links"
-    let lv ← (← J.arr x "leaves" "META links").mapM (J.asNat · "a link leaf")
-    let some p := (List.range k).find? (fun q => (c.ports.getD q default).name == name)
-      | throw s!"META links: {name} is not an input row"
-    let pt := c.ports.getD p default
-    if lv.size != 2 || lv[0]! ≥ lv[1]! then throw s!"META links: {name}'s leaves are not [lo, hi) with lo < hi"
-    if pt.v2 || pt.segs.isSome || pt.words != out.words || lv[1]! - lv[0]! > out.words then
-      throw s!"META links: {name} is not a hm96-sha512/row/v1 row of the output row's {out.words} words"
-    if r.any (fun (q, a, b) => q == p || (a < lv[1]! && lv[0]! < b)) then
-      throw s!"META links: {name} is linked twice, or its leaves overlap another link's"
-    r := r.push (p, lv[0]!, lv[1]!)
-  return r
 
 /-- The template query's population over the program (`TemplateQuery.evaluate`'s order), by node: per root node that is not
 an input node, its index, members, first gate and gates per member. Unit `u` is counted across them in order, member `m` of
@@ -2308,18 +2291,20 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
 
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
-lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or exactly
-one unit's outputs in order, which its link row reads by path in the writer's output field's tree (`Registered.checkLinked`),
-whether or not the writer is a unit of the file. The cut wires checked. -/
-def checkUnit (c : Circuit) (P : Program.Prog) (links : Array (Nat × Nat × Nat)) (popIdx : Array Nat)
+lies in a row of in(S)'s layout (`OneCircuit.inLayoutOf`, read only where such a leaf is); each row's leaves are either all
+circuit inputs (the row is an ordinary input row) or exactly one unit's outputs in order, which its row reads by path in
+the writer's output field's tree, whether or not the writer is a unit of the file. The wires checked. -/
+def checkUnit (c : Circuit) (P : Program.Prog) (popIdx : Array Nat)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
   let some u := popIdx[i]? | throw s!"links: unit {i} of the draw is outside the public file's {popIdx.size} units"
   let some (k, m) := unitOf u | throw s!"links: unit {u} is outside the program's {n} units"
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
+  if !ops.any (ownerOf · |>.isSome) then return 0
+  let links ← OneCircuit.inLayoutOf c P
   for t in [0:ops.size] do
     if let some v := ownerOf ops[t]! then
       if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then
-        throw s!"links: cut wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no link row (META links) carries it"
+        throw s!"links: wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no row of in(S)'s layout carries it"
   let mut wires := 0
   for (p, lo, hi) in links do
     let name := (c.ports.getD p default).name
@@ -2338,12 +2323,12 @@ def checkUnit (c : Circuit) (P : Program.Prog) (links : Array (Nat × Nat × Nat
   return wires
 
 /-- `checkUnit` for each reader of `readers` (places in the public file; every unit of it when none), summed. -/
-def checkAt (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Nat × Nat × Nat))
+def checkAt (c : Circuit) (pop : Public) (P : Program.Prog)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n : Nat) (readers : Option (Array Nat)) : V Nat := do
   let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
   let mut wires := 0
   for i in readers.getD (Array.range popIdx.size) do
-    wires := wires + (← checkUnit c P links popIdx unitOf ownerOf n i)
+    wires := wires + (← checkUnit c P popIdx unitOf ownerOf n i)
   return wires
 
 /-- Linking on the registered population `pop`, for each unit the sample proves (`readers`, places in the public file: the
@@ -2352,18 +2337,16 @@ root body's nodes (`unitAt`, `ownerAt`), so its work is the program's descriptio
 population's. A reader's link row is its writer's committed row by path whether or not the writer is sampled; an unsampled
 reader's wires are its own proof's, which the sample samples like any other part of it. The cut wires checked. -/
 def check (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : V Nat := do
-  let links ← parse c
   let P ← Program.decode program
   let ns := nodes P
-  checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
+  checkAt c pop P (unitAt ns) (ownerAt ns) (count ns) readers
 
 /-- `check` over every unit of the population, each unit and each gate's unit looked up in the units unrolled (`unitsRef`):
 the reference `check` is proved equal to on the whole population (`check_ref`); the verifier never runs it. -/
 def checkRef (c : Circuit) (pop : Public) (program : ByteArray) : V Nat := do
-  let links ← parse c
   let P ← Program.decode program
   let ns := nodes P
-  checkAt c pop P links (unitRef ns) (ownerRef ns) (unitsRef ns).length none
+  checkAt c pop P (unitRef ns) (ownerRef ns) (unitsRef ns).length none
 
 theorem check_ref (c : Circuit) (pop : Public) (program : ByteArray) : check c pop none program = checkRef c pop program := by
   simp only [check, checkRef, unitAt_eq, ownerAt_eq, count_eq]
@@ -2395,7 +2378,6 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
       let (samplingDesign, _) ← HmRow.stratifiedSamplingDesign obj prog k
       if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
-  let linked := J.has c.metaJ "links"
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
@@ -2403,14 +2385,11 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnits c obj prog indices
         let wires ← HmLinks.check c pop (HmLinks.readersOf draw) prog
-        let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}"
+        let linking := if wires == 0 then "; no wire between the statement's units"
+          else s!"; Linking checked: {wires} wire(s) into the {pub.n} proved units of the population's {pop.n}"
         pure (some { f with derived := true, note := note ++ linking })
-      else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFinding c pub obj prog f
-    | f, _, _ =>
-      if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
-      pure f
+    | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
@@ -2552,7 +2531,6 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
       let (samplingDesign, _) ← HmRow.stratifiedSamplingDesign obj prog k
       if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
-  let linked := J.has c.metaJ "links"
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
@@ -2560,14 +2538,11 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnits c obj prog indices
         let wires ← HmLinks.check c pop (HmLinks.readersOf draw) prog
-        let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}"
+        let linking := if wires == 0 then "; no wire between the statement's units"
+          else s!"; Linking checked: {wires} wire(s) into the {pub.n} proved units of the population's {pop.n}"
         pure (some { f with derived := true, note := note ++ linking })
-      else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFinding c pub obj prog f
-    | f, _, _ =>
-      if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
-      pure f
+    | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
