@@ -244,15 +244,19 @@ class PassEnds(_RunState):
         return out
 
     def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None,
-                  y_tree: Any = None) -> None:
+                  y_tree: Any = None, salts: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
-        and given its real rows of `y`, y's rows and its tree, `served_y_device.y_tree`, made on the call's device: all written
+        A's row salts `salts`, uint8, `HM96_SALT` bytes a row of A's tree in rank order, as the call's commit read them, and
+        given its real rows of `y`, y's rows and its tree, `served_y_device.y_tree`, made on the call's device: all written
         behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
         its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
         host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`).  With `y_tree`
         (uint8, `commit_y`'s layout), y's tree is that one, as the caller's own launches wrote it, copied and never made
         again here: a caller that wrote nothing into it retains what it holds."""
         import torch
+        if salts is None:
+            raise NotImplementedError("A's row salts of a retained call: run.py's pd_commit taking A's fresh row salts as "
+                                      "data (hash_h3.cuh's p7, 192 bytes a row), drawn by the call and handed here")
         d = cast(Path, cur.retain) / "calls"
         for name in ("calls",) if y is None else ("calls", "y"):
             if name not in cur.dirs:
@@ -260,7 +264,7 @@ class PassEnds(_RunState):
                 (cast(Path, cur.retain) / name).mkdir(mode=0o700, exist_ok=True)
                 cur.dirs.add(name)
         unit, ex, rec = (mm, m, mm.shape.k), self.weights[mm.weight].excluded, len(cur.records)
-        files: dict[str, Any] = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
+        files: dict[str, Any] = {"rows": None, "tree": None, "salts": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
         paths = (d / f"{mm.index}.rows.bf16", d / f"{mm.index}.tree",
                  cast(Path, cur.retain) / "y" / f"{mm.index}.rows.bf16", cast(Path, cur.retain) / "y" / f"{mm.index}.tree")
 
@@ -269,32 +273,34 @@ class PassEnds(_RunState):
 
         if not xa.is_cuda:
             cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
-            out: list[tuple] = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
+            out: list[tuple] = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True),
+                                (d / f"{mm.index}.salts", salts, True)]
             if y is not None:
                 out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index) if y_tree is None else y_tree, True, y_root)]
             got = write_behind(tuple(out), cur.writes)
         else:
             side = self._retain_stream(xa.device)
-            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()]) \
+            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone(), salts.clone()] + ([] if y is None else [y.clone()]) \
                 + ([] if y is None or y_tree is None else [y_tree.clone()])
             side.wait_stream(torch.cuda.current_stream(xa.device))
             cur.records.append(None)
             with torch.cuda.stream(side):
                 for t in kept:
                     t.record_stream(side)
-                rows, a_tree, held, *ys = kept
+                rows, a_tree, held, a_salts, *ys = kept
 
                 def record(host: Any, flags: Any) -> None:
                     words = host.numpy().view("<u2").reshape(-1, mm.shape.k)
                     cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
-                out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
+                out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True),
+                       (d / f"{mm.index}.salts", a_salts, True)]
                 if ys:
                     out += [(paths[2], ys[0], False),
                             (paths[3], ys[1] if y_tree is not None else SY.y_tree(self, ys[0], mm.index), True, y_root)]
                 got = write_behind(tuple(out), cur.writes, fresh=True, here=True)
-        files.update(rows=got[0], tree=got[1])
+        files.update(rows=got[0], tree=got[1], salts=got[2])
         if y is not None:
-            files["y"].update(rows=got[2], tree=got[3])
+            files["y"].update(rows=got[3], tree=got[4])
         cur.files.append(files)
 
     def _poison_graphs(self, value: int) -> None:
@@ -345,19 +351,23 @@ class PassEnds(_RunState):
         def weight_files(read: Callable[[int, str], Callable[[], bytes]]) -> dict[str, dict]:
             return {str(w): {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
                              "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False, data=read(w, "rows.bf16")),
-                             "tree": _linked(wd / f"{w}.tree", self._weight_files, data=read(w, "tree"))}
+                             "tree": _linked(wd / f"{w}.tree", self._weight_files, data=read(w, "tree")),
+                             "salts": _linked(wd / f"{w}.salts", self._weight_files, data=read(w, "salts"))}
                     for w, wt in sorted(self.weights.items())}
 
         def from_device(w: int, part: str) -> Callable[[], bytes]:
             wt = self.weights[w]
             if part == "tree":
                 return lambda: _bytes(wt.b["tree_b"][:sizes[w]])
+            if part == "salts":
+                raise NotImplementedError("weight's B row salts: the vLLM adapter's install handing the device run each "
+                                          "weight's registration and parameter name, read by `pearl_c.weight_row_salts`")
             return lambda: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))
 
         def from_first(w: int, part: str) -> Callable[[], bytes]:
             return self._weight_files[f"{w}.{part}"][0].read_bytes
 
-        kept = all(f"{w}.{p}" in self._weight_files for w in self.weights for p in ("rows.bf16", "tree"))
+        kept = all(f"{w}.{p}" in self._weight_files for w in self.weights for p in ("rows.bf16", "tree", "salts"))
         weights = None if kept else weight_files(from_device)
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},

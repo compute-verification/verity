@@ -456,10 +456,12 @@ def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], b
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
     """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
     and its salt coin's opening, the salt, the live session that gave it if one did (`pouw_pearl_c_manifest.session_head`),
-    the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and
-    tree levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
-    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the
-    head also holds the prover's hm96 salt key.  It appears whole or not at all."""
+    the records root, the commitment, the leaves, the tile tree and the tiles' salts ``salts_t``), every weight (n, k, root,
+    excluded B rows, its rows, tree levels and row salts) and every matmul in order (index, m, k, n, weight, real rows, |K|,
+    excluded A rows, A's root, rows, tree levels and row salts, and its y's).  Trees are the device's layout: level 0 padded
+    to a power of two, then each level above it, 64 bytes a node; salts are 192 bytes a position in rank order, each file
+    the pass's own (mode 0600), and the manifest names them by path, size and sha256 alone.  It appears whole or not at
+    all."""
     path, part = d / "manifest.json", d / "manifest.json.part"
     _write(part, (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode(), digest=False)
     os.replace(part, path)

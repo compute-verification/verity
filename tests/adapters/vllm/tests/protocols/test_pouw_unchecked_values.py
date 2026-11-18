@@ -222,7 +222,7 @@ def test_a_retained_call_of_a_pass_without_a_directory_fails_at_its_first_path()
     pytest.importorskip("torch")
     cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
-        PPDR.PearlCDeviceRun._retained(SimpleNamespace(), cur, None, 1, None, None, None)
+        PPDR.PearlCDeviceRun._retained(SimpleNamespace(), cur, None, 1, None, None, None, salts=b"")
     assert cur.dirs == set() and cur.records == [] and cur.files == []
 
 
@@ -236,22 +236,17 @@ def test_a_retained_passes_end_without_a_directory_fails_at_its_first_path():
     assert cur.writes == []
 
 
-def test_a_retained_passes_end_of_a_run_without_a_salt_key_fails_at_the_manifests_head(tmp_path):
-    """`_write_retained` puts the run's hm96 salt key in the manifest's head unchecked: a run holds one from its start,
-    which refuses a run without (`host._constants`).  Handed a run with none, it fails where the head reads the key: the
-    pass's leaves and its tile tree are written behind by then, and no manifest is."""
+def test_a_retained_passes_end_waits_on_the_tiles_salts_before_it_writes_a_file(tmp_path):
+    """`_write_retained` keeps the tiles' fresh salts beside the leaves (``salts_t``), which the leaf kernel must take as
+    data: until it does, the pass's end refuses by naming that, with only the weights' directory made and no file, leaf,
+    tile tree or manifest written."""
     torch = pytest.importorskip("torch")
     d = tmp_path / "pass"
     cur, tree = PPDR._Pass(d, run="a run"), torch.arange(64, dtype=torch.uint8)
-    run = SimpleNamespace(nb=64, leaves=torch.ones(128, dtype=torch.uint8), weights={}, _weight_files={}, entry="an entry",
-                          scheme=SimpleNamespace(name=PPD.SCHEMES[0]), coins=SimpleNamespace(to_json=dict),
-                          opening=SimpleNamespace(to_json=dict), salt=bytes(32), commits={}, details={"schedule": {}},
-                          kernel=SimpleNamespace(cubin_sha256="", source_sha256="", files={}), salt_key=None)
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'hex'"):
+    run = SimpleNamespace(nb=64, leaves=torch.ones(128, dtype=torch.uint8), weights={}, _weight_files={})
+    with pytest.raises(NotImplementedError, match="salts_t"):
         PPDR.PearlCDeviceRun._write_retained(run, cur, None, b"", bytes(64), tree, 1, {})
-    joined(cur.writes)
-    assert (d / "leaves").read_bytes() == b"\1" * 64 and (d / "tree_t").read_bytes() == bytes(range(64))
-    assert sorted(p.name for p in d.iterdir()) == ["leaves", "tree_t", "weights"] and not list((d / "weights").iterdir())
+    assert cur.writes == [] and sorted(p.name for p in d.iterdir()) == ["weights"] and not list((d / "weights").iterdir())
 
 
 def test_whole_calls_kept_without_stages_fail_at_the_first_calls_stage():
