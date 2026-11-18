@@ -129,6 +129,7 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 - A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
   check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
   entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
+  Its records run (`lean_changed.py --records security`) runs that ratchet and fails on it before the mark.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
