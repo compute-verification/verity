@@ -53,7 +53,6 @@ from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import declared, settings
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
@@ -173,21 +172,18 @@ def _declared(name: str, **launch: Any) -> Component:
 #: the components no scheme declares yet, each with its row in the record, which only shrinks
 #: (`tests/tools/verity/cli/test_undeclared_rows.py`)
 UNDECLARED: dict[str, tuple[Component, str]] = {c.name: (c, row) for c, row in (
-    (Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-               needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-     "integrity"),
     (Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                 Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work"),
-    (Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-     "inference-only"),
     (Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
                needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
                colocated=((CHALLENGER, NETWORK_ATTESTER),)), "communication"),
 )}
 MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()}, **{c.name: c for c in (
+    _declared("sampled-proofs", sampling_design=_design, default_sampling_design="rate:1/3481648"),
+    _declared("inference-only"),
     _declared("pearl-plus", params=_pearlplus_params),
     _declared("pous", params=_pous, default_params=dict(schemes.get("pous").settings)),
     _declared("bandwidth"),
