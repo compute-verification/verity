@@ -15,12 +15,16 @@ network attester's ingress rows, with the request each slot's Program starts.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from functools import cache
 from typing import Any
 
 from verity.circuits.defs import bind
+from verity.protocols.resource_accounting import scheme as schemes
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.verifier import blocks as BK
 
+from verity_vllm import messages
 from verity_vllm.definitions.registry import boolean_io_shell as BIO
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
@@ -29,31 +33,62 @@ SCAN_STATE = BK.SCAN_STATE
 #: `verity.protocols.resource_accounting.network.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
 #: request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
+#: the port whose layout the state row is, looked up on the declared scheme that has it (`messages.declaring`)
+PORT = "scan-state"
 
 
-def scan_class(lanes: int, outputs: int, every: int, prompt: int = 1024) -> IS.Class:
+@dataclass(frozen=True)
+class Scan:
+    """The scan's class as a window's lowering reads it: ``shape``, its statics by name (an attribute each), and
+    ``layout``, the state row's `scheme.Layout` at them, ``K0`` and ``K`` its counts."""
+
+    shape: Mapping[str, int]
+    layout: schemes.Layout
+
+    def __getattr__(self, name: str) -> int:
+        if name in ("shape", "layout") or name not in self.__dict__.get("shape", {}):
+            raise AttributeError(name)
+        return self.shape[name]
+
+    @property
+    def K0(self) -> int:
+        return self.layout.counts["K0"]
+
+    @property
+    def K(self) -> int:
+        return self.layout.counts["K"]
+
+
+@cache
+def _layout(shape: tuple[tuple[str, int], ...]) -> schemes.Layout:
+    return schemes.layout(messages.declaring(PORT), PORT, dict(shape))
+
+
+def scan_class(lanes: int, outputs: int, every: int, prompt: int = 1024) -> Scan:
     """The scan's class at a window class's lanes, outputs (KO), timestep and prompt ids (KI), on the class of record's
     cells; its delay the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
-    return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs,
-                    KI=prompt)
+    shape = {"B": B, "r": R, "lanes": lanes, "C": C, "IDB": IDB, "EVERY": every, "WITHIN": WITHIN, "D": WITHIN + every - 1,
+             "KO": outputs, "KI": prompt}
+    return Scan(shape, _layout(tuple(shape.items())))
 
 
-def words(cls: IS.Class) -> int:
+def words(scan: Scan) -> int:
     """The state row's u16 words."""
-    return IS.state_bits(cls) // 16
+    return scan.layout.bits // 16
 
 
-def bridge(cls: IS.Class, prompt: int) -> Any:
-    """`boolean_io_shell.ScanSlots_v3` at ``cls``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
-    word, prompt length, ``max_tokens`` and ids where `ingress_scan.layout` puts them."""
-    lay = IS.layout(cls)
-    at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(cls.NR)) for f in ("occ", "fields", "max_tokens", "ids")}
-    return bind(BIO.ScanSlotsV3, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at["occ"], LP=at["fields"],
-                MAX=at["max_tokens"], IDS=at["ids"])
+def bridge(scan: Scan, prompt: int) -> Any:
+    """`boolean_io_shell.ScanSlots_v3` at ``scan``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
+    word, prompt length, ``max_tokens`` and ids where its layout puts them."""
+    lay = scan.layout.fields
+    lanes = sum(1 for k in lay if k.endswith(".occ"))
+    at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(lanes)) for f in ("occ", "fields", "max_tokens", "ids")}
+    return bind(BIO.ScanSlotsV3, NS=words(scan), NP=prompt, IDB=scan.IDB, K0=scan.K0, K=scan.K, OCC=at["occ"],
+                LP=at["fields"], MAX=at["max_tokens"], IDS=at["ids"])
 
 
-def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
-    got = IS.scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
+def _scan(scan: Scan, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
+    got = IS.scan(IS.Class(**scan.shape), list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
     if got is None:
         raise ValueError(f"the scan at {scan} refuses the network attester's ingress rows to bucket {len(ingress) - 1}: "
                          f"a request it can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that "
@@ -88,8 +123,9 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
         raise ValueError(f"the window from scan bucket {t0} reads the scan's states to bucket {n - 1}: give the ingress "
                          f"rows to it, {n}, not {len(ingress)}")
     states = _scan(scan, ingress[:n], outputs)
-    rows = IS.window_state(scan, [IS.encode(scan, s) for s in states], t0, cls.buckets)
-    at = {a: states[t0 + a - 1] if t0 + a else IS.empty(scan) for a in {cls.anchor(k) for k in range(cls.slots)}}
+    net = IS.Class(**scan.shape)
+    rows = IS.window_state(net, [IS.encode(net, s) for s in states], t0, cls.buckets)
+    at = {a: states[t0 + a - 1] if t0 + a else IS.empty(net) for a in {cls.anchor(k) for k in range(cls.slots)}}
     starts = []
     for k in range(cls.slots):
         s = at[cls.anchor(k)].slots[cls.lane(k)]
@@ -97,4 +133,4 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     return rows, starts
 
 
-__all__ = ["SCAN_STATE", "bridge", "scan_anchors", "scan_class", "scan_state", "words"]
+__all__ = ["PORT", "SCAN_STATE", "Scan", "bridge", "scan_anchors", "scan_class", "scan_state", "words"]

@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -206,12 +206,21 @@ class Exchange:
         return out
 
 
+def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
+    found = [s for s in declarations.load().values() if has(s)]
+    if len(found) != 1:
+        raise LookupError(f"one declared scheme {what}, not {len(found)}: {[s.name for s in found]}")
+    return found[0]
+
+
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
-    found = [s for s in declarations.load().values() if role in s.provides]
-    if len(found) != 1:
-        raise LookupError(f"one declared scheme provides {role!r}, not {len(found)}: {[s.name for s in found]}")
-    return found[0]
+    return _one(f"provides {role!r}", lambda s: role in s.provides)
+
+
+def declaring(port: str) -> schemes.Scheme:
+    """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
+    return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
 
 
 _CURRENT: Exchange | None = None

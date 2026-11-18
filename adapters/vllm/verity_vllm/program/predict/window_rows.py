@@ -712,8 +712,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
     scan's alike: the scan's state ports open their rows in it, by its root and domain, and its salts exist only in it and
     in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`)."""
     bits = np.asarray(rows, dtype=np.uint16)
-    if bits.shape != (cls.buckets, IS.state_bits(cls.scan)) or bits.max(initial=0) > 1:
-        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
+    if bits.shape != (cls.buckets, cls.scan.layout.bits) or bits.max(initial=0) > 1:
+        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {cls.scan.layout.bits} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
     return registered_commit(program, SS.SCAN_STATE, words, bytes(32), 0, keep_rows=True,
@@ -724,7 +724,7 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
                   window: str) -> G.Registered:
     """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
     ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
-    scan = cls.scan
+    scan = IS.Class(**cls.scan.shape)
     states = [IS.empty(scan) for _ in range(cls.buckets)]
     for k, (row, max_tokens) in enumerate(slots):
         s = states[cls.anchor(k)].slots[cls.lane(k)]

@@ -292,7 +292,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
     window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
-    scan = SLOTS_CLASS.scan
+    scan = IS.Class(**SLOTS_CLASS.scan.shape)
     assert SS.scan_anchors(SLOTS_CLASS, ingress, outputs) == {1: 16, 2: 16, 3: 16, 4: 32}
     for w, want in ((0, [None, 1, None, 2, None, 3, None, None]), (1, [None] * 6 + [4, None])):
         rows, starts = SS.scan_state(SLOTS_CLASS, ingress, outputs, w * SLOTS_CLASS.buckets)

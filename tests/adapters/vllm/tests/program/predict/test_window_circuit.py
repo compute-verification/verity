@@ -323,7 +323,7 @@ def test_a_slots_entry_stops_at_the_registered_models_stop_ids(window):
 def state_row(scan, fields) -> list[int]:
     """A scan state row of ``scan``'s class (`ingress_scan.layout`'s u16 words): lane j's occupancy word, prompt length,
     ``max_tokens`` and ids ``fields[j]``, every other field zero."""
-    lay, x = IS.layout(scan), 0
+    lay, x = scan.layout.fields, 0
     for j, (occ, lp, m, ids) in enumerate(fields):
         x |= occ << lay[f"{j}.occ"][0] | lp << lay[f"{j}.fields"][0] | m << lay[f"{j}.max_tokens"][0]
         x |= sum(v << lay[f"{j}.ids"][0] + scan.IDB * IO.position(scan.K0, scan.K, p) for p, v in enumerate(ids))
@@ -339,9 +339,9 @@ def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot
     the layout (`state_row`) reads back each lane's fields, ids at `io_shell.position`, and its first position's token and
     slot (`io_shell.scan_reference`): an empty lane's token 0 and prompt length -1 past it."""
     scan = CLASS_OF_RECORD.scan
-    lay = IS.layout(scan)
+    lay = scan.layout.fields
     assert (SS.words(scan), scan.K0, scan.K, scan.IDB, scan.KO) == (9353, 12, 45, 17, 64)
-    assert [k.split(".", 1)[1] for k in lay if k.startswith("0.")] == [f for f, _ in IS.slot_layout(scan)]
+    assert [k.split(".", 1)[1] for k in lay if k.startswith("0.")] == [f for f, _ in IS.slot_layout(IS.Class(**scan.shape))]
     assert [lay[f"{j}.occ"][0] - lay["0.occ"][0] for j in range(4)] == [37387 * j for j in range(4)]
     bridge = SS.bridge(scan, CLASS_OF_RECORD.prompt)
     lay_ = IF.layout(bridge)
