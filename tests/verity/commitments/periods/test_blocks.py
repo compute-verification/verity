@@ -16,7 +16,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.population import WordBits
+from verity.circuits.population import BitsWord, WordBits
 from verity.commitments.periods import interface as I, rows as CS
 
 GID, RUN = TI.GID, TI.RUN
@@ -127,8 +127,8 @@ T, LAYERS, H = NP + O - 1, 2, 16
 EMB, HEAD = bind(EW.Bf16Add), bind(G.Gemm, K=H, N=1, **G.GEMM_HOPPER)
 QKV = bind(G.Gemm, K=H, N=H, **G.GEMM_HOPPER)
 QK, OUT = (bind(G.GemmCoordinate, K=k, **G.GEMM_HOPPER) for k in (H, 2 * H))
-BITS = bind(WordBits, W=16)
-EID, QID, KID, OID, HID, BID = map(descriptor_id, (EMB, QKV, QK, OUT, HEAD, BITS))
+BITS, WORD = bind(WordBits, W=16), bind(BitsWord, W=16)
+EID, QID, KID, OID, HID, BID, WID = map(descriptor_id, (EMB, QKV, QK, OUT, HEAD, BITS, WORD))
 QK_LAYER = S * T * (T + 1)
 
 
@@ -147,7 +147,8 @@ def cmp92() -> I.Circuit:
     steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k from the request row's
     leaf j(1 + NP) + 1 + k (the length, then the bytes as u16) and leaves at step NP − 1 + k as the response's leaf
     j·O + k, the head's output row read once, as the response, and enters step NP + k as its 16 bits
-    (``WordBits_v1{16}``), each wire carrying one width. Its templates read one another, so it states an order, a range
+    (``WordBits_v1{16}``), each coordinate reaching the head rows as a word (``BitsWord_v1{16}``), each wire carrying one
+    width. Its templates read one another, so it states an order, a range
     each inference entry's step (`ordered`)."""
     pos, layer = T * H, 8 * H * H
     qw = {0: pos, 1: pos + layer}
@@ -155,11 +156,12 @@ def cmp92() -> I.Circuit:
     wires = [I.Wire(OID, "x", QID, "o0", at=0, radix=(T * LAYERS * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
              I.Wire(HID, "x", OID, "o0", at=0, radix=(O, S, H), base=((NP - 1) * LAYERS + LAYERS - 1) * S * H,
                     step=(LAYERS * S * H, H, 1), cut=(0, H)),
+             I.Wire(WID, "x", EID, "o0", at=0, radix=(T * S * H,), base=0, step=(1,)),
              I.Wire(BID, "x", HID, "o0", at=0, radix=((T - NP) * S,), base=0, step=(1,)),
              I.Wire(EID, "a", BID, "o0", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
     for p in range(T):
         for k in range(LAYERS):
-            writer, base = (EID, p * S * H) if k == 0 else (OID, (p * LAYERS + k - 1) * S * H)
+            writer, base = (WID, p * S * H) if k == 0 else (OID, (p * LAYERS + k - 1) * S * H)
             wires.append(I.Wire(QID, "x", writer, "o0", at=(p * LAYERS + k) * S * 6, radix=(S, 6, H), base=base,
                                 step=(H, 0, 1), cut=(0, H)))
             at = qk_at(p, k)
@@ -179,9 +181,10 @@ def cmp92() -> I.Circuit:
                    for p in range(T) for k in range(LAYERS)),
                  I.InferenceEntry(OID, 0, (T, LAYERS, S, H), ("step", "-", "slot", "-"), 0),
                  I.InferenceEntry(HID, 0, (O, S), ("step", "slot"), NP - 1),
-                 I.InferenceEntry(BID, 0, (T - NP, S), ("step", "slot"), NP))
+                 I.InferenceEntry(BID, 0, (T - NP, S), ("step", "slot"), NP),
+                 I.InferenceEntry(WID, 0, (T, S, H), ("step", "slot", "-"), 0))
     templates = ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER), (OUT, LAYERS * H * T * S), (HEAD, O * S),
-                 (BITS, (T - NP) * S))
+                 (BITS, (T - NP) * S), (WORD, H * T * S))
     starts: dict[str, list[int]] = {}
     for e in inference:
         run = math.prod(e.radix[e.axes.index("slot"):]) if "step" in e.axes else e.units
@@ -212,12 +215,12 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
     """The class circuit's units with one inference block, the plan's layer-0 QKᵀ entry at step p
     ``{at: L·S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
     and the request) no input row is free, the response on its writer being an output-row read that fills none."""
-    assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S, (T - NP) * S]
+    assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S, (T - NP) * S, H * T * S]
     assert {"template": KID, "at": LAYERS * S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in circuit.blocks.inference]
     count = I.input_count(json.loads(json.dumps(circuit.description())), **held("weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
-    assert circuit.blocks_record()["proof"] == {"units": 15564,
+    assert circuit.blocks_record()["proof"] == {"units": 17548,
                                                 "partition": I.descriptor_record(circuit, 1 << 20)["partition"]}
 
 
