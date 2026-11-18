@@ -4,7 +4,9 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 This file describes a Definition and its design: no session of the compile slice runs, and no auditor and no driver
 runs any check of it; its checks run only in its tests. In its place, `records_audit.py audit` opens the advice in the
-clear and recompiles it (`records_audit.compile_check`), which reads no served rows.
+clear and recompiles it (`records_audit.compile_check`), which reads no served rows. Running the slice would not close the
+gap: the design holds the served rows to nothing the server ran, so even a proof of the slice would accept a prover that
+registers its own rows, the phase-10 passes' among them.
 
 `CompileSlice_v1` (`verity_vllm.compiler.compile_slice`) is one execution phase of the compile slice's proof block in one Boolean
 Definition. Its circuit, rows, verdict flags, reference and stand-ins are `verity_vllm.compiler.compile_slice`'s
@@ -48,16 +50,18 @@ and its carry are witness until the slice binds them):
   - by ``load`` when the execution-phase row keeps the decision;
   - by ``steps`` (and ``rows``) when the execution-phase row drops it too, since the scan's ask then reads past the count.
   On w212 both cases charge less than the honest 27 bits (24).
-- *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
+- *`bit` is the committed decisions:* ``adv``'s row, which a verifier of the slice's proof would hold to the advice
+  registration's leaf; none runs.
 - *The carry is the honest prover's:* ``cout`` must be the charge's carry' from ``cin`` (``code``), and the proof block
   accepts any carry-in, a restarted one (the priors, or counts fitted to the execution phase) included. `charge_check`'s
   `check_chain` would refuse it (``CH-first`` on a session's first execution phase, ``CH-carry`` after it), and no
   verifier calls it, so no verifier holds ``cin`` and ``cout`` to the session's carry chain.
 - The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
 
-**Every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an unproved one's
-carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load
-proof block, where the replay is split into proof blocks) is sampled `All`, as N2's proof blocks are (PROTOCOL.md, A3).
+**In the design every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an
+unproved one's carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile
+slice (the load proof block, where the replay is split into proof blocks) would be sampled `All`, as N2's proof blocks
+are (PROTOCOL.md, A3).
 
 **A served execution phase at its engine's class: w212.** An execution phase's request and step counts are private, and the
 class is protocol structure. So a session of the slice would prove every execution phase at its engine's class: (R, W, A) =
