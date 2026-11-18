@@ -11,7 +11,8 @@ first unless every argument of every root node is accepted (`edgesOf_partsOk`).
 
 @[expose] public section
 
-open _root_.Spot Flock.Program (Prog Part)
+open _root_.Spot
+open Flock.Program (Prog Part)
 
 namespace Properties.Spot.Edges
 
@@ -49,7 +50,7 @@ theorem edgesOf_partsOk {P : Prog} {rs : Array Flock.TemplateQuery.TRange} {W : 
     {ws : List Spot.Wires.Wire} (h : Edges.edgesOf P rs W = .ok ws) : Edges.partsOk P = true := by
   cases hP : Edges.partsOk P
   · unfold Edges.edgesOf at h
-    simp [hP] at h
+    simp [hP, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   · rfl
 
 /-- **A root `edgesOf` accepts is within the parts bound.** -/

@@ -21,7 +21,6 @@ the M0 verifier's verdict and Lean's at generation). Never a prover's inst file;
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
@@ -57,7 +56,7 @@ def bf16(x: np.ndarray) -> np.ndarray:
     return ((u + np.uint32(0x7FFF) + ((u >> np.uint32(16)) & np.uint32(1))) >> np.uint32(16)).astype(np.uint16)
 
 
-def stage_case(st, rows: dict, flip: tuple[int, ...], d: Path, salt_key: bytes, set_name: str) -> None:
+def stage_case(st, rows: dict, flip: tuple[int, ...], d: Path, set_name: str) -> None:
     """`UnitStager.stage`, with bit 0 of the first output word of each instance in ``flip`` flipped before the set is committed
     (A8's `stage_tampered`); the prover's file is ``inst-N.bin``, the verifier's ``pub-N.bin``."""
     iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
@@ -72,9 +71,9 @@ def stage_case(st, rows: dict, flip: tuple[int, ...], d: Path, salt_key: bytes, 
     for i in flip:
         outs["o0"][i, 0] ^= 1
     d.mkdir(parents=True, exist_ok=True)
-    FC.write(st.text, iset, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin", salt_key,
+    FC.write(st.text, iset, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin",
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs,
-             salts=FC.stage_salts(iset, 0, N, st.ports, salt_key), public_words={}, digests=(st.pin, st.class_sha512),
+             salts=FC.stage_salts(0, N, st.ports), public_words={}, digests=(st.pin, st.class_sha512),
              indices=list(range(N)))
 
 
@@ -104,11 +103,10 @@ def main() -> int:
                        bind={"partition": P.digest(part), "program": part["program"]})
     rng = np.random.default_rng(20261019)
     rows = {"r0": np.concatenate([bf16(rng.normal(0, 1, (N, K))), bf16(rng.normal(0, 0.02, (N, K)))], axis=1)}
-    salt_key = hashlib.sha256(b"verity/flock/forged-proofs/salts").digest()
     cases: dict[str, dict] = {}
     for name, flip in CASES.items():
         d = work / name
-        stage_case(st, rows, flip, d, salt_key, f"{st.iset.name}-{name}")
+        stage_case(st, rows, flip, d, f"{st.iset.name}-{name}")
         (d / "tables").mkdir(exist_ok=True)
         (d / "circuit.txt").symlink_to("../stage/circuit.txt")
         sd = {"dir": d, "pin": st.pin, "partition_file": stage / "partition.json", "program_file": stage / "program.json"}

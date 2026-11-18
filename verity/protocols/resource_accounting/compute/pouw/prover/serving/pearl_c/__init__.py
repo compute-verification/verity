@@ -1,5 +1,5 @@
 """Pearl-C on the RTX PRO 6000 (sm_120) and the H100/H200 (sm_90a) at a served linear: the schemes this device path
-runs (`SCHEMES`, `scheme_of`: the kernel schemes' ``pearl-c`` family), the linears outside them (`refusals`), the kernels' buffers
+runs (the kernel schemes' ``pearl-c`` family, each built by `prover.schemes.get`), the linears outside them (`refusals`), the kernels' buffers
 and steps by name, a registered weight's row salts (`weight_row_salts`), and the readers a verifier and the option need: the kernel's directory (`Kernel`),
 the schedule (`schedule_of`, `pearl_c.lanes`), the manifest (`manifest_epoch`, `epoch_of`), a call's served y
 (`served_y`) and a window (`window`).
@@ -11,11 +11,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
 
 from verity.commitments import salt_file
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, names
@@ -45,11 +43,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.ma
 )
 
 __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "JOB_STEPS", "Kernel", "LEAF_CAPACITY", "ROW_ALIGN",
-           "SCHEDULES", "SCHEMES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "no_salt_key", "refusals",
-           "rotated", "schedule_of", "scheme_of", "splits", "weight_row_salts"]
+           "SCHEDULES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "no_salt_key", "refusals",
+           "rotated", "schedule_of", "splits", "weight_row_salts"]
 
-#: the schemes this device path runs, in the kernel schemes' order
-SCHEMES = names("pearl-c")
 #: each device record's kernels' (k, n) grain past its domain, the record being GPU 1's pipeline variant too: ``sm120``
 #: (G = 4, the panel's ``pearl-c-sm120`` v1) and ``sm120-unpromoted`` (no promotion, the panel's v2), pearl_c_sm120's
 #: (1,024, 128); ``h100`` (G = 4, a served model's FP8 form on the H200), pearl_c_sm90's (256, 64), 1 KiB row segments,
@@ -77,17 +73,16 @@ HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", 
                         "rows_a", "tree_seed_a"})
 
 
-def scheme_of(name: str, **instance: Any) -> C.PearlC:
-    """The scheme `name` names, one of the kernel schemes' ``pearl-c`` family; `instance` (``k_min``, ``tile``) makes a
-    test instance."""
+def _runs(name: str) -> None:
+    """Refuse a scheme this device path doesn't run, one outside the kernel schemes' ``pearl-c`` family."""
     if named(name).family != "pearl-c":
-        raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
-    return schemes.get(name, **instance)
+        raise KeyError(f"{name!r}: this device path runs {', '.join(names('pearl-c'))}")
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
     """Every linear outside the scheme's domain or its kernels' (`KERNEL_GRAIN`), by weight id."""
-    s, out = scheme_of(name), []
+    _runs(name)
+    s, out = schemes.get(name), []
     gk, gn = KERNEL_GRAIN[s.device.name]
     for w, (n, k) in sorted(shapes.items()):
         if k % gk or n % gn:
@@ -103,7 +98,7 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
 def no_salt_key(scheme: str) -> bytes:
     """Pearl+ draws no salt key: every leaf's salt is fresh bytes from the OS, B's rows' those of the weights' registration
     (`weight_row_salts`)."""
-    scheme_of(scheme)
+    _runs(scheme)
     raise NotImplementedError("Pearl+'s install with no salt key: the vLLM adapter's weights' commit under the salts of "
                               "the salt file beside the model's registration, which it hands the device run")
 

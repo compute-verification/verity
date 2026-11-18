@@ -1,5 +1,5 @@
-// The H200's dense tensor MAC rate over the host's wall clock by tensor duty cycle: whether any mix of tensor work with
-// idle or non-tensor work moves more MACs a second than 132 SMs x 4096 MACs a clock at 1830 MHz (9.894e14), whatever
+// An sm_90a GPU's dense tensor MAC rate over the host's wall clock by tensor duty cycle: whether any mix of tensor work
+// with idle or non-tensor work moves more MACs a second than its data sheet's tensor rate, whatever
 // the SM clock is locked to. Timings only.
 //
 // One CTA an SM. Each period (SM-cycles of clock64, counted from the CTA's start) issues a burst of whole batches of
@@ -17,7 +17,7 @@
 // Fills:   idle (__nanosleep until the period ends) or alu (four FFMA chains a thread until it ends).
 // Readings, per point: MACs over the host's wall clock (host_t0 and host_t1, system_clock before the launch and after
 // its end event's synchronize, printed to the millisecond), the one summarize.py judges by. The GPU's own timers are
-// diagnostics: MACs over cudaEvents around the launch (tmacs_per_s, mhz_equiv and over_bound) and over %globaltimer
+// diagnostics: MACs over cudaEvents around the launch (tmacs_per_s and mhz_equiv) and over %globaltimer
 // (gt_s); clock64 over %globaltimer for the whole kernel and for its tensor phases alone (warp 0's issue to its drain);
 // MACs a SM-cycle.
 //
@@ -64,8 +64,6 @@
 using u64 = unsigned long long;
 using u32 = uint32_t;
 
-// 132 SMs x 4096 dense MACs a clock at 1830 MHz
-constexpr double BOUND = 132.0 * 4096 * 1830e6;
 constexpr u64 CHECK_CYCLES = 65536;
 
 struct Stamp {
@@ -629,12 +627,12 @@ int main(int argc, char** argv) {
     const double fcyc = pt.cyc - pt.tcyc, fns = pt.ns - pt.tns;
     printf("{\"arm\": \"%s\", \"class\": \"%s\", \"fill\": \"%s\", \"burst\": %llu, \"duty\": %.0f, \"nb\": %u, "
            "\"period\": %llu, \"cont\": %s, \"secs\": %.2f, \"host_t0\": %.3f, \"host_t1\": %.3f, \"event_s\": %.6f, "
-           "\"gt_s\": %.6f, \"macs\": %.6e, \"tmacs_per_s\": %.4f, \"mhz_equiv\": %.2f, \"over_bound\": %s, "
+           "\"gt_s\": %.6f, \"macs\": %.6e, \"tmacs_per_s\": %.4f, \"mhz_equiv\": %.2f, "
            "\"clock64_mhz\": %.2f, \"tensor_mhz\": %.2f, \"fill_mhz\": %.2f, \"macs_per_smclk\": %.2f, "
            "\"duty_achieved\": %.4f}\n",
            aname.c_str(), cname.c_str(), fname.c_str(), burst, duty, cont ? cont_nb : nb, period, cont ? "true" : "false",
            secs, pt.host_t0, pt.host_t1, pt.event_s, pt.gt_s, pt.macs, rate * 1e-12, rate / (nsm * 4096.0) * 1e-6,
-           rate > BOUND ? "true" : "false", pt.cyc / pt.ns * 1e3,
+           pt.cyc / pt.ns * 1e3,
            cont ? pt.cyc / pt.ns * 1e3 : (pt.tns > 0 ? pt.tcyc / pt.tns * 1e3 : 0.0),
            cont ? 0.0 : (fns > 0 ? fcyc / fns * 1e3 : 0.0), pt.macs / pt.cyc, pt.macs / pt.cyc / r100);
     fflush(stdout);

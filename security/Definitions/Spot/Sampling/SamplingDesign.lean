@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Draw
-public import Definitions.Flock.Game
+public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Fin
 public import Mathlib.Data.Fintype.Powerset
 public import Mathlib.Data.Nat.Choose.Basic
@@ -33,9 +33,7 @@ The lemmas named here are `Proofs/Spot/Sampling/SamplingDesign.lean`'s.
 
 namespace Spot.Sampling
 
-open FlockSoundness
-
-open Game
+open Verity.Game
 open scoped ENNReal
 
 /-- A sampling design over `n` units: core's sampling design over `Fin n`. -/

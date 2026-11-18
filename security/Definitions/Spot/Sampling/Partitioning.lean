@@ -21,8 +21,6 @@ read:
 
 namespace Spot.Sampling.Partitioning
 
-open FlockSoundness
-
 open Finset
 open scoped ENNReal
 

@@ -451,6 +451,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     monkeypatch.setattr(B.served, "apply", lambda execution: {})
     monkeypatch.setattr(sparse_mla, "arm", lambda: None)
     monkeypatch.setattr(topp_pin, "arm", lambda: None)
+    monkeypatch.setattr(B, "hooked", lambda make: (make(), None, lambda: None))
     seen = {}
 
     class _VllmLLM:

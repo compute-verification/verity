@@ -85,8 +85,6 @@ SCHEME = "pearl-c-h100-v1-h3"
 CLASS, GRAIN, PEARL = WindowClass(1, 27, 2), WC.Grain(gemm_words=8192, rows=256, select=512), PearlTables(SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down
 CALLS = 4
-#: the audited window's committer's secret key
-KEY = bytes(range(32))
 #: the window's epoch salt, Pearl+'s salt coin's
 SALT = bytes(range(100, 164))
 #: the audited window's run root
@@ -221,7 +219,7 @@ def make_toy() -> SimpleNamespace:
     low = WC.lower(reg, CLASS, None, GRAIN, tables=PEARL)
     fields = _weights(low.fn)
     state = WRS.standin_state(IB.program_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], window=RUN)
-    values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
              for row, _ in WRS.scan_slots(low, state.rows)]
     rows, c = WRS.Rows(low, slots, values), low.circuit

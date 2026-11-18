@@ -164,7 +164,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
@@ -194,8 +194,9 @@ INPUTS_REFUSED = "second-inputs"
 ORDER_REFUSED = "cross-stream-order"
 #: a stop class whose stop blocks registered or sampled nothing
 STOP_REFUSED = "stop-stage"
-#: the salts' key of a reference statement (`references`): its rows are stand-ins, so its salts hide nothing
-REFERENCE_KEY = hashlib.sha512(b"verity-vllm/two-stage/reference/v0").digest()
+#: the public tag of a reference statement's salts (`references`, `toy.reference_salts`): its rows are stand-ins, so its
+#: salts hide nothing
+REFERENCE_SALTS = b"verity-vllm/two-stage/reference-salts/v1\0"
 #: a design's counts as a record (`benchmarks/spot_figures`' ``total_cost.py counts``): its ``k`` is the rule's
 COUNTS = "spot-two-stage-counts/v1"
 #: seconds on the challenger's clock from the sample to the proofs: the replay, the interior docket and the second
@@ -914,12 +915,13 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
-    sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
+    sessions' circuits are, on zero rows, under the public `toy.reference_salts`: its public file is ``out``/m<k>/pub.bin, its
     ``circuit.txt`` beside it, and its prover file is deleted. Its registered reads name none of the run's fields: each
     port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, a
     read's verdict's of registered tables, else the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
     first-stage sampling design can sample; this command builds them after the sample, which is why its run is a development run."""
+    from toy import reference_salts
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -929,9 +931,10 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     named = []
     for k, m in enumerate(window.members):
         at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(template_fn(m.template), m, bind).stage(
-            rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
+        st, tables = member_stager(template_fn(m.template), m, bind), {r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16)
+                                                                     for r, w in m.rows}
+        st.stage(
+            rows, at, reference_salts(REFERENCE_SALTS, k, st, m, tables), indices=range(m.base, m.base + m.n), tables=tables,
             refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
@@ -1066,6 +1069,13 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
     return own
 
 
+def round_two(python: Mapping[str, Any] | None, lean: Sequence[str] | None) -> dict[str, Any]:
+    """Round 2's verdict of record: the Python twin's verdict ``python`` (`second_stage.check_twin`'s JSON) held to the
+    statement codes ``lean`` the Lean verifier's run of the stream gave (`second_stage.held_to_lean`)."""
+    codes = SS.held_to_lean(None if python is None else python["codes"], lean)
+    return {"ok": codes == [], "codes": codes}
+
+
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
                  brec: dict, irec: dict, sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict],
                  proofs: dict, out: Path, provenance: dict, *, replay: tuple[Program, str],
@@ -1102,10 +1112,14 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     if refusals:  # why a session never ran: flock-circuit's own words (a statement outside its shape, say)
         got["proof_server_refused"] = refusals
     stmts = None
-    if s.get("draw") is not None:
+    if (units := s.get("draw")) is not None:
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
+        own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie)
+        got["round_two_python"] = SS.check_twin(True, own, stmts).to_json()
+        got["round_two_negatives"] = {name: SS.check_twin(True, own, tampered).ok is False
+                                      for name, tampered in (("dropped", stmts[:-1]), ("none", None))}
     return s, ok, record, got, stmts
 
 
@@ -1499,7 +1513,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
             with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
             codes = summary["outcome"].get("statements")
-            summary["round_two"] = None if codes is None else {"ok": codes == [], "codes": codes}
+            summary["round_two"] = None if codes is None else round_two(summary.get("round_two_python"), codes)
             if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
@@ -1601,6 +1615,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    from verity_config.settings import of
+
+    try:
+        LV.command(of(__file__).raw(LV.ENV), (2,), 2)
+    except LV.Refused as e:
+        ap.error(f"{e} (one level: a5.py)")
     if a.cmd == "second":
         if a.gpus is not None:
             a5 = _a5()
@@ -1616,6 +1636,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.stop_design and not a.stop:
         ap.error("--stop-design is the sampling design over the stop blocks of the rule --stop gives")
     pubs = [json.loads((Path(d) / BR.COMMIT).read_text()) for d in a.boundary]
+    for d, pub in zip(a.boundary, pubs, strict=True):
+        try:
+            if (n := LV.served(pub)) != 2:
+                ap.error(f"--boundary {d}: its record serves {n} level(s), not the two this command audits")
+        except LV.Refused as e:
+            ap.error(f"--boundary {d}: {e}")
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None

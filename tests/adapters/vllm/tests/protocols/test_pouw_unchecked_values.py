@@ -15,6 +15,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
@@ -388,7 +389,7 @@ def test_a_pearl_c_scheme_whose_settings_name_no_kernel_hands_the_kernels_load_n
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(load))
     monkeypatch.setattr(P, "_SALT_KEYS", {})
     monkeypatch.setattr(P, "_layers",
-                        lambda scheme, target: (PPD.scheme_of(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
+                        lambda scheme, target: (pearl_c_scheme(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
     committed = {entry: {"weight_roots": {"0": "05" * 64}, "shapes": {"0": [128, 1024]}}}
     for call, target in ((P.commit_weights, SimpleNamespace(model=None, context=ctx)),
                          (P.install, SimpleNamespace(model=None, context=ctx, weight_commitments=committed))):
