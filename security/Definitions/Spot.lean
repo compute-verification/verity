@@ -9,6 +9,10 @@ public import Definitions.Spot.Necessity
 public import Definitions.Spot.Exfiltration
 public import Definitions.Spot.SamplePressure
 public import Definitions.Spot.ChiPool
+public import Definitions.Spot.Sampling.SamplingDesign
+public import Definitions.Spot.Sampling.Analysis
+public import Definitions.Spot.Sampling.Harm
+public import Definitions.Spot.Sampling.Partitioning
 public import Definitions.Spot.Sampling.Layer
 public import Definitions.Spot.Limits
 import Mathlib.Algebra.Order.BigOperators.Expect
