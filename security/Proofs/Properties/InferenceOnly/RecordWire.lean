@@ -99,7 +99,7 @@ theorem indexOf_some {w : Spot.Wires.Wire} {t : String} {u : Nat} {p : String} {
     (h : w.indexOf t u p row = some i) :
     w.reader = t ∧ w.port = p ∧ w.start ≤ u ∧ u < w.start + w.readerUnits ∧ w.cut0 ≤ row ∧
       row < w.cut0 + w.cuts ∧ i = (u - w.start) * w.cuts + (row - w.cut0) := by
-  unfold Spot.Wires.Wire.indexOf at h
+  simp only [Circuits.Wire.indexOf] at h
   split at h
   · rename_i hcnd
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcnd
