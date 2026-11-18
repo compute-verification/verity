@@ -34,7 +34,9 @@ to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides 
              that never took a slot, a run that ended before any step, as check.py refusing its own plan does) points at
              the machines or the loop's own configuration, not the members: the check is enqueued again and infra rung from
              `rings` on, and no candidate is split for it, however often; a lone member is set aside for it only after
-             `launch_tries` readings
+             `launch_tries` readings.  A candidate above the lowest whose check ended in such infra alone is enqueued
+             again in that tick, once, so launches that never started rerun side by side rather than one candidate at a
+             time; what follows a second reading waits until it is the lowest
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its lock records regenerated before its check, as
@@ -137,6 +139,9 @@ class Ready:
                                    # holds at most one, last (`_moves_last`), and one on a candidate holding one takes only
                                    # the PRs that cross it (`_crossing`)
     scripts: bool = False          # it changes `tools/move/`'s scripts (`queue.MOVE_SCRIPTS`): no move is built on or beside it
+    staged_conflict: bool = False  # a build left it out at this head for conflicting with the staged batch's members, which go
+                                   # onto main's chain's top above it (`vqueue_loop.World._under_staged`): no batch beside
+                                   # that batch takes it (`_pool`)
     crosses: frozenset[str] = frozenset()  # the heads of the move PRs, ready or in flight, whose maps retire nothing its own
                                    # change names (`queue.crossed`): a batch on a candidate holding such a move, at such a
                                    # head, or in the tick that advances to one, may take it (`_crossing`)
@@ -520,6 +525,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
+    acts += [Retry(c.sha) for c in chain if c is not c1 and _reading(c.verdict) == INFRA and _unlaunched(c.verdict)
+             and c.tries < min(s.rings, 2)]
     kept, passed, moved = [], [], []
     dead = {a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}
     for c in staged:
@@ -642,9 +649,9 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
     the one this tick commits, which may be staged again while they are built on `main`), no Lean PR and no PR
     changing a Lean input (`Ready.lean_input`): one Lean batch is staged at a time, and no batch built beside it changes the
     Lean inputs (`vqueue_slim.lean_key`) of the chain's top it goes onto, so its records carry there rather than its records
-    run starting again (`Commit`)."""
+    run starting again (`Commit`), nor a PR that conflicts with the staged batch's members (`Ready.staged_conflict`)."""
     return sorted((r for r in ready.values() if r.number not in busy and not r.conflict
-                   and not (staged and (r.lean or r.lean_input))), key=lambda r: (r.rank, r.number))
+                   and not (staged and (r.lean or r.lean_input or r.staged_conflict))), key=lambda r: (r.rank, r.number))
 
 
 #: why a ready PR that doesn't cross a move (`_crossing`) waits, as a `Leave`'s (cause, why)
@@ -702,6 +709,10 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
     aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
     if r.conflict:
         return "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes"
+    if r.staged_conflict and kept:
+        return "conflicts with staged batch", ("it conflicts with the staged Lean batch's members, which go onto main's chain's "
+                                               "top above it: no batch beside it takes it until that staged batch is on "
+                                               "main's chain or the PR's head moves")
     if o is not None and _unsaid_holds(o, r.number):
         return "base's word", (f"a fail above the lowest suspects it: it waits for {o.base[:12]}'s check, which says whose "
                                "failure it was")
@@ -966,9 +977,13 @@ def _tree(v: Verdict) -> tuple[Failed, ...]:
     return tuple(f for f in v.infra if f.tree)
 
 
+NEVER_RAN = "waited for a check slot until its --wait-max and never ran the tier"
+
+
 def _unlaunched(v: Verdict) -> bool:
-    """Whether ``v`` erred only in launches that started none of the candidate's steps (`Failed.launch`)."""
-    return bool(erred := _erred(v)) and all(f.launch for f in erred)
+    """Whether ``v`` erred only in launches that started none of the candidate's steps (`Failed.launch`, or a quick tier's run
+    that left its slot line unrun, `NEVER_RAN`, as verdicts recorded before that flag was set for it say)."""
+    return bool(erred := _erred(v)) and all(f.launch or NEVER_RAN in f.task for f in erred)
 
 
 def _passed(c: Candidate) -> Outcome:

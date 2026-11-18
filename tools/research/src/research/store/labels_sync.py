@@ -391,8 +391,8 @@ def write_label_file(store: LocalStore, label: Label, *, index: bool = True) -> 
 def _landing(store: LocalStore) -> Iterator[Callable[[Label], Path]]:
     """`write_label_file` for many assertions, indexed `INDEX_BATCH` at a time in one transaction each and the rest on the way out,
     so a sync's catalog rows are all written before it returns; one commit per assertion took a node's fill of 4.3e5 of them
-    half an hour.  A process killed inside a batch leaves at most `INDEX_BATCH` files without their rows (`research data
-    reindex`)."""
+    half an hour.  A process killed inside a batch leaves at most `INDEX_BATCH` files without their rows, which the next pull
+    indexes before it pulls (`_index_unindexed`)."""
     rows: list[tuple[Label, Path]] = []
 
     def land(label: Label) -> Path:
@@ -408,6 +408,20 @@ def _landing(store: LocalStore) -> Iterator[Callable[[Label], Path]]:
     finally:
         if rows:
             store.index.index_labels(rows)
+
+
+def _index_unindexed(store: LocalStore, paths: list[Path], warn: Callable[[str], None]) -> int:
+    """Index the label files among `paths` (every file under labels/) that have no catalog row, and return how many: a pull killed
+    inside a `_landing` batch leaves them, and a pull fetches only the assertions the store lacks, so it would never see them as
+    missing.  When the rows are as many as the files nothing is read; the files were listed anyway, for the sync's hashes."""
+    if len(paths) <= store.index.db.execute("SELECT count(*) FROM labels").fetchone()[0]:
+        return 0
+    have = {r[0] for r in store.index.db.execute("SELECT path FROM labels")}
+    rows = [(lab, p) for p, lab in _read_label_files([p for p in paths if str(p) not in have], warn).values()]
+    store.index.index_labels(rows)
+    if rows:
+        warn(f"labels-sync: indexed {len(rows)} label file(s) without a catalog row (a pull killed inside a batch)")
+    return len(rows)
 
 
 class PackUnusable(Exception):
@@ -513,16 +527,18 @@ def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], N
 def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None,
          theirs: dict[str, str] | None = None) -> dict:
     """Union the local labels/ and the remote `labels/` prefix (`theirs`: its listing, `remote_labels`, when the caller has it).
-    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "bad": [...]}` where `pushed` / `pulled`
-    list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
-    `PACK_MIN_MISSING` takes it first, `pull_pack`) and `bad` lists the remote keys whose content did not hash to their name or
+    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "indexed", "bad": [...]}` where `pushed` /
+    `pulled` list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
+    `PACK_MIN_MISSING` takes it first, `pull_pack`), `indexed` counts the local files a pull found without a catalog row and
+    indexed first (`_index_unindexed`) and `bad` lists the remote keys whose content did not hash to their name or
     did not validate (left alone, never written locally)."""
     r = store._require_remote()
     warn = log or (lambda s: None)
-    mine = local_labels(store, warn)
+    paths = sorted((store.root / "labels").glob("*/*.json"))
+    mine = _read_label_files(paths, warn)
     theirs = remote_labels(r) if theirs is None else theirs
     rep: dict = {"remote": r.describe(), "local": len(mine), "remote_before": len(theirs), "pushed": [], "pulled": [], "pack": 0, "already": 0,
-                 "bad": []}
+                 "bad": [], "indexed": _index_unindexed(store, paths, warn) if pull else 0}
     rep["already"] = len(set(mine) & set(theirs))
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
