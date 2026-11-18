@@ -5,7 +5,7 @@
   "tests/verity/protocols/proofs/spot/verifier/lean/ExfiltrationVectors.lean": "d56f60d9abaa279a1108b17943f1fbb6c8852dfa2de4d4179ea92fcce274989b",
   "security/Proofs/Spot/Sampling/Influence.lean": "21d3ef3177d486c04047e0bf39bd9c02f4c20f89f992f90ea1b8e50dd0630f87",
   "security/Proofs/Spot/Sampling/SamplingDesign.lean": "668796aea8d64265ecb516cb4d34723fd590ac4073666a2ef83655bcd0e891fe",
-  "security/Proofs/Spot/Sampling/Stratified.lean": "d99842ad0c5980587806aac1c657fe82bb077074c87de6479417f395d9eb4140",
+  "security/Proofs/Spot/Sampling/Stratified.lean": "20373524b693c867cf6a4f9533ffce489fbc6904cb9e3ddba770bcd9dc928cb2",
   "security/Proofs/Spot/Sampling/StratifiedMiss.lean": "88727748269a2954007d99d50c21d7bd0e2ce43b707d3d87198dd96901b62615",
   "security/Proofs/lake-manifest.json": "c6689ebebe63bcc33710b71c7e1f9ed83c294c1670734ec61ab28a5a91f70a21",
   "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"

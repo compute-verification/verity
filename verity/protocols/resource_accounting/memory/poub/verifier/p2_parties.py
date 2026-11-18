@@ -360,7 +360,7 @@ def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[
         public: dict[str, Any] = {"eps": str(delta + Fraction(sum(a["draws"]), 2**64)), "q_bytes": q, "span_ns": span}
         profile: dict[str, Any] = {
             "delta": str(delta), "draws": a["draws"], "eps_terms": EPS_TERMS, "plan_units": a.get("plan_units", a["units"]),
-            "receipts": a["receipts"], "unit_bytes": a["unit_bytes"], "units": a["units"], "verifier_host": a.get("host"),
+            "receipts": a["receipts"], "unit_bytes": a["unit_bytes"], "units": a["units"], "verifier_host": None if a.get("host") is None else mc.UNNAMED,
             "windows": len(a["windows"]), "wrong": a["wrong_at_most"]}
         if r_bytes_per_s is not None:
             public |= {"gamma": str(1 - Fraction(q * 10**9, r_bytes_per_s * span)), "r_bytes_per_s": r_bytes_per_s}

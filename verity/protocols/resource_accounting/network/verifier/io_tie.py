@@ -23,9 +23,8 @@ arrival order from 0: advice v1's order permutation, which carries and charges h
 from the network attester's; v0's is the identity) and was admitted at bucket admitted[i], which the network
 attester's FIFO makes non-decreasing in arrival order; its output k must be released at admitted[i] + D + ⌊k / r⌋, so
 advice v0's release is held to the schedule. No prover value says where a cell goes. The advice is private; here the
-verifier computes the map in the clear from the opened advice and the admissions (which the network attester's wiring
-gives, opened to the verifier for now), the named gap ("the advice is opened to the verifier until the compile slice's
-proof block exists"). The target reads the map inside the proof under the advice's hiding root.
+prototype computes the map in the clear from the opened advice and the admissions (which the network attester's wiring
+gives), as a verifier of the design would until the compile slice's proof block exists; no verifier computes it today, and no real path runs the map or the tie's check. The target reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
@@ -280,7 +279,7 @@ def _count(name: str, value: object, least: int) -> int:
 def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], window: int, admitted: Sequence[int],
                delay: int, slots: int, order: Sequence[int] | None = None
                ) -> tuple[tuple[MapEntry, ...], tuple[tuple[int, ...], ...]]:
-    """The verifier's map of egress window `window` (buckets window·T … window·T + T − 1), from the advice's outputs
+    """The prototype's map of egress window `window` (buckets window·T … window·T + T − 1), from the advice's outputs
     (`advice.outputs(a)`) and release buckets (`a.release`), each request's admission bucket `admitted[i]`, and the
     network attester's D = `delay` and r = `slots`; with each bucket's S steps, whose port rows its proof block opens.
     Advice request i is on stream order[i] + 1, its ingress ordinal on the wire (order[i] its arrival order from 0,
@@ -289,7 +288,8 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
     at rank ρ among that bucket's live requests by stream: slot ρ·r + j is a `PAD` before admitted[i] + D, then its cell
     (b − admitted[i] − D)·r + j: an output, with its entry σ·P + row (σ its step's place among the bucket's steps),
     the `END`, or a `PAD`. A slot past the live requests' is `UNHELD`. A bucket's steps are sorted and padded to S by
-    repeating the last (step 0 for a bucket with no output)."""
+    repeating the last (step 0 for a bucket with no output). A verifier of the design would compute it; no verifier
+    computes it today, and no real path runs the map or the tie's check."""
     sh = shape
     D, r = _count("the delay", delay, 0), _count("a connection's slots", slots, 1)
     if sh.R % r:
@@ -402,7 +402,7 @@ def rows_path(levels: Sequence[Sequence[bytes]], pos: int) -> tuple[bytes, ...]:
 @dataclass(frozen=True)
 class Instance:
     """One egress execution phase's tie: the shape; the network attester's cells with one salt a bucket row, their root
-    and domain id (its registration: proof block t reads row t there); the verifier's map and each bucket's S steps;
+    and domain id (its registration: proof block t reads row t there); the prototype's map and each bucket's S steps;
     each bucket's opened port rows (its steps' rows of the Commit's tree), their salts and paths; and the Commit's root
     and domain id. Public: the roots, the domain ids, the map and the steps; the rest is witness."""
 
@@ -493,7 +493,7 @@ def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, co
     """The verifier's own `--registered` ports (`network_attester_rows.reads_file`'s `ports`) of a population of proof blocks that
     each read S rows of the Commit's port, its `count` rows of P ids under `root` in the domain `domain_id`: `port[s]`
     (`port` when S = 1, as `registered.reads` keys a parameter of one row), the proof block's s-th port row, has proof
-    block `reads_from + u` read row steps[u][s]. The steps are the verifier's map's, so every read is at a public
+    block `reads_from + u` read row steps[u][s]. The steps are the prototype's map's, so every read is at a public
     position, and the Lean verifier holds each read row to its leaf of the Commit's root by its b ‖ c
     (`registered.verify_read`), as it holds a bucket row to the network attester's (`network_attester_rows.bucket_port`)."""
     widths = {len(st) for st in steps}

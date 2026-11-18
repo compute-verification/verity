@@ -4,11 +4,15 @@ the earlier window didn't leave, a carry in from a window that isn't among them,
 aborted request are refused."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
 from verity_vllm.pipeline.advice_code import format as I1
 from verity_vllm.pipeline import window_advice as WA
 
-from verity_vllm.pipeline import window_chain as WC
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e"))
+import window_chain as WC  # noqa: E402
 
 
 def _row(request: int, start: int, n: int, prompt_len: int = 3) -> WA.Row:

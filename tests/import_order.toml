@@ -887,7 +887,6 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
-    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -993,7 +992,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
     "verity/protocols/resource_accounting/memory/pous/scheme.py",
-    "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
