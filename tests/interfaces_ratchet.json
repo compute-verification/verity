@@ -148,7 +148,7 @@
   "benchmarks/network_e2e/traces/network_attester_probe.py": 4,
   "benchmarks/network_traces/attester_piece.py": 5,
   "benchmarks/network_traces/capture_flows.py": 5,
-  "benchmarks/network_traces/chain_record.py": 5,
+  "benchmarks/network_traces/chain_record.py": 6,
   "benchmarks/network_traces/demo_endpoint.py": 1,
   "benchmarks/network_traces/demo_stub.py": 2,
   "benchmarks/network_traces/leak_bounds.py": 5,

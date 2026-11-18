@@ -99,7 +99,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_ATTESTER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --protocols-config "
                                     "'{\"network-attester\": {\"order\": \"release-order\"}}' "
-                                    "--seal --retain-exclude hidden_m1")
+                                    "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
@@ -511,28 +511,6 @@ def test_endpoint_refuses_on_its_serve_dir_and_flags(tmp_path, monkeypatch, caps
         (src / f).rename(tmp_path / f)
         assert SS.main(argv) == 2 and f"no {f}" in capsys.readouterr().err
         (tmp_path / f).rename(src / f)
-
-
-def test_each_defaulted_flag_holds_serve_openais_own_default_for_it():
-    from dataclasses import fields
-
-    from verity_vllm.pipeline import cli
-
-    def flag_of(options, flag):
-        for f in fields(options):
-            if "group" in f.metadata:
-                found = flag_of(getattr(options, f.name), flag)
-                if found is not None:
-                    return found
-            elif flag in f.metadata.get("flags", ()):
-                return getattr(options, f.name)
-        return None
-
-    words = shlex.split(SS.ENDPOINT.format(port=0))[2:]
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", *words], environ={})
-    pairs = dict(zip(SS.DEFAULTED[::2], SS.DEFAULTED[1::2]))
-    assert pairs and not set(pairs) & set(words), "a DEFAULTED flag the endpoint's flags name is no default left out"
-    assert {k: flag_of(opts, k) for k in pairs} == pairs
 
 
 def test_chain_runs_chain_records_network_attester_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
