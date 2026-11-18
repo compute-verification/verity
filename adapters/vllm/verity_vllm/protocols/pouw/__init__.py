@@ -90,7 +90,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ROUND0,
     run_matmul,
     salt_session,
-    SCHEDULES,
     Shape,
     traced_as as _traced_as,
     use_int8_arm,
@@ -102,6 +101,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting import scheme as RS
 from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
@@ -184,7 +185,7 @@ class Settings:
     #: Pearl-C on sm_120: the kernel directory (the run tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
-    #: Pearl-C on sm_120: the schedule each pass runs under (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.SCHEDULES`), serial by default
+    #: Pearl-C on sm_120: the schedule each pass runs under (the ``pearl-plus`` scheme's setting ``schedule``), serial by default
     schedule: str = "serial"
     #: ``ncp-v2``: the anchored forward index the install's first pass takes.  A salt's first execution phase starts at 0; a second
     #: served execution phase under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
@@ -260,8 +261,7 @@ class Settings:
         if any(p is not None and not isinstance(p, str) for p in (kernel, cubin)):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
         schedule = raw.get("schedule", "serial")
-        if schedule not in SCHEDULES:
-            raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
+        RS.settings(declarations.get("pearl-plus"), {"schedule": schedule})
         start = raw.get("start_forward", 0)
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
