@@ -1,6 +1,6 @@
 """R2's other partition, which every arm's registration-partition-mismatch negative registers: the window's population with
 its first template one instance short, or one over where it has a single instance, since a population has at least one
-(`partition.population_program`). A one-unit window is the case one short would leave empty.
+(`population.population_program`). A one-unit window is the case one short would leave empty.
 
     import r2_population as R2
     other = R2.program([(template, n)], mixed=False)            # TemplateInstances, as A0 and A2 build theirs
