@@ -29,7 +29,6 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
 from verity.circuits.private_circuits import universal as U
-from verity.commitments import hm96
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
 from verity_flock import class_statement as CS
@@ -158,8 +157,8 @@ def _stage(topo, d: Path, wired: bool):
                              share_rows=False, salts=own)
         port = _meta(d / "honest")["links"][0]["port"]
         _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
-        bc = hm96.SHA512.commit_string(hm96.SHA512.default_key, RG.row_digest([1 - b for b in tree.rows[0]]), tree.salts[0])
-        _edit(d / "honest", d / "other_words", N, port, rows={0: bc})
+        st["other_words"] = CS.stage(units, SPEC, shape, cl, _cut(_lanes(units, cl, tp, inputs, {N: flip[N]}), N, tp.population),
+                                     d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
         for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
             (d / f"{name}.reads.json").write_text(json.dumps({"format": RG.READS, "ports": st[k]["registered_reads"]}))
         text = (d / "honest" / "circuit.txt").read_text()
@@ -167,19 +166,16 @@ def _stage(topo, d: Path, wired: bool):
     return fn, program, query, tp, st
 
 
-def _edit(src: Path, dst: Path, n: int, port: str, refs: dict | None = None, rows: dict | None = None) -> None:
-    """``src``'s statement with port ``port``'s refs moved (instance i reads table row ``refs[i]``) or its table rows' `b || c`
-    replaced (``rows``); the header, and so every row's stated position and path, unchanged."""
+def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
+    """``src``'s statement with port ``port``'s refs moved (instance i reads table row ``refs[i]``); its rows, and every row's
+    stated position and path, unchanged."""
     shutil.copytree(src, dst)
     names = [p[0] for p in _meta(src)["ports"]]
     head, body = (src / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
     counts = [json.loads(head)["shared_rows"][x] for x in names]
     j, o = names.index(port), 128 * sum(counts)
     body = bytearray(body)
-    for r, bc in (rows or {}).items():
-        at = 128 * (sum(counts[:j]) + r)
-        body[at:at + 128] = bc
-    for i, r in (refs or {}).items():
+    for i, r in refs.items():
         at = o + 4 * (i * len(names) + j)
         body[at:at + 4] = r.to_bytes(4, "little")
     (dst / f"pub-{n}.bin").write_bytes(head + b"\n" + bytes(body))
@@ -274,9 +270,11 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
                      *(["--registered", str(d / reads)] if reads else []))
 
     ok, out = at("writers", *bound, reads="writers.reads.json")
+    print("writers", ok and ok["partition_check"]["note"])
     assert ok is not None and ok["partition_check"]["units"] == "derived", out
     for name, reads in (("honest", "readers.reads.json"), ("own", "own.reads.json")):
         ok, out = at(name, *bound, reads=reads)
+        print(name, ok and ok["partition_check"]["note"])
         assert ok is not None, out
         note = ok["partition_check"]["note"]
         assert ok["partition_check"]["units"] == "derived" and f"Linking checked: {N} cut wire(s)" in note and "unit-class/" in note
@@ -285,12 +283,15 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     for cheat, why in (("made_up", NOT_OPEN), ("wrong_salt", NOT_OPEN), ("other_words", NOT_OPEN),
                        ("other_leaf", "and the verifier's program reads")):
         bad, out = at(cheat, *bound)
+        print(cheat, out.strip().splitlines()[-1])
         assert bad is None and why in out, (cheat, out)
     # without registered reads, every linked statement is refused by checkLinked's name, the honest one included
     for name in ("honest", "made_up", "wrong_salt"):
         bad, out = at(name, *bound, reads=None)
+        print(name, "without --registered:", out.strip().splitlines()[-1])
         assert bad is None and NO_TREE in out, (name, out)
     bad, out = at("honest", "--partition", str(d / "partition.json"), reads=None)
+    print("no-program", out.strip().splitlines()[-1])
     assert bad is None and "Linking needs the verifier's own program" in out, out
     # a one-layer class: staged with Wiring, no cut wire and no links, its units derived; staged without, as before (its
     # template the size class's own, so its units are taken as stated)
