@@ -19,6 +19,8 @@
 #                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
+#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size --find-load|--feature ARM
+#     # a serving profile of benchmarks/production.toml: where stock saturates, or one arm of ours beside stock
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
 # shard and no plan). Its arms are by default stock, stock again and two-stage, with --arms all one arm for each change
@@ -27,6 +29,19 @@
 # --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
 # of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
+# --profile NAME serves as benchmarks/production.toml's profile does (serve_tax.profile_run): the file's stock launch
+# (prod for glm53, stock vLLM at vLLM's own limits for the others), the profile's load at the model's context, no
+# sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
+# It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
+# WITH, and refuses each one given, naming it. --find-load serves stock alone over a ladder (users 1, 2, 4, 8, 16 for
+# coding-agent; 4 to 192 requests in flight, up to the profile's prompts, for the others) and prints where its output
+# tokens a second stop rising: the file's line, the version to raise and the pin test's digest
+# (OUT/find_load.{json,txt}); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
+# two lifetimes of three reps each, and writes the result's three lines (OUT/serving_profile.{json,txt}). Where ARM
+# refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
+# arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
+# (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
+# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap).
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
@@ -106,25 +121,50 @@
 # its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
 # qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
 # lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
-# pin, unless set.
+# pin, unless set. On a machine that is not ours (a Slurm node, under research run --local-only) there is no gpu-lease:
+# the job waits for its own cards (CUDA_VISIBLE_DEVICES, as Slurm sets it) to be free; VENV must be given; HF_HOME is
+# the hub's own place under XDG_CACHE_HOME unless given; and a profile's job names its commit from research run's
+# --tree-sha (RESEARCH_SOURCE_SHA) or RESEARCH_SOURCE_COMMIT, with no .git, and its card from nvidia-smi's name
+# through the card files, never from the machine's name.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
   case $flag in
     --json) JSON=1 ;;
-    --model|--arms|--loads|--dataset|--reps|--target)
+    --find-load) FIND_LOAD=1 ;;
+    --model|--arms|--loads|--dataset|--reps|--target|--profile|--feature)
       [ $# -gt 0 ] || { echo "serve-tax: $flag takes a value"; exit 2; }
       case $flag in
         --model) MODEL_ID=$1 ;; --arms) ARMS=$1 ;; --loads) LOADS=$1 ;; --reps) REPS=$1 ;; --target) TARGET=$1 ;;
-        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;;
+        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;; --profile) PROFILE=$1 ;; --feature) FEATURE=$1 ;;
       esac
       shift ;;
-    *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json)"; exit 2 ;;
+    *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json," \
+         "--profile NAME, --feature ARM, --find-load)"; exit 2 ;;
   esac
   CLIENT=${CLIENT:-vllm-bench}
 done
 CLIENT=${CLIENT:-corpus}
-if [ "$CLIENT" = vllm-bench ]; then
+if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; then
+  [ -n "${PROFILE:-}" ] || { echo "serve-tax: --feature and --find-load are a profile's: --profile NAME"; exit 2; }
+  [ "${FIND_LOAD:-1}" = 1 ] || { echo "serve-tax: FIND_LOAD=$FIND_LOAD: set by --find-load alone"; exit 2; }
+  case "${FEATURE:+f}${FIND_LOAD:+l}" in
+    f|l) ;;
+    *) echo "serve-tax: --profile $PROFILE takes --feature ARM or --find-load, one of them"; exit 2 ;;
+  esac
+  fixes() { echo "serve-tax: --profile $PROFILE fixes $2 (benchmarks/production.toml): drop $1"; exit 2; }
+  [ -z "${ARMS:-}" ] || fixes "--arms/ARMS" "the arms: its stock and --feature's arm, or stock alone for --find-load"
+  [ -z "${LOADS:-}" ] || fixes "--loads/LOADS" "the load: its dataset, cut and turns at its one load, or --find-load's ladder"
+  [ -z "${REPS:-}${LIFETIMES:-}" ] || fixes "--reps/REPS and LIFETIMES" \
+    "the passes: two lifetimes of three reps each, six paired, or one of three for --find-load"
+  [ "${SAMPLED:-0}" = 0 ] || fixes SAMPLED "the sampling: no flag, so the model's generation_config applies"
+  [ -z "${MAX_MODEL_LEN:-}" ] || fixes MAX_MODEL_LEN "the context limit: the model's in the file"
+  [ -z "${PASS_PROMPTS:-}" ] || fixes PASS_PROMPTS "the prompts a pass sends"
+  [ -z "${PUBLISHED_ARGS:-}${PUBLISHED_FRONTEND:-}" ] || fixes "PUBLISHED_ARGS and PUBLISHED_FRONTEND" "the stock launch"
+  [ -z "${TARGET:-}${WITH:-}" ] || fixes "--target/TARGET and WITH" "the result: its three lines, and no cost against a target"
+  WINDOW_S=${WINDOW_S:-30}
+  export PROFILE ${FEATURE:+FEATURE} ${FIND_LOAD:+FIND_LOAD}
+elif [ "$CLIENT" = vllm-bench ] && [ -z "${PROFILE:-}" ]; then
   ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
   [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
   # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit period shorter than a
@@ -157,8 +197,10 @@ else
     TRITON_CACHE_DIR=$venv/cache/triton
 fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
+[ -x "$PY" ] || { echo "serve-tax: no environment at VENV=$VENV: on a machine that is not ours (no /workspace/venv312), set VENV to one holding vLLM $SERVE_VLLM"; exit 2; }
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
+[ -d "$hf" ] || hf=${XDG_CACHE_HOME:-$HOME/.cache}/huggingface   # a machine that is not ours: the hub's own place, the job's
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 MODEL_ID=${MODEL_ID:-moonlight}
 case $MODEL_ID in
@@ -210,6 +252,20 @@ replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY
 v=$("$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))') || exit 2
 [ "$v" = "$SERVE_VLLM" ] || { echo "serve-tax: $VENV holds vLLM $v, not SERVE_VLLM=$SERVE_VLLM"; exit 2; }
 mkdir -p "$OUT"
+if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
+  # what the profile serves (serve_tax.profile_plan): ARMS, LOADS, REPS, LIFETIMES, the changes on our side (OURS), the
+  # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
+  # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
+  plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "$FEATURE"} \
+    ${FIND_LOAD:+--find-load}) || exit 2
+  eval "$plan"
+  { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
+  export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN
+  if [ -z "$ARMS" ]; then
+    "$PY" "$here/serve_tax.py" profile result --profile "$PROFILE" --model-id "$MODEL_ID" --feature "$FEATURE" --out "$OUT"
+    exit $?
+  fi
+fi
 [ ! -f "$VENV/freeze.txt" ] || cp "$VENV/freeze.txt" "$OUT/vllm_env.freeze.txt"   # ops/vllm_env.sh's: what it installed
 
 # FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (TRTLLM_DG_CACHE_DIR, else
@@ -275,6 +331,13 @@ if [ "${1:-}" = leased ]; then
     for arm in "${names[@]}"; do order+=("$arm:$k"); done
   done
   last=; to_serve=${#order[@]}
+  if [ -n "${PROFILE:-}" ]; then
+    # a profile's job stops by its model's minutes: an arm starts no pass it can't finish by then, and the result says
+    # cannot tell where a side's passes were cut
+    cap_at=$((t_leased + CAP_MIN * 60))
+    { [ -n "${STOP_AT:-}" ] && [ "$(date -d "$STOP_AT" +%s)" -le "$cap_at" ]; } 2>/dev/null \
+      || STOP_AT=$(date -u -d "@$cap_at" +%FT%TZ)
+  fi
   [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "serve-tax: STOP_AT=$STOP_AT is not a time"; exit 2; }
   for item in "${order[@]}"; do
     arm=${item%%:*}; dir=$arm; life=()
@@ -293,7 +356,9 @@ if [ "${1:-}" = leased ]; then
       break
     fi
     echo "== $dir $(date -u +%FT%TZ)"
-    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
+    profile=(); [ -n "${PROFILE:-}" ] && profile=(--profile "$PROFILE")
+    [ -n "${PROFILE:-}" ] && [ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")
+    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" "${profile[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
       ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
@@ -383,7 +448,12 @@ for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 # no arm of ours; nor has the node's side of an arm behind the network attester, whose passes are in the other
 # side's directory. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
 # joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+if [ -n "${PROFILE:-}" ]; then
+  # a profile's result in place of a cost (serve_tax.profile_result): exit 1 where the feature cannot run, as for an arm
+  # whose run refuses it
+  "$PY" "$here/serve_tax.py" profile result "${dirs[@]}" --profile "$PROFILE" --model-id "$MODEL_ID" \
+    ${FEATURE:+--feature "$FEATURE"} ${FIND_LOAD:+--find-load} --out "$OUT" || rc=1
+elif [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
     && [ "${ARMS##* }" != prod ] && [ "${SIDE:-}" != server ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})

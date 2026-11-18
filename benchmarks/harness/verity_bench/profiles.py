@@ -1,6 +1,7 @@
 """The serving profiles of `benchmarks/production.toml`, read strictly into frozen objects (`load`), each profile's
 digest (`digest`), and the two command lines a profile's run starts: stock vLLM's server (`serve_argv`) and the
-profile's client, `vllm bench serve` (`bench_argv`)."""
+profile's client, `vllm bench serve` (`bench_argv`). A model's launch is the same on each of its `cards` (the card files'
+``short``, `verity_bench.kit.card_short`), and a profile's load is the model's on one card."""
 
 from __future__ import annotations
 
@@ -48,8 +49,8 @@ class Profile:
     cuts: Mapping[str, Cut] = field(default_factory=dict)
     datasets: Mapping[str, Dataset] = field(default_factory=dict)
     dataset: Dataset | None = None
-    users: Mapping[str, int | str] = field(default_factory=dict)
-    in_flight: Mapping[str, int | str] = field(default_factory=dict)
+    users: Mapping[str, Mapping[str, int | str]] = field(default_factory=dict)
+    in_flight: Mapping[str, Mapping[str, int | str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class Model:
     repository: str
     revision: str
     served: str
-    card: str
+    cards: tuple[str, ...]
     gpus: int
     context: int
     quick_check: bool
@@ -154,9 +155,14 @@ def _check(doc: Production, path: Path) -> Production:
         loads = profile.users or profile.in_flight
         if set(loads) != set(doc.models):
             raise refuse(f"profiles.{name}: its load names models {sorted(loads)}, not {sorted(doc.models)}")
-        for model, count in loads.items():
-            if count != NOT_FOUND and not (isinstance(count, int) and count > 0):
-                raise refuse(f"profiles.{name}: load for {model} is {count!r}: a positive count, or {NOT_FOUND!r}")
+        for model, by_card in loads.items():
+            if set(by_card) != set(doc.models[model].cards):
+                raise refuse(f"profiles.{name}: its load for {model} names cards {sorted(by_card)}, not its cards "
+                             f"{sorted(doc.models[model].cards)}")
+            for card, count in by_card.items():
+                if count != NOT_FOUND and not (isinstance(count, int) and count > 0):
+                    raise refuse(f"profiles.{name}: load for {model}.{card} is {count!r}: a positive count, or "
+                                 f"{NOT_FOUND!r}")
         for context, cut in profile.cuts.items():
             if not context.isdigit() or cut.dataset not in profile.datasets:
                 raise refuse(f"profiles.{name}.cuts.{context}: a context in tokens, on one of {sorted(profile.datasets)}")
@@ -201,12 +207,16 @@ def dataset(doc: Production, profile: str, model: str) -> Dataset:
     return prof.datasets[cut(doc, profile, model).dataset] if prof.cuts else prof.dataset
 
 
-def load_point(doc: Production, profile: str, model: str) -> int:
-    """Users of a session profile, requests in flight of the others; refused while not found yet."""
+def load_point(doc: Production, profile: str, model: str, card: str) -> int:
+    """Users of a session profile, requests in flight of the others, for ``model`` on ``card``; refused on a card the
+    model has no load for, and while not found yet."""
     prof = doc.profiles[profile]
-    count = (prof.users or prof.in_flight)[model]
+    by_card = (prof.users or prof.in_flight)[model]
+    if card not in by_card:
+        raise ConfigError(f"{profile} on {model}: no load on card {card or '(none named)'}; its cards are {', '.join(by_card)}")
+    count = by_card[card]
     if count == NOT_FOUND:
-        raise ConfigError(f"{profile} on {model}: the load is {NOT_FOUND}; pass the load to run at")
+        raise ConfigError(f"{profile} on {model}.{card}: the load is {NOT_FOUND}; pass the load to run at")
     return count
 
 
@@ -225,11 +235,11 @@ def serve_argv(doc: Production, model: str, checkpoint: str | Path, *, port: int
 
 def bench_argv(doc: Production, profile: str, model: str, checkpoint: str | Path, *, port: int,
                result_dir: str | Path, tag: str, dataset_path: str | Path | None = None, in_flight: int | None = None,
-               prompts: int | None = None, seed: int = 0, host: str = "127.0.0.1",
+               card: str | None = None, prompts: int | None = None, seed: int = 0, host: str = "127.0.0.1",
                vllm: Sequence[str] = ("vllm",)) -> list[str]:
     """``profile``'s client on ``model``: no sampling flag, so the server samples by the model's defaults, and every
     answer stops at its recorded length. A session profile's client is one user's: one request in flight, ``prompts``
-    its turns; ``in_flight`` is the requests in flight of the others, the file's load unless given."""
+    its turns; ``in_flight`` is the requests in flight of the others, the file's load on ``card`` unless given."""
     prof, m = doc.profiles[profile], doc.models[model]
     flags = ["--dataset-name", prof.dataset_name]
     if prof.dataset_name == "random":
@@ -239,7 +249,7 @@ def bench_argv(doc: Production, profile: str, model: str, checkpoint: str | Path
         held = ["--no-self-timed", "--request-rate", "inf", "--max-concurrency", "1"]
         count = cut(doc, profile, model).turns if prompts is None else prompts
     else:
-        held = ["--request-rate", "inf", "--max-concurrency", str(in_flight or load_point(doc, profile, model))]
+        held = ["--request-rate", "inf", "--max-concurrency", str(in_flight or load_point(doc, profile, model, card or ""))]
         count = prof.prompts if prompts is None else prompts
     goodput = ["--goodput", *(f"{GOODPUT[bound][0]}:{round(getattr(doc.bounds, GOODPUT[bound][1]) * 1e3)}"
                               for bound in prof.within)]
