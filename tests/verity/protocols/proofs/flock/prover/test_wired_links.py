@@ -21,6 +21,7 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -286,6 +287,15 @@ def test_a_wire_of_part_of_a_return_field_or_of_several_is_refused_by_name(topo,
     CS.cache_slot_circuits()
     with pytest.raises(ValueError, match="a wire reads one whole return field of its writer"):
         _stage(topo, tmp_path, True, unit)
+
+
+def test_a_link_reads_its_field_at_the_fields_first_leaf_and_its_parameters_sit_at_that_fields_first_word():
+    """Behind a 32-bit output leaf a field's first word is past its first leaf: META ``at`` counts leaves (Lean's
+    `HmLinks.fieldSpans`), the link row's frame words, each output leaf ``ceil(bits / 16)`` of them."""
+    uc = SimpleNamespace(in_widths=[16, 16], out_widths=[32, 16, 16])
+    assert CS._link_frame(uc, [0, 1, 3], [0, 1], 1) == (2, 4)
+    with pytest.raises(ValueError, match="not one field's"):
+        CS._link_frame(uc, [0, 1, 3], [0, 1], 2)
 
 
 def test_link_triples_refuse_a_cut_wire_no_link_carries_a_read_at_another_offset_and_not_a_run(staged):
