@@ -33,13 +33,14 @@ The metrics, Pearl+'s γ at the H200's C and L, are Llama-3.1-70B's. Llama-3.2-1
 ## Commands
 
 ```text
-verity bench overhead points [--card h200] [--model M]       sweep m on one GPU of NODE for C and L (a research run)
-    [--on NODE] [--gpu I] [--cores CPUS]                      the node, the GPU and the CPUs it leases
+verity bench overhead points --on NODE --card CARD [--model M] sweep m on one GPU of NODE for C and L (a research run)
+    [--gpu I] [--cores CPUS]                                  the GPU and the CPUs it leases
 verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
-verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
-    [--model M] [--cubin ART]                                 at the model's points; the cubin S's arm loads, sent with it
+verity bench overhead run --on NODE --card CARD --scheme S    time S against stock at the card's points (a research run)
+    [--point C|L|all] [--model M] [--cubin ART]               at the model's points; the cubin S's arm loads, sent with it
 verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
-A step runs as a `research run` on one GPU of its node through the node's `gpu-lease`; the H200's node is `vy-spot-glm53`.
+A step runs as a `research run` on one GPU of its node through the node's `gpu-lease`. A launch names its node and the
+card's `short` there; the door's cards are `verity_bench.overhead.DOOR`, each by its node file, which gives its card file.

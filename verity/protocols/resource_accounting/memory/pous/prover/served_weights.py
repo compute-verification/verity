@@ -36,15 +36,15 @@ root (``python -m verity.protocols.resource_accounting.memory.pous.prover.served
   width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
   program named by its digest alone reads each tensor at `Tensor.word_bits`, 16: a Boolean program's one-bit leaves, as
   the served step's Program reads them). Row
-  i's salt is ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the tensor's index as nonce (Flock's
-  ``hm96_salt``; the key salts these rows only). At `H200` every tensor's row count is a power of two, so no tree has a
+  i's salt is 192 fresh operating-system bytes drawn once for it (`draw_salts`) and kept in the prover's salt file
+  (`verity.commitments.salt_file`, by the tensor's name, row i at bytes 192 i), never derived from a key. At `H200` every tensor's row count is a power of two, so no tree has a
   pad. **The registration digest** (`registration_digest`) is SHA-512 of ``verity/seeded-weights/registration/v1`` and
   ``{program, values}`` (the program's digest, the entries of the tensors it reads in tensor order): the one root the
   weights' store ties to.
   The generator never reads the program, so a new program re-roots the weights and leaves their bytes as they were.
 * **In parallel** (`root`): a value's rows are cut into aligned chunks of a power of two rows; each worker generates its
   chunk's bytes itself and returns the chunk's subtree root, and the caller folds them as ``tree_levels`` does. Only the
-  seed, the salt key, the `Reader` (the program's digest and widths) and chunk indices cross processes.
+  seed, the salt file's path, the `Reader` (the program's digest and widths) and chunk indices cross processes.
 """
 from __future__ import annotations
 
@@ -63,8 +63,7 @@ import numpy as np
 
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
-from verity.commitments import hm96
-from verity.commitments.crypto import chacha20
+from verity.commitments import hm96, salt_file
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
@@ -76,7 +75,6 @@ MANIFEST = "verity/seeded-weights/manifest/v1"
 REGISTRATION = "verity/seeded-weights/registration/v1"
 SCHEMA = REG.SCHEMA_V2
 _INST = hm96.SHA512
-_SALT_BLOCKS = _INST.salt_bytes // chacha20.BLOCK_BYTES
 #: a chunk's bytes are at most this many (`root`)
 CHUNK_BYTES = 1 << 23
 _DTYPES = {"s8": (1, np.int8), "f32": (4, np.float32), "bf16": (2, np.uint16)}
@@ -348,15 +346,14 @@ def reader(shape: Shape, program: Program | str | Reader) -> Reader:
     return Reader(program_digest(program), tuple(widths))
 
 
-def _salt_key(key: bytes) -> bytes:
-    if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("a salt key is 32 bytes")
-    return key
+def draw_salts(shape: Shape, names: Iterable[str]) -> dict[str, bytes]:
+    """Every row's salt of each tensor in `names`, fresh operating-system bytes, by tensor name (`salt_file.write`)."""
+    return {n: os.urandom(_INST.salt_bytes * tensor(shape, n).leaves) for n in names}
 
 
-def salts(salt_key: bytes, index: int, first: int, n: int) -> bytes:
-    """Rows ``first .. first + n - 1``'s 192-byte salts of the tensor at `index` (Flock's ``hm96_salt``)."""
-    return chacha20.keystream(_salt_key(salt_key), index, _SALT_BLOCKS * first, _SALT_BLOCKS * n)
+def salts(path: str | Path, name: str, first: int, n: int) -> bytes:
+    """Rows ``first .. first + n - 1``'s 192-byte salts of tensor `name`, from the salt file at `path`."""
+    return salt_file.read(path, name, range(first, first + n))
 
 
 def domain(t: Tensor, r: Reader) -> CommitmentDomain:
@@ -365,13 +362,13 @@ def domain(t: Tensor, r: Reader) -> CommitmentDomain:
     return REG.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
 
 
-def commit(shape: Shape, seed: bytes, salt_key: bytes, program: Program | str | Reader, name: str) -> REG.Registered:
+def commit(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader, name: str) -> REG.Registered:
     """Tensor `name` committed whole by core's ``Registered.commit`` (small shapes; `root` is the same root in parallel)."""
     i, t = next((i, t) for i, t in enumerate(tensors(shape)) if t.name == name)
     r = reader(shape, program)
     b = r.word_bits(name)
     rows = np.frombuffer(tensor_bytes(shape, seed, name), "<u2" if b == 16 else "<u4")
-    s = salts(salt_key, i, 0, t.leaves)
+    s = salts(salts_at, name, 0, t.leaves)
     return REG.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
                                  [s[k * _INST.salt_bytes:(k + 1) * _INST.salt_bytes] for k in range(t.leaves)],
                                  word_bits=b, schema=t.schema)
@@ -417,21 +414,21 @@ def chunk_levels(t: Tensor, dom: Any, data: bytes, row_salts: bytes, j0: int, bi
     return levels
 
 
-def subtree(shape: Shape, seed: bytes, salt_key: bytes, r: Reader, index: int, chunk: int, bits: int) -> bytes:
+def subtree(shape: Shape, seed: bytes, salts_at: str | Path, r: Reader, index: int, chunk: int, bits: int) -> bytes:
     """The subtree root over rows ``[chunk << bits, (chunk + 1) << bits)`` of the tensor at `index`, pads included."""
     t = tensors(shape)[index]
     rb, j0 = 2 * t.words, chunk << bits
     n = max(0, min(1 << bits, t.leaves - j0))
     data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb) if n else b""
-    return chunk_levels(t, domain(t, r), data, salts(salt_key, index, j0, n) if n else b"", j0, bits)[-1][0]
+    return chunk_levels(t, domain(t, r), data, salts(salts_at, t.name, j0, n) if n else b"", j0, bits)[-1][0]
 
 
 def _task(args: tuple) -> tuple[int, int, bytes]:
-    shape, seed, key, r, index, chunk, bits = args
-    return index, chunk, subtree(shape, seed, key, r, index, chunk, bits)
+    shape, seed, salts_at, r, index, chunk, bits = args
+    return index, chunk, subtree(shape, seed, salts_at, r, index, chunk, bits)
 
 
-def root(shape: Shape, seed: bytes, salt_key: bytes, program: Program | str | Reader,
+def root(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader,
          names: Sequence[str] | None = None, *, workers: int = 1, chunk_bytes: int = CHUNK_BYTES,
          progress: Any = None) -> dict[str, bytes]:
     """Each tensor's registered root for `program` (`names`, default every tensor it reads), equal to `commit`'s, computed
@@ -446,7 +443,7 @@ def root(shape: Shape, seed: bytes, salt_key: bytes, program: Program | str | Re
         t = ts[i]
         bits = chunk_bits(t, chunk_bytes)
         bits_of[i] = bits
-        plan += [(shape, seed, _salt_key(salt_key), r, i, c, bits) for c in range((1 << merkle_depth(t.leaves)) >> bits)]
+        plan += [(shape, seed, str(salts_at), r, i, c, bits) for c in range((1 << merkle_depth(t.leaves)) >> bits)]
     got: dict[int, dict[int, bytes]] = {i: {} for i in want}
     if workers == 1:
         results: Iterable = map(_task, plan)
@@ -578,11 +575,13 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
 
 
 #: the H200 demo's seed, frozen (its weights' registration roots depend on these bytes): public, so its weights are
-#: reproducible; the demo's salt key is the prover's, sampled from the OS at registration
+#: reproducible; the demo's salts are the prover's, drawn from the OS at registration (`salts`)
 DEMO_SEED = b"verity/cmp92/h200/weights/v1"
-#: the fixture's public seed and dummy salt key: test values, never the demo's
+#: the fixture's public seed: a test value, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"
-TEST_SALT_KEY = hashlib.sha512(b"not-a-secret: the seeded weights' test salt key").digest()[:32]
+#: what the fixture says of its salt file
+TEST_SALTS_NOTE = ("public test data: TINY's row salts drawn once from the operating system for this fixture and stored; "
+                   "never a run's salts")
 #: the fixture's reader, a digest of no program: every tensor at `Tensor.word_bits`
 TEST_PROGRAM = hashlib.sha512(b"not-a-program: the seeded weights' test reader").hexdigest()
 
@@ -597,20 +596,22 @@ def first_rows(shape: Shape, seed: bytes) -> list[list[str]]:
     return out
 
 
-def fixture() -> dict[str, Any]:
-    """The interface's fixture (``tests/fixtures/weights-v1.json``): under `TEST_SEED` and `TEST_SALT_KEY`, `TINY`'s and
-    `PHASE1`'s manifests with digests, and their entries and registration digests for `TEST_PROGRAM`; at `H200` the
+def fixture(salts_at: str | Path) -> dict[str, Any]:
+    """The interface's fixture (``tests/benchmarks/pous/fixtures/weights-v1.json``): under `TEST_SEED`, `TINY`'s and `PHASE1`'s manifests
+    with digests, and `TINY`'s entries and registration digest for `TEST_PROGRAM` under the stored test salts at
+    `salts_at` (`TEST_SALTS_NOTE`; `PHASE1`'s salts would pass the repository's file cap); at `H200` the
     stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
     SHA-256 of every tensor's
     (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
     of the evidence store (``manifest --digests`` writes it again)."""
-    out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
-                           "salt_key": TEST_SALT_KEY.hex(), "program": TEST_PROGRAM, "shapes": {}}
-    for s in (TINY, PHASE1):
-        roots = root(s, TEST_SEED, TEST_SALT_KEY, TEST_PROGRAM)
-        out["shapes"][s.name] = {"manifest": manifest(s, TEST_SEED, digests=True),
-                                 "values": entries(s, TEST_PROGRAM, roots),
-                                 "registration": registration_digest(s, TEST_PROGRAM, roots)}
+    out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v2", "seed": TEST_SEED.hex(),
+                           "salts": {"file": Path(salts_at).name, "note": TEST_SALTS_NOTE}, "program": TEST_PROGRAM,
+                           "shapes": {}}
+    roots = root(TINY, TEST_SEED, salts_at, TEST_PROGRAM)
+    out["shapes"][TINY.name] = {"manifest": manifest(TINY, TEST_SEED, digests=True),
+                                "values": entries(TINY, TEST_PROGRAM, roots),
+                                "registration": registration_digest(TINY, TEST_PROGRAM, roots)}
+    out["shapes"][PHASE1.name] = {"manifest": manifest(PHASE1, TEST_SEED, digests=True)}
     rows = first_rows(H200, TEST_SEED)
     out["shapes"][H200.name] = {
         "stream_bytes": stream_bytes(H200), "stream_head": stream(H200, TEST_SEED, 0, 64).hex(),
@@ -654,9 +655,9 @@ def _bytes_arg(text: str) -> bytes:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("manifest", "write", "root", "fixture"):
+    for name in ("manifest", "write", "salts", "root", "fixture"):
         p = sub.add_parser(name)
-        if name != "fixture":
+        if name not in ("fixture", "salts"):
             p.add_argument("--shape", type=_shape_arg, default=H200)
             p.add_argument("--seed", type=_bytes_arg, help="hex:..., file:PATH or text:...")
         p.add_argument("--out", required=True)
@@ -664,12 +665,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.choices["manifest"].add_argument("--digests", action="store_true")
     sub.choices["write"].add_argument("--start", type=int, default=0)
     sub.choices["write"].add_argument("--stop", type=int)
-    sub.choices["root"].add_argument("--salt-key", type=_bytes_arg, required=True,
-                                     help="the prover's 32-byte salt key: file:PATH, never on a command line in the demo")
-    sub.choices["root"].add_argument("--program", required=True,
-                                     help="the reading program's digest (128 hex digits); each tensor read at "
-                                          "Tensor.word_bits, 16")
-    sub.choices["root"].add_argument("--tensors", help="comma-separated tensor names (default all)")
+    sub.choices["salts"].add_argument("--shape", type=_shape_arg, default=H200)
+    for name in ("salts", "root"):
+        sub.choices[name].add_argument("--program", required=True,
+                                       help="the reading program's digest (128 hex digits); each tensor read at "
+                                            "Tensor.word_bits, 16")
+        sub.choices[name].add_argument("--tensors", help="comma-separated tensor names (default all it reads)")
+    for name in ("root", "fixture"):
+        sub.choices[name].add_argument("--salts", required=True,
+                                       help="the salt file (`salts --out`; the prover's, never under a run's output)")
     a = ap.parse_args(argv)
 
     def say(done: int, total: int) -> None:
@@ -677,7 +681,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{a.cmd}: {done}/{total}", file=sys.stderr, flush=True)
 
     if a.cmd == "fixture":
-        Path(a.out).write_text(dumps(fixture()))
+        Path(a.out).write_text(dumps(fixture(a.salts)))
+        return 0
+    if a.cmd == "salts":
+        names = a.tensors.split(",") if a.tensors else [n for n, _ in reader(a.shape, a.program).widths]
+        salt_file.write(a.out, draw_salts(a.shape, names))
         return 0
     if a.seed is None:
         ap.error("--seed is required")
@@ -687,7 +695,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         write(a.shape, a.seed, a.out, workers=a.workers, start=a.start, stop=a.stop, progress=say)
     else:
         names = a.tensors.split(",") if a.tensors else None
-        roots = root(a.shape, a.seed, a.salt_key, a.program, names, workers=a.workers, progress=say)
+        roots = root(a.shape, a.seed, a.salts, a.program, names, workers=a.workers, progress=say)
         doc: dict[str, Any] = {"format": REGISTRATION, "program": a.program, "model": model_id(a.shape, a.seed),
                                "shape": a.shape.name, "values": entries(a.shape, a.program, roots)}
         if names is None:

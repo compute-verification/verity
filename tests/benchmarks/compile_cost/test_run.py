@@ -40,10 +40,10 @@ H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-
 
 H200_TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
                "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
-               "moe_backend": "triton"}
+               "moe_backend": "triton", "card": "h200-sxm-141gb"}
 
 
-def test_the_card_has_no_default_and_the_h200_compiles_exactly_as_it_was_written_in(capsys) -> None:
+def test_the_card_has_no_default_and_the_h200_target_is_the_one_written_in_naming_its_card(capsys) -> None:
     with pytest.raises(SystemExit):
         run.parse([])
     assert "--card" in capsys.readouterr().err
@@ -52,7 +52,7 @@ def test_the_card_has_no_default_and_the_h200_compiles_exactly_as_it_was_written
 
 
 def test_another_card_is_read_from_its_card_file() -> None:
-    assert run.target(run.parse(["--card", "h100-sxm-80gb"]).card) == {**H200_TARGET, "device_name": H100}
+    assert run.target(run.parse(["--card", "h100-sxm-80gb"]).card) == {**H200_TARGET, "device_name": H100, "card": "h100-sxm-80gb"}
     assert {k: run.target("rtx-pro-6000-server")[k] for k in ("compute_capability", "num_sms", "device_name")} == {
         "compute_capability": [12, 0], "num_sms": 188, "device_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition"}
 

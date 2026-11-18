@@ -300,3 +300,9 @@ def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
     assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
     assert told == [("in-1", "no release stamp")]
     assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"
+
+
+def test_the_scheme_that_provides_admission_is_found_by_its_role():
+    assert M.providing("admission").name == "network-attester"
+    with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
+        M.providing("nothing")

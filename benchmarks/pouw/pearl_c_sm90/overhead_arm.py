@@ -372,13 +372,15 @@ class _YTree:
     """A call's y commitment on the device, the served call's bytes made serially: the pipeline of `trees`
     (`served_y_device.DeviceTrees`, its width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers
     made here, at prepare: y's tree in `commit_y`'s layout, the row digests, one chunk's FP32 words and segment scratch
-    (`served_y.chunk_rows`), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
+    (`served_y.chunk_rows`), y's rows' fresh salts (`served_y_device.y_salts`, kept as ``salts`` for the call's retained
+    pass), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
     rows into the words a chunk at a time (`widen_a`, exact: `served_y.f32_rows`) and digests them: device launches alone,
     no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+        from verity_torch.pouw.pearl_c.served_y_device import y_salts
 
         run = trees.run
         self.R, self.dev, self.m, self.n, self.index = run.kernel.run, run.kernel.dev, m, n, index
@@ -387,10 +389,10 @@ class _YTree:
                                "take the wide row-digest kernels (hash_wide.cuh), which the loaded cubin lacks; build one that "
                                "has them")
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
-        self.salts = trees.salts(m, index)
         self.tree = PPDR._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
         self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
-        self.at = tuple(t.data_ptr() for t in self.bufs)
+        self.salts = y_salts(m).to(run.device)
+        self.at, self.salts_at = tuple(t.data_ptr() for t in self.bufs), self.salts.data_ptr()
         PPDR._put(trees.dom, SY.y_domain(run.salt, index, m).domain_id)
 
     def launch(self, y: int) -> None:
@@ -400,7 +402,7 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts_at)
 
 
 class _Call:
@@ -426,7 +428,7 @@ class _Call:
         self.views = {"y": self.y[:self.m]}
         if hashing:
             ytree, y = _YTree(held.ytrees, self.m, self.n, INDEX), self.y.data_ptr()
-            self.y_steps = [lambda: ytree.launch(y)]
+            self.y_steps, self.y_salts = [lambda: ytree.launch(y)], ytree.salts
             self.views |= {"tree_y": ytree.tree, "root_a": run.roots_buf[:nb], "leaves": run.leaves[:nb * self.tiles],
                            "flags": run.flag_buf[:self.m]}
         self.outputs = {name: _buffer(t) for name, t in self.views.items()}
@@ -483,7 +485,7 @@ class _Call:
         y = self.reference()
         ref = {"y": y} | {name: t for name, t in self.views.items() if name not in ("y", "tree_y")}
         if "tree_y" in mine:
-            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX)
+            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX, self.y_salts)
         same = {name: bool(torch.equal(mine[name], ref[name])) for name in mine}
         return all(same.values()), {name: "all" for name in mine}, {"equal_to_served_call": same, "index": INDEX}
 
@@ -507,7 +509,7 @@ class _Call:
         cur.matmuls.append(mm)
         cur.flag_rows, cur.tiles = self.m, self.tiles
         run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe), y=self.views["y"],
-                      y_tree=self.views["tree_y"])
+                      y_tree=self.views["tree_y"], y_salts=self.y_salts)
         run.end()
         (out / "coins.json").write_text(json.dumps(run.coins.to_json()) + "\n")
 

@@ -4,7 +4,7 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
-(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
+(`commit_guard`).  Each protocol has one adapter module here (`config.PROTOCOLS`, `interface`), imported only when it is enabled; PoUB, which
 serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`).  The
 protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
 
@@ -69,15 +69,13 @@ from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 if TYPE_CHECKING:
     from verity_vllm.errors import Refused
 
-__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
+__all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
            "adapter",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "CUT", "circuit_registry", "cuts", "keeps_weight_copy", "traced_as"]
+           "CUT", "circuit_registry", "cuts", "has_circuit", "keeps_weight_copy", "traced_as"]
 
-#: protocol -> its adapter module in this package
-ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
@@ -121,9 +119,9 @@ def _imported(name: str, module: str, what: str) -> ModuleType:
 def adapter(name: str) -> ModuleType:
     """The adapter module of protocol ``name``; `Refused` when the protocol is unknown or its adapter cannot be imported
     on this tree (not landed yet, or its protocol package missing)."""
-    if name not in ADAPTERS:
-        raise refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
-    return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
+    if name not in config.PROTOCOLS:
+        raise refused([f"unknown protocol {name!r} (known: {', '.join(config.PROTOCOLS)})"])
+    return _imported(name, f"{__name__}.{config.PROTOCOLS[name]}", "adapter")
 
 
 def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -209,7 +207,11 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
-def _has_circuit(name: str, scheme: str) -> bool:
+def has_circuit(entry: str) -> bool:
+    """Whether ``entry`` (``pouw:ncp-v2``) names a scheme its protocol's package registered a circuit for
+    (`circuit_registry`), once its adapter is imported, which registers them; `Refused` for an unknown protocol."""
+    name, _, scheme = entry.partition(":")
+    adapter(name)
     reg = circuit_registry(name)
     return reg is not None and scheme in reg.schemes
 
@@ -247,7 +249,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and sampled and not _has_circuit(name, scheme):
+        if sites and sampled and not has_circuit(entry):
             if not cuts(name, scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "
@@ -447,7 +449,7 @@ def register_weights(comp: Composition | None, com: Any, replay: bool = False) -
 
 def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:
     """The tags of live hook entries that name a protocol option outside ``enabled``: an option some other path installed."""
-    return tuple(sorted({e.tag for e in hooks.live() if e.tag and e.tag.partition(":")[0] in ADAPTERS and e.tag not in enabled}))
+    return tuple(sorted({e.tag for e in hooks.live() if e.tag and e.tag.partition(":")[0] in config.PROTOCOLS and e.tag not in enabled}))
 
 
 def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Context | None:

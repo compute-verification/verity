@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -206,11 +206,12 @@ class Exchange:
         return out
 
 
-def attester() -> schemes.Scheme:
-    """The network attester's scheme, by its declaration's name, from the one table of schemes."""
-    from verity.protocols.compose import schemes as table
-    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
-    return table.get(NETWORK_ATTESTER.name)
+def providing(role: str) -> schemes.Scheme:
+    """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
+    found = [s for s in declarations.load().values() if role in s.provides]
+    if len(found) != 1:
+        raise LookupError(f"one declared scheme provides {role!r}, not {len(found)}: {[s.name for s in found]}")
+    return found[0]
 
 
 _CURRENT: Exchange | None = None
