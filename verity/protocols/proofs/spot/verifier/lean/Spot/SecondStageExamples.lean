@@ -733,8 +733,9 @@ private def exLogitsBinding (p : String) (w : Option String) : Option String :=
 /-- `exOwn` with `Pair_v0`'s `x` linked to read `logits`, which the interior registers as `entries` give it and holds
 under `exHeld`, and no tree of `x` of its own. -/
 private def exReg (entries : List Json) (held : Option Held := some exHeld) : Own :=
-  { exOwn with interior := (exRec 6 [("out", 3, 4)] (exExecutionPhase (natsJson #[1, 3]))).setObjVal! "registered"
-      (Json.arr entries.toArray), links := some #[⟨"Pair_v0", "x", "logits"⟩], held }
+  let rec_ := exRec 6 [("out", 3, 4)] (exExecutionPhase (natsJson #[1, 3]))
+  { exOwn with interior := rec_.setObjVal! "registered" (Json.arr entries.toArray),
+               links := some #[⟨"Pair_v0", "x", "logits"⟩], held := held }
 
 private def exV2 : String := "hm96-sha512/row/v2"
 
