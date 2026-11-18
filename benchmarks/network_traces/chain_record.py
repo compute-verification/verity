@@ -675,12 +675,12 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
-    """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the attested I/O), each window's declared sync, log2 #Σ_sync,
-    and no cell: no connection passes the attester but the link, whose counts the advice fixes."""
-    bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
-    advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
-    return {"advice": advice, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
+    """The network's own terms of K, charged once a period: the advice's, each window's declared sync, log2 #Σ_sync,
+    and no cell: no connection passes the attester but the link, whose counts the advice fixes. The advice's term is
+    None, not established: its charge is the registered compiler's cap ℓ per Commit window, and the advice's own length
+    is private, so no endpoint document's length is read."""
+    syncs = cert.get("sync_bits")
+    return {"advice": None, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
             "cells": 0}
 
 
@@ -694,7 +694,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     network = network_terms(cert, endpoint or {})
     steps = windows * (cert.get("window_buckets") or 0)
     if None in network.values():
-        k = {"open": f"the network's terms aren't all computed: {network}"}
+        k = {"open": "not established: the network's term "
+                     + ", ".join(sorted(t for t, v in network.items() if v is None)), "network": network}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and sample the K counts", "network": network}
