@@ -37,7 +37,7 @@ attester's bucket and τ_sat, τ_free the engine class's (`Tick`), registered wi
 run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
 once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n but
 the ones a line names lost. The rest of each step is the serving stack's own scheduler, unpatched: the gate holds a
-numbered request outside it until its step (`hooks.StartOnBoundary`: an input starts only when `ready` lets its step
+numbered request outside it until its step (a hold, `hooks.AdmitInput`: an input starts only when `ready` lets its step
 run), so the scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
 registered τ, which the encoder's replay recomputes (`advice_code.replay`, ``tick``) without timing advice. A release a
 watermark line names lost is skipped (``lost``): the gate doesn't wait for it, the later ones are admitted in order, and
@@ -53,7 +53,7 @@ watermark route in the server), and, where the server's front runs in another pr
 the front's hooks, which appends the releases and the watermark to a feed file that the engine's gate reads (`engine`).
 A request the gate drops is its frontend's to end, and each refuses one that comes after its line with one sentence
 (`LOST`): `TickAdmit` answers the one in the engine with that error and aborts it; `FrontFeed` hands the refusal to the
-adapter's front (`hooks.RefuseInput`), which ends the request in its server.
+adapter's front (a refusal, `hooks.AdmitInput`), which ends the request in its server.
 """
 from __future__ import annotations
 
@@ -353,7 +353,7 @@ class TickGate:
         ``name`` (the network attester's declaration's by default), and subscribe it to the ``steps`` hook; returns
         the subscription's removal."""
         name = name or scheme_name()
-        exchange.request(name, H.StartOnBoundary(self))
+        exchange.request(name, H.AdmitInput("hold", self))
         return exchange.subscribe(name, "steps", self.on)
 
     def add(self, key: str, start: Callable[[], None]) -> None:
@@ -598,7 +598,7 @@ class TickAdmit:
         releases it names lost."""
         name = name or scheme_name()
         exchange.request(name, H.ServeRoute(WATERMARK_PATH, self.serve_watermark))
-        self.refuse = lambda input, why: exchange.request(name, H.RefuseInput(input, why))
+        self.refuse = lambda input, why: exchange.request(name, H.AdmitInput("refuse", input=input, why=why))
 
     def serve_watermark(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]:
         """The watermark's route (`hooks.Route`): its chunked body's lines go to the gate as they come, and its end is
@@ -745,8 +745,8 @@ class Admitter:
     def install(self, exchange: Any, name: str | None = None) -> Admitter:
         """File and subscribe on ``exchange`` (the adapter's: ``request(name, request)``, and ``subscribe(name, hook,
         fn)`` returning the removal) under ``name`` (`scheme_name` by default), before the engine is built: the gate
-        (`TickGate.attach`: `hooks.StartOnBoundary` and the ``steps`` hook) and the frontend's watermark route and
-        refusals (`TickAdmit.attach`: `hooks.ServeRoute`, `hooks.RefuseInput`). ``release-order`` files nothing."""
+        (`TickGate.attach`: a hold, `hooks.AdmitInput`, and the ``steps`` hook) and the frontend's watermark route and
+        refusals (`TickAdmit.attach`: `hooks.ServeRoute`, `hooks.AdmitInput`). ``release-order`` files nothing."""
         if self.installed:
             raise RuntimeError("the network attester's admission is installed")
         self.installed = True
@@ -808,7 +808,7 @@ class FrontFeed:
     """The front's side (`hooks.FRONT`) where the engine runs in another process: `TickAdmit` on the front's hooks,
     appending its records to the feed file the engine's gate reads, and each release and watermark end, as the feed
     has them, to ``log`` (the scheme's ``log`` directory's ``tick.PID.jsonl``) as it comes. Each input that arrives with a release
-    is that release, its key the input; a malformed or repeated one is refused (`hooks.RefuseInput`); one complete at
+    is that release, its key the input; a malformed or repeated one is refused (`hooks.AdmitInput`); one complete at
     the front at step 0 never reached the engine and is passed; the watermark's route and its lost releases' refusals
     are `TickAdmit.attach`'s."""
 

@@ -46,7 +46,7 @@ def test_tick_builds_the_gate_and_the_frontend_and_files_both_under_the_name():
     ex = Exchange()
     assert a.install(ex, "n") is a
     (n0, gate), (n1, route) = ex.requests
-    assert (n0, n1) == ("n", "n") and gate == H.StartOnBoundary(a.gate)
+    assert (n0, n1) == ("n", "n") and gate == H.AdmitInput("hold", a.gate)
     assert route == H.ServeRoute(NA.WATERMARK_PATH, a.front.serve_watermark)
     assert ex.subscribers == [("n", "steps", a.gate.on)]
 
@@ -57,7 +57,7 @@ def test_a_lost_release_in_the_engine_is_refused_through_the_exchange():
     adm = SimpleNamespace(engine_id="e0", release=a.front.key({"x-verity-release": "0", "x-verity-release-run": RUN}))
     a.front.submit(adm)
     assert a.front.watermark({"x-verity-release-run": RUN}).feed(b"0 2 0\n")
-    assert ex.requests[2:] == [("n", H.RefuseInput("e0", NA.LOST.format(n=0, run=RUN)))]
+    assert ex.requests[2:] == [("n", H.AdmitInput("refuse", input="e0", why=NA.LOST.format(n=0, run=RUN)))]
 
 
 def test_the_token_term_is_a_setting_of_the_one_gate():
@@ -73,7 +73,7 @@ def test_without_submit_the_gate_alone_reads_its_records_from_pull():
     assert a.front is None and a.gate.pull is pull and a.gate.log == records.append and a.gate.hold_s == 1.0
     ex = Exchange()
     a.install(ex, "n")
-    assert ex.requests == [("n", H.StartOnBoundary(a.gate))] and ex.subscribers == [("n", "steps", a.gate.on)]
+    assert ex.requests == [("n", H.AdmitInput("hold", a.gate))] and ex.subscribers == [("n", "steps", a.gate.on)]
 
 
 def test_release_order_makes_the_frontend_alone_and_files_nothing():
@@ -128,6 +128,6 @@ def test_the_schemes_attach_installs_the_admission_its_context_configures_else_s
     a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, "submit": q.append,
                                      "abort": q.append, "take": q.append, "source": "--admit"})
     assert type(a) is NA.Admitter and a.installed and a.front.take == q.append
-    assert ex.requests[0] == (NETWORK_ATTESTER.name, H.StartOnBoundary(a.gate))
+    assert ex.requests[0] == (NETWORK_ATTESTER.name, H.AdmitInput("hold", a.gate))
     ex = Exchange()
     assert NETWORK_ATTESTER.attach(ex, {}) is None and ex.requests == [(NETWORK_ATTESTER.name, START_ID_RELAY)]

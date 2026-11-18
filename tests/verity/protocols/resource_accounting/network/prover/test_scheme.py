@@ -158,8 +158,8 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     front.emit(H.InputArrived("d", 0, 0, {}, "POST /v1/completions HTTP/1.1"))
     front.emit(H.OutputLeft("b", 0))
     front.emit(H.OutputLeft("a", 7))
-    assert [r for _, r in front.filed if isinstance(r, H.RefuseInput)] == [
-        H.RefuseInput("c", f"{A.RELEASE_HEADER}: 0 came twice in run '0f'")]
+    assert [r for _, r in front.filed if isinstance(r, H.AdmitInput) and r.admit == "refuse"] == [
+        H.AdmitInput("refuse", input="c", why=f"{A.RELEASE_HEADER}: 0 came twice in run '0f'")]
     assert A.FeedReader(A.FrontFeed(str(tmp_path)).path)() == [
         {"key": "a", "run": "0f", "n": 0, "bucket": 3}, {"key": "b", "run": "0f", "n": 1, "bucket": 3},
         {"run": "0f", "n": 1, "passed": True}]
