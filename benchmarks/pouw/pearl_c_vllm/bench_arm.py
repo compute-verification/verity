@@ -47,10 +47,10 @@ ERR = 0.08
 def kernel_directory(scheme: str, card: str) -> Path:
     """The tree's kernel directory of the PoUW kernel scheme ``scheme`` on the card ``card`` (its short name): its
     family's, built for the card's target (``pearl_c_sm90`` for ``pearl-c-h100-v1-h3`` on an H200)."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named
     from verity_bench.schemes import arch
 
-    return KERNELS / f"{SchemeId.parse(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
+    return KERNELS / f"{named(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
 
 
 class _Coins:
@@ -226,8 +226,8 @@ class PearlCArm:
     def kernel(self, card: str | None = None) -> tuple[str, Path]:
         """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme
         `verity_bench.schemes.kernel_scheme` derives from the arm's useful-work scheme and the card ``card`` (its short
-        name; where None, the leased card's, `kit.card_short` of the run's stamp), and its directory ``PEARLC_KERNEL``
-        or the tree's (`kernel_directory`)."""
+        name; where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
+        registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
         if self._kernel is None:
             from verity_bench import kit
             from verity_bench.schemes import kernel_scheme
@@ -236,7 +236,7 @@ class PearlCArm:
                 raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
                                  "a registered compute scheme's name")
             card = card or kit.card_short(kit.host_stamp()["card"])
-            scheme = kernel_scheme(self.protocol, card)
+            scheme = kernel_scheme(self.protocol, card, pinned=True)
             self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
         return self._kernel
 
@@ -451,6 +451,13 @@ class PearlCWholeArm(PearlCArm):
         self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
+    def kernel(self, card: str | None = None) -> tuple[str, Path]:
+        """`PearlCArm.kernel`, the `RTX_ONLY` options dropped from `run_options` where its directory is another kernel's."""
+        got = super().kernel(card)
+        if got[1].name != "pearl_c_sm120":
+            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
+        return got
+
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         self.capture = list(settings.PEARLC_CAPTURE_SIZES or (1, 8, 32, 128))
         return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
@@ -461,8 +468,6 @@ class PearlCWholeArm(PearlCArm):
         from verity_vllm.engine import handle
         from verity_torch.pouw.pearl_c.whole import WholeStep
 
-        if self.kernel_dir.name != "pearl_c_sm120":
-            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)
         self.whole.prepare()

@@ -3,7 +3,7 @@ the PoUW kernel scheme it runs on a card, given by the card's short name (`kit.c
 
 - `useful_work(name)`: the registered compute scheme ``name``; ValueError naming the registered ones otherwise.
 - `served(scheme)`: ``scheme`` where an adapter entry attaches it to a served run; `NotImplementedError` otherwise.
-- `kernel_scheme(name, card)`: the PoUW kernel scheme ``name`` runs on ``card``.
+- `kernel_scheme(name, card, pinned)`: the PoUW kernel scheme ``name`` runs on ``card``.
 - `arch(card)`: the build target of the card record whose ``short`` is ``card``.
 """
 
@@ -50,32 +50,9 @@ def arch(card: str) -> str:
     return cards[card]["arch"]
 
 
-def kernel_scheme(name: str, card: str) -> str:
-    """The PoUW kernel scheme the useful-work scheme ``name`` runs on the card ``card`` (its short name)."""
-    return _kernel_scheme(served(useful_work(name)), card)
+def kernel_scheme(name: str, card: str, pinned: bool) -> str:
+    """The PoUW kernel scheme the served useful-work scheme ``name`` runs on the card ``card`` (its short name), with
+    registration pinning the weights or not (`pouw.verifier.kernel_schemes.resolve`, whose `KeyError` names the table)."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import resolve
 
-
-def _kernel_scheme(scheme: registry.Scheme, card: str) -> str:
-    """Of PoUW's named kernel schemes (`pouw.prover.schemes`), the one of the family, forming, hashing and prices of the
-    kernel scheme ``scheme``'s adapter entry names whose device is priced for ``card``'s build target; ValueError
-    naming those it found otherwise."""
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw
-    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
-
-    def parts(kernel: str) -> SchemeId | None:
-        try:
-            return SchemeId.parse(kernel)
-        except ValueError:
-            return None
-
-    entry = parts(scheme.option.partition(":")[2])
-    if entry is None:
-        raise ValueError(f"{scheme.name}'s adapter entry {scheme.option!r} names no PoUW kernel scheme")
-    target = arch(card).removesuffix("a")
-    same = [k for k in pouw.SCHEMES if (p := parts(k)) is not None
-            and (p.family, p.forming, p.hashing, p.prices) == (entry.family, entry.forming, entry.hashing, entry.prices)]
-    found = [k for k in same if pouw.get(k).device.prices.device == target]
-    if len(found) != 1:
-        raise ValueError(f"{scheme.name} on {card} ({target}): {len(found)} of PoUW's kernel schemes "
-                         f"{', '.join(same)} are priced for {target}, not one")
-    return found[0]
+    return resolve(served(useful_work(name)).name, card, pinned).name
