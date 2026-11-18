@@ -227,7 +227,7 @@ def test_moe_experts(moe_window):
     slots = _tid(circuit, r"MoeRouterSigmoidBiasSlots_v1\{.*\}")
     for stack, (N, K, n) in {"": (512, 6144, 1), "W": (6144, 256, 32)}.items():
         gemms = [t for t in circuit.units if re.fullmatch(rf"MoeExpertFp8BlockGemm{stack}_v3\{{K={K},N={n},.*\}}", t)]
-        rows, scales = _tid(circuit, rf"EmbeddingRead_v1\{{V={E},H={n * K // 2}\}}"), _tid(circuit, rf"EmbeddingRead_v1\{{V={E},H={K // 64}\}}")
+        rows, scales = _tid(circuit, rf"EmbeddingRead_v2\{{V={E},H={n * K // 2}\}}"), _tid(circuit, rf"EmbeddingRead_v2\{{V={E},H={K // 64}\}}")
         quant = _tid(circuit, rf"Fp8GroupQuantUe8m0_v1\{{K={K},G=128\}}")
         assert len(gemms) == 2 and all(circuit.units[t] == TOPK * N // n for t in gemms)
         assert circuit.units[rows] == 2 * TOPK * N // n and circuit.units[scales] == 2 * TOPK * N // 128
@@ -313,7 +313,7 @@ def test_moe_reads_free(moe_program):
     """With the router left unlowered, every expert read's key and every w2 block's routed weight are free inputs under it."""
     circuit, w = NW.node_window(moe_program, families={k: v for k, v in FAMILIES.items() if k != "MoeRouterSigmoidBias"})
     free = {(f.tid.split("{")[0], f.port) for f in w.free if f.family == "MoeRouterSigmoidBias"}
-    assert free == {("EmbeddingRead_v1", "tok"), ("MoeExpertFp8BlockGemmW_v3", "g")}
+    assert free == {("EmbeddingRead_v2", "tok"), ("MoeExpertFp8BlockGemmW_v3", "g")}
 
 
 def test_chain_reads_free(program):

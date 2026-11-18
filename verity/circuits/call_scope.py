@@ -12,7 +12,7 @@ class QueryRuleViolation(ValueError):
 def specialization(fam: str, statics: dict[str, Any], reg: Any = None):
     """The Definition `fam` registered in ``reg`` bound to `statics` (a primitive as it is); function-valued statics (`DOT`,
     rendered `{"fn": id}` or as the bare id) resolve to the registered Definition they name, a specialized id (`READ`'s
-    `EmbeddingRead_v1{V=256,H=3072}`) to its family bound to its own record.  ``reg`` is the registry of the catalog its
+    `EmbeddingRead_v2{V=256,H=3072}`) to its family bound to its own record.  ``reg`` is the registry of the catalog its
     caller loaded (`registry.catalog.load`); by default `REGISTRY` as this process has registered it, since this module
     loads no catalog."""
     from verity.circuits.codec import lookup_primitive

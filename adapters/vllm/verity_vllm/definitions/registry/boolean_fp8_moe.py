@@ -25,8 +25,9 @@ from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import WordBits
 from verity.circuits.refs import Coll, concat, tuple_of
-from verity.circuits.types import Array, Tuple
+from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as SC
@@ -113,7 +114,7 @@ MoeExpertFp8BlockGemmWV4 = EW.on_bits("MoeExpertFp8BlockGemmW", 4, ["K", "N", "G
 
 # --- a pair's GEMM over the weight rows it reads itself: one proof block opens a block of its expert's rows from a table
 # registered one expert a row and multiplies by them, so the rows are no block's input or output.  `READ` is the read,
-# `commitments.gates.embedding`'s `EmbeddingRead_v1{V, N K / 2}` where served: a static, as `DOT` is, so this module imports
+# `commitments.gates.embedding`'s `EmbeddingRead_v2{V, N K / 2}` where served: a static, as `DOT` is, so this module imports
 # no commitment code.
 
 #: a read's ports: its hidden key, the table's root and domain id, and the opening (the row, its salt, its path)
@@ -126,10 +127,10 @@ def _read_ports(S) -> tuple:
     if (S.N * S.K) % 2:
         raise ValueError(f"a block of N = {S.N} rows of K = {S.K} e4m3 bytes is no whole number of u16 words")
     params, ret = S.READ.signature()
-    want = Tuple(Array(S.N * S.K // 2, BF16), BL.BIT)
+    want = Tuple(Array(S.N * S.K // 2, Value(16)), BL.BIT)
     if tuple(n for n, _ in params) != READ_PORTS or ret != want:
         raise ValueError(f"READ = {S.READ.id} is not a read of N K / 2 = {S.N * S.K // 2} u16 words: it takes "
-                         f"{[n for n, _ in params]} and returns {ret!r}; bind EmbeddingRead_v1{{V, H = N K / 2}}")
+                         f"{[n for n, _ in params]} and returns {ret!r}; bind EmbeddingRead_v2{{V, H = N K / 2}}")
     return tuple(params)
 
 
@@ -146,12 +147,13 @@ def _read_gemm(routed: bool):
         *lead, ws = operands
         gemm = bind(MoeExpertFp8BlockGemmWV4 if routed else MoeExpertFp8BlockGemmV4, K=S.K, N=S.N, G=S.G, KB=S.KB, SWAP=S.SWAP,
                     DOT=S.DOT)
+        h = B.batch(bind(WordBits, W=16), h, axes=(0,))
         return tuple_of(B.call(gemm, *lead, h.reshape(Array(S.N, Array(S.K, E4M3))), ws), ok)
     return body
 
 
 _READ_CONF = ("exact-model-tested as its two parts, whose composition it is (the vLLM tests' program/test_fp8_moe_per_expert.py): "
-              "READ (EmbeddingRead_v1: Embedding_v1's row on a registered table) and MoeExpertFp8BlockGemm(W)_v4")
+              "READ (EmbeddingRead_v2: Embedding_v1's row on a registered table) and MoeExpertFp8BlockGemm(W)_v4")
 _READ_GEMM = ["READ", "K", "N", "G", "KB", "SWAP", "DOT"]
 MoeExpertFp8ReadGemmV1 = CompositeDefinition(
     "MoeExpertFp8ReadGemm", 1, _READ_GEMM, _read_gemm_sig(False), _read_gemm(False), conformance=_READ_CONF,

@@ -5,7 +5,7 @@ layouts:
 
 * ``slots``: a router row cut into slots (`moe.MoeRouterSigmoidBiasSlots`), a unit a token: ``in0`` its logits and ``in1`` its
   bias -> ``o<k>`` slot k's weight and ``o<TOPK + k>`` its expert id, the row's committed members;
-* ``read``: a table read (`gates.embedding.EmbeddingRead_v1{V=E, H}`), a unit a block of a pair: ``in0`` the pair's expert (the
+* ``read``: a table read (`gates.embedding.EmbeddingRead_v2{V=E, H}`), a unit a block of a pair: ``in0`` the pair's expert (the
   read's key), ``in1`` and ``in2`` the table's root and domain id, ``in3``, ``in4`` and ``in5`` the table's row at the expert, its
   salt and its path -> ``o0`` the row and ``o1`` its verdict;
 * ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)_v3`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
