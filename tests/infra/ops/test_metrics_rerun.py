@@ -562,6 +562,19 @@ def control(i, command=LANDING, every="12h"):
     return {**row(i, command, every), "runs": "control"}
 
 
+def write_list(tmp_path, entries):
+    """The pod's list of CONTROL rows, as infra writes it on the pod: [[row]] id, command."""
+    p = tmp_path / "metrics-rerun.control.toml"
+    p.write_text("".join(f"[[row]]\nid = {json.dumps(i)}\ncommand = {json.dumps(c)}\n\n" for i, c in entries))
+    return p
+
+
+def listed(tmp_path, files, **kw):
+    """`setup`, with the pod's list holding every CONTROL row of `files` with its command."""
+    entries = [(r["id"], r["command"]) for rows in files.values() for r in rows if r.get("runs") == "control"]
+    return setup(tmp_path, files, control_rows=write_list(tmp_path, entries), **kw)
+
+
 def here(n):
     """A local run's output: `research run` with no `--on` names its directory, never a machine it launched on."""
     return f"research: run {run_id(n)} -> /root/.research/runs/{run_id(n)}\n"
@@ -572,7 +585,7 @@ def test_a_control_row_runs_on_the_pod_itself_and_nowhere_else(tmp_path, dry_run
     """The landing rows read the pod's own state, GitHub and the store's labels, which no node reaches: `runs = "control"`
     launches them as a local run on the pod, with no `--on` and no pool and its --timeout the pass waits out, and never on
     the loop's node; the pass judges the run by its own record as soon as it ends."""
-    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]})
+    cfg = listed(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]})
     pod = Pod(out=here, states={run_id(1): ("done", 0, True, {"here": True})})
     state, _ = run(cfg, pod, dry_run=dry_run)
     argv = ["research", "run", "--source", ".", "--timeout", f"{R.CONTROL_S}", "--project", "verity", "--cwd", "source", "--",
@@ -590,7 +603,7 @@ def test_a_control_row_runs_on_the_pod_itself_and_nowhere_else(tmp_path, dry_run
 def test_a_control_rows_bounds_still_hold(tmp_path):
     """A row on the pod is held like any other: once it ran, it waits its every; when it fails it rings and is tried again
     after the hour; and --max and the stop file apply to it."""
-    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")],
+    cfg = listed(tmp_path, {"benchmarks/landing": [control("ci/plain")],
                            "benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]}, max=1)
     pod = Pod(out=lambda n: here(n) if n == 2 else f"research: run {run_id(n)} launched\n",
               states={run_id(2): ("failed", 1, True, {"here": True})})
@@ -608,7 +621,7 @@ def test_a_control_rows_bounds_still_hold(tmp_path):
 def test_a_control_run_that_had_not_ended_when_its_launch_did_never_will(tmp_path):
     """The pass waits for a run on the pod; one whose record still says running once its launch returned lost its runner, and
     is a fault of the launch, launched again after the hour."""
-    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]})
+    cfg = listed(tmp_path, {"benchmarks/landing": [control("ci/plain")]})
     pod = Pod(out=here, states={run_id(1): ("running", None, True, {"here": True})})
     state, _ = run(cfg, pod)
     (e,) = state["launches"]
@@ -637,6 +650,120 @@ def test_a_runs_value_but_control_or_rows_of_one_command_that_disagree_are_refus
     assert pod.launched == []
     assert "skip ci/plain: ci/plain has no reading; but its runs is 'gpu', not 'control'" in pod.lines
     assert any(ln.startswith("skip ci/a, ci/b: ") and "give runs differently" in ln for ln in pod.lines)
+
+
+COMMUNICATION = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
+#: the entries infra writes in the pod's list for the tree's CONTROL rows
+ENTRIES = [("ci/plain-mark-to-main-p90", LANDING), ("ci/lean-mark-to-main-p90", LANDING),
+           ("top/lead-response-p90-minutes", COMMUNICATION), ("top/lead-asks-open-over-30-min", COMMUNICATION)]
+
+
+def the_trees_control_rows(tmp_path, **kw):
+    """`setup` with the tree's own CONTROL rows, as their metrics.toml files declare them."""
+    tree = tmp_path / "tree"
+    for where in ("benchmarks/landing", "benchmarks/communication"):
+        (tree / where).mkdir(parents=True)
+        (tree / where / "metrics.toml").write_text((ROOT / where / "metrics.toml").read_text())
+    return setup(tmp_path, {}, **kw)
+
+
+def test_a_listed_control_row_launches_on_the_pod(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=write_list(tmp_path, [("ci/plain", LANDING)]))
+    pod = Pod(out=here, states={run_id(1): ("done", 0, True, {"here": True})})
+    state, _ = run(cfg, pod)
+    assert [e["machine"] for e in state["launches"]] == ["control"] and "--on" not in pod.launched[0]
+    assert state["numbers"]["ci/plain"]["reason"] == "launched"
+
+
+def test_a_control_row_the_pods_list_lacks_runs_nowhere_and_rings_its_owner_and_infra_once(tmp_path):
+    """The word in a lane's file is not enough: the pod's own list must hold the row, or it is launched nowhere, not even on
+    the loop's node, and its owner and infra are rung once with the entry to write."""
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]},
+                control_rows=write_list(tmp_path, [("ci/other", LANDING)]))
+    pod = Pod(out=here)
+    state = None
+    for n in range(3):
+        state, _ = run(cfg, pod, state, now=NOW + n * 900)
+    line = (f"it says runs = 'control', but the control pod's list {cfg.control_rows} doesn't hold it (ci/plain's id is "
+            f'missing), so it runs nowhere until infra adds there, on the pod, a [[row]] with id = "ci/plain", command = "{LANDING}"')
+    assert pod.launched == [] and state["launches"] == []
+    assert state["numbers"]["ci/plain"] == {"reason": "control-unlisted", "why": f"ci/plain has no reading; but {line}"}
+    assert f"skip ci/plain: ci/plain has no reading; but {line}" in pod.lines
+    key = f"control-unlisted:ci/plain:{R.Job('benchmarks/landing/metrics.toml', LANDING, (control('ci/plain'),)).declared}"
+    assert pod.rang == [(key, "control-unlisted", o, f"metrics-rerun: ci/plain: {line}") for o in ("ci", "infra")]
+    assert all(len(r[3]) <= 600 for r in pod.rang), "a doorbell carries 600 characters (slack.DOORBELL_MAX)"
+
+
+def test_a_listed_id_whose_command_changed_is_refused_with_the_command_it_lists(tmp_path):
+    changed = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh --all"
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain", changed)]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING)]))
+    pod = Pod(out=here)
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and state["numbers"]["ci/plain"]["reason"] == "control-unlisted"
+    why = state["numbers"]["ci/plain"]["why"]
+    assert "(ci/plain's command differs from its entry)" in why
+    assert why.endswith(f'a [[row]] with id = "ci/plain", command = "{changed}"')
+    assert [r[2] for r in pod.rang] == ["ci", "infra"]
+
+
+def test_each_row_of_a_shared_command_must_be_listed(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING)]))
+    pod = Pod(out=here)
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and "(ci/lean's id is missing)" in state["numbers"]["ci/plain"]["why"]
+    assert "ci/plain's" not in state["numbers"]["ci/lean"]["why"]
+
+
+@pytest.mark.parametrize("contents, said", [(None, "is missing"), ("[[row]]\nid = 1\n", "is unreadable (ValueError: "),
+                                            ("[[row\n", "is unreadable (TOMLDecodeError: ")])
+def test_a_missing_or_unreadable_list_runs_none_of_the_trees_control_rows_and_says_so_once(tmp_path, contents, said):
+    lst = tmp_path / "metrics-rerun.control.toml"
+    if contents is not None:
+        lst.write_text(contents)
+    cfg = the_trees_control_rows(tmp_path, control_rows=lst)
+    pod = Pod(out=here)
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and {i: state["numbers"][i]["reason"] for i, _ in ENTRIES} == dict.fromkeys(
+        (i for i, _ in ENTRIES), "control-unlisted")
+    assert sum(ln.startswith(f"the control pod's list of rows {lst} {said}") for ln in pod.lines) == 1, pod.lines
+    assert sorted({r[2] for r in pod.rang}) == ["ci", "infra", "top"]
+    assert all(len(r[3]) <= 600 for r in pod.rang), "a doorbell carries 600 characters (slack.DOORBELL_MAX): the fix is whole"
+    assert 'a [[row]] for each of id = "ci/plain-mark-to-main-p90", id = "ci/lean-mark-to-main-p90", command = ' in (
+        state["numbers"]["ci/plain-mark-to-main-p90"]["why"])
+
+
+def test_the_entries_for_the_trees_control_rows_run_them_on_the_pod(tmp_path):
+    cfg = the_trees_control_rows(tmp_path, control_rows=write_list(tmp_path, ENTRIES))
+    pod = Pod(out=here, states={run_id(n): ("done", 0, True, {"here": True}) for n in (1, 2)})
+    state, _ = run(cfg, pod)
+    assert sorted(i for e in state["launches"] for i in e["metrics"]) == sorted(i for i, _ in ENTRIES)
+    assert {e["machine"] for e in state["launches"]} == {"control"} and pod.rang == []
+
+
+def test_a_node_row_is_untouched_by_the_list(tmp_path):
+    """The list only lets a CONTROL row run on the pod: a row a node runs launches on its node, missing list or not, and even
+    when the list holds its id with another command."""
+    for lst in (tmp_path / "none.toml", write_list(tmp_path, [("compute-accounting/share", LANDING)])):
+        cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]}, control_rows=lst)
+        pod = Pod()
+        state, _ = run(cfg, pod)
+        assert [e["machine"] for e in state["launches"]] == ["vy-nebius-cpu-12"] and pod.rang == []
+        assert state["numbers"]["compute-accounting/share"]["reason"] == "launched"
+
+
+def test_classify_reads_the_pods_list_only_when_given_it(tmp_path):
+    cfg = the_trees_control_rows(tmp_path)
+    lines = []
+    R.census(cfg.tree, lines.append)
+    assert lines[0].startswith("the control pod's list of rows was not read (no --control-rows)")
+    assert sum(ln.startswith("runnable") and ln.endswith("(on control)") for ln in lines) == 4
+    lines = []
+    counts = R.census(cfg.tree, lines.append, control_rows=tmp_path / "none.toml")
+    assert counts == {"control-unlisted": 4} and sum("is missing, so no row runs on the control pod" in ln for ln in lines) == 1
+    lines = []
+    assert R.census(cfg.tree, lines.append, control_rows=write_list(tmp_path, ENTRIES)) == {"runnable": 4}
 
 
 def test_a_control_rows_environment_keeps_the_linear_apps_keys_and_no_other_of_the_pods():
@@ -851,8 +978,11 @@ def test_the_checked_in_loop_parses_and_launches_nowhere_it_must_not():
     assert not ns.dry_run and not ns.once and cfg.max >= 1 and ns.every == 900, "the row declares its interval"
     assert cfg.stop.parent == cfg.state.parent == Path("/data/watchers")
     assert "--max-in-flight" in lp.argv and cfg.max_in_flight == 4, "the row declares its limit on runs in flight"
+    assert cfg.control_rows == Path("/data/watchers/metrics-rerun.control.toml"), "the pod's list is the pod's, beside its state"
     args = ["--tree", "t", "--state", "s", "--stop", "x", "--plan", "p", "--pool", "research", "--every", "900", "--on", "m"]
-    assert R.parse(args)[0].max_in_flight == 4
+    with pytest.raises(SystemExit):
+        R.parse(args)
+    assert R.parse([*args, "--control-rows", "c"])[0].max_in_flight == 4
 
 
 PRICED = "research run --on auto --store-read --source . --cwd source -- uv run python benchmarks/serving_cost/run.py --capture CAPTURE"

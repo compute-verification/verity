@@ -81,6 +81,9 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # timeout by
           "infra/control/metrics_rerun.py", "tools/research/src/research/metrics.py", "tools/research/src/research/auto.py",
           "tools/check/slot.py",
+          # the rows that run on the control pod, whose entries in the pod's list a test writes from them, and the run's start
+          # its status reads (research.asker)
+          "benchmarks/landing/metrics.toml", "benchmarks/communication/metrics.toml", "tools/research/src/research/asker.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
           "infra/control/vy-control-gate", "infra/control/door_setup.sh",
           # the coordinators' launcher, whose `tell` is tested here with the registry above

@@ -1,8 +1,9 @@
 """Each declared number measured again on its schedule, which the control pod does by itself: each pass reads every
 `metrics.toml` of a clean checkout of `main` (benchmarks/README.md's "Metrics"), each number's newest reading from the site's
 GET /api/metrics (`research.metrics`), and launches the command of each number older than its `every` as a `research run` on a
-machine. The pod runs a workload of its own only for a row that says `runs = "control"`: one that reads what only the pod
-reaches (its own state, GitHub through its read token, the Linear app), which runs on the pod and nowhere else.
+machine. The pod runs a workload of its own only for a row that says `runs = "control"` (one that reads what only the pod
+reaches: its own state, GitHub through its read token, the Linear app) and that the pod's own list holds with its command;
+such a row runs on the pod and nowhere else.
 
 A pass holds a lock beside the record (`--state`.lock), so a dry run and the live loop never share the clone at once; a pass
 that finds it held does nothing and says so. Then:
@@ -27,7 +28,10 @@ that finds it held does nothing and says so. Then:
                 CONTROL row's `--timeout` is at most CONTROL_S, since the pass waits for it;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks): such a
                 number's owner is rung once for each declaration of it;
-              - it has a machine. A CONTROL row runs on the pod itself, and nowhere else. A command that asks for GPUs
+              - it has a machine. A CONTROL row runs on the pod itself, and nowhere else, and only when the pod's list
+                (`--control-rows`) holds each of its rows' ids with its command, character for character; else it is
+                UNLISTED, said with the entry infra writes there, and its owners and infra are rung once for each
+                declaration of it. A command that asks for GPUs
                 (`--gpus`), names a machine that is no CPU node (`research.auto.CPU_NODE`), or names `NODE` without a pool
                 runs only on a machine the plan (`--plan`) lists
                 for one of its numbers now, the machine it names when it names one, and that none of this loop's launches is
@@ -65,7 +69,7 @@ that finds it held does nothing and says so. Then:
 
 The record keeps the newest KEEP launches, every launch in flight, and each declared number's newest SAME_CAUSE + 1; beside
 them, each declared number's reason at the last pass that judged it (`numbers`: its reason of REASONS and the pass's line),
-and the placeholder rings made. A record that isn't JSON is moved aside (`--state`.corrupt) and said once, and every number is
+and the placeholder and UNLISTED rings made. A record that isn't JSON is moved aside (`--state`.corrupt) and said once, and every number is
 then held for its `every`, so nothing in flight is launched twice. A missing record is a first pass: a launch in flight when
 it was lost may be launched once more.
 
@@ -77,11 +81,18 @@ The plan, written by the lead for the week (TOML; a missing file lists no machin
     until = <a TOML date-time, UTC>
     metrics = ["OWNER/NAME", ...]      # the numbers it is free for; a row that names none is free for none
 
+The pod's list of the CONTROL rows it runs (`--control-rows`), which infra writes on the pod and no repository holds (TOML; a
+missing or unreadable file lists no row, and the pass says so), one table a row:
+
+    [[row]]
+    id = "OWNER/NAME"
+    command = "..."                    # the row's `command`, character for character
+
 usage (the watchers' `metrics-rerun` loop on the control pod, infra/control/watchers.toml; research importable, the store's
 key, a site key with events:read in $JOBS_TOKEN, and $SLACK_BOT_TOKEN for its rings):
-  python3 infra/control/metrics_rerun.py --tree DIR --state FILE --stop FILE --plan FILE --on MACHINE --pool POOL --every S
-      [--max 2] [--max-in-flight 4] [--once] [--dry-run]
-  python3 infra/control/metrics_rerun.py classify --tree DIR     # each number of a checkout by `classify`, and the counts
+  python3 infra/control/metrics_rerun.py --tree DIR --state FILE --stop FILE --plan FILE --control-rows FILE --on MACHINE
+      --pool POOL --every S [--max 2] [--max-in-flight 4] [--once] [--dry-run]
+  python3 infra/control/metrics_rerun.py classify --tree DIR [--control-rows FILE]   # each number by `classify`, the counts
 """
 from __future__ import annotations
 
@@ -167,6 +178,8 @@ NOT_LOCAL = ("--on", "--pool", "--cpus", "--mem-gb", "--gpus", "--store-read")
 CONTROL_S = LAUNCH_S // 2                               # a CONTROL run's longest, its --timeout: the pass waits for it
 #: the pod's keys a CONTROL run keeps, which LEFT_OUT drops from every other: the Linear app's, which the reads of Linear take
 CONTROL_KEEPS = frozenset({"LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"})
+UNLISTED = "control-unlisted"                           # a CONTROL row the pod's own list doesn't hold with its command
+INFRA = "infra"                                         # who writes the pod's list, rung beside an unlisted row's owner
 KEEP = 400                                              # launches the record keeps, beside those it always keeps
 URL = "https://github.com/compute-verification/verity.git"
 HELPER = "!/data/infra/gh_app_token.sh git"             # hands git the App's token when git asks: never in a config or an argument
@@ -185,6 +198,8 @@ REASONS = {
     "refused": "its command carries an option or a value the loop never launches",
     "ceiling": "its command asks more than a CPU check machine has",
     "placeholder": "its command holds a placeholder only its owner fills in; the owner is rung once",
+    "control-unlisted": "it runs on the control pod, whose list (--control-rows) doesn't hold its id with its command, so it "
+                        "runs nowhere; its owner and infra are rung once",
     "plan": "it asks for GPUs or names a machine that is no CPU node, and the plan lists none free for it",
     "small-disk": "it names a machine whose disk is too small",
     "in-flight": "its last launch is still in flight",
@@ -208,6 +223,7 @@ class Settings:
     pool: str
     max: int = 2
     max_in_flight: int = 4
+    control_rows: Path | None = None                    # the pod's list of CONTROL rows; None lists none
     url: str = URL
     helper: str = HELPER
 
@@ -360,10 +376,42 @@ def planned(opts: list[tuple[str, str | None]]) -> bool:
             or named not in (None, "auto", OWNERS) and not CPU_NODE.fullmatch(named))
 
 
-def classify(job: Job, cfg: Settings) -> Verdict:
+def control_list(path: Path | None, say: Callable[[str], None]) -> dict[str, str]:
+    """The pod's list of the CONTROL rows it runs (`--control-rows`), id to command; a list that is missing or unreadable lists
+    none, which is said."""
+    if path is None or not path.exists():
+        say(f"the control pod's list of rows {path or '(no --control-rows)'} is missing, so no row runs on the control pod")
+        return {}
+    try:
+        out: dict[str, str] = {}
+        for r in tomllib.loads(path.read_text(encoding="utf-8")).get("row", []):
+            if not isinstance(r, dict) or set(r) != {"id", "command"} or not all(isinstance(v, str) for v in r.values()):
+                raise ValueError(f"{r!r} is no [[row]] of an id and a command, both strings")
+            if out.setdefault(r["id"], r["command"]) != r["command"]:
+                raise ValueError(f"it lists {r['id']} twice, with two commands")
+        return out
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError, TypeError) as e:
+        say(f"the control pod's list of rows {path} is unreadable ({type(e).__name__}: {e}), so no row runs on the control pod")
+        return {}
+
+
+def off_list(job: Job, listed: dict[str, str], path: Path | None) -> str:
+    """Why CONTROL `job` runs nowhere, with the fix: each row the pod's list doesn't hold with the job's command, character
+    for character, and the entry infra writes for it there. '' when the list holds every row."""
+    off = [i for i in job.ids if listed.get(i) != job.command]
+    if not off:
+        return ""
+    whose = "; ".join(f"{i}'s {'id is missing' if i not in listed else 'command differs from its entry'}" for i in off)
+    ids = ", ".join(f"id = {json.dumps(i)}" for i in off)
+    entries = (f"a [[row]] with {ids}" if len(off) == 1 else f"a [[row]] for each of {ids}") + f", command = {json.dumps(job.command)}"
+    return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {path or '(no --control-rows)'} doesn't hold it ({whose}), "
+            f"so it runs nowhere until infra adds there, on the pod, {entries}")
+
+
+def classify(job: Job, cfg: Settings, listed: dict[str, str] | None) -> Verdict:
     """What the loop can do with `job` whatever the door, the record and the plan say: `runnable` (on `machine`, in `--pool`,
-    once due; CONTROL, the pod itself, for a CONTROL row), `plan` (only on a machine the plan lists), or why it never launches
-    it, each a reason of REASONS."""
+    once due; CONTROL, the pod itself, for a CONTROL row that `listed`, the pod's list, holds), `plan` (only on a machine the
+    plan lists), or why it never launches it, each a reason of REASONS. `listed` None (no list read) holds every row."""
     if job.command is None or (SCRIPT.findall(job.command) or [""])[0].startswith(LOOPS):
         return Verdict("loop", REASONS["loop"])
     if bad := next((r for r in job.rows if every_s(r) is None), None):
@@ -391,6 +439,8 @@ def classify(job: Job, cfg: Settings) -> Verdict:
         return Verdict("placeholder", f"its command takes {', '.join(held)}, which only its owner fills in", **shape,
                        held=tuple(held))
     if place == CONTROL:
+        if listed is not None and (off := off_list(job, listed, cfg.control_rows)):
+            return Verdict(UNLISTED, off, **shape)
         return Verdict("runnable", REASONS["runnable"], **shape, machine=CONTROL)
     named = get(opts, "--on")
     if planned(opts):
@@ -577,10 +627,10 @@ def in_flight(record: list[dict]) -> int:
     return sum(e.get("state") not in OVER for e in record)
 
 
-def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cfg: Settings, now: float,
-           held_since: str | None = None) -> list[Decision]:
-    """What a pass does with each job, with its reason of REASONS: a job that is due, or that the door doesn't list, is said;
-    a fresh one and a loop's are not."""
+def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], listed: dict[str, str], cfg: Settings,
+           now: float, held_since: str | None = None) -> list[Decision]:
+    """What a pass does with each job, with its reason of REASONS (`listed`: the pod's list of CONTROL rows): a job that is
+    due, or that the door doesn't list, is said; a fresh one and a loop's are not."""
     readings = {str(m.get("id")): m for m in door.get("metrics") or [] if isinstance(m, dict)}
     busy = {e.get("machine") for e in record if e.get("state") not in OVER}
     flying = in_flight(record)
@@ -589,7 +639,7 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         def skip(reason: str, why: str, job: Job = job, **kw) -> None:
             out.append(Decision(job, False, why, reason=reason, **kw))
 
-        v = classify(job, cfg)
+        v = classify(job, cfg, listed)
         if v.reason in ("loop", "every"):
             skip(v.reason, v.why, said=v.reason == "every")
             continue
@@ -608,7 +658,8 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
             continue
         why = "; ".join(due + ([gone] if gone else []))
         if v.reason not in ("runnable", "plan"):
-            skip(v.reason, f"{why}; but {v.why}", because=v.why, rings=v.reason == "placeholder" and not planned(list(v.opts)))
+            skip(v.reason, f"{why}; but {v.why}", because=v.why,
+                 rings=v.reason == UNLISTED or v.reason == "placeholder" and not planned(list(v.opts)))
             continue
         if blocked := next((b for r in job.rows if (b := bound(record, r, job, now))), None):
             skip(blocked[0], f"{why}; but {blocked[1]}")
@@ -696,7 +747,8 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
     except Exception as e:  # noqa: BLE001  (without readings nothing is known to be due: nothing is launched)
         say(f"the door could not be read ({type(e).__name__}: {e}), so nothing is launched")
         return []
-    out = decide(jobs, door, record, plan_rows(cfg.plan, say), cfg, now, state.get("held_since"))
+    out = decide(jobs, door, record, plan_rows(cfg.plan, say), control_list(cfg.control_rows, say), cfg, now,
+                 state.get("held_since"))
     reasons = {i: [d.reason, d.why] for d in out for i in d.job.ids} | {i: [r, d.why] for d in out for i, r in d.per}
     counts = sorted(((n, r) for r in REASONS if (n := sum(x[0] == r for x in reasons.values()))), key=lambda x: (-x[0], x[1]))
     said = [d for d in out if d.said]
@@ -704,7 +756,7 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
         f"{sum(d.launch for d in out)} to launch" + (" (dry run: none is)" if dry_run else "")
         + f"; {in_flight(record)} in flight (--max-in-flight {cfg.max_in_flight}), "
           f"{sum(d.reason == 'limit' for d in out)} held back for it; by reason: {', '.join(f'{r} {n}' for n, r in counts)}")
-    ring_placeholders(state, jobs, out, fx, now, say, dry_run)
+    ring_declarations(state, jobs, out, fx, now, say, dry_run)
     for k, d in enumerate(said):
         nums = ", ".join(d.job.ids)
         if not d.launch:
@@ -757,14 +809,15 @@ def owners(ids: list[str]) -> list[str]:
 
 
 def ring(fx, entry: dict, run: str, rc: str, ids: list[str], text: str, now: float, say: Callable[[str], None],
-         dry_run: bool) -> None:
-    """Ring each owner of `ids` with `text`, once: `entry` holds when it was rung, or how many passes tried a ring that
-    failed, RING_TRIES at most."""
+         dry_run: bool, also: tuple[str, ...] = ()) -> None:
+    """Ring each owner of `ids`, and each handle of `also`, with `text`, once: `entry` holds when it was rung, or how many
+    passes tried a ring that failed, RING_TRIES at most."""
+    to = sorted({*owners(ids), *also})
     if dry_run:
-        say(f"would ring {', '.join('@' + o for o in owners(ids))}: {text}")
+        say(f"would ring {', '.join('@' + o for o in to)}: {text}")
         return
     try:
-        for o in owners(ids):
+        for o in to:
             fx.ring(run, rc, o, text)
     except (OSError, subprocess.SubprocessError, RuntimeError) as x:
         entry["ring_tries"] = tries = entry.get("ring_tries", 0) + 1
@@ -775,7 +828,7 @@ def ring(fx, entry: dict, run: str, rc: str, ids: list[str], text: str, now: flo
                                                                             "; it is tried again next pass"))
         return
     entry["rung"] = iso(now)
-    say(f"rang {', '.join('@' + o for o in owners(ids))} for {', '.join(ids)}: {text}")
+    say(f"rang {', '.join('@' + o for o in to)} for {', '.join(ids)}: {text}")
 
 
 def ring_failures(record: list[dict], fx, now: float, say: Callable[[str], None], dry_run: bool) -> None:
@@ -806,14 +859,19 @@ def ring_failures(record: list[dict], fx, now: float, say: Callable[[str], None]
         ring(fx, e, e.get("run") or "-", rc, e["metrics"], text, now, say, dry_run)
 
 
-def ring_placeholders(state: dict, jobs: list[Job], out: list[Decision], fx, now: float, say: Callable[[str], None],
+def ring_declarations(state: dict, jobs: list[Job], out: list[Decision], fx, now: float, say: Callable[[str], None],
                       dry_run: bool) -> None:
-    """The owners of a due number whose command holds a placeholder and would otherwise run on a CPU node, rung once for each
-    declaration of it (`rings`): one the plan places waits for the plan as well."""
+    """Rung once for each declaration of it (`rings`): the owners of a due number whose command holds a placeholder and would
+    otherwise run on a CPU node (one the plan places waits for the plan as well), and the owners and infra of a due UNLISTED
+    one."""
     rings = state.get("rings", {})
     for d in out:
         key = f"{d.job.where} {d.job.declared}"
         if not d.rings or (r := rings.setdefault(key, {"ids": d.job.ids})).get("rung"):
+            continue
+        if d.reason == UNLISTED:
+            ring(fx, r, f"{UNLISTED}:{d.job.ids[0]}:{d.job.declared}", UNLISTED, d.job.ids,
+                 f"metrics-rerun: {', '.join(d.job.ids)}: {d.because}", now, say, dry_run, also=(INFRA,))
             continue
         text = (f"metrics-rerun: {', '.join(d.job.ids)}: {d.because}, so the loop launches it only once its command in "
                 f"{d.job.where} holds none")
@@ -969,26 +1027,32 @@ def parse(argv: list[str] | None = None) -> tuple[Settings, argparse.Namespace]:
     ap.add_argument("--max", type=int, default=2, help="launches a pass at most")
     ap.add_argument("--max-in-flight", type=int, default=4, metavar="N",
                     help="the loop's launches not yet ended (queued or running) at most: a pass launches nothing new at N")
+    ap.add_argument("--control-rows", required=True, type=Path, metavar="FILE",
+                    help="the pod's own list of the rows it runs: [[row]] id, command (a missing one lists none)")
     ap.add_argument("--url", default=URL, help="origin")
     ap.add_argument("--credential-helper", default=HELPER, help="git's credential helper for origin ('' for none)")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="one pass that says what it would launch and why, launching nothing "
                                                            "and writing no record")
     ns = ap.parse_args(argv)
-    return Settings(ns.tree, ns.state, ns.stop, ns.plan, ns.on, ns.pool, ns.max, ns.max_in_flight, ns.url,
-                    ns.credential_helper), ns
+    return Settings(ns.tree, ns.state, ns.stop, ns.plan, ns.on, ns.pool, ns.max, ns.max_in_flight,
+                    control_rows=ns.control_rows, url=ns.url, helper=ns.credential_helper), ns
 
 
-def census(tree: Path, out=print) -> dict[str, int]:
+def census(tree: Path, out=print, control_rows: Path | None = None) -> dict[str, int]:
     """Each declared number of `tree` by `classify` (one line each: reason, id, why), then the count of each reason: what the
-    loop could ever launch, read from the files alone."""
-    cfg = Settings(tree, Path("-"), Path("-"), Path("-"), "MACHINE", "POOL")
+    loop could ever launch, read from the files alone and, when given, the pod's list of CONTROL rows."""
+    cfg = Settings(tree, Path("-"), Path("-"), Path("-"), "MACHINE", "POOL", control_rows=control_rows)
+    if control_rows is None:
+        out(f"the control pod's list of rows was not read (no --control-rows): a {RUNS} = {CONTROL!r} row is shown as if "
+            "it listed it")
+    listed = None if control_rows is None else control_list(control_rows, out)
     jobs, broken = declarations(tree)
     for line in broken:
         out(line)
     counts: dict[str, int] = {}
     for job in jobs:
-        v = classify(job, cfg)
+        v = classify(job, cfg, listed)
         for i in job.ids:
             counts[v.reason] = counts.get(v.reason, 0) + 1
             out(f"{v.reason:<12} {i}: {v.why}" + (f" (on {v.machine})" if v.machine and v.machine != cfg.on else ""))
@@ -1001,7 +1065,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["classify"]:
         ap = argparse.ArgumentParser(prog="metrics_rerun classify", description=census.__doc__.split("\n")[0])
         ap.add_argument("--tree", required=True, type=Path, help="a checkout, read as it stands")
-        census(ap.parse_args(argv[1:]).tree)
+        ap.add_argument("--control-rows", type=Path, metavar="FILE", help="the pod's list of the rows it runs, as the loop's")
+        ns = ap.parse_args(argv[1:])
+        census(ns.tree, control_rows=ns.control_rows)
         return 0
     cfg, ns = parse(argv)
     pod = Pod(cfg)
