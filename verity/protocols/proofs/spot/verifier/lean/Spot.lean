@@ -53,6 +53,7 @@ public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
 public import Spot.RecordText
 public import Spot.Edges
+public import Spot.Cut
 public import Spot.HistoryTable
 public import Spot.WiresSpan
 public import Spot.WiresOrder

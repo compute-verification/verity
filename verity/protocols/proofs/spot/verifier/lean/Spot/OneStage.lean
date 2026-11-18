@@ -97,6 +97,7 @@ module
 public import CoreProtocol.Cli
 public import CoreProtocol.Profile
 public import CoreProtocol.Live
+public import Spot.Cut
 public import Spot.Docket
 public import Spot.Record
 public import Spot.ChallengerSample
@@ -294,7 +295,8 @@ private def poolValues (pool : Option Docket.Pool) (program : String) (log : Arr
     else (withField supplied p.pin (.arr #[.arr #[Json.mkObj [("bytes", .str p.genesis)]]]), outputs, schemas)
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
-refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
+refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). Given a wired Program (`wired`), the
+`program` is refused by name unless it is the wired one's cut (`Cut.checkWith`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
@@ -316,9 +318,12 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "compiler").isSome then keys.push "compiler" else keys
   let keys := if (field? j "certified").isSome then keys.push "certified" else keys
   let keys := if (field? j "window_values").isSome then keys.push "window_values" else keys
+  let keys := if (field? j "wired").isSome then keys.push "wired" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
+  if let some w := field? j "wired" then
+    Cut.checkWith (← Program.parse (← Flock.canon (← obj w "wired")).toUTF8) program query
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"
