@@ -53,7 +53,7 @@ def _and_record(circuit: IF.Circuit) -> tuple[IF.Circuit, dict]:
 def _window(free: bool = False) -> IF.Circuit:
     """The window of the module docstring; ``free``: without the short chunk's wires, so a row of `C3`'s ports is free
     beside its wired ones."""
-    b = _Builder(Grain(), provable=False)
+    b = _Builder(Grain())
     b.label = (0, 0)
     x, _ = b.unit(X, 6)
     b.unit(X, 4)
@@ -85,7 +85,7 @@ def _window(free: bool = False) -> IF.Circuit:
 
 def _whole(external: tuple[str, ...] | None = None) -> IF.Circuit:
     """One unit of `C2`, and one of `C1` reading its token as ``idx``: a one-instance writer read whole."""
-    b = _Builder(Grain(), provable=False)
+    b = _Builder(Grain())
     b.label = (0, 0)
     c2, _ = b.unit(C2, 1)
     c1, _ = b.unit(C1, 1)
