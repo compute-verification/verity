@@ -3,7 +3,7 @@ credited at the data sheet's ceilings"), the share of one H200's capacity an hon
 data-sheet reading of the card's tensor clock. Modeled: it multiplies two recorded runs' figures and the card file's
 ceilings, and nothing ran the product.
 
-    uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN
+    uv run python benchmarks/compute/h200_share.py --protocol pearl-plus --from RUN --duty RUN
 
 The number, at each reading r of `READINGS` (the card's `clock.tensor` and `clock.sm`, the reading credit defaults to,
 each the card file's value):
@@ -14,8 +14,8 @@ each the card file's value):
                around the kernel, read from that run's `out/beside.jsonl` (`--duty RUN`)
     ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `calibration/hardware/cards/` `CARD`)
     share      `compute-accounting/verified-compute-share`: the MACs the Pearl+ verifier credits over the MACs the
-               served model computes, on a served run of record (`run.py --from RUN`, which refuses an answer that
-               isn't an accept)
+               served model computes, on a served run of record (`run.py --protocol NAME --from RUN`, which refuses
+               an answer that isn't an accept)
 
 Credit counts each MAC at its pipe's data-sheet ceiling, so a span of T seconds holds ceiling(r) * T MACs of capacity,
 and a prover that computes every MAC of the served model at `rate` is credited share * rate * T of them. So the goal's
@@ -128,14 +128,17 @@ def measured(doc: dict) -> list[dict]:
 def main(argv: list[str] | None = None, *,
          store_of: Callable[[], compute.EvidenceStore] = compute.opened) -> int:
     ap = argparse.ArgumentParser(prog="h200_share.py", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--protocol", metavar="NAME", required=True,
+                    help="the useful-work scheme's registered name, as run.py --protocol takes it")
     ap.add_argument("--from", dest="run", metavar="RUN", required=True,
                     help="a served run of record: its verified compute share read from its record (run.py --from)")
     ap.add_argument("--duty", metavar="RUN", required=True,
                     help="a calibration/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)
     try:
+        scheme = compute.served(compute.useful_work(a.protocol))
         store = store_of()
-        share_doc = compute.from_run(store, a.run)
+        share_doc = compute.from_run(store, a.run, scheme)
         doc = document(share_doc, honest_rate(duty_points(store, a.duty)), a.duty)
     except compute.NoNumber as e:
         print(f"h200 share: no number: {e}", file=sys.stderr)

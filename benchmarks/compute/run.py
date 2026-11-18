@@ -4,9 +4,16 @@ the model computes on those tokens, as text and as one line of JSON (`value`, `u
 target (`TARGET`). An answer that isn't an accept, is a test instance's (`profile.test_instance`), or that the record
 holds no Lean verdict of, prints no number and exits 1.
 
-    verity bench compute --from DIR                          a run's record in a directory on disk
-    verity bench compute --from RUN                          a recorded run in our evidence store
-    verity bench compute --from DIR|RUN --per-call [--uncredited F] [--top N]   and where the rest of its MACs went
+    verity bench compute --protocol NAME --from DIR           a run's record in a directory on disk
+    verity bench compute --protocol NAME --from RUN           a recorded run in our evidence store
+    verity bench compute --protocol NAME --from DIR|RUN --per-call [--uncredited F] [--top N]   and where the rest of
+                                                             its MACs went
+
+NAME is the useful-work scheme's registered name (`verity.protocols.resource_accounting.scheme.get`, `pearl-plus`), a
+compute scheme: another name is refused (exit 2) with the registered compute schemes. The answer must be that scheme's
+verifier's (its `Scheme.protocol`). A scheme that attaches to no served run (its `Scheme.option` empty, as `dither`'s)
+raises `NotImplementedError` before any record is read: no kernel serves it and no verifier answers for a served run
+of it, so a run leaves no answer to read.
 
 The number, for a run whose inference-only policy registers one class of S slots, each P prompt tokens then O output
 tokens, served by a model of L layers, hidden size d, H attention heads of d_h = d / H, H_kv key and value heads, MLP
@@ -141,8 +148,10 @@ are written as one entry each, with no value and why. A made-up record's entries
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import math
+import os
 import re
 import sys
 import tomllib
@@ -152,15 +161,18 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
+from verity.protocols.resource_accounting import scheme as schemes
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+PROTOCOLS = Path(__file__).resolve().parents[2] / "verity/protocols"
 
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "uncredited_words"]
+           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "served", "uncredited_words",
+           "useful_work"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the unit of the two shares the number is the product of (`CREDITABLE`, `OF_CREDITABLE`)
@@ -176,7 +188,6 @@ TARGET = Fraction(97, 100)
 LOAD = Path(__file__).with_name("load.toml")
 #: the load's keys, the policy's names for them
 LOAD_KEYS = ("model", "revision", "slots", "prompt", "outputs")
-PROTOCOL = "verity/pouw/pearl-plus/v1"
 #: the files of a run this command reads
 ANSWER = "out/pieces/pouw/pearlplus-answer.json"
 LEAN = "out/pieces/pouw/pearlplus-lean.json"
@@ -266,6 +277,32 @@ class Unreadable(Exception):
     """A run, its policy or its record can't be read."""
 
 
+def useful_work(name: str) -> schemes.Scheme:
+    """The compute scheme registered under ``name``, after importing every ``scheme.py`` under `verity/protocols` that
+    imports the registry (each registers its scheme when imported); `Unreadable` naming the registered compute schemes
+    for any other name."""
+    for root, dirs, files in os.walk(PROTOCOLS):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        path = Path(root) / "scheme.py"
+        if "scheme.py" in files and f"from {schemes.__name__} import" in path.read_text():
+            importlib.import_module(".".join(path.relative_to(PROTOCOLS.parents[1]).with_suffix("").parts))
+    compute = sorted(n for n, s in schemes.SCHEMES.items() if s.resource == "compute")
+    if name not in compute:
+        raise Unreadable(f"--protocol {name!r} is no registered compute scheme; registered: {', '.join(compute)}")
+    return schemes.get(name)
+
+
+def served(scheme: schemes.Scheme) -> schemes.Scheme:
+    """``scheme``, where a served run of it leaves an answer to read: `NotImplementedError` where no adapter entry
+    attaches it to a served run (`Scheme.option` empty)."""
+    if not scheme.option:
+        raise NotImplementedError(
+            f"{scheme.name} is not served: no adapter entry attaches it to a served run, so no kernel computes its "
+            f"workload's products while serving and no verifier ({scheme.protocol}) answers for a served run of it; a "
+            "run of it leaves no answer to read")
+    return scheme
+
+
 def _under(path: str, prefix: str) -> bool:
     return path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/")
 
@@ -348,8 +385,9 @@ def _held(tree: Path, path: str) -> Any:
     return json.loads((tree / path).read_text()) if (tree / path).is_file() else None
 
 
-def credit(tree: Path) -> dict:
-    """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is Pearl+'s accept with a
+def credit(tree: Path, scheme: schemes.Scheme) -> dict:
+    """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is `scheme`'s verifier's
+    (`Scheme.protocol`), an accept with a
     credit that is no test instance's, and the record holds the Lean verifier's verdict and its comparison with the
     answer, both the answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
     try:
@@ -368,8 +406,8 @@ def credit(tree: Path) -> dict:
         differ = check["differ"]
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise NoNumber(f"the run's Pearl+ verdicts don't read as verdicts ({type(e).__name__}: {e})") from e
-    if protocol != PROTOCOL:
-        raise NoNumber(f"the answer is {protocol}'s, not {PROTOCOL}'s")
+    if protocol != scheme.protocol:
+        raise NoNumber(f"the answer is {protocol}'s, not {scheme.protocol}'s ({scheme.name}'s verifier)")
     if verdict != "accept":
         raise NoNumber(f"Pearl+'s answer is {verdict}, not accept ({answer.get('reason') or 'no reason recorded'})")
     if (answer.get("profile") or {}).get("test_instance"):
@@ -622,12 +660,14 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
                     for c in worst]}
 
 
-def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[str], given: Path | None = None) -> dict:
-    """The printed document of the record under `tree`: the number, its unit, the commit the run ran from and the run,
-    then what the number is made of. `withdrawn` is what was withdrawn of the rest of the record, and `given` a per-call
-    split in a file of its own (`head_calls`). Where the passes hold the LM head's calls it also holds ``lm_head``: their
-    count and the MACs Pearl+ can credit at the class, the linears' and the LM head's."""
-    c, served, record = credit(tree), load(tree), row(tree)
+def document(tree: Path, scheme: schemes.Scheme, commit: str | None, run: str | None, withdrawn: list[str],
+             given: Path | None = None) -> dict:
+    """The printed document of the record under `tree`, of the useful-work scheme `scheme`: the number, its unit, the
+    commit the run ran from and the run, then what the number is made of. `withdrawn` is what was withdrawn of the rest of
+    the record, and `given` a per-call split in a file of its own (`head_calls`). Where the passes hold the LM head's
+    calls it also holds ``lm_head``: their count and the MACs Pearl+ can credit at the class, the linears' and the LM
+    head's."""
+    c, served, record = credit(tree, scheme), load(tree), row(tree)
     macs = served["macs"]
     heads = head_calls(tree, given, MODELS[served["model"]])
     creditable = macs["linears"] + macs["lm_head"] * bool(heads)
@@ -735,9 +775,10 @@ def commit_of(attempt: dict) -> str | None:
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
 
 
-def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path | None = None,
+def from_run(store: EvidenceStore, run: str, scheme: schemes.Scheme, per_call: bool = False, given: Path | None = None,
              top: int = 10) -> dict:
-    """The printed document of recorded run `run`; with `per_call`, its give-up by cause and by call too (`split`)."""
+    """The printed document of recorded run `run` of `scheme`; with `per_call`, its give-up by cause and by call too
+    (`split`)."""
     attempt = store.attempt(run)
     if attempt is None:
         raise Unreadable(f"{run} is not in the evidence store this machine reads")
@@ -745,7 +786,7 @@ def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path
     try:
         if tree is None or not (tree / ANSWER).is_file():
             raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
-        return _with_split(document(tree, commit_of(attempt), run, withdrawn, given), tree, per_call, given, top)
+        return _with_split(document(tree, scheme, commit_of(attempt), run, withdrawn, given), tree, per_call, given, top)
     except NoNumber as e:
         e.tree = tree
         raise
@@ -765,8 +806,10 @@ def stated(tree: Path | None) -> tuple[tuple[str, dict] | None, str]:
     return said, "" if said else coins_text(c)
 
 
-def from_dir(record: Path, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
-    """The printed document of the run record in the directory `record` (module docstring), through no store: the run
+def from_dir(record: Path, scheme: schemes.Scheme, per_call: bool = False, given: Path | None = None,
+             top: int = 10) -> dict:
+    """The printed document of the run record of `scheme` in the directory `record` (module docstring), through no
+    store: the run
     is the `run.id` its `job.json` states, else the directory's name, and the commit the one its `store.conditions`
     state, else None. `Unreadable` unless it holds every file of `REQUIRED`."""
     if not record.is_dir():
@@ -784,7 +827,7 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
                   or (ran if ran != "unknown" else None))
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
-    return _with_split(document(record, commit, run, [], given), record, per_call, given, top)
+    return _with_split(document(record, scheme, commit, run, [], given), record, per_call, given, top)
 
 
 def record_run(record: Path) -> str:
@@ -880,6 +923,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     (`kit_report.RUN_ID`) that names no directory, fetched through `store_of`, the evidence store, which honors
     withdrawals of parts of a record (`EvidenceStore.files`)."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--protocol", metavar="NAME", required=True,
+                    help="the useful-work scheme's registered name (verity.protocols.resource_accounting.scheme), a "
+                         "compute scheme such as pearl-plus")
     ap.add_argument("--from", dest="source", metavar="DIR|RUN", required=True,
                     help="a run's record: its directory (the run's, holding out/ and job.json), read from disk alone, or "
                          "a run id of our evidence store, read through research's store client")
@@ -894,11 +940,12 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         ap.error("--uncredited and --top go with --per-call")
     tree = None
     try:
+        scheme = served(useful_work(a.protocol))
         if RUN_ID.fullmatch(a.source) and not Path(a.source).is_dir():
-            doc = from_run(store_of(), a.source, a.per_call, a.uncredited, a.top)
+            doc = from_run(store_of(), a.source, scheme, a.per_call, a.uncredited, a.top)
         else:
             tree = kit.record_dir(a.source)
-            doc = from_dir(tree, a.per_call, a.uncredited, a.top)
+            doc = from_dir(tree, scheme, a.per_call, a.uncredited, a.top)
         measured, said = amounts(doc), ran_with(doc)
     except kit.NoRecord as e:
         print(f"compute: {e}", file=sys.stderr)

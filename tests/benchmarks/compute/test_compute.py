@@ -25,6 +25,7 @@ import run as C
 HERE = Path(__file__).resolve().parent
 CARD_FILES = HERE.parents[2] / "calibration/hardware/cards"
 RUN = "r20000101-000000-aaaa"
+PROTOCOL = ("--protocol", "pearl-plus")
 COMMIT = "c" * 40
 RECORD = HERE / "fixtures" / "record"
 LLAMA = C.MODELS["unsloth/Llama-3.2-1B"]
@@ -138,7 +139,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
 
 
 def bench(store: FakeStore, *argv: str) -> int:
-    return C.main(list(argv), store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
+    return C.main([*PROTOCOL, *argv], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
 
 
 def no_number(capsys, why: str, said: str | None = None) -> dict:
@@ -397,7 +398,7 @@ def test_a_store_that_cannot_be_read_exits_2(store, tmp_path, capsys, monkeypatc
     def absent():
         raise C.Unreadable("the evidence store's client isn't installed here (No module named 'research'): give --from "
                            "the run's record directory, or install research (uv sync --all-packages)")
-    assert C.main(["--from", RUN], store_of=absent) == 2
+    assert C.main([*PROTOCOL, "--from", RUN], store_of=absent) == 2
     assert "compute: the evidence store's client isn't installed here" in capsys.readouterr().err
 
 
@@ -449,6 +450,24 @@ def test_the_command_line_names_a_run(store, capsys):
     with pytest.raises(SystemExit) as e:
         bench(store)
     assert e.value.code == 2 and "--from" in capsys.readouterr().err
+
+
+def test_the_command_line_names_the_useful_work_scheme(store, capsys):
+    store.add(RUN, RECORD)
+    with pytest.raises(SystemExit) as e:
+        C.main(["--from", RUN], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
+    assert e.value.code == 2 and "--protocol" in capsys.readouterr().err
+    for name in ("pearl-c-h100-v1-h3", "certifier"):
+        assert C.main(["--protocol", name, "--from", str(RECORD)]) == 2
+        err = capsys.readouterr().err
+        assert f"--protocol {name!r} is no registered compute scheme; registered: " in err
+        assert err.split("registered: ")[1].strip() == "dither, pearl-plus"
+
+
+def test_a_scheme_no_served_run_attaches_is_not_implemented():
+    with pytest.raises(NotImplementedError, match=r"^dither is not served: no adapter entry attaches it to a served run"):
+        C.main(["--protocol", "dither", "--from", str(RECORD)])
+    assert C.served(C.useful_work("pearl-plus")).protocol == "verity/pouw/pearl-plus/v1"
 
 
 @pytest.mark.parametrize("edits, why", [
@@ -624,7 +643,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     over 600 s are 2 x 132 SMs x 4,096 e4m3 MACs a clock at each, free is capacity less the credit, and a span that
     leaves a fraction of a MAC rounds capacity up."""
     store.add(RUN, a_record(tmp_path))
-    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN, C.useful_work("pearl-plus"))
     tensor, sm = 2 * 132 * 4096 * 1_830_000_000 * 600, 2 * 132 * 4096 * 1_980_000_000 * 600
     assert C.capacity(h200_site(2), Fraction(600)) == {"tensor": tensor, "sm": sm}
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
@@ -655,7 +674,7 @@ def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
 
 def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp_path):
     store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d.pop("profile")))
-    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN, C.useful_work("pearl-plus"))
     got = {m["name"]: m for m in C.amounts(doc)}["error"]
     assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
     assert got["mark"] == C.DELTA_S_MARK
@@ -974,7 +993,7 @@ def test_a_record_directory_prints_what_the_store_prints_for_the_same_record(sto
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN, *argv) == 0
     from_store = capsys.readouterr()
-    assert C.main(["--from", str(RECORD), *argv], store_of=no_store) == 0
+    assert C.main([*PROTOCOL, "--from", str(RECORD), *argv], store_of=no_store) == 0
     assert capsys.readouterr() == from_store
     doc = json.loads(from_store.out.splitlines()[-1])
     assert (doc["value"], doc["run"], doc["commit"], doc["credited_macs"]) == (SHARE, RUN, COMMIT, CREDITED)
@@ -989,7 +1008,7 @@ def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys
         monkeypatch.setitem(sys.modules, name, None)
     with pytest.raises(C.Unreadable, match="the evidence store's client isn't installed here"):
         C.opened()
-    assert C.main(["--from", str(RECORD), "--per-call"], store_of=no_store) == 0
+    assert C.main([*PROTOCOL, "--from", str(RECORD), "--per-call"], store_of=no_store) == 0
     doc = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert doc["value"] == SHARE and doc["withdrawn"] == [] and doc["per_call"]["give_up"] == TOTAL - CREDITED
 
@@ -997,7 +1016,7 @@ def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys
 @pytest.mark.parametrize("name", ["ANSWER", "POLICY"])
 def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, capsys, local, name):
     record = a_record(tmp_path, **{name: None})
-    assert C.main(["--from", str(record)], store_of=no_store) == 2
+    assert C.main([*PROTOCOL, "--from", str(record)], store_of=no_store) == 2
     out, err = capsys.readouterr()
     path = getattr(C, name)
     assert out == "" and f"compute: the record directory {record} holds no {path} ({C.REQUIRED[path]})" in err
@@ -1006,13 +1025,13 @@ def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, 
 def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_name(tmp_path, capsys, local):
     """A run's `out/` named in place of the run's directory is refused with a hint, and a path that is no directory is
     refused as a path, never sent to the store as a run id. `--record` is gone: `--from` takes both."""
-    assert C.main(["--from", str(RECORD / "out")], store_of=no_store) == 2
+    assert C.main([*PROTOCOL, "--from", str(RECORD / "out")], store_of=no_store) == 2
     err = capsys.readouterr().err
     assert f"holds no {C.ANSWER}" in err and "it is a run's out/ directory; name the directory holding it" in err
-    assert C.main(["--from", str(tmp_path / RUN)], store_of=no_store) == 2
+    assert C.main([*PROTOCOL, "--from", str(tmp_path / RUN)], store_of=no_store) == 2
     assert f"compute: {tmp_path / RUN}: no such directory, and not a run id" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        C.main(["--from", str(RECORD), "--record", str(RECORD)], store_of=no_store)
+        C.main([*PROTOCOL, "--from", str(RECORD), "--record", str(RECORD)], store_of=no_store)
     assert e.value.code == 2 and "unrecognized arguments: --record" in capsys.readouterr().err
 
 
@@ -1021,24 +1040,24 @@ def test_a_run_id_that_names_a_directory_is_read_as_the_directory(tmp_path, caps
     run id that names none."""
     shutil.copytree(RECORD, tmp_path / RUN)
     monkeypatch.chdir(tmp_path)
-    assert C.main(["--from", RUN], store_of=no_store) == 0
+    assert C.main([*PROTOCOL, "--from", RUN], store_of=no_store) == 0
     assert printed(capsys)[1]["credited_macs"] == CREDITED
 
 
 def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp_path, capsys, local):
     record = a_record(tmp_path, JOB=None)
-    assert C.main(["--from", str(record)], store_of=no_store) == 0
+    assert C.main([*PROTOCOL, "--from", str(record)], store_of=no_store) == 0
     text, doc, _ = printed(capsys)
     assert (doc["run"], doc["commit"], doc["value"], doc["made_up_says"]) == ("record", None, SHARE, None)
     assert text[3].startswith("  record, commit unknown: Pearl+'s answer accepts")
     dirty = a_record(tmp_path / "dirty", JOB=to("store", "conditions", "source.dirty", value=True))
-    assert C.main(["--from", str(dirty)], store_of=no_store) == 0
+    assert C.main([*PROTOCOL, "--from", str(dirty)], store_of=no_store) == 0
     assert printed(capsys)[1]["commit"] == f"{COMMIT}-dirty"
     for said, commit in (("e" * 40, "e" * 40), ("unknown", None)):
         ran = a_record(tmp_path / said, JOB=None, RAN=json.dumps({"commit": said}))
-        assert C.main(["--from", str(ran)], store_of=no_store) == 0
+        assert C.main([*PROTOCOL, "--from", str(ran)], store_of=no_store) == 0
         assert printed(capsys)[1]["commit"] == commit
-    assert C.main(["--from", str(a_record(tmp_path / "bad", JOB="not json"))], store_of=no_store) == 2
+    assert C.main([*PROTOCOL, "--from", str(a_record(tmp_path / "bad", JOB="not json"))], store_of=no_store) == 2
     assert f"compute: the record's {C.JOB} doesn't read as the run's" in capsys.readouterr().err
 
 
@@ -1054,7 +1073,7 @@ def test_a_record_directory_is_refused_as_the_store_refuses_the_same_record(stor
     record = a_record(tmp_path, **edits)
     store.add(RUN, record)
     for argv in (["--from", RUN], ["--from", str(record)]):
-        assert C.main([*argv, "--per-call"], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn")) == rc
+        assert C.main([*PROTOCOL, *argv, "--per-call"], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn")) == rc
         out, err = capsys.readouterr()
         assert f"compute: {why}" in (out if rc == 1 else err) and (err if rc == 1 else out) == ""
 
@@ -1080,7 +1099,7 @@ def test_a_made_up_record_is_written_as_made_up_and_writes_no_measurement(tmp_pa
     result.json, even under the run whose record it is."""
     out = tmp_path / "out"
     monkeypatch.setenv("OUT", str(out))
-    assert C.main(["--from", str(a_record(tmp_path, **edits))]) == rc
+    assert C.main([*PROTOCOL, "--from", str(a_record(tmp_path, **edits))]) == rc
     text, doc, _ = printed(capsys)
     assert text[3:5] == MADE_UP and text[2] == "a measurement, not an audit"
     assert (doc["made_up"], doc["made_up_says"], doc["audit"]) == (True, SAYS, False)
@@ -1211,7 +1230,7 @@ def test_no_record_prints_an_audit(tmp_path, capsys, local, pieces, launcher):
     """Every shape of the record's pieces against every word the launcher may say: a deployed word exits 2, and
     every other prints ``a measurement, not an audit`` with ``audit`` false and development parameters."""
     edits = PIECES[pieces] | ({} if LAUNCHERS[launcher] is None else {"RAN": LAUNCHERS[launcher]})
-    rc = C.main(["--from", str(a_record(tmp_path, **edits))])
+    rc = C.main([*PROTOCOL, "--from", str(a_record(tmp_path, **edits))])
     text, doc, _ = printed(capsys)
     assert rc == (2 if "deployed" in launcher else 0)
     if rc == 0:

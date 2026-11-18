@@ -36,7 +36,8 @@
 #      it fails at that (R chained after W);
 #  12. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
 #      tied path writes no Program;
-#  13. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
+#  13. share: `benchmarks/compute/run.py --protocol pearl-plus --from RUN_DIR`, which prints the share from the record
+#      this wrote.
 # Coins (COINS): `local` (default), a local challenger: infra's gate code (AUDITOR) on a scratch auditor host under
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
@@ -73,7 +74,7 @@ CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 9
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
-SCHEME=pearl-c-h100-v1-h3
+PROTOCOL=pearl-plus SCHEME=pearl-c-h100-v1-h3
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
 PIECE=$OUT/pieces/pouw REC=$OUT/record
@@ -340,7 +341,7 @@ if [ "$failed" != 0 ]; then
     "$OUT/logs/STEP.log)" >&2
   exit 1
 fi
-step share "$PY" benchmarks/compute/run.py --from "$RUN" || failed=1
+step share "$PY" benchmarks/compute/run.py --protocol "$PROTOCOL" --from "$RUN" || failed=1
 coins > "$OUT/coins.txt"
 cat "$OUT/logs/share.log"
 exit "$failed"
