@@ -38,8 +38,10 @@ TAB_WORDS, SEG_BYTES = 14, 1024
 
 
 class Args(ctypes.Structure):
-    """`row_table.cuh`'s ``Args``: the address of the step's salts where the kernels run, the table count, the step's domain id."""
-    _fields_ = [("salts", ctypes.c_uint64), ("T", ctypes.c_uint32), ("pad", ctypes.c_uint32), ("did", ctypes.c_uint64 * 8)]
+    """`row_table.cuh`'s ``Args``: the address of the step's given salts where the kernels run (0: ChaCha20 under ``key`` at
+    ``nonce``), the table count, the step's domain id."""
+    _fields_ = [("salts", ctypes.c_uint64), ("key", ctypes.c_uint32 * 8), ("nonce", ctypes.c_uint32 * 3), ("T", ctypes.c_uint32),
+                ("did", ctypes.c_uint64 * 8)]
 
 
 def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, headers: Sequence[Path] = ()) -> Path:

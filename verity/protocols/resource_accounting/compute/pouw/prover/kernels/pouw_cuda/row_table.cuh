@@ -8,7 +8,7 @@
 // A row is its K s8 codes then its f32 scale's four bytes little-endian (`row_table.s8_row`). Its leaf, rank r of its table:
 //   d_j  = SHA-512(S(j, s, m_j) || row[1024 j : 1024 j + m_j / 8])           `rowleaf.sha512_row_seg_digest`
 //   x    = SHA-512(Q(n_bits) || d_0 || ... || d_(s-1))
-//   y    = the step's salts [192 g, 192 g + 192), fresh OS bytes the host gives g the row's index in the step
+//   y    = the given salts [192 g, 192 g + 192), or ChaCha20(key, nonce, blocks 3 g .. 3 g + 2)   g the row's index in the step
 //   b, c = x ^ M_key y, SHA-512(salt_prefix || y)                              `hm96.SHA512.commit_string`
 //   leaf = frame-v3-sha512 leaf(domain, r, "hm96-sha512/row-seg/v1", SHA-512(leaf_prefix || b || c))
 // Each table's root is the frame-v3-sha512 tree over its leaves, and the step's root the tree over its tables' roots, each a
@@ -42,12 +42,13 @@ struct Tab {
 static_assert(sizeof(Tab) == 112, "Tab is 14 words");
 
 struct Args {
-  uint64_t salts;  // address of the step's N salts, 192 bytes a row, where the kernels run
-  uint32_t T;      // tables
-  uint32_t pad;
-  uint64_t did[8];  // the step's domain id
+  uint64_t salts;     // address of the step's N given salts (192 bytes a row) where the kernels run, or 0: ChaCha20
+  uint32_t key[8];    // ChaCha20's key words, read only without given salts
+  uint32_t nonce[3];  // ChaCha20's nonce words, read only without given salts
+  uint32_t T;         // tables
+  uint64_t did[8];    // the step's domain id
 };
-static_assert(sizeof(Args) == 80, "Args is 10 words");
+static_assert(sizeof(Args) == 120, "Args is 15 words");
 
 HD uint64_t bswap64(uint64_t x) {
 #ifdef __CUDA_ARCH__
@@ -211,11 +212,16 @@ HD void chacha20_block(const uint32_t key[8], uint32_t counter, const uint32_t n
   for (int i = 0; i < 16; ++i) out[i] = x[i] + s[i];
 }
 
-// Row ``g``'s 192-byte salt, as 48 little-endian u32 words: the step's salt bytes [192 g, 192 g + 192).
+// Row ``g``'s 192-byte salt, as 48 little-endian u32 words: the given salt bytes [192 g, 192 g + 192), or the step's
+// keystream bytes there.
 HD void salt(const Args& a, uint32_t g, uint32_t y[48]) {
-  const uint32_t* s = reinterpret_cast<const uint32_t*>(a.salts) + 48 * static_cast<uint64_t>(g);
+  if (a.salts) {
+    const uint32_t* s = reinterpret_cast<const uint32_t*>(a.salts) + 48 * static_cast<uint64_t>(g);
+    for (int i = 0; i < 48; ++i) y[i] = s[i];
+    return;
+  }
 #pragma unroll
-  for (int i = 0; i < 48; ++i) y[i] = s[i];
+  for (int c = 0; c < 3; ++c) chacha20_block(a.key, 3 * g + c, a.nonce, y + 16 * c);
 }
 
 // ---- hm96-sha512 ---------------------------------------------------------------------------------------------------------
