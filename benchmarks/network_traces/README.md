@@ -151,7 +151,9 @@ around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs 
 committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. The verifier reads an audit's state entry among its `roots` and its
-`registered` alone, and a workload's execution phase's registration holds its `SCAN_STATE` among its `registered`.
+`registered` alone. Serving commits no `SCAN_STATE`: V3c's window-commit step (`benchmarks/one_stage/window_commit.py`)
+computes it after the serve from the network attester run the serve kept, its certified ingress rows, and commits it
+among V3c's `registered`.
 
 ## A second count from a packet capture
 
