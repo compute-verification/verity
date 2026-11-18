@@ -14,12 +14,10 @@ drains every step in flight and schedules nothing; then
    whose gate adds requests in release order) is the release order;
 4. keeps the prefix cache, and records the edge (`Cut.edges`, and a line of ``cut.PID.jsonl`` under ``log``).
 
-The engine core's next step schedules window w + 1's first step. With ``VERITY_POOL_ROW`` (the keys' token width CTW)
-too, the scheduler's blocks are keyed by BlockKey_v1 from its first request, and each cut exports the pool's row and root
-(`engine.pool_row.export`) under ``log``'s ``pool_rows/``.
+The engine core's next step schedules window w + 1's first step.
 
 Each edge's record holds its index, the scheduler step it falls before, the drain (its seconds and steps, from the
-seam's `Drained`), the wait for ``e`` after it (``wait_s``, over ``waits`` polls), the cut's and the export's time, and
+seam's `Drained`), the wait for ``e`` after it (``wait_s``, over ``waits`` polls), the cut's time, and
 the cut set in preemption order: each request's id, release number, prompt length P, outputs n and ``e``, its computed
 tokens and blocks before the cut, and ``a_O``, the outputs it emitted in the window (n less the ``e`` it carried in). A
 request cut with n > e (the hold timed out) is listed in ``over``; its continuation carries n outputs, which the network
@@ -39,7 +37,7 @@ engine emitted, so the hold is the drain alone. Refused at the engine core's fir
 FCFS, a KV connector, and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `verity_vllm.engine.admission` and `scheme_plugin`, and `register` imports the seam,
+stdlib, `verity_vllm.settings`, `verity_vllm.engine.admission` and `scheme_plugin`, and `register` imports the seam,
 and through it vLLM, only once ``VERITY_CUT`` is set.
 """
 from __future__ import annotations
@@ -54,7 +52,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.errors import Refused
 from verity_vllm.engine.admission import request_key
 from verity_vllm.pipeline.scheme_plugin import SAMPLED_PATHS, FeedReader, route_of
 
@@ -62,8 +59,6 @@ __all__ = ["CUT_ENV", "Cut", "Sent", "SentFeed", "cut_config", "make", "register
 
 #: `register`'s configuration, a JSON object (`cut_config`)
 CUT_ENV = "VERITY_CUT"
-#: the pool row's setting, the keys' token width CTW (`engine.pool_row`)
-POOL_ENV = "VERITY_POOL_ROW"
 
 
 def cut_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
@@ -163,20 +158,19 @@ class Cut:
     """One engine core's edges, an `engine.core_gate.HeldEdge`: `due` before each step; once the seam has drained, `ready`
     on each pass of its input loop, true once every running request's outputs are released or ``hold_s`` after the first
     ask, and true from then until `take`. ``released(request)`` is the request's released output count ``e`` (by default,
-    what the engine emitted), and ``poll()``, called by `due` and `ready`, brings it up to date (`Sent`);
-    ``export(scheduler, k)`` exports the pool's row at edge k after the cut (by default, none). ``clock`` is the engine
+    what the engine emitted), and ``poll()``, called by `due` and `ready`, brings it up to date (`Sent`). ``clock`` is the engine
     core's (injected in tests), ``poll_s`` the longest the seam's input loop waits on its queue between two asks, ``log``
     a JSON-lines file."""
 
     def __init__(self, *, every_s: float | None = None, every_steps: int | None = None, hold_s: float = 30.0,
                  released: Callable[[Any], int] | None = None, poll: Callable[[], None] | None = None,
-                 export: Callable[[Any, int], Any] | None = None, clock: Callable[[], float] = time.monotonic,
+                 clock: Callable[[], float] = time.monotonic,
                  poll_s: float = 0.002, log: Path | None = None) -> None:
         if (every_s is None) == (every_steps is None):
             raise ValueError("an edge every so many seconds or every so many steps, one of the two")
         self.every_s, self.every_steps, self.hold_s = every_s, every_steps, float(hold_s)
         self.released = released or (lambda r: r.num_output_tokens)
-        self.poll, self.export, self.clock, self.poll_s = poll, export, clock, poll_s
+        self.poll, self.clock, self.poll_s = poll, clock, poll_s
         self.file = None if log is None else open(log, "a", encoding="utf-8")
         self.numbers = itertools.count()
         self.seq: dict[str, int] = {}
@@ -259,14 +253,12 @@ class Cut:
         for r in sorted(waiting, key=lambda r: self.seq.get(r.request_id, -1)):
             sched.waiting.add_request(r)
         t2 = self.clock()
-        row = self.export(sched, k) if self.export is not None else None
-        t3 = self.clock()
         rec = {"edge": k, "step": sched.current_step, "due": self.next_due, "at": self._at(sched, self.due_at),
                "drain_s": drained.drained_t - drained.due_t, "drain_calls": drained.drain_calls,
-               "wait_s": wait_s, "waits": waits, "cut_s": t2 - t1, "export_s": t3 - t2, "cut": cut,
+               "wait_s": wait_s, "waits": waits, "cut_s": t2 - t1, "cut": cut,
                "requeued": [r.request_id for r in sched.waiting],
                "skipped": [r.request_id for r in getattr(sched, "skipped_waiting", ())], "over": over,
-               "reads_outputs": reads, "pool_row": row}
+               "reads_outputs": reads}
         self.edges.append(rec)
         self.due_at = None
         every = self.every_steps if self.every_steps is not None else self.every_s
@@ -282,11 +274,10 @@ class Cut:
 
 
 def make(cfg: Mapping[str, Any]) -> Callable[[Any], Cut]:
-    """``cfg``'s (`cut_config`'s) edge maker for the seam: ``make(cfg)(core)`` refuses an engine core it can't cut,
-    installs BlockKey_v1 with ``VERITY_POOL_ROW`` set, and returns the core's `Cut`. Refused: a scheduling policy other
+    """``cfg``'s (`cut_config`'s) edge maker for the seam: ``make(cfg)(core)`` refuses an engine core it can't cut and
+    returns the core's `Cut`. Refused: a scheduling policy other
     than FCFS, a KV connector, more than one data-parallel engine."""
     log = Path(cfg["log"]) if cfg.get("log") else None
-    ctw = settings.get(POOL_ENV)
 
     def for_core(core: Any) -> Cut:
         sched = core.scheduler
@@ -300,24 +291,10 @@ def make(cfg: Mapping[str, Any]) -> Callable[[Any], Cut]:
         dp = getattr(getattr(getattr(sched, "vllm_config", None), "parallel_config", None), "data_parallel_size", 1)
         if dp != 1:
             raise RuntimeError(f"{CUT_ENV} cuts one engine's requests; this one is one of {dp} data-parallel engines")
-        export = None
-        if ctw:
-            from verity_vllm.engine import pool_row as PR
-            PR.install_keys(ctw, sched.block_size)
-            rows = None if log is None else log / "pool_rows"
-            if rows is not None:
-                rows.mkdir(parents=True, exist_ok=True)
-
-            def export(s: Any, k: int) -> Any:
-                try:
-                    return PR.export(s.kv_cache_manager.block_pool, s.block_size,
-                                     None if rows is None else rows / f"e{k}.json")
-                except Refused as e:
-                    return {"refused": str(e)[:500]}
         if log is not None:
             log.mkdir(parents=True, exist_ok=True)
         sent = Sent(FeedReader(cfg["feed"])) if cfg.get("feed") else None
-        return Cut(every_s=cfg["every_s"], every_steps=cfg["every_steps"], hold_s=cfg["hold_s"], export=export,
+        return Cut(every_s=cfg["every_s"], every_steps=cfg["every_steps"], hold_s=cfg["hold_s"],
                    released=sent, poll=None if sent is None else sent.poll,
                    log=None if log is None else log / f"cut.{os.getpid()}.jsonl")
     return for_core

@@ -350,13 +350,16 @@ name exactly `own`'s ports, each a port of the circuit and a table of a shared-r
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
 the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`); every link row
 is a tree port reading its writer template's output field's tree (`checkLinked`). Without
-`own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
+`own`, a statement that names registered reads is refused: its rows would be checked against no root; so is one that
+declares links, which no tree port reads. With `own`, the
 units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
 binds nothing unless the verifier derived it. -/
 def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
-    | if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+    | do
+      if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+      checkLinked c #[]
   if !derived then
     throw "registered reads: the statement's units are taken as stated, and a read's position binds only as far as its unit does: the verifier derives them from its own program (--partition, --program)"
   let .ok (.obj kvs) := hdr

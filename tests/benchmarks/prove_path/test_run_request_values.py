@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 RUN_SH = Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "run.sh"
+PUBF = RUN_SH.parents[1] / "one_stage" / "public_files.py"
 PROMPT = [918273, 827364, 736455]
 NEEDLES = (b"918273", b"prompt_ids", b"streamed_ids", b"prompt_token_ids")
 
@@ -70,7 +71,7 @@ def test_the_standins_workload_prompts_never_reach_out(tmp_path):
     put(s, {"workload.json": {"requests": [{"request_id": "q0", "prompt_token_ids": PROMPT}]},
             "commit/runs.jsonl": [{"rank": 0, "root": "ab"}], "commit/versions.json": {"root_tag": "t"},
             "commit/rank0/rows.json": {"rows": [PROMPT]}})
-    code = f"O={out}; S={s}\n" + block("  mkdir -p $O/standin", "  mkdir -p $O/standin")
+    code = f"O={out}; S={s}; PUBF={PUBF}\n" + block("  mkdir -p $O/standin", "  mkdir -p $O/standin")
     got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert published(out) == ["standin/runs.jsonl", "standin/versions.json"]

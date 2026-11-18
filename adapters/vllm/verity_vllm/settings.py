@@ -195,8 +195,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
       "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
-    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
-      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
       "(`engine.rope_cache`)"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
@@ -213,7 +211,7 @@ SETTINGS: dict[str, Setting] = _declare(
       "comma-separated, an application's protocols line; unset, none"),
     S("VERITY_PROTOCOLS_CONFIG", json.loads, None, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
       "front and its engine share (required with a scheme); the engine's out, the run output its schemes' reports go "
-      "under, and private, the directory each scheme's own goes under; gate, infra's challenger gate command; and each "
+      "under, and private, the directory each scheme's own goes under (serve-openai's too); gate, infra's challenger gate command; and each "
       "scheme's settings under its name"),
     S("VERITY_QUERY_ID", str, None, VALUE, "the verification query id a row runs"),
     S("VERITY_QWORD_MAX_GATES", str, None, VALUE, "the strict word check's gate bound for the row"),

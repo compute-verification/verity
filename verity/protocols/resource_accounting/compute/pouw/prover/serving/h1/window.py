@@ -260,11 +260,12 @@ def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, n
     return client, c, opening, answer
 
 
-def salt_session(entry: str, settings: Any, root: bytes, opens: bool
+def salt_session(entry: str, settings: Any, root: bytes, opens: bool, epoch: int | None = None
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any], int | None]:
     """The session an install's salt coin comes from, on the challenger at ``settings.challenger``: when `opens`
     (Pearl-C's), the reserved session ``settings.session`` that ``settings.gate`` opens on the install's salt epoch's
-    epoch root, `salt.epoch_open_root` of the weights' root `root` and the epoch's number k over it (`EPOCHS`), its coins
+    epoch root, `salt.epoch_open_root` of the weights' root `root` and the epoch's number k over it (`epoch`, a number
+    its caller has already spent where it outlives the process; else `EPOCHS`), its coins
     the salt coin alone (`window.salt_epoch_reason`, so it ends complete once that coin is released) and that coin
     opened after the epoch root (`opened`); else (ncp-v2's) the session the gate's open answer ``settings.session``
     names (`session`), its salt coin opened after `root`. Returns the session, its coin commitment, the salt coin's
@@ -273,8 +274,11 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
     if not opens:
         (client, c, opening, _, _), given = session(entry, settings.challenger, 0, root, settings.session), settings.session
         return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given), None
-    k = EPOCHS.get(root.hex(), 0)
-    EPOCHS[root.hex()] = k + 1
+    if epoch is None:
+        k = EPOCHS.get(root.hex(), 0)
+        EPOCHS[root.hex()] = k + 1
+    else:
+        k = epoch
     client, c, opening, given = opened(entry, settings.challenger, 0, settings.gate, settings.session["session"],
                                        PS.epoch_open_root(root, k), f"salt epoch {k}'s root",
                                        layout=Wd.salt_epoch_reason)

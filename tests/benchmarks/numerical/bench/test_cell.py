@@ -219,7 +219,7 @@ def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch
     assert (cmd[-2:] == ["--lane", "bench-spine"]) is takes and ("--lane" in cmd) is takes
 
 
-def test_an_ir_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
+def test_a_circuit_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
     drv = drivers.driver("C-interactive")
 
     def result(where: str, doc) -> None:
@@ -229,17 +229,17 @@ def test_an_ir_cells_verifier_binary_is_the_first_result_that_names_its_backend(
     def named(name) -> dict:
         return {"workload_fingerprint": {"software": {"backend": {"name": name}}}}
 
-    assert drv.ir_binary(tmp_path) == drv.ir_binary(tmp_path / "absent") == "flock-ir-frame"
-    result("points/a", named("flock-ir-sampling"))
-    assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
+    assert drv.circuit_binary(tmp_path) == drv.circuit_binary(tmp_path / "absent") == "flock-circuit"
+    result("points/a", named("flock-circuit-gpu"))
+    assert drv.circuit_binary(tmp_path) == "flock-circuit-gpu"
     for says_nothing in ({}, [], named(None), named(""), {"workload_fingerprint": {"software": None}}):
         result(".", says_nothing)
-        assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
-    result(".", named("flock-ir-frame"))
-    assert drv.ir_binary(tmp_path) == "flock-ir-frame"
+        assert drv.circuit_binary(tmp_path) == "flock-circuit-gpu"
+    result(".", named("flock-circuit"))
+    assert drv.circuit_binary(tmp_path) == "flock-circuit"
     result(".", "{")
     with pytest.raises(ValueError):
-        drv.ir_binary(tmp_path)
+        drv.circuit_binary(tmp_path)
 
 
 def test_takes_lane_reads_the_installed_script():

@@ -120,11 +120,6 @@ theorem find_executionPhase (w : Win) (root : String) (h : w.root = root) :
     (#[w] : Array Win).find? (·.root == root) = some w := by
   rw [show (#[w] : Array Win) = [w].toArray from rfl, List.find?_toArray, List.find?_cons_of_pos (by simp [h])]
 
-theorem family_roots (label : String) (after : ByteArray) :
-    ((([(label, [after])] : Roots).find? (·.1 == label)).map (·.2)).getD [] = [after] := by
-  rw [List.find?_cons_of_pos (by simp)]
-  rfl
-
 /-- A field that reads as a string is there. -/
 theorem field_some {j : Json} {k s : String} (h : getD j k = .str s) : (field? j k).isSome = true := by
   unfold getD at h
@@ -428,9 +423,9 @@ theorem record_read (h : p.Honest I) : ChallengerRecord.ofJson p.record.toJson =
 theorem close_read (p : Play) : ChallengerClose.ofJson p.close.toJson = .ok p.close :=
   Files.close_ofJson p.sigClose (chain_size p.commitment p.rootText p.releaseText) (by decide) (by decide) session_id
 
-theorem released (h : p.Honest I) : releasedRootsOf p.commitment p.lines = .ok [(p.label, [p.after])] := by
+theorem released (h : p.Honest I) : releasedLogOf p.commitment p.lines = .ok (Logs.oneLog p.label p.after) := by
   obtain ⟨a, b, ha, hb, hr⟩ := Logs.released_one (c := p.commitment) (label := p.label) (after := p.after) (n := 1) rfl
-    h.labelPlain h.labelShort h.afterSize
+    (by decide) h.labelPlain h.labelShort h.afterSize
   obtain rfl : a = p.rootText := Except.ok.inj (ha.symm.trans h.rootLine)
   obtain rfl : b = p.releaseText := Except.ok.inj (hb.symm.trans h.releaseLine)
   exact hr
@@ -447,7 +442,7 @@ theorem record_signed (h : p.Honest I) : recordReason p.key p.record.toJson = .o
 session's name. -/
 theorem session_read (h : p.Honest I) :
     challengePhaseOf p.key p.record.toJson (.arr (p.lines.map Json.str).toArray) p.close.toJson =
-      .ok (p.commitment, [(p.label, [p.after])], SESSION) := by
+      .ok (p.commitment, Logs.oneLog p.label p.after, SESSION) := by
   obtain ⟨m, s, hm, hd, hv⟩ := h.closeSigned
   have hI : p.key.pub.extract 0 16 = I := h.pubId
   exact Steps.challengePhaseOf_ok_of_steps (r := p.record) (c := p.close) (record_signed h) (record_read h) rfl (close_read p)
@@ -493,7 +488,7 @@ head, and the session's files are the ones the ledger's end seals. -/
 theorem trusted (h : p.Honest I) :
     trustedChallengePhaseOf (.arr #[.str p.openText, .str p.endText]) (Json.mkObj [("root", Json.str (Flock.hexOf p.window))])
       p.key (.arr #[.str p.pinText]) (.arr #[.str (Flock.hexOf p.pin)]) p.session =
-        .ok (p.commitment, [(p.label, [p.after])]) ∧
+        .ok (p.commitment, Logs.oneLog p.label p.after) ∧
       withheldOn (.arr #[.str p.openText, .str p.endText]) (Flock.hexOf p.window) = true := by
   obtain ⟨eo, nbo, hbo, hto, heo⟩ := open_read h
   obtain ⟨ee, nbe, hbe, hte, hee⟩ := end_read h
@@ -609,7 +604,7 @@ theorem trusted (h : p.Honest I) :
   have g3 : getD p.session "close" = p.close.toJson := rfl
   have g4 : getD p.session "hellos" = .arr (([] : List String).map Json.str).toArray := rfl
   have hsn := Steps.challengePhaseNamed_ok_of_steps (key := p.key) (session := p.session) (c := p.commitment)
-    (roots := [(p.label, [p.after])]) (r := p.record) (lines := p.lines) (hellos := [])
+    (roots := Logs.oneLog p.label p.after) (r := p.record) (lines := p.lines) (hellos := [])
     (a :=
       { session := SESSION, host := strOf (getD (.obj nbo) "host"), prover := laneOf (.obj nbo),
         files := getD (.obj nbe) "files", recordLeaf := 1, commitment := strOf (getD (.obj nbe) "commitment"),
@@ -653,8 +648,8 @@ theorem draws (h : p.Honest I) :
     (after := p.after) (label := p.label) (o := p.opening)
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)) rfl (Files.nat?_nat 0) rfl
     (Logs.jsonStrIs_str _) (Files.opening_ofJson _ _ _ _ _ _)
-    (Files.liveReason_one p.after h.domain h.coinSize h.saltSize)
-  exact Steps.sampleCoins_ok_of_steps (c := p.commitment) (roots := [(p.label, [p.after])])
+    (Files.liveReason_one p.after h.domain h.coinSize h.saltSize) (Logs.oneLog_roots _ _) (Logs.releasedAfter_oneLog _ _)
+  exact Steps.sampleCoins_ok_of_steps (c := p.commitment) (roots := Logs.oneLog p.label p.after)
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))
     (by
       rw [c1, c2, c3, c4]
@@ -666,7 +661,7 @@ theorem draws (h : p.Honest I) :
       rw [c5]
       exact Logs.jsonStrIs_str _)
     (by
-      rw [c5, family_roots]
+      rw [c5]
       exact hst)
 
 /-- **`coinsReason` gives no reason against an honest play** read whole, under the verifier's own copy of main's
@@ -699,7 +694,7 @@ theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lm
   obtain ⟨sR, hdR, hvR, -, hlR, -⟩ := Signer.signs hk mR (q := 1) (by decide)
   -- its log and its close
   obtain ⟨a, b, hca, hcb, -⟩ := Logs.released_one (c := commitmentOf label epoch dom coin salt) (label := label)
-    (after := after) (n := 1) rfl hl hll ha
+    (after := after) (n := 1) rfl (by decide) hl hll ha
   obtain ⟨mC, hmC⟩ := Messages.closeMessage_ok hIs DEVICE (commitmentOf label epoch dom coin salt) SESSION 3
     (logChain (linesOf (commitmentOf label epoch dom coin salt) a b)) none
   obtain ⟨sC, hdC, hvC, -, -, -⟩ := Signer.signs hk mC (q := 3) (by decide)

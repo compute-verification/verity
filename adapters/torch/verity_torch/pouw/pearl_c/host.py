@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
@@ -25,6 +26,7 @@ from verity.commitments.merkle import domain_message
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     activation_binding,
     hm96_kernel_constants,
     rows_domain,
@@ -71,6 +73,19 @@ def _put(t: Any, data: bytes) -> None:
     import torch
     host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
+
+
+def fresh_into(dst: Any, n: int, raw: int | None = None) -> None:
+    """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order, fresh from the operating
+    system and never derived; on raw stream `raw` where given (a lane's or a replay's), else the current stream.  The pinned
+    staging copy is torch's to keep alive until the copy is done."""
+    import torch
+    host = torch.frombuffer(bytearray(os.urandom(HM96_SALT * n)), dtype=torch.uint8)
+    if not dst.is_cuda:
+        dst[:host.numel()].copy_(host)
+        return
+    with torch.cuda.stream(torch.cuda.ExternalStream(raw, device=dst.device)) if raw is not None else nullcontext():
+        dst[:host.numel()].copy_(host.pin_memory(), non_blocking=True)
 
 
 def _constants(device: Any) -> Any:
@@ -247,6 +262,15 @@ def memmove(dst: int, src: int, n: int, raw: int) -> None:
     ctypes.memmove(dst, src, n)
 
 
+def _pinned(n: int) -> Any:
+    """`n` pinned host bytes as a normal tensor, even when made inside inference mode (a vLLM forward, or
+    `PearlCDeviceRun.gemm`): the arena's bytes are written by copies outside it too (a pass's end), which torch refuses into
+    an inference tensor."""
+    import torch
+    with torch.inference_mode(False):
+        return torch.empty(n, dtype=torch.uint8, pin_memory=True)
+
+
 class _Ring:
     """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
     handed out before it are given back."""
@@ -254,8 +278,7 @@ class _Ring:
     live: deque[list]
 
     def __init__(self, n: int):
-        import torch
-        self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
+        self.buf, self.n, self.head, self.live = _pinned(n), n, 0, deque()
 
     def take(self, size: int) -> tuple[list, Any] | None:
         if not self.live:
@@ -291,9 +314,8 @@ class _Arena:
         self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
 
     def take(self, size: int) -> tuple[Callable[[], None], Any]:
-        import torch
         if size > self.ring_bytes // 2:
-            return (lambda: None), torch.empty(size, dtype=torch.uint8, pin_memory=True)
+            return (lambda: None), _pinned(size)
         size = -(-size // 512) * 512
         with self.cv:
             if not self.rings:

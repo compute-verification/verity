@@ -11,7 +11,7 @@
 #   toolchain.txt                          nvcc --version and the make line
 #   source.txt                             the commit, and the sha256 of every source the Makefile names
 #   MANIFEST.sha256                        every file above
-# CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
+# CUDA_HOME names the toolkit (nvcc >= 12.8), given by the caller and refused by name where unset. It builds in ship.sh's
 # frame from its loaded sources, with ship.sh's SHIP_NVCC as the Makefile's NVCC, so a rebuild at the same commit and
 # toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
@@ -29,7 +29,7 @@ P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 
-ship_cuda /usr/local/cuda-13.0 /usr/local/cuda
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}; ship_cuda
 
 GMPINC=
 if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then

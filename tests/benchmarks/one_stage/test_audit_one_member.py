@@ -25,7 +25,8 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, draw as D, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, proofs as PF
+from verity.commitments import randomness as RND
 
 import test_audit_two_members as T
 from test_audit_two_members import binaries  # noqa: F401 -- the fixture, under the name the test takes
@@ -51,7 +52,7 @@ RATE = "rate:1/1"
 
 def _window(d: Path) -> Path:
     t, k = T.TEMPLATES[0], T.KS[0]
-    win = IF.Window(IF.Circuit("one-member", ((t, N),)), T.RUN, D.parse_design(DESIGN), 4)
+    win = IF.Window(IF.Circuit("one-member", ((t, N),)), T.RUN, RND.parse_design(DESIGN), 4)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (N, k)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(N)) / 127).astype(np.float32) for _ in range(2))
@@ -66,7 +67,7 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
     drawn unit as proved."""
     window = _window(tmp_path / "window")
-    assert T.RA.verifier_window(window, RATE, None)[0].law == D.parse_design(DESIGN)
+    assert T.RA.verifier_window(window, RATE, None)[0].law == RND.parse_design(DESIGN)
     rc, row, out, said = T._audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"},
                                   design=RATE)
     assert rc == 0 and row.get("ok") is True, said
