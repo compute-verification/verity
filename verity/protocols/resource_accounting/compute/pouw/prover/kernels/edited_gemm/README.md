@@ -17,8 +17,8 @@ uv run pytest tests/verity/protocols/resource_accounting/compute/pouw/prover/ker
 
 It prints `4 passed`.
 
-On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `run.sh` builds, gates and times the
-kernels, from the source tree's root:
+On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `benchmarks/pouw/edited_gemm/run.sh`
+builds, gates and times the kernels, from the source tree's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \

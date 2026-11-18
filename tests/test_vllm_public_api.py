@@ -78,6 +78,7 @@ PUBLIC = {
                                     "block pool's allocations, writes and frees and the scheduler's steps as events to the "
                                     "exchange, which benchmarks/poub_session and benchmarks/vllm_encoded attach to an engine "
                                     "they build",
+    "verity_vllm.engine.admission": "I2: the admission and release hook on a scheduler (install), which a tick gate admits by",
     "verity_vllm.engine.hooks": "I2: the one owner of runtime patches: the patches one component installs on an engine and puts "
                                 "back (Hooks, Patch, patch, wrap, patched, triton_launch), a hook run at a module's import "
                                 "(OnImport) and the patches installed now (live), which the harness's arms and engine install "

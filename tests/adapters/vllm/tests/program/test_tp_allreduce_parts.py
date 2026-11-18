@@ -71,7 +71,7 @@ def test_the_parts_compute_a_served_fused_call() -> None:
     d = np.load(SERVED)
     parts, res, w = d["allreduce_in_before"], d["residual_before"], d["rms_gamma"]
     N, half = res.size, res.size // 2
-    shot, cluster = TA.mnnvl_shot(SERVED_M, N, 8), TA.mnnvl_grid(SERVED_M, N)[1]
+    shot, cluster = TA.mnnvl_shot(SERVED_M, N, 8), TA.mnnvl_grid(SERVED_M, N, TA.UNSTATED_NODE[0][1])[1]
     (r,) = _ev(bind(TA.AllReduceResidualMnnvl, WORLD=8, N=half, SHOT=shot),
                parts.reshape(8, 2, half).transpose(1, 0, 2).reshape(2, -1), res.reshape(2, half))
     assert (r.reshape(-1) == d["allreduce_in_after"]).all()

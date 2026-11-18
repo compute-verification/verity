@@ -167,8 +167,8 @@ def test_a_layer_whose_cache_is_not_the_one_its_rows_were_written_in_refuses():
 
 def test_an_indexer_and_a_share_layer_derive_over_their_cache_rows(served):
     """A two-row call then a decode: per token the q norm, one `DsaLatentRowDsMla_v1` and on the indexer layer its index-K slot;
-    per row the logits and short-row top-k as over the default cache; then two index words and per row `FlashMlaV32Decode_v1` at
-    the planner's splits for the call's rows.  The circuit's outputs are the Definitions' composition."""
+    the call's logits, then per row its short-row top-k, as over the default cache; then two index words and per row
+    `FlashMlaV32Decode_v1` at the planner's splits for the call's rows.  The circuit's outputs are the Definitions' composition."""
     model = _model()
     xs = T._inputs(model)
     rep = T._derive(model, xs)
@@ -183,8 +183,9 @@ def test_an_indexer_and_a_share_layer_derive_over_their_cache_rows(served):
         for indexer in (True, False):
             want += [norm_q] * M + [LATENT.id] * M + ([krow] * M if indexer else []) + [up] * M + [qr] * (M * NH)
             want += [iq] * M if indexer else []
-            for p in range(p0, p0 + M) if indexer else ():
-                want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id, f"Const32[0x{p + 1:08x}]_v1", sel]
+            pos = range(p0, p0 + M) if indexer else ()
+            want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id for p in pos]
+            want += [i for p in pos for i in (f"Const32[0x{p + 1:08x}]_v1", sel)]
             want += ["Const32[0x00000000]_v1", "Const32[0xffffffff]_v1"] + [_decode(M).id] * M + [down] * M
     assert T._ids(rep) == want
     assert T._run(rep, model, xs) == _reference(model, xs)

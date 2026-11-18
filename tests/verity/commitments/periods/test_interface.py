@@ -2542,10 +2542,9 @@ def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
 
 
 REFUSED = {
-    "a value of another row width": (_value_rows(value=lambda v: Bound("w", v.rows.reshape(-1, 128))),
-                                     "rows of 128 16-bit leaves, not 256 16-bit words"),
-    "a value of 32-bit leaves, so another row width": (_value_rows(value=lambda v: _like(v, word_bits=32)),
-                                                       "rows of 256 32-bit leaves, not 256 16-bit words"),
+    "a value of a row width the port's doesn't divide": (_value_rows(value=lambda v: Bound("w", v.rows.reshape(-1, 128))),
+                                                         "recut-width"),
+    "a value whose rows recut into several of the port's": (_value_rows(value=lambda v: _like(v, word_bits=32)), "recut-rows"),
     "a value of another schema": (_value_rows(value=lambda v: _like(v, schema=CS.TABLE_SCHEMA)),
                                   f"{CS.TABLE_SCHEMA} rows, not {V2}"),
     "a value of 8-bit leaves": (_value_rows(value=lambda v: _like(v, word_bits=8)), "8-bit leaves, not 16 or 32"),
@@ -2558,15 +2557,11 @@ REFUSED = {
 }
 
 
-WAITS_CUT_AGAIN = "waits on proofs: rows._referenced reading a registered value recut at a reader's width (refs.recut)"
-
-
-@pytest.mark.parametrize("edit, why", [
-    pytest.param(*v, id=k, marks=[pytest.mark.xfail(strict=True, reason=WAITS_CUT_AGAIN)] if "row width" in k else [])
-    for k, v in REFUSED.items()])
+@pytest.mark.parametrize("edit, why", list(REFUSED.values()), ids=list(REFUSED))
 def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
-    """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width (in u16
-    words: a 32-bit value's leaves are two each), schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
+    """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of a row width the port's
+    doesn't divide (`refs.recut`'s recut-width) or recuts into several of its rows (recut-rows),
+    schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
     than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
     reference in a period with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit

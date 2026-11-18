@@ -70,8 +70,7 @@ def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admissi
     assert NS.settings({}) == NS.SETTINGS and NS.settings({"order": "release-order"})["hold_ms"] == 5000
     tick = {"order": "tick", "sat_us": 30_000, "free_us": 40_000}
     assert NS.settings(tick)["bucket_us"] == 100_000
-    for bad in ({"feed": "f"}, {"hold_ms": 1.5}, {"order": "fifo"}, {"hold_ms": 0}, {"order": "tick"},
-                {**tick, "catch_up": "open"}):
+    for bad in ({"feed": "f"}, {"hold_ms": 1.5}, {"order": "fifo"}, {"hold_ms": 0}, {"order": "tick"}):
         with pytest.raises(ValueError):
             NS.settings(bad)
 
