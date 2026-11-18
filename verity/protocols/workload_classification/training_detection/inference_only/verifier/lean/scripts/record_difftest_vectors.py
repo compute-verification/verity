@@ -974,8 +974,8 @@ def shaped() -> list[dict]:
     fresh and the rate refuses.
 
     Then a wire's leaves, each case under the policy of exactly what its blocks hold: the token a word into a key of
-    bits that only gates read, and bits into a key of one word (both accepted). Then the accepted case with its Program's root edited (`own-rows`): `Norm`'s `x` handed the input gates its weights' row
-    has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output.
+    bits that only gates read, and bits into a key of one word (both accepted). Then the accepted case with its Program's root edited: the second `Norm`'s weights' row handed the input gates
+    the first's has, and the first's not mapped (`own-rows`), and `Select`'s row handed part of `Norm`'s output (`wires`).
 
     Then the accepted case with its record's text another: one that lists its members and so states no wires
     (`listed`, refused `wires`), and the text of no wire and nothing else, which names no Program (`templates`).
@@ -1103,14 +1103,17 @@ def shaped() -> list[dict]:
         return [n for n in nodes if n["args"]]
     pin = [ref.closure_digest(json.loads(lowered(2, 3, word=True).program()[0]), EMBED)]
     first("2x3 the key a 32-bit word, its writers' too", lowered(2, 3, word=True), 23, pins=pin, policy={})
-    def twice(nodes: list, _desc: dict) -> None:
-        """`Norm`'s `x` handed the input gates its weights' row has."""
-        norm = units(nodes)[2]
-        norm["args"][0]["refs"] = copy.deepcopy(norm["args"][1]["refs"])
+    def norms(nodes: list, desc: dict) -> list[dict]:
+        return [x for x in units(nodes) if desc["callees"][x["fn"]] == "LowNorm_v1"]
+
+    def twice(nodes: list, desc: dict) -> None:
+        """The second `Norm`'s weights' row handed the input gates the first's has."""
+        first, second = norms(nodes, desc)[:2]
+        second["args"][1]["refs"] = copy.deepcopy(first["args"][1]["refs"])
 
     def shared(nodes: list, desc: dict) -> None:
-        """`Feed`'s selection not mapped: every unit handed the first unit's input gates."""
-        _share(nodes, units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
+        """The first `Norm`'s weights not mapped: every unit handed the first unit's input gates."""
+        _share(nodes, norms(nodes, desc)[0], 1, desc["types"].index(["Array", 2, ["Value", 16]]))
 
     def computed(nodes: list, desc: dict) -> None:
         """`Select`'s row handed the first of `Norm`'s output leaves it holds, computed gates of one field it doesn't
