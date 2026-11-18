@@ -344,12 +344,12 @@ def test_a_keyword_and_a_setting_that_differ_are_refused_by_name(unset, key, nam
 
 
 def test_an_engine_attach_after_the_weights_are_registered_is_refused():
-    """An engine's attach after `RegisteredValues` is refused by name; one that names no engine process (admission on
+    """An engine's attach after the registered values (`MemoryChanged`) is refused by name; one that names no engine process (admission on
     the loaded engine's exchange) still attaches."""
     seen, probe = _seeing()
     ex = M.Exchange()
     ex.attach(probe, process=H.ENGINE)
-    ex.emit(H.RegisteredValues((("w", "W"),), operands={"w": 0}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "W"),), operands={"w": 0}))
     with pytest.raises(RuntimeError, match="probe attached after the model's weights were registered: an attach in "
                                            "the engine runs before the load"):
         ex.attach(probe, process=H.ENGINE)

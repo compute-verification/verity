@@ -1,7 +1,7 @@
 """PoUS attached by its scheme's name on the build's exchange (`compose.schemes.get("pous")`, `messages.Exchange`), over a
 tiny int8 model's weights, on the CPU: what it holds, what it refuses, its period and its rejects.
 
-The weights are a toy int8 model's (`Model`), registered as a served run registers them (`RegisteredValues`, a tied weight
+The weights are a toy int8 model's (`Model`), registered as a served run registers them (`MemoryChanged` registered, a tied weight
 once), and P2 runs at the small point's 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so encoding takes
 milliseconds. No forward runs: a linear block is computed through the exchange with the weight decoded from ``C*``.
 """
@@ -173,7 +173,7 @@ def _held(model: Model, **launcher):
     got = ex.attach(POUS, {}, **({"salt_source": SOURCE, "experimental": True} | launcher))
     ex.answer(H.Declared("card", {"eager": True}, tuple(ex.attached), {n: dict(v) for n, v in ex.attached.items()}))
     w = _weights(model)
-    ex.emit(H.RegisteredValues(tuple(w.items()), operands={n: i for i, n in enumerate(w)}))
+    ex.emit(H.MemoryChanged("registered", values=tuple(w.items()), operands={n: i for i, n in enumerate(w)}))
     return got, ex
 
 
@@ -378,7 +378,7 @@ def test_weights_registered_again_after_the_commitment_are_refused(toy):
     model.layers["k"].weight.data[0, 0] += 1
     w = _weights(model)
     with pytest.raises(RuntimeError, match=re.escape(f"{ENTRY}: the weights were registered twice, and C* is encoded once")):
-        ex.emit(H.RegisteredValues(tuple(w.items()), operands={n: i for i, n in enumerate(w)}))
+        ex.emit(H.MemoryChanged("registered", values=tuple(w.items()), operands={n: i for i, n in enumerate(w)}))
     assert opt.store.root == root
     opt.release()
 
@@ -388,7 +388,7 @@ def test_a_run_that_registers_no_weight_operand_is_refused_and_holds_nothing(toy
     opt = ex.attach(POUS, {}, salt_source=SOURCE, experimental=True)
     ex.answer(H.Declared("card", {"eager": True}, tuple(ex.attached), {n: dict(v) for n, v in ex.attached.items()}))
     with pytest.raises(ValueError, match=re.escape(f"{ENTRY}: no registered value is a block's weight operand, so W is empty")):
-        ex.emit(H.RegisteredValues((("bias", torch.zeros(4)),), operands={}))
+        ex.emit(H.MemoryChanged("registered", values=(("bias", torch.zeros(4)),), operands={}))
     assert opt.store is None
 
 

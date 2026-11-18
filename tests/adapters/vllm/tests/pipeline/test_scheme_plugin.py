@@ -183,7 +183,7 @@ def test_pearl_plus_by_name_opens_at_load_ends_a_pass_each_computed_step_and_clo
 
         def load_model(runner):
             orig(runner)
-            messages.current().emit(H.RegisteredValues((("l0.weight", "W0"),), 0, {"l0.weight": 3}))
+            messages.current().emit(H.MemoryChanged("registered", step=0, values=(("l0.weight", "W0"),), operands={"l0.weight": 3}))
         Runner.load_model = load_model
         return lambda: setattr(Runner, "load_model", orig)
 

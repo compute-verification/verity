@@ -76,7 +76,7 @@ def _honest() -> list[object]:
     """One input's step in a phase, every event of `H.EVENTS` but `H.Declared` (the answer's), in the order a run
     emits them."""
     w, x, kv = torch.zeros(64, 256, dtype=torch.int8), torch.zeros(1, 256), torch.zeros(2, 3, 16, 256, dtype=torch.uint8)
-    return [H.RegisteredValues((("w", w),), operands={"w": 0}),
+    return [H.MemoryChanged("registered", values=(("w", w),), operands={"w": 0}),
             H.RangesDeclared(3, 16, 256, 2, (kv,)),
             H.InputArrived("r0", 3, 0, {}, "POST /v1/completions HTTP/1.1"),
             H.MemoryChanged("allocated", (0,), input="r0"),
@@ -195,14 +195,14 @@ def _through_the_warm_up(serve, ex, after=None) -> None:
 def test_a_handler_takes_only_the_events_it_names():
     ex, got = M.Exchange(), []
 
-    def registered(event: H.RegisteredValues) -> None:
+    def registered(event: H.MemoryChanged) -> None:
         got.append(event.values)
 
     ex.subscribe("s", "memory", registered)
     ex.subscribe("s", "memory", lambda e: got.append(type(e).__name__))
     for e in _honest()[:2]:
         ex.emit(e)
-    assert [type(g).__name__ for g in got] == ["tuple", "str", "str"] and got[1:] == ["RegisteredValues", "RangesDeclared"]
+    assert [type(g).__name__ for g in got] == ["tuple", "str", "str"] and got[1:] == ["MemoryChanged", "RangesDeclared"]
 
     def stepped(event: H.StepBegan) -> None: ...
 

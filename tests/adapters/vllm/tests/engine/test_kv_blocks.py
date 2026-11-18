@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (MemoryChanged, RangesDeclared, RegisteredValues, ReleaseValue, ReuseOldestFreed, StepBegan,
+from verity.hooks import (MemoryChanged, RangesDeclared, ReleaseValue, ReuseOldestFreed, StepBegan,
                           StepComputed, StepEnded)
 
 from tests import fake_vllm
@@ -292,8 +292,8 @@ def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_th
     heard = subscribe()
     r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
     assert r.load_model("x") == "loaded"
-    assert heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw"), ("out.weight", "ow")),
-                                      operands={"proj.weight": 0, "w": 1, "out.weight": 2})]
+    assert heard == [MemoryChanged("registered", values=(("w", "w"), ("proj.weight", "pw"), ("out.weight", "ow")),
+                                   operands={"proj.weight": 0, "w": 1, "out.weight": 2})]
     assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
     assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
     assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]

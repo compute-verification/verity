@@ -8,7 +8,7 @@ begun.  It names no scheme, and builds no event no scheme reads.
 
 ~~~text
 GPUModelRunner.load_model       after: the linear site attached (`vllm_site`) where a scheme computes blocks; then
-                                RegisteredValues, each parameter of the loaded model once (tied ones once), each
+                                MemoryChanged registered, each parameter of the loaded model once (tied ones once), each
                                 linear layer's weight an operand with its block key
 GPUModelRunner.execute_model    after: StepComputed, for a step that computes; the forward has run, and its outputs
                                 are not yet sampled or read
@@ -64,7 +64,7 @@ def model_of(runner: Any) -> Any:
     return model
 
 
-def registered_values(runner: Any, step: int = 0, sites: Sequence[tuple[Any, Any]] = ()) -> H.RegisteredValues:
+def registered_values(runner: Any, step: int = 0, sites: Sequence[tuple[Any, Any]] = ()) -> H.MemoryChanged:
     """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the weight of
     each of ``sites`` (`vllm_site.discover`'s) an operand, under the name its storage is registered by, with its site's
     block key."""
@@ -76,7 +76,7 @@ def registered_values(runner: Any, step: int = 0, sites: Sequence[tuple[Any, Any
         out.append((name, p.data))
     operands = {kept[layer.weight.data_ptr()]: site.weight_id for site, layer in sites
                 if layer.weight.data_ptr() in kept}
-    return H.RegisteredValues(tuple(out), step, operands)
+    return H.MemoryChanged("registered", step=step, values=tuple(out), operands=operands)
 
 
 def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.RangesDeclared:

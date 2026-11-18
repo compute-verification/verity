@@ -45,17 +45,6 @@ class Declared:
 
 
 @dataclass(frozen=True)
-class RegisteredValues:
-    """``memory``: the registered values once resident, by name; ``operands`` maps each one a block reads as its weight
-    operand to that block's ``key`` (`BlockDue.key`)."""
-
-    hook: ClassVar[str] = "memory"
-    values: tuple[tuple[str, Handle], ...]
-    step: int = 0
-    operands: Mapping[str, int] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class InputArrived:
     """``steps``: input ``input`` of ``length`` values arrived, at ``step``, with the ``headers`` it came with (names
     lower-cased), its ``first_line`` and the ``user`` it names (None where it names none).  ``user`` is the input's own
@@ -171,28 +160,36 @@ class RangesDeclared:
     step: int = 0
 
 
-#: what a `MemoryChanged` says of its ranges
-CHANGES = ("allocated", "written", "freed")
+#: what a `MemoryChanged` says: of its values (``registered``) or of its ranges (the rest)
+CHANGES = ("registered", "allocated", "written", "freed")
 
 
 @dataclass(frozen=True)
 class MemoryChanged:
-    """``memory``: the workload's memory changed at ``step``: ``ranges`` handed to ``input`` (``allocated``; ``reused``:
-    handed again, holding values another input wrote), ``count`` slots from ``offset`` of the one range of ``ranges``
-    written (``written``), or ``ranges`` returned with no reader left (``freed``)."""
+    """``memory``: the workload's memory changed at ``step``: its registered ``values`` resident, by name, ``operands``
+    mapping each one a block reads as its weight operand to that block's ``key`` (`BlockDue.key`) (``registered``);
+    ``ranges`` handed to ``input`` (``allocated``; ``reused``: handed again, holding values another input wrote),
+    ``count`` slots from ``offset`` of the one range of ``ranges`` written (``written``), or ``ranges`` returned with no
+    reader left (``freed``)."""
 
     hook: ClassVar[str] = "memory"
     change: str
-    ranges: tuple[int, ...]
+    ranges: tuple[int, ...] = ()
     step: int = 0
     input: str | None = None
     reused: bool = False
     offset: int = 0
     count: int = 0
+    values: tuple[tuple[str, Handle], ...] = ()
+    operands: Mapping[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.change not in CHANGES:
             raise ValueError(f"MemoryChanged: change {self.change!r} is not one of {CHANGES}")
+        if self.change == "registered" and self.ranges:
+            raise ValueError("MemoryChanged: a registered change names its values, not ranges")
+        if self.change != "registered" and (not self.ranges or self.values or self.operands):
+            raise ValueError(f"MemoryChanged: a {self.change} change names its ranges, and no values")
         if self.change == "written" and len(self.ranges) != 1:
             raise ValueError(f"MemoryChanged: a write is to one range, not {len(self.ranges)}")
 
@@ -208,7 +205,7 @@ class OutputLeft:
 
 
 #: every event a served run emits, each read through its ``hook``
-EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, BlockResult, BlockDue, RangesDeclared,
+EVENTS = (Declared, InputArrived, StepBegan, StepComputed, StepEnded, BlockResult, BlockDue, RangesDeclared,
           MemoryChanged, OutputLeft, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
@@ -361,6 +358,6 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
 
 __all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "BlockResult", "ComputeBlockWith", "Declared", "Gate", "Handle",
            "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputLeft",
-           "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
+           "RangesDeclared", "RefuseInput", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded",
            "unmet"]

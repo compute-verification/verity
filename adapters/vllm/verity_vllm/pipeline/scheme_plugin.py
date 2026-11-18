@@ -4,8 +4,8 @@ one table (`verity.protocols.compose.schemes.get`), as ``VERITY_PROTOCOLS`` list
 `Front`, the server's ``--middleware``, is the front's side, in the API server's process. `register`, a vLLM general
 plugin, is the engine's side, in the engine core's process: the adapter's memory hook
 (`engine.kv_blocks`) on, and each engine core's schemes attached on the process's exchange (``process`` `hooks.ENGINE`)
-just before its model runner loads the model, so that they hear the model's `hooks.RegisteredValues` and its linear
-site attaches, the exchange answered with what vLLM's
+just before its model runner loads the model, so that they hear the model's registered values (`hooks.MemoryChanged`)
+and its linear site attaches, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
 scheduler, and what each scheme holds released when the engine core shuts down, then each scheme's
 report written under the run output (`write_reports`). A scheme's

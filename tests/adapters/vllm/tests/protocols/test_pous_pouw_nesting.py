@@ -75,7 +75,7 @@ def _released(monkeypatch):
     ex.attach(schemes.get("pous"), {}, salt_source=SOURCE, experimental=True)
     ex.answer(H.Declared("card", {"eager": True}, tuple(ex.attached), {n: dict(v) for n, v in ex.attached.items()}))
     sites = vllm_site.discover(model, types=(Linear,))
-    ex.emit(H.RegisteredValues((("l0.weight", layer.weight),), operands={"l0.weight": 0}))
+    ex.emit(H.MemoryChanged("registered", values=(("l0.weight", layer.weight),), operands={"l0.weight": 0}))
     site_hooks = hooks.Hooks(tag="linear-site")
     vllm_site.attach(sites, site_hooks)                                  # kv_blocks' load_model: the site, then release
     KB._Hook.release_values(SimpleNamespace(released=[]), model, ex)
