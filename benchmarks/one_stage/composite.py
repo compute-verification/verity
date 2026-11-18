@@ -111,6 +111,7 @@ class Leak(Exception):
 
 def canonical(x: Any) -> bytes:
     """`x` as `Core.canonicalJson` reads it, for the integers, strings, lists and objects of ASCII keys cases hold."""
+    # Not `codec.canonical_json`: a character outside ASCII stays raw (which `Core.canonicalJson` refuses), and NaN is refused.
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 
 

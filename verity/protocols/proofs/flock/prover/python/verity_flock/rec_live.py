@@ -119,6 +119,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from verity.circuits.codec import canonical_json
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 
@@ -442,7 +443,7 @@ def refused(what: str) -> str:
 def canonical(v) -> str:
     """``v`` as the ZK server compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
     (or ``true`` and ``1``) differ."""
-    return json.dumps(v, sort_keys=True, separators=(",", ":"))
+    return canonical_json(v).decode()
 
 
 def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:

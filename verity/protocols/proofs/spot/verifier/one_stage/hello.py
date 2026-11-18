@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, Sequence
 
+from verity.circuits.codec import canonical_json
+
 from .verdict import Verdict
 
 SCHEME = "coin-tree/hm96-sha512/v2"
@@ -46,7 +48,7 @@ def _canon(x: Any) -> str:
     """`Flock.canon`: compact, keys sorted, every character outside printable ASCII escaped, integers only."""
     if not _integers(x):
         raise ValueError("canonical JSON: a non-integer number")
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return canonical_json(x).decode()
 
 
 def _no_constant(c: str) -> Any:
