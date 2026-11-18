@@ -83,7 +83,7 @@ if unknown := sorted(set(doc) - set(wipe.settings) - set(WS.FACTS)):
             f"{sorted(WS.FACTS)}")
 given = {k: v for k, v in doc.items() if k in wipe.settings}
 facts = json.loads(json.dumps(WS.FACTS | {k: v for k, v in doc.items() if k in WS.FACTS}))
-ctx = {"process": H.ENGINE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
+ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
        "node": node, "judge": judge or None, **facts}
 try:
     settings = S.settings(wipe, given)
