@@ -191,23 +191,25 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
         n, k = weight.shape
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
-        keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
+        keys, const = _zeros(128, weight.device), _constants(weight.device)
         _put(keys[64:], rows_domain(weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
-                         variant=variant, weight=w)
+                         variant=variant)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - nb:size["tree_b"]])
     return out
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, weight: int = 0, split_a: bool = False) -> Any:
+              m_real: int | None = None, *, variant: str, split_a: bool = False) -> Any:
     """The kernel's pipeline over the caller's buffers; with `split_a` (A's tree on a side lane) A's commitment split and
-    the padding rows' E_A lines left unwritten (`run.Pipeline`'s ``fillers``)."""
-    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight,
+    the padding rows' E_A lines left unwritten (`run.Pipeline`'s ``fillers``).  A tree's hm96 salts are the buffer
+    ``salts_<tree>`` of `bufs`, filled by the caller before the launch that reads it (`run.Pipeline.salts`, which refuses a
+    tree whose pipeline was given none)."""
+    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "hm": 0, **keys}
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real,
                                **({"split_a": True, "fillers": False} if split_a else {}))
 
 
@@ -281,7 +283,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self._side_turn = 0
         self._side_cache: dict[tuple, frozenset[str]] = {}
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
-        self.const = _constants(scheme, self.device, salt_key)
+        self.const = _constants(self.device)
         self.const_keys = _constant_keys(self.const)
         if hasattr(kernel.run, "pd_setup"):   # it syncs, so here rather than at a call's first pipeline, which may be captured
             kernel.run.pd_setup(kernel.dev)
@@ -388,7 +390,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         seg = _zeros(size["segdig_b"], weight.device)
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr()},
                          xb.data_ptr(), {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
-                         variant=self.variant, weight=w)
+                         variant=self.variant)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)
         root = _bytes(b["tree_b"][size["tree_b"] - self.nb:size["tree_b"]])

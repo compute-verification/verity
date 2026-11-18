@@ -70,17 +70,18 @@ def chunk_rows(m: int, n: int) -> int:
     return max(1, min(m, Y_CHUNK_BYTES // (4 * n)))
 
 
-def tree_launches(R: Any, p: Any, tree: int, dig: int, seg: int, m: int, rows: int, index: int,
+def tree_launches(R: Any, p: Any, tree: int, dig: int, seg: int, m: int, rows: int, salts: int,
                   words: Callable[[int, int], int]) -> None:
-    """Call `index`'s y tree over its `m` rows into `tree` (`commit_y`'s layout), launches only, on the device's stream:
+    """A call's y tree over its `m` rows into `tree` (`commit_y`'s layout), launches only, on the device's stream:
     the pads, the row digests `rows` rows at a time into `dig` through the chunk's scratch `seg`, each chunk's FP32 words at
-    the address `words(r, count)` returns once it has widened rows r to r + count - 1, then the hm96 leaves at nonce
-    `HM96_Y` + index and the frame leaves under p's ``dom_b`` (y's `y_domain`), and the levels.  `R` is p's run module."""
-    p.b["tree_b"] = tree
+    the address `words(r, count)` returns once it has widened rows r to r + count - 1, then the hm96 leaves over the
+    rows' salts at device address `salts` (192 bytes a row, in row order: the caller's bytes, which the kernel only reads)
+    and the frame leaves under p's ``dom_b`` (y's `y_domain`), and the levels.  `R` is p's run module."""
+    p.b["tree_b"], p.b["salts_b"] = tree, salts
     for _, f in p.tree_setup("b", m, "dom_b"):
         f()
     for r in range(0, m, rows):
         count = min(rows, m - r)
         p.row_digests(words(r, count), dig + 64 * r, seg, count)
-    R.Pipeline.hm_level0(p, "b", dig, m, "dom_b", nonce=R.nonce_args(HM96_Y + index))
+    R.Pipeline.hm_level0(p, "b", dig, m, "dom_b")
     p.levels("b", m, "dom_b")

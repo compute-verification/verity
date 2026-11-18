@@ -28,8 +28,8 @@ def y_tree(run: Any, y: Any, index: int) -> Any:
 
 class DeviceTrees:
     """A run's y trees on its device, by its kernel's own tree launches, the ones B's weight trees run: the row digests
-    (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves at
-    nonce `HM96_Y` + index and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
+    (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves over
+    the rows' salts (`salts`) and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
     rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
     `Y_CHECK_ROWS`-row y."""
@@ -59,6 +59,13 @@ class DeviceTrees:
         except ValueError as e:
             raise ValueError(f"y's device tree hashes y's rows as the kernels' rows of k = {n} words: {e}") from None
 
+    def salts(self, m: int, index: int) -> int:
+        """The device address of call `index`'s y rows' hm96 salts, 192 bytes a row in row order, which the leaf kernel
+        reads: fresh bytes, the ones the call's retained record keeps for its openings."""
+        raise NotImplementedError(
+            f"call {index}'s y tree takes {m} fresh 192-byte hm96 salts on its device, which the leaf kernel reads as data "
+            "and derives from no key (compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
+
     def _tree(self, p: Any, y: Any, index: int) -> Any:
         import torch
         R, dev, (m, n) = self.run.kernel.run, self.run.kernel.dev, y.shape
@@ -77,7 +84,7 @@ class DeviceTrees:
             return held[0].data_ptr()
         before, dev.stream = dev.stream, _stream(y.device)
         try:
-            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, index, words)
+            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, self.salts(m, index), words)
         finally:
             dev.stream = before
         return tree
