@@ -182,7 +182,9 @@ EOF
   uv sync -q --all-packages --extra torch-cpu
   [ -n "$CH" ] || cc -O3 -pthread verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c -o "$S/wipe_stream-check"
   if [ -n "$WIPE_PROTOCOL" ]; then
-    [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
+    # under WIPE_PROTOCOL_READY it is still being built, and the wipe waits for it only before it answers
+    [ -x "$WIPE_PROTOCOL" ] || [ -n "${WIPE_PROTOCOL_READY:-}" ] \
+      || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
   else
     L=verity/protocols/resource_accounting/memory/pous/attester/lean
