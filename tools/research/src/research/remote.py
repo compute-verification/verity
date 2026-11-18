@@ -763,8 +763,18 @@ def source_tool_package(source: Path | None) -> Path | None:
 
 
 def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
-    """Deterministic tar of the research package source (no tests, no caches); sha256 of the tar is the tool identity."""
+    """Deterministic tar of the research package source (no tests, no caches), with the snapshot's floor beside it at store.private's
+    TREE_NAMES: the list of the repository the package sits in, else (a tree that predates it) this launcher's own floor; sha256 of
+    the tar is the tool identity.  Refused when neither is there: custody on the machine could judge nothing."""
+    from .store import private
+
     src = Path(src).resolve() if src is not None else Path(__file__).resolve().parent
+    floor = next((src.parents[i] / private.TREE_NAMES for i in (3, 0)
+                  if i < len(src.parents) and (src.parents[i] / private.TREE_NAMES).is_file()), None)
+    try:
+        floor_bytes = floor.read_bytes() if floor is not None else private.floor_text().encode()
+    except (OSError, private.PathsUnread) as e:
+        raise Refused(f"the research package {src} ships no private names ({e}), so its snapshot's custody could judge no file") from None
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
         for p in sorted(src.rglob("*")):
@@ -776,6 +786,9 @@ def tool_tarball(src: Path | None = None) -> tuple[bytes, str]:
             ti.uname = ti.gname = ""
             with open(p, "rb") as f:
                 tf.addfile(ti, f)
+        ti = tarfile.TarInfo(private.TREE_NAMES)
+        ti.size, ti.mode = len(floor_bytes), 0o644
+        tf.addfile(ti, io.BytesIO(floor_bytes))
     data = buf.getvalue()
     return data, hashlib.sha256(data).hexdigest()[:16]
 
@@ -2666,7 +2679,7 @@ def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str
 
 
 #: what `fetch --all` runs on the machine as `python3 -c PROGRAM MODE .` in the run dir, after `SRC = ...` (store/private.py) and
-#: `NAMES = ...` (its private_names.json): `list`
+#: `NAMES = ...` (its floor's private names, `floor_text`): `list`
 #: prints {"refused": [...]} (or {"unread": why}, exit 3); `keep` prints, NUL-separated, every file and symlink tar may copy
 PRIVATE_PROGRAM = '''
 import json, os, sys, types
@@ -2695,16 +2708,22 @@ for base, dirs, files in os.walk(root):
 
 
 def private_program() -> str:
+    """PRIVATE_PROGRAM with this package's store/private.py and its floor's private names; PathsUnread when the floor can't be read."""
     from .store import private
 
-    return f"SRC = {Path(private.__file__).read_text()!r}\nNAMES = {private.NAMES_FILE.read_text()!r}\n" + PRIVATE_PROGRAM
+    return f"SRC = {Path(private.__file__).read_text()!r}\nNAMES = {private.floor_text()!r}\n" + PRIVATE_PROGRAM
 
 
 def _refused_on_machine(ssh: list[str], rd: str, timeout: float) -> list[dict[str, Any]]:
     """The private files of the run dir on the machine (store.private, with the run's own PATHS_FILE), judged there; Refused when they
     can't be told, so `fetch --all` copies nothing it hasn't judged."""
-    r = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; exec python3 -c {shlex.quote(private_program())} list ."],
-                timeout=timeout)
+    from .store.private import PathsUnread
+
+    try:
+        program = private_program()
+    except PathsUnread as e:
+        raise Refused(f"the run's private files can't be judged, so nothing was copied: {e}") from None
+    r = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; exec python3 -c {shlex.quote(program)} list ."], timeout=timeout)
     out = _json_line((r.stdout.decode(errors="replace").strip().splitlines() or [""])[-1])
     if r.returncode != 0 or not isinstance(out.get("refused"), list):
         why = out.get("unread") or r.stderr.decode(errors="replace").strip()[-300:] or f"rc {r.returncode}"

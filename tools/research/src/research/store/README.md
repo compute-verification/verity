@@ -546,11 +546,14 @@ now in the run dir is in the record by content. From the record on, the runner's
 not launcher.log, so nothing it prints makes the run dir differ from its record. An expired key is named in the marker's
 `error`. `--no-custody-r2` leaves attempts with no `run_record`.
 
-- **Private files are never stored.** By name, `private_names.json` (`verity/private-names/v1`, owner and reason in
-  `why`; no name a public file has); by place and text, `private.py`'s `PLACES`.
+- **Private files are never stored.** By name, the tree's one list, `adapters/vllm/verity_vllm/pipeline/private_names.json`
+  (`verity/private-names/v1`: `kept_apart` prefixes of a path's components, `private` globs on a file's name, owner and
+  reason in `why`; no name a public file has), with the meaning its own matcher `private_names.py` gives it; by place and
+  text, `private.py`'s `PLACES`. The floor is that list in the tree `research` runs from: a checkout, a deployed copy laid
+  out as one, or a tool snapshot, which carries it beside its package; without it nothing is stored or copied.
   Custody adds a run's statement, `private-paths.json` at its run dir's root (`private-paths/v1`: `private` directories outside the run, `names` none of its paths may have, a trailing `/` a directory's), and its shipped tree's
-  `adapters/vllm/verity_vllm/pipeline/private_names.json` (job.json's `run.remote.source_dir`); an unreadable one stores and
-  copies nothing of the run. Custody stores the rest, loudly: `custody REFUSED N private file(s)` on launcher.log
+  list (job.json's `run.remote.source_dir`); an unreadable one stores and copies nothing of the run, and a shipped tree
+  that is missing or holds no list is named in the record's `meta.tree_names`. Custody stores the rest, loudly: `custody REFUSED N private file(s)` on launcher.log
   and custody's output, each path with its rule in `custody-refused.json`, the record's `meta.refused` and `.custody`'s
   `refused`; `research status` and `data preserved` say `N private file(s) refused`. A refused file stays,
   never evicted. No glob or typed output brings one in; a symlink is never followed or uploaded, and

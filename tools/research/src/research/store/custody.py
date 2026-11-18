@@ -23,7 +23,7 @@ file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (
 by where it lies, its name or its text; a symlink naming or resolving to one) is never uploaded, listed or evicted: the rest of
 the record is stored, the refused paths with their rules go in REFUSED_FILE (in the run dir and the record), the record's
 `meta.refused_files` and `meta.refused`, and `.custody`'s `refused`, and custody says so on launcher.log and its own output
-(`refusal_warning`).  A credential a run may be sent
+(`refusal_warning`); a shipped tree whose private names it couldn't apply is named in `meta.tree_names`.  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
 holds one; a refused launch deletes it from the request dir (remote.py).
 
@@ -251,6 +251,9 @@ def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
             return None
         size = sum((tmp / r).stat().st_size for r in rels)
         meta: dict[str, Any] = {"run_id": run_id, "files": len(rels), "bytes": size}
+        if skipped := P.shipped_names(Path(run_dir))[1]:
+            meta["tree_names"] = skipped
+            print(f"research: custody: {skipped}", file=sys.stderr)
         if refused:
             meta["refused_files"] = len(refused)
             if len(json.dumps(refused, separators=(",", ":"))) <= TRIMMED_INLINE_BYTES:

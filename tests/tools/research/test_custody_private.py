@@ -34,6 +34,9 @@ PRIVATE = [
     ("out/retain/pass-00004/manifest.json", "under pass-[0-9][0-9][0-9][0-9][0-9]*/"),
     ("out/b/manifest.json", "manifest.json beside salts or salts_t"),
     ("out/old/manifest.json", "*.json holding hm96_salt_key"),
+    ("out/row/commit/replay_bundle_p0/commit/values.json", "kept apart replay_bundle_p*"),
+    ("out/row/commit/replay_slim_p1/slim.json", "kept apart replay_slim_p*"),
+    ("out/serve/requests.jsonl", "name requests.jsonl"),
 ]
 #: names in stored runs today whose owners have not said they are private: uploaded as before
 UNDECIDED = ["out/saltskeyed.tsv", "out/challenger/key.json", "out/lean.key"]
@@ -66,8 +69,11 @@ def _private_run(runs: Path) -> Path:
 
 
 def test_every_rule_has_a_one_line_reason_and_an_owning_lanes_handle():
-    doc = json.loads(P.NAMES_FILE.read_text())
-    assert doc["schema"] == "verity/private-names/v1" and set(doc["why"]) == set(doc["private"]), "each name has its why, and no more"
+    doc = json.loads(P.floor_text())
+    assert P.FLOOR_UNREAD is None and P.FLOOR_ROOTS[0] / P.TREE_NAMES == Path(__file__).resolve().parents[3] / P.TREE_NAMES
+    assert doc["schema"] == "verity/private-names/v1" and set(doc["why"]) == {*doc["kept_apart"], *doc["private"]}, \
+        "each entry has its why, and no more"
+    assert len(set(doc["private"])) == len(doc["private"]), "a name is listed once"
     assert all(len(w) == 2 for w in doc["why"].values()), "why: {glob: [owner, reason]}"
     assert len({r.what for r in P.RULES}) == len(P.RULES), "two rules print alike"
     for r in P.RULES:
@@ -214,20 +220,20 @@ def test_a_runs_statement_refuses_its_names_and_its_private_directories(tmp_path
     secret = _write(priv, "secret.bin", b"s")
     _write(d, "out/plan.jsonl", b"p")
     _write(d, "out/capture/a.bin", b"c")
-    _write(d, "out/ids.3.jsonl.gz", b"i")
+    _write(d, "out/draws.3.jsonl.gz", b"i")
     _write(d, "out/note/capture", b"a file, not a directory")
     (d / "out" / "held").symlink_to(secret)
-    _stated(d, [str(priv)], ["plan.jsonl", "capture/", "ids.*.jsonl*"])
+    _stated(d, [str(priv)], ["plan.jsonl", "capture/", "draws.*.jsonl*"])
     rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
     assert rep["preserved"], rep.get("error")
     err = capsys.readouterr().err
     assert ("custody REFUSED 4 private file(s), not uploaded and left on this machine: out/capture/a.bin (private-paths.json: name "
-            "capture/), out/held (private-paths.json: inside " + str(priv) + "), out/ids.3.jsonl.gz (private-paths.json: name "
-            "ids.*.jsonl*) and 1 more") in err
+            "capture/), out/draws.3.jsonl.gz (private-paths.json: name draws.*.jsonl*), out/held (private-paths.json: inside "
+            + str(priv) + ") and 1 more") in err
     marker = json.loads((d / CU.MARKER).read_text())["refused"]
     assert {r["path"]: r["rule"] for r in marker} == {"out/capture/a.bin": "private-paths.json: name capture/",
                                                       "out/held": f"private-paths.json: inside {priv}",
-                                                      "out/ids.3.jsonl.gz": "private-paths.json: name ids.*.jsonl*",
+                                                      "out/draws.3.jsonl.gz": "private-paths.json: name draws.*.jsonl*",
                                                       "out/plan.jsonl": "private-paths.json: name plan.jsonl"}
     assert all("owner" not in r for r in marker), "a statement's rule has no lane owner"
     kept, _, _ = CU.choose(d)
@@ -256,20 +262,42 @@ def test_a_put_under_a_run_dir_obeys_its_statement(tmp_path, capsys):
     assert "plan.jsonl: private (private-paths.json: name plan.jsonl)" in capsys.readouterr().err
 
 
-def test_the_runs_shipped_tree_adds_its_private_names(tmp_path):
-    d = _fixture_run(tmp_path / "runs")
-    src = tmp_path / "src" / ("0" * 40)
-    _write(src, P.TREE_NAMES, json.dumps({"schema": "verity/private-names/v1", "kept_apart": [], "private": ["requests.jsonl"]}))
-    _write(d, "out/requests.jsonl", b"r")
-    assert CU.choose(d)[2] == [], "without the run's tree, requests.jsonl is no bare name"
+def _ship(d: Path, src: Path) -> None:
     job = json.loads((d / "job.json").read_text())
     job.setdefault("run", {}).setdefault("remote", {})["source_dir"] = str(src)
     (d / "job.json").write_text(json.dumps(job))
-    assert P.source_dir(d) == src
-    assert CU.choose(d)[2] == [{"path": "out/requests.jsonl", "rule": "the run's tree: private_names.json: requests.jsonl"}]
+
+
+def test_the_runs_shipped_tree_adds_its_private_names_and_its_kept_apart_directories(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    src = tmp_path / "src" / ("0" * 40)
+    _write(src, P.TREE_NAMES, json.dumps({"schema": "verity/private-names/v1", "kept_apart": ["held_back_p"],
+                                          "private": ["plan_values.jsonl"]}))
+    _write(d, "out/plan_values.jsonl", b"r")
+    _write(d, "out/held_back_p3/x/values.json", b"v")
+    assert CU.choose(d)[2] == [], "without the run's tree, neither is a floor name"
+    _ship(d, src)
+    assert P.shipped_names(d) == (src / P.TREE_NAMES, None)
+    assert CU.choose(d)[2] == [{"path": "out/held_back_p3/x/values.json", "rule": "the run's tree: kept apart held_back_p*"},
+                               {"path": "out/plan_values.jsonl", "rule": "the run's tree: name plan_values.jsonl"}]
     (src / P.TREE_NAMES).write_text('{"schema": "other"}')
     with pytest.raises(P.PathsUnread, match="private_names.json"):
         CU.choose(d)
+
+
+def test_a_missing_shipped_tree_is_named_in_the_record_and_the_floor_still_applies(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    _write(d, "out/commit/replay_bundle_p0/values.json", b"v")
+    gone = tmp_path / "src" / ("1" * 40)
+    _ship(d, gone)
+    why = f"the run's shipped tree {gone} is missing, so only the floor's private names applied"
+    assert P.shipped_names(d) == (None, why)
+    st = LocalStore(tmp_path / "store")
+    m = st.get_manifest(CU.put_run_record(st, d, FIXTURE_RID))
+    assert m.meta["tree_names"] == why
+    assert [r["path"] for r in m.meta["refused"]] == ["out/commit/replay_bundle_p0/values.json"]
+    gone.mkdir(parents=True)
+    assert P.shipped_names(d) == (None, f"the run's shipped tree {gone} holds no {P.TREE_NAMES}, so only the floor's private names applied")
 
 
 def _registry(repo: Path, rel: str, toys: dict | None = None) -> None:

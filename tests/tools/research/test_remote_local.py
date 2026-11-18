@@ -263,9 +263,12 @@ def test_tool_tarball_is_deterministic_and_excludes_caches():
     d2, s2 = remote.tool_tarball()
     assert s1 == s2 and d1 == d2
     import io, tarfile
-    names = tarfile.open(fileobj=io.BytesIO(d1)).getnames()
+    tar = tarfile.open(fileobj=io.BytesIO(d1))
+    names = tar.getnames()
     assert "research/cli.py" in names and "research/telemetry/run.py" in names
     assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)
+    from research.store import private
+    assert tar.extractfile(private.TREE_NAMES).read().decode() == private.floor_text(), "the snapshot carries the tree's own list"
 
 
 def test_source_tree_research_package_is_the_tool_that_ships(tmp_path, monkeypatch, capsys):
@@ -283,6 +286,8 @@ def test_source_tree_research_package_is_the_tool_that_ships(tmp_path, monkeypat
     data, sha = remote.tool_tarball(pkg)
     names = tarfile.open(fileobj=io.BytesIO(data)).getnames()
     assert "research/marker_only_in_the_tree.py" in names and "research/cli.py" not in names
+    from research.store.private import TREE_NAMES
+    assert TREE_NAMES in names, "a tree that predates its list ships the launcher's floor"
     assert sha != remote.tool_tarball()[1]                                    # a different package is a different tool identity
     # the refusal: the launcher's registry does not know `nope.tool` and no --source package would replace it
     from research import cli

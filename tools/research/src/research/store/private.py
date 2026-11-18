@@ -1,9 +1,9 @@
-"""The private files no run record, no `research data put` and no `research fetch --all` copies: by name (NAMES_FILE, data in the
-lanes' `verity/private-names/v1`, each glob with its owner and reason), and in code what a name can't say: where a file lies, what
-lies beside it, or (`contains`) its text.  A lane adds a name to NAMES_FILE, or a rule to PLACES, in a reviewed change; a bare name
-goes in only where no public file has it.  For one run, custody adds the names its statement (`private-paths/v1` at
-PATHS_FILE, which the lanes' launchers write) and its shipped tree's TREE_NAMES list; nothing removes a rule at run time.  Custody
-lists what it refused (store.custody); a put refuses the whole payload."""
+"""The private files no run record, no `research data put` and no `research fetch --all` copies: by name (the tree's one list,
+TREE_NAMES, in the tree `research` runs from: the floor), and in code what a name can't say: where a file lies, what lies beside it,
+or (`contains`) its text.  A lane adds a name to TREE_NAMES, or a rule to PLACES, in a reviewed change; a bare name goes in only
+where no public file has it.  For one run, custody adds the names its statement (`private-paths/v1` at PATHS_FILE, which the lanes'
+launchers write) and its shipped tree's TREE_NAMES; nothing removes a rule at run time.  Custody lists what it refused
+(store.custody); a put refuses the whole payload."""
 from __future__ import annotations
 
 import fnmatch
@@ -20,15 +20,18 @@ SCAN_MAX_BYTES = 4 << 20
 #: custody's listing of the private files it refused (REFUSED_SCHEMA: `refused`, [{path, rule, owner}]), in the run dir and its record
 REFUSED_FILE = "custody-refused.json"
 REFUSED_SCHEMA = "research/custody-refused/v1"
-#: the by-name list: {"schema": NAMES_SCHEMA, "private": [globs on a file's own name], "why": {glob: [owner, reason]}}
-NAMES_FILE = Path(__file__).with_name("private_names.json")
+#: the tree's one list of private names, by its path from a tree's root: {"schema": NAMES_SCHEMA, "kept_apart": [prefixes of a
+#: directory's or file's name], "private": [globs on a file's own name], "why": {entry: [owner, reason]}}, read with the meaning
+#: its own matcher (`private_names.py` beside it) gives it, which this module can't import
+TREE_NAMES = "adapters/vllm/verity_vllm/pipeline/private_names.json"
 NAMES_SCHEMA = "verity/private-names/v1"
+#: the roots the floor's TREE_NAMES is looked for under: the tree this file is in, laid out as the repository (a checkout, or a
+#: deployed copy carrying the list at its path), then a tool snapshot's directory (remote.tool_tarball puts the list there)
+FLOOR_ROOTS = tuple(Path(__file__).resolve().parents[i] for i in (5, 2) if i < len(Path(__file__).resolve().parents))
 #: the run's statement at its run dir's root: {"schema": PATHS_SCHEMA, "private": [absolute directories outside the run dir],
 #: "names": [globs no file or directory of the run's may have; a trailing `/` names a directory]}
 PATHS_FILE = "private-paths.json"
 PATHS_SCHEMA = "private-paths/v1"
-#: the private names the code that made the run keeps, in its shipped tree (job.json's run.remote.source_dir), as NAMES_SCHEMA
-TREE_NAMES = "adapters/vllm/verity_vllm/pipeline/private_names.json"
 
 
 @dataclass(frozen=True)
@@ -93,12 +96,28 @@ class PathsUnread(ValueError):
     aren't known."""
 
 
-def names_of(doc: Any, where: str) -> list[str]:
-    """The `private` globs of a NAMES_SCHEMA document; PathsUnread naming `where` when it is not one."""
-    if not isinstance(doc, dict) or doc.get("schema") != NAMES_SCHEMA or not isinstance(doc.get("private"), list) \
-            or not all(isinstance(g, str) and g for g in doc["private"]):
-        raise PathsUnread(f"{where}: not {{\"schema\": \"{NAMES_SCHEMA}\", \"private\": [globs]}}")
-    return list(doc["private"])
+def kept_apart(prefix: str, reason: str, owner: str) -> Rule:
+    """Every file whose path has a component (a directory's name or its own) starting with `prefix`."""
+    return Rule(f"kept apart {prefix}*", lambda p, _: any(x.startswith(prefix) for x in p.parts), reason, owner)
+
+
+def names_of(doc: Any, where: str, label: str = "") -> tuple[Rule, ...]:
+    """The rules of a NAMES_SCHEMA document, `kept_apart` then `private`, each with its `why` when the document gives one and its
+    printed rule after `label`; PathsUnread naming `where` when it is not one."""
+    def strs(k: str) -> bool:
+        return isinstance(doc.get(k), list) and all(isinstance(g, str) and g for g in doc[k])
+
+    if not isinstance(doc, dict) or doc.get("schema") != NAMES_SCHEMA or not strs("kept_apart") or not strs("private") \
+            or not isinstance(doc.get("why", {}), dict):
+        raise PathsUnread(f"{where}: not {{\"schema\": \"{NAMES_SCHEMA}\", \"kept_apart\": [prefixes], \"private\": [globs]}}")
+    why = doc.get("why", {})
+
+    def of(g: str) -> tuple[str, str]:
+        w = why.get(g)
+        return (str(w[1]), str(w[0])) if isinstance(w, list) and len(w) == 2 else ("", "")
+
+    rules = [*(kept_apart(g, *of(g)) for g in doc["kept_apart"]), *(name(g, *of(g)) for g in doc["private"])]
+    return tuple(Rule(label + r.what, r.test, r.reason, r.owner) for r in rules)
 
 
 def _read(p: Path) -> Any:
@@ -108,9 +127,35 @@ def _read(p: Path) -> Any:
         raise PathsUnread(f"{p}: {type(e).__name__}: {e}") from None
 
 
-# NAMES_TEXT is set beside this module's source where it runs without its directory (remote.PRIVATE_PROGRAM)
-_NAMES_DOC = json.loads(globals()["NAMES_TEXT"]) if "NAMES_TEXT" in globals() else json.loads(NAMES_FILE.read_text())
-NAMES = tuple(name(g, *reversed(_NAMES_DOC["why"][g])) for g in names_of(_NAMES_DOC, str(NAMES_FILE)))
+def floor_text() -> str:
+    """The floor's TREE_NAMES as text: the first under FLOOR_ROOTS; PathsUnread when none holds it."""
+    if "NAMES_TEXT" in globals():
+        return globals()["NAMES_TEXT"]
+    for root in FLOOR_ROOTS:
+        if (root / TREE_NAMES).is_file():
+            try:
+                return (root / TREE_NAMES).read_text()
+            except OSError as e:
+                raise PathsUnread(f"{root / TREE_NAMES}: {type(e).__name__}: {e}") from None
+    raise PathsUnread(f"no {TREE_NAMES} under {' or '.join(map(str, FLOOR_ROOTS))}, the tree research runs from: its private names "
+                      "aren't known")
+
+
+def _floor() -> tuple[tuple[Rule, ...], str | None]:
+    try:
+        text = floor_text()
+        try:
+            doc = json.loads(text)
+        except ValueError as e:
+            raise PathsUnread(f"the floor's {TREE_NAMES}: {type(e).__name__}: {e}") from None
+        return names_of(doc, f"the floor's {TREE_NAMES}"), None
+    except PathsUnread as e:
+        return (Rule(f"every file: {e}", lambda p, _: True),), str(e)
+
+
+# NAMES_TEXT is set beside this module's source where it runs without its directory (remote.PRIVATE_PROGRAM).  A floor that can't be
+# read refuses every file, and run_rules and check_payload raise its PathsUnread.
+NAMES, FLOOR_UNREAD = _floor()
 
 PLACES: tuple[Rule, ...] = (
     under_beside(".salts", ".json", "a registration's salt directory (index.json and <i>.bin) beside the registration",
@@ -134,19 +179,29 @@ def _inside(d: str, what: str) -> Rule:
     return Rule(what, lambda p, f: os.path.realpath(f) == d or os.path.realpath(f).startswith(d.rstrip("/") + "/"))
 
 
-def source_dir(run_dir: Path) -> Path | None:
-    """The run's shipped source tree: job.json's run.remote.source_dir, when it is a directory; else None."""
+def shipped_names(run_dir: Path) -> tuple[Path | None, str | None]:
+    """(the run's shipped tree's TREE_NAMES, None) when job.json's run.remote.source_dir names a tree holding it; (None, why) when it
+    names a tree that is missing or holds none, whose names custody then doesn't apply; (None, None) for a run with no shipped tree."""
     try:
         job = json.loads((Path(run_dir) / "job.json").read_text())
         src = ((job.get("run") or {}).get("remote") or {}).get("source_dir")
     except (OSError, ValueError, AttributeError):
-        return None
-    return Path(src) if isinstance(src, str) and src and Path(src).is_dir() else None
+        return None, None
+    if not isinstance(src, str) or not src:
+        return None, None
+    if not Path(src).is_dir():
+        return None, f"the run's shipped tree {src} is missing, so only the floor's private names applied"
+    if not os.path.lexists(t := Path(src) / TREE_NAMES):
+        return None, f"the run's shipped tree {src} holds no {TREE_NAMES}, so only the floor's private names applied"
+    return t, None
 
 
 def run_rules(run_dir: Path) -> tuple[Rule, ...]:
-    """RULES, then the run's: its statement's (PATHS_FILE) names and directories, and its shipped tree's TREE_NAMES globs.
-    PathsUnread, naming the file, when either is there and is not its schema."""
+    """RULES, then the run's: its statement's (PATHS_FILE) names and directories, and its shipped tree's TREE_NAMES.  PathsUnread,
+    naming the file, when the floor's list, the statement or the tree's list is there and is not its schema, or the floor's is not
+    there."""
+    if FLOOR_UNREAD:
+        raise PathsUnread(FLOOR_UNREAD)
     out: list[Rule] = []
     p = Path(run_dir) / PATHS_FILE
     if os.path.lexists(p):
@@ -158,8 +213,8 @@ def run_rules(run_dir: Path) -> tuple[Rule, ...]:
                               f"\"names\": [globs]}}")
         out += [_named(g, f"{PATHS_FILE}: name {g}") for g in doc["names"]]
         out += [_inside(os.path.realpath(d), f"{PATHS_FILE}: inside {d}") for d in doc["private"]]
-    if (src := source_dir(run_dir)) is not None and os.path.lexists(t := src / TREE_NAMES):
-        out += [Rule(f"the run's tree: private_names.json: {g}", name(g, "", "").test) for g in names_of(_read(t), str(t))]
+    if (t := shipped_names(run_dir)[0]) is not None:
+        out += names_of(_read(t), str(t), "the run's tree: ")
     return (*RULES, *out)
 
 
@@ -245,12 +300,14 @@ def toy(path: Path) -> str | None:
 def check_payload(files: list[Path], root: Path | None = None) -> None:
     """PrivateFiles when any of the files a put would store is private, by its absolute path or, for a symlink, by what it
     resolves to (read: the put stores its target's bytes), or by the run rules (`run_rules`) of its nearest directory holding a
-    PATHS_FILE; PathsUnread when that directory's run rules can't be read.  A payload `root` that is a registered toy (`toy`) is
-    stored whole, and says so."""
+    PATHS_FILE; PathsUnread when the floor's list or that directory's run rules can't be read.  A payload `root` that is a
+    registered toy (`toy`) is stored whole, and says so."""
     if root is not None and (why := toy(root)) is not None:
         print(f"research: {root} is a registered toy fixture ({REGISTRY} {TOYS}: {why}): stored with any private-named files it holds",
               file=sys.stderr)
         return
+    if FLOOR_UNREAD:
+        raise PathsUnread(FLOOR_UNREAD)
     bad, ruled = [], {}
     for f in files:
         absolute = Path(os.path.abspath(f))
@@ -281,7 +338,7 @@ def listed(run_dir: Path) -> list[dict[str, Any]]:
     return [r for r in got if isinstance(r, dict)] if isinstance(got, list) else []
 
 
-__all__ = ["NAMES", "NAMES_FILE", "NAMES_SCHEMA", "PATHS_FILE", "PATHS_SCHEMA", "PLACES", "REFUSED_FILE", "REFUSED_SCHEMA", "REGISTRY",
-           "RULES", "SCAN_MAX_BYTES", "TOYS", "TREE_NAMES", "PathsUnread", "PrivateFiles", "Rule", "beside", "check_payload", "contains",
-           "listed", "name", "names_of", "refusal", "rule_for", "run_rules", "scan", "source_dir", "summary", "toy", "under",
-           "under_beside"]
+__all__ = ["FLOOR_ROOTS", "FLOOR_UNREAD", "NAMES", "NAMES_SCHEMA", "PATHS_FILE", "PATHS_SCHEMA", "PLACES", "REFUSED_FILE",
+           "REFUSED_SCHEMA", "REGISTRY", "RULES", "SCAN_MAX_BYTES", "TOYS", "TREE_NAMES", "PathsUnread", "PrivateFiles", "Rule", "beside",
+           "check_payload", "contains", "floor_text", "kept_apart", "listed", "name", "names_of", "refusal", "rule_for", "run_rules",
+           "scan", "shipped_names", "summary", "toy", "under", "under_beside"]
