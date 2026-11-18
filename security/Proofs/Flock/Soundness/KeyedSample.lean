@@ -365,7 +365,7 @@ the spec's per-swap sampler returns a sample missing `B` with probability at mos
 theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun G : Fin k → Fin L → Fin 256 =>
         ∃ D, Randomness.subsetOn k n (KeyedSample.streamsOf G) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
-      (subset n k hk).missProb B := by
+      (Verity.SamplingDesign.subset n k hk).missProb B := by
   classical
   set B' : Finset ℕ := B.image Fin.val with hB'
   have hB'n : ∀ u ∈ B', u < n := fun u hu => by obtain ⟨v, _, rfl⟩ := mem_image.1 hu; exact v.isLt
@@ -383,7 +383,7 @@ theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     _ ≤ ((n - 0 - B'.card).choose k : ℝ≥0∞) / ((n - 0).choose k : ℝ≥0∞) :=
         KeyedSample.loopK_le n k L B' hB'n k 0 (Equiv.refl ℕ) (by omega) hk (fun t ht => ht)
           (fun t ht => absurd ht (Nat.not_lt_zero t))
-    _ = (subset n k hk).missProb B := by rw [subset_escape, hcard, Nat.sub_zero]
+    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_escape, hcard, Nat.sub_zero]
 
 end Spot.Sampling.SamplingDesign
 
@@ -568,12 +568,12 @@ theorem sampleOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ 
           ∃ D, subsetOn (k p) (stratum σ p).card (KeyedSample.streamsOf G) = some D ∧ ∀ j ∈ Bl p, j.val ∉ D) :=
         prCoin_pi_forall (Ω := fun p => Fin (k p) → Fin L → Fin 256) univ (fun p (G : Fin (k p) → Fin L → Fin 256) =>
           ∃ D, subsetOn (k p) (stratum σ p).card (KeyedSample.streamsOf G) = some D ∧ ∀ j ∈ Bl p, j.val ∉ D)
-    _ ≤ ∏ p, (subset (stratum σ p).card (k p) (hk p)).missProb (Bl p) :=
+    _ ≤ ∏ p, (Verity.SamplingDesign.subset (stratum σ p).card (k p) (hk p)).missProb (Bl p) :=
         Finset.prod_le_prod fun p _ => subsetOn_escape_le _ _ _ (hk p) (Bl p)
     _ ≤ (stratified σ k hk).missProb B := by
         rw [stratified_escape]
         refine Finset.prod_le_prod fun p _ => ?_
-        rw [subset_escape]
+        rw [Verity.SamplingDesign.subset_escape]
         have hcard : (B.filter (σ · = p)).card ≤ (Bl p).card := by
           obtain ⟨_, hn', himg⟩ := hW p (hp p)
           have hsub : (B.filter (σ · = p)).map Fin.valEmbedding ⊆ (Bl p).image fun j => (U p).getD j.val 0 := by
