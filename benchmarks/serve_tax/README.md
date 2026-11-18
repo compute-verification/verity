@@ -16,7 +16,6 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
@@ -486,7 +485,7 @@ On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchma
 research run --on NODE --source . --cwd source --send C4.json.gz --env CAPACITY=1 -- bash benchmarks/serve_tax/run.sh
 # the arms at three loads, then the replay of the record arm's saturated load
 research run --on NODE --source . --cwd source --send C4.json.gz \
-  --env 'ARMS=compiled eager record release-order tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env 'ARMS=compiled eager record tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
@@ -596,7 +595,7 @@ ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the sam
    ~~~text
    uv run python -c 'import json, sys
    from verity_vllm.pipeline.commit_coins import ChallengerGate
-   from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window import reserve_salt
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window import reserve_salt
    g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
      "$GATE" LANE PEER
    ~~~

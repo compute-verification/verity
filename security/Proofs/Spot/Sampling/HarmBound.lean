@@ -14,9 +14,9 @@ probability at least `δ` has harm at most `H`. This file proves it for the stra
 closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly without replacement, and a set `B` holds
 `c_s = |B ∩ stratum s|` of them.
 
-* `choose_div_le_exp`, `stratified_escape_le_exp`: **the closed form**. `B` escapes with probability at most
-  `exp(−∑ s k_s c_s / n_s)`, since `C(n − c, k)/C(n, k) ≤ (1 − c/n)^k ≤ exp(−k c / n)`. `work_escape_le_exp` is the work
-  sampling design's, whose `work_escape_le` bounds the same product through weighted AM-GM at the rule's sizes instead.
+* `choose_div_le_exp`, `stratified_missProb_le_exp`: **the closed form**. `B` escapes with probability at most
+  `exp(−∑ s k_s c_s / n_s)`, since `C(n − c, k)/C(n, k) ≤ (1 − c/n)^k ≤ exp(−k c / n)`. `work_missProb_le_exp` is the work
+  sampling design's, whose `work_missProb_le` bounds the same product through weighted AM-GM at the rule's sizes instead.
 * `stratified_risk_le`: a set escaping with probability at least `δ > 0` has `c_s ≤ n_s − k_s` in every stratum and
   `∑ s k_s c_s / n_s ≤ ln(1/δ)`.
 * `stratified_isHarmBound_dual`, **the harm bound at a price**: with harm `g_s` per unit of stratum `s`, every `τ ≥ 0`
@@ -198,20 +198,20 @@ theorem card_filter_le_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (F
 
 /-- **The closed form**: sampling `k_s` of the `n_s` units of stratum `s` uniformly without replacement, a set with `c_s`
 units in stratum `s` escapes with probability at most `exp(−∑ s k_s c_s / n_s)`. -/
-theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_missProb_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
     (stratified σ k hk).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) := by
-  rw [stratified_escape]
+  rw [stratified_missProb]
   exact prod_choose_div_le_exp (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
     (fun s => card_filter_le_stratum σ s B)
 
 /-- **The work sampling design in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)`, `k_s = workK σ w f K s`, at any floors. -/
-theorem work_escape_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
+theorem work_missProb_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
     (work σ w f K).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (workK σ w f K s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) :=
-  stratified_escape_le_exp σ (workK σ w f K) (workK_le σ w f K) B
+  stratified_missProb_le_exp σ (workK σ w f K) (workK_le σ w f K) B
 
 /-- A set escaping with probability at least `δ > 0` holds at most `n_s − k_s` units of stratum `s`, and its closed-form
 risk `∑ s k_s c_s / n_s` is at most `ln(1/δ)`. -/
@@ -219,7 +219,7 @@ theorem stratified_risk_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ 
     (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).missProb B) :
     (∀ s, (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) ∧
       ∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card ≤ Real.log δ.toReal⁻¹ := by
-  rw [stratified_escape] at hB
+  rw [stratified_missProb] at hB
   exact risk_le_of_le_prod (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
     (fun s => card_filter_le_stratum σ s B) hδ hB
 
@@ -309,7 +309,7 @@ theorem stratified_isHarmBound_exact (σ : Fin n → Fin m) (k : Fin m → ℕ) 
     IsHarmBound (stratified σ k hk) h δ (τ * Real.log δ.toReal⁻¹ + ∑ s, c s) := by
   intro B hB
   obtain ⟨hcap, -⟩ := stratified_risk_le σ k hk hδ hB
-  rw [stratified_escape] at hB
+  rw [stratified_missProb] at hB
   have hrisk : ∑ s, stratumRisk σ k s (B.filter (σ · = s)).card ≤ Real.log δ.toReal⁻¹ :=
     risk_exact_le_of_le_prod (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk hcap hδ hB
   calc ∑ u ∈ B, h u = ∑ s, (∑ u ∈ B.filter (σ · = s), h u - τ * stratumRisk σ k s (B.filter (σ · = s)).card) +

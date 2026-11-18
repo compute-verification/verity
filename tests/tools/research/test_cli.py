@@ -38,6 +38,26 @@ def test_run_records_and_inspects(tmp_path, capsys):
     assert data["runs"][0]["id"] == s["id"]
 
 
+def test_a_run_records_its_launchers_lane_never_its_campaign_and_its_own_lane_wins(tmp_path, monkeypatch):
+    """job.json's lane is its retention record's owner (research.retention), which must be a lane a handle answers to."""
+    monkeypatch.delenv("TELEMETRY_LANE", raising=False)
+    monkeypatch.setenv("RESEARCH_LANE", "proofs")
+    monkeypatch.setenv("RESEARCH_CAMPAIGN", "recursion-e2e")
+
+    def lane(name: str, *opts: str) -> str | None:
+        assert main(["run", "--runs-dir", str(tmp_path / name), "--no-sampler", *opts, "--", "true"]) == 0
+        return json.loads((next((tmp_path / name).iterdir()) / "job.json").read_text())["ownership"]["lane"]
+
+    assert lane("env") == "proofs", "the launcher's $RESEARCH_LANE"
+    assert lane("as", "--as", "@infra") == "infra", "--as, as a handle without its @"
+    assert lane("own", "--lane", "compute-accounting") == "compute-accounting", "the run's own lane"
+    monkeypatch.setenv("TELEMETRY_LANE", "memory-accounting")
+    assert lane("tele") == "memory-accounting"
+    monkeypatch.delenv("TELEMETRY_LANE")
+    monkeypatch.delenv("RESEARCH_LANE")
+    assert lane("none") is None, "no lane anywhere: none, which retention reads as runner"
+
+
 RESULT_OF_ENV = ("import os, json; json.dump({'foo': os.environ.get('RSEC_FOO'), 'tok': os.environ.get('RSEC_API_TOKEN'), 'cwd': os.getcwd()}, "
                  "open('result.json', 'w'))")
 

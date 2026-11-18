@@ -65,7 +65,7 @@ import eps_budget as EB
 from verity.device import number
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
-from verity_machine_model.model import card, device
+from verity_machine_model.model import card, data_device, device
 
 #: what the tests read
 __all__ = [
@@ -100,7 +100,9 @@ class Sheet:
     fmax_mhz: float
 
 
-def sheet(family: str = "sm_120") -> Sheet:
+def sheet(family: str | None = None) -> Sheet:
+    """``family``'s data-sheet reading; None: the family the machine model's data holds (`data_device`), the headline's."""
+    family = family or data_device()
     f = headline.spec()["family"][family]
     return Sheet(family, f["sheet"]["vector"], f["design"], table(device(family)).sms, fmax_mhz(family))
 
