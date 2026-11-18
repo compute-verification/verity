@@ -503,7 +503,9 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
         except Exception as e:                                       # not listed, not this project's, no source: never chosen
             return str(e) or type(e).__name__
         if r.returncode:
-            err = r.stderr.decode(errors="replace").strip().splitlines()
+            from .remote import name_addresses
+
+            err = name_addresses(r.stderr.decode(errors="replace"), machine=name).strip().splitlines()
             if r.returncode == 255 and err and err[-1].startswith("ssh: connect to host "):
                 return f"{NO_SSH} ({err[-1].rsplit(': ', 1)[-1]})"
             return f"exit {r.returncode}: {err[-1] if err else 'no output'}"

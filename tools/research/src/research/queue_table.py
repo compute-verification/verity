@@ -441,7 +441,9 @@ def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tupl
         return None, f"no answer in {timeout:g} s"
     answer = next((line for line in reversed(p.stdout.splitlines()) if line.startswith("{")), None)
     if answer is None:
-        return None, (p.stderr or p.stdout).strip()[-200:] or f"rc {p.returncode}"
+        from .remote import name_addresses
+
+        return None, name_addresses(p.stderr or p.stdout, machine=machine).strip()[-200:] or f"rc {p.returncode}"
     try:
         return json.loads(answer), ""
     except ValueError as e:
