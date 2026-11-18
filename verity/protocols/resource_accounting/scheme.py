@@ -255,8 +255,9 @@ def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
 class Bound:
     """What the audit's guarantee gives a scheme (`Verity.Scheme.GetsBack`): at cutoff ``delta``, its ``over`` exceeds
     its ``under`` by more than ``missable``, the largest cost of a set of its blocks that the sample misses with
-    probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus
-    ``delta_scheme``, the scheme's own term: where that is a `Term`, ``term`` names its Lean constant and
+    probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus ``epsilon``,
+    the audit's own error (its knowledge and binding errors, the audit's to give), plus ``delta_scheme``, the scheme's own
+    term: where that is a `Term`, ``term`` names its Lean constant and
     ``parameters`` the values it was evaluated at."""
 
     scheme: str
@@ -264,6 +265,7 @@ class Bound:
     missable: int
     charges: Mapping[str, int]
     delta_scheme: Fraction
+    epsilon: Fraction = Fraction(0)
     term: str = ""
     parameters: Mapping[str, Any] = field(default_factory=dict)
 
@@ -274,16 +276,17 @@ class Bound:
 
     @property
     def probability(self) -> Fraction:
-        """The probability that ``over`` exceeds ``under`` by more than `excess`: ``delta + delta_scheme``."""
-        return self.delta + self.delta_scheme
+        """The probability that ``over`` exceeds ``under`` by more than `excess`: ``delta + epsilon + delta_scheme``
+        (`GetsBack`'s ``δ + ε + δscheme``)."""
+        return self.delta + self.epsilon + self.delta_scheme
 
 
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int],
-          parameters: Mapping[str, Any] | None = None) -> Bound:
+          parameters: Mapping[str, Any] | None = None, *, epsilon: Fraction | None = None) -> Bound:
     """``scheme``'s `Bound`, carrying its own term, evaluated at ``parameters`` where it is a `Term` (``N`` read from
     the registered circuit, ``q`` and the rest the caller's); refuses charges other than exactly the ones it states, a
-    scheme with a known charge nothing bounds yet or whose own term is not said, and parameters other than exactly the
-    term's."""
+    scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
+    term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
     if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
@@ -294,12 +297,16 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
                          "own term by name, zero where none of its assumptions can fail")
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
+    if epsilon is None or not 0 <= epsilon < 1:
+        raise ValueError(f"{scheme.name}: the audit's error ε (Verity.Scheme.GetsBack's δ + ε + δscheme) is given by the "
+                         f"audit, in [0, 1), not {epsilon}")
     given = dict(parameters or {})
     term = scheme.delta_scheme
     if not isinstance(term, Term):
         if given:
             raise ValueError(f"{scheme.name}: its own term is the number {term}, which takes no parameters {sorted(given)}")
-        return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), Fraction(term))
+        return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), Fraction(term),
+                     Fraction(epsilon))
     if missing := [p for p in term.parameters if p not in given]:
         raise ValueError(f"{scheme.name}: its own term {term.lean} is evaluated at {list(term.parameters)}, and "
                          f"{missing} were not given")
@@ -308,8 +315,8 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     value = Fraction(term.value(**given))
     if not 0 <= value < 1:
         raise ValueError(f"{scheme.name}: its own term {term.lean} at {given} is {value}, outside [0, 1): no bound")
-    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), value, term.lean,
-                 MappingProxyType(given))
+    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), value, Fraction(epsilon),
+                 term.lean, MappingProxyType(given))
 
 
 #: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through
