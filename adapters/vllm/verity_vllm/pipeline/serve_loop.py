@@ -23,14 +23,20 @@ class EngineLoop:
 
     Each request goes into the engine with the seed `engine.served_seed.served` gives it: a stochastic one that sent none is
     seeded from the current seed coin of ``coins`` (the Commit's, else its own) and its ``user``, a fresh coin when it comes
-    into an engine holding nothing with no window open (`SeedCoins.admitting`)."""
+    into an engine holding nothing with no window open (`SeedCoins.admitting`).
+
+    With ``group_s`` (``--group-ms``), each group starts on a window's boundary: the requests that arrive within ``group_s``
+    of the first one into an engine holding nothing with no window open are one group, all in the window's first step, and
+    a request arriving later waits in ``later`` until the engine holds nothing and its window has closed."""
 
     _STOP = object()
 
     def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
                  clock: Callable[[], float] = time.time, gate: TickGate | None = None, sched: Any = None,
-                 coins: SeedCoins | None = None) -> None:
+                 coins: SeedCoins | None = None, group_s: float = 0.0) -> None:
         self.engine, self.commit, self.cap, self.clock, self.gate, self.sched = engine, commit, int(cap), clock, gate, sched
+        self.group_s, self.gathering = float(group_s), False
+        self.later: collections.deque[Admission] = collections.deque()
         own = getattr(commit, "coins", None)
         if own is not None and coins is not None and coins is not own:
             raise ValueError("the engine loop seeds from its Commit's seed coins, whose windows record them: pass them to the Commit")
@@ -80,15 +86,22 @@ class EngineLoop:
                 self._release()
             else:
                 self.held = collections.deque(a for a in self.held if a.engine_id != eid)
+                self.later = collections.deque(a for a in self.later if a.engine_id != eid)
             return True
         if self.draining is not None:
             item.deliver(Delta([], "", error=f"the endpoint is stopping: {self.draining}"))
             return True
+        if self.group_s and not self.gathering:
+            self.later.append(item)
+            return True
+        self._enter(item)
+        return True
+
+    def _enter(self, item: Admission) -> None:
         if self.cap and (self.held or len(self.live) >= self.cap):
             self.held.append(item)
         else:
             self._add(item)
-        return True
 
     def _add(self, item: Admission) -> None:
         try:
@@ -130,14 +143,20 @@ class EngineLoop:
                 idle = not self.engine.has_unfinished_requests()
                 if idle and self.commit is not None:
                     self.commit.idle()
-                if idle and self.draining is not None:
+                if idle and self.later:
+                    running = self._group(None)
+                elif idle and self.draining is not None:
                     break
-                item = self.q.get() if idle else self._poll()
-                while item is not None:
-                    if not self._take(item):
-                        running = False
-                        break
-                    item = self._poll()
+                else:
+                    item = self.q.get() if idle else self._poll()
+                    if idle and self.group_s and not isinstance(item, tuple) and item is not self._STOP:
+                        running = self._group(item)
+                        item = None
+                    while item is not None:
+                        if not self._take(item):
+                            running = False
+                            break
+                        item = self._poll()
                 if not running or not self.engine.has_unfinished_requests():
                     continue
                 if self.gate is not None and not self.gate.ready(self.sched):
@@ -163,11 +182,33 @@ class EngineLoop:
                 if self.commit is not None:
                     self.commit.aborted(adm.engine_id, "server")
             self.live.clear()
-            for adm in self.held:
+            for adm in (*self.held, *self.later):
                 adm.deliver(Delta([], "", error=self.error or "the server stopped"))
             self.held.clear()
+            self.later.clear()
             if self.commit is not None and self.commit.is_open:
                 self.commit.close()
+
+    def _group(self, first: Any) -> bool:
+        """One group into an engine holding nothing: ``first`` (None: every request waiting in ``later``, admitted before any
+        drain) and whatever arrives within ``group_s``; False for the stop."""
+        self.gathering, end = True, self.clock() + self.group_s
+        try:
+            if first is None:
+                while self.later:
+                    self._enter(self.later.popleft())
+            elif not self._take(first):
+                return False
+            while (left := end - self.clock()) > 0:
+                try:
+                    item = self.q.get(timeout=left)
+                except queue.Empty:
+                    break
+                if not self._take(item):
+                    return False
+            return True
+        finally:
+            self.gathering = False
 
     def _poll(self) -> Any:
         try:

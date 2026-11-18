@@ -196,6 +196,10 @@ class Options:
                                   help="at most this many distinct requests in a Commit window, the class's slots (0: no bound): the "
                                        "engine holds at most this many unfinished requests, the rest wait in admission order, and a "
                                        "window closes before a step that would bring in one more (the running ones carry on)")
+    group_ms: float = option("--group-ms", type=float, default=0.0,
+                             help="start each group of requests on a Commit window's boundary (0: off): the requests arriving within "
+                                  "this many ms of the first one into an idle engine are one group, in the window's first step, and "
+                                  "one arriving later waits until the engine idles and its window closes (serve_loop.EngineLoop)")
     scheme: str = option("--scheme", choices=SS.SCHEMES, default=SS.ROWS,
                          help="the Commit's scheme, rows-sha512 (the declared Commit's committer, hm96-sha512 rows, 64-byte roots; "
                               "needs --required-manifest); its kernels are JIT-built with ninja, which must be on PATH")
@@ -591,6 +595,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
                              "class's registered step times)")
         if opts.window_requests:
             raise UsageError("--admit tick adds each request at its step; --window-requests would hold it past that")
+        if opts.group_ms:
+            raise UsageError("--admit tick adds each request at its step; --group-ms would hold it past that")
+    if opts.group_ms < 0 or (opts.group_ms and opts.idle_close_steps != 1):
+        raise UsageError("--group-ms is at least 0, and a group starts on a window's boundary only under --idle-close-steps 1")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
@@ -683,7 +691,8 @@ def main(opts: Options) -> int:
         draws_dir.start()
     if session is not None:
         session.begin(windows)
-    loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
+    loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests,
+                      group_s=opts.group_ms / 1000)
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model

@@ -63,7 +63,7 @@ VARIABLES = {
     "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus", "PRODUCT": "onsite",
     "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
-    "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
+    "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503 --group-ms 50", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
     "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
@@ -270,7 +270,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
                     if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
-            if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
+            if "SERVE_ARGS" in e["hooks"]} == {"certifier": VARIABLES["SERVE_ARGS"]}
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
     assert (hooks["POUW"], hooks["PEARLPLUS_TIE"]) == ("pearlplus", "1") and "H1_GATE" not in hooks
@@ -411,7 +411,7 @@ def test_under_pearl_pluss_tie_the_attesters_piece_is_whole_sets_no_class_and_fi
     assert not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(got)
     assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
     assert REG.parties["certifier"][NC.WORKERS].variables(cfg, BINDINGS) == {
-        "SERVE_ARGS": T.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
+        "SERVE_ARGS": VARIABLES["SERVE_ARGS"], "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
         "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
 
 
@@ -709,7 +709,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["V3C_CLASS"] == hooks["CLASSES"] == "4,27,2"
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "192.0.2.1" not in json.dumps(json.loads((state / "run.json").read_text()))
-    assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
+    assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503 --group-ms 50"
 
 
 #: two of the prover node's parties, whose pieces are the served window's
@@ -748,7 +748,7 @@ def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsy
 
 def test_serve_openais_flags_are_every_listed_pieces():
     cfg = R.load(CONFIG, REG)
-    assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == T.ID_FORM == "--protocol ids --id-payload 503"
+    assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == f"{T.ID_FORM} --group-ms {T.GROUP_MS}" == VARIABLES["SERVE_ARGS"]
     without = {**cfg, "protocols": [c for c in cfg["protocols"] if c not in ("certifier", "pearl-plus")]}
     assert "SERVE_ARGS" not in T.variables(without, BINDINGS)
     # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS

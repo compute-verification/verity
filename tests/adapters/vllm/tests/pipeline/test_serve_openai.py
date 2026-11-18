@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import json
+import queue
 import socket
 import threading
 import urllib.error
@@ -256,6 +257,23 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     assert "needs the Commit (drop --no-commit)" in refusal("--retain-exclude", "hidden_m1", "--no-commit")
     with pytest.raises(cli.UsageError, match="aren't attention interiors"):
         ss.committer(cli.parse("serve-openai", [*rows, "--retain-exclude", "weights"], environ={}), llm=None)
+
+
+def test_group_ms_is_refused_where_a_group_cant_start_on_a_windows_boundary(tmp_path):
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(predicted.row(tmp_path)))
+
+    def refusal(*more: str) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", [*rows, *more], environ={}), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert refusal("--group-ms", "50") is None and refusal("--group-ms", "50", "--admit", "release-order") is None
+    assert "--group-ms would hold it past that" in refusal("--group-ms", "50", "--admit", "tick", "--tick-sat-ms", "9",
+                                                           "--tick-free-ms", "9")
+    assert "only under --idle-close-steps 1" in refusal("--group-ms", "50", "--idle-close-steps", "2")
+    assert "at least 0" in refusal("--group-ms", "-1")
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
@@ -801,6 +819,73 @@ def test_window_requests_holds_the_engine_to_its_cap_and_serves_the_rest_in_admi
     assert max(len(live) for live in spy.live_at_steps) == 2 and loop.held == collections.deque()
     assert {e: sum(len(d.token_ids) for d in ds) for e, ds in got.items()} == dict(zip(eids[:4], lengths[:4]))
     assert all(ds[-1].finished and ds[-1].error is None for ds in got.values())
+
+
+class SimTime:
+    """The engine loop's clock and queue on simulated time: each item arrives at its time, a wait moves the clock to the
+    next arrival or by its timeout, and each engine step takes its time from ``steps`` (the last repeats)."""
+
+    def __init__(self, arrivals: list[tuple[float, Any]], steps: list[float]) -> None:
+        self.t, self.arrivals, self.steps = 0.0, sorted(arrivals, key=lambda a: a[0]), list(steps)
+
+    def __call__(self) -> float:
+        return self.t
+
+    def put(self, item: Any) -> None:
+        self.arrivals.append((self.t, item))
+
+    def get(self, block: bool = True, timeout: float | None = None) -> Any:
+        if self.arrivals and (self.arrivals[0][0] <= self.t or block and (timeout is None or self.arrivals[0][0] <= self.t + timeout)):
+            at, item = self.arrivals.pop(0)
+            self.t = max(self.t, at)
+            return item
+        if block and timeout is not None:
+            self.t += timeout
+        raise queue.Empty
+
+    def get_nowait(self) -> Any:
+        return self.get(block=False)
+
+    def stepping(self, engine: Engine) -> Engine:
+        step = engine.step
+
+        def timed() -> list[Any]:
+            self.t += self.steps.pop(0) if len(self.steps) > 1 else self.steps[0]
+            return step()
+
+        engine.step = timed
+        return engine
+
+
+@pytest.mark.parametrize("group_ms", [0.0, 50.0])
+def test_with_group_ms_the_fronts_group_and_then_the_fixed_load_each_start_a_window_of_their_own(tmp_path, group_ms):
+    """The tied onsite run's order at window steps 2 and 4 slots: the front's group of four, 2 to 5 ms apart, into an idle
+    engine whose first step takes 6.2 s, and the fixed load of four 3.7 s later, while the front's group still runs. Without
+    a group rule the front's group spills over two windows and the fixed load shares one; with it each is one window alone."""
+    runner = Runner()
+    windows = sc.CommitWindows(Committer(runner), tmp_path, run_id="t", window_steps=2, idle_close_steps=1, request_cap=4,
+                               eos_ids=[Tokenizer.eos_token_id], clock=lambda: 0.0, wall=lambda: 0.0)
+
+    def adm(eid: str, i: int) -> Admission:
+        return Admission(eid, eid + "-0", [1, 2 + i], {"max_tokens": 2, "seed": 0}, lambda d: None, {}, user=eid)
+
+    front, fixed = [f"user-{i}" for i in (3, 2, 1, 0)], [f"fixed.{i:05d}" for i in range(4)]
+    sim = SimTime([(t, adm(e, i)) for i, (t, e) in enumerate(zip((0.0, 0.002, 0.003, 0.005), front))]
+                  + [(3.7 + i / 1000, adm(e, 4 + i)) for i, e in enumerate(fixed)] + [(100.0, ("drain", "done"))], [6.2, 0.05])
+    loop = so.EngineLoop(sim.stepping(Engine(runner)), windows, cap=4, clock=sim, group_s=group_ms / 1000)
+    loop.q = sim
+    loop.run()
+    reqs = {r["engine_id"][:-2]: r["windows"] for r in records(tmp_path, "requests.jsonl")}
+    wins = {w["window"]: w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")}
+    assert set(reqs) == set(front) | set(fixed) and all(w["passed"] for w in wins.values())
+    alone = {e: reqs[e] for e in front + fixed if len(reqs[e]) == 1}
+    if not group_ms:
+        assert len({k for e in front for k in reqs[e]}) > 1, "tonight's spill: the front's group over two windows"
+        return
+    assert alone.keys() == set(front) | set(fixed)
+    ((f,),), ((x,),) = {tuple(reqs[e]) for e in front}, {tuple(reqs[e]) for e in fixed}
+    assert f != x and sorted(wins[x]["requests"]) == sorted(e + "-0" for e in fixed)
+    assert sorted(wins[f]["requests"]) == sorted(e + "-0" for e in front)
 
 
 def test_a_window_closes_before_a_step_that_would_bring_in_more_than_window_requests(tmp_path):

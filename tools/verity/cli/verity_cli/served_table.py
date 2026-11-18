@@ -637,18 +637,22 @@ SCAN_CLASS = "8,32,4,4,16"
 
 #: the most output tokens a front request asks for (`attester_piece.TOKENS`): its group stays in one execution phase
 FRONT_TOKENS = 4
+#: serve-openai's ``--group-ms`` under the tie: requests this close to a group's first are its group, so the front's group
+#: and the fixed load each start a window of their own
+GROUP_MS = 50
 
 
 def _attester_piece(cfg, params, bound):
     """Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets ``PEARLPLUS_TIE``) the tied class is Pearl+'s and
     V3c runs after the pieces, so the piece is whole (``CERTIFIER_CMD``) on the front's own window, sets no class, and
-    the front's requests ask for at most the window's steps, so each is in one window."""
+    the front's requests ask for at most the window's steps, so each is in one window; the serve starts each group on a
+    window's boundary (``--group-ms``), so the front's group and the fixed load after it are each a window alone."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
     if "pearl-plus" in cfg["protocols"]:
         tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
-        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
+        return {"SERVE_ARGS": f"{ID_FORM} --group-ms {GROUP_MS}", "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
                 "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
             "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
