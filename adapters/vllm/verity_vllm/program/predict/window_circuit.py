@@ -261,8 +261,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 def population_digest(circuit: IF.Circuit) -> str:
-    """The digest of ``circuit``'s population Program, which its registered values' domains bind (`window_rows.state_value`'s
-    ``program``)."""
+    """The digest of the Program ``circuit`` registers (`Circuit.program`, its wired Program), which its registered values'
+    domains bind (`window_rows.state_value`'s ``program``)."""
     return program_digest(circuit.program()[0])
 
 
