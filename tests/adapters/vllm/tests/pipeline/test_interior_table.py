@@ -39,6 +39,7 @@ from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
@@ -154,7 +155,7 @@ def _first(tables):
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     c = CS.commit(boundary, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                               "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(boundary))
-    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
+    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK)
     rec["roots"] += [{"port": t.value, "root": t.root.hex(), "leaves": t.leaves, "domain": t.domain.domain_id.hex()}
                      for t in tables]
     ports = CS.expected_ports(boundary) | {t.value: {"leaves": t.leaves, "domain": t.domain.domain_id.hex()} for t in tables}

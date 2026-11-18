@@ -8,18 +8,22 @@ protocols = ["sampled-proofs", "pearl-plus", "inference-only"]
 name = "served-window"
 
 [workload.params]
-model = "verity-int8/Llama-3.2-1B-INT8"
-revision = "15b0976d400d796ee589e7737d03a919526bf800"
-precision = "verity_int8"
+model = "unsloth/Llama-3.2-1B"
+revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
+precision = "bfloat16"
 slots = 4
-window-steps = 16
-load = "varied"
+window-steps = 2
+load = "fixed"
 
 [service]
 law = "rate:1/3481648"
 
 [program]
 commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
+
+[params."verity/pouw/pearl-plus/v1"]
+class = "4,27,2"
+tie-uniform = true
 
 [[party]]
 name = "workers"

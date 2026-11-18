@@ -157,7 +157,6 @@ from verity.commitments import registered_value as RV
 from .verdict import Verdict, _Collect
 
 RECEIPT = DM.REGISTRATION_RECEIPT
-KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
 #: the window's field naming the reset serving chose for its pool (Pool chain)
@@ -181,30 +180,6 @@ _HEX = re.compile(r"[0-9a-f]+")
 
 def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
-
-
-def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
-           window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
-           previous: str | None = None, partition: Mapping[str, Any] | None = None,
-           work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
-    `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
-    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`registered_value.Registered.entry`),
-    which make the record v2."""
-    part = dict(partition) if partition is not None else P.partition(program, query)
-    rec = {"format": DM.REGISTRATION if registered else DM.REGISTRATION_V1, "protocol": DM.ONE_STAGE_PROTOCOL, "program": part["program"],
-           "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
-           "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
-           "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
-           "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
-    if registered:
-        rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in RV.ENTRY_KEYS},
-                              **RV.width_entry(int(e.get(RV.WIDTH_KEY, RV.WORD_BITS)))} for e in registered]
-    return rec
-
-
-
-
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
@@ -374,7 +349,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     else:
         if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
-    if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
+    if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in DD.KINDS:
         c.fail("window", rec["window"])
     # R2
     part = dict(partition) if partition is not None else P.partition(program, query)
@@ -986,7 +961,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+__all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
            "WINDOW_DOMAIN", "check", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

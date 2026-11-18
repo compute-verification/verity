@@ -17,6 +17,7 @@ from verity_bench.proof_layers_result import (
     SCHEMA,
     Result,
 )
+from verity_bench.kit_report import LEAN, checked_by as words
 from verity_bench.spot_status import WIRES
 
 # ---- printing and writing ------------------------------------------------------------------------------------------------
@@ -77,6 +78,7 @@ def render(results: Sequence[Result]) -> str:
                                                   for r in results) else []),
               *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in results for n in r.notes]
+    lines.append(f"- Lean verdicts: {words(LEAN)}, under the coins each benchmark result's `ran with:` line names")
     return "\n".join(lines).rstrip()
 
 

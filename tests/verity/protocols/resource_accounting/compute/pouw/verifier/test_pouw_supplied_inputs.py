@@ -22,6 +22,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import com
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
@@ -69,7 +70,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     x_root = hashlib.sha512(b"x").digest()
     served = [{"port": p, "root": x_root.hex() if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = RV.Registered.commit(digest, "w", [[0] * 512] * 16, word_bits=G.width(prog, "w"))
-    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, WINDOW, partition=part, registered=[w.entry()])
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, served, WINDOW, partition=part, registered=[w.entry()])
     sup = G.sources(sources(c))
     mine = {v: G.supplied_value(prog, v, sup[v], rec, sorted(sup), prog=digest, binding=BINDING) for v in sorted(sup)}
     salt = G.window_salt(bytes.fromhex(COIN), WINDOW, BINDING)

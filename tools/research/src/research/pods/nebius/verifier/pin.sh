@@ -5,11 +5,13 @@
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build
 # poub-verifier poub-difftest` and `spot-verifier` (what a gate run's kit builds first) run there as
 # auditor, so neither a run nor a replay waits on a build. The pin (commit, UTC time) is appended to /opt/vy-verifier/pins.jsonl,
-# root's and append-only (`chattr +a`, host.py `record_pin`), and every run's request names its line (RT4-INT-40). Last,
-# /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
-# it for an installed COMMIT skips the unpack and reads no TAR, and logs the pin again.
+# root's and append-only (`chattr +a`, host.py `record_pin`), and every run's request names its line (RT4-INT-40). Before
+# that, vy-verifier-figures writes each peer's figures file of /etc/vy/verifier.json from COMMIT's data sheets, and refuses the
+# pin when their digest isn't the peer's `figures_sha512`. Last, /opt/vy-verifier/current -> COMMIT. A run runs from the tree it
+# was requested at: host.py refuses one whose pin moved. Rerunning it for an installed COMMIT skips the unpack and reads no TAR,
+# and writes the figures and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/poub_session verity/protocols/resource_accounting/memory/poub/attester/live_verifier tools/research/src/research \
+#   git archive COMMIT verity benchmarks/poub_session calibration/hardware tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }
@@ -24,7 +26,7 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py tools/research/src/research/store/cli.py; do
+  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py tools/research/src/research/store/cli.py benchmarks/poub_session/sheets.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
@@ -58,6 +60,7 @@ done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
   sh -c "cd '$pkg' && lake build poub-verifier poub-difftest &&
          cd '$T/verity/protocols/proofs/spot/verifier/lean' && lake build spot-verifier" | tail -1
+/usr/bin/python3 -I /usr/local/sbin/vy-verifier-figures "$T" || die "no figures for $c (above): nothing pinned"
 /usr/bin/python3 -I "$T/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"

@@ -209,7 +209,8 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -1563,7 +1564,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     (`KeptIngress`): the caller passes it, since SPOT reads the attester's record as a certified input and imports
     neither the attester nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
     doesn't give the window's scan or the caller passed no reader."""
-    from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
 
     if kept_ingress is None:
         raise ValueError("a window's scan reads the network attester run its serve kept, or that it kept none, by the "
@@ -1573,7 +1574,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
         return None
     params, io, phases = kept
     T = params.window
-    cls.scan.serves(params)
+    IS.Class(**cls.scan.shape).serves(params)
     if T != cls.buckets:
         raise ValueError(f"the kept run's execution phases are {T} buckets, not a window of class {cls}'s "
                          f"{cls.buckets}: serve at the class's scan schedule")
@@ -1860,7 +1861,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=R, previous=previous)
+    win.write(c, a.out, prov, registrar=DK, previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}

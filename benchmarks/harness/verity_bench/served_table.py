@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit
+from verity_bench.kit_report import checked_by_of
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
                                        former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
@@ -211,6 +212,8 @@ class Found:
     caveats: list[dict[str, Any]]
     device: str | None = None
     card: str | None = None
+    #: who ran the result's gates (`kit_report.checked_by_of`), None for a result that predates the field
+    checked_by: str | None = None
 
 
 def _labels(store: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
@@ -251,7 +254,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
             return [], f"no timed {', '.join(absent)} at {row['point']['id']}"
     caveats = [label for label in labels if label["key"] in CAVEAT_KEYS]
     device = doc["identity"].get("gpu")
-    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device, ran_on) for row in rows], None
+    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device, ran_on, checked_by_of(doc["gates"]))
+            for row in rows], None
 
 
 def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
@@ -357,9 +361,10 @@ def _points(protocol: Protocol, record: Sequence[str], store: Any,
 def _source(spec: str, point: str, found: Found | None, record: str | None) -> dict[str, Any]:
     if found is None:
         return {"spec": spec, "point": point, "device": None, "run": None, "art": None, "commit": None, "reps": None,
-                "caveats": [], "record": record}
+                "caveats": [], "record": record, "checked_by": None}
     return {"spec": spec, "point": point, "device": found.device, "run": found.run, "art": found.art,
-            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record}
+            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record,
+            "checked_by": found.checked_by}
 
 
 def _over(point: Mapping[str, Any], arm: str, over: str | None, metric: str) -> dict[str, Any] | None:
@@ -413,7 +418,7 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     row: dict[str, Any] = {"device": live.device, "run": live.run, "arm": live.arm, "control": live.control,
                            "machine": None, "record": None, "commit": None, "batch": None, "t": None, "reps": None,
                            "step_ms": None, "control_ms": None, "ratio": None, "form": None, "coins": None,
-                           "caveats": []}
+                           "checked_by": None, "caveats": []}
     attempt = store.get_attempt(live.run)
     if attempt is None:
         return row, "not in the store or on its remote"
@@ -438,7 +443,8 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     coins = stop[live.arm]["end"]["live"]["coins"]
     row.update(batch=summary["b"], t=check.get("t"), reps=min(len(steps), len(controls)),
                step_ms=statistics.median(steps), control_ms=statistics.median(controls),
-               form=check.get("form_basis") or check.get("form"), coins=coins["source"])
+               form=check.get("form_basis") or check.get("form"), coins=coins["source"],
+               checked_by=summary.get("checked_by"))
     row["ratio"] = row["step_ms"] / row["control_ms"]
     return row, None
 

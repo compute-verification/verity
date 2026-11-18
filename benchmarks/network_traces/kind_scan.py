@@ -81,7 +81,7 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
 DESCRIPTOR = {"**": S}
 #: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
-#: a one-stage registration (`one_stage.docket.record`): the digests and population of the Program and query, the
+#: a one-stage registration (`prover.docket.record`): the digests and population of the Program and query, the
 #: verifier's sampling design over them, the roots and registered values hiding commitments under domains of
 #: their structure; its window the provenance of a committed window: its run root, circuit record, class, per-window
 #: values, registered roots and index leaf. The window's own number is none of them, the advice's binding
@@ -121,7 +121,7 @@ CERTIFICATES = {**under("records[]", ATTESTATION_DOC), **under("rows[]", ATTESTA
 ANSWER = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M, "profile": O, "public": O,
     "profile.link": S, "profile.windows": S,
-    **{f"profile.placement.{k}": S for k in ("kind", "trusted-device", "uncounted")},
+    **{f"profile.placement.{k}": S for k in ("kind", "trusted-device", "uncounted", "key_pin", "coins_on")},
     "profile.placement.parties.*": S,
     **{f"profile.placement.links[].{k}": S for k in ("name", "from", "to", "counted", "via")},
     **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows", "start")}, "public.held[]": O,

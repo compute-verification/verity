@@ -16,7 +16,8 @@ finished and the engine has idled. One JSON line a request goes to ``--out``: it
 ``--rate`` a second; each prompt one chat turn (Llama 3's header, one of six questions, filler, the assistant header, in the
 endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-range``, so prompts share cached prefixes;
 ``max_tokens`` uniform in 1 … ``--max-tokens``, greedy, a seed of its own, streamed; ``user`` ``varied.<j>``. With
-``--release RUN`` request j carries ``x-verity-release: j`` and ``x-verity-release-run: RUN`` (its place in the arrival
+``--release RUN`` (a run id in hex, as `verity.release.release_fields` reads it) request j carries
+``x-verity-release: j`` and ``x-verity-release-run: RUN`` (its place in the arrival
 order, as the network attester numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 
