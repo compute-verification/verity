@@ -73,7 +73,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, ``served_piece.py --collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
+   piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
    case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
@@ -146,6 +146,9 @@ MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_
           ("mlp.down_proj", ("mlp.down_proj",)))
 SERVING = ("the KV cache's pages and the activations: serving state, which the weights-only obligation doesn't cover and "
            "an honest run doesn't need")
+#: who graded PoUS's answer, its placement's ``graded_by``
+GRADED_BY = ("graded by the developer's piece (benchmarks/pous/served_piece.py: period.answer, with setup's tie, and "
+             "pous-run-protocol) on the served node; no auditor-side entry runs it")
 #: the auditor's device and how the card reaches its challenger: the gate's `challenger_party` verb under the card's key,
 #: and the port the side listens on, which the security groups open from the card only
 CHALLENGER_HOST = "vy-auditor-2"
@@ -634,7 +637,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
                            "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
             "placement": CS.placement(node, host, key_sha, **deployed) | {
                 "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
-                        "logged under the window's binding, with the session's id derived from both"},
+                        "logged under the window's binding, with the session's id derived from both",
+                "graded_by": GRADED_BY},
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}

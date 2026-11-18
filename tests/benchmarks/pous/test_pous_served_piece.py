@@ -374,6 +374,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
     assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
+    assert prof["placement"]["graded_by"] == SP.GRADED_BY and prof["placement"]["unchecked"] == dict(mc.UNCHECKED)
+    assert SV.graded_by(row) == SP.GRADED_BY
+    assert SV.ran_by("space", row | {"answer_from": "as written"}, "remote")["answer_from"] == f"as written; {SP.GRADED_BY}"
 
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", True) and doc["setup"] == CS.SETUP
@@ -1254,3 +1257,27 @@ def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(t
     out = _held_answer(tmp_path, 3, HELD_ANSWER | {"protocol": "verity/pous/p2/v4/run"})
     assert SP.main(["collect-bandwidth", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 1
     assert "not PoUB's" in capsys.readouterr().out.splitlines()[-1]
+
+
+def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tmp_path):
+    """An accepted session's public answer (`p2_stage.bandwidth.public_answer`) carries a placement, which it had none
+    of: what no auditor-side entry checks of the memory attester (`memory_attester.UNCHECKED`) and who graded it
+    (`GRADED_BY`), which the launcher ends the bandwidth row's ``answer_from`` with (`served_verdicts.ran_by`), in place
+    of its general sentence. The placement names no premise, so nothing reads it as holding."""
+    from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+
+    session = {"verdict": "accept", "delta": "1/1099511627776", "span_ns": 16448, "q_bytes": 8224, "draws": [0],
+               "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}
+    judged = p2_parties.core_answer({"protocol": p2_parties.PROTOCOL, "registration": "cd" * 64, **session})
+    (d := tmp_path / "bandwidth").mkdir()
+    answer = SP.BW.public_answer(judged, bytes(64), "beside the served window", 1000, d)
+    assert answer["profile"]["placement"] == {"unchecked": dict(mc.UNCHECKED), "graded_by": SP.BW.GRADED_BY}
+    assert not {mc.PREMISE, mc.PREMISE_BEFORE} & set(answer["profile"]["placement"])
+    (d / "answer.json").write_text(json.dumps(answer))
+    row = SV.piece_row("bandwidth", tmp_path)
+    assert SV.graded_by(row) == SP.BW.GRADED_BY and SP.BW.GRADED_BY.endswith(
+        "a live verdict on the auditor's device exists (poub-verifier, its bandwidth party) and is not the one this row "
+        "reads")
+    for product, tail in (("remote", ""), ("onsite", f"; {SV.ONSITE_UNDECIDED}")):
+        said = SV.ran_by("bandwidth", row | {"answer_from": "as written"}, product)["answer_from"]
+        assert said == f"as written; {SP.BW.GRADED_BY}{tail}" and SV.PIECE not in said
