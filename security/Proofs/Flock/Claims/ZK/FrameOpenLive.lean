@@ -65,7 +65,7 @@ open Claims.ZKServer (L0Round LeanRelease absPos zeros_get!)
 
 /-- **Two bodies that are a level-0 masked round** at configuration `c` and absorbed position `p`: the zero-pad round
 `G` and the round at the pads `H` of an `L0Round` of `n` values, each with its squeeze of `nc` coins of kind `k`. -/
-abbrev L0Sent (c : Cfg) (p n : ℕ) (k : UInt8) (nc : ℕ) (Bz Bh : Claims.Msg) : Prop :=
+abbrev L0Sent (c : Cfg) (p n : ℕ) (k : UInt8) (nc : ℕ) (Bz Bh : Hash.Msg) : Prop :=
   ∃ G H, L0Round c p n G H ∧ Bz = encs G ++ (Frame.sq k nc).enc ∧ Bh = encs H ++ (Frame.sq k nc).enc
 
 section Sent
@@ -131,8 +131,8 @@ end Sent
 
 section Release
 
-variable {W R : Type} {L : LeanRelease W R} {x : Claims.Msg} {ρ : R} {hh : List (Claims.Msg × Claims.Msg)}
-  {p n : ℕ} {k : UInt8} {Bz Bh : Claims.Msg} {m : Masker}
+variable {W R : Type} {L : LeanRelease W R} {x : Hash.Msg} {ρ : R} {hh : List (Hash.Msg × Hash.Msg)}
+  {p n : ℕ} {k : UInt8} {Bz Bh : Hash.Msg} {m : Masker}
 
 /-- **The frame releases a sent level-0 round's zero-pad body as its body at the pads**, tagged `0`, where it takes
 the coins before the round at level 0's masked phase and the round's position (`LeanRelease.release_l0`). -/
@@ -179,7 +179,7 @@ each body `1 ≤ i ≤ k_0 + 2` is a sent level-0 round, the live opening's its 
 theorem ligeritoPZk_cutL0_live (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (d : Draws) (mk : Option MaskSlot)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (tr : Transcript) (l : Array Claims.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
+    (tr : Transcript) (l : Array Hash.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
     (hl0 : 0 < lay.k0) (hkk : sch.k0 ≤ lay.k0) :
     let B := fun (h : Array F128) =>
       l0BodyAt coin l.size tr.pending.data.toList T (flat cm0.cap) sch t b lay h rep extra nonce

@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.commitments import domains as DM
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.crypto import lms
@@ -228,7 +229,7 @@ def test_the_digest_is_one_stages():
         b = bytes.fromhex(_instance(seed)["commitment"])
         c = CC.commitment(b)
         assert CC.digest(c).hex() == R.digest(json.loads(b))
-    assert CC.ONE_STAGE == R.PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (R.FORMAT, R.FORMAT_V2)
+    assert CC.ONE_STAGE == DM.ONE_STAGE_PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (DM.REGISTRATION_V1, DM.REGISTRATION)
 
 
 def test_ratios_have_one_spelling():

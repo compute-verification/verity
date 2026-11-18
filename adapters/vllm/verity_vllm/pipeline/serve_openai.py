@@ -78,7 +78,7 @@ under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.j
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
@@ -124,6 +124,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import shutil
 import signal
@@ -146,9 +147,9 @@ from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
-                                               records_mirror, served_statics, user_of)
-from verity_vllm.pipeline.serve_loop import EngineLoop
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, records_mirror,
+                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
                                                  usage_of)
@@ -180,7 +181,7 @@ TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler r
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
+    out: str | None = option("--out", default=None, help="the records' directory, outside the run's directory (refused inside it)")
     host: str = option("--host", default="127.0.0.1")
     port: int = option("--port", type=int, default=18082)
     model: str = option("--model", help="the pinned model (the int8 pin: manifests/checkpoints-int8.json)")
@@ -734,7 +735,7 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] = os.environ) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")
@@ -754,8 +755,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
-        raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
     scheme = M.option(opts.protocols)
@@ -764,6 +763,14 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
+    if why := SG.out_refusal(opts.out, environ):
+        raise UsageError(why)
+    from verity_vllm.pipeline.replay_bundle import private_refusal
+
+    if opts.seal and (why := private_refusal(environ)):
+        raise UsageError(f"--seal: {why}")
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+        raise UsageError(f"--seal: {why}")
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:

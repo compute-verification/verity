@@ -186,7 +186,7 @@ namespace DigestCut
 
 /-- **The two-continuation finder** at the cut `K` along `s`, at `q` SHA-512 calls on every coin: a uniform tape of the
 fork (`forkG`, `CoinTape`), its output the two messages the continuations reveal. -/
-noncomputable def finder {g : Game α} (K : DigestCut Claims.Msg g) (s : Strategy g) (q : ℕ) : Claims.Finder where
+noncomputable def finder {g : Game α} (K : DigestCut Hash.Msg g) (s : Strategy g) (q : ℕ) : Claims.Finder where
   S := CoinTape (K.forkG s) (K.forkS s)
   fin := CoinTape.fintype _ _
   ne := CoinTape.nonempty _ _

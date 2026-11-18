@@ -41,7 +41,6 @@ from typing import Any
 
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
@@ -116,7 +115,7 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
         raise Refused(f"pair {pair}: the commitment vector does not combine into a TP run root: {e}") from e
     if len(vec) != int(dd["world"]) or combined != row["commit"].get("tp_run_root") or ctx["tp_run_root"] != row["commit"]["tp_run_root"]:
         raise Refused(f"pair {pair}: the commitment vector does not combine into the TP run root of record {str(row['commit'].get('tp_run_root'))[:16]}")
-    store, run = SD.load(bdir / "store")
+    store, run = RB.load_store(bdir)
     folded = store._run_root(run)
     for what, got in (("the bundle's run root", ctx["run_root"]), ("the store's run root", run.run_root.hex()),
                       ("the store's step roots folded", folded.hex() if folded else None), ("the commitment vector's", vec[rank].hex())):

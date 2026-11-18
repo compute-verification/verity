@@ -663,7 +663,7 @@ theorem checkStmt_scopeOk {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables
 
 /-- **What a staged part's tables passed**: each is in `ProvedScope.scopeOk`, and its population is the instance
 count of V\*'s statement `s` at the inner shape (`checkStmt`, `checkCircuit_ok`, `check_ok`). -/
-theorem staged_scope {st : Stage} {s : ℕ} {x xO : Claims.Msg} (h : StagedPart st s x xO)
+theorem staged_scope {st : Stage} {s : ℕ} {x xO : Hash.Msg} (h : StagedPart st s x xO)
     {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
     Flock.ProvedScope.scopeOk p.sts[t].c = true ∧ ∃ r ss sv, readX x = some r ∧
@@ -715,7 +715,7 @@ theorem oneFull_ok {i : Flock.RecVStar.Inner} {sts : Array Flock.Stmt}
 
 /-- **A staged part sets up one table holding its whole population**: its setup ran `RecSetup.oneFull` under the
 verifier's inner shape, which the staged statement carries (`insO_staged`). -/
-theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
+theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Hash.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (h : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts)) :
     sts.size = 1 ∧ ∀ t (ht : t < sts.size), Flock.RecVStar.population sts[t] ≤ sts[t].n := by
   obtain ⟨ms, -, -, -, rfl, -, -⟩ := h
@@ -728,7 +728,7 @@ theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {
 /-- **A staged RecCap part's table holds all its `N` instances**: `checkStmt` makes its population `N`
 (`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table sampled
 short, which proves only its sampled proof blocks (`HmRow.drawn`), never stages. -/
-theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
+theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Hash.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} {r : XR} {l N : ℕ} (hS : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts))
     (hr : readX x = some r) (hcap : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N))
     (h0 : 0 < sts.size) : N ≤ sts[0].n := by

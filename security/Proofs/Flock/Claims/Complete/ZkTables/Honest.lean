@@ -61,7 +61,7 @@ def traces (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) : Array Trace :=
   (Array.range sts.size).map fun i => traceOf sts[i]! (Readable.tableWit sts.size w i).hid.toArray 0
 
 /-- **The honest masked prover's program** at several tables: `progZk`'s, on each table's share of the witness. -/
-def prog (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Claims.Msg :=
+def prog (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Hash.Msg :=
   match setupOf true x with
   | none => .ret []
   | some (_, spec, sts) => do
@@ -95,7 +95,7 @@ theorem traces_one {sts : Array Flock.Stmt} (h : sts.size = 1) (w : Claims.Flock
     simp only [Array.getElem_map, Array.getElem_range, h, zero_mul, tableWit_one]
 
 /-- **On a statement whose setup has one table the program is `progZk`'s.** -/
-theorem prog_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem prog_one {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) (w : Claims.Flock.Wit) (ω : TapeZk) :
     prog x w ω = progZk x w ω := by
   unfold prog progZk
@@ -105,9 +105,9 @@ theorem prog_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Fl
   rfl
 
 /-- **On a statement whose setup has one table the prover's next message is `honestPZk`'s.** -/
-theorem honestP_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem honestP_one {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) (w : Claims.Flock.Wit)
-    (hist : List (Claims.Msg × Claims.Msg)) (ω : TapeZk) : (honestP w).next x hist ω = (honestPZk w).next x hist ω := by
+    (hist : List (Hash.Msg × Hash.Msg)) (ω : TapeZk) : (honestP w).next x hist ω = (honestPZk w).next x hist ω := by
   show feed (prog x w ω) _ = feed (progZk x w ω) _
   rw [prog_one hs h1]
 

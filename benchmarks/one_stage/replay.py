@@ -56,6 +56,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
     draw as DR,
@@ -589,7 +590,7 @@ def python(c: Case) -> dict:
     digest = bytes.fromhex(R.digest(rec))
     delta = Fraction(p["delta"])
     out = lambda verdict, reason=None, public=None, profile=None: PR.outcome(  # noqa: E731
-        R.PROTOCOL, verdict, reason, digest, public, profile)
+        DM.ONE_STAGE_PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
                     schemas=p.get("row_schemas"), window_root=p.get("window_root")).codes

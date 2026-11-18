@@ -29,7 +29,7 @@ Every other unit holds its Definition's function of the window's values:
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
 - each cut linear's `LinearARow_v3` its x widened to FP32 exactly, its A row;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
-  core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
+  ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
@@ -58,7 +58,7 @@ from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
@@ -703,7 +703,7 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> G.Registered:
+def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> RV.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
     bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows, each under 192 fresh bytes from the OS, a
     per-window value under ``program``, its circuit's `inference_blocks.program_digest`, and the execution phase's open

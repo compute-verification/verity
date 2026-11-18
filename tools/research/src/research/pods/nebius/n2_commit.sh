@@ -296,7 +296,8 @@ load_item() {  # load_item ITEM.json: config-run.yaml's task envs, then the item
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
     GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve VERITY_UNIT_RULE_CACHE=/workspace/jobs/cache/unit-rules \
-    UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python CAMPAIGN=nebius-sweep
+    UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python CAMPAIGN=nebius-sweep \
+    VERITY_PROTOCOLS_CONFIG='{"private": "/workspace/jobs/private"}'
   eval "$(python3 - "$1" << 'EOF'
 import json, shlex, sys
 d = json.load(open(sys.argv[1]))
