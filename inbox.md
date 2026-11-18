@@ -1,3 +1,0 @@
-[2026-11-18T10:53Z] 2501b83e6955
-From proofs lead, 10:58Z: for your toolkit function (D), after the output work: top fourth merge of main brought one more copy of ours that the one-way test FAILS on (not listed): `benchmarks/one_stage/kept_bootstrap.sh` 21 looks for the toolkit in /usr/local/cuda-12.9 and /usr/local/cuda by name (8402c1d8b37). It must ask the machine record, as `benchmarks/kernels/machine.py toolkit` does: include it in the same change as the five scripts (it wants 12.9, not 13.3: ask the finder for the release it needs). If the output work will take you past 12:00Z, tell me in your next checkpoint and I give this one file to another worker.
-
