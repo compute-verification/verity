@@ -5,8 +5,8 @@ public import Definitions.Pouw.Window
 /-!
 # A window's ε from its calls' (M2), with a sample that depends on the registration (C1) (trusted)
 
-C1, a sample that depends on the registration, is already expressed on main: `Spot.Sampling.auditReg`
-(`Proofs/Spot/Sampling/RegDraw.lean`) and the keyed window's record theorem over it,
+C1, a sample that depends on the registration, is already expressed on main: `Pouw.Window.auditReg`
+(`Definitions/Pouw/Window.lean`) and the keyed window's record theorem over it,
 `keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedSample.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `ε_bind(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `ε_bind(R, τ)` are in terms of its calls', for a window of `C` calls,

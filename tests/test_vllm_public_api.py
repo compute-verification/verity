@@ -188,8 +188,6 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
-    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
-                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.scheme_plugin": "I1: schemes turned on by name inside vLLM's own OpenAI server: its general "
                                           "plugin (register) and ASGI middleware (Front), configured by VERITY_PROTOCOLS, "
                                           "which serve-tax's tick arms and the trace corpus serve under",
