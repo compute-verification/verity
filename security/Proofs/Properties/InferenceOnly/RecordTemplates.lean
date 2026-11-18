@@ -200,7 +200,7 @@ theorem unit_tmpl {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String}
   have hk := (hall r hrl).1
   rw [(tmplOf_spec htm).1, (child_root P _ _).1]
   show (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0 = _
-  rw [Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, ← getElem!_pos _ _ hk]
+  rw [Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, ← getElem!_pos (P.defs[P.root]!).body.nodes r.node hk]
   exact range_fn hP hrs hrl hil (hrt.trans (hxt.symm.trans (htid.trans hti.symm)))
 
 /-! ## The wiring's templates -/
