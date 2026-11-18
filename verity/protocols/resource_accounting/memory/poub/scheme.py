@@ -12,15 +12,18 @@ They are two protocols, each with its own verifier and its own store, and no set
   session over that store is its process `SESSION_PROCESS` (`prover.commit_session`), which reads what the build
   declared.
 
-No verifier loads this module, and it loads none: each verifier states its own id, component name and deadline, and
-PoUB's tests hold them equal to the declarations.
+No verifier loads this module: each verifier states its own id, component name and deadline, and PoUB's tests hold them
+equal to the declarations. It reads each one's parties and channels from its verifier's manifest (`verifier.p2_parties`,
+`verifier.session_parties`).
 
 Neither declares a block: PoUB's opening unit (`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2``) is
 proved in the read session's own window (`prover.window`), not as a template of the served circuit's first level, and
 P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
 bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layout (g, b), a function of the prover's hash
 budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
-Lean's εrank, which is not the audit's error ε), and its two sides in words (`OVER`, `UNDER`).
+Lean's εrank, which is not the audit's error ε).
+The two sides are the route form's: `ResourceAccounting.Remote.Run.Paid` is `Verity.Scheme`'s charge exactly
+(`ResourceAccounting.Remote.Run.scheme`); the deployed forms are what its `GetsBack` gives.
 """
 
 from __future__ import annotations
@@ -31,9 +34,14 @@ from importlib import import_module
 from types import MappingProxyType
 from typing import Any
 
+from dataclasses import replace
+
 from verity import hooks as H
 from verity.commitments import domains
+from verity.protocol import Channel
 from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
+from verity.protocols.resource_accounting.memory.poub.verifier import session_parties as RS
 
 #: P2's allowance from a window's boundary message to its roots' deadline, which the session's parameters carry
 #: (`verifier.p2_parties.SESSION`); the remote session's is a parameter of each session (`verifier.audit.Params`)
@@ -63,13 +71,6 @@ def delta_sketch(g: int, b: int) -> S.Term:
 #: each scheme's own term: `DELTA_SKETCH` at its receipts' layout, the conclusion of `SketchBoundP2` (rank 12, 256-bit
 #: sign keys) and of `SketchBoundDeployed` (rank 27, 512-bit sign keys)
 DELTA_SCHEME = {"bandwidth": delta_sketch(96, 257), "poub": delta_sketch(216, 513)}
-#: the two sides (`Verity.Scheme.over`, `under`), in bits. The Lean's conclusion is that an accepted session's reads are
-#: at least (1 − γ) of its credited bits (`RemoteRunConservation`: Σ_w reads_w ≥ (1 − γ̄)·n·P·N·b), γ the session's
-#: ledger total (`verifier.audit.GammaTerms`), a public rational g/D of the session. Both sides are multiplied by D, so
-#: each is a natural and no factor stands on either: (D − g)·credited ≤ D·reads.
-OVER = ("(D − g) × the session's credited bits, n·P·N·b: its n windows, each of P passes over the store's N blocks of "
-        "b bits, where γ = g/D in lowest terms is the session's ledger total")
-UNDER = "D × the bits the session's passes read from the node's memory tier, summed over its windows"
 #: the ways to a correct receipt without a read from node memory, as the session's ledger names them
 #: (`verifier.audit.GammaTerms`)
 CHARGES = ("chip", "counting", "rebuild", "host", "link", "carrier")
@@ -79,6 +80,25 @@ _SKETCH = ("ResourceAccounting.Assumptions.SketchHashRandom",
            "ResourceAccounting.Remote.Sketch.Assumptions.Present",
            "ResourceAccounting.Remote.Sketch.Assumptions.Receipted")
 _OUTSIDE = "the opening unit (BlockOpeningCheck_v2) is proved outside the workload's circuit: "
+#: why neither is attached by name on a served run of its own
+_P2_ATTACH = ("bandwidth attaches through no hook of a served run: its prover reads PoUS's store and the receipts PoUS's "
+              "decode computed, inside PoUS's piece (benchmarks/pous/served_piece.py), and its verifier is its own "
+              "session (`verifier.p2_parties`)")
+
+
+def _named(role: str) -> str:
+    return P2.CLOSER_PARTY if role == P2.VERIFIER else role
+
+
+def _bandwidth_attach(exchange: Any, ctx: Any) -> Any:
+    raise LookupError(_P2_ATTACH)
+
+
+def _refresh(values: Mapping[str, Any]) -> str | None:
+    return f"refresh waits on {REFRESH_GOAL}: a session with it on, accepted by the Lean verifier" \
+        if values["refresh"] else None
+
+
 _REQUIRES = {
     "log-order": "the verifier party's own log of the session",
     "log-times": "the verifier party's clock on the auditor's host",
@@ -102,14 +122,27 @@ BANDWIDTH = S.register(S.Scheme(
     charges=tuple(S.Charge(name, f"no P2 record carries it: verifier.audit.GammaTerms.{name} at P2's units",
                            bounded=False) for name in CHARGES),
     delta_scheme=DELTA_SCHEME["bandwidth"],
-    over=OVER,
-    under=UNDER,
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: PoUS's vk root over the store and a receipt root a pass",
         "one-design": _OUTSIDE + "its own sample of receipts a window and its own pooled bound, the openings sent to "
                                  "the verifier in the clear",
     },
+    over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
+    under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
+          "(`Remote.Run.paid`), in bits",
+    attach=_bandwidth_attach,
+    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), S.VERIFIER),
+    channels=(*(replace(c, sender=_named(c.sender), receiver=_named(c.receiver)) for c in P2.MANIFEST.channels),
+              Channel(P2.CLOSER_PARTY, S.VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
+    channel_schemas=P2.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset({"receipts"}),
+    depends=("pous",),
+    record="bandwidth",
+    symbol="Q_cert",
+    published=("bytes", Fraction(1, 8)),
+    record_owner="memory-accounting",
 ))
 
 POUB = S.register(S.Scheme(
@@ -122,9 +155,8 @@ POUB = S.register(S.Scheme(
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
     charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
     delta_scheme=DELTA_SCHEME["poub"],
-    over=OVER,
-    under=UNDER,
     settings={"refresh": False},
+    check_settings=_refresh,
     hooks=("declared", "memory", "steps"),
     requests=lambda ctx: requests(ctx),
     attach=lambda exchange, ctx: attach(exchange, ctx),
@@ -136,6 +168,20 @@ POUB = S.register(S.Scheme(
                                  "(memory-accounting/read-session-in-zero-knowledge); today its own sample of "
                                  "receipts a window and its own pooled bound",
     },
+    over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
+    under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
+          "(`Remote.Run.paid`), in bits",
+    parties=RS.MANIFEST.parties,
+    channels=RS.MANIFEST.channels,
+    channel_schemas=RS.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset(),
+    depends=(),
+    record=S.Lacks("no combined record has a row for the remote session: its verdict is its own session's "
+                   "(benchmarks/poub_session)"),
+    symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
+    published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
+    record_owner=S.Lacks("no combined record has a row for the remote session"),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
@@ -188,13 +234,6 @@ def session(verifier: str, **kw: Any) -> Any:
     return prover(SESSION_PROCESS)(verifier, **kw)
 
 
-def settings(given: Mapping[str, Any]) -> dict[str, Any]:
-    """`POUB`'s settings with ``given`` over their defaults: the one place a session's ``refresh`` is read from."""
-    out = S.settings(POUB, given)
-    if out["refresh"]:
-        raise NotImplementedError(REFRESH_GOAL)
-    return out
-
-
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "OVER", "POUB", "PROVER", "REFRESH_GOAL",
-           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "UNDER", "attach", "delta_sketch", "prover", "requests", "session", "settings"]
+__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "POUB", "PROVER",
+           "REFRESH_GOAL", "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "attach", "delta_sketch", "prover",
+           "requests", "session"]

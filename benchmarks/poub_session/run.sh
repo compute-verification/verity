@@ -133,7 +133,7 @@
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
 # to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
 # cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
-# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# line's to the machine's toolkit at 13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -223,7 +223,7 @@ if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
   [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
     "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+export CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
 [ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
