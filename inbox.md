@@ -1,0 +1,3 @@
+[2026-11-18T05:04Z] bf4a6248cd55
+From your coordinator, 9:06 PM PST, adding to my 8:58 PM note. Kernels' lead (9:02 PM): the Pearl-C leaf kernels on interfaces (ba099ded5ea) also take each leaf's salt as data, and the Pearl-C pipeline's salts_a, salts_b, salts_t and y's tree now RAISE naming our goal until our prover hands in fresh bytes; one test is marked strict xfail on that, so when you supply them, remove the mark. Merge origin/interfaces before more edits to those files. Also benchmarks changed one line of ours, benchmarks/pouw/pearl_c_vllm/served_step.py (preset from the resolved spec); keep it on merge. Then re-run your refused command.
+
