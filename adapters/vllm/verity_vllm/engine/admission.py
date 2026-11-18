@@ -21,8 +21,8 @@ emits, and what it asks:
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
 - ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
   for a step that scheduled none) and the requests left waiting;
-- ``update_from_output``: `OutputsComplete` for each request that finished, then `StepEnded`;
-- ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
+- ``update_from_output``: `OutputLeft` for each request that finished, then `StepEnded`;
+- ``finish_requests``: `OutputLeft` for each request it ends; where vLLM names none, every gate is opened first.
 """
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ class Hook(scheduler_step.Part):
                 if o.finish_reason is not None:
                     self.live.pop(rid, None)
                     if wants:
-                        self.ex.emit(H.OutputsComplete(input_, step))
+                        self.ex.emit(H.OutputLeft(input_, step))
         if wants:
             self.ex.emit(H.StepEnded(step))
         return outs
@@ -138,7 +138,7 @@ class Hook(scheduler_step.Part):
                 rest.append(rid)
         if self.ex.wants("steps"):
             for input_ in ended:
-                self.ex.emit(H.OutputsComplete(input_, self.step))
+                self.ex.emit(H.OutputLeft(input_, self.step))
         return call(rest, finished_status, *a, **kw)
 
     def arrive(self, input: str, first_line: str, headers: Mapping[str, str], user: str | None = None) -> None:

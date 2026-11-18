@@ -87,7 +87,7 @@ def _honest() -> list[object]:
             H.MemoryChanged("written", (0,), offset=0, count=3),
             H.StepComputed(0),
             H.StepEnded(0),
-            H.OutputsComplete("r0", 0),
+            H.OutputLeft("r0", 0),
             H.MemoryChanged("freed", (0,)),
             H.PhaseClosed(0, 0, ROOT),
             H.PhaseCommitted(0, ROOT)]

@@ -307,9 +307,9 @@ class Front:
     (its X-Request-Id, set where the client sent none, its first line, headers, body's length and the user its body names) before the server sees
     it. Only `SAMPLED_PATHS` and `OTHER_PATHS` are served, and a sampled request only with its seed (`unseeded`): any
     other is answered 400, and a websocket closed. A scheme's `hooks.RefuseInput` answers it 400 with the reason too;
-    an input refused before the server sees it is complete at the front at step 0 (`hooks.OutputsComplete`). Filed while the server has it, the server is given its
+    an input refused before the server sees it is complete at the front at step 0 (`hooks.OutputLeft`). Filed while the server has it, the server is given its
     disconnect, and the request is answered 400 where no response began, its stream ended where one did. An input the
-    server answered with no 200 never reached the engine, and is complete at the front (`hooks.OutputsComplete`).
+    server answered with no 200 never reached the engine, and is complete at the front (`hooks.OutputLeft`).
     Without the variable it passes everything."""
 
     def __init__(self, app: Any, environ: Mapping[str, str] | None = None) -> None:
@@ -355,7 +355,7 @@ class Front:
         elif path in SAMPLED_PATHS and (seedless := unseeded(body)):
             why.append(seedless)
         if why:
-            self.ex.emit(H.OutputsComplete(input, 0))
+            self.ex.emit(H.OutputLeft(input, 0))
             return await _answer(send, 400, "; ".join(why))
         gone = self.inside[input] = asyncio.get_running_loop().create_future()
         began = started = sized = ended = False
@@ -389,7 +389,7 @@ class Front:
         finally:
             del self.inside[input]
             if not began:
-                self.ex.emit(H.OutputsComplete(input, 0))
+                self.ex.emit(H.OutputLeft(input, 0))
         if gone.done() and not started:
             await _answer(send, 400, gone.result())
         elif gone.done() and not sized and not ended:

@@ -42,7 +42,7 @@ def test_the_hook_emits_each_point_as_a_steps_event():
     step(sched)
     assert seen == [H.InputArrived("a", 0, 0),
                     H.StepBegan(0, ("a",), 1, 0), H.StepEnded(0),
-                    H.StepBegan(1, ("a",), 1, 0), H.OutputsComplete("a", 1), H.StepEnded(1)]
+                    H.StepBegan(1, ("a",), 1, 0), H.OutputLeft("a", 1), H.StepEnded(1)]
 
 
 def test_an_arrival_carries_the_user_the_server_gave_and_none_without_one():
@@ -63,7 +63,7 @@ def test_a_gated_request_finished_from_outside_never_reaches_the_scheduler():
                            open=lambda why: None)
     ex.request("g", H.StartOnBoundary(gate))
     ended: list = []
-    ex.subscribe("s", "steps", lambda e: isinstance(e, H.OutputsComplete) and ended.append(e.input))
+    ex.subscribe("s", "steps", lambda e: isinstance(e, H.OutputLeft) and ended.append(e.input))
     sched = Outputs()
     admission.install(sched, ex)
     sched.add_request(Req("a"))

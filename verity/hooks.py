@@ -198,7 +198,10 @@ class MemoryChanged:
 
 
 @dataclass(frozen=True)
-class OutputsComplete:
+class OutputLeft:
+    """``steps``: input ``input``'s outputs are complete and have left the workload, at ``step``; an input refused or
+    ended before it reached the engine leaves at step 0."""
+
     hook: ClassVar[str] = "steps"
     input: str
     step: int
@@ -206,7 +209,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          MemoryChanged, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
+          MemoryChanged, OutputLeft, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -357,7 +360,7 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
 
 
 __all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputsComplete",
+           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputLeft",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

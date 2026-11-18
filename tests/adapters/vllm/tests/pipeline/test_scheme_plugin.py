@@ -310,7 +310,7 @@ def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_
     assert answer(sent) == (400, "bad")
     arrived, done = front_scheme["events"]
     assert (arrived.input, arrived.length, arrived.first_line, done) == (
-        "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+        "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputLeft("r1", 0))
 
 
 @pytest.mark.parametrize("body,user", [(b'{"temperature": 0, "user": "u-7"}', "u-7"), (b'{"temperature": 0}', None),
@@ -329,7 +329,7 @@ def test_an_unserved_route_and_a_sampled_request_without_its_seed_are_refused_af
     front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
     sent = drive(front, http(path, [("x-request-id", "r1")]), [{"type": "http.request", "body": body}])
     assert answer(sent)[0] == 400 and why in answer(sent)[1]
-    assert [type(e) for e in front_scheme["events"]] == [H.InputArrived, H.OutputsComplete]
+    assert [type(e) for e in front_scheme["events"]] == [H.InputArrived, H.OutputLeft]
 
 
 def test_a_websocket_is_closed_under_a_scheme(front_scheme):
@@ -356,7 +356,7 @@ def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_
     sent = drive_with_event(front, got, during)
     assert got["body"] == GREEDY and got["heard"] == {"type": "http.disconnect"} and got["id"].startswith("verity-")
     assert answer(sent) == (400, "its release was lost")
-    assert front_scheme["events"][-1] == H.OutputsComplete(got["id"], 0)
+    assert front_scheme["events"][-1] == H.OutputLeft(got["id"], 0)
 
 
 def drive_with_event(front, got, during):
