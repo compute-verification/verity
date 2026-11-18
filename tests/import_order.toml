@@ -869,6 +869,11 @@ loaded_by = [
 
 [[place]]
 paths = [
+    "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/workload_classification/training_detection/inference_only/verifier",
 ]
 loads = [
