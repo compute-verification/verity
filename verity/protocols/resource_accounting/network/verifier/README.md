@@ -187,20 +187,22 @@ A spec-level reference for network attestation's timing channel:
 - the compile slice, in vLLM's compiler (`verity_vllm.compiler.compile_slice`): `CompileSlice_v1`, a Boolean Definition
   with `check` its reference, composes `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires,
   `CacheStep_v1`'s calls on the attested tokens checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the
-  decisions the execution phase commits, from its carry-in to its carry-out, for one execution phase. It holds the charge to the declared
-  one and the step rows to its committed ``srv`` row, the served rows. The evictable and returned counts are a stand-in
+  decisions the execution phase commits, from its carry-in to its carry-out, for one execution phase. It states that the charge is the
+  declared one and that the step rows are its committed ``srv`` row, the served rows. No session of the compile slice runs,
+  and the served rows it reads are the prover's word. The evictable and returned counts are a stand-in
   held at 0 (`protocol/compile-slice.md`), so a session past the pool bound is outside its class and refused;
 - the compile slice charging the length terms, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v7`):
   `CompileSlice_v7`, `CompileSlice_v1` with `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot
   for each attested arrival read from ``cert`` (its output length and its attested max_tokens), so an execution phase's charge
   covers `code_v1`'s segment and its length tail. vLLM's served execution phases name it (`serve_commit.SERVED_SLICE`), except
   under the network attester's order `tick`;
-- the served rows, in vLLM's compiler (`verity_vllm.compiler.served_rows`): the step rows a served execution phase ran, from the
-  server's kept rows, committed before the sample under the run root as a hiding-commitment registration, a row each
-  block of G steps (G = P unless given: an execution phase's row, the slice's ``srv`` row; at G < P block j is the slice's
-  ``srv{j}``, `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1`). `leaf_ok` holds a proof block's row b‖c to
-  its registered leaf, as the advice's ``adv`` row is held, and `reads_port` is the same read as the Lean verifier's
-  registered reads take it;
+- the served rows, in vLLM's compiler (`verity_vllm.compiler.served_rows`): the rows the prover registers as the step rows
+  a served execution phase ran, from the server's kept rows, committed before the sample under the run root as a
+  hiding-commitment registration, a row each block of G steps (G = P unless given: an execution phase's row, the slice's
+  ``srv`` row; at G < P block j is the slice's ``srv{j}``, `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1`).
+  `leaf_ok` checks a proof block's row b‖c against its registered leaf, as the slice's design holds the advice's ``adv``
+  row, and `reads_port` is the same read as the Lean verifier's registered reads take it. No session of the compile slice
+  runs, only its tests call `leaf_ok`, and nothing ties the rows to what the server ran, so they are the prover's word;
 - the served rows' tie, in vLLM's compiler (`verity_vllm.compiler.served_tie`): `ServedRowsTie_v2`, a Boolean Definition
   with `check` its reference, states that an execution phase's served rows are the positions its steps' Commit holds (the
   step-input port, `port_chunks`: each step's ids and then its positions at the head of its stream). No proof of it runs,

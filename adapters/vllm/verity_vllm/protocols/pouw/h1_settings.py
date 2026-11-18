@@ -25,9 +25,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 
 from verity_vllm.engine import handle
 
-#: The schemes whose coins the auditor device's challenger can sample (the setting ``challenger``): H1's salt and rounds,
-#: and ncp-v2's salt
-CHALLENGED = (H1_SCHEME, "ncp-v2")
+#: The schemes whose coins the auditor device's challenger can sample (the setting ``challenger``): H1's salt and rounds
+CHALLENGED = (H1_SCHEME,)
 #: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
 #: answer, ``gate`` its open), by the root it opens it on, the one its salt coin follows
 OPENS = {H1_SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)"}

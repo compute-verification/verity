@@ -1433,16 +1433,12 @@ def test_the_challenger_setting_is_where_h1s_coins_come_from(tmp_path, monkeypat
     assert any("from one source" in r for r in refused(_remote(coins=Challenger(0, CH.entropy(0)))))
     assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
-    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2 only" in r
+    assert any("'challenger' is for eps1-sm120-h1fx1 only" in r
                for r in refused({"pouw": {"challenger": AUDITOR, "session": SESSION}}, entry="pouw:ncp-v1"))
     assert any("needs 'session'" in r for r in refused(_remote(session=None)))
     assert any("'session' is the session of the challenger" in r for r in refused(_settings(session=SESSION)))
     itself = "the window opens its session itself, on its window-open root"
     assert any(itself in r for r in refused(_remote(gate=None))) and any(itself in r for r in refused(_remote(session=SESSION)))
-    assert any("'session' is the gate's open answer" in r for r in
-               refused({"pouw": {"challenger": AUDITOR, "session": RESERVED}}, entry="pouw:ncp-v2"))
-    assert any("'gate' opens a reserved session" in r for r in
-               refused({"pouw": {"challenger": AUDITOR, "session": SESSION, "gate": _gate}}, entry="pouw:ncp-v2"))
     with pytest.raises(ValueError, match="pouw setting 'gate'"):
         pouw.Settings.of({"gate": "ssh"})
     with pytest.raises(ValueError, match="H1's pouw setting 'session' is the challenger gate's reserve answer"):

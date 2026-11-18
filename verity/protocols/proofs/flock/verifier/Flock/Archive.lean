@@ -1,6 +1,7 @@
 module
 
-public import Flock
+public import Base.Bytes
+public import Flock.CircuitRead
 
 /-! The verifier's archive: its own copies of objects under `ARCHIVE/sha512/<hex>`, each checked to hash to its key. -/
 
@@ -8,7 +9,7 @@ public import Flock
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open Flock Flock.SelfTest
+open Flock
 
 def archiveMismatch (hex : String) : String := s!"archive: the object held under {hex} does not hash to it"
 
