@@ -262,8 +262,8 @@ def _refused(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[s
     if not why:
         raise ValueError(f"{name}: a refused row says why it refused, by name")
     if name in BY_NAME:
-        symbol, unit, protocol = {"integrity": ("integrity bound", INTEGRITY_UNIT), "pouw": ("W_cert", "work")}[name] + (
-            str(row.get("protocol") or name),)
+        symbol, unit = ("integrity bound", INTEGRITY_UNIT) if name == "integrity" else ("W_cert", "work")
+        protocol = str(row.get("protocol") or name)
     else:
         scheme = _scheme(name)
         symbol, unit, protocol = S.declared(scheme, "symbol"), S.declared(scheme, "published")[0], scheme.protocol
