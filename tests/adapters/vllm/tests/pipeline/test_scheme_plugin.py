@@ -72,31 +72,44 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
         SP.attach(messages.Exchange(), vllm_config(tp=2), *SP.config(ENV))
 
 
-def test_register_attaches_before_the_kv_cache_and_releases_at_shutdown(stand_in, monkeypatch):
+def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand_in, monkeypatch):
     got, held = stand_in
     seams: list = []
-    monkeypatch.setattr(kv_blocks, "attach", lambda: (lambda: None))
-    monkeypatch.setattr(admission, "register", lambda attach, refuse=None: seams.append(refuse))
     order: list[str] = []
 
-    class Core:
-        def _initialize_kv_caches(self, vllm_config):
-            order.append(f"kv after {len(got)} attach")
+    class Runner:
+        vllm_config = vllm_config()
 
+        def load_model(self):
+            order.append(f"load after {len(got)} attach")
+
+    def kv_attach():
+        orig = Runner.load_model
+
+        def load_model(runner):
+            orig(runner)
+            order.append("registered values")
+        Runner.load_model = load_model
+        return lambda: setattr(Runner, "load_model", orig)
+
+    class Core:
         def shutdown(self):
             order.append(f"shutdown after {held.released} release")
 
+    monkeypatch.setattr(kv_blocks, "attach", kv_attach)
+    monkeypatch.setattr(admission, "register", lambda attach, refuse=None: seams.append(refuse))
     monkeypatch.setattr(SP, "_PLUGIN", [])
-    SP.register(ENV, core=Core)
+    SP.register(ENV, core=Core, runners=(Runner,))
     try:
-        SP.register(ENV, core=Core)
+        SP.register(ENV, core=Core, runners=(Runner,))
         assert len(SP._PLUGIN) == 1 and seams == [SP.aborts]
-        core = Core()
-        core._initialize_kv_caches(vllm_config())
-        core.shutdown()
-        assert order == ["kv after 1 attach", "shutdown after 1 release"] and got[0][0] is messages.current()
+        Runner().load_model()
+        Core().shutdown()
+        assert order == ["load after 1 attach", "registered values", "shutdown after 1 release"]
+        assert got[0][0] is messages.current() and Runner.vllm_config.cache_config.num_gpu_blocks_override == 64
     finally:
         SP._PLUGIN[0][0].uninstall()
+        SP._PLUGIN[0][1]()
 
 
 def test_a_refused_input_is_aborted_in_the_scheduler_and_its_reason_logged():
@@ -108,6 +121,7 @@ def test_a_refused_input_is_aborted_in_the_scheduler_and_its_reason_logged():
     assert logged == ["verity: input a refused (2 request(s) aborted): its release was lost"]
 
 
+GREEDY = {"type": "http.request", "body": b'{"temperature": 0}'}
 FRONT_ENV = {"VERITY_PROTOCOLS": "stand-in", "VERITY_PROTOCOLS_CONFIG": '{"feed": "%s"}' % FEED}
 
 
@@ -176,10 +190,28 @@ def test_the_front_answers_a_schemes_route_with_the_body_as_it_streams_in(front_
 
 def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_the_server(front_scheme):
     front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
-    sent = drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [])
+    sent = drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [GREEDY])
     assert answer(sent) == (400, "bad")
     arrived, done = front_scheme["events"]
-    assert (arrived.input, arrived.first_line, done) == ("r1", "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+    assert (arrived.input, arrived.length, arrived.first_line, done) == (
+        "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+
+
+@pytest.mark.parametrize("path,body,why", [
+    ("/v1/responses", b"", "/v1/responses is not served under a scheme"),
+    ("/v1/completions", b'{"temperature": 0.7}', "needs an integer seed"),
+])
+def test_an_unserved_route_and_a_sampled_request_without_its_seed_are_refused_after_arriving(front_scheme, path, body, why):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
+    sent = drive(front, http(path, [("x-request-id", "r1")]), [{"type": "http.request", "body": body}])
+    assert answer(sent)[0] == 400 and why in answer(sent)[1]
+    assert [type(e) for e in front_scheme["events"]] == [H.InputArrived, H.OutputsComplete]
+
+
+def test_a_websocket_is_closed_under_a_scheme(front_scheme):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a websocket"), FRONT_ENV)
+    sent = drive(front, {"type": "websocket", "path": "/v1/realtime", "headers": []}, [{"type": "websocket.connect"}])
+    assert sent == [{"type": "websocket.close", "code": 1008}]
 
 
 def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_scheme):
@@ -188,6 +220,7 @@ def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_
     async def app(scope, receive, send):
         got["id"] = dict(scope["headers"])[b"x-request-id"].decode()
         got["started"].set()
+        got["body"] = await receive()
         got["heard"] = await receive()
 
     front = SP.Front(app, FRONT_ENV)
@@ -197,7 +230,7 @@ def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_
         front.refuse(got["id"], "its release was lost")
 
     sent = drive_with_event(front, got, during)
-    assert got["heard"] == {"type": "http.disconnect"} and got["id"].startswith("verity-")
+    assert got["body"] == GREEDY and got["heard"] == {"type": "http.disconnect"} and got["id"].startswith("verity-")
     assert answer(sent) == (400, "its release was lost")
     assert front_scheme["events"][-1] == H.OutputsComplete(got["id"], 0)
 
@@ -208,7 +241,11 @@ def drive_with_event(front, got, during):
     async def main():
         got["started"] = asyncio.Event()
 
+        bodies = [GREEDY]
+
         async def receive():
+            if bodies:
+                return bodies.pop()
             await asyncio.Future()
 
         async def send(m):
