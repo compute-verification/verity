@@ -283,7 +283,7 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
-                          card=kit.card_sku(kit.host_stamp()["card"]),
+                          card=kit.run_card_sku(),
                           engine_args={"max_model_len": args.max_model_len,
                                        "max_num_batched_tokens": args.max_num_batched_tokens,
                                        "gpu_memory_utilization": args.gpu_memory_utilization})
