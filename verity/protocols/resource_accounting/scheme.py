@@ -77,7 +77,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
 from verity.channel import Schema
@@ -105,6 +105,15 @@ class Lacks:
 
 
 UNDECLARED = Lacks()
+
+
+class Kernels(Protocol):
+    """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
+    ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
+
+    def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
+
+
 #: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
 VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
 
@@ -282,9 +291,9 @@ class Scheme:
     products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
     FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
     commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
-    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
-    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
-    otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
+    name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
+    cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
     against the committed root once at build.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
@@ -333,7 +342,7 @@ class Scheme:
     product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
-    kernels: Callable[..., str] | Lacks = UNDECLARED
+    kernels: Kernels | Lacks = UNDECLARED
     keeps_weight_copy: bool | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
@@ -572,5 +581,6 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "bound", "credited", "declared",
+           "Charge", "Circuits", "Kernels", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "bound",
+           "credited", "declared",
            "layout", "register", "register_circuits", "register_process", "settings"]
