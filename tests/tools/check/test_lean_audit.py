@@ -2429,6 +2429,13 @@ def test_kept_dependencies_and_replays_past_their_limits_go_oldest_first(tmp_pat
         os.utime(replay / f"{i}.json", (2000 + i, 2000 + i))
     assert LA.prune_replays(replay, kept=2) == 3 and sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json"]
     assert LA.prune_replays(tmp_path / "absent", kept=2) == 0
+    (replay / "graphs").mkdir()
+    for i in range(3):
+        (replay / "graphs" / f"{i}.json").write_text("{}")
+        os.utime(replay / "graphs" / f"{i}.json", (2000 + i, 2000 + i))
+    assert LA.prune_replays(replay, kept=2) == 1 and sorted(p.name for p in (replay / "graphs").iterdir()) == ["1.json",
+                                                                                                             "2.json"]
+    assert sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json", "graphs"]
 
 
 def test_records_trees_beyond_the_limit_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):

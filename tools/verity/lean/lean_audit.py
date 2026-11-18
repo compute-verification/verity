@@ -1041,20 +1041,22 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
 
 def prune_replays(cache: Path, kept: int | None = None) -> int:
     """Remove all but the ``kept`` (`REPLAYS_KEPT`) replay entries of ``cache`` (`check.py --replay-cache`) last stored or
-    reused (`check.touch_replays`): each is one module's pass under its key, so one dropped costs that module one replay. The
-    number removed."""
+    reused (`check.touch_replays`): each is one module's pass under its key, so one dropped costs that module one replay;
+    and the same of its `graphs/` (`check.store_graphs`), where one dropped costs one module's graph walk. The number
+    removed."""
     kept = REPLAYS_KEPT if kept is None else kept
-    try:
-        entries = [(e.stat().st_mtime, e) for e in os.scandir(cache) if e.name.endswith(".json")]
-    except OSError:
-        return 0
     n = 0
-    for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+    for d in (cache, cache / "graphs"):
         try:
-            os.unlink(e.path)
-            n += 1
+            entries = [(e.stat().st_mtime, e) for e in os.scandir(d) if e.name.endswith(".json")]
         except OSError:
-            pass
+            continue
+        for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+            try:
+                os.unlink(e.path)
+                n += 1
+            except OSError:
+                pass
     return n
 
 
