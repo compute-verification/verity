@@ -12,6 +12,8 @@ UNIT = "proof blocks a second"
 MODEL = {"bf16-k6144": "glm-5.3", "bf16-k2048": "llama-3.2-1b"}
 VALUES = "stand-in: the workload's frozen population of uniform 16-bit words, not served values"
 PORT = 7710
+#: a prover's rate over its timed sessions: their median's, and its slowest and fastest session's
+SESSIONS = {"median": "vu.per_second", "lowest": "prove.vu_per_second_lowest", "highest": "prove.vu_per_second_highest"}
 
 
 def card_slug(card: str) -> str:
@@ -58,7 +60,7 @@ def _sh(root: Path, script: str, env: dict[str, str], log: Path) -> subprocess.P
 
 
 def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], cards: Sequence[str], cores: Sequence[str],
-        node: str, prove_run: str,
+        node: str, prove_run: str, runs: int = 3,
         start: Callable[[Path, str, dict[str, str], Path], subprocess.Popen] = _sh) -> dict[int, list[dict]]:
     points: dict[int, list[dict]] = {}
     for n in sorted(provers):
@@ -67,7 +69,7 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], ca
             d = out / f"provers-{n}" / f"prover-{i}"
             env = {"WORKLOAD": workload, "B": str(B), "OUT": str(d), "RESULT": str(d / "result.json"),
                    "PT_PROVER_NODE": node, "SESSIONS_LOCK": str(d / "sessions.lock"), "LEASE_CARD": cards[i],
-                   "LEASE_CORES": cores[i], "PORT": str(PORT + i)}
+                   "LEASE_CORES": cores[i], "PORT": str(PORT + i), "RUNS": str(runs)}
             group.append({"dir": str(d.relative_to(out)), "path": d, "card": cards[i], "cores": cores[i],
                           "proc": start(root, "job.sh", env, d / "job.out")})
         for p in group:
@@ -87,6 +89,10 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], ca
     return points
 
 
+def rate(p: dict, name: str) -> float | None:
+    return next((m["value"] for m in (p.get("result") or {}).get("measurements", []) if m["name"] == name), None)
+
+
 def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) -> int:
     def rel(p: dict) -> str:
         return str((out / p["dir"] / "verifier" / "result.json").resolve().relative_to(Path(w.out).resolve()))
@@ -102,7 +108,11 @@ def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) ->
         value, why = throughput(group)
         results = [rel(p) for p in group if p.get("result")]
         extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results,
-                 "leases": [{"card": p["card"], "cores": p["cores"]} for p in group]}
+                 "leases": [{"card": p["card"], "cores": p["cores"]} for p in group],
+                 "sessions": [{k: rate(p, name) for k, name in SESSIONS.items()} for p in group]}
+        for k in ("lowest", "highest"):
+            each = [s[k] for s in extra["sessions"]]
+            extra[k] = float(sum(each)) if each and None not in each else None
         m = w.measurement(METRIC, value, UNIT, why=None if value is not None else why, mark="measured",
                           member=name, extra=extra)
         print(json.dumps({k: m.get(k) for k in ("name", "value", "unit", "member")} | {"why": why}))
