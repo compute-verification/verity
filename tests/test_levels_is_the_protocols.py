@@ -1,4 +1,4 @@
-"""`levels` names one setting: the sampled-proofs protocol's number of levels. The recursion benchmark's
+"""`levels` names one setting: SPOT's number of levels. The recursion benchmark's
 reader and its figures write no key of that name for anything else.
 
 - Neither file of `FILES` writes a key named `levels`: a dict literal's key, a subscript stored to, or a keyword of a
@@ -31,7 +31,7 @@ def _written(text: str) -> list[int]:
 
 def test_neither_file_writes_a_key_named_levels() -> None:
     found = {rel: lines for rel in FILES if (lines := _written((ROOT / rel).read_text()))}
-    assert not found, (f"`{KEY}` is the sampled-proofs protocol's setting; name the key for what it holds "
+    assert not found, (f"`{KEY}` is SPOT's setting; name the key for what it holds "
                        f"(figures.py's knowledge-soundness terms are `ks_log2`): {found}")
 
 
