@@ -214,12 +214,12 @@ class Chain:
 def population(defn, n: int, version: int | str):
     """A level's population program and its template query: a new level's wired one, or a recorded level's at 1 or 0."""
     from verity.circuits.codec import descriptor_id
-    from verity.circuits.population import wired_population_program
+    from verity.circuits.population import population_program, wired_population_program
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     if version == "wired":
         return wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
-    return P.population_program(defn, n, version=version), P.template_instance_query(defn)
+    return population_program(defn, n, version=version), P.template_instance_query(defn)
 
 
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
@@ -227,7 +227,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
     prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
     ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's,
-    `wired_population_program`'s ("wired"), or 1 or 0 to restage a level recorded under `partition.population_program`. The openings' positions are the ones the
+    `wired_population_program`'s ("wired"), or 1 or 0 to restage a level recorded under `population.population_program`. The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G

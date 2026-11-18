@@ -25,7 +25,7 @@ from pathlib import Path
 
 from verity.circuits.codec import canonical_json, decode_program, descriptor_id, program_digest
 from verity.circuits.defs import REGISTRY, bind
-from verity.circuits.population import wired_population_program
+from verity.circuits.population import population_program, wired_population_program
 from verity.circuits.program import Program
 
 from . import rec_open as _rec_open  # registers RecOpen
@@ -105,7 +105,7 @@ def bindings(partition: dict, program: dict, vstar=None) -> dict:
         raise ValueError(f"the template bound again is {descriptor_id(template)!r}, not {tid!r}")
     n = int(m[1])
     rebuilt = wired_population_program([(template, n)], {"templates": [[tid, n]]})[0] if version == "wired" else \
-        P.population_program(template, n, version=version)
+        population_program(template, n, version=version)
     if program_digest(rebuilt) != prog:
         raise ValueError(f"the program is not the {version} population of {entry['id']} at N={n}")
     return {"partition": P.digest(partition), "program": prog, "program_digests": {tid: program_digest(Program(template))}}

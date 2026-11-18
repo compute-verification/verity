@@ -16,7 +16,6 @@ KINDS = {
     "replay": "rebuilds a recorded run's Program at the version or digest its record names",
     "both": "replays a recorded run and builds for a new run; its new-run use still to move",
     "new-run": "builds a Program for a new run; still to move to `wired_population_program`",
-    "re-export": "names the builders for its own callers, who are listed",
     "check": "a circuit-check binding of the builders' Definitions",
 }
 
@@ -45,7 +44,6 @@ CALLERS: dict[str, str] = {
     "verity/commitments/periods/rows.py": "new-run",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py": "replay",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py": "replay",
-    "verity/protocols/proofs/spot/verifier/one_stage/partition.py": "re-export",
     "verity/protocols/proofs/spot/verifier/service.py": "new-run",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.circuit-check.py": "check",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "replay",
