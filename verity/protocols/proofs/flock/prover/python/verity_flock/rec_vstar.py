@@ -34,7 +34,6 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.commitments import docket_digest as DD
 from verity.commitments import hm96
 
 from . import rec_live as RL
@@ -271,6 +270,7 @@ def registered(public: dict, registration: dict | None, bound: str | None, table
     staging): the record must be the one whose digest the statement's META binds (``bound``, one-stage
     ``registration.digest``), and its registered entry named ``table`` the entry its stream's binding round's salted top makes
     (`rec_live.top_entry` under the record's ``program``: root, leaves, words and domain); refused by name otherwise."""
+    from verity.commitments import docket_digest as DD
 
     stream = f"{table}/rep0"
     first = next((r for r in _stream_rounds(public, stream) if r["k"] == 0), None)

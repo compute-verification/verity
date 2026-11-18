@@ -183,7 +183,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity_config.settings import of
-from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -609,6 +608,7 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
+        from verity.commitments import docket_digest as DD
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
@@ -909,6 +909,7 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the Lean verdict is not on the coin record's run and source")
     if any(k not in coin for k in CASE_RECORD):
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
+    from verity.commitments import docket_digest as DD
 
     try:
         if not doc.get("tie_record"):
