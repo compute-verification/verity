@@ -1120,6 +1120,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     (cd "$TREE" && timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") \
       > "$LOGS/wipe-piece.log" 2>&1
     rc=$?
+    printf '{"limit": "%s", "rc": %d}\n' "${WIPE_TIMEOUT:-20m}" "$rc" > "$OUT/pieces/wipe/piece.json"
     say "WIPE (exit $rc, within WIPE_TIMEOUT=${WIPE_TIMEOUT:-20m}): $(said "$rc" "$LOGS/wipe-piece.log" | cut -c1-600)"
   fi
   local period=0
@@ -1599,8 +1600,8 @@ sampled_of_record() {
 # And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
 # stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
 # host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
-# Every one is a verifier's input: `served_verdicts.py witness` refuses a list holding a value file, a prover's instance or
-# private file, the advice, a key, a row dir or the requests, and a blob outside the serve dir is refused too.
+# Every one is a verifier's input: `public_files.py handoff` refuses a list holding any file its ``D/`` entries don't
+# name, and a blob outside the serve dir is refused too.
 COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json ledger.jsonl coin.json
 pearlplus-answer.json pearlplus-lean.json"
 handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once, the record's audit $1's among them
@@ -1665,8 +1666,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   handoff_inputs "$sampled" > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused $(failed "$rc" "$COMPOSE_DIR/inputs.err")"; return 1; }
-  why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "HANDOFF refused: it would carry the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
+  why=$("$SAY_PY" "${SV%/*}/public_files.py" handoff < "$COMPOSE_DIR/inputs.txt") \
+    || { say "HANDOFF refused: it would carry a file the list doesn't name ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
   (cd "$D" && tr '\n' '\0' < "$COMPOSE_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$COMPOSE_DIR/inputs.sha256" || return 1
   echo private/compose/inputs.sha256 >> "$COMPOSE_DIR/inputs.txt"
   say "HANDOFF $HANDED_WHAT, composed off this node: on COMPOSE_NODE, from the serve dir's verifier-side" \
@@ -1741,8 +1742,8 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
   else
     [ "${host%%.*}" != "$served" ] \
       || { say "COPY refused: its node is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE"; return 3; }
-    why=$("$SAY_PY" "$SV" witness < "$dir/inputs.txt") \
-      || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+    why=$("$SAY_PY" "${SV%/*}/public_files.py" handoff < "$dir/inputs.txt") \
+      || { say "COPY refused: the hand-off's list names a file the list doesn't ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
   n=$(count "$dir/inputs.txt")
   if [[ $2 == *:* ]]; then
@@ -1765,8 +1766,8 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: t
   # answer in $OUT/compose
   local rc why answer=$OUT/compose/answer.json
   handoff "$1" "${2:-}" || return 1
-  why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "GATE-COMPOSE refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+  why=$("$SAY_PY" "${SV%/*}/public_files.py" handoff < "$COMPOSE_DIR/inputs.txt") \
+    || { say "GATE-COMPOSE refused: the hand-off's list names a file the list doesn't ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   mkdir -p "$OUT/compose" && rm -f "$answer"
   # shellcheck disable=SC2086
   (cd "$D" && tar --create --dereference --no-recursion --file=- --files-from="$COMPOSE_DIR/inputs.txt") \

@@ -82,8 +82,8 @@ What the launch before this one did that `research run` doesn't yet:
 
 | What it did | Now |
 | --- | --- |
-| `--end UTC`: a booked period's end; the slot wait stopped in time and a point whose `max_minutes` didn't fit wasn't started | none: `--timeout` and `--pool-wait` are lengths, not an end (`jobs.booked`, infra's launcher) |
-| `--cores CPUS`: the slot taker ran under `taskset -c CPUS`, so it took the booked slot or waited for it | none: `--pool` takes the first free slot (`jobs.booked`); the lease's CPUs are `GPU_LEASE_CORES` (gpu-lease's `--cores`) |
+| `--end UTC`: a booked period's end; the slot wait stopped in time and a point whose `max_minutes` didn't fit wasn't started | `research run --end UTC` with `--timeout`, refused at launch unless the bound fits before the end |
+| `--cores CPUS`: the slot taker ran under `taskset -c CPUS`, so it took the booked slot or waited for it | `research run --pool P --slot NAME`, which waits for that slot alone; the lease's CPUs are `GPU_LEASE_CORES` (gpu-lease's `--cores`) |
 | `--card INDEX`: the lease asked for the booked card alone | `--env GPU_LEASE_ON=INDEX`, read by the point's lease (gpu-lease reads no such variable, and `research run --gpus N` takes any card) |
 | a GPU slot of the node, waited for up to 4 h | `--pool gpu --pool-wait S`, which also runs the point under `nice -n 19` |
 | the run bounded by the spec's `max_minutes` | `--timeout`, counted from taking the slot; the lease's `--max-min` is the spec's |

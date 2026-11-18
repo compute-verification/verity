@@ -25,11 +25,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `fanout` gives a template query's fan-out F, at least the most proof blocks one group joined by reads of each other's
   results holds, and `shared_inputs` the run Input nodes its proof blocks don't each read alone, both a root node at a
   time (R8, `registration.check`).
-* **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
-  `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
-  templates by descriptor id, are `verity.circuits.population`'s, named here too: a serving stack builds its window's
-  program with the same functions. v0 of each, which names only the counts, is kept for the records made with it
-  (`POPULATION_VERSIONS`).
+* **Programs**: a partition's program is built by `verity.circuits.population`.
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
 proof block index on the prover's word.
@@ -47,7 +43,6 @@ from verity.circuits.layout import resolve
 from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
 from verity.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
-from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.circuits.program import Program, is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Grid, Strided
 from verity.circuits.types import Value
@@ -392,6 +387,6 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "mixed_population_program", "partition",
-           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
+           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]
