@@ -24,7 +24,11 @@ ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``,
 - ``lean_reexports``: a Lean ``export Verity ...`` or ``export Hash ...``, or a one-line ``abbrev N ... := Q.N x y``
   whose body is another namespace's ``N`` applied to bare names only (a specialization, ``Verity.Coins (Pub N)``, is not).
 - ``lean_old_names``: ceilings on the number of Lean files naming each old name, and of `security/` files defining a
-  ``structure Scheme`` or ``structure Partition``."""
+  ``structure Scheme`` or ``structure Partition``.
+- ``second_descriptions``: ceilings on the number of Lean or Python files naming each copy of the one circuit handed to
+  a verifier beside it (positions, links, wirings, a second circuit, partition or gate count, the adapter's hand wiring)
+  and each open statement that ties such a copy to the circuit (``SECOND``); they go to zero on ``one-circuit``. A name
+  with namesakes is counted by its qualified form and its defining file."""
 
 from __future__ import annotations
 
@@ -123,6 +127,53 @@ OLD_LEAN = {"Claims.Msg": ("", re.compile(r"\bClaims\.Msg\b")),
             "FlockSoundness.Game": ("", re.compile(r"\bFlockSoundness\.Game\b")),
             "structure Scheme": ("security/", re.compile(r"^\s*structure\s+Scheme\b", re.M)),
             "structure Partition": ("security/", re.compile(r"^\s*structure\s+Partition\b", re.M))}
+_SAMPLING = re.compile(r"(?<![\w.])(?:Claims\.)?Sampling\.(?:Prog|Boundary|runIn|Correct)\b")
+_SAMPLING_OPEN = re.compile(r"^[ \t]*open\b[^\n(]*\bClaims\.Sampling\b(?!\.)[ \t]*(?:\(([^)]*)\))?", re.M)
+#: the other namespaces defining a ``Prog``, where a bare ``Prog`` may be theirs
+_OTHER_PROG = re.compile(r"^[ \t]*(?:open|namespace)\b[^\n]*\b(?:FlockSoundness|Flock\.Program|Accel\.Machine|Machine"
+                         r"|PousVerifier\.Verdict)\b(?!\.)", re.M)
+
+
+def _claims_sampling(text: str) -> bool:
+    """Whether a Lean file names `Claims.Sampling`'s ``Prog`` stack: qualified, or bare under an ``open`` of the namespace
+    that brings ``Prog``, where no other namespace holding a ``Prog`` is opened or entered."""
+    if _SAMPLING.search(text):
+        return True
+    if _OTHER_PROG.search(text):
+        return False
+    return any((m.group(1) is None or re.search(r"\bProg\b", m.group(1))) and re.search(r"(?<![\w.])Prog\b", text[m.end():])
+               for m in _SAMPLING_OPEN.finditer(text))
+
+
+_PERIODS = "verity/commitments/periods/interface.py"
+#: {ceiling's name: (the files it counts in: a prefix and a suffix, the file defining it under its bare name or "", a
+#: substring every match holds, the test of a file's text)}
+SECOND = {
+    "CutIsRegistered": ("", ".lean", "", "CutIsRegistered", re.compile(r"\bCutIsRegistered\b").search),
+    "PositionsCarry": ("", ".lean", "", "PositionsCarry", re.compile(r"\bPositionsCarry\b").search),
+    "EdgeFreeReads": ("", ".lean", "", "EdgeFreeReads", re.compile(r"\bEdgeFreeReads\b").search),
+    "posOf": ("", ".lean", "", "posOf", re.compile(r"\bposOf\s*:\s*ByteArray\b").search),
+    "HmLinks": ("", ".lean", "", "HmLinks", re.compile(r"\bHmLinks\b").search),
+    "checkLinked": ("", ".lean", "", "checkLinked", re.compile(r"\bcheckLinked\b").search),
+    "wiringOf": ("", ".lean", "", "wiringOf", re.compile(r"\bwiringOf\b").search),
+    "wiresWide": ("", ".lean", "", "wiresWide", re.compile(r"\bwiresWide\b").search),
+    "Circuit.ofAudit": ("", ".lean", "", "Circuit.ofAudit", re.compile(r"\bCircuit\.ofAudit\b").search),
+    "Partition.ofAudit": ("", ".lean", "", "Partition.ofAudit", re.compile(r"\bPartition\.ofAudit\b").search),
+    "RegisteredCircuit.ofPartition": ("", ".lean", "", "ofPartition", re.compile(r"\bofPartition\b").search),
+    "Claims.Sampling.Prog": ("", ".lean", "security/Definitions/Claims/Sampling.lean", "Sampling", _claims_sampling),
+    "unitGates": ("", ".lean", "verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean", "unitGates",
+                  re.compile(r"\bTemplateQuery\.unitGates\b").search),
+    "cut_wires": ("", ".py", "", "cut_wires", re.compile(r"\bcut_wires\b").search),
+    "served_program": ("", ".py", "", "served_program", re.compile(r"(?<!h1\.)\bserved_program\b").search),
+    "registered_reads": ("", ".py", _PERIODS, "registered_reads",
+                         re.compile(r"\b(?:interface|IF|I)\.registered_reads\b").search),
+    "check_wires": ("", ".py", "", "check_wires", re.compile(r"\bcheck_wires\b").search),
+    "check_order": ("", ".py", _PERIODS, "check_order", re.compile(r"\b(?:interface|IF|I)\.check_order\b").search),
+    "def wire(": ("adapters/vllm/verity_vllm/pipeline/", ".py", "", "def wire(",
+                  re.compile(r"^def wire\(", re.M).search),
+    "port_map": ("", ".py", "", "port_map", re.compile(r"\bport_map\b").search),
+}
+CEILINGS = ("lean_old_names", "second_descriptions")
 TOOLKIT = ("the machine's record of its toolkits, read by one function: `verity_bench.kit.toolkit(version)` "
            "(`benchmarks/kernels/machine.py toolkit 13.0` from a shell); under `verity/` and `adapters/` a script takes "
            "`CUDA_HOME` as given and refuses without it")
@@ -139,6 +190,8 @@ INTERFACE = {
     "lean_reexports": "the core's own name (`Verity.X`, `Hash.X`), read where it is defined",
     "lean_old_names": "the core's own name (`Hash.Msg`, `Hash.Collision`, `Verity.Game`, `Verity.Scheme`, the core's "
                       "partition)",
+    "second_descriptions": "the one registered circuit C and its partition into blocks, from which the verifier derives "
+                           "what each block reads and writes, its circuit and its positions in the commitment",
 }
 RATCHETS = tuple(INTERFACE)
 
@@ -359,6 +412,9 @@ def scan(files: dict[str, str]) -> Scan:
             for name, (under, pattern) in OLD_LEAN.items():
                 if path.startswith(under) and name.split()[-1] in text and pattern.search(text):
                     s.found["lean_old_names"].setdefault(name, []).append(path)
+        for name, (under, suffix, home, hint, test) in SECOND.items():
+            if path.startswith(under) and path.endswith(suffix) and (path == home or hint in text and test(text)):
+                s.found["second_descriptions"].setdefault(name, []).append(path)
     for c, areas in named.items():
         if len(areas) < 2:
             s.found["messages_one_sided"][c] = [len(areas), *sorted(areas)]
@@ -401,12 +457,12 @@ def grown(ratchet: str, now: dict[str, int], held: dict[str, int]) -> list[str]:
 
 def pruned(lists: dict[str, dict[str, int]], now: dict[str, dict[str, int]]) -> tuple[dict, list[str]]:
     """``lists`` without its stale entries and with each count lowered to today's, and what changed; nothing is added. A
-    ceiling (``lean_old_names``) stays, lowered, down to 0."""
+    ceiling (``CEILINGS``) stays, lowered, down to 0."""
     out, said = {}, []
     for r in RATCHETS:
         out[r] = {}
         for k, n in sorted(lists.get(r, {}).items()):
-            cur = now[r].get(k, 0 if r == "lean_old_names" else None)
+            cur = now[r].get(k, 0 if r in CEILINGS else None)
             if cur is None:
                 said.append(f"{r}: {k} dropped")
                 continue
@@ -427,7 +483,7 @@ def failure(ratchet: str, s: Scan, keys: list[str], held: dict[str, int]) -> str
         if ratchet == "messages_one_sided":
             rows.append(f"  {HOOKS}:{s.where[k]}: class {k} is named in code only in "
                         f"{', '.join(got[1:]) or 'no area'} (areas: {', '.join(a for a, _ in AREAS)})")
-        elif ratchet == "lean_old_names":
+        elif ratchet in CEILINGS:
             rows.append(f"  {k}: {len(got)} files, ceiling {held.get(k, 0)}: {', '.join(got)}")
         else:
             rows.append(f"  {k}: {len(got)} lines, listed {held.get(k, 0)}:")
@@ -527,6 +583,20 @@ def test_an_old_lean_name_is_counted() -> None:
     assert _flagged("lean_old_names", files) == {"Claims.Msg": 1, "FlockSoundness.Game": 1, "structure Scheme": 1}
 
 
+def test_a_second_description_is_counted() -> None:
+    files = {"security/A.lean": "def P (posOf : ByteArray → Positions) : Prop := CutIsRegistered\n",
+             "security/B.lean": "open Claims.Sampling\ntheorem t (C : Prog) : C.Correct r u := x\n",
+             "security/C.lean": "open Claims.Sampling\nopen FlockSoundness\ntheorem t (C : Prog) : True := x\n",
+             "security/D.lean": "def f := posOf θ F\ndef g := Spot.Bits.unitGates kp u\n",
+             "verity/E.py": "import verity.commitments.periods.interface as IF\nIF.check_order(u, w, o)\n",
+             "adapters/x/row_tables.py": "def check_order(tables):\n    pass\n",
+             "adapters/vllm/verity_vllm/pipeline/k_rows.py": "def wire(ms, tmpls, rows):\n    return ms\n",
+             "adapters/vllm/verity_vllm/pipeline/w.py": "def f():\n    def wire(w, lo, hi):\n        pass\n",
+             "tests/F.lean": "theorem t : HmLinks := x\n"}
+    assert _flagged("second_descriptions", files) == {"posOf": 1, "CutIsRegistered": 1, "Claims.Sampling.Prog": 1,
+                                                      "check_order": 1, "def wire(": 1}
+
+
 def test_a_list_only_shrinks() -> None:
     held = {r: {} for r in RATCHETS} | {"toolkit_paths": {"a.sh": 2, "b.sh": 1}, "lean_old_names": {"Claims.Msg": 3},
                                         "messages_one_sided": {"Gone": 1, "Still": 0}}
@@ -558,8 +628,10 @@ def main(argv: list[str]) -> int:
     if argv == ["--report"]:
         for r in RATCHETS:
             kept = sorted(set(KEPT.get(r, {})) & set(now[r]))
-            print(r, ", ".join(f"{k} {n}" for k, n in sorted(now[r].items())) if r == "lean_old_names" else len(now[r]),
+            print(r, ", ".join(f"{k} {n}" for k, n in sorted(now[r].items())) if r in CEILINGS else len(now[r]),
                   f"(kept by ruling: {', '.join(kept)})" if kept else "")
+        print(f"second_descriptions: {sum(now['second_descriptions'].values())} file-mentions of "
+              f"{len(now['second_descriptions'])} names")
         return 0
     if argv == ["--init"]:
         LIST.write_text(dump(now))

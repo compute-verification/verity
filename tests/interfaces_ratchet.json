@@ -239,6 +239,28 @@
   "calibration/sampling_plan/demo_a.py": 1,
   "tools/verity/cli/verity_cli/served_table.py": 5
  },
+ "second_descriptions": {
+  "Circuit.ofAudit": 5,
+  "Claims.Sampling.Prog": 67,
+  "CutIsRegistered": 1,
+  "EdgeFreeReads": 4,
+  "HmLinks": 15,
+  "Partition.ofAudit": 4,
+  "PositionsCarry": 1,
+  "RegisteredCircuit.ofPartition": 4,
+  "checkLinked": 4,
+  "check_order": 1,
+  "check_wires": 3,
+  "cut_wires": 2,
+  "def wire(": 5,
+  "port_map": 1,
+  "posOf": 1,
+  "registered_reads": 7,
+  "served_program": 2,
+  "unitGates": 4,
+  "wiresWide": 1,
+  "wiringOf": 2
+ },
  "toolkit_paths": {
   "adapters/vllm/tools/served_run/placement.toml": 2,
   "benchmarks/one_stage/cold_sessions.sh": 1,
