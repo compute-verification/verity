@@ -16,8 +16,6 @@ from types import SimpleNamespace
 
 import pytest
 
-torch = pytest.importorskip("torch")
-
 from verity import hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
@@ -25,6 +23,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
 from tests.protocols import test_pouw_h1 as T1
+from tests.protocols._needs_torch import torch
 from verity_vllm import messages
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
