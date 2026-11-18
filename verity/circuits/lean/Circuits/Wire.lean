@@ -120,17 +120,20 @@ def rpairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.rstep).reverse
 def stridedAt (w : Wire) (u : Nat) : List Nat :=
   (List.range w.units).filter fun i => (w.start : Int) + accum w.rpairs i = u
 
-/-- The leaf of its writer's output tree that reader unit `u`'s row `row` of the wire's port reads: its writer unit,
-none where the wire doesn't cover that row or names a writer below unit 0. With reader steps, none unless the wire is
-uncut with one step a digit, `row` is 0 and exactly one index reads `u`. -/
+/-- The reader index of reader unit `u`'s row `row` of the wire's port, none where the wire doesn't cover that row. With
+reader steps, none unless the wire is uncut with one step a digit, `row` is 0 and exactly one index reads `u`. -/
+def indexAt (w : Wire) (u row : Nat) : Option Nat :=
+  if w.rstep.isEmpty then w.indexOf w.reader u w.port row
+  else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
+    match w.stridedAt u with
+    | [i] => some i
+    | _ => none
+  else none
+
+/-- The leaf of its writer's output tree that reader unit `u`'s row `row` of the wire's port reads: its writer unit at
+its index (`indexAt`), none where there is none or it names a writer below unit 0. -/
 def leafAt (w : Wire) (u row : Nat) : Option Nat :=
-  let i? := if w.rstep.isEmpty then w.indexOf w.reader u w.port row
-    else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
-      match w.stridedAt u with
-      | [i] => some i
-      | _ => none
-    else none
-  i?.bind fun i =>
+  (w.indexAt u row).bind fun i =>
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 

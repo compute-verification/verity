@@ -28,6 +28,10 @@ XOR16 = PrimitiveDefinition("CoreEdgesXor16", 1, (("a", Value(16)), ("b", Value(
 XOR32 = PrimitiveDefinition("CoreEdgesXor32", 1, (("a", Value(32)), ("b", Value(32))), Value(32), lambda a, b: a ^ b,
                             register=False)
 LOW16 = PrimitiveDefinition("CoreEdgesLow16", 1, (("a", Value(32)),), Value(16), lambda a: a & 0xFFFF, register=False)
+LOW = {b: PrimitiveDefinition(f"CoreEdgesLow{b}", 1, (("a", Value(32)),), Value(b), lambda a, m=(1 << b) - 1: a & m,
+                              register=False) for b in (1, 8)} | {16: LOW16}
+XOR8 = PrimitiveDefinition("CoreEdgesXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+                           register=False)
 ROW = Array(2, Value(16))
 PAIR = Tuple(Value(16), Value(16))
 
@@ -237,6 +241,48 @@ def _mixed_toy(name: str, widths: tuple, read: int) -> dict:
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
 
+def _leaf_toy(name: str, fields: tuple, read: int, rparam) -> dict:
+    """A writer (4 members) whose field `f` is ``fields[f] = (n, bits)``, `n` leaves of `bits` bits (one value where `n`
+    is 0), and a reader (4 members, each one `rparam`) whose member m reads field `read` of writer unit m."""
+    def ty(n, b):
+        return Value(b) if n == 0 else Tuple(*[Value(b)] * n)
+
+    def val(B, x, n, b):
+        one = B.call(XOR32, x, x) if b == 32 else B.call(LOW[b], x)
+        return one if n == 0 else tuple_of(*[one] * n)
+
+    ret = Tuple(*[ty(n, b) for n, b in fields])
+    writer = bind(CompositeDefinition(f"{name}W", 0, (), lambda S: ((("x", Value(32)),), ret),
+                                      lambda B, S, x: tuple_of(*[val(B, x, n, b) for n, b in fields]), register=False))
+    op = {16: XOR16, 8: XOR8}[(rparam.elem if isinstance(rparam, Array) else rparam).w]
+    reader = bind(CompositeDefinition(f"{name}R", 0, (), lambda S: ((("x", rparam),), rparam),
+                                      (lambda B, S, x: B.batch(op, x, x, axes=(0, 0))) if isinstance(rparam, Array)
+                                      else (lambda B, S, x: B.call(op, x, x)), register=False))
+
+    def body(B, S, x, y):
+        return tuple_of(B.batch(writer, x, axes=(0,)), B.batch(reader, y, axes=(0,)))
+
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(4, Value(32))), ("y", Array(4, rparam))),
+                                                            Tuple(Array(4, ret), Array(4, rparam))), body,
+                                    register=False))
+    desc = json.loads(D.canonical(codec.encode_program(Program(defn))))
+    tw, tr = codec.descriptor_id(writer), codec.descriptor_id(reader)
+    ids = desc["callees"]
+    w = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tw)
+    r = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tr)
+    starts = [0]
+    for n, _b in fields:
+        starts.append(starts[-1] + max(n, 1))
+    ln = starts[read + 1] - starts[read]
+    _nodes(desc)[r]["args"][0]["refs"] = {"strided": ["n", w, starts[read], ln, starts[-1], 1, 4 * ln]}
+    words = sum(max(n, 1) * -(-b // 16) for n, b in fields)
+    template = {"units": 4, "rows": {"x": [max(1, ln * -(-fields[read][1] // 16)), 1]}, "outs": {"out": words}}
+    return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, 4]],
+            "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
+
+
+BITS16 = _leaf_toy("CoreEdgesBits16", ((16, 1), (0, 16)), 1, Value(16))
+SPANS = _leaf_toy("CoreEdgesSpans", ((2, 16), (0, 32), (3, 8)), 2, Array(3, Value(8)))
 MIXED_16_32 = _mixed_toy("CoreEdgesMixedA", (16, 32), 1)
 MIXED_32_16_32 = _mixed_toy("CoreEdgesMixedB", (32, 16, 32), 2)
 
@@ -318,6 +364,10 @@ WORD_CASES = [
     ("a 32-bit field after a 16-bit one, at word 1", MIXED_16_32, {"wires": [_wire_of(MIXED_16_32, [4], [1], offset=1)]}),
     ("a 32-bit field after a 32-bit and a 16-bit one, leaf 2 at word 3", MIXED_32_16_32,
      {"wires": [_wire_of(MIXED_32_16_32, [4], [1], offset=3)]}),
+    ("a 16-bit field after 16 one-bit leaves, at word 16 (a leaf of w bits is ceil(w/16) words)", BITS16,
+     {"wires": [_wire_of(BITS16, [4], [1], offset=16)]}),
+    ("three 8-bit leaves after two 16-bit leaves and a 32-bit one, at word 4", SPANS,
+     {"wires": [_wire_of(SPANS, [4], [1], offset=4)]}),
 ]
 
 
@@ -327,7 +377,7 @@ def _grid(*lanes, run=1):
 
 _CUT = {UA: {"x": 2}, UB: {"x": 2}}
 
-#: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Spot.Edges.partLanes`)
+#: grid parts
 GRID_CASES = [
     ("two lanes over a cut port", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
      {"wires": [_wire(UB, UA, 0, 0, 0, 0), {**_wire(UB, UA, 1, 0, 1, 1), "step": [-1]},
@@ -446,9 +496,10 @@ def test_one_run_a_row(pieces, name, j, want):
 
 
 @pytest.mark.parametrize("name, j, want", GRID_CASES, ids=[c[0] for c in GRID_CASES])
-def test_the_grid_cases(name, j, want):
-    """Each grid case gives the rule's wires or refusal in the twin."""
-    assert _code(reference(j)) == want
+def test_the_grid_cases(pieces, name, j, want):
+    """Each grid case gives the rule's wires or refusal, in Lean and in the twin."""
+    assert _code(got := reference(j)) == want
+    assert pieces.call("edges", j) == ("output", D.canonical(got))
 
 
 def test_a_part_form_it_does_not_know_is_refused_by_name():

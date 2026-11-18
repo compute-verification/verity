@@ -57,7 +57,7 @@ record first, and the digest of the run's own record. `params` is not read.
    "Rows of its own" below).
 8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
    the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
-9. `leaf-widths`: some wire's offset is no field's first leaf of its writer's output, or its row is not that one
+9. `leaf-widths`: some offset of a wire is no field's first word of its writer's output, or its row is not that one
    field; or its row holds bits its writer's field lacks; or a leaf of some wire's writer does not lie inside one
    leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
 10. `inputs`: a registered read, table, table read, opening, ingress or row format declaration is malformed for the
@@ -110,10 +110,11 @@ it: more than the circuit's inputs, which errs toward the bound.
 
 ## Wires whole
 
-`Spot.Wires.check` holds a wire's row inside its writer unit's output row `out`, from the word `offset`: the unit's
-return fields end to end, each its bits rounded up to whole words. `unwhole` reads a wire as one whole field of its
-writer: the field whose first leaf is the wire's offset (`Spot.Edges.fieldOffset`, one word a leaf in the writer's
-link row), its words the row's. A wire whose offset is no field's first leaf, or whose row is not that one field's words, is refused. A row is its leaves' bits in
+`Spot.Wires.check` holds each of a wire's rows inside its writer unit's output row `out`, from the word its index
+reads (`Circuits.Wire.offsetAt`: `offset`, stepped by the index's digits). `unwhole` reads each index of a wire as one
+whole field of its writer: the field whose first word is the index's offset (`Spot.Edges.fieldWord`: the writer's link
+row is its leaves in order, each its bits in whole words), its words the row's. A wire with an offset that is no
+field's first word, or whose row is not that one field's words, is refused. A row is its leaves' bits in
 leaf order, and a gate reads leaves, so equal words alone leave a writer's leaf free to straddle leaves of the row
 that reads it: a gate of the reader then reads part of a gate of the writer, and a template that passes a leaf on,
 with no gate, carries that part further than the one row the wire fills. `unwhole` takes a wire in one of two ways
@@ -494,24 +495,42 @@ def widthName : Option Nat → String
   | some w => s!"{w} bits"
   | none => "more than one width"
 
+/-- The offset steps `Σ_k d_k · ostep_k` a wire's indices reach, `ps` its offset steps fastest first
+(`Circuits.Wire.opairs`), each once, or none where they could be more than `n`: a digit with a step reaches its radix's
+values, each a distinct step, so a radix past `n`, or more than `n` sums, is more offsets than a writer of `n` fields
+has first words. The work is the digits with a step, each at most `n` values over at most `n` sums. -/
+def offsetSteps (n : Nat) : List (Nat × Int) → Option (List Int)
+  | [] => some [0]
+  | (r, s) :: ps => (offsetSteps n ps).bind fun rest =>
+    if s == 0 then some rest
+    else if r == 0 || r > n then none
+    else
+      let os := ((List.range r).flatMap fun d => rest.map fun a => (d : Int) * s + a).foldl (fun t x => t.insert x) []
+      if os.length > n then none else some os
+
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
-refusal's message: the wire, its offset, its two rows' bits or its two leaf widths, and the fix. A wire reads the
-field of its writer's return, of a leaf or more, whose first leaf is the wire's offset (`field`,
-`Spot.Edges.fieldOffset`); an offset that is no such field's first leaf is refused. Of every wire, that field's bits are
+refusal's message: the wire, its offset, its two rows' bits or its two leaf widths, and the fix. A wire's index reads
+its writer from the word `offsetAt` gives it (`Circuits.Wire.offsetAt`), one of the offsets `offsetSteps` lists; a
+wire whose offsets could be more than its writer's fields is refused. At each, a wire reads the field of its writer's
+return, of a word or more, whose first word is that offset (`field`, `Spot.Edges.fieldWord`); an offset that is no
+such field's first word is refused. Of every wire, that field's bits are
 the row's (`short`), the row's words those `Spot.Wires.check` gives it (`Summary.rowWords`): so the row is that one
 field, whole, and a field's bits are its own words'. And a wire is taken in one of two ways. The reader's row is
 closed (`Leaves.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the writer's
 leaves. Or the reader's row and the writer's field each have leaves of one width, and the writer's divides the
 reader's: with the same words, every leaf of the writer's field then lies inside one leaf of the row that reads it.
-It costs the wires, each four lookups among the templates and a pass over its writer's return fields. -/
+It costs the wires, each four lookups among the templates and, at each of at most its writer's fields offsets, a pass
+over its writer's return fields. -/
 def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summary) : Option String :=
   let leaves := fun (tid : String) => ls.find? (·.tid == tid)
   let width := fun (tid port : String) => ((leaves tid).bind fun l => l.leaf.lookup port).join
   let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
-  let field := fun (w : Spot.Wires.Wire) => (ts.find? (·.tid == w.writer)).bind fun t =>
+  let nf := fun (w : Spot.Wires.Wire) =>
+    ((ts.find? (·.tid == w.writer)).map fun t => (fieldsOf (P.defs[t.defn]!).ret).length).getD 0
+  let field := fun (w : Spot.Wires.Wire) (off : Nat) => (ts.find? (·.tid == w.writer)).bind fun t =>
     let ret := (P.defs[t.defn]!).ret
     (List.range (fieldsOf ret).length).find? fun f =>
-      Spot.Edges.fieldOffset ret f == w.offset && 0 < (fieldsOf ret)[f]!.leaves
+      Spot.Edges.fieldWord ret f == off && 0 < Spot.Edges.wordsOf (fieldsOf ret)[f]!
   let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
     match (leaves w.writer).bind fun l => l.bits.lookup ("o" ++ toString f) with
     | some b => if b == 16 * n then none else some (b, 16 * n)
@@ -521,10 +540,17 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
     | some r, some o => o != 0 && r % o == 0
     | _, _ => false
   (s.wires.zip s.rowWords).findSome? fun (w, n) =>
-    let wire := s!"wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}: "
-    match field w with
-    | none => some (wire ++ s!"leaf {w.offset} of the writer's output row is no field's first leaf. A wire reads " ++
-      "one whole field of its writer's return, from that field's first leaf. Fix the Program, not the record: have " ++
+    match offsetSteps (nf w) (Circuits.Wire.opairs w) with
+    | none => some (s!"wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}: its offset steps " ++
+      s!"{w.ostep} over its radices {w.radix} reach more words than its writer's {nf w} fields have first words. " ++
+      "A wire's every index reads one whole field of its writer's return, from that field's first word. Fix the " ++
+      "Program, not the record: have the root read each writer's field whole, from its first leaf.")
+    | some os => os.findSome? fun d =>
+    let off := ((w.offset : Int) + d).toNat
+    let wire := s!"wire {w.writer}.out at word {off} -> {w.reader}.{w.port}: "
+    match field w off with
+    | none => some (wire ++ s!"word {off} of the writer's output row is no field's first word. A wire reads " ++
+      "one whole field of its writer's return, from that field's first word. Fix the Program, not the record: have " ++
       "the root read each writer's field whole, from its first leaf.")
     | some f =>
     match short w f n with
