@@ -34,12 +34,13 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import served as RS
+from verity.protocols.proofs.spot.prover import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
@@ -188,7 +189,7 @@ def stop_registration(pub: Mapping[str, Any], check: SpecializedDefinition, stop
     want = {p: {"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()}
     if mine != want:
         raise ValueError("the boundary record's roots are not this commitment's values, under its layout's domains")
-    digest = R.digest(boundary)
+    digest = DD.digest(boundary)
     trees = [RS.ServedTree(name, mine[p]["root"], L.spans, L.words(p) // 2, mine[p]["domain"], 32, output=(digest, p),
                            row_schema=SCHEMA) for name, p in STOP_READS.items()]
     return RS.register_served(L.stop_program, L.stop_query, trees, log=[boundary])
@@ -205,7 +206,7 @@ def stop_record(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop
     reg = stop_registration(pub, check, stop, boundary)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.stop_ports().items()]
     w = {**boundary["window"], **(window or {}), "population": "stop"}
-    return R.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=R.digest(boundary),
+    return R.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=DD.digest(boundary),
                     registered=reg.registered)
 
 

@@ -49,12 +49,14 @@ def test_spec_table_and_size_parsing() -> None:
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.4e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.42976e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.85952e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
     assert m.spec_peak("NVIDIA H200", "bf16")[0] == 989.42976e12 and m.spec_peak("NVIDIA H200", "e4m3")[0] == 1978.85952e12
     assert m.spec_peak("NVIDIA H200", "nvfp4")[0] is None
+    assert [m.spec_peak("NVIDIA RTX PRO 6000 Blackwell Server Edition", d)[0] for d in ("bf16", "e4m3", "nvfp4")] == \
+        [467.80416e12, 935.60832e12, 1871.21664e12]
     assert m.spec_peak("NVIDIA H200 NVL", "bf16") == (None, None)  # its peaks are lower than the H200 SXM's
     assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
     # RTX 5090: the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
@@ -150,17 +152,21 @@ def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_cl
     from verity.device import load_card, number, rate
 
     m = _measure()
-    card = load_card("h200-sxm-141gb", directory=CARD_FILES)
-    for fmt in ("bf16", "e4m3"):
-        assert m.tensor_reading("h200-sxm-141gb", fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"])))
+    for sku, fmts in (("h100-sxm-80gb", ("bf16", "e4m3")), ("h200-sxm-141gb", ("bf16", "e4m3")),
+                      ("rtx-pro-6000-server", ("bf16", "e4m3", "nvf4"))):
+        card = load_card(sku, directory=CARD_FILES)
+        for fmt in fmts:
+            assert m.tensor_reading(sku, fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"]))), (sku, fmt)
 
 
 def test_spec_peaks_agree_with_every_census_line() -> None:
-    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote calibration/census/hardware.json's peak
-    for every line."""
+    """The pod-side table reads nothing on a pod but the shipped tree's cards; a line it reads from a card is the data sheet's
+    (the test above), and every other line must quote calibration/census/hardware.json's peak."""
     m = _measure()
     hardware = json.loads((REPO / "calibration" / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
     for h in hardware:
-        assert m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])[0] == h["flop_per_second"], h["id"]
+        peak, source = m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])
+        if not (source or "").startswith("calibration/hardware/cards/"):
+            assert peak == h["flop_per_second"], h["id"]

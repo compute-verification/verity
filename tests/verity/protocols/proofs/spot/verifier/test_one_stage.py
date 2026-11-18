@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
 import verity.circuits.ops.prims  # with verity.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names
@@ -216,7 +217,7 @@ def test_an_old_v0_record_still_decodes_and_verifies():
     """A docket made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
     copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
     old, q, rec = _registration(6, version=0)
-    assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
+    assert (rec["program"], DD.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
     decoded = codec.decode_program(json.loads(json.dumps(codec.encode_program(old))), _xor8_registry())
     for prog in (old, decoded):
         assert _check(rec, prog, q).ok
@@ -237,7 +238,7 @@ def test_registration_v1_passes_r1_to_r6():
     assert rec["format"] == "verity/registration/v1" and rec["protocol"] == "verity/sampled-proofs/one-stage/v1"
     assert rec["partition"] == P.digest(P.partition(prog, q)) and rec["query"] == R.query_digest(q) and rec["population"] == 6
     assert _check(rec, prog, q).ok
-    assert len(R.digest(rec)) == 128 and R.digest(rec) == R.digest(dict(rec))
+    assert len(DD.digest(rec)) == 128 and DD.digest(rec) == DD.digest(dict(rec))
 
 
 def test_a_root_with_a_trailing_newline_is_refused_at_r3():
@@ -261,7 +262,7 @@ def test_registration_refusals():
         assert code in _check({**rec, **change}, prog, q).codes, code
     assert "R2-partition" in _check(rec, PN.population_program(PAIR, 5), q).codes
     assert "keys" in _check({**rec, "extra": 1}, prog, q).codes
-    assert _check({**rec, "previous": R.digest(rec)}, prog, q, log=[rec]).codes == ("R6-window",)
+    assert _check({**rec, "previous": DD.digest(rec)}, prog, q, log=[rec]).codes == ("R6-window",)
     both = {"roots": [dict(rec["roots"][0], domain="00" * 64), dict(rec["roots"][1], leaves=5)]}
     ports = _ports(prog, q, P.units(prog, q))
     codes = {_check({**rec, **both}, prog, q, ports=dict(order)).codes for order in (ports.items(), reversed(ports.items()))}
@@ -306,7 +307,7 @@ def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
 def test_receipt_names_the_record():
     _, _, rec = _registration(6)
     r = R.receipt(rec, "verifier-test", received="2026-09-27T06:00:00Z")
-    assert r == {"format": "verity/registration-receipt/v1", "registration": R.digest(rec), "verifier": "verifier-test",
+    assert r == {"format": "verity/registration-receipt/v1", "registration": DD.digest(rec), "verifier": "verifier-test",
                  "received": "2026-09-27T06:00:00Z"}
 
 
@@ -440,7 +441,7 @@ def test_audit_record_needs_every_check_and_verdict():
     assert ok["accepted"] and ok["complete"] and ok["profile"]["levels"][0]["draw"] == {"subset": 2}
     assert ok["proved_units"] == [1, 4] and ok["law"] == design and ok["wrong_units"]["of"] == 6
     ip = ok["integrity_profile"]
-    assert ip["format"] == "verity/integrity-profile/v1" and ip["drawn"] == [1, 4] and ip["registration"] == R.digest(rec)
+    assert ip["format"] == "verity/integrity-profile/v1" and ip["drawn"] == [1, 4] and ip["registration"] == DD.digest(rec)
     assert ip["partition"] == rec["partition"] and ip["evidence"]["verdict"] == "dd" * 64 and ip["evidence"]["sessions"] == ["aa" * 64]
     part = audit.audit_record(rec, rcpt, d, design, [1, 4], 2, {}, {"m0": {"accepted": True}, "lean": {**lean, "accepted": None}}, 0.25)
     assert not part["accepted"] and not part["complete"] and part["profile"] is None and part["integrity_profile"] is None
@@ -472,7 +473,7 @@ def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
     assert whole["complete"] is True and a["public"] == {"bound": whole["wrong_units"]["bound"], "complete": True,
                                                          "drawn": [1, 4], "per_template": None, "proved": [1, 4]}
     assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, DM.ONE_STAGE_PROTOCOL)
-    assert a["commitment"] == R.digest(whole["registration"]) and a["profile"]["delta"] == "1/4"
+    assert a["commitment"] == DD.digest(whole["registration"]) and a["profile"]["delta"] == "1/4"
     assert a["profile"]["levels"][0]["draw"] == {"subset": 2}
     for other in ({"accepted": None}, {"accepted": None, "premise": "a check nothing ran"}, {}):
         part = _accepted({"lean": lean, "other": other})
