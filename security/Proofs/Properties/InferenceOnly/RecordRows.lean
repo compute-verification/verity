@@ -200,7 +200,7 @@ theorem returnsOwn (hP : ReadProg P)
     have hgood : Resolve.Good P (P.child P.rootScope k m) :=
       Resolve.good_child P (parent := P.rootScope)
         (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hc hm rfl
-    obtain ⟨f, -, hf, hl, hres, -, -⟩ := ho
+    obtain ⟨f, -, hf, -, hl, hres, -, -⟩ := ho
     obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec k hk
     obtain ⟨hbp, hcount, -⟩ := hcallee.2 hc
     have ht : (outRow (P.defs[(P.child P.rootScope k m).d]!) f).1 + l <

@@ -29,15 +29,15 @@ open Spot.RecordText
 open Lean (Json)
 
 /-- **`finish`'s wiring has the front's templates**: each template of the wiring is one of the front's, with its
-units, its rows by name with their words and outer lengths, and its outputs by name, and each of the front's is one
-of the wiring's. `RecordText.wiring` builds the wiring's templates from `templatesOf`'s (`Tmpl.wired`); proving it
+units, its rows by name with their words and outer lengths, and its one output row `out`, the front's template's
+outputs end to end, and each of the front's is one of the wiring's. `RecordText.wiring` builds the wiring's templates from `templatesOf`'s (`Tmpl.wired`); proving it
 of that construction replaces this hypothesis. -/
 def FinishTemplates : Prop :=
   ∀ (f : Front) (pin : String → Option String) (c : Case), finish f pin = .ok c →
     (∀ tid t', (tid, t') ∈ c.W.templates → ∃ t ∈ f.ts, t.tid = tid ∧ t'.units = t.units ∧
         (∀ p q, (p, q) ∈ t'.rows ↔
           ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer) ∧
-        ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) ∧
+        ∀ o n, (o, n) ∈ t'.outs ↔ o = "out" ∧ n = (t.outs.map (·.2)).sum) ∧
       ∀ t ∈ f.ts, ∃ t', (t.tid, t') ∈ c.W.templates
 
 end InferenceOnlyVerifier.Record.SecurityProofs
@@ -45,7 +45,7 @@ end InferenceOnlyVerifier.Record.SecurityProofs
 namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open Flock.Program (Prog Scope Defn fieldsOf)
+open Flock.Program (Prog Scope Defn Ty fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
@@ -225,9 +225,10 @@ private theorem names_inj {α : Type} [Inhabited α] (ps : Array (String × α))
   · exact heq
   · exact absurd hEq.symm (List.pairwise_iff_getElem.1 hnd i' i h2 h1 hgt)
 
-/-- **A template read off a Definition is that Definition's template**: a wiring's template whose rows and outputs
-are those of a text's template, which has a row a parameter of the Definition `d`, of a whole number of 16-bit
-words, and an output a field of `d`'s return, under distinct names, is `d`'s template (`TemplateOf`). -/
+/-- **A template read off a Definition is that Definition's template**: a wiring's template whose rows are those of
+a text's template, which has a row a parameter of the Definition `d`, of a whole number of 16-bit words, and an
+output a field of `d`'s return, under distinct names, and whose one output row `out` is the text's template's outputs
+end to end, is `d`'s template (`TemplateOf`). -/
 theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
     (hrows : t.rows = d.params.toList.map (fun p => (p.1, bits p.2 / 16, outerOf p.2)))
     (hbits : ∀ p ∈ d.params.toList, bits p.2 ≠ 0 ∧ bits p.2 % 16 = 0)
@@ -235,7 +236,7 @@ theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
     (hnames : (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup)
     (hr : ∀ p q, (p, q) ∈ t'.rows ↔
       ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer)
-    (ho : ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) : TemplateOf d t' := by
+    (ho : ∀ o n, (o, n) ∈ t'.outs ↔ o = "out" ∧ n = (t.outs.map (·.2)).sum) : TemplateOf d t' := by
   have hnd : (d.params.toList.map (·.1)).Nodup := by
     have h := (List.nodup_append.1 hnames).1
     rw [hrows, List.map_map] at h
@@ -258,31 +259,26 @@ theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
       · rw [getElem!_pos d.params i hi, ho']; exact he.2.2.symm
     · rintro ⟨i, hi, rfl, hw, ho'⟩
       exact ⟨_, _, List.mem_map.2 ⟨d.params[i]!, hmem i hi, rfl⟩, by rw [hw, bitsOf_eq], ho'⟩
-  · rw [ho, houts]
-    constructor
-    · intro hm
-      obtain ⟨⟨ty, f⟩, hx, he⟩ := List.mem_map.1 hm
-      obtain ⟨hlt, hget⟩ := List.getElem?_eq_some_iff.1 (List.mem_zipIdx_iff_getElem?.1 hx)
-      simp only [Prod.mk.injEq] at he
-      refine ⟨f, hlt, he.1.symm, ?_⟩
-      rw [getElem!_pos _ f hlt, hget, bitsOf_eq]
-      exact he.2.symm
-    · rintro ⟨f, hf, rfl, rfl⟩
-      refine List.mem_map.2 ⟨((fieldsOf d.ret)[f]!, f), List.mem_zipIdx_iff_getElem?.2 ?_, ?_⟩
-      · rw [getElem!_pos _ f hf]
-        exact List.getElem?_eq_getElem hf
-      · rw [bitsOf_eq]
+  · have hsum : (t.outs.map (·.2)).sum = Spot.Edges.fieldWord d.ret (fieldsOf d.ret).length := by
+      have e : (fun x : Ty × ℕ => (bits x.1 + 15) / 16) = (fun ty => (bitsOf ty + 15) / 16) ∘ Prod.fst :=
+        funext fun x => by simp [bitsOf_eq]
+      rw [houts, List.map_map]
+      unfold Spot.Edges.fieldWord
+      rw [List.take_length]
+      show ((fieldsOf d.ret).zipIdx.map fun x : Ty × ℕ => (bits x.1 + 15) / 16).sum = _
+      rw [e, ← List.map_map, List.zipIdx_map_fst]
+    rw [ho, hsum]
 
 /-- **A wiring whose templates are the text's has the Program's templates** (`Templates`): where the text's reader
 gives the templates `ts`, the template query gives the ranges `rs`, and each template of the wiring `W` has the id,
-the units, the rows and the outputs of one of `ts`. -/
+the units and the rows of one of `ts`, and its outputs end to end as its one output row `out`. -/
 theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     {tids : Array String} {rs : Array TRange}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {W : Spot.Wires.Wiring}
     (hp1 : ∀ tid t', (tid, t') ∈ W.templates → ∃ t ∈ ts, t.tid = tid ∧ t'.units = t.units ∧
         (∀ p q, (p, q) ∈ t'.rows ↔
           ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer) ∧
-        ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) : Templates P rs W := by
+        ∀ o n, (o, n) ∈ t'.outs ↔ o = "out" ∧ n = (t.outs.map (·.2)).sum) : Templates P rs W := by
   obtain ⟨hd, -⟩ := tmpls_named hts
   intro tid t' hmem
   obtain ⟨t, ht, htid, hunits, hrows, houts⟩ := hp1 tid t' hmem

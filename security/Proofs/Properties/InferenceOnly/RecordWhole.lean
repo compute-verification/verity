@@ -60,6 +60,19 @@ theorem lookup_append_of_not_mem {β : Type} : ∀ (l l' : List (String × β)) 
     rw [List.cons_append, List.lookup_cons, show (a == x.1) = false from beq_eq_false_iff_ne.2 h.1]
     exact lookup_append_of_not_mem l l' a h.2
 
+/-- Two leaf widths, each found, the writer's nonzero and dividing the reader's. -/
+theorem widths_divide {a b : Option Nat}
+    (h : (match a, b with
+      | some r, some o => o != 0 && r % o == 0
+      | _, _ => false) = true) :
+    ∃ r o, a = some r ∧ b = some o ∧ o ≠ 0 ∧ r % o = 0 := by
+  match a, b, h with
+  | some r, some o, h =>
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, beq_iff_eq] at h
+    exact ⟨r, o, rfl, rfl, h.1, h.2⟩
+  | none, _, h => simp at h
+  | some _, none, h => simp at h
+
 /-- **What `unwhole` tests of one wire**, with the words `Spot.Wires.check` gives its row: the writer is a template,
 and the wire's offset is the first word of a field of its Definition's return that has a bit; that field's bits,
 where its leaves are found, are the row's words'; and the reader's row is closed, or each side has a leaf width and
@@ -99,12 +112,7 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
           simp only [Bool.or_eq_true] at hwh
           rcases hwh with hc | hc
           · exact Or.inl hc
-          · right
-            split at hc
-            · rename_i r o hr ho
-              simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, beq_iff_eq] at hc
-              exact ⟨r, o, hr, ho, hc.1, hc.2⟩
-            · cases hc
+          · exact Or.inr (widths_divide hc)
         · cases h0
 
 /-- A name among a list's names is looked up in it. -/
