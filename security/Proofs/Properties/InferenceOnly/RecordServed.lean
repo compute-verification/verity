@@ -5,6 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordCircuit
 public import Proofs.Properties.InferenceOnly.RecordForm
 public import Proofs.Properties.InferenceOnly.RecordInputs
 public import Proofs.Properties.InferenceOnly.RecordRows
+public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWired
 
@@ -12,9 +13,10 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 # The record check's own form lays out a circuit
 
 `form_laidOut` (`Properties.Record.LaidOut`): every record `read` accepts lays out a registered circuit
-(`Properties.Record.Served`), clause by clause, under two hypotheses: every record `read` accepts is of a root with
+(`Properties.Record.Served`), clause by clause, under three hypotheses: every record `read` accepts is of a root with
 no edge (`EdgeFreeReads`), so `own-rows` admits only roots whose arguments are runs of input leaves
-(`ownRuns_of_edgeFree`), and the wiring has the front's templates (`FinishTemplates`). On a root with edges, every
+(`ownRuns_of_edgeFree`), the wiring has the front's templates (`FinishTemplates`), and every row of a leaf of a
+shared run is a registered read of one parameter (`SharedHeld`). On a root with edges, every
 unit's rows are its own input gates or its writers' outputs (`OwnOrEdgeRows`) where `own-rows` holds
 (`OwnRowsEdges`, not yet proved); restating these proofs over it replaces `EdgeFreeReads`.
 
@@ -26,7 +28,7 @@ unit's rows are its own input gates or its writers' outputs (`OwnOrEdgeRows`) wh
   so its own input gates or its writers' outputs (`ownOrEdgeRows_of_ownRows`);
   the wires pass the check's `unwhole` on the leaves the Program gives each template (`unwhole_of_read`), so every
   wire lands whole and every bit of a wired row is its writer's (`aligned`, `filled`); and no row the check holds has
-  a writer (`held_unwired`).
+  a writer (`held_unwired`), so no row of a leaf of a shared run has one (`SharedHeld`, `sharedUnwired_of_read`).
 * The circuit. What a unit returns and what its gates read are its own (`returnsOwn`, `operandsOwn`), a unit's gates
   are computed and every gate has its place (`unitsComputed`, `gatesOwn`), and the wires rank the units (`ranked`):
   so the Program's gates no wire covers are a circuit (`laysOut_exists`). θ is the gates of the rows held and the
@@ -88,7 +90,8 @@ theorem ownOrEdgeRows_iff {P : Flock.Program.Prog} {rs : Array Flock.TemplateQue
 
 /-- **A record `read` accepts of a root with no edge lays out a registered circuit**: the wired circuit of its
 Program, with θ the gates of the rows the check holds and the blocks the slots. -/
-theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates) {j tr : Json}
+theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates)
+    (hSR : InferenceOnlyVerifier.Record.SecurityProofs.SharedHeld) {j tr : Json}
     {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
     (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P) :
     ∃ d, Served form c d := by
@@ -102,14 +105,16 @@ theorem served_of_read (hFT : InferenceOnlyVerifier.Record.SecurityProofs.Finish
   have hO := ownRows_holds hP hown hrs
   have hG := gatesOwn hP hrs
   obtain ⟨ρ, hρ⟩ := ranked hS
-  obtain ⟨D, at_, hL⟩ := laysOut_exists c.f.P rs c.W c.wired hO (returnsOwn hP hrs hT hS) (unitsComputed hP hrs)
+  have hSU := sharedUnwired_of_read hSR h hrs
+  obtain ⟨D, at_, hL⟩ := laysOut_exists c.f.P rs c.W c.wired hO hSU (returnsOwn hP hrs hT hS) (unitsComputed hP hrs)
     (operandsOwn hP hown hrs hT hS) hG ρ hρ
   obtain ⟨θ, hθ, U, hN, hD⟩ := names_divides hL hO hG (fun r => (c.heldAt r).isSome) c.slot c.S
     (fun tid u sc hu => slot_of_unit h hrs hu)
   exact ⟨Verity.RegisteredCircuit.ofPartition D θ hθ c.S U, c.f.P, c.f.doc, text, c.wired, rs, at_,
     decode_of_read h, (inst_of_read h).2, htext, hcuts, hwires, slot_of_read h,
-    fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT, ownOrEdgeRows_of_ownRows hO, aligned hP hown hrs hT hS hts hwh,
-    filled hP hrs hT hS hts hwh, fun r hh => held_unwired h r hh, hL, hN, hD⟩
+    fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT, ownOrEdgeRows_of_ownRows hO,
+    aligned hP hown hrs hT hS hts hwh hSU, filled hP hrs hT hS hts hwh, fun r hh => held_unwired h r hh,
+    hSR j tr c rs h hrs, hL, hN, hD⟩
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
@@ -117,8 +122,8 @@ namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 /-- **Where `own-rows` holds, every unit's rows are its own input gates or its writers' outputs**, on the record's
 wiring: the text's cuts and the edges of the Program's root (`Spot.RecordText.wiring`), the summary SPOT's check
-gives it, and the ranges of its templates. Not yet proved; the record proofs restated over it replace
-`EdgeFreeReads`. -/
+gives it, and the ranges of its templates, a gate of a shared run being a leaf of more than one row. Never
+proved, and no proof here takes it; the record proofs restated over it replace `EdgeFreeReads`. -/
 def OwnRowsEdges : Prop :=
   ∀ (P : Flock.Program.Prog) (doc : Lean.Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     (rs : Array Flock.TemplateQuery.TRange), ownRows P = true → Spot.RecordText.wiring P doc = .ok W →
@@ -127,10 +132,11 @@ def OwnRowsEdges : Prop :=
     Properties.Record.OwnOrEdgeRows P rs W S
 
 /-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`), where every record it reads
-is of a root with no edge. -/
-theorem form_laidOut (hNE : EdgeFreeReads) (hFT : FinishTemplates) : Properties.Record.LaidOut form := by
+is of a root with no edge and every row of a leaf of its shared runs is a registered read of one parameter. -/
+theorem form_laidOut (hNE : EdgeFreeReads) (hFT : FinishTemplates) (hSR : SharedHeld) :
+    Properties.Record.LaidOut form := by
   intro j tr c h
   have h' : read j tr = .ok c := h
-  exact Properties.Record.SecurityProofs.served_of_read hFT h' (hNE j tr c h')
+  exact Properties.Record.SecurityProofs.served_of_read hFT hSR h' (hNE j tr c h')
 
 end InferenceOnlyVerifier.Record.SecurityProofs
