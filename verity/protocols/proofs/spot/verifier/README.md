@@ -281,7 +281,7 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
 `spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
-refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet (a two-stage outcome's completeness) raises
 `NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
 
 | Verdict | Entry | Lean of record | Twin |
@@ -547,8 +547,8 @@ is true, so an answer without the field (one written before it, a reject, an und
 outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
 goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
 is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
-`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
-Python side the run is held to.
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) is its twin `check_twin` held to the codes the Lean's
+run gave (`DISAGREE` where they differ).
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).
