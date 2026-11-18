@@ -226,7 +226,8 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_n
         _put(b["salts_b"], _weight_salts(weight_salts, w, n))
         keys, const = _zeros(128, weight.device), _constants(weight.device)
         _put(keys[64:], rows_domain(weight_binding(w), -2, n, hash).domain_id)
-        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
+        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0,
+                                              "salts_b": (b["salts_b"].data_ptr(), size["salts_b"])}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
                          variant=variant)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
@@ -422,7 +423,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
         seg = _zeros(size["segdig_b"], weight.device)
         _put(b["salts_b"], self.weight_salts[w])
-        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr()},
+        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr(),
+                                         "salts_b": (b["salts_b"].data_ptr(), size["salts_b"])},
                          xb.data_ptr(), {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
                          variant=self.variant)
         stream = _stream(weight.device)
@@ -512,8 +514,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
                     "leaves": 0, "pd_count": sh.count.data_ptr()}
             own = _zeros(sh.size["salts_a"], self.device) if self._graphed(sh.m16) else None
-            if own is not None:
-                bufs["salts_a"] = own.data_ptr()
+            bufs["salts_a"] = ((sh.b["salts_a"] if own is None else own).data_ptr(), sh.size["salts_a"])
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}

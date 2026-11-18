@@ -138,12 +138,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier import levels as LV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
@@ -313,7 +313,7 @@ def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
         raise Refused(f"the case's commitment is not a registration record: {type(e).__name__}: {e}") from None
     _need(isinstance(rec, dict) and codec.canonical_json(rec) == b,
           "the case's commitment is not a registration record as canonical JSON")
-    return rec, R.digest(rec)
+    return rec, DD.digest(rec)
 
 
 def window_case(audit: Path) -> dict[str, Any]:
@@ -454,7 +454,7 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         _need(isinstance(r, Mapping) and r.get("previous") == prev,
               "the log and the record don't chain: each record's previous is the digest of the one before"
               + ("; the record names a previous record, so pass the deployment's log (--log)" if not log else ""))
-        prev = R.digest(r)
+        prev = DD.digest(r)
 
 
 def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -473,7 +473,7 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
         _need(isinstance(x, dict) and isinstance(x.get("file"), str) and isinstance(x.get("digest"), str),
               f"a line of the serve's H1 log names no record file and digest: {str(x)[:200]}")
         r = _json(path.parent / x["file"])
-        _need(isinstance(r, dict) and R.digest(r) == x["digest"],
+        _need(isinstance(r, dict) and DD.digest(r) == x["digest"],
               f"the serve's H1 log names {x['file']} as the record of digest {x['digest'][:16]}…, which it isn't")
         log.append(r)
         if x["digest"] == rec["previous"]:
@@ -498,7 +498,7 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
     if parts is not None:
         w = (_json(parts / "parts.json").get("window") or {}).get("record")
         if isinstance(w, dict):
-            held[R.digest(w)] = w
+            held[DD.digest(w)] = w
     if serve is not None:
         found = [_json(serve / DEPLOYMENT)] if (serve / DEPLOYMENT).is_file() else []
         for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
@@ -508,7 +508,7 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
                 unread.append(f"{f.relative_to(serve)} ({type(e).__name__})")
         for r in found:
             if isinstance(r, dict):
-                held[R.digest(r)] = r
+                held[DD.digest(r)] = r
     log: list[dict[str, Any]] = []
     at = rec.get("previous")
     while at is not None:

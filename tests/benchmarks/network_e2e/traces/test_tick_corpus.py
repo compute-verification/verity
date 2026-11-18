@@ -1,5 +1,5 @@
 """``--admit tick`` in the corpus: the client's stand-in network attester, and the network attester's release headers
-and watermark as `verity.protocols.resource_accounting.network.verifier.release` makes them, against the server's real `scheme_plugin.Front`;
+and watermark as `verity.release` makes them, against the server's real `scheme_plugin.Front`;
 which traces take the tick, τ's calibration on a trace's busy cycle, the checkpoint's stop ids, the hook's record of the
 KV pool, and what the summary keeps of a tick trace, a network attester trace's releases taken from the server's feed and checked
 against the attester's log."""
@@ -325,7 +325,7 @@ def test_the_servers_feed_reads_the_network_attesters_releases_and_watermark(tmp
     corpus = mod("corpus")
     sa, tp = corpus.tick_modules()
     monkeypatch.syspath_prepend(str(corpus.ROOT))
-    from verity.protocols.resource_accounting.network.verifier import release
+    from verity import release
     feed_mw, run = front(sa, tp, tmp_path), bytes.fromhex(RUN)
 
     def line(t: int, n: int) -> bytes:

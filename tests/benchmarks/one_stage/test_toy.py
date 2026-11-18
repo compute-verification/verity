@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -46,7 +47,7 @@ def run(tmp_path_factory):
     u = T.ingress(N)
     bc = T.boundary(u, Q)
     brec = T.write(bc, tmp / "boundary", {"toy": "boundary"}, index_salt=b"\x01" * 192)
-    digest = R.digest(brec)
+    digest = DD.digest(brec)
     it = T.interior(bc, digest, SAMPLE)
     irec = T.write(it.committed, tmp / "interior", {"interior": True, "boundary": digest, "replay_sample": list(SAMPLE)},
                    previous=digest, registered=it.registered, index_salt=b"\x02" * 192)

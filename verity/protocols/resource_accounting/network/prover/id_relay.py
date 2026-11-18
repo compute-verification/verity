@@ -20,9 +20,9 @@ else ``why``, which is `GONE` where the network attester's side ended first), ``
 to the request's arrival, whole) and ``ms`` (each id event's write after the arrival, in milliseconds, then the
 trailer's). It holds no id and no text. A connection's egress cell i is due i // r buckets after its first, so the delay
 a connection needed after its release is the most of ``ms[i]`` less (i // r) buckets, over its events and its trailer.
-Any other connection that breaks before it is relayed, or while relayed with an error that is no `ConnectionError`,
-leaves one record: ``broken``, the side whose connection broke (``client`` or ``server``), ``error``, the exception's
-class name, and ``at``, the seconds from the relay's start to the break.
+Every other connection that breaks, before it is relayed or while it is, leaves one record: ``broken``, the side whose
+connection broke (``client`` or ``server``), ``error``, the exception's class name, and ``at``, the seconds from the
+relay's start to the break.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from verity.protocols.resource_accounting.network.prover.workload import (
     TRAILER,
     id_event,
 )
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 __all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "process", "run", "serve"]
 
@@ -87,14 +87,12 @@ async def _first(reader: asyncio.StreamReader) -> bytes:
 
 
 async def _pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
-    """`src`'s bytes to `dst` until `src` ends or either breaks, then `dst`'s write side closed."""
-    with contextlib.suppress(ConnectionError):
-        while data := await src.read(READ_BYTES):
-            dst.write(data)
-            await dst.drain()
-    with contextlib.suppress(OSError):
-        if dst.can_write_eof():
-            dst.write_eof()
+    """`src`'s bytes to `dst` until `src` ends, then `dst`'s write side closed; a break of either raises."""
+    while data := await src.read(READ_BYTES):
+        dst.write(data)
+        await dst.drain()
+    if dst.can_write_eof():
+        dst.write_eof()
 
 
 async def _ended(reader: asyncio.StreamReader) -> None:

@@ -21,7 +21,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
     (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
     suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
     Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
-    keep busy. It holds request values, so it stays in the serve dir (`serve_commit.MIRRORED` leaves it out)."""
+    keep busy. It holds request values, so it stays in the serve dir (`serve_mirror.MIRRORED` leaves it out)."""
     from verity_vllm.engine.engine_driver import external_id
     from verity_vllm.engine.step_trace import SERVED, StepTrace
 

@@ -84,6 +84,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
@@ -291,7 +292,7 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
     opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
         p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
-                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                      "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -443,7 +444,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
-    subprotocol["registration"] = R.digest(rec)
+    subprotocol["registration"] = DD.digest(rec)
     subprotocol["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
     if not all(v["ok"] for v in checks.values()):
         subprotocol.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))

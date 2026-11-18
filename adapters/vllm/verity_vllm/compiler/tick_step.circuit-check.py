@@ -15,5 +15,5 @@ RULES = ({"tau": 100_000, "sat": 30_000, "free": 40_000}, {"tau": 10**8, "sat": 
 def _network_tick_roots() -> list[Any]:
     from verity_vllm.compiler.tick_step import statics, unit
 
-    return [*(unit(**statics(8, 1, 9, SERVED, 9, **rule, quiet=quiet)) for rule in RULES for quiet in (True, False)),
+    return [*(unit(**statics(8, 1, 9, SERVED, 9, **rule)) for rule in RULES),
             unit(**statics(8, 1, 9, {**SERVED, "max_num_batched_tokens": 8192}, 9, **RULES[1], carry=2))]

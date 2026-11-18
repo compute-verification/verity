@@ -24,6 +24,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
+from verity.protocols.registration.verifier import site_log as L
 from verity_difftest import protocol as P
 
 REGISTRATION = Path(__file__).resolve().parents[6] / "verity/protocols/registration/verifier/lean"
@@ -121,7 +122,7 @@ def chain(composite: str, entries: Any) -> list[G.Entry]:
     """`G.chain`, through `_digest`."""
     log: list[G.Entry] = []
     for e in entries:
-        log.append(dataclasses.replace(e, previous=_digest(log[-1]) if log else S.genesis(composite)))
+        log.append(dataclasses.replace(e, previous=_digest(log[-1]) if log else L.genesis(composite)))
     return log
 
 
@@ -283,7 +284,7 @@ def cases(draw) -> dict:
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
-        log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, S.genesis("remote")]))
+        log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, L.genesis("remote")]))
     auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, WITH_VM, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
                                          dataclasses.replace(WITH_VM, timebases=(("vm0", "tb1"),)),
                                          dataclasses.replace(AUDITOR, tolerance=0),
@@ -407,7 +408,7 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     assert view.site.locs == LOCS
     assert view.declared(0) == DAY0 and view.declared(1) is None
     log = chain("onsite", EXAMPLE)
-    heads = [{"entries": 0, "head": S.genesis("onsite")},
+    heads = [{"entries": 0, "head": L.genesis("onsite")},
              *({"entries": i + 1, "head": _digest(e)} for i, e in enumerate(log))]
     assert reference(case("onsite", log))["public"]["heads"] == heads
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}

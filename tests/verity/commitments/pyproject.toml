@@ -11,6 +11,7 @@ inputs = ["verity", "verity/circuits", "verity/circuits/kernels", "adapters/vllm
           "verity/protocols/resource_accounting/memory/poub/verifier", "tests/verity/commitments/fixtures/commit-slots-v1.json"]
 parallel = true
 worker_gb = 8
+typical_worker_gb = 5
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

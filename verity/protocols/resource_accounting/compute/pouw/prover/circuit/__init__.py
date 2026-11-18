@@ -1,6 +1,8 @@
 """`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by SPOT.
 
-* `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
+PoUW's word primitives are `verity.circuits.ops.words` (every output at most 32 bits but `pc8`'s exact squares, which stay
+inside a row unit).
+
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
   as Boolean Definitions (`_v2`, the same functions on bits).
 * `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
