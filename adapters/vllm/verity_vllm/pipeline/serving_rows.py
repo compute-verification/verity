@@ -711,7 +711,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
-    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.ranges_of(IF.templates_of(window), None))
+    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:

@@ -1852,6 +1852,20 @@ def ranges_of(templates: Sequence[tuple[str, int]], order: Sequence[tuple[str, i
     return tuple(order) if order is not None else tuple((t, 0, int(n)) for t, n in templates)
 
 
+def member_ranges(members: Sequence[CS.Member]) -> tuple[tuple[str, int, int], ...]:
+    """The ranges ``members`` (in root order) tile, each run of one template's consecutive members one (`ranges_of`'s form):
+    a template's own units counted over its members before."""
+    out, seen = [], {}
+    for m in members:
+        lo = seen.get(m.template, 0)
+        if out and out[-1][0] == m.template:
+            out[-1][2] += m.n
+        else:
+            out.append([m.template, lo, m.n])
+        seen[m.template] = lo + m.n
+    return tuple(map(tuple, out))
+
+
 def own_units(members: Sequence[CS.Member], ranges: Sequence[tuple[str, int, int]]) -> list[int]:
     """Each of ``members``' (in the partition's order) first own unit: members tile ``ranges`` (`ranges_of`) in turn."""
     out, it = [], iter(ranges)
