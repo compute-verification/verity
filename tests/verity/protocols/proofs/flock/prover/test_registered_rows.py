@@ -10,6 +10,7 @@ import numpy as np
 from verity.commitments import hm96
 from verity_flock import circuit as FC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 PROGRAM = "ab" * 64
 #: RMSNorm's eps (1e-5) as the f32 its Definition holds
@@ -35,14 +36,14 @@ def _equal(reg: G.Registered, statement_rows) -> None:
     bcs = _statement_leaves(statement_rows, list(reg.salts))
     assert list(reg.bcs) == bcs
     for r, bc in enumerate(bcs):
-        assert G.leaf(reg.domain, r, bc) == reg.levels[0][r]
+        assert RV.leaf(reg.domain, r, bc) == reg.levels[0][r]
         assert G.verify_read(reg.domain, reg.root, r, bc, reg.path(r))
 
 
 def test_a_16_bit_registered_row_is_the_ports_row():
     rows = np.random.default_rng(20261002).integers(0, 1 << 16, (3, 64)).tolist()
     reg = G.Registered.commit(PROGRAM, "cs_table", rows)
-    assert [G.row_words(r) for r in rows] == rows
+    assert [RV.row_words(r) for r in rows] == rows
     _equal(reg, rows)
 
 
@@ -52,7 +53,7 @@ def test_a_32_bit_registered_row_is_the_values_row():
     assert value_row([32, 32], [EPS, SCALE])[:5] == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, 0]
     for rows in ([[EPS]], [[SCALE]], [[EPS, SCALE], [SCALE, EPS]]):
         reg = G.Registered.commit(PROGRAM, "values", rows, word_bits=32)
-        assert [G.row_words(r, 32) for r in rows] == [value_row([32] * len(r), r) for r in rows]
+        assert [RV.row_words(r, 32) for r in rows] == [value_row([32] * len(r), r) for r in rows]
         _equal(reg, [value_row([32] * len(r), r) for r in rows])
         # the same u16 words registered as 16-bit leaves have the same b || c, under another domain
         as16 = G.Registered.commit(PROGRAM, "values", [value_row([32] * len(r), r)[:2 * len(r)] for r in rows], list(reg.salts))

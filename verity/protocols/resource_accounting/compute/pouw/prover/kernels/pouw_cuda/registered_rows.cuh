@@ -10,7 +10,7 @@
 //   b, c = x ^ M_key y, SHA-512(salt_prefix || y)                     `hm96.SHA512.commit_string`
 //   leaf = frame-v3-sha512 leaf(domain, j, "hm96-sha512/row/v2", SHA-512(leaf_prefix || b || c))
 // and the value's tree is the frame-v3-sha512 tree over its leaves padded to a power of two, every level kept. The domain id
-// comes from the host (`registered.domain`).
+// comes from the host (`registered_value.domain`).
 #pragma once
 #include "row_table.cuh"
 

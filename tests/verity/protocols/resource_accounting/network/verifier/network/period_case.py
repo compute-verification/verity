@@ -131,6 +131,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIG
 from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkAttesterParams
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.proofs.spot.verifier.profile import Stratified
 from verity.circuits import boolean as BL, codec, population
@@ -1248,7 +1249,7 @@ def start_empty(words: int, salt: bytes, domain: bytes, row: bytes | None = None
     """The empty state as a scan's registration starts from it (`startEmpty`): its `registered` entry of `START`, a
     tree of the one row of `words` zero u16 words (or of `row`, a row the prover chose) under `salt` at the domain
     whose id is `domain`, and the opening its `window` gives as ``empty``."""
-    root = G.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
+    root = RV.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
     return ({"domain": domain.hex(), "leaves": 1, "root": root.hex(), "value": START, "words": words},
             {START: {"salt": salt.hex(), "words": words}})
 

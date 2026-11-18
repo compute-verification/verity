@@ -22,6 +22,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import com
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.commitments import registered_value as RV
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 I8 = Array(8, BL.BIT)
@@ -84,7 +85,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
              "registered": {"w": 512, **words}, "supplied": sources(c), "pinned": {"w": w.root.hex()},
              "binding": BINDING}
     assert R.check(rec, **check).ok
-    zero = G.Registered.commit(digest, C.ROOTS, [SD.leaves(b"\0" * 128, True)], G.supplied_salts(digest, C.ROOTS, 1),
+    zero = G.Registered.commit(digest, C.ROOTS, [SD.leaves(b"\0" * 128, True)], RV.supplied_salts(digest, C.ROOTS, 1),
                                G.width(prog, C.ROOTS))
     witness = {**rec, "registered": [zero.entry() if e["value"] == C.ROOTS else e for e in rec["registered"]]}
     assert R.check(witness, **check).codes == ("R7-supplied",)

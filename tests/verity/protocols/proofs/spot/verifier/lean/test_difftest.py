@@ -77,6 +77,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     registered as G,
     docket as R,
 )
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.proofs.spot.verifier.challenger.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, sampling_design_problem)
@@ -922,7 +923,7 @@ def domain(j):
         if k in j and j[k] is None:
             raise D.Reject(f"the {k} is not 64 bytes of hex")
     try:
-        return G.domain(j["program"], j["value"], j["words"], j["leaves"], j["word_bits"], j.get("window"),
+        return RV.domain(j["program"], j["value"], j["words"], j["leaves"], j["word_bits"], j.get("window"),
                         j.get("produced")).domain_id.hex()
     except ValueError as e:
         raise D.Reject(str(e)) from None
@@ -2259,8 +2260,8 @@ def _earlier_value(a: dict, x: int) -> None:
         if not (isinstance(e, dict) and e.get("value") == EARLIER_VALUE):
             return e
         if x % 7 == 6:
-            return {k: v for k, v in e.items() if k != G.WIDTH_KEY}
-        return {**e, ["leaves", "words", G.WIDTH_KEY, "domain", "root", "value"][x % 7]:
+            return {k: v for k, v in e.items() if k != RV.WIDTH_KEY}
+        return {**e, ["leaves", "words", RV.WIDTH_KEY, "domain", "root", "value"][x % 7]:
                 [1, 1000, True, None, "x", -1, 16, 32, "W"][x // 7 % 9]}
     a["params"]["log"] = [{**r, "registered": [change(e) for e in r["registered"]]}
                           if isinstance(r.get("registered"), list) else r for r in a["params"]["log"]]
@@ -2416,7 +2417,7 @@ def _replayed_window(a: dict, x: int) -> None:
     es, rec = a["record"]["registered"], a["record"]
     i, window = x % len(es), [EARLIER_WROOT, None, WROOT][x // len(es) % 3]
     e = es[i]
-    dom = G.domain(rec["program"], e["value"], e["words"], e["leaves"], e.get("word_bits", 16), window).domain_id.hex()
+    dom = RV.domain(rec["program"], e["value"], e["words"], e["leaves"], e.get("word_bits", 16), window).domain_id.hex()
     rec["registered"] = [{**e, "domain": dom} if j == i else f for j, f in enumerate(es)]
 
 
@@ -3500,7 +3501,7 @@ PRODUCED_CHANGES = [
     ("another registration's domain", lambda c, x: _entry(c, x).update(domain=PD.domain(
         REGISTERED_SETUPS[0].sha512, _entry(c, x)["value"], _entry(c, x)["words"], _entry(c, x)["leaves"],
         _entry(c, x).get("word_bits", 16), PRODUCED_OTHER).domain_id.hex()), "P-domain"),
-    ("a registered value's domain", lambda c, x: _entry(c, x).update(domain=G.domain(
+    ("a registered value's domain", lambda c, x: _entry(c, x).update(domain=RV.domain(
         REGISTERED_SETUPS[0].sha512, _entry(c, x)["value"], _entry(c, x)["words"], _entry(c, x)["leaves"],
         _entry(c, x).get("word_bits", 16)).domain_id.hex()), "P-domain"),
     ("16 named", lambda c, x: _entry(c, x).update(word_bits=16), "P-word_bits"),
@@ -5363,7 +5364,7 @@ def _supplied_linked(c: dict, schema: str) -> dict:
     link, prog = c["links"][0], c["interior"]["program"]
     n = len(c["sample"]) * next(r["per"] for r in c["rows"] if r["template"] == link["template"])
     reg = G.Registered.commit(prog, link["value"], [[(40503 * i + j) & 0xFFFF for j in range(2)] for i in range(n)],
-                              G.supplied_salts(prog, link["value"], n), schema=schema)
+                              RV.supplied_salts(prog, link["value"], n), schema=schema)
     return {"root": reg.root.hex(), "domain": reg.domain.domain_id.hex()}
 
 
@@ -7045,7 +7046,7 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
     """`T` reusing (`outputs`) Pearl+'s window record's entry for a call's A rows or served y, which PoUW commits
     (`audit.commit_rows` under hm96-sha512) under its rows domain, not one-stage's: `T`'s 32-bit rows as `row-seg/v1`
     rows, or `row/v2` rows (which R7 counts alike), are accepted under that domain and root verbatim, and without
-    `outputs` are `R7-domain`. The record's entry under one-stage's own domain for `T` (`registered.domain`, whichever
+    `outputs` are `R7-domain`. The record's entry under one-stage's own domain for `T` (`registered_value.domain`, whichever
     binding it takes) is `R7-domain`, under another root `R7-held`, and Pearl+'s entry of 16-bit words or of other rows
     `R7-output`, Lean and Python agreeing."""
     s, values, sampling_design = REGISTERED_SETUPS[1], {"T": 2}, {"k": 1, "law": "subset"}
@@ -7081,7 +7082,7 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
         assert codes(case(drop=["outputs"])) == ["R7-domain"], name
         assert codes(case({"domain": mine["domain"]})) == ["R7-domain"], name
         assert codes(case({"root": "ef" * 64})) == ["R7-held"], name
-        for e in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 4, "words": 1}):
+        for e in ({k: v for k, v in theirs.items() if k != RV.WIDTH_KEY}, {**theirs, "leaves": 4, "words": 1}):
             assert codes(case(earlier=e))[0] == "R7-output", (name, e)
 
 
@@ -8460,8 +8461,8 @@ def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
     _, triple = SECOND_MIXED.templates
     linked = _row_schema(_second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}),
                          G.SCHEMA_SEG)
-    value = {schema: _supplied_linked(linked, schema) for schema in G.SCHEMAS}
-    assert len({v["root"] for v in value.values()}) == len(G.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
+    value = {schema: _supplied_linked(linked, schema) for schema in RV.SCHEMAS}
+    assert len({v["root"] for v in value.values()}) == len(RV.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
     seg = value[G.SCHEMA_SEG]
     cases = [(_read_linked(linked, 0, seg), []),
              (_row_schema(_read_linked(linked, 0, seg), G.SCHEMA, reference=False), ["second-values"])]

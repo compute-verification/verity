@@ -27,6 +27,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1z
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
 LABEL = b"verity/pouw/splitk-rows-vectors/v1"
@@ -87,7 +88,7 @@ def vectors() -> dict:
             "window": windowed, "leaves": reg.leaves, "words": reg.words, "domain": reg.domain.domain_id.hex(),
             "root": reg.root.hex(),
             "leaf": [{"words_sha512": hashlib.sha512(_bytes(w)).hexdigest(),
-                      "row_digest": G.row_digest(w, G.WORD_BITS, G.SCHEMA_V2).hex(), "frame_leaf": reg.levels[0][j].hex()}
+                      "row_digest": RV.row_digest(w, RV.WORD_BITS, G.SCHEMA_V2).hex(), "frame_leaf": reg.levels[0][j].hex()}
                      for j, w in enumerate(words)]})
     return out
 

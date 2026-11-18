@@ -36,6 +36,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import core_chec
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 #: the prover-side tamperings `negatives` applies, each to be refused
 NEGATIVES = ("receipt-word", "receipt-word-after-round", "pub-other-root", "ok-zero")
@@ -43,12 +44,12 @@ NEGATIVES = ("receipt-word", "receipt-word-after-round", "pub-other-root", "ok-z
 
 def bc_of(words: Any, salt: bytes) -> bytes:
     """A row/v2 row's b || c under ``salt`` (`registered.Registered.commit`'s)."""
-    return G._INST.commit_string(G._INST.default_key, G.row_digest([int(w) for w in words], G.WORD_BITS, G.SCHEMA_V2), salt)
+    return G._INST.commit_string(G._INST.default_key, RV.row_digest([int(w) for w in words], RV.WORD_BITS, G.SCHEMA_V2), salt)
 
 
 def _root(dom: Any, position: int, bc: bytes, path: bytes) -> bytes:
     """The root ``bc`` at ``position`` reaches through ``path`` under ``dom`` (`registered.verify_read`'s walk)."""
-    digest, i = G.leaf(dom, position, bc, G.SCHEMA_V2), position
+    digest, i = RV.leaf(dom, position, bc, G.SCHEMA_V2), position
     for level in range(len(path) // 64):
         sib = path[64 * level:64 * level + 64]
         digest = dom.node(level, i >> 1, *((digest, sib) if i % 2 == 0 else (sib, digest)))
@@ -126,7 +127,7 @@ class StandIn:
         self.rejected: list[str] = []
 
     def _dom(self, port: dict) -> Any:
-        dom = G.domain(self.w.program, port["value"], port["words"], port["leaves"],
+        dom = RV.domain(self.w.program, port["value"], port["words"], port["leaves"],
                        window=None if CR.is_held(port["value"]) else self.w.window)
         if dom.domain_id.hex() != port["domain"]:
             raise ValueError(f"port {port['value']}'s domain is not the registered one")
@@ -139,7 +140,7 @@ class StandIn:
         if o0 is None:
             return "the file reads no receipt table at o0"
         for name, port in ((CR.PUB_PORT, pub), (CR.RECEIPT_PORT, o0), (CR.OK_PORT, o1)):
-            i, (bc, path) = u - port.get(G.READS_FROM, 0), (bytes.fromhex(x) for x in opened[name][:2])
+            i, (bc, path) = u - port.get(RV.READS_FROM, 0), (bytes.fromhex(x) for x in opened[name][:2])
             at = port["reads"][i] if 0 <= i < len(port["reads"]) else None
             if at is None or not G.verify_read(self._dom(port), bytes.fromhex(port["root"]), at, bc, path, G.SCHEMA_V2):
                 return f"unit {u}'s {name} row does not open {port['value']} at the file's root"

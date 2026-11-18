@@ -96,6 +96,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.errors import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
@@ -385,7 +386,7 @@ def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[st
     registered port ``r_``, ``v_``, ``p_``): each port of credit's file `reg` at the row it reads, from `values` (each
     value's rebuilt tree, the call's receipt table among them for o0), the public table `pub` and the ok rows `ok`."""
     ports = reg["ports"]
-    u0 = ports[CR.PUB_PORT][G.READS_FROM]
+    u0 = ports[CR.PUB_PORT][RV.READS_FROM]
     z: dict[str, Any] = {"units": np.array(units)}
     for port, e in ports.items():
         src = pub if port == CR.PUB_PORT else ok if port == CR.OK_PORT else values[e["value"]]
@@ -449,7 +450,7 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     size = CR.call_work(win["layout"])[call][0]
-    u0 = reg["ports"][CR.PUB_PORT][G.READS_FROM]
+    u0 = reg["ports"][CR.PUB_PORT][RV.READS_FROM]
     units = list(range(u0, u0 + size))
     z: dict[str, Any] = {"units": np.array(units), "u0": np.array(u0), "call": np.array(call)}
     for port, e in reg["ports"].items():
@@ -647,7 +648,7 @@ def stage(a: Any) -> int:
             reg, units = regs[c], drawn[c]
             pv = reg["ports"][CR.PUB_PORT]
             pub = held(G.Registered.commit(win["program"], pv["value"], pv["known"]["rows"],
-                                           [bytes.fromhex(s) for s in pv["known"]["salts"]], G.WORD_BITS, G.SCHEMA_V2,
+                                           [bytes.fromhex(s) for s in pv["known"]["salts"]], RV.WORD_BITS, G.SCHEMA_V2,
                                            window=win["root"]), pv, "credit's public table")
             z = call_rows(win, c, units, reg, values, pub, ok)
             z["call"] = np.array(c)

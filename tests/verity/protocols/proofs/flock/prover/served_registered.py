@@ -38,6 +38,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree, register_served
 
 N = 32
@@ -114,7 +115,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
              salts={"x": x_salts, "cs": salts, "out": out_salts},
              registered={"cs": entry, "x": x_entry, "out": out_entry})
     tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
-    out_port = {**reg_out.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(bit_rows), "reads": list(range(N))}
+    out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
     (out / "served-x.json").write_text(json.dumps(dataclasses.asdict(x_tree), sort_keys=True))
     (out / "out-port.json").write_text(json.dumps(out_port, sort_keys=True))

@@ -137,7 +137,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
-from verity.commitments import advice as AC, history as HT
+from verity.commitments import advice as AC, history as HT, registered_value as RV
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS, wiring as WI
@@ -1405,7 +1405,7 @@ def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, A
             continue
         for of, row in zip(SUPPLIED, (digest_words(bytes.fromhex(e["root"])), digest_words(bytes.fromhex(e["domain"])), [1])):
             name = supplied_param(t, of)
-            out[name] = module.Registered.commit(program, name, [row], module.supplied_salts(program, name, 1), schema=V2)
+            out[name] = module.Registered.commit(program, name, [row], RV.supplied_salts(program, name, 1), schema=V2)
     return out
 
 
@@ -2482,13 +2482,13 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
             words = dict(m.rows + m.outs)[p]
             if e is None:
                 raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
-            n, bits, want = e.get("words"), e.get("word_bits", registered.WORD_BITS), value_format(reg, param)[1]
+            n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
             if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
                 raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
                                  f"the port's {words} 16-bit words in {want}-bit leaves")
             ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
                         "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        "reads": [positions[int(i)] for i in refs], registered.READS_FROM: m.base}
+                        "reads": [positions[int(i)] for i in refs], RV.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": ports}
     return out
 
@@ -2654,7 +2654,7 @@ class Window:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit
         that reads it in read order, as the verifier makes them from the unit's sampled index (its supplied value's
         ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
-        committed under the public salts ``module.supplied_salts`` gives at the period's partition digest, so `close`
+        committed under the public salts ``registered_value.supplied_salts`` gives at the period's partition digest, so `close`
         leaves their salts out and the verifier's root of them is the record's. Not written."""
         raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
                                   "(Window.give)")

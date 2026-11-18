@@ -29,6 +29,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lane
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 V16, BIT = Value(16), Value(1)
 XOR1 = PrimitiveDefinition("H1WindowTestXor1", 1, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b, register=False)
@@ -298,10 +299,10 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
         assert file["format"] == G.READS_V1 and sorted(file["ports"]) == sorted(
             [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
         for port, e in file["ports"].items():
-            reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
+            reg, dom = tabs[e["value"]], RV.domain(digest, e["value"], e["words"], e["leaves"])
             assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words,
                                                                                  dom.domain_id.hex(), G.SCHEMA_V2), port
-            assert e[G.READS_FROM] == u0 and len(e["reads"]) == n and None not in e["reads"], port
+            assert e[RV.READS_FROM] == u0 and len(e["reads"]) == n and None not in e["reads"], port
             assert u0 + n < tp.population, "a unit past reads reads none"
             for u in range(u0, u0 + n):
                 p = CC.port_reads(e)[u]
@@ -354,7 +355,7 @@ def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
         assert file["format"] == G.READS_V1 and {HW.RECEIPT_PORT, HW.PUB_PORT, HW.OK_PORT, "zy"} <= set(file["ports"])
         v0 = _v0_reads(prog, tp, c, steps, file)
         for port, e in file["ports"].items():
-            assert (e[G.READS_FROM], len(e["reads"])) == (u0, n), port
+            assert (e[RV.READS_FROM], len(e["reads"])) == (u0, n), port
             assert CC.port_reads(e) == v0[port], port
         files.append(file)
     return files
@@ -414,7 +415,7 @@ def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
     assert sorted(file["ports"]) == sorted(bare["ports"])
     for port, e in file["ports"].items():
         held = e["value"] == "b/32"
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"],
+        assert e["domain"] == RV.domain(digest, e["value"], e["words"], e["leaves"],
                                        window=None if held else window).domain_id.hex(), port
         assert e["domain"] == Cr.domain_of(digest, window, e), port
         assert (e["domain"] == bare["ports"][port]["domain"]) == held, port
@@ -445,7 +446,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
     assert (e["value"], e["leaves"], e["words"], e["root"], e["domain"]) == (
         rc, n, words, reg.root.hex(), reg.domain.domain_id.hex())
     assert e["domain"] == Cr.domain_of(digest, w, e)
-    assert (e[G.READS_FROM], e["reads"]) == (u0, list(range(n))) and u0 + n < tp.population
+    assert (e[RV.READS_FROM], e["reads"]) == (u0, list(range(n))) and u0 + n < tp.population
     assert all(G.verify_read(reg.domain, reg.root, t, reg.bcs[t], reg.path(t), G.SCHEMA_V2) for t in range(n))
 
     odd_tile = _test_tile("H1WindowTestOddReceiptTile", sig=lambda S: _tile_sig(S)[:1] + (
@@ -514,7 +515,7 @@ def test_a_lone_row_is_read_under_its_parameters_name_as_registered_reads_keys_i
 
 def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_that_window():
     """``window``: with the execution phase's open root W, `table_reads_file` gives the call's A and z tables the registered domain
-    that binds W (`registered.domain`'s ``window``), as the served path commits them, and the weights' b/32 the one that
+    that binds W (`registered_value.domain`'s ``window``), as the served path commits them, and the weights' b/32 the one that
     binds none; without it every domain binds none, as before. Every read opens the trees committed so, and the call's A
     table committed in another execution phase, of the same rows under the same salts, opens none of them at its own root."""
     m = HW.slot(5, TILE)
@@ -539,7 +540,7 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
         assert e["domain"] == reg.domain.domain_id.hex(), port
         assert (e["domain"] == bare[port]["domain"]) == (e["value"] == "b/32"), port
         assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare[port].items() if k != "domain"}
-        assert bare[port]["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"]).domain_id.hex(), port
+        assert bare[port]["domain"] == RV.domain(digest, e["value"], e["words"], e["leaves"]).domain_id.hex(), port
         for u in range(u0, u0 + n):
             p = CC.port_reads(e)[u]
             assert G.verify_read(reg.domain, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
@@ -794,7 +795,7 @@ def test_a_sampled_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_w
                 assert {x: e[x] for x in partials} == partials
                 continue
             held = value == f"h1/w/b/{k}"
-            assert e["domain"] == G.domain(digest, value, e["words"], e["leaves"],
+            assert e["domain"] == RV.domain(digest, value, e["words"], e["leaves"],
                                            window=None if held else window).domain_id.hex(), port
             assert e["domain"] == Cr.domain_of(digest, window, e), port
             if logical == LL.RECEIPT:

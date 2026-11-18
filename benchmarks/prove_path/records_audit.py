@@ -54,7 +54,7 @@ reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A docket whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the docket;
-the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
+the audit holds each entry's domain to the one core's ``registered_value.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
 the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the docket beside ``--registered``'s (`window_pins`), so Lean's registered
@@ -198,6 +198,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import credit as
 from verity.protocols.resource_accounting.network.verifier import blocks as NB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
@@ -491,7 +492,7 @@ def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
-    (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
+    (ValueError) unless it names its parameter and its domain is the one core's ``registered_value.domain`` makes of the pin's
     program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
     is their values together, each under its own program (the weights under the model's, the output a network attester
     relayed under the reading program's), a value pinned once."""
@@ -506,7 +507,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     try:
         program, values = doc["program"], doc["values"]
         for v, e in values.items():
-            want = REG.domain(program, v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS)).domain_id.hex()
+            want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS)).domain_id.hex()
             if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
                 raise ValueError(f"the pin of {v!r} names another value or domain than {program!r}'s, or no root")
     except (KeyError, TypeError, AttributeError) as e:
@@ -558,7 +559,7 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any], resolve: Calla
     acts = w.get("activations") or {}
     values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
     for v, e in values.items():
-        want = REG.domain(acts["program"], v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+        want = RV.domain(acts["program"], v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                           window=w.get("run")).domain_id.hex()
         if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
             raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
@@ -700,7 +701,7 @@ def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dic
         v = e.get("value") if isinstance(e, Mapping) else None
         if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
             continue
-        want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+        want = RV.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                           window=run).domain_id.hex()
         if e.get("domain") == want:
             out[v] = dict(e)
@@ -717,7 +718,7 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     try:
         program, values = w["activations"]["program"], dict(w["activations"]["values"])
         other = [v for v, e in values.items() if e.get("value") != v or not isinstance(e.get("root"), str) or e.get("domain")
-                 != REG.domain(program, v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                 != RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                                window=w.get("run")).domain_id.hex()]
     except (KeyError, TypeError, AttributeError, ValueError) as e:
         return _verdict({"activations": False}, {"why": f"{type(e).__name__}: {e}"})

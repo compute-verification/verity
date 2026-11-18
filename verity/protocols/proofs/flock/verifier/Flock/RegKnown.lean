@@ -28,7 +28,7 @@ open Lean (Json)
 def KNOWN_KEY : String := "known"
 
 /-- `sha512/row/v2`'s message for a bit row of u16 words: `P(16 · words)`, then each word low byte first
-(`registered.row_digest` under `hm96-sha512/row/v2` at 16-bit leaves). -/
+(`registered_value.row_digest` under `hm96-sha512/row/v2` at 16-bit leaves). -/
 def rowBytesV2 (row : Array Nat) : ByteArray :=
   row.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) (HmRow.rowPrefixV2 (16 * row.size))
 

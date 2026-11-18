@@ -19,6 +19,7 @@ from verity.circuits.types import Array, Value
 from verity.commitments import history as HT
 from verity.commitments.gates.rowleaf import digest_bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R, verifier as V
+from verity.commitments import registered_value as RV
 
 from test_registered import SAMPLING_DESIGN, MIX, POS, Q, SCHEME, SERVED, TABLE
 
@@ -84,7 +85,7 @@ def _case(hist_rows=None):
         base = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
         hist = G.supplied_value(prog, "hist", G.sources(resolved)["hist"], base, ["hist"])
     else:
-        hist = G.Registered.commit(pd, "hist", hist_rows, G.supplied_salts(pd, "hist", 2), word_bits=16)
+        hist = G.Registered.commit(pd, "hist", hist_rows, RV.supplied_salts(pd, "hist", 2), word_bits=16)
     rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
     check = {"program": prog, "query": Q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
              "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history}
@@ -190,7 +191,7 @@ def vector() -> dict:
     rows, salts, bcs, dom, root = _table(program)
     full = HT.domain(program, TABLE_NAME, 576)
     leaves = [digest_bits(root), digest_bits(dom.domain_id)]
-    hist = G.Registered.commit(program, "hist", leaves, G.supplied_salts(program, "hist", 2), word_bits=16)
+    hist = G.Registered.commit(program, "hist", leaves, RV.supplied_salts(program, "hist", 2), word_bits=16)
     return {
         "generator": "tests/verity/protocols/proofs/spot/verifier/test_history_read.py",
         "program": program,
@@ -200,7 +201,7 @@ def vector() -> dict:
         "domain_2_17": {"name": TABLE_NAME, "words": 576, "capacity": HT.CAPACITY, "domain_id": full.domain_id.hex()},
         "supplied": {"value": "hist", "type": "Array<2, Digest>", "sources": SUPPLIED["hist"], "word_bits": 16,
                      "rows_bits": ["".join(map(str, r)) for r in leaves],
-                     "salts": [s.hex() for s in G.supplied_salts(program, "hist", 2)], "entry": hist.entry()},
+                     "salts": [s.hex() for s in RV.supplied_salts(program, "hist", 2)], "entry": hist.entry()},
     }
 
 

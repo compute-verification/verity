@@ -36,6 +36,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity.commitments import hm96
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 
 SEED = 20261118
 FIELD = "out"
@@ -61,13 +62,13 @@ def program(n: int) -> tuple[Program, dict]:
 
 def port(reg: G.Registered, reads: dict[int, int], units: int) -> dict:
     """The verifier's own entry for a port reading `reg`: unit u reads row `reads[u]`, other units none."""
-    return {**reg.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(G.SCHEMA),
             "reads": [reads.get(u) for u in range(units)]}
 
 
 def tree_port(reg: G.Registered, template: str, field: str) -> dict:
     """The verifier's own entry for a link row reading the tree of (`template`, `field`): its reads the program's."""
-    return {**reg.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(G.SCHEMA),
             "tree": {"template": template, "field": field}, "reads": []}
 
 

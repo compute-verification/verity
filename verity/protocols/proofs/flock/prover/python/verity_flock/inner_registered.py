@@ -48,6 +48,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from . import circuit as FC
 
@@ -251,7 +252,7 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         reads = [None] * population
         for i, u in enumerate(head["units"]["indices"]):
             reads[u] = t["refs"][i]
-        own[name] = {**reg.entry(), "word_bits": G.WORD_BITS, "reads": reads}
+        own[name] = {**reg.entry(), "word_bits": RV.WORD_BITS, "reads": reads}
         out[name] = {"entry": entries[name], "root": reg.root.hex(), "leaves": reg.leaves, "positions": positions}
         if name in ports:
             records.append(reg.entry())

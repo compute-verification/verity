@@ -41,6 +41,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
 from verity_vllm.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
@@ -280,7 +281,7 @@ def test_the_stream_registers_an_interior_of_fused_blocks_under_the_tables_the_v
         assert c.given[m.port(x.port)].positions == tuple(s * T + a for s in range(Q) for a in AT)
         mine = RG.supplied_rows(stream.interior_program(Q), x.value, RG.sources(srcs)[x.value], it.record)
         v = RG.Registered.commit(prog, x.value, [RG.bit_words(r, 1, 16) for r in mine],
-                                 RG.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
+                                 RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
         assert [list(r) for r in v.rows] == [digest_words(bytes.fromhex(pins[n][x.port])) for _ in range(Q) for n in PARAMS]
         assert v.entry() == {k: got[x.value][k] for k in v.entry()} and got[x.value]["leaves"] == Q * T
     assert IR.span_values(SUPPLIES) == tuple((x.value, T, IR.DIGEST) for x in SUPPLIES)

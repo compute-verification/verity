@@ -47,6 +47,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import row_leaf
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 
 CASES = {"coef": ("L0", "coef"), "dirs": ("L0", "dirs"), "message": ("alg-p0", "m0")}
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
@@ -82,7 +83,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     rows, salts = table_rows(inst, text, port, len(pos))
     wb, schema = int(port_.get("word_bits", 16)), port_.get("row_schema", RG.SCHEMA)
     def bc(row, salt):
-        return RG._INST.commit_string(RG._INST.default_key, RG.row_digest(row, wb, schema), salt)
+        return RG._INST.commit_string(RG._INST.default_key, RV.row_digest(row, wb, schema), salt)
     honest = bc(rows[0], salts[0])
     at = pub.find(honest, pnl)
     if at < 0 or pub.find(honest, at + 1) >= 0:
@@ -121,7 +122,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
     meta = json.loads(text.split("\n", 2)[1][5:])
     progs = [c for c in (O.session_program((inner / "public.json").read_bytes()), meta.get("program_sha512"))
-             if c and RG.domain(c, port_["value"], len(rows[0]), int(port_["leaves"]), wb).domain_id.hex() == port_["domain"]]
+             if c and RV.domain(c, port_["value"], len(rows[0]), int(port_["leaves"]), wb).domain_id.hex() == port_["domain"]]
     if not progs:
         return skip("neither the release's program nor the statement's names the value's domain")
     by_pos = sorted(zip(pos, rows, salts))

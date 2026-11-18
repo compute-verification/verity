@@ -15,6 +15,7 @@ from verity.protocols.resource_accounting.network.verifier import transfer_rows 
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 import signers
 
@@ -50,7 +51,7 @@ def test_commitment_is_a_registered_values_and_the_head_its_root(tmp_path):
     data = rows(4, 1)
     t, cert, _issuer = attested(tmp_path, data=data)
     same = G.Registered.commit(PROGRAM, "bias", data, t.salts, 16, G.SCHEMA_V2)
-    assert t.root == same.root and t.head.domain == G.domain(PROGRAM, "bias", 1, 4).domain_id
+    assert t.root == same.root and t.head.domain == RV.domain(PROGRAM, "bias", 1, 4).domain_id
     assert (t.head.words, t.head.rows) == (1, 4) and cert.digest == t.head.digest()
     assert TR.read_witness(t.witness) == list(t.salts) and len(set(t.salts)) == 4
     doc = TR.registration(t.head, cert)
@@ -63,7 +64,7 @@ def test_a_units_row_opens_the_signed_root_and_a_forged_byte_does_not(tmp_path):
     t, _cert, _issuer = attested(tmp_path, data=data)
     reads = [2, 0, 3, 1]
     port = TR.port(t.head, reads, reads_from=5)
-    assert port["value"] == "bias" and port["reads"] == reads and port[G.READS_FROM] == 5
+    assert port["value"] == "bias" and port["reads"] == reads and port[RV.READS_FROM] == 5
     assert port["root"] == t.root.hex() and port["row_schema"] == G.SCHEMA_V2 and port["words"] == 1
     got, salts, entry = t.statement(reads)
     dom = TR.domain(PROGRAM, "bias", 1, 4)
@@ -86,7 +87,7 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
     t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=word_bits, schema=schema)
     assert t.root == G.Registered.commit(PROGRAM, "w", data, t.salts, word_bits, schema).root
     assert t.head.domain == TR.domain(PROGRAM, "w", words, 4, word_bits).domain_id == \
-        G.domain(PROGRAM, "w", words, 4, word_bits).domain_id
+        RV.domain(PROGRAM, "w", words, 4, word_bits).domain_id
     flip = {"word_bits": {32: 16, 16: 32}[word_bits], "schema": G.SCHEMA_SEG if schema == G.SCHEMA_V2 else G.SCHEMA_V2}
     assert all(replace(t.head, **{k: v}).digest() != t.head.digest() for k, v in flip.items())
     doc = TR.registration(t.head, cert)

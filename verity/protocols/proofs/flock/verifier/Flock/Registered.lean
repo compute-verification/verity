@@ -56,7 +56,7 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   let m := (← Flock.canonUtf8 manifest).toUTF8
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
-/-- `registered.domain(program, value, words, leaves, word_bits, ...).domain_id` (one-stage `registered.py`), `leaves`
+/-- `registered_value.domain(program, value, words, leaves, word_bits, ...).domain_id` (`verity/commitments/registered_value.py`), `leaves`
 the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
 `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's

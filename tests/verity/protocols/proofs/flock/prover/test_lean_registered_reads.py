@@ -28,6 +28,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
@@ -359,7 +360,7 @@ def test_a_v1_files_reads_start_at_its_first_unit(staged):
     cs = staged.own["ports"]["cs"]
     later = staged.dir / "own-v1-later.json"
     later.write_text(json.dumps({**staged.own, "format": G.READS_V1,
-                                 "ports": {**staged.own["ports"], "cs": {**cs, G.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
+                                 "ports": {**staged.own["ports"], "cs": {**cs, RV.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
     code, out = _statement(staged, public, later)
     assert code == 1 and f"reads no row of {VALUE} in unit 0" in out, out
 

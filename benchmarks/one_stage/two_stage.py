@@ -166,6 +166,7 @@ import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
@@ -901,8 +902,8 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 raise ValueError(f"{m.template}'s {p!r} reads {x.value}, which the interior registration doesn't register")
             e = values[x.value]
             ports[p] = {"value": x.value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
-                        "word_bits": REG.WORD_BITS, "domain": e["domain"], REG.SCHEMA_KEY: m.schema(p),
-                        "reads": [s * x.per + a for s in range(q) for a in x.at], REG.READS_FROM: m.base}
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], REG.SCHEMA_KEY: m.schema(p),
+                        "reads": [s * x.per + a for s in range(q) for a in x.at], RV.READS_FROM: m.base}
         out[m.key] = LK.reads_file(ports, registered=REG)
     return out
 
@@ -938,7 +939,7 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
         reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
-                                   "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
+                                   "word_bits": RV.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,

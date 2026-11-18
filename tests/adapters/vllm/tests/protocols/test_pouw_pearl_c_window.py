@@ -32,6 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
 )
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.program.predict.window_class import PearlTables
 
@@ -80,7 +81,7 @@ def test_w_registers_each_retained_timed_rounds_calls_under_the_rounds_served_nu
     mans = [json.loads(Path(passes[i]["manifest"]).read_text()) for i in (3, 4)]
     calls = [u for man in mans for u in man["matmuls"]]
     for (a, y), u in zip(zip(w["registered"][:6:2], w["registered"][1:6:2]), calls, strict=True):
-        assert set(a) == set(y) == {*G.ENTRY_KEYS, G.WIDTH_KEY}
+        assert set(a) == set(y) == {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
         assert a == {"value": a["value"], "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
                      "domain": rows_domain(activation_binding(SALT, u["index"]), u["index"], u["m"], HM96).domain_id.hex()}
         assert y == {"value": y["value"], "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"], "word_bits": 32,
@@ -288,7 +289,7 @@ def test_ws_b_rows_are_at_pouws_weight_root_the_hm96_root_of_the_same_rows(tmp_p
         base = G.Registered.commit(SCHEME, PWR.b_value(wid), rows.tolist(), b_salts[wid],
                                    word_bits=32, schema=G.SCHEMA_SEG)
         dom = rows_domain(weight_binding(wid), -2, n, "sha512")
-        levels = tree_levels(dom, [G.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base.bcs)])
+        levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base.bcs)])
         return PWR.Committed(**{**{f.name: getattr(base, f.name) for f in fields(base)}, "levels": levels}, call_domain=dom)
 
     for wid, rows in b.items():

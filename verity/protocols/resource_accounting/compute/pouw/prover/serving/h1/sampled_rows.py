@@ -16,6 +16,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import credit as
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.errors import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
@@ -199,7 +200,7 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
         at = e["reads"][0]
         if port in known:
             src = PR.commit(win["program"], e["value"], [known[port][1]], draw_root,
-                            [LL.known_salt(draw_root, e["value"])], G.WORD_BITS, G.SCHEMA_V2)
+                            [LL.known_salt(draw_root, e["value"])], RV.WORD_BITS, G.SCHEMA_V2)
         elif e["value"] == tree.value:
             src = tree
         else:

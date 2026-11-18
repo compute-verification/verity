@@ -1,6 +1,6 @@
 """`weights.weights_roots`, the streaming b/<K> commitment the auditor registers a model with, against
 `registered.Registered.commit` over the same rows and salts, and against `scalar_roots`, the per-row reference it replaced
-(`hm96_salt`, `commit_string`, `registered.leaf`, `tree_levels`), for any chunking and any `workers`."""
+(`hm96_salt`, `commit_string`, `registered_value.leaf`, `tree_levels`), for any chunking and any `workers`."""
 from __future__ import annotations
 
 import json
@@ -21,6 +21,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import weights a
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import chacha20_block, hm96_salt
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import fold_roots, tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 CIRCUIT = "ab" * 64
 PREFIX = "h1/"
@@ -33,13 +34,13 @@ def scalar_roots(circuit, prefix, linears, rows, key):
     for i, k in enumerate(Wt.ks(linears)):
         mine = [w for w, (_n, kw) in enumerate(linears) if kw == k]
         width = 2 * Wt.b_words(k)
-        dom = G.domain(circuit, Wt.value(prefix, k), Wt.b_words(k), sum(linears[w][0] for w in mine))
+        dom = RV.domain(circuit, Wt.value(prefix, k), Wt.b_words(k), sum(linears[w][0] for w in mine))
         leaves = []
         for w in mine:
             for row in rows(w):
                 j, x = len(leaves), sha512_row_v2_digest(bytes(row), 8 * width)
                 salt = hm96_salt(key, Wt.B_NONCE + i, j)
-                leaves.append(G.leaf(dom, j, hm96.SHA512.commit_string(hm96.SHA512.default_key, x, salt), Wt.SCHEMA))
+                leaves.append(RV.leaf(dom, j, hm96.SHA512.commit_string(hm96.SHA512.default_key, x, salt), Wt.SCHEMA))
         out[k] = tree_levels(dom, leaves)[-1][0]
     return out
 

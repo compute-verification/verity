@@ -154,6 +154,7 @@ def test_a_unit_whose_ok_is_0_opens_no_root_the_verifier_pins():
     stand-in for the Lean verifier's opening of a registered read, which `Window.give` keeps from running: a unit row's
     root under the supplied salts, against the root of the verifier's own row. The units whose ok is 1 open it; the unit
     whose row of W is wrong records ok 0, whose row opens another root, so its proof is refused."""
+    from verity.commitments import registered_value as RV
     from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
     params, salt, _ = setup_case()
@@ -172,7 +173,7 @@ def test_a_unit_whose_ok_is_0_opens_no_root_the_verifier_pins():
     (leaves,) = RG.supplied_rows(Unit, V.OK, [row], {})
     assert RG.bit_words(leaves, 1, 16) == [1] and RG.leaves_of(bytes.fromhex(row[0][1]), 16) == [1]
     prog = "ab" * 64
-    salts = RG.supplied_salts(prog, V.OK, 1)
+    salts = RV.supplied_salts(prog, V.OK, 1)
     pinned = RG.Registered.commit(prog, V.OK, [[1]], salts).root
     opens = [RG.Registered.commit(prog, V.OK, [[o]], salts).root == pinned for o in ok]
     assert opens == [True, False, True, False, True]

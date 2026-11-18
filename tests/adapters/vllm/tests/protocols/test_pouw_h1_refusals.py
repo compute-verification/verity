@@ -115,6 +115,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
+from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -1876,7 +1877,7 @@ def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused
     """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
     past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
     value is read."""
-    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
 

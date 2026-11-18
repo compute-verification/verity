@@ -16,6 +16,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static 
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.protocols import pouw
 
@@ -62,7 +63,7 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
     assert req.leaves == slots.leaves == ROWS
     for reg, bound in ((req, {"session": SV.LOCAL_SESSION}), (slots, {"window": served.root})):
         e = reg.entry()
-        assert e["domain"] == G.domain(served.program_digest, e["value"], e["words"], e["leaves"], **bound).domain_id.hex()
+        assert e["domain"] == RV.domain(served.program_digest, e["value"], e["words"], e["leaves"], **bound).domain_id.hex()
         assert e in served.entries()
     assert [e["words"] for e in (req.entry(), slots.entry())] == [LR.HEADER_WORDS, LR.SLOT_WORDS]
     for reg, schema, other in ((req, G.SCHEMA_SEG, G.SCHEMA_V2), (slots, G.SCHEMA_V2, G.SCHEMA_SEG)):
@@ -91,7 +92,7 @@ def test_round_0s_request_table_is_cores_commit_of_its_headers():
     req, words = served.live[LV.value(served, LV.REQUESTS)], LV.request_words(run.admitted.get(0, []), ROWS)
     ys = NR.salts(run._key, LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0), ROWS)
     core = G.Registered.commit(served.program_digest, req.value, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(ROWS)],
-                               G.WORD_BITS, LR.REQUEST_SCHEMA, session=SV.LOCAL_SESSION)
+                               RV.WORD_BITS, LR.REQUEST_SCHEMA, session=SV.LOCAL_SESSION)
     assert req.entry() == core.entry() and req.bcs == core.bcs and req.levels == core.levels
     assert [req.salts[j] for j in range(ROWS)] == list(core.salts)
     assert [list(req.rows[j]) for j in range(ROWS)] == [list(r) for r in core.rows]
@@ -262,7 +263,7 @@ def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
         assert (op["value"], op["index"], str(z[f"v_{p}"][0]), int(z[f"r_{p}"][0]), str(z[f"p_{p}"][0])) == (
             e["value"], e["reads"][0], e["value"], e["reads"][0], op["path"])
         bind = {"session": pub["session"]} if e["value"] == "h1/requests@0" else {"window": pub["window"]}
-        dom = G.domain(pub["program"], e["value"], e["words"], e["leaves"], **bind)
+        dom = RV.domain(pub["program"], e["value"], e["words"], e["leaves"], **bind)
         assert dom.domain_id.hex() == e["domain"]
         assert G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]), bytes.fromhex(op["path"]),
                              e.get(G.SCHEMA_KEY, G.SCHEMA)), p

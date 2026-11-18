@@ -30,6 +30,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     caller as C,
     verifier as V,
 )
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -98,11 +99,11 @@ def _record(prog: Program, reg: G.Registered, **kw):
 def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     prog = _program()
     reg = _registered(prog)
-    dom = G.domain(P.program_digest(prog), "W", 2, len(TABLE))
+    dom = RV.domain(P.program_digest(prog), "W", 2, len(TABLE))
     inst = hm96.SHA512
     for r, row in enumerate(TABLE):
         # the statement's port row: the two 16-bit words, zero-padded to one SHA-512 block
-        assert G.row_words(row) == [*row, *[0] * 62]
+        assert RV.row_words(row) == [*row, *[0] * 62]
         assert reg.bcs[r] == inst.commit_string(inst.default_key, sha512_row_digest([*row, *[0] * 62], 16, ROLE_X), reg.salts[r])
         assert G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r))
         assert len(reg.path(r)) == 64 * merkle_depth(len(TABLE))
@@ -118,12 +119,12 @@ def test_a_16_bit_value_binds_only_the_five_keys():
     from verity.commitments.identity import identity_digest_sha512
 
     prog = P.program_digest(_program())
-    binding = identity_digest_sha512(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
+    binding = identity_digest_sha512(RV.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
                                                            "leaves": 5})
-    assert G.domain(prog, "W", 2, 5).domain_id == G.domain(prog, "W", 2, 5, 16).domain_id
-    assert G.domain(prog, "W", 2, 5).binding == binding and len(binding) == 64
+    assert RV.domain(prog, "W", 2, 5).domain_id == RV.domain(prog, "W", 2, 5, 16).domain_id
+    assert RV.domain(prog, "W", 2, 5).binding == binding and len(binding) == 64
     row = list(range(1, 65))
-    assert G.row_words(row) == row and G.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
+    assert RV.row_words(row) == row and RV.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
     rows = [[(r * 64 + j) * 1009 % 65536 for j in range(64)] for r in range(3)]
     reg = G.Registered.commit("ab" * 64, "cs_table", rows, [bytes([r + 1]) * 192 for r in range(3)])
     assert reg.root.hex() == ROOT_16 and "word_bits" not in reg.entry()
@@ -134,15 +135,15 @@ def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
     """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
     domain names `word_bits`, so a 32-bit docket is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
-    assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
-    assert G.domain(prog, "W", 2, 5, 32).domain_id != G.domain(prog, "W", 2, 5).domain_id
+    assert RV.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
+    assert RV.domain(prog, "W", 2, 5, 32).domain_id != RV.domain(prog, "W", 2, 5).domain_id
     reg = G.Registered.commit(prog, "W", [[0x3727C5AC, 0x3E38AA3B]] * 2, word_bits=32)
     assert reg.entry() == {"value": "W", "root": reg.root.hex(), "leaves": 2, "words": 2, "word_bits": 32,
-                           "domain": G.domain(prog, "W", 2, 2, 32).domain_id.hex()}
+                           "domain": RV.domain(prog, "W", 2, 2, 32).domain_id.hex()}
     inst = hm96.SHA512
-    assert reg.bcs[0] == inst.commit_string(inst.default_key, G.row_digest([0x3727C5AC, 0x3E38AA3B], 32), reg.salts[0])
+    assert reg.bcs[0] == inst.commit_string(inst.default_key, RV.row_digest([0x3727C5AC, 0x3E38AA3B], 32), reg.salts[0])
     assert G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1))
-    assert not G.verify_read(G.domain(prog, "W", 2, 2), reg.root, 1, reg.bcs[1], reg.path(1))
+    assert not G.verify_read(RV.domain(prog, "W", 2, 2), reg.root, 1, reg.bcs[1], reg.path(1))
     pinned = G.Registered.commit("ab" * 64, "values", [[0x3727C5AC, 0x3E38AA3B]], [bytes([9]) * 192], word_bits=32)
     assert pinned.root.hex() == ROOT_32
     for bad in (dict(rows=[[1 << 32, 0]], word_bits=32), dict(rows=[[1 << 16, 0]]), dict(rows=[[1, 2]], word_bits=8),
@@ -167,7 +168,7 @@ def test_a_read_opens_only_its_own_row_under_its_own_value():
     dom = reg.domain
     assert not G.verify_read(dom, reg.root, 2, reg.bcs[3], reg.path(3))
     assert not G.verify_read(dom, reg.root, 3, reg.bcs[2], reg.path(3))
-    other = G.domain(P.program_digest(prog), "V", 2, len(TABLE))
+    other = RV.domain(P.program_digest(prog), "V", 2, len(TABLE))
     assert not G.verify_read(other, reg.root, 3, reg.bcs[3], reg.path(3))
     flipped = bytes([reg.path(3)[0] ^ 1]) + reg.path(3)[1:]
     assert not G.verify_read(dom, reg.root, 3, reg.bcs[3], flipped)
@@ -248,12 +249,12 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
     reg = G.Registered.commit(prog, "W", rows, salts, word_bits, schema)
     v1 = G.Registered.commit(prog, "W", rows, salts, word_bits)
     inst = hm96.SHA512
-    words = G.row_words(rows[0], word_bits, schema)
+    words = RV.row_words(rows[0], word_bits, schema)
     assert len(words) == 2 * word_bits // 16, "a bit row is its leaves' bits, no whole-block padding"
     data, n = bit_row((words, 16))
     assert n == 2 * word_bits and data == b"".join(int(v).to_bytes(word_bits // 8, "little") for v in rows[0])
     digest = sha512_row_v2_digest(data, n) if schema == G.SCHEMA_V2 else sha512_row_seg_digest(data, n)
-    assert G.row_digest(rows[0], word_bits, schema) == digest
+    assert RV.row_digest(rows[0], word_bits, schema) == digest
     assert reg.bcs[0] == inst.commit_string(inst.default_key, digest, salts[0])
     assert reg.domain.domain_id == v1.domain.domain_id and reg.root != v1.root
     assert reg.levels[0][1] == row_leaf(reg.domain, 1, inst.tree_leaf(inst.default_key, reg.bcs[1]), schema)
@@ -294,7 +295,7 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
     for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
         doc = G.reads_file(prog, Q, {"W": 1}, {"W": reg.root.hex()}, schemas={"W": schema})
         assert doc["ports"]["w"] == {**v1["ports"]["w"], "words": 1, "row_schema": schema,
-                                     "domain": G.domain(P.program_digest(prog), "W", 1, 5).domain_id.hex()}
+                                     "domain": RV.domain(P.program_digest(prog), "W", 1, 5).domain_id.hex()}
         assert list(doc["ports"]["w"])[-2:] == ["row_schema", "reads"]
         with pytest.raises(ValueError, match="10 leaves are not rows of 2 .4 of its leaves in a"):
             G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": schema})
@@ -352,7 +353,7 @@ def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
     assert G.row_leaves(prog, "A", K // 2) == K // 2 and G.shape(prog, "A", K // 2) == 4 * 8 * K // (K // 2)
     assert G.shape(prog, "A", K // 2, G.SCHEMA_V2) == 4
     assert G.registered_entries(prog, {"A": K // 2}, {"A": G.SCHEMA_V2})["A"] == {
-        "leaves": 4, "words": K // 2, "word_bits": 16, "domain": G.domain(P.program_digest(prog), "A", K // 2, 4).domain_id.hex()}
+        "leaves": 4, "words": K // 2, "word_bits": 16, "domain": RV.domain(P.program_digest(prog), "A", K // 2, 4).domain_id.hex()}
     assert G.registered_entries(prog, {"A": K // 2})["A"]["leaves"] == 64, "row/v1 is counted as it was"
     with pytest.raises(ValueError, match="leaves are not rows of 33"):
         G.shape(prog, "A", 33, G.SCHEMA_V2)
@@ -626,8 +627,8 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
     recs, kw = _windows(prog, xs, w)
     for i, (r, rec) in enumerate(zip(WINDOWS, recs)):
         assert R.check(rec, prog, Q, **kw, log=recs[:i], window_root=r, held=["W"]).ok
-        assert rec["registered"][0]["domain"] == G.domain(d, "x", 2, len(POS), window=r).domain_id.hex()
-        assert rec["registered"][1]["domain"] == w.entry()["domain"] == G.domain(d, "W", 2, len(TABLE)).domain_id.hex()
+        assert rec["registered"][0]["domain"] == RV.domain(d, "x", 2, len(POS), window=r).domain_id.hex()
+        assert rec["registered"][1]["domain"] == w.entry()["domain"] == RV.domain(d, "W", 2, len(TABLE)).domain_id.hex()
     assert xs[0].entry()["domain"] != xs[1].entry()["domain"] and xs[0].root != xs[1].root
     # (c) the weights are held across the windows: a second window's W under another root, or under its window's
     # domain, is refused
@@ -662,7 +663,7 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
     assert R.check(replay, prog, Q, **kw, **win).codes == ("R7-domain",)
     renamed = {**recs[1], "registered": [{**xs[0].entry(), "domain": xs[1].entry()["domain"]}, w.entry()]}
     assert R.check(renamed, prog, Q, **kw, **win).ok
-    first, second = (G.domain(d, "x", 2, len(POS), window=r) for r in WINDOWS)
+    first, second = (RV.domain(d, "x", 2, len(POS), window=r) for r in WINDOWS)
     for r in range(len(POS)):
         assert G.verify_read(first, xs[0].root, r, xs[0].bcs[r], xs[0].path(r))
         assert not G.verify_read(second, xs[0].root, r, xs[0].bcs[r], xs[0].path(r))
@@ -703,12 +704,12 @@ def test_a_session_bound_domain_binds_the_session_alone():
     domain binds at most one of a window, a docket and a session."""
     prog = P.program_digest(_program())
     rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
-    doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
+    doms = {RV.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
             ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
-    assert len(doms) == 4 and rec.domain.domain_id == G.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
+    assert len(doms) == 4 and rec.domain.domain_id == RV.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
     for kw in ({"window": WINDOWS[0], "session": "s-1"}, {"produced": "0" * 128, "session": "s-1"}, {"session": ""}):
         with pytest.raises(ValueError):
-            G.domain(prog, "x", 2, len(X_ROWS), **kw)
+            RV.domain(prog, "x", 2, len(X_ROWS), **kw)
 
 
 def _prefixed(prefix: str) -> Program:
@@ -934,7 +935,7 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
     for bad in ((b"\0" * 4, 16), (b"\0" * 2, 32), (b"\0" * 2, 3)):
         with pytest.raises(ValueError):
             G.half_leaves(*bad)
-    salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
+    salts = RV.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
     head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
     assert salts[1] == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
@@ -943,7 +944,7 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
         x, wr = bytes.fromhex("ab" * 64), w.root
         rows = G.supplied_rows(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], rec, ["pouw.roots"])
         assert rows == [G.bytes_leaves(x + wr, bits), G.bytes_leaves(wr + x, bits)] == [list(r) for r in roots.rows]
-        assert roots.salts == tuple(G.supplied_salts(P.program_digest(check["program"]), "pouw.roots", 2))
+        assert roots.salts == tuple(RV.supplied_salts(P.program_digest(check["program"]), "pouw.roots", 2))
         assert roots.entry()["words"] == check["registered"]["pouw.roots"] and roots.word_bits == (32 if bits == 32 else 16)
         assert G.supplied_root(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], rec,
                                G.registered_entries(check["program"], check["registered"])["pouw.roots"],
@@ -962,7 +963,7 @@ def test_r7_refuses_a_supplied_value_the_prover_chose():
     prog, words = check["program"], check["registered"]["pouw.roots"]
     zero = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2, word_bits=32)
     zero_public = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2,
-                                      G.supplied_salts(P.program_digest(prog), "pouw.roots", 2), word_bits=32)
+                                      RV.supplied_salts(P.program_digest(prog), "pouw.roots", 2), word_bits=32)
     fresh = G.Registered.commit(P.program_digest(prog), "pouw.roots", roots.rows, word_bits=32)
     for other in (zero, zero_public, fresh):
         bad, _, _, _ = _seeded_case(roots=other)
@@ -1531,7 +1532,7 @@ def test_r7_reuses_an_earlier_records_registered_value():
     same = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "value": "W"}])
     assert R.check({**rec, "previous": R.digest(same)}, prog, Q, **{**kw, "log": [same]},
                    outputs={"W": {"record": R.digest(same), "value": "W"}}).ok
-    for e in ({**theirs, "leaves": 4}, {**theirs, "words": 1}, {**theirs, G.WIDTH_KEY: 32}, {**theirs, "domain": 1},
+    for e in ({**theirs, "leaves": 4}, {**theirs, "words": 1}, {**theirs, RV.WIDTH_KEY: 32}, {**theirs, "domain": 1},
               {**theirs, "root": None}, {**theirs, "leaves": True}):
         other = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
         assert R.check({**rec, "previous": R.digest(other)}, prog, Q, **{**kw, "log": [other]},
@@ -1951,7 +1952,7 @@ def _pearl_plus(rows, y: bool = False):
     assert dom.domain_id == tree.domain.domain_id
 
     def bc(i: int, row) -> bytes:
-        return hm96.SHA512.commit_string(hm96.SHA512.default_key, G.row_digest(row, 32, G.SCHEMA_SEG),
+        return hm96.SHA512.commit_string(hm96.SHA512.default_key, RV.row_digest(row, 32, G.SCHEMA_SEG),
                                          salts[i])
     return tree, dom, bc
 
@@ -1961,7 +1962,7 @@ def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
     row, zero rows up to 16) and y (its served y widened to FP32, N words a row). One-stage's `row-seg/v1` leaves of
     32-bit words under that domain are Pearl+'s leaves, so its reads open Pearl+'s root at every row. A row with one
     word flipped opens nothing, nor does a row read as `row/v2`, nor any row under one-stage's own domain for the value
-    (`registered.domain`, whichever binding it takes)."""
+    (`registered_value.domain`, whichever binding it takes)."""
     rnd = random.Random(7)
 
     def rows(n: int, words: int, real: int) -> list[list[int]]:
@@ -1971,12 +1972,12 @@ def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
         tree, dom, bc = _pearl_plus(rs, y)
         root, bcs = tree.commitment.root, [bc(i, r) for i, r in enumerate(rs)]
         paths = [b"".join(tree.open(i).path) for i in range(len(rs))]
-        assert tree_levels(dom, [G.leaf(dom, i, b, G.SCHEMA_SEG) for i, b in enumerate(bcs)])[-1][0] == root, value
+        assert tree_levels(dom, [RV.leaf(dom, i, b, G.SCHEMA_SEG) for i, b in enumerate(bcs)])[-1][0] == root, value
         assert all(G.verify_read(dom, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
         flipped = [rs[0][0] ^ 1 << 16, *rs[0][1:]]
         assert not G.verify_read(dom, root, 0, bc(0, flipped), paths[0], G.SCHEMA_SEG), value
         assert not G.verify_read(dom, root, 0, bcs[0], paths[0], G.SCHEMA_V2), value
-        own = G.domain("ab" * 64, value, len(rs[0]), len(rs), 32)
+        own = RV.domain("ab" * 64, value, len(rs[0]), len(rs), 32)
         assert own.domain_id != dom.domain_id
         assert not any(G.verify_read(own, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
 
@@ -1984,18 +1985,18 @@ def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
 def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
     """Pearl+'s window record W registers each call's A rows and y under PoUW's rows domain, not one-stage's. A value
     reusing W's entry (`outputs`) as `row-seg/v1` rows of 32-bit words is held to that domain and root verbatim, A's and
-    y's alike. The record's entry under one-stage's own domain for the value is `R7-domain` (`registered.domain`,
+    y's alike. The record's entry under one-stage's own domain for the value is `R7-domain` (`registered_value.domain`,
     whichever binding it takes), under another root `R7-held`; W's entry of 16-bit words, or of the call's real rows
     rather than its 16, is `R7-output`. R7 counts the value's rows alike under `row/v2`, so the row format binds where a
     row is read (`test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain`)."""
     prog = _program(rows=16, w=32)
     first, ports = _record(prog, _registered(prog))
-    own = G.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
+    own = RV.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
     kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
     for y, name in ((False, "pearl-a/0/0"), (True, "pearl-y/0/0")):
         rows = [[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)]
         tree, dom, _ = _pearl_plus(rows, y)
-        theirs = {"value": name, "root": tree.commitment.root.hex(), "leaves": 16, "words": 2, G.WIDTH_KEY: 32,
+        theirs = {"value": name, "root": tree.commitment.root.hex(), "leaves": 16, "words": 2, RV.WIDTH_KEY: 32,
                   "domain": dom.domain_id.hex()}
         assert theirs["domain"] != own
 
@@ -2012,7 +2013,7 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
         assert codes({}, schemas={"W": G.SCHEMA_V2}) == ()
         assert codes({"domain": own}) == ("R7-domain",)
         assert codes({"root": "ef" * 64}) == ("R7-held",)
-        for w in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 5}):
+        for w in ({k: v for k, v in theirs.items() if k != RV.WIDTH_KEY}, {**theirs, "leaves": 5}):
             assert codes({}, w)[0] == "R7-output", (name, w)
 
 

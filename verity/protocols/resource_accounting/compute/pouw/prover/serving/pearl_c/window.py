@@ -47,6 +47,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     weight_binding,
 )
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
@@ -129,9 +130,9 @@ def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
         y = SY.y_domain(salt, u["index"], u["real_rows"])
         out += [{"value": a_value(s, c), "root": u["root_a"], "leaves": u["m"], "words": u["k"],
-                 "domain": a.domain_id.hex(), G.WIDTH_KEY: WORD_BITS},
+                 "domain": a.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS},
                 {"value": y_value(s, c), "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
-                 "domain": y.domain_id.hex(), G.WIDTH_KEY: WORD_BITS}]
+                 "domain": y.domain_id.hex(), RV.WIDTH_KEY: WORD_BITS}]
     return out
 
 
@@ -152,7 +153,7 @@ def b_entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
         if "root" not in man.get("weights", {}).get(str(w), {}):
             raise ValueError(f"round {s}'s pass commits no root of weight {w}, whose B rows W registers")
         out.append({"value": b_value(w), "root": bytes.fromhex(man["weights"][str(w)]["root"]).hex(), "leaves": n,
-                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), G.WIDTH_KEY: WORD_BITS})
+                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), RV.WIDTH_KEY: WORD_BITS})
     return out
 
 
@@ -313,7 +314,7 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
                 base_value = G.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
                                                  word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
                 dom = rows_domain(binding, i, n, "sha512")
-                levels = tree_levels(dom, [G.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
+                levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
                 got = out[e["value"]] = Committed(**{**{f.name: getattr(base_value, f.name) for f in fields(base_value)},
                                                      "levels": levels}, call_domain=dom)
                 if got.entry() != e:

@@ -433,11 +433,11 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
 def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> dict:
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
+    from verity.commitments import registered_value as RV
     from verity.commitments.merkle import tree_levels
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
-    dom = RG.domain(program, value, words_, len(bcs))
-    root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
+    dom = RV.domain(program, value, words_, len(bcs))
+    root = tree_levels(dom, [RV.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
     return {"value": value, "root": root.hex(), "leaves": len(bcs), "words": int(words_), "domain": dom.domain_id.hex()}
 
 

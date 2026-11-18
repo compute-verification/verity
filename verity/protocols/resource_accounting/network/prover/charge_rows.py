@@ -10,6 +10,7 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.interface.charge import window_charge as WC
 from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
 
@@ -17,8 +18,8 @@ _INST = hm96.SHA512
 
 
 def start_salt(program: str, value: str = CC.VALUE) -> bytes:
-    """The public salt of the session's first carry row (`registered.supplied_salts`' row 0 of `value`)."""
-    return G.supplied_salts(program, value, 1)[0]
+    """The public salt of the session's first carry row (`registered_value.supplied_salts`' row 0 of `value`)."""
+    return RV.supplied_salts(program, value, 1)[0]
 
 
 def commit_rows(program: str, value: str, first: Sequence[int], out: Sequence[int], registration: str,

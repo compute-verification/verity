@@ -146,6 +146,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import verifier 
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
@@ -238,7 +239,7 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
 def z_only(com: dict) -> dict:
     """``com`` as a prover that registers its records' z alone states it: its z tables' entries rows of 2 R C words, no y."""
     words = 2 * R * C
-    return dict(com, registered=[dict(e, words=words, domain=G.domain(com["program_sha512"], e["value"], words, e["leaves"],
+    return dict(com, registered=[dict(e, words=words, domain=RV.domain(com["program_sha512"], e["value"], words, e["leaves"],
                                                                        window=com["window_root"]).domain_id.hex())
                                  if e["value"].startswith("zy@") else e for e in com["registered"]])
 
@@ -246,7 +247,7 @@ def z_only(com: dict) -> dict:
 def unrooted(com: dict) -> dict:
     """``com`` as a prover that registers its per-execution-phase values with no execution phase root states it (the form
     before execution phase roots): every entry's domain the registered domain of its value with no execution phase bound."""
-    return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
+    return dict(com, registered=[dict(e, domain=RV.domain(com["program_sha512"], e["value"], e["words"],
                                                          e["leaves"]).domain_id.hex()) for e in com["registered"]])
 
 
@@ -421,7 +422,7 @@ def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
     execution phase's open root (the Lean verifier roots known rows at the domain the file gives)."""
     n = int(win.tp.population)
     return G.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
-                               [U.ok_salt(com["window"], u) for u in range(n)], G.WORD_BITS, U.V2, None)
+                               [U.ok_salt(com["window"], u) for u in range(n)], RV.WORD_BITS, U.V2, None)
 
 
 def forge(base: Path, out: Path, pub: bytes, outs: dict, rows: dict, circuit: Path) -> list[dict]:

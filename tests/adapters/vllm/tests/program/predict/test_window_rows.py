@@ -24,6 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
@@ -931,4 +932,4 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
     assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
     assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
-        CLASS.buckets, words, CR.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())
+        CLASS.buckets, words, RV.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())

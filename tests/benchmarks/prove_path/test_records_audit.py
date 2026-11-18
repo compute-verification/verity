@@ -49,6 +49,7 @@ import settings
 
 from verity.protocols.proofs.spot.prover import registered_reads as RR
 from verity.protocols.proofs.spot.verifier.one_stage import caller as C, produced as PR, registered as REG, docket as R
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
@@ -367,7 +368,7 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
         got = json.loads(capsys.readouterr().out)
         assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
         assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
-    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": REG.domain("p", "a", 4, 1).domain_id.hex()}
+    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": RV.domain("p", "a", 4, 1).domain_id.hex()}
     (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
     (tmp_path / "registration.json").write_text(json.dumps({"program": "p", "values": {"a": entry}}))
     (tmp_path / "other-domain.json").write_text(json.dumps({"program": "q", "values": {"a": entry}}))
@@ -744,7 +745,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
     d = R.digest(w)
     assert tied == {"log": [w], "registered": {"pearl-a/0/0": K, "pearl-y/0/0": 2 * K},
                     "outputs": {v: {"record": d, "value": v} for v in rows}, "schemas": {v: REG.SCHEMA_SEG for v in rows}}
-    assert pins == {"pearl-a/0/0": a, "pearl-y/0/0": y} and a[REG.WIDTH_KEY] == y[REG.WIDTH_KEY] == 32
+    assert pins == {"pearl-a/0/0": a, "pearl-y/0/0": y} and a[RV.WIDTH_KEY] == y[RV.WIDTH_KEY] == 32
     for earlier, prefix, why in (({**w, "registered": [a]}, None, "'pearl-y/0/0' as 'pearl-y/0/0' 0 times"),
                                  ({**w, "registered": [a, y, a]}, None, "'pearl-a/0/0' 2 times"),
                                  (w, "h1/", "is no Commit name")):
@@ -785,11 +786,11 @@ def test_the_workload_sides_registered_port_is_the_verifiers():
     block reads nothing at; a format the verifier's refuses it refuses; `READS_FROM`, `READS_V1` and the formats, their key and
     the default width are the verifier's."""
     assert ((RR.READS_FROM, RR.READS_V1, RR.SCHEMAS, RR.SCHEMA_KEY, RR.WORD_BITS)
-            == (REG.READS_FROM, REG.READS_V1, REG.SCHEMAS, REG.SCHEMA_KEY, REG.WORD_BITS))
+            == (RV.READS_FROM, REG.READS_V1, RV.SCHEMAS, REG.SCHEMA_KEY, RV.WORD_BITS))
     e, root = {"leaves": 12, "words": 64, "domain": "ab" * 64}, "cd" * 64
     for entry in (e, {**e, "word_bits": 32}):
         for rows in ([0, None, 11], [None], []):
-            for schema in ((), *((s,) for s in REG.SCHEMAS)):
+            for schema in ((), *((s,) for s in RV.SCHEMAS)):
                 mine, theirs = RR.port("v", entry, root, rows, *schema), PR.port("v", entry, root, rows, *schema)
                 assert list(mine.items()) == list(theirs.items())
     for port in (RR.port, PR.port):
@@ -801,7 +802,7 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
     scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
     opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
-    entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
+    entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, RV.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
     pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
                                                "scheme": "pearl-c-h100-v1-h3", "salt": "00" * 64},

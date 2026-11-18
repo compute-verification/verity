@@ -87,6 +87,7 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -159,7 +160,7 @@ def partials(hidden: int, tokens: int, requests: int = 2, seed: int = 0) -> dict
 
 def domain(r: int, q: int, k: int, hidden: int, tokens: int):
     """The verifier's own domain of rank r's partial of collective k for request q."""
-    return G.domain(PROGRAM, value_name(r, q, k), hidden, tokens, 16, window=ROOT)
+    return RV.domain(PROGRAM, value_name(r, q, k), hidden, tokens, 16, window=ROOT)
 
 
 def own_entry(r: int, q: int, k: int, hidden: int, tokens: int) -> dict:
@@ -296,7 +297,7 @@ def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
         for j in RANKS:
             e = own_entry(j, q, k, dict(m.rows)["part0"], m.n)
             root = regs[j]["window"]["of"]["partials"][e["value"]]["root"]
-            ports[f"part{j}"] = produced.port(e["value"], e, root, list(range(m.n)), V2) | ({G.READS_FROM: m.base} if m.base else {})
+            ports[f"part{j}"] = produced.port(e["value"], e, root, list(range(m.n)), V2) | ({RV.READS_FROM: m.base} if m.base else {})
         out[m.key] = WR.reads_file(ports)
     return out
 
@@ -314,7 +315,7 @@ def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
             return False
         for name, own in want.items():
             e = got[name]
-            if not isinstance(e, dict) or sorted(e) != sorted(G.ENTRY_KEYS) or {x: e[x] for x in own} != own:
+            if not isinstance(e, dict) or sorted(e) != sorted(RV.ENTRY_KEYS) or {x: e[x] for x in own} != own:
                 return False
             if not (isinstance(e["root"], str) and len(e["root"]) == 128 and all(ch in "0123456789abcdef" for ch in e["root"])):
                 return False

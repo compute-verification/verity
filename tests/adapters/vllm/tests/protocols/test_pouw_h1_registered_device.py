@@ -32,6 +32,7 @@ from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, hm96_salt, rows_domain
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw.h1 import registered_device as D
 from verity_torch.pouw.h1 import tables_device as TD
 
@@ -49,7 +50,7 @@ def _words(n: int, w: int) -> np.ndarray:
 
 
 def _numpy(words, nonce, given=None, **binding):
-    dom = G.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], G.WORD_BITS, **binding)
+    dom = RV.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], RV.WORD_BITS, **binding)
     return NR._numpy(words, KEY, nonce, given, dom.domain_id), dom.domain_id
 
 

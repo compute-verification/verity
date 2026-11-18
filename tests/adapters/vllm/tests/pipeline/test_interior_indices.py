@@ -26,6 +26,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 
 from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.pipeline import boundary_rows as BR
@@ -166,7 +167,7 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
         mine = RG.supplied_rows(stream.interior_program(Q), x.value, RG.sources(srcs)[x.value], it.record)
         assert mine == [[r, 0] for _ in range(Q) for r in range(x.per)]
         assert [list(r) for r in c.given[m.port("idx")].value.rows] == mine
-        v = RG.Registered.commit(prog, x.value, mine, RG.supplied_salts(prog, x.value, len(mine)), schema=m.schema("idx"))
+        v = RG.Registered.commit(prog, x.value, mine, RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema("idx"))
         assert v.entry() == {k: got[x.value][k] for k in v.entry()}
     assert IR.link_words(SUPPLIES) == {f"{KEY}/c": 2, f"{KEY}/i": 2}
     assert IR.span_values(SUPPLIES) == ((f"{KEY}/c", NC, IR.INDEX), (f"{KEY}/i", W, IR.INDEX))
@@ -208,7 +209,7 @@ def test_an_operand_port_is_rows_of_a_value_the_interior_registers_as_its_own(op
         assert ref.positions == tuple(range(Q * x.per))
         assert np.array_equal(np.asarray(ref.value.rows, np.uint16), took)
         assert ref.value.entry() == got[x.value] and got[x.value]["leaves"] == Q * x.per and got[x.value]["words"] == 1
-        assert list(ref.value.salts) != RG.supplied_salts(prog, x.value, Q * x.per)
+        assert list(ref.value.salts) != RV.supplied_salts(prog, x.value, Q * x.per)
         assert ref.value.schema == w.members[k].schema(x.port)
     words, schemas = IR.link_words(OPERANDS), IR.link_schemas(MEMBERS, OPERANDS)
     for bad, codes in (({v: n for v, n in words.items() if v != OPERANDS[0].value}, ("R7-values",)),

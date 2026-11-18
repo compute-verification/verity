@@ -36,6 +36,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
@@ -96,7 +97,7 @@ def _entry(program: str, param: str, words: int, registers: int) -> dict[str, An
         raise ValueError(f"{param}: {words} words are no whole rows of {w} u16 words")
     if words != registers:
         raise ValueError(f"{param}: {words} words of record, and the circuit registers {registers}")
-    return {"value": param, "leaves": words // w, "words": w, "domain": G.domain(program, param, w, words // w).domain_id.hex()}
+    return {"value": param, "leaves": words // w, "words": w, "domain": RV.domain(program, param, w, words // w).domain_id.hex()}
 
 
 def _analytic(rec: dict[str, Any], of: dict[str, list[str]]) -> list[dict[str, Any]]:

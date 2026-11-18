@@ -43,7 +43,7 @@
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
   `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
   registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
-  open root (`registered.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
+  open root (`registered_value.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **Chunk rows** (SPLITK). Past K = 4096 an A or B row of K is n = `weights.chunks` (K) leaves (6144 → 2, 14336 → 4):
   row r's leaf n·r + c is its codes [c·K/n, (c + 1)·K/n) then its scale (`chunk_words`, `h1zy.ROW` (K/n)), so
@@ -106,6 +106,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import salt as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import live as LV
@@ -386,7 +387,7 @@ class Served:
     def open(self, run: Any) -> None:
         """The window's open root, from its key, and the period's Program, at its first call (after its salt opened)."""
         try:
-            self.root = G.window_root(self.key(run.commits).hex())
+            self.root = RV.window_root(self.key(run.commits).hex())
             digest = self.declare(run.shapes_, run.modules, run.rows, run.steps)
         except ValueError as e:
             self.refused.append(str(e))

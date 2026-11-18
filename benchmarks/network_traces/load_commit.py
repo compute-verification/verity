@@ -42,6 +42,7 @@ from verity.commitments.hm96 import batch as HB
 from verity.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -80,7 +81,7 @@ def shape() -> dict:
 # --- the attester's hm96 commitment, streamed ------------------------------------------------------------------------
 
 def hm96_leaves(dom, rows: np.ndarray, salts: bytes, start: int = 0) -> list[bytes]:
-    """The frame-v3 leaves of `rows` (n × 256 bytes) at ranks ``start ..``, each under its salt: `registered.leaf` of
+    """The frame-v3 leaves of `rows` (n × 256 bytes) at ranks ``start ..``, each under its salt: `registered_value.leaf` of
     `Registered.commit`'s ``b ‖ c``, batched (the mask in numpy, every hash from a midstate)."""
     n = rows.shape[0]
     xh = hashlib.sha512(sha512_row_v2_prefix(8 * ROW_BYTES))
@@ -152,7 +153,7 @@ def exact() -> dict:
     salts = os.urandom(n * INST.salt_bytes)
     words = [list(np.frombuffer(r.tobytes(), "<u2")) for r in rows]
     ref = G.Registered.commit(PROGRAM, "w", words, [salts[192 * i:192 * (i + 1)] for i in range(n)], 16, SCHEMA)
-    dom = G.domain(PROGRAM, "w", ROW_WORDS, n)
+    dom = RV.domain(PROGRAM, "w", ROW_WORDS, n)
     ours = frame_nodes(dom, hm96_leaves(dom, rows, salts))
     from verity.protocols.resource_accounting.memory.pous.verifier import verifier as PV
     from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
@@ -191,7 +192,7 @@ def per_core(rows: int, blocks: int) -> dict:
     store's root and of its decode, raw SHA-512 and the generator."""
     rng = np.random.default_rng(os.getpid())
     data = rng.integers(0, 256, (rows, ROW_BYTES), dtype=np.uint8)
-    dom = G.domain(PROGRAM, "w", ROW_WORDS, rows)
+    dom = RV.domain(PROGRAM, "w", ROW_WORDS, rows)
     t_salt = _time(os.urandom, rows * INST.salt_bytes)
     salts = os.urandom(rows * INST.salt_bytes)
     t_mask = _time(HB.masks, INST, KEY, salts)

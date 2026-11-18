@@ -15,6 +15,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree, register_served
 
 XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -86,7 +87,7 @@ def test_each_registered_read_opens_the_served_root(tmp_path):
     reg, tree = _tree(prog)
     sr = register_served(prog, Q, [tree])
     port = sr.ports["w"]
-    dom = G.domain(P.program_digest(prog), "W", 2, 5)
+    dom = RV.domain(P.program_digest(prog), "W", 2, 5)
     assert port["domain"] == dom.domain_id.hex()
     for r in port["reads"]:
         assert G.verify_read(dom, bytes.fromhex(port["root"]), r, reg.bcs[r], reg.path(r))
@@ -213,7 +214,7 @@ def test_the_row_formats_are_the_commitment_layers():
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     from verity.protocols.proofs.spot.verifier.one_stage.served import SCHEMAS
 
-    assert SCHEMAS == G.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+    assert SCHEMAS == RV.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 
 
 #: TABLE's rows packed as bit rows: each row's two 8-bit leaves in one u16 word, leaf 0 low (H1's A: K int8 codes, K/2 words)
@@ -234,7 +235,7 @@ def test_a_bit_row_tree_registers_in_its_format(schema):
     assert sr.file == G.reads_file(prog, Q, {"W": 1}, {"W": reg.root.hex()}, schemas={"W": schema})
     assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 1, "word_bits": 16,
                               "domain": reg.domain.domain_id.hex(), "row_schema": schema, "reads": list(POS)}}
-    dom = G.domain(P.program_digest(prog), "W", 1, 5)
+    dom = RV.domain(P.program_digest(prog), "W", 1, 5)
     assert reg.domain.domain_id == dom.domain_id
     for r in POS:
         assert G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r), schema)
@@ -302,7 +303,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     ([("W", G.SCHEMA_V2)], {"W": 1}),
 ])
 def test_r7_refuses_a_row_format_of_another_form(schemas, registered):
-    """A row format names a value the verifier expects registered, in one of `registered.SCHEMAS`, as
+    """A row format names a value the verifier expects registered, in one of `registered_value.SCHEMAS`, as
     `OneStage.paramsOfJson` reads it."""
     prog = _program()
     rec, ports = _record(prog, [])

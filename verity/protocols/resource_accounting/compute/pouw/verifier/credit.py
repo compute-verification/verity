@@ -218,6 +218,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.circuits.codec import _checked_refs
 from verity.circuits.defs import _Widths
 from verity.circuits.refs import Coll, Concat, refs_from_json
@@ -1135,7 +1136,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     receipts the round roots commit are the ones the units return; every other unit reads none of them: each port's
     reads start at the call's first unit u0 (``reads_from``, `core_check.call_reads`) and end at its last (the verifier
     reads none below ``reads_from`` or past ``reads``). Each value is a row/v2 value of 16-bit leaves under
-    `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
+    `registered_value.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
     gives it. Its reads cost the call's units, once a port; only the ok rows' known content is the window's.
 
@@ -1199,19 +1200,19 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     for port, v, row in ports:
         leaves, words = rows_of[v]
         out[port] = {**params.get(port, {}), "value": v, "root": roots[v][0], "leaves": leaves, "words": words,
-                     "word_bits": G.WORD_BITS,
-                     "domain": G.domain(program, v, words, leaves,
+                     "word_bits": RV.WORD_BITS,
+                     "domain": RV.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
                      **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
     pv = f"{prefix}pub@{call}"
     blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
-    out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": G.WORD_BITS,
+    out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                      **CC.call_reads(u0, list(range(size))), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
     out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
-                    "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                    "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                     **CC.call_reads(u0, list(range(u0, u0 + size))),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     return {"format": G.READS_V1, "ports": out}, None
@@ -1227,7 +1228,7 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
-    return rows, salts, G.Registered.commit(program, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, G.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
@@ -1238,7 +1239,7 @@ def ok_table(program: str, value: str, window: str, population: int) -> tuple[li
     input is public, so the verifier and the prover compute the same root."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
     salts = [CC.ok_salt(window, u) for u in range(population)]
-    return rows, salts, G.Registered.commit(program, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, G.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 def sampling_design(ss: list[dict], k: Any) -> tuple[str, str] | None:
@@ -1421,27 +1422,27 @@ def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: An
 
 
 def _entry(e: Any) -> bool:
-    """A registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with ``word_bits`` only
+    """A registered value's entry as one-stage's registration names it (`registered_value.ENTRY_KEYS`, with ``word_bits`` only
     when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows at least 1 and its words from 1
     to `MAX_ROWS`. Its rows have no other bound here: the verifier hashes pads only in `_a_link`, which holds each value
     it hashes to the layout's rows (`table_rows`) or `MAX_ROWS`."""
-    bits = e.get(G.WIDTH_KEY, G.WORD_BITS) if isinstance(e, dict) else None
-    return (isinstance(e, dict) and set(G.ENTRY_KEYS) <= set(e) <= {*G.ENTRY_KEYS, G.WIDTH_KEY}
+    bits = e.get(RV.WIDTH_KEY, RV.WORD_BITS) if isinstance(e, dict) else None
+    return (isinstance(e, dict) and set(RV.ENTRY_KEYS) <= set(e) <= {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
             and _printable(e["value"]) and _digest(e["root"]) is not None and type(e["domain"]) is str
             and _nat(e["leaves"]) and e["leaves"] >= 1 and _nat(e["words"]) and 1 <= e["words"] <= MAX_ROWS
-            and type(bits) is int and bits in G.WIDTHS and e.get(G.WIDTH_KEY) != G.WORD_BITS)
+            and type(bits) is int and bits in RV.WIDTHS and e.get(RV.WIDTH_KEY) != RV.WORD_BITS)
 
 
 def domain_of(program: str, window: str, e: dict, session: str | None = None) -> str:
     """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
-    open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): the
+    open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered_value.domain`): the
     weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; round 0's input-ids table (``…/ids@0``,
     `ids_step` 0) and request table (``…/requests@0``, `is_requests`), whose roots the window's open root contains
     (`requests_root`, `_arow`), bind the window's session `session` in that root's place; every other value's rows are
     the window's own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the
     window's open root."""
     v, first = e["value"], ids_step(e["value"]) == 0 or is_requests(e["value"])
-    return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
+    return RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
 
 
@@ -1910,7 +1911,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     and its known openings, and None; or None and the refusal (``registration``). It is `h1window.leaf_reads_file`'s at
     the served `place` (``served``), built from the descriptor alone: each `leaf_lanes.reads` port at its value's table
     and row past the leaf's place (`leaf_place`), each table's entry the verifier's own (a ``row/v2`` value of 16-bit
-    leaves under `registered.domain` of its name, rows and width, binding the window's open root `window` but for the
+    leaves under `registered_value.domain` of its name, rows and width, binding the window's open root `window` but for the
     weights' ``b/<K>``) at the one root `roots` (``{value: [root, ...]}``) gives it, each after-draw value's entry
     `produced.entry` under the window's descriptor digest `program` and its sample root `registration` at the produced
     record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
@@ -1945,8 +1946,8 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
                                               f"window registers {'twice' if roots.get(table) else 'not'}: register "
                                               "each of a call's tables and its weights once")
             leaves, words = rows_of[table]
-            e = {"leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                 "domain": G.domain(program, table, words, leaves, window=None if table == b else window).domain_id.hex()}
+            e = {"leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
+                 "domain": RV.domain(program, table, words, leaves, window=None if table == b else window).domain_id.hex()}
             root = roots[table][0]
         if _digest(root) is None:
             return None, ("registration", f"drawn leaf {u}'s statement {list(statement)} reads {table}, whose root the "
@@ -2278,7 +2279,7 @@ def _live_roots(entries: list, prefix: str, t: int, steps: int) -> tuple[dict | 
         if len(got) != 1:
             return None, (LIVE, no_live_table(v, len(got)))
         e = got[0]
-        if not (_entry(e) and G.WIDTH_KEY not in e and e["leaves"] == t and e["words"] == words):
+        if not (_entry(e) and RV.WIDTH_KEY not in e and e["leaves"] == t and e["words"] == words):
             return None, (LIVE, other_live_table(v, e.get("leaves"), e.get("words"), t, words))
         out[v] = e["root"]
     return out, None
@@ -3591,7 +3592,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     `layout` (`strata`), exactly ``<prefix>b/<K>`` (`prefix` its descriptor's ``PREFIX``) once, and no other ``…/b/<K>``;
     each such entry must be the registration of all of K's B rows (K's linears' n in turn, each x = `weights.chunks` (K)
     leaves of `weights.leaf_words` (K) words, x·Σn leaves),
-    under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
+    under `registered_value.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
     (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
     (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt_of_record` reads it)
     must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin opens only after that root,
@@ -3638,9 +3639,9 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
             return no(f"the window registers K = {k}'s weights twice ({v}): each K's B rows are one registered value "
                       f"{prefix}b/<K>")
         h, x, w = _digest(e.get("root")), chunks(k), leaf_words(k)
-        if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == x * n and type(e["leaves"]) is int
+        if not (h is not None and sorted(e) == sorted(RV.ENTRY_KEYS) and e["leaves"] == x * n and type(e["leaves"]) is int
                 and e["words"] == w and type(e["words"]) is int
-                and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
+                and e["domain"] == RV.domain(program, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
         held.append(e)

@@ -22,6 +22,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import core_chec
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 if TYPE_CHECKING:
     from verity.circuits.program import Program
@@ -107,7 +108,7 @@ def check_openings(pub: dict, u: int, opening: dict, reg: dict) -> list[str]:
         if "known" in e:
             continue
         op = opening.get(port)
-        dom = G.domain(pub["program"], e["value"], e["words"], e["leaves"],
+        dom = RV.domain(pub["program"], e["value"], e["words"], e["leaves"],
                        **({"session": pub["session"]} if e["value"].endswith(f"{LR.REQUESTS}@0") else {"window": pub["window"]}))
         if op is None or op["value"] != e["value"] or op["index"] != e["reads"][u] or dom.domain_id.hex() != e["domain"] or \
                 not G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]),

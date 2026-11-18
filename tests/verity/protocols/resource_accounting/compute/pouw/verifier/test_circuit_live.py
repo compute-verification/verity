@@ -17,6 +17,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import liv
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 M32 = (1 << 32) - 1
 
@@ -211,7 +212,7 @@ def test_the_tables_rows_are_the_statements_port_rows():
         assert LR.slot_words([v]) == [words(_b(v))]
     h = [7, 0x10002, 3, 1 << 31, 9]
     assert LR.header_words([h]) == [words(sum(map(_b, h), []))] and len(LR.header_words([h])[0]) == LR.HEADER_WORDS
-    assert G.row_words(LR.slot_words([5])[0], G.WORD_BITS, G.SCHEMA_V2) == LR.slot_words([5])[0]
+    assert RV.row_words(LR.slot_words([5])[0], RV.WORD_BITS, G.SCHEMA_V2) == LR.slot_words([5])[0]
 
 
 def _window(T, S, rng):
@@ -238,7 +239,7 @@ def test_a_rounds_live_file_reads_its_slot_table_the_request_table_and_the_known
     assert doc["format"] == G.READS and sorted(ports) == sorted([p for p, *_ in LR.statement_rows(T)] + [LR.OK_PORT])
     for i in range(T):
         for port, v in ((f"slot_{i}", LR.table("h1/", LR.SLOTS, s)), (f"req_{i}", LR.table("h1/", LR.REQUESTS))):
-            assert {k: ports[port][k] for k in G.ENTRY_KEYS} == {k: regs[v].entry()[k] for k in G.ENTRY_KEYS}
+            assert {k: ports[port][k] for k in RV.ENTRY_KEYS} == {k: regs[v].entry()[k] for k in RV.ENTRY_KEYS}
             assert ports[port]["reads"] == [None] * s + [i] and ports[port]["row_schema"] == regs[v].schema
     rows, salts, reg = LR.m_table(prog, "h1/", window, s, 2)
     assert ports["m"]["known"] == {"rows": [LR.slot_words([2])[0]], "salts": [x.hex() for x in salts]}
@@ -575,7 +576,7 @@ def test_a_pieces_live_file_reads_its_rows_the_first_headers_and_caps_and_the_kn
     assert [p for p, *_ in LR.statement_rows_pieces(R)][2 * R:2 * R + 3] == ["m", "s", "base"]
     for i in range(R):
         assert ports[f"slot_{i}"]["value"] == "h1/slots@1" and ports[f"slot_{i}"]["reads"] == [None] * u + [j * R + i]
-        assert {k: ports[f"slot_{i}"][k] for k in G.ENTRY_KEYS} == {k: regs["h1/slots@1"].entry()[k] for k in G.ENTRY_KEYS}
+        assert {k: ports[f"slot_{i}"][k] for k in RV.ENTRY_KEYS} == {k: regs["h1/slots@1"].entry()[k] for k in RV.ENTRY_KEYS}
         assert ports[f"req_{i}"]["reads"] == [None] * u + [i] and ports[f"cap_{i}"]["reads"] == [None] * u + [i]
     rows, salts, reg = LR.base_table(prog, "h1/", window, j, R)
     assert ports["base"]["value"] == "h1/base@1" and rows == [LR.slot_words([j * R])[0]]

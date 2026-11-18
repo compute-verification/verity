@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
+from verity.commitments import registered_value as RV
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import mul
@@ -552,7 +553,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     again = _toy_circuit(tmp_path / "again", 8)[0].parent
     IR.bind(again, program, part, [desc.entry()])
     assert _registered_top(again, binds["stacked"], 6) == (registration, bound, reg), "the circuit and the salts alone"
-    dom = RG.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
+    dom = RV.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
     assert registration["format"] == R.FORMAT_V2 and entry == \
         {"value": "stacked", "root": entry["root"], "leaves": 128, "words": 64, "domain": dom.domain_id.hex()}
     assert reg["top"] == [b.hex() for b in RL.commit_top(binds["stacked"], [bytes.fromhex(s) for s in reg["salts"]])]
@@ -895,7 +896,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
 
     def opens(i: int, reg) -> bool:
         e = own[f"m{i}"]
-        dom = RG.domain(program, f"rec-opening-c{i}", reg.words, 1)
+        dom = RV.domain(program, f"rec-opening-c{i}", reg.words, 1)
         return e["domain"] == dom.domain_id.hex() and RG.verify_read(dom, bytes.fromhex(e["root"]), 0, reg.bcs[0], reg.path(0))
 
     for i, x in enumerate(msgs):

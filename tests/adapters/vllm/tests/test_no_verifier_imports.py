@@ -67,7 +67,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.registered",
         ),
         # The compiler's served rows (`verity_vllm/compiler/served_rows.py`): the Lean verifier's `--registered` port form
-        # (`produced.port`, `registered.READS_FROM`), until SPOT's workload side offers the registered-port format.
+        # (`produced.port`, `registered_value.READS_FROM`), until SPOT's workload side offers the registered-port format.
         "verity_vllm/compiler/served_rows.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),

@@ -60,7 +60,7 @@ BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32"
 
 
 def program(repo: str, revision: str, world: int, rank: int, prefix: str) -> str:
-    """The program a rank's tables are registered under (their domains', core's ``registered.domain``): the SHA-512 of the model,
+    """The program a rank's tables are registered under (their domains', core's ``registered_value.domain``): the SHA-512 of the model,
     its revision, the TP world and rank and the Programs' wrapper prefix, so two ranks' tables of one name are distinct values."""
     doc = {"format": SCHEMA, "repo": repo, "revision": revision, "world": int(world), "rank": int(rank), "prefix": prefix}
     return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()

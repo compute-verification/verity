@@ -114,6 +114,7 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.compiler import tick_step as TK
 
@@ -478,13 +479,13 @@ def close(S: Shape, row: Row, win: QueueRow) -> bool:
 # --- the chain ------------------------------------------------------------------------------------------------------------
 
 def empty_salts(program: str) -> tuple[bytes, bytes]:
-    """The public salts of the session's first state row and first window row (`registered.supplied_salts`' row 0 of
+    """The public salts of the session's first state row and first window row (`registered_value.supplied_salts`' row 0 of
     `VALUE` and of `WINDOW`)."""
-    return G.supplied_salts(program, VALUE, 1)[0], G.supplied_salts(program, WINDOW, 1)[0]
+    return RV.supplied_salts(program, VALUE, 1)[0], RV.supplied_salts(program, WINDOW, 1)[0]
 
 
 def _opening(words: Sequence[int], salt: bytes) -> bytes:
-    return _INST.commit_string(_INST.default_key, G.row_digest(words, WORD_BITS, SCHEMA), salt)
+    return _INST.commit_string(_INST.default_key, RV.row_digest(words, WORD_BITS, SCHEMA), salt)
 
 
 def empty_openings(program: str, S: Shape) -> tuple[bytes, bytes]:
@@ -839,7 +840,7 @@ def size(S: Shape) -> dict[str, int]:
             "ands_close": _counted("close", key),
             "ands_per_window": S.P * step + window, "rows_per_window": S.P + 2, "window_rows_per_window": 2,
             "reads_per_window": 3 * S.P + 4, "path_depth": (S.P + 1).bit_length(),
-            "record_bytes_per_window": (S.P + 4) * produced.BC_BYTES}
+            "record_bytes_per_window": (S.P + 4) * RV.BC_BYTES}
 
 
 __all__ = ["Arrival", "MalformedRow", "QueueRow", "Row", "STATICS", "Shape", "VALUE", "WINDOW", "advance",

@@ -699,6 +699,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``out``."""
     from circuit_check import targets as TG
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat
@@ -721,12 +722,12 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
     prog = P.program_digest(program)
-    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
-    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, RV.WORD_BITS, V2)
+    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, RV.WORD_BITS, V2)
+    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, RV.WORD_BITS, V2)
     own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
                        schemas={xn: V2, "weights": V2})
-    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
+    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)

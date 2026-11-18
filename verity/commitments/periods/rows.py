@@ -75,7 +75,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO
-from verity.commitments import hm96, row_table as RT
+from verity.commitments import hm96, registered_value as RV, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
@@ -1503,8 +1503,8 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 continue
             wire = w.wire(m, p)
             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
-                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        **({"reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base} if wire is None else
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        **({"reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base} if wire is None else
                            {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out

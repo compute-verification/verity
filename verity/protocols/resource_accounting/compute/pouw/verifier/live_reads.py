@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 #: a request header's u32 fields: index, round, first slot, cap and prompt length
 HEADER = 5
@@ -74,7 +75,7 @@ def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[lis
     if not (isinstance(m, int) and 0 <= m < 1 << 32):
         raise ValueError(f"m is a u32, not {m!r}")
     rows, salts = slot_words([m]), [_cc().public_row_salt(window, int(s))]
-    return rows, salts, G.Registered.commit(program, table(prefix, M_ROWS, s), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
+    return rows, salts, G.Registered.commit(program, table(prefix, M_ROWS, s), rows, salts, RV.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
 
 
@@ -85,7 +86,7 @@ def round_table(program: str, prefix: str, window: str, s: int) -> tuple[list[li
     if not (isinstance(s, int) and not isinstance(s, bool) and 0 <= s < 1 << 32):
         raise ValueError(f"s is a u32, not {s!r}")
     rows, salts = slot_words([s]), [_cc().public_row_salt(window, s)]
-    return rows, salts, G.Registered.commit(program, table(prefix, ROUND_ROWS, s), rows, salts, G.WORD_BITS,
+    return rows, salts, G.Registered.commit(program, table(prefix, ROUND_ROWS, s), rows, salts, RV.WORD_BITS,
                                             G.SCHEMA_V2, window=window)
 
 
@@ -104,7 +105,7 @@ def caps_table(program: str, prefix: str, window: str, T: int, max_tokens: Seque
     if not all(isinstance(c, int) and 0 <= c < 1 << 32 for c in cs):
         raise ValueError(f"each public cap is a u32, not {cs!r}")
     rows, salts = slot_words(cs), [_cc().public_row_salt(window, q) for q in range(T)]
-    return rows, salts, G.Registered.commit(program, table(prefix, CAPS), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
+    return rows, salts, G.Registered.commit(program, table(prefix, CAPS), rows, salts, RV.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
 
 
@@ -115,7 +116,7 @@ def base_table(program: str, prefix: str, window: str, j: int, R: int) -> tuple[
     if not (isinstance(j, int) and not isinstance(j, bool) and j >= 0 and 0 <= j * R < 1 << 32):
         raise ValueError(f"a piece's base j R is a u32, not {j!r} × {R!r}")
     rows, salts = slot_words([j * R]), [_cc().public_row_salt(window, j)]
-    return rows, salts, G.Registered.commit(program, table(prefix, BASE_ROWS, j), rows, salts, G.WORD_BITS,
+    return rows, salts, G.Registered.commit(program, table(prefix, BASE_ROWS, j), rows, salts, RV.WORD_BITS,
                                             G.SCHEMA_V2, window=window)
 
 
@@ -125,7 +126,7 @@ def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[
     the execution phase's open root `window` and s, registered under `program` binding `window`. Every input is public."""
     rows = [list(_cc().OK_ROW) for _s in range(rounds)]
     salts = [_cc().ok_salt(window, s) for s in range(rounds)]
-    return rows, salts, G.Registered.commit(program, table(prefix, OK_VALUE), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
+    return rows, salts, G.Registered.commit(program, table(prefix, OK_VALUE), rows, salts, RV.WORD_BITS, G.SCHEMA_V2,
                                             window=window)
 
 
@@ -147,7 +148,7 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
     """The verifier's ``--registered`` file (`registered.READS`) of round s's statement ``live@<s>``, unit s of the live
     Program of S rounds at T: its slot ports at round s's ``<prefix>slots@<s>`` and its header ports at
     ``<prefix>requests@0``, at the roots `roots` (``{value: root}``, the execution phase's entries) gives them, each under
-    `registered.domain` of `program` (the execution phase Program's digest, which the tables are registered under), the slot table
+    `registered_value.domain` of `program` (the execution phase Program's digest, which the tables are registered under), the slot table
     bound to the execution phase's open root `window` and the request table to its session `session`; ``m`` and ``s`` at their known
     content (`m_table`, `round_table`) and the output row ``o0`` at the ok rows (`ok_table`). With `max_tokens` it is the v2
     unit's: each ``cap_<i>`` reads row i of the known public caps (`caps_table` of them). Units other than s read nothing.
@@ -160,13 +161,13 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
     before = [None] * s
 
     def port(value: str, words: int, leaves: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
-        return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                "domain": G.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(schema),
+        return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
+                "domain": RV.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(schema),
                 "reads": before + [row]}
 
     def known(value: str, rows: list, salts: list, reg: G.Registered, row: int) -> dict[str, Any]:
         return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
-                "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                 "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, T, i, window=window) for i in range(T)}
@@ -194,7 +195,7 @@ def reads_file_rows(program: str, T: int, S: int, R: int, u: int, roots: dict[st
     pieces), round s's piece j for (s, j) = divmod(u, P): its ``slot_<i>`` at row j R + i of round s's ``<prefix>slots@<s>``
     (bound to the open root `window`), its ``req_<i>`` at row i of ``<prefix>requests@0`` (bound to the session `session`),
     ``m``, ``s`` and ``base`` at their known ``m@<s>``, ``round@<s>`` and ``base@<j>``, ``cap_<i>`` at row i of the known
-    public caps of `max_tokens` (T rows) and ``o0`` at row u of the ok rows (S·P of them), each under `registered.domain`
+    public caps of `max_tokens` (T rows) and ``o0`` at row u of the ok rows (S·P of them), each under `registered_value.domain`
     of `program`. Units other than u read nothing. Refused (ValueError) when `roots` lacks a table or u is no unit."""
     P = T // R if R > 0 and T % R == 0 else 0
     if not (P and 0 <= u < S * P):
@@ -206,13 +207,13 @@ def reads_file_rows(program: str, T: int, S: int, R: int, u: int, roots: dict[st
     before = [None] * u
 
     def port(value: str, words: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
-        return {"value": value, "root": roots[value], "leaves": T, "words": words, "word_bits": G.WORD_BITS,
-                "domain": G.domain(program, value, words, T, **bind).domain_id.hex(), **G.schema_entry(schema),
+        return {"value": value, "root": roots[value], "leaves": T, "words": words, "word_bits": RV.WORD_BITS,
+                "domain": RV.domain(program, value, words, T, **bind).domain_id.hex(), **G.schema_entry(schema),
                 "reads": before + [row]}
 
     def known(value: str, rows: list, salts: list, reg: G.Registered, row: int) -> dict[str, Any]:
         return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
-                "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                 "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, j * R + i, window=window) for i in range(R)}

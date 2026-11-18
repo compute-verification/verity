@@ -43,7 +43,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening, LiveRecord
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw import credit_gate_device as CGD
 
 from tests.protocols import challenger_host as CH
@@ -740,7 +740,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     r0 = ev["rounds"][0]
     assert r0["request_table"] == c["request_table"] == run._tables[0].commitment.root.hex()
     assert r0["requests"] == CR.requests_root(bytes.fromhex(r0["request_table"]), bytes.fromhex(ids0["root"])).hex()
-    assert ids0["domain"] == G.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
+    assert ids0["domain"] == RV.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
                                       session=auditor.session_id).domain_id.hex()
 
 
@@ -1028,7 +1028,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     root, digest = auditor.window["root"], _circuit()
     for port, e in got["registered"]["ports"].items():
         held = CR.is_held(e["value"])
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
+        assert e["domain"] == RV.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
                                        ).domain_id.hex(), port
     failed = _credit(auditor, rec, st, run=_verifier(drawn, reject=drawn[-1:]))
     assert failed["window"][0] == "failed" and failed["credit"] is None

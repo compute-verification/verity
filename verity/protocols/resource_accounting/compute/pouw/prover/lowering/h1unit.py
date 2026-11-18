@@ -81,6 +81,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import credit as
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 if TYPE_CHECKING:
     from verity.circuits.partition_object import TemplatePartition
@@ -311,7 +312,7 @@ def register(program: str, name: str, words: np.ndarray, salts: Sequence[bytes],
     """An execution phase's rows of the registered value ``name`` (its bit rows' u16 words, `row_words` or `record_words`), committed
     under the execution phase Program's digest ``program`` in the tile's ports' format (``row/v2``, 16-bit leaves) with one of
     ``salts`` a row, its domain binding the execution phase's open root ``window_root`` unless ``name`` is b/<K> (`bound_root`)."""
-    return G.Registered.commit(program, name, np.asarray(words).tolist(), [bytes(s) for s in salts], G.WORD_BITS, V2,
+    return G.Registered.commit(program, name, np.asarray(words).tolist(), [bytes(s) for s in salts], RV.WORD_BITS, V2,
                                bound_root(name, window_root))
 
 
@@ -339,7 +340,7 @@ def check_known(program: str, window_root: str, port: str, entry: dict) -> str |
     ``window_root``): `Registered.checkKnown`, the Lean verifier's check of ``--registered``, which roots them at the entry's
     domain as given, where this also holds that domain to the execution phase's."""
     rows, salts = entry["known"]["rows"], entry["known"]["salts"]
-    schema, bits = entry.get("row_schema"), entry.get("word_bits", G.WORD_BITS)
+    schema, bits = entry.get("row_schema"), entry.get("word_bits", RV.WORD_BITS)
     if schema != V2 or bits != 16:
         return (f"registered reads: port {port}: known content is of {V2} rows of 16-bit leaves, and {entry['value']}'s "
                 f"are {schema} rows of {bits}-bit leaves")
@@ -356,13 +357,13 @@ def check_known(program: str, window_root: str, port: str, entry: dict) -> str |
 
 
 def registered_domain(program: str, name: str, leaves: int, window_root: str) -> CommitmentDomain:
-    return G.domain(program, name, value_words(name), int(leaves), window=bound_root(name, window_root))
+    return RV.domain(program, name, value_words(name), int(leaves), window=bound_root(name, window_root))
 
 
 def registered_levels(program: str, name: str, bcs: list[bytes], window_root: str) -> tuple[tuple[bytes, ...], ...]:
     """The registered tree of ``name``'s rows ``b || c`` (`register`'s, from its ``bcs`` alone)."""
     dom = registered_domain(program, name, len(bcs), window_root)
-    return tree_levels(dom, [G.leaf(dom, i, bc, V2) for i, bc in enumerate(bcs)])
+    return tree_levels(dom, [RV.leaf(dom, i, bc, V2) for i, bc in enumerate(bcs)])
 
 
 def verify_registered(program: str, name: str, leaves: int, root: bytes, index: int, bc: bytes, sibs: list[str],
@@ -395,7 +396,7 @@ def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: 
         value, rows[u - u0] = unit_reads(program, tp, u)[o1]
         if value != OK_VALUE:
             raise ValueError(f"unit {u}'s ok port reads {value}, not the Program's output {OK_VALUE}")
-    doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": G.WORD_BITS,
+    doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": RV.WORD_BITS,
                         "domain": registered_domain(prog, OK_VALUE, T, window_root).domain_id.hex(),
                         **G.schema_entry(G.SCHEMA_V2),
                         **CC.call_reads(u0, rows), "known": known_ok(window, T)}

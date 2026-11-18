@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity_torch.pouw.h1 import registered_device as D
@@ -48,7 +49,7 @@ def test_the_cpu_twins_registered_value_opens_under_cores_root(n, w):
     bcs, levels = D.host_commit(words, KEY, 3, None, core.domain.domain_id)
     assert isinstance(bcs, Nodes) and all(isinstance(lv, Nodes) for lv in levels)
     assert (bcs, levels) == (core.bcs, core.levels) and NR._numpy(words, KEY, 3, None, core.domain.domain_id) == (bcs, levels)
-    got = G.Registered(program=PROGRAM, value="h1/v", words=w, word_bits=G.WORD_BITS, rows=core.rows, salts=core.salts,
+    got = G.Registered(program=PROGRAM, value="h1/v", words=w, word_bits=RV.WORD_BITS, rows=core.rows, salts=core.salts,
                        bcs=bcs, levels=levels, schema=G.SCHEMA_V2, window=WINDOW)
     assert got.root == core.root and got.entry() == core.entry()
     assert all(got.path(p) == core.path(p) and G.verify_read(core.domain, core.root, p, got.bcs[p], got.path(p), G.SCHEMA_V2)

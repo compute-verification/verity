@@ -251,6 +251,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     verifier as V,
 )  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 
 RANK_PORTS = 16
@@ -362,7 +363,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
               *((f"{x}:{v}", "a registered value's layout") for v, _n, w in taken
-                for x in ("leaves", "words", "domain", *(("word_bits",) if w != REG.WORD_BITS else ())))]
+                for x in ("leaves", "words", "domain", *(("word_bits",) if w != RV.WORD_BITS else ())))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want)) + tuple(S.Value(v, None, "serve", registered=True) for v, _n, _w in taken)
     spec = S.Spec(values, S.SamplingDesign(a.rule),

@@ -8,6 +8,7 @@ import pytest
 from verity.protocols.proofs.spot.verifier.one_stage import audit
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 PD = "12" * 64
 REG = "ab" * 64
@@ -24,14 +25,14 @@ def test_the_produced_tree_opens_under_its_registrations_domain_only():
     for r in range(3):
         assert G.verify_read(dom, tree.root, r, tree.bcs[r], tree.path(r))
         assert not G.verify_read(PR.domain(PD, "partials", 2, 3, 16, OTHER_REG), tree.root, r, tree.bcs[r], tree.path(r))
-        assert not G.verify_read(G.domain(PD, "partials", 2, 3), tree.root, r, tree.bcs[r], tree.path(r))
+        assert not G.verify_read(RV.domain(PD, "partials", 2, 3), tree.root, r, tree.bcs[r], tree.path(r))
     assert not G.verify_read(dom, tree.root, 0, tree.bcs[1], tree.path(0)), "a swapped row opens at no other position"
     other = PR.commit(PD, "partials", [[1, 2], [3, 4], [5, 7]], REG)
     assert not G.verify_read(dom, tree.root, 2, other.bcs[2], other.path(2)), "another tree's row opens under no root but its own"
     with pytest.raises(ValueError, match="registration digest"):
         PR.domain(PD, "partials", 2, 3, 16, "AB" * 64)
     with pytest.raises(ValueError, match="not two"):
-        G.domain(PD, "partials", 2, 3, 16, window="00" * 64, produced=REG)
+        RV.domain(PD, "partials", 2, 3, 16, window="00" * 64, produced=REG)
 
 
 def test_a_32_bit_entry_and_its_port():

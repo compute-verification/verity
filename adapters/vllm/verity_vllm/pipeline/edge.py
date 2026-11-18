@@ -40,6 +40,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, RecordType, Type, field_types
 from verity.circuits.types import Tuple as TupleT
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from . import window_advice as WA
 
@@ -129,7 +130,7 @@ def _dims(t: Type) -> tuple[int, ...]:
 def _shape(name: str, t: Type, words: int) -> tuple[int, int]:
     """Port ``name`` of type ``t`` as rows of ``words`` leaves: (rows, word_bits); ValueError where it isn't."""
     w = t.homogeneous_width()
-    if w is None or not 0 < w <= max(REG.WIDTHS) or type(words) is not int or words < 1 or t.leaves % words:
+    if w is None or not 0 < w <= max(RV.WIDTHS) or type(words) is not int or words < 1 or t.leaves % words:
         raise ValueError(f"{name}: {t.leaves} leaves of widths {sorted(t.width_set())} are no rows of {words!r} leaves of one width")
     return t.leaves // words, 16 * -(-w // 16)
 
@@ -148,12 +149,12 @@ def _returned(program: Program, ports: Sequence[str]) -> dict[str, Type]:
 def out_ports(program: Program, ports: Sequence[str], words: Mapping[str, int], window: str) -> dict[str, dict[str, Any]]:
     """Window w's verifier's ports for the edge ``ports`` its Program returns (`fields`' ports some member holds), as R3 holds
     its record's roots to them: each one's rows of `row_words` leaves and the registered domain of its value under the
-    Program and the window's open root ``window`` (core's ``registered.domain``), which window w + 1's history takes."""
+    Program and the window's open root ``window`` (core's ``registered_value.domain``), which window w + 1's history takes."""
     prog = program_digest(program)
     out = {}
     for p, t in _returned(program, ports).items():
         n, bits = _shape(p, t, words[p])
-        out[p] = {"leaves": n, "domain": REG.domain(prog, p, words[p], n, bits, window).domain_id.hex()}
+        out[p] = {"leaves": n, "domain": RV.domain(prog, p, words[p], n, bits, window).domain_id.hex()}
     return out
 
 

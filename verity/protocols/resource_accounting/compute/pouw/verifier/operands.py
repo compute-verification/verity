@@ -21,6 +21,7 @@ from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 KEY = "activations"
 #: what an execution phase's operands don't establish yet, named wherever a record reports them (`stated`)
@@ -62,7 +63,7 @@ def held(window: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         if set(b) != {"program", "values"} or not values:
             raise ValueError(f"{KEY} is {{program, values}}, at least one value")
         for v, e in values.items():
-            want = G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS), window=context)
+            want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS), window=context)
             if e.get("value") != v or not isinstance(e.get("root"), str) or e.get("domain") != want.domain_id.hex():
                 raise ValueError(f"the entry of {v!r} names another value, no root, or a domain other than the one "
                                  f"{program!r}, its rows and the window's context make")

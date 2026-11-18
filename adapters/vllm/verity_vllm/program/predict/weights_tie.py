@@ -65,6 +65,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header
@@ -221,7 +222,7 @@ class Tie:
     def supplied_values(self, program: str) -> dict[str, G.Registered]:
         """Each chain's supplied values committed as core's ``registered.Registered`` under ``program`` (the window's
         partition digest) at their public salts, so the committer and the verifier make the same value."""
-        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
+        return {n: G.Registered.commit(program, n, [row], RV.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
     def digest(self, design: dict[str, Any], cap: int) -> str:
