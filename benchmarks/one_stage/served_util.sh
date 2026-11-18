@@ -8,7 +8,7 @@
 #
 # The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N
 # --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/1024 requests a step and a window
-# (--max-num-seqs, --window-requests), --window-steps 1, --admit arrival, no prefix cache. WARM requests are served first,
+# (--max-num-seqs, --window-requests), --window-steps 1, arrival admission (the default: no order set), no prefix cache. WARM requests are served first,
 # outside the capture. Arms (ARM):
 #   stock   --no-commit, no protocol: the ceiling
 #   noseal  the rows-sha512 Commit, --no-seal: every value is still copied to host and committed, then dropped at the
