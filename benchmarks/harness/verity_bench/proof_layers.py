@@ -70,6 +70,7 @@ from verity_bench.proof_layers_result import (
     NOT_AN_AUDIT,
     NOT_STATED,
     PARAMETERS,
+    PREDICTED,
     PROOF,
     PROVE_PATH,
     RECURSION,
@@ -91,6 +92,7 @@ __all__ = [
     "MEMBERS",
     "NOT_AN_AUDIT",
     "NOT_STATED",
+    "PREDICTED",
     "PROVE_PATH",
     "READERS",
     "RECURSION",
@@ -209,28 +211,24 @@ def _epsilon(e: Any) -> str | None:
             f" (summary.json epsilon, the first and last of its {len(pairs)} pairs)")
 
 
-#: a5_llama1b_h200.sh's steps.txt: a step's start and its exit (``HH:MM:SSZ NAME: ARGS``, ``HH:MM:SSZ NAME rc=N``), and the
-#: build step's ``build cache:`` line
-STEP_AT = re.compile(r"^(\d\d):(\d\d):(\d\d)Z (build)(?:: | rc=(\d+)$)")
-BUILD_CACHE = re.compile(r"^\d\d:\d\d:\d\dZ build cache: (.+)$")
+def _build(d: Path, notes: list[str]) -> tuple[float | None, str]:
+    """predict row's Build of record in `d`: its record's ``secs`` and the registered compiler it names (``NAME DIGEST``), or
+    (None, `NOT_STATED`) where `d` holds none, and a note where it holds one of another schema or without them."""
 
-
-def _build(steps: str) -> tuple[float | None, str]:
-    """steps.txt's build step: its wall seconds, from its start line to an ``rc=0`` line after it (None without both), and its
-    ``build cache:`` line's words (`NOT_STATED` without one)."""
-
-    start = end = None
-    cache = NOT_STATED
-    for line in steps.splitlines():
-        if m := STEP_AT.match(line):
-            at = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
-            if m.group(5) is None:
-                start, end = at, None
-            elif start is not None and m.group(5) == "0":
-                end = at
-        elif m := BUILD_CACHE.match(line):
-            cache = m.group(1)
-    return (None if start is None or end is None else float((end - start) % 86400)), cache
+    schema, name = PREDICTED
+    try:
+        rec = json.loads((d / name).read_text())
+    except FileNotFoundError:
+        return None, NOT_STATED
+    except (OSError, ValueError) as e:
+        notes.append(f"{name} can't be read ({type(e).__name__}), so no build seconds")
+        return None, NOT_STATED
+    secs, compiler = (rec.get("secs"), rec.get("compiler")) if isinstance(rec, dict) else (None, None)
+    if not isinstance(rec, dict) or rec.get("schema") != schema or isinstance(secs, bool) or not isinstance(secs, (int, float)) \
+            or not isinstance(compiler, dict) or not all(isinstance(compiler.get(k), str) for k in ("name", "digest")):
+        notes.append(f"{name} is not a {schema} record with its secs and its compiler's name and digest, so no build seconds")
+        return None, NOT_STATED
+    return float(secs), f"{compiler['name']} {compiler['digest']}"
 
 
 def _statement_instances(d: Path) -> int | None:
@@ -432,7 +430,7 @@ def read_prove_path(d: Path, result: Result) -> None:
 def read_a5(d: Path, result: Result) -> None:
     """a5_llama1b_h200.sh's out (or a5.sh's): the audit's last A5 line (its Lean verify verdicts), the audit's summary.json
     for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir,
-    verdicts.txt's serving stages, steps.txt's build step and the prover's log for its statement's proof blocks."""
+    verdicts.txt's serving stages, predicted.json's Build (`PREDICTED`) and the prover's log for its statement's proof blocks."""
 
     summary_txt = _text(d / "summary.txt")
     log = next((_text(d / f) for f in ("a5/a5.log", "a5.log") if (d / f).is_file()), summary_txt)
@@ -471,9 +469,10 @@ def read_a5(d: Path, result: Result) -> None:
     result.prover_batch = _statement_instances(d)
     if result.prover_batch is not None and result.prover_what:
         result.prover_what += f"; its Flock statement holds {result.prover_batch:,} proof blocks, the prover's batch"
-    result.build_s, result.build_cache = _build(_text(d / "steps.txt"))
-    result.build_what = ("steps.txt's build step: the served workload's step, request and workload Programs, every Definition's, "
-                         "not only the partition's") if result.build_s is not None else ""
+    result.build_s, result.build_compiler = _build(d, result.notes)
+    result.build_what = ("predicted.json's secs: predict row's Build of record, the served workload's request and workload "
+                         "Programs from the row's declared inputs, every Definition's, not only the partition's, with no trace "
+                         "and no manifest") if result.build_s is not None else ""
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
