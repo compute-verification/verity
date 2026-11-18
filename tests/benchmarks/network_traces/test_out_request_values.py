@@ -271,8 +271,8 @@ def test_the_chains_endpoint_step_keeps_its_report_and_logs_on_the_private_side(
 def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone():
     """The report's endpoint step (chain_record.py's, from the private report) names no request and counts no window's
     requests: the attested I/O's violations by their count, the advice's binding by its Commit windows'."""
-    sys.path.insert(0, str(HERE.parents[1]))
-    from benchmarks.network_traces import chain_record as cr
+    sys.path.insert(0, str(HERE))
+    import chain_record as cr
 
     bits = {"bound": False, "rebuilt": False, "bound_why": "2 certified requests are in none (s0-needle, s1-needle)",
             "commit_windows": [{"window": 0, "requests": 7, "bound": True, "rebuilt": True},

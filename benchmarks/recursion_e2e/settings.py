@@ -65,6 +65,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),
+    S("SM", str, None, VALUE, "the compute capability 85 builds its GPU prover for (120 for sm_120); unset, the run's machine's "
+      "card's (benchmarks/kernels/machine.py arch)"),
     S("CUDA_TK", str, None, WHERE, "the CUDA toolkit 85 builds the prover with, a path; the build records the binary's sha256"),
     S("WARM_FROM", str, None, WHERE, "a warm cargo tree 85 builds from, read only; the build records the binary's sha256"),
     # ---- research run's

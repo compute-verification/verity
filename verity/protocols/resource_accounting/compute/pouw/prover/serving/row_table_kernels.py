@@ -26,7 +26,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import dev
 __all__ = ["CFLAGS", "CUDA_DIR", "DEVICE_SOURCES", "HOST_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "SHARED", "TAB_WORDS", "Args",
            "built", "device_lib", "hm_tables", "host_lib", "leaf_prefixes", "nvcc", "table_width", "u64_words"]
 
-nvcc = PD.nvcc
 CUDA_DIR = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
@@ -102,10 +101,15 @@ def host_lib() -> ctypes.CDLL:
     return dll
 
 
+def nvcc() -> str | None:
+    """`device.nvcc`."""
+    return PD.nvcc()
+
+
 @cache
 def device_lib(arch: str) -> ctypes.CDLL:
     """`row_table.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
-    tool = PD.nvcc()
+    tool = nvcc()
     if tool is None:
         raise RuntimeError("no nvcc configured or on the path")
     dll = _build(tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"), "librow_table_cuda.so")
