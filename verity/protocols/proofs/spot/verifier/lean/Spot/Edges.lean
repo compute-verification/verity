@@ -281,15 +281,15 @@ consecutive leaves a wire of one unit; `edge-rows` for a row mixing them or out 
 def explicitWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wiring) (k : Nat)
     (rt port : String) (ty : Ty) (cuts j start : Nat) (rows : List (List Ref)) :
     Except String (List Spot.Wires.Wire) := do
-  let mut out : List Spot.Wires.Wire := []
+  let mut out : Array Spot.Wires.Wire := #[]
   for m in [0:rows.length] do
     let row := rows[m]!
     if row.any fun r => !r.p && r.i ≥ k then throw "not-topological"
     if row.all fun r => !r.p && isInputNode P r.i then continue
     let some r0 := row.head? | continue
     if r0.p || row.zipIdx.any (fun (r, t) => r.p || r.i != r0.i || r.j != r0.j + t) then throw "edge-rows"
-    out := out ++ (← wireOf P fu W k rt port ty cuts j (start + m) r0.i r0.j [1] [0])
-  return out
+    out := out ++ (← wireOf P fu W k rt port ty cuts j (start + m) r0.i r0.j [1] [0]).toArray
+  return out.toList
 
 /-- The wires of the reads of argument `i`'s part `q` (at `[s0, s0 + c)` of the argument) by root node `k`'s members,
 one per row of the port: the module docstring's rule, or its refusal. An explicit part's rows are `explicitWires`. -/
@@ -307,7 +307,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   if cuts == 0 || n % cuts != 0 || bitsOf ty % cuts != 0 then throw "edge-rows"
   let len := n / cuts
   let M := node.members
-  let mut out : List Spot.Wires.Wire := []
+  let mut out : Array Spot.Wires.Wire := #[]
   for j in [0:cuts] do
     let t0 := j * len
     let (x0, L) ← match a.dims with
@@ -320,7 +320,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     if let .explicit it := q then
       let rows := (List.range cnt).map fun m =>
         (it.extract (x0 + (lo + m) * L - s0) (x0 + (lo + m) * L - s0 + len)).toList
-      out := out ++ (← explicitWires P fu W k rt port ty cuts j (rb + lo) rows)
+      out := out ++ (← explicitWires P fu W k rt port ty cuts j (rb + lo) rows).toArray
       continue
     let (run, lanes) := partLanes q
     if lanes.all fun l => !l.p && l.i < nodes.size && isInputNode P l.i then continue
@@ -328,8 +328,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
       | .ok v => pure v
       | .error e => throw (if e == "edge-rows" && unitsCross P run lanes q.count k0 len then "edge-units" else e)
-    out := out ++ (← wireOf P fu W k rt port ty cuts j (rb + lo) w l0 radix steps)
-  return out
+    out := out ++ (← wireOf P fu W k rt port ty cuts j (rb + lo) w l0 radix steps).toArray
+  return out.toList
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
 cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal, at the node
@@ -337,7 +337,7 @@ cuts): the module docstring's rule, in the root's node, argument and part order,
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
   let fu := firstUnits rs
   let nodes := (P.defs[P.root]!).body.nodes
-  let mut out : List Spot.Wires.Wire := []
+  let mut out : Array Spot.Wires.Wire := #[]
   for k in [0:nodes.size] do
     if isInputNode P k then continue
     let node := nodes[k]!
@@ -347,9 +347,9 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       for (q, s0, qi) in merged node.args[i]!.seq do
         match partWires P fu W k i q s0 with
-        | .ok ws => out := out ++ ws
+        | .ok ws => out := out ++ ws.toArray
         | .error e => throw s!"{e} at node {k} argument {i} part {qi}"
-  return out
+  return out.toList
 
 /-! ## Examples: the A, B, A layout -/
 

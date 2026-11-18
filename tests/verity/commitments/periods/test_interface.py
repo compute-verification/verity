@@ -828,6 +828,24 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
     assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
 
 
+def test_a_wire_reads_its_writers_out_row_from_a_word_that_steps_with_its_digits():
+    """A wire of ``out`` (the writer's fields in order, a leaf of w bits ceil(w/16) words: two 8-bit leaves are two
+    words) reads from word ``offset + sum(d[k] * ostep[k])`` (`Circuits.Wire.offsetAt`); `check_wires` refuses
+    (``width``) a row past ``out`` or a first word below 0 at some index, and `Wire.of` an ostep not one a digit."""
+    lays = {"R": (I.RowLayout((("x", 2),), (("o0", 2),), (32, 32), (1,)), 2),
+            "W": (I.RowLayout((("y", 2),), (("o0", 1), ("o1", 2), ("o2", 2)), (32, 8, 32, 32), (1,)), 2)}
+    w = {"reader": "R", "port": "x", "writer": "W", "out": "out", "at": 0, "radix": [2], "base": 0, "step": [1],
+         "offset": 2, "ostep": [2]}
+    assert I.Wire.of(w).doc() == w and I.Wire.of(w).offsets() == (2, 4)
+    I.check_wires(lays, [I.Wire.of(w)])
+    I.check_wires(lays, [I.Wire.of({**w, "offset": 4, "ostep": [0]})])
+    for edit in ({"offset": 3}, {"ostep": [-3]}):
+        with pytest.raises(ValueError, match="read from words"):
+            I.check_wires(lays, [I.Wire.of({**w, **edit})])
+    with pytest.raises(ValueError, match="ostep one integer a digit"):
+        I.Wire.of({**w, "ostep": [1, 2]})
+
+
 def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
     """`Wire.box` bounds the writers of reader indices ``lo`` to ``hi`` digit by digit (`Spot.Wires.Wire.box`,
     `writerAt_mem_box`): every writer between them lies in it, and over a run of whole values of a digit, such as a range

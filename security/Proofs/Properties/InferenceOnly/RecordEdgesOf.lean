@@ -81,6 +81,11 @@ private theorem appendedL {a b : List Spot.Wires.Wire} (ha : ∀ w ∈ a, Digits
     ∀ w ∈ a ++ b, Digits w :=
   fun w hw => (List.mem_append.1 hw).elim (ha w) (hb w)
 
+private theorem appendedA {a : Array Spot.Wires.Wire} {b : List Spot.Wires.Wire} (ha : ∀ w ∈ a.toList, Digits w)
+    (hb : ∀ w ∈ b, Digits w) : ∀ w ∈ (a ++ b.toArray).toList, Digits w := by
+  rw [Array.toList_append, List.toList_toArray]
+  exact appendedL ha hb
+
 /-- **A writer read's wire has a step for each digit and no digit of radix zero.** -/
 theorem wireOf_wire {P : Prog} {fu W k rt port ty cuts j start w l0 radix steps out}
     (h : Spot.Edges.wireOf P fu W k rt port ty cuts j start w l0 radix steps = .ok out) : ∀ x ∈ out, Digits x := by
@@ -110,11 +115,11 @@ theorem explicitWires_wire {P : Prog} {fu W k rt port ty cuts j start rows out}
   unfold Spot.Edges.explicitWires at h
   refine bind_ok_elim h (fun o hs h => ?_)
   cases h
-  refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ (by simp) hs
+  refine forIn_upto (fun (o : Array Spot.Wires.Wire) => ∀ w ∈ o.toList, Digits w) _ _ ?_ _ _ (by simp) hs
   intro m a st _ ha hst
   repeat' (first
     | (cases hst; exact ha)
-    | (cases hst; exact appendedL ha (wireOf_wire ‹_›))
+    | (cases hst; exact appendedA ha (wireOf_wire ‹_›))
     | (refine bind_ok_elim hst (fun _ hx hst => ?_)
        first
          | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
@@ -142,12 +147,12 @@ theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i 
     · rw [ite_eq_right_iff.2 (fun h' => absurd h' hc)] at h
       refine bind_ok_elim h (fun o hs h => ?_)
       cases h
-      refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ (by simp) hs
+      refine forIn_upto (fun (o : Array Spot.Wires.Wire) => ∀ w ∈ o.toList, Digits w) _ _ ?_ _ _ (by simp) hs
       intro j a st _ ha hst
       repeat' (first
         | (cases hst; exact ha)
-        | (cases hst; exact appendedL ha (wireOf_wire ‹_›))
-        | (cases hst; exact appendedL ha (explicitWires_wire ‹_›))
+        | (cases hst; exact appendedA ha (wireOf_wire ‹_›))
+        | (cases hst; exact appendedA ha (explicitWires_wire ‹_›))
         | (refine bind_ok_elim hst (fun _ hx hst => ?_)
            first
              | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
@@ -162,7 +167,7 @@ theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w 
   dsimp only at h
   refine bind_ok_elim h (fun o hs h => ?_)
   cases h
-  refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ (by simp) hs
+  refine forIn_upto (fun (o : Array Spot.Wires.Wire) => ∀ w ∈ o.toList, Digits w) _ _ ?_ _ _ (by simp) hs
   intro k a st hk ha hst
   refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_)
   · cases hst; exact ha
@@ -175,16 +180,16 @@ theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w 
       simp [throw, throwThe, MonadExceptOf.throw] at hx
     refine bind_ok_elim hst (fun a' hi hst => ?_)
     cases hst
-    refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ ha hi
+    refine forIn_upto (fun (o : Array Spot.Wires.Wire) => ∀ w ∈ o.toList, Digits w) _ _ ?_ _ _ ha hi
     intro i b st' hi' hb hst'
     refine bind_ok_elim hst' (fun b' hq hst' => ?_)
     cases hst'
-    refine forIn_inv (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ hb hq
+    refine forIn_inv (fun (o : Array Spot.Wires.Wire) => ∀ w ∈ o.toList, Digits w) _ _ ?_ _ _ hb hq
     intro x _ c st'' hc hst''
     obtain ⟨q, s0, qi⟩ := x
     try dsimp only at hst''
     repeat' (first
-      | (cases hst''; exact appendedL hc (partWires_wire ‹_›))
+      | (cases hst''; exact appendedA hc (partWires_wire ‹_›))
       | (cases hst''; exact hc)
       | (refine bind_ok_elim hst'' (fun _ hx hst'' => ?_)
          first
