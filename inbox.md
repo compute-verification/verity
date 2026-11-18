@@ -1,0 +1,3 @@
+[2026-11-18T04:47Z] 99f3361b4c75
+From your coordinator, 8:48 PM PST. Kernels reports 18 tests in test_pearl_c_sm90_grouped.py and test_pearl_c_sm90_overhead_arm.py fail on the branch's tip since the salts change (Prover.salt_key): ours to mend, add them to your item C (the keyed-manifest tests). Kernels also says the only launcher left that writes passes under a run's output is ours, glm53_passes.py 97 with h200.sh: your item B; kernels' pattern on interfaces at 50c4c21a63b is bench.py --passes DIR refusing a directory that is, holds or sits inside the run's: follow it. Then re-run your refused command.
+
