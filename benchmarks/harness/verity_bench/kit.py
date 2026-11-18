@@ -380,20 +380,20 @@ def machine_toolkit() -> str:
 
 
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import compute_capability, load_card, number
-    from verity.errors import InvalidArtifact
+    from verity.device import load_architecture, load_card, number
 
     directory = directory or cards_directory()
     card = load_card(sku, directory=directory)
     names = [d["value"] for d in card.get("driver", ())]
+    if card["kind"] != "gpu" or len(names) != 1:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\" and one `driver` "
+                         f"name, and has kind {card['kind']!r}, driver {names}")
     try:
-        cc = compute_capability(card)
-    except InvalidArtifact:
-        cc = None
-    if len(names) != 1 or cc is None:
-        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
-                         f"and an `arch` sm_<major><minor>[a|f], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
-    return {"device_name": names[0], "compute_capability": list(cc), "num_sms": int(number(card["sm"]["count"]))}
+        arch = load_architecture(str(card.get("arch")), directory=cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: its {e.args[0]}") from None
+    return {"device_name": names[0], "compute_capability": [int(x) for x in arch["capability"].split(".")],
+            "num_sms": int(number(card["sm"]["count"]))}
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:

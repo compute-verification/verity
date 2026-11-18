@@ -55,6 +55,7 @@
 # stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/ copies of
 # the row's records and the Commit's window, which the stages get KEPT for, never the published run dir).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
@@ -219,9 +220,9 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
     --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --out "$A" > "$OUT/a5/a5.log" 2> "$OUT/a5/audit.err"
   rc=$?
-  (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*private*' ! -path './*/archive/*' \
+  (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
-    | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
   [ -z "$A5_PLAIN" ] || return $rc
   # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
   # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)
