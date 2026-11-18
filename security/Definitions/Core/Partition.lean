@@ -8,7 +8,8 @@ public import Definitions.Core.Circuit
 A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof blocks,
 replay blocks and inference blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
 blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
-unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
+unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`), and the
+boundary (`boundary`) is in(S) ∪ out(S) over the units, `committed` less the inputs no gate reads.
 
 Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
@@ -60,6 +61,11 @@ open Classical in
 /-- `u`'s committed inputs and outputs: what an opening of the unit shows. -/
 noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
   P.committed.filter fun g => P.unit g = some u ∨ ∃ h, P.unit h = some u ∧ g ∈ C.reads h
+
+open Classical in
+/-- **The boundary**: in(S) ∪ out(S) over the proof blocks, every unit's committed inputs and outputs. It is
+`committed` less the input gates no gate reads. -/
+noncomputable def boundary : Finset (Fin C.N) := univ.biUnion P.io
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
 structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
