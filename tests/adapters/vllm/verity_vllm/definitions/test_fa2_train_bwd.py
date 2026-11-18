@@ -19,13 +19,14 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.types import Array, Tuple
 
 from verity_vllm.config import card_at
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry import boolean_fa2_train_bwd as BX
 from verity_vllm.definitions.registry import fa2_train_bwd as W
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16, F32
 
-#: the SMs of cc 12.0's card, the card the capture ran on
-SMS = int(card_at((12, 0))["sm"]["count"]["value"])
+#: the SMs of the card at the captures' cc (`cublas_bf16.TRAIN_CC`), the card they ran on
+SMS = int(card_at(TRAIN_CC)["sm"]["count"]["value"])
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fa2_train_bwd_sm120.npz"
 BM, BN = 64, 128

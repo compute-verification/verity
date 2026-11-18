@@ -145,6 +145,7 @@ class FlashSdpaBackward(_TrainRule):
         if deterministic and structure:
             raise ValueError("FlashSdpaBackward: a structure derivation reads no cell, so no setting of the kernels")
         self.cc, self.deterministic, self.structure = f"cc{cc[0]}.{cc[1]}", deterministic, structure
+        # the card of the cc the caller targets, which the check above holds to the captures' (`cublas_bf16.TRAIN_CC`)
         self.sms = None if structure else int(card_at(cc)["sm"]["count"]["value"])
         self.info = _info(f"FlashSdpaBackward_{self.cc}" + ("_deterministic" if deterministic else "")
                           + ("_structure" if structure else ""),

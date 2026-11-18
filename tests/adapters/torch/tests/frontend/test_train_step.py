@@ -36,6 +36,7 @@ from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import fa2_train as FT
 from verity_vllm.config import card_at
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.definitions.registry import prims as P
@@ -61,8 +62,8 @@ from verity_torch.frontend.train_step import (
     structure_program,
 )
 
-#: the SMs of cc 12.0's card, the card the capture ran on
-SMS = int(card_at((12, 0))["sm"]["count"]["value"])
+#: the SMs of the card at the captures' cc (`cublas_bf16.TRAIN_CC`), the card they ran on
+SMS = int(card_at(TRAIN_CC)["sm"]["count"]["value"])
 
 aten = torch.ops.aten
 

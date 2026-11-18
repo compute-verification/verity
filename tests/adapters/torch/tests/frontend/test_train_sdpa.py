@@ -22,6 +22,7 @@ from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import fa2_train as FT
 from verity_vllm.config import card_at
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 
 from tests.frontend.test_train_step import (
@@ -50,8 +51,8 @@ from verity_torch.frontend.train_step import (
     step_report,
 )
 
-#: the SMs of cc 12.0's card, the card the capture ran on
-SMS = int(card_at((12, 0))["sm"]["count"]["value"])
+#: the SMs of the card at the captures' cc (`cublas_bf16.TRAIN_CC`), the card they ran on
+SMS = int(card_at(TRAIN_CC)["sm"]["count"]["value"])
 
 aten = torch.ops.aten
 BACKWARD = "aten._scaled_dot_product_flash_attention_backward.default"

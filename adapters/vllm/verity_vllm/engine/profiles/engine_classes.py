@@ -33,15 +33,20 @@ from verity_vllm.errors import Refused
 from verity_vllm.target_family import device_token_of_row
 
 
-def rows_device_name(checkpoint: str, world: int) -> str | None:
+def rows_device_name(checkpoint: str, world: int) -> str:
     """The name the one card reports that the stored rows of ``checkpoint`` (their ids' first two fields) at TP ``world`` name
-    (`config.stored_workloads`, each id's target token, `devices.class_device_name`); `Refused` where they name none or several."""
+    (`config.stored_workloads`, each id's target token, `devices.class_device_name`); `Refused` where they name none or several,
+    or a card no GPU card file states one reported name of."""
     rows = [n.removesuffix(".json") for n in stored_workloads() if n.startswith(f"{checkpoint}__")]
     tokens = {device_token_of_row(r) for r in rows if row_world(r) == world}
     if len(tokens) != 1:
         raise Refused(f"the stored rows of {checkpoint} at TP{world} name the cards {sorted(map(str, tokens))}, not one",
                       what="an engine class's card")
-    return class_device_name(str(tokens.pop()))
+    token = str(tokens.pop())
+    if (name := class_device_name(token)) is None:
+        raise Refused(f"the stored rows of {checkpoint} at TP{world} name {token!r}, which no GPU card file states one reported name "
+                      "of: add its `short` and `driver` to its card file", what="an engine class's card")
+    return name
 
 
 #: class G's rows: the stored workloads of this checkpoint at its world, whose ids name its card

@@ -32,10 +32,11 @@ from pathlib import Path
 import numpy as np
 
 from verity_vllm.config import card_at
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry.fa2_train_bwd import train_sdpa_backward
 
-#: the SMs of cc 12.0's card, the card the capture ran on
-SMS = int(card_at((12, 0))["sm"]["count"]["value"])
+#: the SMs of the card at the captures' cc (`cublas_bf16.TRAIN_CC`), the card they ran on
+SMS = int(card_at(TRAIN_CC)["sm"]["count"]["value"])
 
 #: name -> (capture case, which of its heads, (B, H), rows)
 ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621)),
