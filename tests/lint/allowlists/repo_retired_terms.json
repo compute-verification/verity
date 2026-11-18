@@ -330,7 +330,6 @@
     {"file": "benchmarks/poub_session/rows.py", "count": 3},
     {"file": "benchmarks/poub_session/sampling_inputs.py", "count": 23},
     {"file": "benchmarks/poub_session/summary.py", "count": 22},
-    {"file": "benchmarks/pous/big_case.py", "count": 1},
     {"file": "benchmarks/pous/held_bandwidth.py", "count": 2},
     {"file": "benchmarks/pous/memory_attester/live.py", "count": 5},
     {"file": "benchmarks/pous/p2_v1/serve.py", "count": 4},
