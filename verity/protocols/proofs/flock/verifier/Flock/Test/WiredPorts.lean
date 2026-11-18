@@ -1,6 +1,8 @@
 module
 
 public import Flock.Registered
+meta import Flock.Registered
+meta import Lean.Data.Json
 
 /-!
 A wired registered port on the shared-tree window: `2n` units of one template, reader unit `n + i` reading writer unit
