@@ -362,6 +362,26 @@ def test_a_familys_struct_budget_is_read_from_its_pins_so_every_run_checks_it_th
     assert not rec["lowered"] and "over its family's struct budget, 1 (its sidecar's 'struct_max_gates')" in rec["reason"]
 
 
+def test_a_word_composite_within_its_familys_struct_budget_is_compared_on_random_vectors():
+    pytest.importorskip("verity_flock.struct_lower")
+    from circuit_check import checks as CK
+
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import resolve
+    from verity.circuits.population import WordBits
+
+    t = resolve(bind(WordBits, W=16))
+    opts = CK.Options(vectors=1, min_vectors=1, lower_max_gates=0)
+
+    def struct(pins: dict) -> tuple[str, list[dict]]:
+        e = CK.check_definition(t, opts, pins=pins, as_call=False)
+        return CK.vector_class(e), [r for r in e["correspondence"]["realizations"] if r["via"] == CK.STRUCT_VIA]
+
+    assert struct({}) == ("none", [])
+    cls, (rec,) = struct({CK.STRUCT_PINS: {"WordBits_v1": 1 << 20}})
+    assert cls == "random" and rec["mismatches"] == 0 and rec["random"] >= opts.random_floor
+
+
 # --- a proof block on its row ports ----------------------------------------------------------------------------------
 
 def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction():

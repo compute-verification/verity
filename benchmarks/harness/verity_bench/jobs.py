@@ -102,10 +102,20 @@ COMMIT_MARGIN_S = 86_400
 PULL_JOBS = 64
 
 
+class NoCatalog(ValueError):
+    """No catalog is reachable here to look a point's runs up in: git doesn't know the commit (a tree with no git, as a
+    shipped tree has) or the spec's history, or the evidence store has no remote, unconfigured or unusable. `verity-bench
+    run` runs the point on this alone, saying so; any other error of a lookup is the launch's."""
+
+
 def _show(root: Path, commit: str, field: str) -> str:
-    process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
+    try:
+        process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True,
+                                 text=True)
+    except FileNotFoundError:
+        raise NoCatalog(f"no git here, so commit {commit}'s runs can't be looked up") from None
     if process.returncode != 0:
-        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
+        raise NoCatalog(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
     return process.stdout.strip()
 
 
@@ -207,7 +217,7 @@ class StoreCompletion:
         remote = self.store.remote
         if remote is None:
             why = getattr(self.store, "remote_error", None) or "no remote is configured"
-            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+            raise NoCatalog(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
                                "missing; pass --local-only to read this machine's catalog alone")
         return remote
 
