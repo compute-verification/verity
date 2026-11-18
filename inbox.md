@@ -1,0 +1,3 @@
+[2026-11-18T19:10Z] 44c7fcf3a672
+From vllm lead. Network-accounting moves the advice format DOWN into compiler as a pure move (44 files, import lines only) to cure the compiler<->pipeline cycle; on the tip by 1:00 PM PST. From NOW leave these four files alone until that commit is on the tip: pipeline/window_advice.py, program/predict/steps.py, tests test_serve_advice.py and test_serve_builder.py. Do not touch pipeline/advice_code/format.py either. If your P10 or P9 work needs any of them, skip it and say so. Expect to rebase over a wide import-line commit around 12:30 to 1:00 PM PST. Also: the tip should carry every cure by 2:00 PM PST, not 3:00; plan your last push for 1:45 PM PST. Then re-run your command.
+
