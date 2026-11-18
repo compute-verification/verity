@@ -59,6 +59,7 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
@@ -692,7 +693,7 @@ def decode_commitment(b: bytes) -> tuple[dict, bytes]:
     rec = PR.canonical_json(b)
     if not isinstance(rec, dict):
         raise D.Reject("the registration record is not an object")
-    return rec, bytes.fromhex(R.digest(rec))
+    return rec, bytes.fromhex(DD.digest(rec))
 
 
 def decode_evidence(b: bytes) -> dict:
@@ -1587,7 +1588,7 @@ def _values_of(vs) -> list:
 
 
 def _receipt(rec, challenger: str, received: str) -> dict:
-    return {"format": R.RECEIPT, "registration": R.digest(rec), "verifier": challenger, "received": received}
+    return {"format": R.RECEIPT, "registration": DD.digest(rec), "verifier": challenger, "received": received}
 
 
 def run(j):
@@ -1808,7 +1809,7 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     if SS.parts(len(sample), strata) != service.cell_parts(len(sample), ids, ns):
         return {"codes": ["interior-parts"], "step": "interiors"}
     window, boundary = it["params"].get("window_root"), j["params"].get("window_root")
-    if window != boundary and (window is None or window != SS.interior_root(R.digest(j["record"]), sample)):
+    if window != boundary and (window is None or window != SS.interior_root(DD.digest(j["record"]), sample)):
         return {"codes": ["interior-window"], "step": "interiors"}
     codes = _registration({**p, "law": {"law": "subset", "k": m}}, rec)
     if codes:
@@ -1843,7 +1844,7 @@ def _coins_code(j: dict, rec: dict, read: bytes, key, main) -> str | None:
     window, family = j["params"].get("window_root"), j.get("family")
     if window is None or family is None or key is None:
         return "coins"
-    why = coins_reason(ChallengerKey.from_json(key), main, j.get("coins"), window, family, bytes.fromhex(R.digest(rec)),
+    why = coins_reason(ChallengerKey.from_json(key), main, j.get("coins"), window, family, bytes.fromhex(DD.digest(rec)),
                        read, lms_verify)
     return None if why is None else "family" if why == FAMILY_ROOT else "coins"
 
@@ -2025,7 +2026,7 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["supplied"] = s.supplied(values)
     if output:
         kind = {"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}
-        params["outputs"] = {"W": kind if not reuse and draw(st.booleans()) else {**kind, "record": R.digest(log[-1])}}
+        params["outputs"] = {"W": kind if not reuse and draw(st.booleans()) else {**kind, "record": DD.digest(log[-1])}}
     if values and s.formats and draw(st.integers(0, 3)):
         # without the formats, R7 counts a packed value's rows as row/v1 rows and refuses it
         params["row_schemas"] = {v: f for v, f in s.formats.items() if v in values}
@@ -2048,7 +2049,7 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     window = {**WINDOW, **(binding or {}), **({R.SEED_SALT: SEED_SALT} if seeded else {})}
     rec = _record_of(s, values, named, window, log, binding, output=output,
                      window_root=WROOT if windowed else None, fixed=fixed, leaf_layer=LEAF, anchors=anchors,
-                     previous=R.digest(log[-1]) if log else None, partition=part, work_table=expanded)
+                     previous=DD.digest(log[-1]) if log else None, partition=part, work_table=expanded)
     assert rec["law"] == mine
     if pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
@@ -2207,7 +2208,7 @@ def _held(a, x):
     last = a["params"]["log"][-1]
     last = {**last, "registered": [{**e, "root": "12" * 64} for e in last["registered"]]}
     a["params"]["log"] = [*a["params"]["log"][:-1], last]
-    a["record"]["previous"] = R.digest(last)
+    a["record"]["previous"] = DD.digest(last)
 
 
 def _signature(sig: list, x: int):
@@ -2283,7 +2284,7 @@ def _repoint(a: dict) -> None:
 
 def _earlier(a: dict) -> str:
     """The digest of the log's last record, or of none."""
-    return R.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
+    return DD.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
 
 
 def _registered(value):
@@ -2311,14 +2312,14 @@ REGISTERED_PARAMS = [
     _held,
     _set("params", "outputs", lambda a, x: [
         {"W": {"port": EARLIER_OUT, "record": "ee" * 64}}, {"W": {"port": "nope", "record": _earlier(a)}},
-        {"W": {"port": "x", "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": R.digest(a["record"])}},
+        {"W": {"port": "x", "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": DD.digest(a["record"])}},
         {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"S": {"port": EARLIER_OUT, "record": _earlier(a)}},
         {"nope": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": "EE" * 64}},
         {"W": {"port": EARLIER_OUT}}, {"W": {"port": 1, "record": _earlier(a)}},
         {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {},
         {"W": {"value": EARLIER_VALUE, "record": "ee" * 64}}, {"W": {"value": "nope", "record": _earlier(a)}},
         {"W": {"value": "W", "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE, "record": _earlier(a)}},
-        {"W": {"value": EARLIER_VALUE, "record": R.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
+        {"W": {"value": EARLIER_VALUE, "record": DD.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
         {"W": {"value": EARLIER_VALUE, "port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE}},
         {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}, {"W": {"port": "nope"}}, {"W": {"port": 1}},
         {"S": {"port": EARLIER_OUT}}, {"W": {"port": "x"}}][x % 28]),
@@ -2430,7 +2431,7 @@ def _same_window_log(a: dict, x: int) -> None:
     last = a["params"]["log"][-1]
     a["params"]["log"] = [*a["params"]["log"][:-1], {**last, "registered": [
         {**e, "root": "12" * 64} for e in a["record"]["registered"]][:1 + x % len(a["record"]["registered"])]}]
-    a["record"]["previous"] = R.digest(a["params"]["log"][-1])
+    a["record"]["previous"] = DD.digest(a["params"]["log"][-1])
 
 
 #: One change each to the window's open root the verifier names (another window's, in another form, or none), the values
@@ -2740,7 +2741,7 @@ def _challenger_sample(rng: random.Random, s: Setup, sampling_design: dict, rec:
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
+    d = Drawn(rng, after=bytes.fromhex(DD.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
               keys=keys, params=[DEPLOYED], seed=seed, order=order, **shape)
     at = [0]
 
@@ -3001,7 +3002,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
         assert D.replay(ONE_STAGE, v1, server)[0] == "accept", order
         want = None if order == "honest" else f"coins: {Ch.SAMPLE_LINK_FIRST}"
         assert order_why(params, rec, evidence) == want, order
-        assert Ch.sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (want is None), order
+        assert Ch.sample_link_first("draw", bytes.fromhex(DD.digest(rec)), ch.s.lines[1:]) == (want is None), order
         record = D.canonical(ch.trees[0].record).encode()
         proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
@@ -3045,7 +3046,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     s, sampling_design = SETUPS[3], {"k": 3, "law": "subset"}
     rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    after = bytes.fromhex(R.digest(rec))
+    after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
@@ -4351,7 +4352,7 @@ def _from_challenger(c: dict, rng: random.Random, **shape: bool) -> tuple[Drawn,
             return b
         service.select_draw(rule, sampling_design, rec["population"], source)
         return bytes(got)
-    d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, **shape)
+    d = Drawn(rng, after=bytes.fromhex(DD.digest(rec)), reads=reads, **shape)
     return d, {**c, "params": {**c["params"], "window_root": d.ledger.window["root"]}, "source": d.read.hex(),
                "coins": d.evidence(d.segment.to_json()), "family": "draw", **d.held()}
 
@@ -4561,20 +4562,20 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
             draw_one(source)
             return bytes(got)
         return reader
-    d1 = Drawn(rng, before=again == 0, after=bytes.fromhex(R.digest(rec)), reads=reads(
+    d1 = Drawn(rng, before=again == 0, after=bytes.fromhex(DD.digest(rec)), reads=reads(
         lambda source: sample.extend(service.select_draw(rule, first_sampling_design, b.population, source)["units"])))
     ns = service.replay_cells(Program(BLOCK), i.query)
     ks = service.second_counts(rule.k, [PAIR.id], ns)
     m = len(sample) * sum(ns)
     irec = R.record(i.program, i.query, {"law": "subset", "k": m}, SCHEME,
                     [{"port": p, "root": ROOTS[p], **i.ports[p]} for p in i.ports],
-                    {**WINDOW, "interior": True, "replay_sample": list(sample)}, leaf_layer=LEAF, previous=R.digest(rec))
+                    {**WINDOW, "interior": True, "replay_sample": list(sample)}, leaf_layer=LEAF, previous=DD.digest(rec))
     second = {}
 
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
-    d2 = Drawn(rng, before=again == 1, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
-               window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)},
+    d2 = Drawn(rng, before=again == 1, after=bytes.fromhex(DD.digest(irec)), reads=reads(second_stage),
+               window=None if elsewhere else {"root": SS.interior_root(DD.digest(rec), sample)},
                params=[(d1.s.w, d1.s.h)])
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
@@ -6892,7 +6893,7 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     sampling_design = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     earlier = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
-    rec = _record_of(s, values, sampling_design, {**WINDOW, **BINDING}, [earlier], BINDING, leaf_layer=LEAF, previous=R.digest(earlier))
+    rec = _record_of(s, values, sampling_design, {**WINDOW, **BINDING}, [earlier], BINDING, leaf_layer=LEAF, previous=DD.digest(earlier))
     params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": [earlier],
               "held": sorted(set(values) - set(s.supplied(values) or {})), "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
@@ -7072,10 +7073,10 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
         def case(entry=(), earlier=theirs, drop=(), **change):
             log = [R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=[earlier])]
             rec = R.record(s.program, s.query, sampling_design, SCHEME, roots, {**WINDOW, **BINDING}, leaf_layer=LEAF,
-                           previous=R.digest(log[0]),
+                           previous=DD.digest(log[0]),
                            registered=[{**mine, "root": theirs["root"], "domain": theirs["domain"], **dict(entry)}])
             params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": log,
-                      "outputs": {"T": {"record": R.digest(log[0]), "value": name}}, "parameters": s.signature,
+                      "outputs": {"T": {"record": DD.digest(log[0]), "value": name}}, "parameters": s.signature,
                       "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
                       "row_schemas": {"T": G.SCHEMA_SEG}, "scheme": SCHEME, "work_table": None, **change}
             return {"params": {k: v for k, v in params.items() if k not in drop}, "record": rec}
@@ -7145,7 +7146,7 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     earlier = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF,
                        registered=s.entries(values, EARLIER_WROOT, ["W"]))
-    rec = _record_of(s, values, sampling_design, WINDOW, [earlier], leaf_layer=LEAF, previous=R.digest(earlier), window_root=WROOT,
+    rec = _record_of(s, values, sampling_design, WINDOW, [earlier], leaf_layer=LEAF, previous=DD.digest(earlier), window_root=WROOT,
                      fixed=["W"])
     params = {"anchors": [], "delta": "1/10", "held": ["W"], "law": sampling_design, "leaf_layer": LEAF, "log": [earlier],
               "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
@@ -7174,7 +7175,7 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     plain = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
     for again in (s.entries(values), rec["registered"]):
         b = {"params": {**unrooted, "log": [plain]},
-             "record": {**_record_of(s, values, sampling_design, WINDOW, [plain], leaf_layer=LEAF, previous=R.digest(plain)),
+             "record": {**_record_of(s, values, sampling_design, WINDOW, [plain], leaf_layer=LEAF, previous=DD.digest(plain)),
                         "registered": again}}
         assert codes(b) == "reject"
         assert codes({**b, "params": {**b["params"], "held": ["D", "W"]}}) == ([] if again == plain["registered"]
@@ -7281,7 +7282,7 @@ def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
         honest = {R.POOL_RESET: reset, R.POOL_WEEK: week,
                   R.POOL_SPENT: reset or R.pool_spent_before({"week": week}, list(log))}
         return R.record(s.program, s.query, sampling_design, SCHEME, roots, {**window, **honest, **marks}, leaf_layer=LEAF,
-                        previous=R.digest(log[-1]) if log else None, registered=[pout, *([pin] if pin else [])])
+                        previous=DD.digest(log[-1]) if log else None, registered=[pout, *([pin] if pin else [])])
 
     def codes(p, rec):
         return _codes_of(_json({"params": p, "record": rec}), pieces, callers)
@@ -7298,12 +7299,12 @@ def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
                       ({**pout1, "value": "pin"}, ["R7-domain", "R7-held", "R7-pool-chain"]),
                       ({**carried, "domain": pout1["domain"]}, ["R7-domain", "R7-pool-chain"])):
         assert codes(then, record(WINDOW, pout1, pin, [first])) == want, pin
-    for how in ({"verdicts": {R.digest(first): False}}, {"reset": True}):
+    for how in ({"verdicts": {DD.digest(first): False}}, {"reset": True}):
         restart, reset = {**then, "pool": {**pool, **how}}, how.get("reset", False)
         assert codes(restart, record(WINDOW, pout1, empty, [first], reset)) == [], how
         assert codes(restart, record(WINDOW, pout1, carried, [first], reset)) == [
             "R7-domain", "R7-supplied", "R7-pool-chain"], how
-    for verdicts, lag in (({R.digest(first): True}, 1), ({GENESIS: False}, 1), ({R.digest(first): False}, 2)):
+    for verdicts, lag in (({DD.digest(first): True}, 1), ({GENESIS: False}, 1), ({DD.digest(first): False}, 2)):
         on = {**then, "pool": {**pool, "verdicts": verdicts, "lag": lag}}
         assert codes(on, record(WINDOW, pout1, carried, [first])) == [], (verdicts, lag)
     spent = record(EARLIER, pout0, empty, reset=True)
@@ -7351,7 +7352,7 @@ def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, 
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     log = [R.record(s.program, s.query, sampling_design, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
                     EARLIER, leaf_layer=LEAF, registered=[{**w, "value": EARLIER_VALUE, **output}])]
-    d = R.digest(log[0])
+    d = DD.digest(log[0])
     rec = _record_of(s, values, sampling_design, WINDOW, log, output=output, fixed=["W"], leaf_layer=LEAF, previous=d)
     params = {"anchors": [], "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": log, "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
@@ -7409,7 +7410,7 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
 
         def bare(*extra):
             return R.record(s.program, s.query, sampling_design, SCHEME, roots, {**windows[i], **marks},
-                            leaf_layer=LEAF, previous=R.digest(log[-1]) if log else None,
+                            leaf_layer=LEAF, previous=DD.digest(log[-1]) if log else None,
                             registered=[ing or stamps[i], *s.entries({"req": 12, "pout": 16}, wroots[i]), *extra])
 
         if pin is None:
@@ -7431,7 +7432,7 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
     for ing in (served, stamps[0]):
         assert codes(params(1, [first]), record(1, carried(first), [first], ing)) == ["R7-held"], ing
     assert codes(params(1, [first]), record(1, None, [first])) == ["R7-domain", "R7-held", "R7-pool-chain"]
-    for how in ({"verdicts": {R.digest(second): False}}, {"reset": True}):
+    for how in ({"verdicts": {DD.digest(second): False}}, {"reset": True}):
         restart, reset = params(2, [first, second], **how), how.get("reset", False)
         assert codes(restart, record(2, None, [first, second], reset=reset)) == [], how
         assert codes(restart, record(2, carried(second), [first, second], reset=reset)) == [
@@ -8901,7 +8902,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
 
     for seed in range(3):
         rng = random.Random(f"window/{seed}")
-        d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads)
+        d = Drawn(rng, after=bytes.fromhex(DD.digest(rec)), reads=reads)
         honest = case_of(d, d.segment.to_json(), d.read)
         out = ran(honest)
         assert out["symbol"] == "accept" and out["read"] == len(d.read), out
@@ -8925,7 +8926,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                    if name not in ("before", "unread", "read-tampered", "other-after")]
         selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
         elsewhere = Drawn(rng, reads=reads)
-        bare = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
+        bare = Drawn(rng, after=bytes.fromhex(DD.digest(rec)), reads=reads, withheld=False)
         selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
                     case_of(bare, bare.segment.to_json(), bare.read),
                     {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
@@ -8939,7 +8940,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
         for shape in ("before", "later"):
-            again = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, **{shape: True})
+            again = Drawn(rng, after=bytes.fromhex(DD.digest(rec)), reads=reads, **{shape: True})
             out = ran(case_of(again, again.segment.to_json(), again.read))
             assert (out.get("step"), out.get("codes")) == ("select", ["family"]), (shape, out)
             if shape == "before":
@@ -8961,7 +8962,7 @@ def test_the_audit_reads_its_sample_from_the_challengers_coins(server):
     mine = DR.derive(s.program, s.query, sampling_design, None)
     rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    after = bytes.fromhex(R.digest(rec))
+    after = bytes.fromhex(DD.digest(rec))
 
     def drawn_from(src: bytes) -> dict:
         at = [0]

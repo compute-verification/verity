@@ -14,7 +14,7 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 
-pytest.importorskip("verity_vllm.definitions.registry.prims")
+pytest.importorskip("verity_vllm.definitions.registry")
 BX.load_catalog("verity_vllm.definitions.registry")
 
 

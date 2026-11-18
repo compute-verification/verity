@@ -7,6 +7,7 @@ import random
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
@@ -16,7 +17,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lane
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 SALT, POSITION, ROOTS = bytes(range(64)), 11, (b"\x01" * 64, b"\x02" * 64)
 
@@ -249,7 +249,7 @@ def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
     produced = {"produced": [{"value": "x", "root": "aa" * 64}, {"value": LL.PARTIALS, "root": "bb" * 64}]}
     ent, roots = LL.verifier_entries(rec, produced, 32, 6)
     assert roots == {LL.A: e[LL.A]["root"], LL.B: e[LL.B]["root"], LL.PARTIALS: "bb" * 64}
-    assert ent[LL.A] is rec["registered"][0] and ent[LL.PARTIALS] == PR.entry("12" * 64, LL.PARTIALS, 32, 6, R.digest(rec))
+    assert ent[LL.A] is rec["registered"][0] and ent[LL.PARTIALS] == PR.entry("12" * 64, LL.PARTIALS, 32, 6, DD.digest(rec))
     with pytest.raises(ValueError, match="no partials"):
         LL.verifier_entries(rec, {"produced": [produced["produced"][0]]}, 32, 6)
 
@@ -367,6 +367,6 @@ def test_the_verifiers_entries_of_a_j10r_leafs_produced_values():
     produced = {"produced": [{"value": v, "root": f"{i:02x}" * 64} for i, v in enumerate(vals)]}
     ent, roots = LL.verifier_entries(rec, produced, 32, 0, values=vals)
     assert roots == {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
-    assert all(ent[v] == PR.entry("12" * 64, v, rows, w, R.digest(rec)) for v, (rows, w) in vals.items())
+    assert all(ent[v] == PR.entry("12" * 64, v, rows, w, DD.digest(rec)) for v, (rows, w) in vals.items())
     with pytest.raises(ValueError, match="no oks"):
         LL.verifier_entries(rec, {"produced": produced["produced"][:-1]}, 32, 0, values=vals)
