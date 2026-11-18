@@ -50,7 +50,7 @@ class Options:
 
 
 def main(args: Options):
-    cuda_home = settings.setdefault('CUDA_HOME', '/usr/local/cuda-12.9')
+    cuda_home = settings.cuda_home()
     settings.put('TORCH_CUDA_ARCH_LIST', args.arch)
     settings.setdefault('MAX_JOBS', '32')
     import torch
