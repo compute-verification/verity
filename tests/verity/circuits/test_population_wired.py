@@ -9,8 +9,9 @@ from verity.circuits.defs import CompositeDefinition, DefinitionTable, Primitive
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.population import BitsWord, WordBits, mixed_population_program, wired_population_program
 from verity.circuits.program import is_input
-from verity.circuits.refs import Concat, Grid, Strided
-from verity.circuits.types import Array, Value
+from verity.circuits.refs import Concat, Grid, Strided, tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.commitments.periods.edges import edges
 
 V16 = Value(16)
 Add = PrimitiveDefinition("TWiredAdd16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: (a + b) & 0xFFFF, register=False)
@@ -141,6 +142,31 @@ def test_a_reader_range_is_one_batch_whatever_writer_batches_it_reads():
     a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(8)]
     b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(4)]
     assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+
+
+T2 = bind(CompositeDefinition("TWiredTwo", 1, (), lambda S: ((("x", Array(2, V16)),), Tuple(Array(2, V16), Array(2, V16))),
+                              lambda B_, S, x: tuple_of(B_.batch(Add, x, x, axes=(0, 0)), B_.batch(Mul, x, x, axes=(0, 0))),
+                              register=False))
+IT2 = descriptor_id(T2)
+
+
+def test_members_that_read_two_fields_of_one_writer_are_two_parts_one_wire_each():
+    wires = [{"reader": IB, "port": "y", "writer": IT2, "out": f"o{f}", "at": f, "radix": [1], "base": 0, "step": [0]}
+             for f in range(2)]
+    rec = {"templates": [[IT2, 1], [IB, 2]], "wires": wires, "external": [f"{IT2}/x"],
+           "registered": {"params": {"w": 4}, "tables": [], "reads": [_record()["registered"]["reads"][0]], "roots": [],
+                          "openings": []}}
+    prog = wired_population_program([(T2, 1), (B, 2)], rec)[0]
+    nodes, parts = _root(prog)
+    assert parts == [1, 2, 1]
+    desc = json.loads(json.dumps(encode_program(prog)))
+    ranges = [[k, descriptor_id(n.fn), 0, n.n if n.form == "batch" else 1]
+              for k, n in enumerate(prog.root.body.nodes) if not is_input(n.fn)]
+    got = edges(desc, ranges, {"templates": {IT2: {}, IB: {}}, "cuts": {}})
+    assert got == {"wires": [{**w, "cut": [0, 1]} for w in wires]}
+    w, x = [7, 9, 11, 13], [1, 2]
+    a = evaluate(T2, x)
+    assert evaluate(prog.fn, w, x) == (*a, *evaluate(B, a[:2], w[:2]), *evaluate(B, a[2:], w[2:]))
 
 
 BIT = Value(1)

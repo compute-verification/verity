@@ -170,7 +170,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     """`WiredPopulations_v1{templates, record, counts}` and its template query, as `Circuit.program` gives the population's:
     circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each
     range of the record's order (each template one range where it states none) is a batch; each argument's runs of equal
-    rows at one stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
+    rows at one stride are one strided part, never across members whose rows read another field or source, so a part
+    reads one output field of a writer (`edges`), and the result is `mixed_population_program`'s. An input row is its wire's writer's output
     row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
     ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the opening's units; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
@@ -318,10 +319,14 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             for p, t in sigs[j][0]:
                 k, rt = cut(j, p), row(j, p)
                 r = rt.homogeneous_width()
-                parts = []
+                groups: list[tuple[tuple, list[Refs]]] = []
                 for u in range(lo, lo + n):
-                    for c in range(k):
-                        kind, a, b, *f = fills[(j, p)][(u, c)]
+                    fs = [fills[(j, p)][(u, c)] for c in range(k)]
+                    key = tuple((s[0], s[1], *s[3:]) for s in fs)
+                    if not groups or groups[-1][0] != key:
+                        groups.append((key, []))
+                    parts = groups[-1][1]
+                    for c, (kind, a, b, *f) in enumerate(fs):
                         if kind == "wire":
                             wlo, out = made[a][writer(a, b)]
                             e = out[b - wlo]
@@ -333,7 +338,9 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                         else:
                             v = coll[a] if kind == "whole" and b is None else coll[a][u if kind == "own" else b]
                             parts.append(v.refs.slice(c * rt.leaves, (c + 1) * rt.leaves))
-                argv.append(Coll(Array(n, t), _grid(parts, t.leaves)))
+                spelled = [_grid(ps, t.leaves) for _, ps in groups]
+                argv.append(Coll(Array(n, t), spelled[0] if len(spelled) == 1 else Concat(
+                    [q for s in spelled for q in (s.parts if isinstance(s, Concat) else [s])])))
             i = bisect.bisect_right(starts[j], lo)
             starts[j].insert(i, lo)
             made[j].insert(i, (lo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
