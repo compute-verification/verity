@@ -382,7 +382,8 @@ Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red | Regenerat
 @dataclass(frozen=True)
 class Leave:
     """Ready PR #``number`` at ``head`` is in no candidate once the tick's actions are applied, for ``why`` (`left_out`):
-    ``cause`` names the reason in words that stay the same while it holds, so the loop logs each (number, head, cause) once."""
+    ``cause`` names the reason in words that stay the same while it holds, which the loop's stats count by; the loop logs each
+    (number, head, cause, why) once."""
     number: int
     head: str
     cause: str

@@ -3288,14 +3288,15 @@ class Loop:
     def _leaves(self, t: Tick) -> list[dict]:
         """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
         takes no further (`World.held_out`), of those held for a red of `main`'s check (`held`), then of the PRs it took
-        (`left_out`), each (PR, head, cause) once."""
-        seen = {(r.get("number"), h, r.get("cause")) for r in t.past.of("leave") for h in r.get("heads") or ()}
+        (`left_out`), each (PR, head, cause, why) once: a reason whose words change while its cause holds, another PR it waits
+        for, is logged again."""
+        seen = {(r.get("number"), h, r.get("cause"), r.get("why")) for r in t.past.of("leave") for h in r.get("heads") or ()}
         out = []
         for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
                                     *((n, *x) for n, x in sorted(self.held.items())),
                                     *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
-            if (n, head, cause) not in seen:
-                seen.add((n, head, cause))
+            if (n, head, cause, why) not in seen:
+                seen.add((n, head, cause, why))
                 out.append(self.record(t, "leave", number=n, heads=[head], why=why, cause=cause))
         return out
 
