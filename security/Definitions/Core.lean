@@ -16,7 +16,6 @@ public import Definitions.Core.CircuitLevels
 public import Definitions.Core.LevelsCount
 public import Definitions.Core.LevelsCredited
 public import Definitions.Core.LevelsKinds
-public import Definitions.Claims.LevelsProofBlocks
 public import Definitions.Core.Scheme
 public import Definitions.Core.ZkCompiler
 public import Definitions.Core.Challenger
@@ -57,8 +56,8 @@ the ones here.
   (`Definitions.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Levels` (a sample drawn
   level by level, outer blocks then inner blocks; `LevelsCount`, its count at δ; `CircuitLevels`, those of a circuit's
-  nested partitions; `LevelsKinds`, the first level drawn by kind; `LevelsProofBlocks`, a claims partition's proof
-  blocks placed as the last level's blocks), `Challenger` (the log's order, the cut, coin families, coins keyed by
+  nested partitions; `LevelsKinds`, the first level drawn by kind; a claims partition's proof blocks placed as the last level's
+  blocks are the claims' `Definitions.Claims.LevelsProofBlocks`), `Challenger` (the log's order, the cut, coin families, coins keyed by
   slot and values derived from the log's prefix), `Label` (a value's label: a wire's leaf, a registered input or a
   coin, with no time in it), `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).

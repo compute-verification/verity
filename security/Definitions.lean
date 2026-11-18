@@ -52,6 +52,7 @@ public import Definitions.ResourceAccounting
 public import Definitions.Spot
 public import Definitions.Claims
 public import Definitions.Claims.Encodings
+public import Definitions.Claims.LevelsProofBlocks
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
