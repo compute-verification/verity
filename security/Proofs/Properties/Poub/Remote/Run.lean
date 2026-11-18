@@ -231,10 +231,9 @@ theorem extract_push_le (as : Array Append) (a : Append) (m : Nat) (hm : m ≤ a
 
 /-- An append: the store's next `n` indices, the next coin, the chain extended. -/
 theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
-    (h : InvOn P R AC ws filling stp extent appends sampledN head) (n : Nat) (root coin : ByteArray) (o : Origin)
+    (h : InvOn P R AC ws filling stp extent appends sampledN head) (n : Nat) (root coin : ByteArray)
     (hc : AC[sampledN]? = some coin) :
-    InvOn P R AC ws filling stp (extent + n) (appends.push { first := extent, count := n, root, coin, origin := o })
-      (sampledN + 1)
+    InvOn P R AC ws filling stp (extent + n) (appends.push ⟨extent, n, root, coin⟩) (sampledN + 1)
       (some (appendHead head extent n root)) := by
   have hlt : sampledN < AC.size := by
     rcases Nat.lt_or_ge sampledN AC.size with hl | hl
@@ -299,8 +298,8 @@ theorem inv_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv 
     | exact ⟨inv_releaseCoin (inv_boundaryNs h _ _) _ _, rfl, rfl, rfl⟩
     | exact ⟨inv_boundaryNs h _ _, rfl, rfl, rfl⟩
 
-theorem inv_append {s : State} {root : ByteArray} {count : Int} {origin : Origin} {r : Result} {s' : State}
-    (h : Inv s) (he : append s root count origin = .ok (r, s')) : Inv s' ∧ Frame s s' := by
+theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State} (h : Inv s)
+    (he : append s root count = .ok (r, s')) : Inv s' ∧ Frame s s' := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -308,7 +307,7 @@ theorem inv_append {s : State} {root : ByteArray} {count : Int} {origin : Origin
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
-    | exact ⟨invOn_append h _ _ _ _ (by assumption), rfl, rfl, rfl⟩
+    | exact ⟨invOn_append h _ _ _ (by assumption), rfl, rfl, rfl⟩
 
 theorem inv_sample {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
     (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
@@ -563,7 +562,7 @@ theorem step_inv {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   cases e with
   | start now => injection he with he; exact inv_start h he
   | boundary now => injection he with he; exact inv_boundary h he
-  | append root count origin => exact inv_append h he
+  | append root count => exact inv_append h he
   | release runs withdrawn => injection he with he; exact inv_release h he
   | receive t i root runs change st now => injection he with he; exact inv_receive h he
   | close t now => exact inv_close h he
