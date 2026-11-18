@@ -4809,7 +4809,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
         return
     called = json.loads((tmp_path / "order.compare").read_text())
     at = dict(zip(called["argv"][::2], called["argv"][1::2], strict=True))
-    assert re.fullmatch("[0-9a-f]{128}:[0-9a-f]{128}", at.pop("--of-record"))
+    assert re.fullmatch("[0-9a-f]{128}", at.pop("--of-record"))
     assert (called["cuda"], at) == ("", {
         "--serve": str(d), "--row": PEARL_ROW, "--class": W63K4, "--pearl-tables": "pearl-c-h100-v1-h3",
         "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare",
