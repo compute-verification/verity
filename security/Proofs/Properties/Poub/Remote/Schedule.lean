@@ -915,7 +915,7 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
     (hdec : Codec.decode o.block j reg.key none = .ok (some payload))
     (hver : reg.payloadDomain.verifyOpening reg.payloadRoot reg.payloadDomain.count j (hidden payload o.payloadSalt)
       SCHEMA o.payloadPath = true)
-    (hrec : R.receipt j o.block = y) :
+    (hrec : R.receipt j o.block = y) (horig : o.originPosition = none) :
     checkOpening reg digest appends w R i p o = none := by
   have hany : ((o.receiptPath ++ o.payloadPath).any fun x => decide (x.size ≠ DIGEST_BYTES)) = false := by
     rw [Array.any_eq_false]
@@ -925,7 +925,7 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
   unfold checkOpening
   simp only [Id.run, hpr, hjb]
   rw [hany]
-  simp [hpass, hpos, hblock, htile, hls, hps, hj, hdig, hy, hleaf, hdec, hver, hrec]
+  simp [hpass, hpos, hblock, htile, hls, hps, hj, hdig, hy, hleaf, hdec, hver, hrec, horig]
   rfl
 
 /-- The deployed codec: p1024, three rounds, masked. -/
@@ -956,7 +956,7 @@ def honestWindow (reg : Registration) (challenge previous : ByteArray) : WindowR
 def honestOpening (reg : Registration) (challenge previous : ByteArray) : Opening :=
   let s := seed challenge 0 previous
   ⟨0, 0, zeros Codec.BLOCK_BYTES, honestLeaf reg s, zeros SALT_BYTES, zeroPath (treeDomain s (Plan.whole 130023424)),
-    zeros SALT_BYTES, zeroPath reg.payloadDomain, .empty, .empty⟩
+    zeros SALT_BYTES, zeroPath reg.payloadDomain, .empty, .empty, none⟩
 
 theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB : reg.blocks = 130023424)
     (hk : reg.key.codec = honestCodec)
@@ -990,7 +990,7 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
   refine checkOpening_of (pr := honestPass reg (seed challenge 0 previous)) (j := 0)
     (y := (receipter reg.receipt (seed challenge 0 previous) reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES))
     (payload := zeroPayload reg.key) rfl rfl rfl (zeros_size _) rfl (zeros_size _) (zeros_size _) ?_ hb0
-    (by rw [hB]; decide) rfl (leafReceipt_first (receipt_size _ _ _)) ?_ (decode_zeroPayload reg.key hj hfp) ?_ rfl
+    (by rw [hB]; decide) rfl (leafReceipt_first (receipt_size _ _ _)) ?_ (decode_zeroPayload reg.key hj hfp) ?_ rfl rfl
   · intro x hx
     simp only [honestOpening, zeroPath, Array.mem_append, Array.mem_replicate] at hx
     rcases hx with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;> exact zeros_size 64

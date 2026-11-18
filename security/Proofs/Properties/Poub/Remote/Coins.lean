@@ -75,6 +75,33 @@ theorem staleBelow_staleOf (s : State) (t : Nat) :
     s.staleBelow t = staleOf s.params s.appends s.joined s.extent t := by
   cases s; rfl
 
+/-- A state holding only the fields refresh's checks read. -/
+def refreshState (params : Params) (reg : Registration) (appends : Array Append) (joined : Array Nat)
+    (gone : Array (Nat × Nat)) : State :=
+  { params, reg, digest := .empty, coins := #[], appendCoins := #[], notBeforeNs := 0, extent := 0, appends, joined,
+    gone, plan := Plan.whole 0 }
+
+/-- `joinsAnother`, `refreshRefusal` and `probationPush` on the fields they read, as `staleOf` is `staleBelow`'s. -/
+def joinsOf (params : Params) (reg : Registration) (appends : Array Append) (joined : Array Nat)
+    (gone : Array (Nat × Nat)) (t : Nat) : Bool :=
+  (refreshState params reg appends joined gone).joinsAnother t
+def refusalOf (params : Params) (reg : Registration) (appends : Array Append) (joined : Array Nat)
+    (gone : Array (Nat × Nat)) (t : Nat) (plan : Plan) : Option Failure :=
+  (refreshState params reg appends joined gone).refreshRefusal t plan
+def pushOf (params : Params) (reg : Registration) (appends : Array Append) (joined : Array Nat)
+    (gone : Array (Nat × Nat)) (t : Nat) (ps : Array Nat) : Array Nat :=
+  (refreshState params reg appends joined gone).probationPush t ps
+
+theorem joinsAnother_joinsOf (s : State) (t : Nat) :
+    s.joinsAnother t = joinsOf s.params s.reg s.appends s.joined s.gone t := by
+  cases s; rfl
+theorem refreshRefusal_refusalOf (s : State) (t : Nat) (plan : Plan) :
+    s.refreshRefusal t plan = refusalOf s.params s.reg s.appends s.joined s.gone t plan := by
+  cases s; rfl
+theorem probationPush_pushOf (s : State) (t : Nat) (ps : Array Nat) :
+    s.probationPush t ps = pushOf s.params s.reg s.appends s.joined s.gone t ps := by
+  cases s; rfl
+
 /-! ## Each event -/
 
 theorem verify_coins (s : State) (c : Array ByteArray) (t : Int) (o : Array Opening) :
@@ -128,9 +155,8 @@ theorem receive_coins {s : State} {c : Array ByteArray} {t i : Int} {root : Byte
     intro x hx hx'
     dsimp only [jp] at hx
     dsimp only [jp', C] at hx'
-    simp only [State.deadline, staleBelow_staleOf, State.isReleased, State.joinsAnother, State.refreshRefusal,
-      State.probationPush, State.probation, State.born, State.slotWindow, State.probationHeld,
-      State.releasedIn] at hx hx'
+    simp only [State.deadline, staleBelow_staleOf, State.isReleased, joinsAnother_joinsOf, refreshRefusal_refusalOf,
+      probationPush_pushOf] at hx hx'
     repeat' (split at hx <;> (try simp only [*] at hx'))
     all_goals (cases hx; cases hx'; exact ⟨rfl, rfl⟩)
   split at h₁ <;> split at h₂

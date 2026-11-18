@@ -116,7 +116,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.ResourceAccounting.RegisteredCircuit", "Properties.Poub.Remote.Line",
   "Properties.Poub.Remote.Schedule", "Properties.Poub.Remote.Shared", "Properties.Poub.Remote.Live",
   "Properties.Poub.Remote.Subprotocol", "Properties.Poub.Remote.SubprotocolDeployed",
-  "Properties.Poub.Remote.InProofs",
+  "Properties.Poub.Remote.InProofs", "Properties.Poub.Remote.Refresh",
   "Properties.Composition", "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords", "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
   "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol", "Properties.Verity.Soundness", "Properties.Verity.SoundnessLevels", "Properties.Verity.Game",
