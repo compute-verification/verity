@@ -209,7 +209,7 @@ def probe(tmp: Path, plain: str = "$src", more: str = "true") -> subprocess.Comp
     (kit / "bin/dry.txt").write_text(DRY.format(kit=kit, tmp=tmp / "tmp", temp=TEMP, ii=tmp / "tmp" / f"{TEMP}-5_t.cpp1.ii",
                                                 src="@SRC@", out="@OUT@", more="", s=" "))
     env = dict(os.environ, CUDA=str(kit), TMPDIR=str(tmp / "tmp"))
-    return subprocess.run(["bash", str(SHIP_PROBE)], env=env, capture_output=True, text=True, check=False)
+    return subprocess.run(["bash", str(SHIP_PROBE), "sm_90a"], env=env, capture_output=True, text=True, check=False)
 
 
 def test_the_probe_passes_where_nvcc_follows_the_path_and_the_wrapper_does_not(tmp: Path) -> None:

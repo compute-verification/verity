@@ -38,12 +38,13 @@ ship_find_cuda() {
     || exit 1
 }
 
-# ship_find_cuda, refusing unless SHIP_NVCC with that toolkit still gives one cubin for a source at two places
-# (ship_probe.sh, once a build: a toolkit or a wrapper that no longer does builds no ship)
+# ship_find_cuda, refusing unless SHIP_NVCC with that toolkit still gives one cubin for a source at two places, compiled
+# for the build's target ARCH, which the build sets first (ship_probe.sh, once a build: a toolkit or a wrapper that no
+# longer does builds no ship)
 ship_cuda() {
   ship_find_cuda "$@"
   export CUDA
-  "$ROOT/benchmarks/kernels/ship_probe.sh" || exit 1
+  "$ROOT/benchmarks/kernels/ship_probe.sh" "${ARCH:?set ARCH, the target of the build, before ship_cuda}" || exit 1
 }
 
 # FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a), its -gencode from $1's architecture file

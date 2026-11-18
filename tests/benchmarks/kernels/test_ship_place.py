@@ -42,9 +42,9 @@ echo "$CUDA"
 #: toolkit
 DRIVER = """set -euo pipefail
 . "$1/benchmarks/kernels/ship.sh"
-CUDA=$5
+CUDA=$5 ARCH=sm_90a
 ship_cuda
-ship_cubin_flags sm_90a
+ship_cubin_flags "$ARCH"
 ship_stage "$2"
 "${6:-$SHIP_NVCC}" "${FLAGS[@]}" -o "$4" "$SRC/$2/$3"
 """
@@ -52,7 +52,7 @@ ship_stage "$2"
 #: a build as far as its toolkit: ship.sh, then the toolkit. ship_cuda runs the frame's probe
 TO_THE_TOOLKIT = """set -euo pipefail
 . "$1"
-CUDA=$2
+CUDA=$2 ARCH=sm_90a
 ship_cuda
 """
 
