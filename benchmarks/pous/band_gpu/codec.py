@@ -26,9 +26,7 @@ from __future__ import annotations
 import torch
 
 from verity.protocols.resource_accounting.memory.pous.verifier import primitives
-from verity.protocols.resource_accounting.memory.pous.verifier.codec import Codec
 from verity.protocols.resource_accounting.memory.pous.verifier.params import OPERATING_POINT, SALT_BITS, TAG_BITS
-from verity.protocols.resource_accounting.memory.pous.verifier.scheme import P3
 
 from . import native
 
@@ -36,7 +34,6 @@ N = OPERATING_POINT.n
 WC = OPERATING_POINT.wc // 8
 M = OPERATING_POINT.block_bytes
 K = OPERATING_POINT.k
-SEGMENT_BYTES = OPERATING_POINT.segment_bytes
 PI_BYTES = M + primitives.CAPACITY_BITS // 8
 SALT_BYTES = SALT_BITS // 8
 TAG_BYTES = TAG_BITS // 8
@@ -207,8 +204,3 @@ def encode(w: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
             out[:, v] = x
         top = out
     return top
-
-
-REFERENCE: Codec = P3
-"""The reference codec the server encodes with and the verifier checks against, unless a run names another
-(`twins.reference`)."""

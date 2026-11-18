@@ -58,10 +58,6 @@ class Schedule:
     def window_size(self, w: int) -> int:
         return int(self.has_registered(w)) + self.fresh_slots * (w // self.lifetime) + self.fresh_slots
 
-    def window_start(self, w: int) -> int:
-        """Window w's first slot, for 0 ≤ w ≤ W."""
-        return self._starts[w]
-
     def slots(self, w: int) -> range:
         """Window w's slot indices."""
         return range(self._starts[w], self._starts[w + 1])

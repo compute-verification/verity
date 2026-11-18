@@ -170,7 +170,6 @@ STORE, HELD = "cstar.bin", "held.json"
 #: certifies at `1% + 2^-128`
 ROUNDS = POUS.settings["challenges"]
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
-SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}
 
 
 class Refusal(Exception):
