@@ -122,7 +122,7 @@ def stmts_sessions(own: list, stmts: list) -> str | None:
     verdict"): `own` is the statement each session makes, in order (for a kept honest play, the evidence's own
     `statements`, which pass); `stmts` is the evidence's. It returns the refusal a play reaches — `STMT_COUNT` where the
     counts differ, `STMT_SESSION t` where position `t`'s statement is not its session's (`jeq` by canonical text) — or
-    None, and the difftest holds the Lean's `sampled-two-on` refusal of a mutated honest play to it."""
+    None, and the difftest holds the Lean's (`vstar-recursive sampled check`) refusal of a mutated honest play to it."""
     if len(own) != len(stmts):
         return STMT_COUNT
     for t in range(len(stmts)):
