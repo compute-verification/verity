@@ -3,24 +3,106 @@
 `answer_circuit`, `verdict_circuit`), its values recorded into a `Window`, and the window's four records written for the
 workers, which stage from them as they do from an adapter's.
 
-`SessionIntegration` is a session's statements (the signature check, the message's hash and each round's opened block),
-an `Integration`, its `circuit()` and its `run(window)`. `write_window` closes a window an integration ran and writes its
-records. None is written yet.
+`Setup` is the setup's one circuit C (the setup unit over every block of the store) and `SessionIntegration` a session's
+statements (the signature check, the message's hash and each round's opened block); each is an `Integration`, its
+`circuit()` and its `run(window)`. `write_window` closes a window an integration ran and writes its records. None is
+written yet.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from verity.circuits.codec import descriptor_id
-from verity.commitments.periods.interface import Circuit, Integration, Window, Wire
+from verity.circuits.evaluation import bits as EB
+from verity.commitments import registered_value as RV
+from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window, Wire
 
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
+from . import setup_circuit as SC
 from .session import SessionStatements, SessionUnit
+from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
+#: the setup's registered parameters: the store's blocks and W's rows
+STORE, WEIGHTS = "store", "weights"
+#: the units of a proof block of the setup's C: one store block each
+CAP = 1
+
+
+class Setup:
+    """PoUS's setup as one circuit C: the setup unit (`setup_proof.setup_unit`, ``PousP2SetupCheck_v1``) over every block
+    of the store in order, unit u block u, one proof block a store block (`CAP`, `interface.partition_blocks`). Each unit
+    reads its block of the registered ``store`` and the registered row of ``weights`` that holds its payload (`reads`),
+    and takes its base and its slot (`setup_proof.place`) as C's input nodes, committed once at C's input, their writer;
+    its ok output is C's. Which blocks are proved is the proof system's sample on its live coins after the store is
+    committed, and which units a block holds the partition's: the setup lists neither.
+
+    The base is a function of the verifier's salt and the slot of the unit's position, and nothing in C binds them yet:
+    the verifier refuses there (`setup_proof.bound`) until circuits' coin-bound input kind does.
+
+    `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
+    length; `prefix` is the salt's 128-byte expansion and `store` and `weights` the store's blocks and W's rows, which
+    only `registered` and `run` read."""
+
+    def __init__(self, w: int, c0: int, row_bytes: int, rows: int, blocks_per_segment: int, prefix: bytes | None = None,
+                 store: Sequence[bytes] | None = None, weights: Sequence[bytes] | None = None) -> None:
+        self.w, self.c0, self.row_bytes, self.rows = w, c0, row_bytes, rows
+        self.blocks_per_segment, self.prefix, self.store, self.weights = blocks_per_segment, prefix, store, weights
+        self.unit = setup_unit(w, c0, row_bytes)
+        self.slots = SC.slots(row_bytes, payload_bytes(w))
+
+    @property
+    def blocks(self) -> int:
+        """B, the store's blocks: W's rows' slots."""
+        return self.rows * self.slots
+
+    def reads(self) -> tuple[Read, ...]:
+        """Unit u's two registered reads (16-bit leaves): its block of ``store`` at u·W/16, and its row of ``weights`` at
+        ⌊u/n⌋·N/2, n a row's slots."""
+        tid = descriptor_id(self.unit)
+        return (Read(tid, "block", STORE, 0, (self.blocks,), 0, (self.w // 16,)),
+                Read(tid, "row", WEIGHTS, 0, (self.rows, self.slots), 0, (self.row_bytes // 2, 0)))
+
+    def circuit(self) -> Circuit:
+        tid = descriptor_id(self.unit)
+        params = {STORE: self.blocks * (self.w // 16), WEIGHTS: self.rows * (self.row_bytes // 2)}
+        return Circuit("pous-setup", ((self.unit, self.blocks),), external=(f"{tid}/base", f"{tid}/slot"),
+                       registered=Registered(params, reads=self.reads()))
+
+    def registered(self, program: str) -> dict[str, RV.Registered]:
+        """The store's blocks and W's rows, each committed once before the run under C's Program digest `program`, as
+        the rows of 16-bit words its reading port holds."""
+        if self.store is None or self.weights is None:
+            raise ValueError("Setup.registered reads the store's blocks and W's rows")
+        if len(self.store) != self.blocks or len(self.weights) != self.rows:
+            raise ValueError(f"the setup reads {self.blocks} blocks and {self.rows} rows, not {len(self.store)} and "
+                             f"{len(self.weights)}")
+        return {p: RV.Registered.commit(program, p, [np.frombuffer(b, "<u2").tolist() for b in rows],
+                                        schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+                for p, rows in ((STORE, self.store), (WEIGHTS, self.weights))}
+
+    def run(self, window: Window) -> None:
+        """Every unit recorded: its block and row by reference, its base and slot as 16-bit words, and its bit."""
+        if self.prefix is None or self.store is None or self.weights is None:
+            raise ValueError("Setup.run reads the salt's expansion, the store's blocks and W's rows")
+        cases = [unit_inputs(self.w, self.prefix, self.blocks_per_segment, self.store[u],
+                             self.weights[place(self.w, self.row_bytes, u)[0]], u, self.row_bytes)
+                 for u in range(self.blocks)]
+        block, base, row = (_bit_rows([c[k] for c in cases]) for k in range(3))
+        slot = np.array([[c[3] >> i & 1 for i in range(SC.SLOT_BITS)] for c in cases], dtype=np.uint8)
+        ok = EB.evaluate_bits(self.unit, block, base, row, slot)
+        bases = np.frombuffer(b"".join(c[1] for c in cases), dtype="<u2").reshape(self.blocks, -1)
+        slots = np.array([[c[3]] for c in cases], dtype=np.uint16)
+        window.record(self.unit, [None, bases, None, slots], [ok[:, 0].astype(np.uint16)])
+
+
+def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
+    """Byte strings as bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋, one row each."""
+    return np.unpackbits(np.frombuffer(b"".join(rows), dtype=np.uint8).reshape(len(rows), -1), axis=1, bitorder="little")
 
 
 class SessionIntegration:

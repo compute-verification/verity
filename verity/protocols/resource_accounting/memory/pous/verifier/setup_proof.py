@@ -1,17 +1,29 @@
 """PoUS's setup as a sampled proof about the store, the auditor's side: what its check takes in place of the store.
 
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
-proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples
-`SAMPLE` blocks on its live coins after that (`sampling_design`), each sampled block is proved to decode to the
-registered rows of W at its place (`verity/protocols/resource_accounting/memory/pous/prover/window.py`, one instance of
-`PousP2SetupCheck_v1` a block), and the check takes the `Claim`: the parameters and commitment as today, the store's
-root and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only carries the claim.
+proofs it reads none of it. The setup is one circuit C (`verity/protocols/resource_accounting/memory/pous/prover/window.py`,
+`Setup`): ``PousP2SetupCheck_v1`` over every block of the store, one proof block a store block, its blocks and W's rows
+registered values. The prover commits the store and W, then the setup's values; the proof system samples `SAMPLE`
+blocks on its live coins after that (`sampling_design`), and `check` reads the door's verdict on each sampled block
+(`proofs.verify` on C and the partition, the block's units the partition's), with no list of positions of its own. The
+claim (`Claim`) carries the parameters and commitment as today, the store's root and SPOT's outcome to the Lean check
+`PousCheck.SetupInProofs.check`.
+
+Two places stop it. C's base and slot are input nodes, and the base is a function of the verifier's salt and the slot
+of the unit's position: no input kind binds an input node to such a function yet (circuits' format, Core's side lean's),
+so `bound` refuses (`NotBound`). And the door's statement of a block is not derived (`one_circuit.lower`, proofs').
 """
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+
+from .schemes.p2 import P2Params
 
 GOAL = "memory-accounting/pous-setup-as-proof"
 #: the blocks the challenger samples: a uniform 8,828-subset misses ⌊B/100⌋ + 1 wrong blocks with probability at most
@@ -31,6 +43,43 @@ def base(prefix: bytes, blocks_per_segment: int, u: int) -> bytes:
     """Block `u`'s expansion base, `prefix ‖ u64be(s) ‖ u64be(v)`: block v of segment s."""
     s, v = divmod(u, blocks_per_segment)
     return prefix + s.to_bytes(8, "big") + v.to_bytes(8, "big")
+
+
+#: where C's input nodes wait on circuits' coin-bound input kind
+NOT_BOUND = "pous setup: no coin-bound input kind yet: "
+BASE_INPUT = ("base(u) = expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S), the salt the verifier's coin after "
+              "W is committed")
+SLOT_INPUT = "slot(u) = u mod n, of unit u's position in C"
+
+
+class NotBound(ValueError):
+    """C's base and slot inputs are bound to nothing: an input node bound to a named function of the verifier's coins
+    or of a unit's position is circuits' input kind, which isn't in C's format yet."""
+
+
+def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
+    """C's base and slot input nodes bound to `params`' expansion of `salt` and to each unit's position (`BASE_INPUT`,
+    `SLOT_INPUT`): refused, `NotBound`, until C's format has an input kind that binds them."""
+    raise NotBound(f"{NOT_BOUND}{BASE_INPUT}; {SLOT_INPUT}")
+
+
+def check(proofs: Mapping[int, PF.Proof], c: bytes, partition: Mapping[str, Any], registered: Mapping[str, Any],
+          sample: Sequence[int], params: P2Params, salt: bytes, row_bytes: int) -> list[PF.Finding]:
+    """The door's findings on each sampled block `k` of the registered C `c` and its `partition` (`sample`, the proof
+    system's, sampled after the store is committed): its units the partition's (`one_circuit.block`), C's base and slot
+    bound (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file (`proofs.verify`,
+    `registered` the store's and W's registration). A partition or block the door refuses raises `one_circuit.Refused`,
+    and a refusal of the door's ValueError with its reason."""
+    for k in sample:
+        OC.block(c, partition, k)
+    bound(params, salt, row_bytes)
+    out: list[PF.Finding] = []
+    for k in sample:
+        findings, why = PF.verify(proofs[k], program=c, partition=partition, block=k, registered=registered)
+        if why is not None:
+            raise ValueError(f"setup block {k}: the door refused ({why[0]}): {why[1]}")
+        out += findings or []
+    return out
 
 
 @dataclass(frozen=True)
@@ -58,4 +107,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["Claim", "GOAL", "SAMPLE", "base", "sampling_design"]
+__all__ = ["BASE_INPUT", "Claim", "GOAL", "NOT_BOUND", "NotBound", "SAMPLE", "SLOT_INPUT", "base", "bound", "check",
+           "sampling_design"]
