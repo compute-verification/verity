@@ -167,7 +167,9 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
     input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
 
-  a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. The registered circuit is D = E_1 ‖ … ‖ E_n.
+  As intended, a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. Today E_j and 𝒫_j are public in
+  the sampled proofs (Daniel, 17 Nov): the statement holds E_j's program and the query that cuts it into proof blocks.
+  The registered circuit is D = E_1 ‖ … ‖ E_n.
   Since E_j's structure is a function of a_j, the advice is fresh information: an inference block whose structure
   depends on k_a bits of a_j reads them as fresh input.
 - **Derived quantities**, none assumed:
@@ -191,11 +193,11 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
 Remote, for each execution block E_j, in five steps:
 
 1. **Commitment.** The developer commits E_j's values under hiding leaves (every value crossing a proof-block boundary,
-   its inputs and outputs), a_j, 𝒫_j and 𝓘_j, before any of E_j's coins.
+   its inputs and outputs), a_j and 𝓘_j, before any of E_j's coins; 𝒫_j is public in the statement.
 2. **Challenge.** The challenger, on an auditor device, flips live coins: the sample of proof blocks (by size class) and
    PoUW's noise and check coins.
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
-4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
+4. **Validation.** The verifier checks the proofs, 𝒫_j by running its query on its own copy, 𝓘_j's budgets (c, k) and PoUW's
    credit.
 5. **Accounting.** Each subprotocol's account for E_j is tallied: the bound on incorrect proof blocks, the credited work,
    the inference blocks. The policies read the accounts.

@@ -196,7 +196,8 @@ A proof splits a Program into proof blocks, each proved on its own, which read e
   bounds only what a proof block outputs (at most `X` bits); its inputs are unbounded.
 - `partition_object`: `verity/partition/v1`, a Program's partition named as a query the verifier evaluates on the
   circuit it holds. `partition_v2`: `verity/partition/v2`, a private partition registered as advice under a hidden
-  root, with the public predicates it satisfies.
+  root, with the public predicates it satisfies, which Lean proves it meets; no verifier reads it, and hiding the
+  partition is not being built (Daniel, 17 Nov).
 - `partition`: checks that a family used as a partition is one (every gate in exactly one proof block) and meets the
   width rule.
 - `units`: each proof block as a standalone word circuit; `boundary`, `parts` and `intervals`: the boundary sets, part

@@ -123,18 +123,21 @@ The rules in force, each stated as itself; the friction skill has the standing r
   every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
   committed, each under a hiding leaf; the values inside a proof block never are.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
-  reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
-  are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
-  from 16 to 262,144 bits, and its output bits count in leakage (provisional; `SIZE_CLASS_MAX` = 16 restores the
-  16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
-  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
+  reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. The
+  partition is public (Daniel, 17 Nov): the statement holds the program and the query that cuts it into proof blocks,
+  the verifier runs the query on its own copy, and with two levels both partitions and which inner block lies in which
+  outer one are public; what stays hidden is the values. A proof block's outputs fit its Definition's public size
+  class, a power of two from 16 to 262,144 bits, and its output bits count in leakage (provisional; `SIZE_CLASS_MAX` =
+  16 restores the 16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be
+  hidden: it works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network attestation: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
-  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer, which
+  takes the inner program and partition as its own parameters and hides the inner proof's messages, not the partition,
+  and the ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
   commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
   exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
