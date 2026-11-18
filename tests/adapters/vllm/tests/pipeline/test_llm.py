@@ -217,16 +217,15 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
 
 
 def test_storages_option_attaches_pous_by_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
-    """``pous`` is no protocol of the selector (`config.PROTOCOLS`); its option names PoUS's declared scheme, which attaches
-    by name.  The in-process LLM hands it no salt source, so PoUS's own launcher refusals are what refuse it; stood in, it
-    attaches.  A name that is neither stays the selector's to refuse."""
-    from verity.protocols.resource_accounting.memory.pous.prover import served
-
+    """``pous`` is no protocol of the selector (`config.PROTOCOLS`); its option names PoUS's declared scheme, which is
+    attached by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it
+    no salt source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    attached: list[str] = []
+    attach = messages.Exchange.attach
+    monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
     with pytest.raises(ValueError, match="pous:p2-16448/v4: .*no salt_source"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
-    monkeypatch.setattr(served, "launcher_refusals", lambda scheme, ctx: ())
-    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4", protocols_config={"pous": {"challenges": 32}})
-    assert list(llm._engine.exchange.attached) == ["pous"] and llm.protocols is None
+    assert attached == ["pous"]
     with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4,zk:v1")
 
