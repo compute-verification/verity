@@ -67,17 +67,11 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/served_y.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@proofs",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/PouwCommit/Rows.lean": "@lean",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Open.lean":
-        "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": "@memory-accounting",
-    "verity/protocols/resource_accounting/network/attester/load_relay.py": "@network-accounting",
 }
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}
 
