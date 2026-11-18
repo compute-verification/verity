@@ -124,7 +124,7 @@ def a_session(k: int, *, refresh: bool = False, accepted: bool = True, gamma: fl
         s["ledger"] = {"inputs": {"passes": 7, "receipts": receipts, "post_seed_receipts": post,
                                   "post_seed_credited": credited},
                        "spec": {"gamma": gamma, "gamma_decided_by": "lean", "certified_bytes": 5.0,
-                                "terms": {"probation": 0.5} if probation is not None else {}},
+                                "terms": {}, **({"probation": 0.5} if probation is not None else {})},
                        "declared": {"gamma": {"spec": {"error": {"windows": 1e-9}}}}}
     return s
 
@@ -197,3 +197,36 @@ def test_the_result_is_a_trial_that_names_the_document_and_holds_each_rules_shar
 def test_a_directory_with_no_record_is_said_and_nothing_is_written(tmp_path, capsys):
     assert R.main([str(tmp_path)]) == 2
     assert "refresh_result:" in capsys.readouterr().err and list(tmp_path.iterdir()) == []
+
+
+
+def test_a_session_on_a_card_adds_its_card_object_and_the_reference_size_says_it_is_not_a_rate(tmp_path):
+    out = a_run(tmp_path, "cpu", [a_session(0)])
+    doc = R.document([out])
+    assert doc["rules"][0]["card"] is None and "on a processor" in doc["size"] and "not a rate" in doc["size"]
+    on = a_session(1, refresh=True, probation=[5, 25])
+    on["record"]["public"]["span_ns"] = 4_000_000_000
+    on["record"]["profile"]["windows"].append({"post_seed": [10], "probation": [30]})
+    carded = a_run(tmp_path, "card", [a_session(0), on],
+                   [{"k": 1, "mode": "kv", "fraction": 4.0,
+                     "refresh": {"appends": 3, "blocks": 500, "encoded": 600, "encode_ns": 1_000_000_000}}])
+    v = json.loads((carded / "verifier.json").read_text())
+    v["calibration"] = {"pass_ns": {"p50": 52_900_000}, "encode_bytes_per_s": 2.5e9,
+                        "read_tiers": {"hbm": {"bytes_per_s": 1.5e12}}}
+    (carded / "verifier.json").write_text(json.dumps(v))
+    doc = R.document([carded])
+    off, on = doc["rules"]
+    assert doc["size"] is None
+    assert off["card"] == {"pass_ms_p50": 52.9, "bare_read_TBps": 1.5, "encode_Bps": 2.5e9, "rekey_Bps": None,
+                           "rekey_share": None, "probation_share": None, "store_bytes": 64 * BLOCK}
+    assert on["card"] | {"pass_ms_p50": 0} == {
+        "pass_ms_p50": 0, "bare_read_TBps": 1.5, "encode_Bps": 2.5e9, "rekey_Bps": 500 * BLOCK / 1.0,
+        "rekey_share": 0.25, "probation_share": 0.75, "store_bytes": 64 * BLOCK}
+
+
+def test_a_row_says_what_the_verifiers_disagreed_on(tmp_path):
+    s = a_session(0, refresh=True, accepted=False) | {
+        "disagreement": {"t": 0, "event": "receive", "lean": {"ok": True}, "python": {"failure": "probation"}, "x": 1}}
+    row = R.document([a_run(tmp_path, "a", [a_session(1), s])])["rules"][1]
+    assert row["disagreement"] == {"t": 0, "event": "receive", "lean": {"ok": True}, "python": {"failure": "probation"}}
+
