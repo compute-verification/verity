@@ -704,12 +704,14 @@ def _pinned(sampled_exe: Path, tmp_path: Path, case: dict, retired: list[bytes])
 
 
 @pytest.mark.parametrize("cheat, reason", [
-    ("forger", "challenger-key-not-pinned"), ("retired", "challenger-key-retired"), ("none", "challenger-key-none")])
+    ("forger", "challenger-key-not-pinned"), ("retired", "challenger-key-retired"),
+    ("none", "the parameters name no challenger")])
 def test_spot_lean_under_the_pin_refuses_a_case_whose_challenger_is_not_the_pinned_key(tmp_path, sampled_exe, cheat,
                                                                                        reason):
     """`vstar-recursive sampled --challenger-key-sha512 H --challenger-retired FILE` refuses, by name and at its params,
-    a case whose challenger is a key the forger holds (whatever ledger and session it signs under it), a key FILE
-    retires, or none. The pin is `audit_dir`'s stand-in key's."""
+    a case whose challenger is a key the forger holds (whatever ledger and session it signs under it) or a key FILE
+    retires; a case naming none is refused by SPOT's own parse before the pin reads it. The pin is `audit_dir`'s
+    stand-in key's."""
     case = SC.sampled_case(audit_dir(tmp_path, v1_case(*toy(), design=SUBSET)))
     forger = bytes(range(80))
     if cheat == "none":
