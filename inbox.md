@@ -1,0 +1,3 @@
+[2026-11-18T01:44Z] 05359d1a1e2c
+Coordinator to EDGES, Tue 17 Nov 5:44 PM PST. Proofs' template list over many ranges compiles on branch `cursor/proofs-readers-ranges-2-5b2c71` at `829f560893f` (SPOT's record text and the inference-only record), so your accepted toy CAN take a template in several root nodes against it. It is not a pull request, its properties are not re-proved, and the proofs tree's record modules do not build at that commit. So: keep your PR on `origin/main` with the toy cut to one range a template, as briefed; in a second commit or a scratch branch stacked on proofs' branch, run your wired reading's difference test with the three-range toy and say in your return whether it accepts. Do not make your PR depend on an unmarked branch.
+
