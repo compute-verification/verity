@@ -559,17 +559,17 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
                                        request_cap=opts.window_requests)
             loop = so.EngineLoop(engine, windows, cap=opts.window_requests, clock=lambda: 0.0)
             pump = Pump(loop, windows)
-            front = ticked = None
+            front = None
             if order != "arrival":
                 from verity_vllm.engine.handle import model_runner, scheduler
                 from verity_vllm.pipeline.serve_admit import keep_scheduler_rows
                 rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
                 held.append(rows.uninstall)
-                ticked, front = so.network_admission(loop, scheduler(engine), opts)
+                _, front = so.network_admission(loop, scheduler(engine), opts)
             given = {} if opts.protocol in proto.PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
             server = so.Server(proto=proto.framings()[opts.protocol](opts.force_include_usage, **given), served_name="m", max_model_len=opts.max_model_len,
                                tokenizer=Tokenizer(), defaults={}, submit=loop.submit, abort=loop.abort, clock=lambda: 7,
-                               order=front, arrive=ticked.arrive if ticked is not None else None)
+                               order=front, arrive=so.arrival(engine))
             sends = [(request(j, opts.protocol),
                       {} if order == "arrival" else {"x-verity-release": str(j), "x-verity-release-run": RUN})
                      for j in [*range(1, REQUESTS), 0]]
@@ -615,6 +615,8 @@ IDS_FORM = ("--protocol", "ids", "--id-payload", "503")
 ROAD = {"no scheme, release order": ([], "release-order", {}, ()),
         "no scheme, id form, release order": ([], "release-order", {}, IDS_FORM),
         "pearl-plus, release order": (["pearl-plus"], "release-order", {}, ()),
+        "pearl-plus on the fixed load beside the attester's front, id form, release order": (
+            ["pearl-plus"], "release-order", {"pearl-plus": {"users": r"fixed\.[0-9]+"}}, IDS_FORM),
         "no scheme, arrival": ([], "arrival", {}, ())}
 STORAGE = "pous is storage (it needs the workload's store) and {}'s declaration does not say whether it keeps a weight-derived copy"
 #: the listings no launcher gives serve-openai that its attach refuses today, each by the refusal's scheme and words
@@ -645,17 +647,6 @@ def served(names: list[str], events: list[Any], ex: Any) -> None:
 def test_each_form_the_launchers_give_serves(form, device, tmp_path, monkeypatch):
     names, order, settings, framing = ROAD[form]
     served(names, *serve(names, tmp_path, monkeypatch, order=order, settings=settings, framing=framing))
-
-
-def test_pearl_plus_on_the_fixed_load_beside_the_attesters_front_raises_for_no_user_not_served(device, tmp_path,
-                                                                                               monkeypatch):
-    """A fault on the road (`served_verdicts.sh` under CERTIFIER_FRONT and PEARLPLUS_TIE): under release order
-    `serve_openai.main` gives its server no ``arrive`` (`network_admission` returns no admission hook but under ``tick``),
-    so each `InputArrived` names no user and Pearl+'s ``users`` setting raises (`pouw.scheme.Attached.tied`). Once the
-    server tells the build's admission hook each request's user, this case fails and joins `ROAD`."""
-    with pytest.raises(RuntimeError, match=r"pearl-plus: inputs \[.*\] name no user, and its 'users' setting"):
-        serve(["pearl-plus"], tmp_path, monkeypatch, order="release-order",
-              settings={"pearl-plus": {"users": r"fixed\.[0-9]+"}}, framing=IDS_FORM)
 
 
 def off_road(kind: dict[str, Any]) -> list[list[str]]:

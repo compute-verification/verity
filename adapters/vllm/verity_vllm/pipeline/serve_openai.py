@@ -636,6 +636,14 @@ def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | 
     return None
 
 
+def arrival(engine: Any) -> Callable[[str, str, Mapping[str, str], str | None], None]:
+    """The server's arrival under every order: the admission hook on ``engine``'s scheduler (the build's, its steps' one
+    emitter, `engine.admission.install`), told each request's first line, headers and user before the scheduler has it."""
+    from verity_vllm.engine import admission
+    from verity_vllm.engine.handle import scheduler
+    return admission.install(scheduler(engine)).arrive
+
+
 def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
     """Order ``release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
     the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
@@ -846,7 +854,7 @@ def main(opts: Options) -> int:
         ticked, order = network_admission(loop, scheduler(engine), opts)
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order,
-                    arrive=ticked.arrive if ticked is not None else None)
+                    arrive=arrival(engine))
     http = HttpThread(server, opts.host, opts.port)
     http.start()
     http.ready.wait()
