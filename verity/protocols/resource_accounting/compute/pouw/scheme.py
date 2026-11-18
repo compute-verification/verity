@@ -503,6 +503,9 @@ PEARL_PLUS = register(Scheme(
     under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
           "at g₀ = 1/400)",
     settings=SETTINGS,
+    # the class's slots and outputs are the tied workload's slots and window steps (4, 2): Pearl+'s launcher refuses
+    # any other, so an application on other workload values does not tie
+    tie={"class": "4,27,2", "tie-uniform": True},
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
@@ -518,7 +521,9 @@ PEARL_PLUS = register(Scheme(
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
-    pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"))},
+    pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
+                              starts=("gate", "peer", "lane", "key-sha512", "main-file"),
+                              starts_optional=("lane", "main-file"))},
     answers=Lacks("has no piece that answers outside an exchange"),
     record="work",
     symbol="V",
