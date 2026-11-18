@@ -5,7 +5,7 @@ public import Proofs.Flock.SampledGeneric.Statements
 /-!
 # The sampled audit as a compiler, generic in the proof system (proved)
 
-The proof is the one-stage audit with a randomized extractor (`Audit.extraction_audit_le`), whose sampling term is the
+The proof is the one-stage audit with a randomized extractor (`Spot.Sampling.extraction_audit_le`), whose sampling term is the
 sampling design's alone, at the analysis the extractor defines (`Extractor.analysis`):
 
 * `Extractor.analysis`: the committed transcript is the registration and the committed trace, "wrong" is the
@@ -24,7 +24,7 @@ sampling design's alone, at the analysis the extractor defines (`Extractor.analy
 
 namespace FlockSoundness.SampledGeneric
 
-open Game Audit LinkFinder
+open Game Spot.Sampling LinkFinder
 open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {L : SamplingDesign n}
@@ -114,9 +114,9 @@ end Trials
 
 end FlockSoundness.SampledGeneric
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **The sampled audit's knowledge soundness, generic in the proof system** (`Flock.Guarantees.GenericSampledKS`):
-`Audit.extraction_audit_le` at `Extractor.analysis`, with the knowledge term `Extractor.ksAvg` and the binding error
+`Spot.Sampling.extraction_audit_le` at `Extractor.analysis`, with the knowledge term `Extractor.ksAvg` and the binding error
 `ε_bind` at every prover whose link finders satisfy ecr/sha-512 (`⊤` at any other). -/
 theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledKS := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ E hCR
@@ -131,7 +131,7 @@ theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledK
   simp only [ite_eq_left hCR] at h
   exact h
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **`Pr[accept] ≤ P_a(F) + ε_ks + ε_bind`** (`Flock.Guarantees.GenericSampledKSPa`): `GenericSampledKS` at the sure
 event. -/
 theorem Flock.SecurityProofs.GenericSampledKSPa : Flock.Guarantees.GenericSampledKSPa := by
@@ -143,7 +143,7 @@ theorem Flock.SecurityProofs.GenericSampledKSPa : Flock.Guarantees.GenericSample
   gcongr
   exact prCoin_mono fun ω h => h.2
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **The escape bound at a set of proof blocks** (`Flock.Guarantees.GenericSampledKSEscape`): `GenericSampledKS` at
 `W ⊆ F`, whose sampling term is at most `P_a(W)`: a sample that misses `F` misses `W`. -/
 theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSampledKSEscape := by
@@ -153,9 +153,9 @@ theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSa
   gcongr
   exact prCoin_mono fun ω h => h.2.mono_right h.1
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **The count curve** (`Flock.Guarantees.GenericSampledKSCount`): `GenericSampledKS` at `|F| ≥ K`, whose sampling
-term is at most `miss(K)` (`Audit.SamplingDesign.escape_le_miss`). -/
+term is at most `miss(K)` (`Spot.Sampling.SamplingDesign.escape_le_miss`). -/
 theorem Flock.SecurityProofs.GenericSampledKSCount : Flock.Guarantees.GenericSampledKSCount := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
   refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ

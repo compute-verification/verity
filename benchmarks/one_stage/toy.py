@@ -55,8 +55,17 @@ WORD = 16
 #: the toy's boundary run, and the tag the interior's run is taken under
 RUN = hashlib.sha512(b"verity/two-stage/toy/v1").hexdigest()
 RUN_TAG = b"verity/two-stage/toy/interior-run/v1\x00"
-#: the salts' key of each reference statement's stand-in rows, so the params are one file for every run of the design
-REFERENCE_KEY = hashlib.sha512(b"verity/two-stage/toy/reference/v1").digest()
+#: the public tag of each reference statement's stand-in rows' salts, so the params are one file for every run of the design
+REFERENCE_SALTS = b"verity/two-stage/toy/reference-salts/v1\0"
+
+
+def reference_salts(tag: bytes, k: int, st, m, tables: dict) -> dict[str, list[bytes]]:
+    """Member ``k``'s reference statement's salts, public, as its stager ``st`` takes them: one per table row of each port
+    (``m.n`` for a port with no table), SHA-512 of ``tag``, ``k``, the port, the row and ``j < 3``, 192 bytes a row."""
+    def salt(pre: bytes, i: int) -> bytes:
+        return b"".join(hashlib.sha512(pre + i.to_bytes(8, "big") + bytes([j])).digest() for j in range(3))
+    return {p.name: [salt(tag + k.to_bytes(4, "big") + p.name.encode() + b"\0", i)
+                     for i in range(len(tables[p.name]) if p.name in tables else m.n)] for p in st.ports}
 
 
 def _identity_signature(S):
@@ -311,7 +320,7 @@ def references(q: int, out: Path) -> dict:
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks
     (`interior_window`, under a run of its own, whose fields round 2 places or blanks), bound to that window's partition
     and program as the sessions' circuits are, on zero rows at the member's slots, each port's table and refs as
-    `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
+    `interior` lays them out, under the public `reference_salts`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
     beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
     Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
     port the boundary port it opens, a wired port its writer's output port, any other the member's own), its words and
@@ -323,9 +332,10 @@ def references(q: int, out: Path) -> dict:
     named = []
     for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
         d, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(defn, m, bind).stage(
-            rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
+        st, tables = member_stager(defn, m, bind), {r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows}
+        st.stage(
+            rows, d, reference_salts(REFERENCE_SALTS, k, st, m, tables),
+            indices=range(m.base, m.base + m.n), tables=tables,
             refs={r: window.refs(m, r) for r in rows})
         (d / "inst.bin").unlink()
         with open(d / "pub.bin", "rb") as f:

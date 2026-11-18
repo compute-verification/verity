@@ -94,7 +94,7 @@ theorem part_sizes {sh : Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × A
 
 section Decode
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
@@ -186,7 +186,7 @@ theorem algebraHolds_of_parts {sh : Shape} {d : RepData} {S : RecAlgebra.GfS} (h
 
 section Copy
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 
@@ -277,7 +277,7 @@ end Copy
 
 section Sessions
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 
 variable {T : ℕ} {Vs : Fin T → VStmt} {Reg' : Type}

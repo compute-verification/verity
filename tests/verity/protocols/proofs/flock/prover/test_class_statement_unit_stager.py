@@ -42,7 +42,7 @@ TOY_ROWS = [("ac", V2, 16, ["a", *(f"c[{r}]" for r in range(4))]), ("bc", V2, 32
             ("w", V2, 2048, ["w"])]
 
 
-def _stage_unit_at_base(definition, name, in_rows, out_rows, rows, out_dir, salt_key, salts=None, public_inputs=None) -> dict:
+def _stage_unit_at_base(definition, name, in_rows, out_rows, rows, out_dir, salts=None, public_inputs=None) -> dict:
     public_inputs = dict(public_inputs or {})
     low, out_words = CS.unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
     oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
@@ -67,10 +67,10 @@ def _stage_unit_at_base(definition, name, in_rows, out_rows, rows, out_dir, salt
     at = np.cumsum([0] + out_words)
     outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(out_words))}
     meta = json.loads(text.split("\n", 2)[1][5:])
-    salts = {**FC.stage_salts(iset, 0, n, FC._meta_ports(meta), salt_key), **(salts or {})}
+    salts = {**FC.stage_salts(0, n, FC._meta_ports(meta)), **(salts or {})}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
+    FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
              outs=outs, salts=salts, public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in public_inputs})
     return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"],
             "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_sha512": FC.digest(text)}
@@ -129,8 +129,8 @@ def test_stage_unit_writes_the_bytes_and_returns_the_values_it_did_before_the_st
     Boolean unit, `stage_unit`'s circuit.txt, inst.bin and pub.bin are byte for byte, and its META, outputs, salts, ANDs,
     matrix entries and pin are, those of its code before `UnitStager`."""
     args, rows, kw = STATEMENTS[which]()
-    base = _stage_unit_at_base(*args, rows, tmp_path / "base", b"k" * 32, **kw)
-    _same(tmp_path / "base", base, tmp_path / "new", CS.stage_unit(*args, rows, tmp_path / "new", b"k" * 32, **kw))
+    base = _stage_unit_at_base(*args, rows, tmp_path / "base", **kw)
+    _same(tmp_path / "base", base, tmp_path / "new", CS.stage_unit(*args, rows, tmp_path / "new", **{**kw, "salts": base["salts"]}))
 
 
 @pytest.mark.slow
@@ -144,8 +144,8 @@ def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_
     salts = {"ac": [bytes([7]) * FC.SALT_BYTES] * len(rows2["ac"])}
     circuit = tmp_path / "once" / "circuit.txt" if once else None
     st = CS.UnitStager(*args, circuit=circuit)
-    first = st.stage(rows, tmp_path / "r1", b"k" * 32)
-    second = st.stage(rows2, tmp_path / "r2", b"k" * 32, salts)
+    first = st.stage(rows, tmp_path / "r1")
+    second = st.stage(rows2, tmp_path / "r2", salts)
     assert first["circuit_sha512"] == second["circuit_sha512"] == st.pin == FC.digest(st.text)
     assert st.class_sha512 == FC.class_digest(st.text)
     written = [circuit] if once else [tmp_path / r / "circuit.txt" for r in ("r1", "r2")]
@@ -153,7 +153,7 @@ def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_
     assert (tmp_path / "r1" / "circuit.txt").exists() != once
     assert (tmp_path / "r1" / "inst.bin").read_bytes() != (tmp_path / "r2" / "inst.bin").read_bytes()
     assert second["salts"]["ac"] == salts["ac"]
-    _same(tmp_path / "base", _stage_unit_at_base(*args, rows2, tmp_path / "base", b"k" * 32, salts), tmp_path / "r2", second, circuit)
+    _same(tmp_path / "base", _stage_unit_at_base(*args, rows2, tmp_path / "base", second["salts"]), tmp_path / "r2", second, circuit)
 
 
 @pytest.mark.slow
@@ -176,18 +176,18 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     assert meta["program_digests"] == {descriptor_id(TOY): program_digest(Program(TOY))}
     assert meta["partition"] == {"rule": FC.PARTITION_V1, "digest": bind["partition"]} and meta["program_sha512"] == bind["program"]
     assert st.class_sha512 == plain.class_sha512 and st.pin != plain.pin
-    st.stage(rows, tmp_path / "bound", b"k" * 32, indices=range(3, 8))
+    st.stage(rows, tmp_path / "bound", indices=range(3, 8))
     header = json.loads((tmp_path / "bound" / "pub.bin").read_bytes().split(b"\n", 1)[0])
     assert header["units"]["indices"] == [3, 4, 5, 6, 7] and header["set"] == st.iset.name
-    st.stage(rows, tmp_path / "other-set", b"k" * 32, indices=range(3, 8), set_name="toy-c1")
+    st.stage(rows, tmp_path / "other-set", indices=range(3, 8), set_name="toy-c1")
     h2 = json.loads((tmp_path / "other-set" / "pub.bin").read_bytes().split(b"\n", 1)[0])
     assert h2["set"] == "toy-c1" and h2["circuit_sha512"] == header["circuit_sha512"] == st.pin
     doms, doms2 = header["frame_v3"]["domain_ids"], h2["frame_v3"]["domain_ids"]
     assert doms.keys() == doms2.keys() and all(doms[p] != doms2[p] for p in doms)
     with pytest.raises(ValueError, match="global indices"):
-        st.stage(rows, tmp_path / "no-indices", b"k" * 32)
+        st.stage(rows, tmp_path / "no-indices")
     with pytest.raises(ValueError, match="global indices"):
-        plain.stage(rows, tmp_path / "plain", b"k" * 32, indices=range(5))
+        plain.stage(rows, tmp_path / "plain", indices=range(5))
     with pytest.raises(ValueError, match="exactly partition and program"):
         CS.UnitStager(*args, bind={"partition": bind["partition"]})
 
@@ -238,7 +238,7 @@ def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_firs
     if which == "toy":
         monkeypatch.setattr(EV.batch, "evaluate", lambda *a: pytest.fail("a Boolean unit's check ran the per-instance reference"))
     with pytest.raises(AssertionError, match=f"^{args[1]}: instance 1's outputs are not the IR reference's$"):
-        st.stage(rows, tmp_path / "out", b"k" * 32)
+        st.stage(rows, tmp_path / "out")
     assert calls == [1] and not (tmp_path / "out").exists()
 
 
@@ -311,8 +311,8 @@ def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypa
     assert (st.pin, st.class_sha512, st.meta) == (whole.pin, whole.class_sha512, whole.meta) and st.text == whole.text
     assert [p.name for p in st.circuit.parent.iterdir()] == ["circuit.txt"]
     monkeypatch.setattr(IL, "circuit_description", circuit_description)
-    _same(tmp_path / "whole", whole.stage(rows, tmp_path / "whole", b"k" * 32, **round_kw), tmp_path / "streamed",
-          st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
+    got = whole.stage(rows, tmp_path / "whole", **round_kw)
+    _same(tmp_path / "whole", got, tmp_path / "streamed", st.stage(rows, tmp_path / "streamed", **{**round_kw, "salts": got["salts"]}), st.circuit)
 
 
 def _packed_toy(w: int = 16) -> object:
@@ -344,7 +344,7 @@ def test_a_packed_public_port_stages_on_the_rows_own_words(tmp_path):
     w = rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16)
     rows = {"w": w, "s": rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16), "x": rng.integers(0, 1 << 16, (3, 128), dtype=np.uint16)}
     pins = {p: {"seed": "00", "derivation": "test/packed"} for p in ("w", "s")}
-    got = CS.stage_unit(_packed_toy(), "unit/packed-toy", [("x", V2, 2048, ["x"])], [(V2, (0,))], rows, tmp_path, b"k" * 32,
+    got = CS.stage_unit(_packed_toy(), "unit/packed-toy", [("x", V2, 2048, ["x"])], [(V2, (0,))], rows, tmp_path,
                         public_inputs=pins, packed=True)
     assert np.array_equal(got["outs"]["o0"], w)
     assert {p["port"]: p["words"] for p in got["meta"]["public_inputs"]} == {"w": 8, "s": 8}

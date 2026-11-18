@@ -255,10 +255,9 @@ CHECKPOINT = ["--checkpoint-dir", "ck", "--checkpoints-manifest", "pins.json", "
     ([], [0, 1, 2], None, None),
     (["--ranks", "2,0", *CHECKPOINT], [2, 0],
      {"checkpoints_manifest": "pins.json", "model": "org/model", "revision": "r1", "verify_shards": True}, None),
-    (["--checkpoint-dir", "ck", "--no-verify-shards", "--tables", "t{rank}.json", "--tables-key", "key"], [0, 1, 2],
-     {"checkpoints_manifest": None, "model": None, "revision": None, "verify_shards": False}, {"key": "key", "registration": "t{rank}.json"}),
-    (["--tables-key", "key"], [0, 1, 2], None, None),
-], ids=["every rank, no checkpoint", "two ranks in the order asked, a pinned checkpoint", "shards not hashed, tables", "a tables key and no tables"])
+    (["--checkpoint-dir", "ck", "--no-verify-shards", "--tables", "t{rank}.json"], [0, 1, 2],
+     {"checkpoints_manifest": None, "model": None, "revision": None, "verify_shards": False}, {"registration": "t{rank}.json"}),
+], ids=["every rank, no checkpoint", "two ranks in the order asked, a pinned checkpoint", "shards not hashed, tables"])
 def test_the_command_opens_the_checkpoint_once_and_hands_it_to_each_rank_it_was_asked_for(tmp_path, monkeypatch, capsys, more, ranks, index, tables):
     asked: list[tuple] = []
     made: list[tuple[str, dict[str, Any]]] = []

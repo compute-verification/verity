@@ -41,7 +41,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -65,7 +65,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
+open FlockSoundness FlockSoundness.Game Spot.Sampling Finset Claims.Sampling
 open scoped ENNReal
 
 theorem uniform_zero (src : ByteArray) : ∀ fuel pos, Flock.Draw.uniform 0 src fuel pos = none

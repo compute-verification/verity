@@ -45,7 +45,7 @@ namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open FlockSoundness FlockSoundness.Game Finset
-open FlockSoundness.Audit.StrataExec (Chain chain_facts)
+open Spot.Sampling.StrataExec (Chain chain_facts)
 open scoped ENNReal
 
 /-! ## Loops that run to their end -/

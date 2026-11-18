@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
 of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
-inside it, independently of the other strata (`FlockSoundness.Audit.SamplingDesign.stratified σ k hk`,
+inside it, independently of the other strata (`Spot.Sampling.SamplingDesign.stratified σ k hk`,
 `JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
 sample size is the block's `k s_T`, read from the block's sample, not chosen here.
 
@@ -51,7 +51,7 @@ sample size is the block's `k s_T`, read from the block's sample, not chosen her
   `k s_T` images.
 * `TileStratumAcceptProb`, proved (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
-  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`,
+  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`Spot.Sampling.SamplingDesign.stratified_proj_escape`,
   the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
   is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
   permutation uniformly, needs no premise to be about that sample.
@@ -143,7 +143,7 @@ open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumpt
 
 /-! ## The sampling block's sample, at the tile stratum -/
 
-/-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `FlockSoundness.Audit.SamplingDesign.stratum`
+/-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `Spot.Sampling.SamplingDesign.stratum`
 restated (the sampling design is `security_proofs`', which `security_properties` may not require). -/
 def stratum {nB mB : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) : Finset (Fin nB) := Finset.univ.filter (σ · = s)
 
@@ -162,7 +162,7 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.SamplingDesign.stratified_escape`. Proved:
+`m_s` its proof blocks in `B`, the factor of `s_T` in `Spot.Sampling.SamplingDesign.stratified_escape`. Proved:
 `SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`). Its twin on the sampling design's side is
 `SamplingDesign.stratified_proj_escape`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and

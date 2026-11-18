@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.commitments import salt_file as SF
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
@@ -32,7 +33,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 
 from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import GRAIN, KEY, _checkpoint
+from tests.program.predict.test_window_circuit import GRAIN, _checkpoint
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
 from verity_vllm.program import model as M
@@ -78,6 +79,11 @@ def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -
     return bad
 
 
+def _shapes(registration: dict) -> dict:
+    """``registration`` but its roots, which its fresh salts make its own."""
+    return {**registration, "values": {p: {k: v for k, v in e.items() if k != "root"} for p, e in registration["values"].items()}}
+
+
 def _summary(t: WT.Tie, registration: dict, record: dict, roots: dict[str, str], **kw) -> dict:
     """An accepting records audit's summary of ``t`` as `checked_pins` reads it, the window's roots ``roots``."""
     want = WT.audit_inputs(registration, record, t, DESIGN, CAP)
@@ -102,7 +108,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its shape
     entries are the weights record's but the rotary table's, which names no root."""
     reg, (d, man) = S._registered(), x
-    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    registration = WW.weights_registration(reg, Path(d).parent / "r.salts", d, checkpoints_manifest=man, grain=GRAIN)
     record = WW.weights_record(reg, d, man, grain=GRAIN)
 
     def no(*a, **k):
@@ -146,13 +152,15 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
 
 
 def test_the_honest_registration_is_accepted(x, tmp_path):
-    """The committer's registration of X is `weights_registration`'s (one key, one checkpoint, one registration), every
+    """The committer's registration of X is `weights_registration`'s but its roots (each under fresh salts, kept in the salt
+    file it names), every
     unit of its tie window is its Definition's on its inputs, and each last unit's digest is the verifier's, so its read
     opens the supplied root. Written, its registration records each weight's registered root, the verifier's window from
     its records alone is the tie's (one circuit digest), and the verifier pins the roots on an accepting audit of it."""
     reg, (d, man) = S._registered(), x
-    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN)
-    assert registration == WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    registration, t, win = WT.commit(reg, tmp_path / "tie.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN)
+    plain = WW.weights_registration(reg, tmp_path / "plain.salts", d, checkpoints_manifest=man, grain=GRAIN)
+    assert _shapes(registration) == _shapes(plain) and set(SF.params(tmp_path / "tie.salts")) == set(registration["values"])
     assert win.mismatches(kernel="auto") == {}
     assert _ends(win) == {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
     c = win.close()
@@ -179,9 +187,9 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     verifier pins nothing on an audit that refused (nor on a forged arm's), nor on one of another run, nor one whose sample
     left a unit out or was of another population, nor one that held another root."""
     reg, (d, man) = S._registered(), x
-    honest = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    honest = WW.weights_registration(reg, tmp_path / "honest.salts", d, checkpoints_manifest=man, grain=GRAIN)
     served = WW.record_words(reg, *_checkpoint(tmp_path / "y", seed=4))
-    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served)
+    registration, t, win = WT.commit(reg, tmp_path / "y.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served)
     assert set(registration["values"]) == set(honest["values"])
     assert not [p for p, e in registration["values"].items() if e["root"] == honest["values"][p]["root"]]
     assert win.mismatches(kernel="auto") == {}
@@ -193,7 +201,8 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     c = win.close()
     win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
-    _r, _t, forged = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
+    _r, _t, forged = WT.commit(reg, tmp_path / "forged.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served,
+                               forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
@@ -222,11 +231,12 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
     reg, (d, man) = S._registered(), x
     record = WW.weights_record(reg, d, man, grain=GRAIN)
     field = next(f for f in record["fields"] if f.get("pinned") == "analytic")
-    rooted = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN,
+    rooted = WW.weights_registration(reg, tmp_path / "rooted.salts", d, checkpoints_manifest=man, grain=GRAIN,
                                      tables={"cos_sin": M.cos_sin_table(field["analytic"]["C"])})
-    registration, t, win = WT.commit(reg, KEY, d, man, design=DESIGN, cap=CAP, grain=GRAIN)
+    registration, t, win = WT.commit(reg, tmp_path / "tie.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN)
     rope = sorted(set(rooted["values"]) - set(registration["values"]))
-    assert rope == sorted(t.unrooted) and {p: rooted["values"][p] for p in registration["values"]} == registration["values"]
+    assert rope == sorted(t.unrooted) and {p: v for p, v in _shapes(rooted)["values"].items() if p in registration["values"]} \
+        == _shapes(registration)["values"]
     win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     roots = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]["registered_roots"]
     with pytest.raises(ValueError, match=re.escape(f"the records audit's roots for {rope} aren't the registration's roots")):
@@ -235,22 +245,22 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
 
 def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
     """`verity-vllm weights-tie` as `benchmarks/prove_path/run.sh` runs it, under the tie's own design: ``commit`` writes
-    the registration (its key sampled 0600) and the tie window, ``verify`` the verifier's tie of the same circuit, run and
+    the registration (its salts beside it, 0700) and the tie window, ``verify`` the verifier's tie of the same circuit, run and
     units and no output class, and ``pins`` writes the roots on an accepting audit's summary and nothing (exit 1) on one
     that refused; a forged digest without served words is a usage error."""
     reg, (d, man) = S._registered(), x
     (tmp_path / "phi.json").write_text(json.dumps(reg.phi.to_json()))
     common = ["--phi", str(tmp_path / "phi.json"), "--checkpoint-dir", d, "--manifest", man,
               "--grain", f"{GRAIN.gemm_words},{GRAIN.rows},{GRAIN.select}", "--cap", str(CAP)]
-    path, key = tmp_path / "registration.json", tmp_path / "key"
+    path = tmp_path / "registration.json"
+    salts = SF.beside(path)
     with pytest.raises(SystemExit) as e:
-        cli.main(["weights-tie", "commit", *common, "--key-file", str(key), "--registration-out", str(path),
-                  "--out", str(tmp_path / "w"), "--forge-digest"])
-    assert e.value.code == 2 and not key.exists()
-    assert cli.main(["weights-tie", "commit", *common, "--key-file", str(key), "--registration-out", str(path),
-                     "--out", str(tmp_path / "w")]) == 0
+        cli.main(["weights-tie", "commit", *common, "--registration-out", str(path), "--out", str(tmp_path / "w"),
+                  "--forge-digest"])
+    assert e.value.code == 2 and not salts.exists()
+    assert cli.main(["weights-tie", "commit", *common, "--registration-out", str(path), "--out", str(tmp_path / "w")]) == 0
     committed = json.loads(capsys.readouterr().out)
-    assert key.stat().st_mode & 0o777 == 0o600 and committed["mismatched"] == {}
+    assert salts.stat().st_mode & 0o777 == 0o700 and committed["mismatched"] == {}
     assert cli.main(["weights-tie", "verify", *common, "--registration", str(path), "--out", str(tmp_path / "v")]) == 0
     shown = json.loads(capsys.readouterr().out)
     assert shown == json.loads((tmp_path / "v" / "tie.json").read_text()) == {k: committed[k] for k in ("circuit", "run", "units")}

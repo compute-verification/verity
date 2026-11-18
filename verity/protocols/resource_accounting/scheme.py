@@ -19,6 +19,21 @@ Scheme.lean`); `Scheme`, `Block`, `Order`, `Charge` and `Bound` mirror the field
 spelt ``delta``), and a change to either names the other's line in its message. `hooks`, `settings`, `option`,
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
+**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
+`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
+(`Verity.Scheme`):
+
+- ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
+- ``charges``: `Charge(name, bound)`, summed in `charges`; a known channel with no bound yet is ``bounded=False``.
+- ``log``: `Order`s, `logOK`; a deadline (``within_ns``) names one of ``assumptions``, the names `breaks` ranges over.
+- ``delta_scheme``: `δscheme`, said by name, zero included; unsaid, `bound` refuses.
+- code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
+  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
+  ``option``, ``requires``.
+
+What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
+the integrity profile's ``credited`` takes.
+
 A served run offers every scheme the same five hooks (`verity.hooks.HOOKS`), and a scheme names those it attaches
 through (`Scheme.hooks`).
 
@@ -31,7 +46,7 @@ about, as `Core.Account.Part` names it.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
@@ -116,7 +131,8 @@ class Scheme:
     (``NAME:scheme``, an adapter's ``protocols`` spelling), empty when it attaches through none; ``hooks`` the served
     run's hooks it attaches through (`HOOKS`); ``ports`` the external ports it reads or writes; ``requires`` maps each
     requirement it has of the proof layer to today's stand-in. ``delta_scheme`` is `Verity.Scheme.δscheme`, the bound on
-    the probability that one of its ``assumptions`` fails (a key guessed, a collision), zero where none can."""
+    the probability that one of its ``assumptions`` fails (a key guessed, a collision), said by name in every
+    declaration, zero where none can; None, not said, lets a scheme be registered and read but not bounded (`bound`)."""
 
     name: str
     protocol: str
@@ -130,7 +146,7 @@ class Scheme:
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
     ports: tuple[Port, ...] = ()
-    delta_scheme: Fraction = Fraction(0)
+    delta_scheme: Fraction | None = None
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -148,7 +164,7 @@ class Scheme:
             raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
         if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
             raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
-        if not 0 <= self.delta_scheme < 1:
+        if self.delta_scheme is not None and not 0 <= self.delta_scheme < 1:
             raise ValueError(f"{self.name}: its own term δscheme lies in [0, 1), not {self.delta_scheme}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
@@ -180,7 +196,7 @@ class Bound:
     delta: Fraction
     missable: int
     charges: Mapping[str, int]
-    delta_scheme: Fraction = Fraction(0)
+    delta_scheme: Fraction
 
     @property
     def uncredited(self) -> int:
@@ -194,12 +210,15 @@ class Bound:
 
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int]) -> Bound:
     """``scheme``'s `Bound`, carrying its own term; refuses charges other than exactly the ones it states, and a scheme
-    with a known charge nothing bounds yet."""
+    with a known charge nothing bounds yet or whose own term is not said."""
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
     if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
         raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
                          "without them would read as complete")
+    if scheme.delta_scheme is None:
+        raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
+                         "own term by name, zero where none of its assumptions can fail")
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), scheme.delta_scheme)
@@ -228,6 +247,26 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
+@dataclass(frozen=True)
+class Circuits:
+    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
+    m, k, n)``, one executed call's circuit (None without one)."""
+
+    schemes: Mapping[str, Any]
+    traced_as: Callable[[str, int, int, int], Any]
+
+
+#: the circuits of each scheme's executed computation, by the name a configuration lists it under
+CIRCUITS: dict[str, Circuits] = {}
+
+
+def register_circuits(name: str, circuits: Circuits) -> Circuits:
+    if name in CIRCUITS:
+        raise KeyError(f"circuits named {name!r} are registered already")
+    CIRCUITS[name] = circuits
+    return circuits
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -236,5 +275,30 @@ def get(name: str) -> Scheme:
         raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme", "bound",
-           "get", "register", "register_process", "settings"]
+def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
+    """`Verity.Scheme.Placed.credited`: the numbers of the first-level proof blocks that ``schemes`` credit, in the
+    numbering the integrity profile's ``credited`` takes. ``strata`` are the registered circuit's first-level proof blocks
+    by template, ``(descriptor id, ascending [lo, hi) ranges)``, as each party derives them from the public Program and
+    query (`verity.protocols.proofs.spot.verifier.one_stage.partition.strata`). A declared `Block` places on the
+    templates whose descriptor id is its Definition id, bare or followed by its statics (``Name_vN{...}``). Refuses a
+    declared Definition id that resolves to no block, and a template two blocks would place on, of one scheme or two
+    (`Placed.inj`, and one credited set for all)."""
+    strata = [(tid, rs) for tid, rs in strata]
+    placed: dict[str, str] = {}
+    out: set[int] = set()
+    for s in schemes:
+        for b in s.blocks:
+            hits = [(tid, rs) for tid, rs in strata if tid == b.definition or tid.startswith(b.definition + "{")]
+            if not hits:
+                raise ValueError(f"{s.name}: its block {b.definition} resolves to no block of the circuit, whose "
+                                 f"templates are {[tid for tid, _ in strata]}")
+            for tid, rs in hits:
+                if tid in placed:
+                    raise ValueError(f"{tid} would be credited twice: by {placed[tid]} and by {s.name}'s {b.definition}")
+                placed[tid] = f"{s.name}'s {b.definition}"
+                out.update(u for lo, hi in rs for u in range(lo, hi))
+    return frozenset(out)
+
+
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+           "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]

@@ -32,7 +32,7 @@ rep's units its own (`un p r`, `unO ℓ r j`), as `vbridgeRead_of_layers` compos
 
 namespace FlockC3.Reps
 
-open Flock FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Flock FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 open Flock.RecResiduals (portSizes groups)
 open Flock.RecAlgebra (structureOf verifierRows el)

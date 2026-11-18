@@ -245,9 +245,17 @@ means = "proof of useful space"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/resource_accounting/memory/pous/scheme.py"
+means = "PoUS and the memory wipe as resource schemes, registered as pous and wipe"
+
+[[tree]]
 path = "verity/protocols/resource_accounting/memory/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/resource_accounting/memory/poub/scheme.py"
+means = "PoUB as a resource scheme, registered as bandwidth"
 
 [[tree]]
 path = "verity/protocols/resource_accounting/network/"
@@ -268,6 +276,10 @@ protocol = true
 path = "verity/protocols/compose/"
 means = "the protocol on top of the audits that holds several quantities on one registration, their named values tied by key; remote's and onsite's lists of protocols inside it"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/compose/schemes.py"
+means = "every resource scheme, registered: the one list of the modules that declare one, which a reader of every scheme loads"
 
 [[tree]]
 path = "verity/protocols/experimental/"
