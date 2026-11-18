@@ -337,7 +337,7 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Secur
     rw [inRow_size _ _ _ _ hrow'] at hl'
     simp only [inRow] at htt
     obtain ⟨hrr, hll⟩ := Resolve.mul_add_inj hl hl' htt
-    exact Or.inl ⟨row_ext r r' htid hunit hport hrr, hll⟩
+    exact ⟨row_ext r r' htid hunit hport hrr, hll⟩
 
 /-! ## R5 -/
 
