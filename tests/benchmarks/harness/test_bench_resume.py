@@ -145,6 +145,36 @@ def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tm
     assert logged[-1].startswith("pulled 1 attempts") and logged[-1].endswith("(3 of 4 were here)")
 
 
+def test_a_kept_store_pulls_only_the_labels_written_since_and_the_log_times_the_pull(tmp_path):
+    """A node keeps its store between runs: the next pull lists the remote again, so a label written since the last one
+    is pulled and nothing else is; each pull's start and end are stamped, with the listing's and the sync's seconds."""
+
+    from research.store.local import LocalStore
+
+    root, config = _stores(tmp_path, [])
+    producer = LocalStore(tmp_path / "producer", config_path=config)
+    for n in range(3):
+        producer.add_label(f"r20261021-13000{n}-000{n}", "note", f"n{n}", by="benchmarks", ts="2026-10-21T13:00:00Z")
+        producer.push_labels([f"r20261021-13000{n}-000{n}"])
+    ticks = iter([1_794_960_000.0, 1_794_960_090.0, 1_794_960_150.0, 1_794_960_300.0, 1_794_960_301.0, 1_794_960_302.0])
+    logged = []
+    lookup = jobs.StoreCompletion(LocalStore(root, config_path=config), root=tmp_path, log=logged.append,
+                                  clock=lambda: next(ticks))
+    remote = lookup.store.remote.describe()
+    assert lookup.pull_labels() == 3
+    producer.add_label("r20261021-130000-0000", "superseded_by", "r20261021-130001-0001", by="benchmarks",
+                       ts="2026-10-21T14:00:00Z")
+    producer.push_labels(["r20261021-130000-0000"])
+    assert lookup.pull_labels() == 1
+    assert [label.value for label in lookup.store.labels("r20261021-130000-0000")] == ["n0", "r20261021-130001-0001"]
+    assert logged == [f"2026-11-18T00:00:00Z pulling labels from {remote} into {root}",
+                      f"2026-11-18T00:02:30Z pulled 3 labels from {remote} (0 of 3 were here, 0 of them from the labels "
+                      "pack): listed in 90 s, synced in 60 s",
+                      f"2026-11-18T00:05:00Z pulling labels from {remote} into {root}",
+                      f"2026-11-18T00:05:02Z pulled 1 labels from {remote} (3 of 4 were here, 0 of them from the labels "
+                      "pack): listed in 1 s, synced in 1 s"]
+
+
 def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alone(tmp_path):
     from research.store.local import LocalStore
 
