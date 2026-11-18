@@ -128,3 +128,27 @@ def test_wait_max_may_lower_the_limit_and_never_raise_it(capsys, flags, says):
     assert cmd_run(["--on", "no-such-machine", "--project", "p", *flags, "--", "true"]) == 2
     assert says in capsys.readouterr().err
     assert waitcap.max_s(None) == waitcap.WAIT_LIMIT_S == 1200 and waitcap.max_s(600) == 600
+
+
+def test_wait_exit_takes_a_number_a_thread_now_holds_as_exited():
+    """A process that exited can leave its number to another process's thread before the wait asks for it: the kernel then
+    refuses the pidfd with EINVAL, where a number nobody holds gets ESRCH. Both mean the process has exited."""
+    import threading
+
+    from waits import wait_exit
+
+    tid, started, release = [], threading.Event(), threading.Event()
+
+    def hold() -> None:
+        tid.append(threading.get_native_id())
+        started.set()
+        release.wait()
+
+    t = threading.Thread(target=hold)
+    t.start()
+    try:
+        started.wait()
+        assert wait_exit(tid[0]) == "gone already"
+    finally:
+        release.set()
+        t.join()
