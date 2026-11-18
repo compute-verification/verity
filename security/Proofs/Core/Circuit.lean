@@ -184,6 +184,71 @@ theorem mem_boundary {g : Fin C.N} :
 
 theorem boundary_subset_committed : P.boundary ⊆ P.committed := fun _ hg => (P.mem_boundary.1 hg).1
 
+theorem before_irrefl (g : Fin C.N) : ¬ P.Before g g := by
+  rintro (h | ⟨-, h⟩) <;> exact lt_irrefl _ h
+
+theorem before_trans {g h k : Fin C.N} (hgh : P.Before g h) (hhk : P.Before h k) : P.Before g k := by
+  unfold Before at *
+  rcases hgh with h1 | ⟨h1, h2⟩ <;> rcases hhk with h3 | ⟨h3, h4⟩
+  · exact Or.inl (by omega)
+  · exact Or.inl (by omega)
+  · exact Or.inl (by omega)
+  · exact Or.inr ⟨by omega, lt_trans h2 h4⟩
+
+theorem before_total {g h : Fin C.N} (hne : g ≠ h) : P.Before g h ∨ P.Before h g := by
+  unfold Before
+  rcases lt_trichotomy (P.writerRank g) (P.writerRank h) with h1 | h1 | h1
+  · exact Or.inl (Or.inl h1)
+  · rcases lt_or_gt_of_ne hne with h2 | h2
+    · exact Or.inl (Or.inr ⟨h1, h2⟩)
+    · exact Or.inr (Or.inr ⟨h1.symm, h2⟩)
+  · exact Or.inr (Or.inl h1)
+
+/-- **A position is defined exactly on the boundary.** -/
+theorem pos_some {g : Fin C.N} : (P.pos g).isSome ↔ g ∈ P.boundary := by
+  classical
+  unfold pos
+  split_ifs with h <;> simp [h]
+
+theorem pos_lt_of_before {g h : Fin C.N} (hg : g ∈ P.boundary) (hh : h ∈ P.boundary) (hb : P.Before g h) :
+    (P.boundary.filter fun k => P.Before k g).card < (P.boundary.filter fun k => P.Before k h).card := by
+  classical
+  apply Finset.card_lt_card
+  refine Finset.ssubset_iff_of_subset (fun k hk => ?_) |>.2 ⟨g, ?_, ?_⟩
+  · rw [Finset.mem_filter] at hk ⊢
+    exact ⟨hk.1, P.before_trans hk.2 hb⟩
+  · exact Finset.mem_filter.2 ⟨hg, hb⟩
+  · exact fun hk => P.before_irrefl g (Finset.mem_filter.1 hk).2
+
+/-- **No two boundary gates share a position**, for every circuit and partition. -/
+theorem pos_inj {g h : Fin C.N} (hg : (P.pos g).isSome) (he : P.pos g = P.pos h) : g = h := by
+  classical
+  have hgb := P.pos_some.1 hg
+  have hhb : h ∈ P.boundary := P.pos_some.1 (he ▸ hg)
+  by_contra hne
+  unfold pos at he
+  rw [if_pos hgb, if_pos hhb, Option.some.injEq] at he
+  rcases P.before_total hne with hb | hb
+  · exact absurd he (Nat.ne_of_lt (P.pos_lt_of_before hgb hhb hb))
+  · exact absurd he.symm (Nat.ne_of_lt (P.pos_lt_of_before hhb hgb hb))
+
+theorem io_subset_boundary (u : Fin n) : P.io u ⊆ P.boundary := by
+  classical
+  intro g hg
+  simp only [boundary, Finset.mem_biUnion, Finset.mem_univ, true_and]
+  exact ⟨u, hg⟩
+
+/-- **A reader's input is its writer's output, at one position**: a gate of unit `w` that unit `r` reads as an input is
+also among `w`'s committed outputs, and both open it at the one position `pos g`, which every gate a unit opens has. -/
+theorem mem_io_writer {g : Fin C.N} {r w : Fin n} (hr : g ∈ P.io r) (hw : P.unit g = some w) :
+    g ∈ P.io w ∧ ∃ i, P.pos g = some i := by
+  classical
+  refine ⟨?_, ?_⟩
+  · simp only [io, Finset.mem_filter] at hr ⊢
+    exact ⟨hr.1, Or.inl hw⟩
+  · have hb := P.io_subset_boundary r hr
+    exact Option.isSome_iff_exists.1 (P.pos_some.2 hb)
+
 /-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
 theorem mem_committed_sdiff_boundary {g : Fin C.N} :
     g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ ∀ h, g ∉ C.reads h := by

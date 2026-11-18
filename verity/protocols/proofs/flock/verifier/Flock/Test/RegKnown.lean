@@ -47,7 +47,7 @@ def file (rootHex : String) (known : Option Json) (schema : String := HmRow.ROW_
     Json :=
   Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [(name, Json.mkObj (
     [("value", Json.str "ok"), ("root", Json.str rootHex), ("leaves", Lean.toJson (2 : Nat)),
-      ("domain", Json.str (hexOf dom)), ("reads", Lean.toJson [some 0, some 1]), ("words", Lean.toJson (1 : Nat)),
+      ("domain", Json.str (hexOf dom)), ("words", Lean.toJson (1 : Nat)),
       ("row_schema", Json.str schema)] ++
     (match known with | some k => [(Registered.KNOWN_KEY, k)] | none => [])))])]
 

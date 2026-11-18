@@ -38,14 +38,14 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_machine_model import eps as E
-from verity_machine_model.model import card, device
+from verity_machine_model.model import card, device, vector
 from verity_machine_model.sheet import ROOT
 from verity_machine_model.skip import design_skip
 
 #: What other files read of it: the command and its test, three tests (both exporters' and the census cover's) and
 #: `calibration/pouw/theory/cpw_floor.py`, `dc_reading`, and `lean_headline_dc`, which is this exporter for the
 #: data-centre families and also takes its private `_list`, `_words` and `_wrap`.
-__all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P_M", "OFF_MENU", "OUT", "OUT_M", "P",
+__all__ = ["BULK_FLOORS", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P_M", "OFF_MENU", "OUT", "OUT_M", "P",
            "P_OPERAND", "Q", "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "design_skip", "exact",
            "exact_logs", "instance", "load", "main", "measured", "mload", "price", "stars", "write"]
 
@@ -129,7 +129,6 @@ SM120 = Family(
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 FAMILIES = (SM120,)
-CATCH_ALL = {"sm_120": "NOROW"}    # A2's catch-all by device: every warp instruction no other class names, issue alone
 
 DEVICE, DESIGN = SM120.device, SM120.design
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
@@ -280,7 +279,7 @@ def instance(fam: Family = SM120) -> Instance:
             raise SystemExit(f"{fam.device}: {k} is on pipes {on} at {c}, not one pipe at 128/width")
         pipe.append(pipes[on[0]] if on else None)
         smem.append(int(c["DS_smem"] * 32) if "DS_smem" in c else 0)
-        if k == CATCH_ALL.get(fam.key) and set(c) != {"DS_issue"}:
+        if k == vector(fam.device, fam.data).catch_all and set(c) != {"DS_issue"}:
             raise SystemExit(f"{fam.device}: the catch-all {k} is priced at {c}, not at its issue slot alone")
     words = h.words * h.depth / d.L
     if words != int(words):
@@ -483,11 +482,12 @@ def render(i: Instance) -> str:
     menu = f"the census's MMA classes (ω = m·n{f64})" + (
         ", the generic MMA (128)" if E.MMA in i.classes else "") + (
         f" and the uniform {' and '.join(uni)}" if uni else "")
+    catch_all = vector(f.device, f.data).catch_all
     bullets = [
         f"`classes`: the {len(i.classes)} instruction classes of the {f.device} census, in the order `Fin "
         f"{len(i.classes)}` indexes them." + (
-            f" `{CATCH_ALL[f.key]}` is A2's catch-all: every warp instruction no other class names counts there, "
-            f"at its issue slot alone." if f.key in CATCH_ALL else ""),
+            f" `{catch_all}` is A2's catch-all: every warp instruction no other class names counts there, "
+            f"at its issue slot alone." if catch_all else ""),
         (f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
          f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
          f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "

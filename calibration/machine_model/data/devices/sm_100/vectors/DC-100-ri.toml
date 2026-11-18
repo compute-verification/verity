@@ -7,6 +7,7 @@
 # kept; read this one with `eps --vector DC-100-ri`.
 name = "DC-100-ri"
 epoch = "DC-100-ri"
+catch_all = "UNLISTED"   # A2's catch-all: the class every warp instruction no other class names counts in
 summary = "the B200 (sm_100) census as DC-100, with UNI,JI100_0 refit to the uniform instruction's measured cost beside the saturated async tcgen05.mma (0.0008624 vs DC-100's 0.906): the async-joint issue price silicon charges, not the scalar-saturated-stream estimate (the headline binds the issue ceiling above it, so it does not move)"
 note = "the uniform chain beside the saturated tcgen05.mma: 0.00088 SMSP-cycles an instruction, less 2%; on DC-100"
 rows = ["issue", "M", "A", "I", "SHFL", "TL", "TM100_0", "JI100_0", "UP"]

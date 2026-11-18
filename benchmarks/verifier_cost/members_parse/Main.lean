@@ -41,7 +41,7 @@ def nameOf (i : Nat) : String :=
   "m" ++ "".pushn '0' (12 - s.length) ++ s
 
 def oneRange (lo hi : Nat) : Json :=
-  Json.mkObj [("circuit", .str hex128), ("public", .str hex128), ("registered", Json.null),
+  Json.mkObj [("public", .str hex128), ("registered", Json.null),
     ("units", .arr #[.arr #[toJson lo, toJson hi]]), ("vus_per_block", toJson (1 : Nat))]
 
 /-- Member `i`'s units, `[10 i, 10 i + 10)`. -/
@@ -52,7 +52,7 @@ def membersJ (n : Nat) (more : List (String × Json)) : Json :=
   Json.mkObj (((List.range n).map fun i => (nameOf i, oneRange (unitsOf i).1 (unitsOf i).2)) ++ more)
 
 def noFiles : Own :=
-  { programJ := Json.null, program := ByteArray.empty, partition := Json.null, circuit := "", pub := "",
+  { programJ := Json.null, program := ByteArray.empty, partition := Json.null, pub := "",
     registered := none }
 
 def count (r : Flock.V (Array Member)) : Nat :=

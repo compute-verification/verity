@@ -103,6 +103,7 @@ class Vector:
     superseded_by: str
     published: dict[str, float]
     legacy: dict[str, float] = field(default_factory=dict)
+    catch_all: str = ""                  # A2's catch-all class, where the vector's reading declares one
 
 
 def u_of(cycle_u: float, rate: str, noise: str, cycles: str, u: str) -> float:
@@ -312,7 +313,8 @@ def vector(name: str, data: Path = DATA) -> Vector:
     t = tomllib.loads(p.read_text())
     return Vector(name=t["name"], epoch=t["epoch"], rows=tuple(t["rows"]), credits=tuple((k, c) for k, c in t["credits"]),
                   summary=t.get("summary", ""), note=t.get("note", ""), superseded_by=t.get("superseded_by", ""),
-                  published=dict(t.get("published", {})), legacy=dict(t.get("legacy", {})))
+                  published=dict(t.get("published", {})), legacy=dict(t.get("legacy", {})),
+                  catch_all=t.get("catch_all", ""))
 
 
 def vectors(data: Path = DATA) -> list[str]:

@@ -211,6 +211,13 @@ def test_vectors_are_reproduced() -> None:
     assert rv.generate() == json.loads(rv.PATH.read_text())
 
 
+@pytest.mark.slow
+def test_refresh_off_reproduces_the_pinned_vectors_byte_for_byte(monkeypatch) -> None:
+    """`Params.refresh` named off, the file `poub_vectors.py` writes is the pinned one, every byte."""
+    monkeypatch.setattr(rv, "PARAMS", dataclasses.replace(rv.PARAMS, refresh=False))
+    assert json.dumps(rv.generate(), indent=1) + "\n" == rv.PATH.read_text()
+
+
 def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> None:
     """The quick tier's share of the vectors: the payload root, the registration and the pinned words, encoded one by one
     rather than with the store."""
