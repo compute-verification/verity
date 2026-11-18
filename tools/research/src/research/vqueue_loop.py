@@ -218,6 +218,7 @@ import concurrent.futures
 import contextlib
 import fcntl
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -333,6 +334,9 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
+#: the drops of one tick that stop their runs at once (`Loop._stop_drops`): a red's cascade drops a dozen, whose cancels one
+#: drop at a time held the rebuilds behind them for minutes
+DROP_JOBS = 8
 #: what `World.ready` judged of each open head on `main`, in the loop's cache, for the next tick's process (`--once`)
 JUDGED_CACHE = "judged.json"
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
@@ -2104,6 +2108,11 @@ class World:
         self.q._remote(self.repo, "push", "-q", *([f"--force-with-lease={ref}:{lease}"] if lease is not None else []), "origin",
                        f"{sha}:{ref}" if sha else f":{ref}")
 
+    def delete(self, refs: dict[str, str]) -> None:
+        """origin's ``refs`` deleted in one atomic push, each with a lease on its sha: all of them, or none."""
+        self.q._remote(self.repo, "push", "-q", "--atomic", *(f"--force-with-lease={r}:{sha}" for r, sha in refs.items()),
+                       "origin", *(f":{r}" for r in refs))
+
     def _forget(self, sha: str) -> None:
         if self.reads is not None:
             self.reads.forget(sha)
@@ -2622,6 +2631,8 @@ class Tick:
     fetched: str | None = None
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
     after_running: bool = False
+    #: each drop of this tick that `Loop._stop_drops` stopped ahead of its line, by candidate: what `Loop._drop` logs
+    dropping: dict[str, dict] = field(default_factory=dict)
 
 
 class Loop:
@@ -3116,8 +3127,10 @@ class Loop:
             self.write(rec)
         logged = [*t.wrote, *red, *new]
         stopped = False
-        for a in actions:
+        for i, a in enumerate(actions):
             try:
+                if isinstance(a, Drop) and not (i and isinstance(actions[i - 1], Drop)):
+                    self._stop_drops(list(itertools.takewhile(lambda x: isinstance(x, Drop), actions[i:])), t)
                 recs = self.apply(a, t)
             except (QueueError, OSError, subprocess.SubprocessError) as e:
                 rec = self.record(t, _name(a), sha=getattr(a, "sha", None), base=getattr(a, "base", None),
@@ -3676,26 +3689,15 @@ class Loop:
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
         (`vqueue_slim._passed_early`) leaves them running where it is dropped on `main`, and cancels them otherwise, as
         nothing will land on what they find; its line keeps their record (``off_gate_running``) while it keeps
-        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
-        w, j = self.world, self._reread(t, c)
-        shadow = j.shadow if j is not None else None
-        follow = self._follow(c, t)
-        cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
-        why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
-        rec, kept = _running(j), (j.record if j is not None else None) or {}
-        if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
-            rec = kept
-        base = t.below if c.base == t.main else t.past.slim(c.base)[1]
-        unread = not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
-            "verdict" not in base or base.get("still_running")))
-        if "plan" in rec:
-            self.slim.abandon(rec)
-        ids = list(rec.get("ids") or ())
-        failed = w.cancel_runs(ids, why) if ids else {}
-        regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
-        rids = list(regen.get("ids") or ())
-        rfailed = w.cancel_runs(rids, why) if rids else {}
-        w.push("", branch(c.sha), c.sha)
+        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did.
+        A drop `_stop_drops` stopped ahead (``t.dropping``) only logs what that did."""
+        if (p := t.dropping.pop(c.sha, None)) is None:
+            p = self._dropping(a, c, t)
+            self.world.push("", branch(c.sha), c.sha)
+            self._stop(p)
+        j, shadow, follow, rec, kept, unread, ids, regen, rids = (
+            p[k] for k in ("j", "shadow", "follow", "rec", "kept", "unread", "ids", "regen", "rids"))
+        cancel, failed, rfailed = p["cancel"], p["failed"], p["rfailed"]
         early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
@@ -3709,6 +3711,64 @@ class Loop:
                            **({"records_launching": regen} if "launch" in regen else {}),
                            **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
                               if early is not None else {}))
+
+    def _dropping(self, a: Drop, c: Candidate, t: Tick) -> dict:
+        """What `_drop` of ``c`` reads, stops and logs, but the stopping (`_stop`): its judgement read again, what graph2's
+        shadow follows, the record of the runs to cancel (its auto plan given up) and its records run's."""
+        j = self._reread(t, c)
+        rec, kept = _running(j), (j.record if j is not None else None) or {}
+        if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
+            rec = kept
+        base = t.below if c.base == t.main else t.past.slim(c.base)[1]
+        unread = not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
+            "verdict" not in base or base.get("still_running")))
+        if "plan" in rec:
+            self.slim.abandon(rec)
+        regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
+        ids, rids = list(rec.get("ids") or ()), list(regen.get("ids") or ())
+        if ids or rids:
+            kept_runs(self.world.keep_file)
+        return {"sha": c.sha, "why": f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}", "j": j,
+                "shadow": j.shadow if j is not None else None, "follow": self._follow(c, t), "rec": rec, "kept": kept,
+                "unread": unread, "ids": ids, "regen": regen, "rids": rids}
+
+    def _stop(self, p: dict) -> dict:
+        """The drop `_dropping` made ``p`` of stopped, its branch gone: its graph2 check cancelled unless followed, and its runs
+        and its records run's (`World.cancel_runs`), each kept in ``p`` as `_drop` logs it, a cancel that raised among the
+        failed ones (`_dropping` read ``keep_file`` while the drop could still refuse)."""
+        w = self.world
+
+        def runs(ids: list[str]) -> dict[str, str]:
+            try:
+                return w.cancel_runs(ids, p["why"]) if ids else {}
+            except (QueueError, OSError, subprocess.SubprocessError) as e:
+                return dict.fromkeys(ids, f"cancel raised: {e}"[:300])
+
+        try:
+            p["cancel"] = w.cancel(p["sha"]) if p["follow"] is None else "left running, in shadow"
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            p["cancel"] = f"cancel raised: {e}"[:300]
+        p["failed"], p["rfailed"] = runs(p["ids"]), runs(p["rids"])
+        return p
+
+    def _stop_drops(self, drops: list[Drop], t: Tick) -> None:
+        """The drops of a tick that follow one another, two or more, stopped ahead of their lines and side by side: their
+        branches deleted in one push, then each one's runs cancelled at once (`_stop`, up to `DROP_JOBS` drops, and
+        `landing.CANCEL_JOBS` cancels in all), each kept in ``t.dropping`` for its `_drop` to log, in the tick's order.  A drop
+        of no candidate, or a push that fails, leaves every one of them to its own `_drop`, which deletes its branch before it
+        cancels anything: no candidate left on origin has its runs cancelled."""
+        cs = {c.sha: c for c in t.snap.candidates}
+        if len(drops) < 2 or any(a.sha not in cs for a in drops):
+            return
+        ps = [self._dropping(a, cs[a.sha], t) for a in drops]
+        try:
+            self.world.delete({branch(p["sha"]): p["sha"] for p in ps})
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            self.out(f"research queue vqueue: tick {t.n}: deleting the branches of {len(ps)} drops at once failed, so each "
+                     f"drop deletes its own: {e}"[:400])
+            return
+        with concurrent.futures.ThreadPoolExecutor(min(len(ps), DROP_JOBS)) as pool:
+            t.dropping.update((p["sha"], p) for p in pool.map(self._stop, ps))
 
     def _reread(self, t: Tick, c: Candidate) -> Judged | None:
         """``c`` as this tick judged it, with graph2's reading, in shadow, read again where the snapshot took it from the one

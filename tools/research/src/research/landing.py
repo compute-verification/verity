@@ -610,16 +610,25 @@ class Reads:
         return [dirs[r] for r in ids if r in dirs]
 
 
+#: how many `research cancel`s run at once, over every caller of `cancel_runs` (a tick's drops cancel side by side): each
+#: is an ssh round trip or two to its run's node, and one at a time a cascade of drops held a tick for minutes
+CANCEL_JOBS = 8
+_CANCELS = threading.BoundedSemaphore(CANCEL_JOBS)
+
+
 def cancel_runs(repo: Path, ids: list[str], reason: str) -> dict[str, str]:
-    """`research cancel` of each of ``ids``: {run id: why} of each cancel that failed (a cancel that fails unseen leaves its run holding
-    a machine's line for hours)."""
-    failed = {}
-    for rid in ids:
-        r = subprocess.run([sys.executable, "-m", "research", "cancel", rid, "--by", "ci", "--reason", reason], cwd=repo,
-                           capture_output=True, text=True)
-        if r.returncode:
-            failed[rid] = (r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}"
-    return failed
+    """`research cancel` of each of ``ids``, at once up to `CANCEL_JOBS` in all: {run id: why} of each cancel that failed (a
+    cancel that fails unseen leaves its run holding a machine's line for hours)."""
+    def one(rid: str) -> str | None:
+        with _CANCELS:
+            r = subprocess.run([sys.executable, "-m", "research", "cancel", rid, "--by", "ci", "--reason", reason], cwd=repo,
+                               capture_output=True, text=True)
+        return ((r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}") if r.returncode else None
+
+    if not ids:
+        return {}
+    with concurrent.futures.ThreadPoolExecutor(min(len(ids), CANCEL_JOBS)) as pool:
+        return {rid: why for rid, why in zip(ids, pool.map(one, ids)) if why is not None}
 
 
 def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:

@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ import pytest
 import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
-from research import carry, vqueue, vqueue_records, vqueue_slim
+from research import carry, landing, vqueue, vqueue_records, vqueue_slim
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.landing import PREFLIGHT
 from research.queue import DRIVE_FLAGS, merge_main
@@ -5964,6 +5965,104 @@ def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypa
     with pytest.raises(L.QueueError, match="can't be read.*or remove it"):
         w.cancel_runs(["r-4"], "dropped")
     assert cancelled[-1] == ["r-2"]
+
+
+def test_a_drops_cancels_all_begin_before_any_ends_each_failure_kept_by_its_run(monkeypatch):
+    """`landing.cancel_runs` starts every `research cancel` of its runs before any ends (up to `landing.CANCEL_JOBS`): one at
+    a time, a drop of a check's shards and their twins held a tick a minute.  Each one that failed is kept by its run."""
+    started, go = [], threading.Event()
+
+    def run(argv, **kw):
+        if threading.current_thread() is threading.main_thread():
+            return subprocess.CompletedProcess(argv, 1, "", "one at a time")
+        started.append(rid := argv[4])
+        if len(started) == 3:
+            go.set()
+        go.wait()
+        return subprocess.CompletedProcess(argv, int(rid == "r-2"), "", "no such run" if rid == "r-2" else "")
+
+    monkeypatch.setattr(landing.subprocess, "run", run)
+    assert landing.cancel_runs(Path("."), ["r-1", "r-2", "r-3"], "dropped") == {"r-2": "no such run"}
+    assert sorted(started) == ["r-1", "r-2", "r-3"] and landing.cancel_runs(Path("."), [], "dropped") == {}
+
+
+def _two_drops(env: Env, monkeypatch) -> tuple[Loop, Runs, str, str]:
+    """Four candidates stacked, one PR each, under the sharded check: the third one's fails next, which drops it and the
+    one above it in one tick."""
+    env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(4, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=4)
+    loop.tick()
+    _, three, four = (loop.tick()[0]["sha"] for _ in range(3))
+    return loop, runs, three, four
+
+
+def test_a_cascade_whose_keep_file_cant_be_read_refuses_before_any_branch_goes_or_run_is_cancelled(env, monkeypatch, tmp_path):
+    """The keep file a drop's cancels read (`KEEP_RUNS`) is read while the drop can still refuse: unreadable, the tick's first
+    drop refuses with the fix, and the rest of the tick waits, with every branch on origin and no run cancelled."""
+    loop, runs, three, four = _two_drops(env, monkeypatch)
+    (keep := tmp_path / "keep-runs").mkdir()
+    loop.world.keep_file = keep
+    runs.fail(three, 1, rows=(_row(NEW),))
+    logged = loop.tick()
+    assert [(r["action"], r.get("sha")) for r in logged][1] == ("drop", three) and "or remove it" in logged[1]["error"], logged
+    assert "drop" not in _acts(logged)[2:] and {branch(three), branch(four)} <= set(env.queued()) and env.cancelled == []
+
+
+@pytest.mark.parametrize("refused", [False, True])
+def test_a_ticks_drops_delete_their_branches_in_one_push_then_cancel_their_runs_side_by_side(env, monkeypatch, refused):
+    """A red that drops two candidates in one tick (the failing one, and the one above it as a base failure): their branches
+    go in one atomic push, then their runs are cancelled side by side, each drop's cancel begun before the other's ended
+    rather than one drop after another, and each drop's line keeps its own runs and reason in the tick's order.  With that
+    push refused, each drop deletes its own branch and then cancels its runs, as a drop alone does, so no candidate left
+    on origin has its runs cancelled."""
+    loop, runs, three, four = _two_drops(env, monkeypatch)
+    w, started, go, pushed, deleted = loop.world, [], threading.Event(), [], []
+    push = w.push
+
+    def pushing(sha, ref, lease=None):
+        if not sha:
+            pushed.append(ref)
+        return push(sha, ref, lease)
+    monkeypatch.setattr(w, "push", pushing)
+    if refused:
+        def delete(refs):
+            raise Q.QueueError("git push --atomic: refused")
+
+        def cancel_runs(ids, why):
+            started.append((list(ids), why, pushed[-1]))
+            return {}
+    else:
+        delete = getattr(w, "delete", None)
+
+        def cancel_runs(ids, why):
+            if threading.current_thread() is threading.main_thread():
+                return {i: "one drop after another" for i in ids}
+            started.append((list(ids), why, None))
+            if len(started) == 2:
+                go.set()
+            go.wait()
+            return {}
+    monkeypatch.setattr(w, "delete", lambda refs: deleted.append(refs) or delete(refs), raising=False)
+    monkeypatch.setattr(w, "cancel_runs", cancel_runs)
+    runs.fail(three, 1, rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "drop", "drop", "build", "slim"], logged
+    held, above = logged[1:3]
+    assert (held["sha"], held["beside_cancelled"], above["sha"], above["beside_cancelled"]) == (
+        three, ["c-10", "c-11", "c-12"], four, ["c-13", "c-14", "c-15"])
+    assert "beside_cancel_failed" not in held and "beside_cancel_failed" not in above
+    assert deleted == [{branch(three): three, branch(four): four}]
+    assert sorted((ids, why) for ids, why, _ in started) == [
+        (["c-10", "c-11", "c-12"], f"vqueue: candidate {three[:12]} was dropped: {held['why']}"),
+        (["c-13", "c-14", "c-15"], f"vqueue: candidate {four[:12]} was dropped: {above['why']}")]
+    assert pushed == ([branch(three), branch(four)] if refused else [])
+    if refused:
+        assert [at for _, _, at in started] == [branch(three), branch(four)]
+    assert branch(three) not in env.queued() and branch(four) not in env.queued()
 
 
 def test_under_gate_check_graph2_s_reading_of_a_candidate_stands_g2_read_s_between_ticks_and_is_read_again_once_its_check_ended(
