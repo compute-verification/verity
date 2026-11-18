@@ -30,8 +30,12 @@ import pytest
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
+from verity.circuits import boolean as BL
+from verity.circuits import program as PG
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ops.boolean import versions as V
+from verity.circuits.refs import Coll, Explicit, array_of
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.prover import docket as DK
@@ -503,6 +507,29 @@ def test_a_public_o0_is_under_the_public_salts_so_an_ok_members_root_is_the_sche
 
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
+#: XOR8's one Boolean Definition: bit j is the Xor of bit j of a and of b
+XOR8_BITS = bind(CompositeDefinition(
+    "ScanZkTestXor8Bits", 1, (), lambda S_: ((("a", BL.bit_type(Bits(8))), ("b", BL.bit_type(Bits(8)))), BL.bit_type(Bits(8))),
+    lambda B, S_, a, b: array_of([B.call(BL.xor_gate(2), BL.operands(Coll(BL.BIT, Explicit((x,))), Coll(BL.BIT, Explicit((y,)))))
+                                  for x, y in zip(a.refs, b.refs)]), register=False))
+
+
+@pytest.fixture
+def xor8_body(monkeypatch):
+    """`XOR8_BITS` as XOR8's Boolean body for one test, every other primitive's the lookup registered before it
+    (`period_case`'s once a mirror loads it, else the catalog's), which the test leaves registered after it."""
+    before = PG._BODY_LOOKUP[0] if PG._BODY_LOOKUP else V.boolean_version
+    monkeypatch.setattr(PG, "_BODY_LOOKUP", [lambda p: XOR8_BITS if p.id == XOR8.id else before(p)])
+
+
+def test_xor8s_boolean_body_computes_xor8_on_every_input():
+    """`XOR8_BITS` against XOR8 on all 2^16 pairs, least significant bit first."""
+    import numpy as np
+    from verity.circuits.evaluation.batch import evaluate_batch
+    a, b = np.divmod(np.arange(1 << 16), 1 << 8)
+    bits = lambda v: ((v[:, None] >> np.arange(8)) & 1).astype(np.uint8)  # noqa: E731
+    got = (np.asarray(evaluate_batch(XOR8_BITS, bits(a), bits(b))).astype(np.int64) << np.arange(8)).sum(1)
+    assert (got == a ^ b).all() and XOR8.evaluate(0xA5, 0x3C) == 0xA5 ^ 0x3C
 
 
 def _toy(name: str, f) -> object:
@@ -515,6 +542,7 @@ EG = _toy("ScanZkTestEgress", lambda B, S_, x: B.call(XOR8, x[1], x[0]))
 BLK = _toy("ScanZkTestBlock", lambda B, S_, x: B.call(XOR8, x[0], x[1]))
 
 
+@pytest.mark.usefixtures("xor8_body")
 def test_the_members_are_the_programs_ranges():
     """`members_of` against the partition's own ranges (stand-in templates; `program` asserts the same of the scan's):
     each template's first unit its first member's base and its count its members', the units 0 … N − 1 in order; the
@@ -819,6 +847,7 @@ def _program(T: int) -> tuple:
             sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
+@pytest.mark.usefixtures("xor8_body")
 def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every one of its 2T + 1 proof blocks sampled, one level sampled
@@ -854,6 +883,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
         SA.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
 
 
+@pytest.mark.usefixtures("xor8_body")
 def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_naming_its_failed_checks(tmp_path):
     """`answers` of honest rounds whose members Lean all held but whose audits refused (a check of the record's own,
     say its registered reads): each execution phase's answer is the reject of its own round's registration, its
@@ -1431,6 +1461,7 @@ def test_the_window_root_is_the_network_attesters_signed_execution_phase(tmp_pat
     assert sz.window_root(phase(two, 0)) != sz.window_root(phase(two, 1))
 
 
+@pytest.mark.usefixtures("xor8_body")
 def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():
     """`spec_of` on a round of two stand-in templates split a member an execution phase (the scan's own take a minute to
     build; `spec_of` reads only the round's program, query, templates and members), its ports a member's and the scan's
