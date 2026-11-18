@@ -27,7 +27,6 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import versions as BB
-from verity.commitments.periods import wiring as WI
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
@@ -38,6 +37,7 @@ from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
 from verity_vllm.definitions.registry import topp_keep_builder as K
 from verity_vllm.definitions.registry import topp_stages as T
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
@@ -160,7 +160,7 @@ def test_each_carried_parameter_is_wired_to_the_unit_that_wrote_it():
     s = Served(n=2)
     ms = members(s)
     assert sum(m.n for m in ms) == 2 * 392 and max(m.n for m in ms) == 7
-    WI.validate(ms)
+    CH.validate(ms)
     at = places(ms, TMPLS, rows=2)
     unit = {key: u for u, key in at.items()}
     plan = {u.key: u for u in T.plan(V)}
@@ -169,7 +169,7 @@ def test_each_carried_parameter_is_wired_to_the_unit_that_wrote_it():
         for i in range(m.n):
             p, key = at[m.base + i]
             want = {(f"in{names.index(x)}", f"o{j}", unit[(p, w)]) for x, w, j in plan[key].wires}
-            assert {(q, o, ws[i]) for q, o, ws in m.wired} == want, (m.key, key)
+            assert {(q, o, ws[i]) for q, o, ws in CH.writer_units(ms, m)} == want, (m.key, key)
 
 
 @pytest.mark.slow
@@ -180,8 +180,7 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
     s = Served(n=2)
     ms = members(s)
     got = read(s, ms)
-    words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     at, plan = places(ms, TMPLS, rows=2), {u.key: u for u in T.plan(V)}
     ops = [{x: int(s.ops[6 * p + g].view(f"<u{s.ops[6 * p + g].dtype.itemsize}")[0])
             for g, x in enumerate(ST.OPERANDS[spec_base(ROW)]) if g} for p in range(2)]
@@ -218,7 +217,7 @@ def test_a_partition_of_the_stages_on_bits_holds_the_same_units_on_the_same_rows
         assert CR.unit_rows(tb) == CR.unit_rows(SRW.template(t)) and tb.fn is not SRW.template(t).fn, b
     s = Served()
     ms, mb = members(s), members(s, bits, dict.fromkeys(bits, 7))
-    WI.validate(mb)
+    CH.validate(mb)
     of = dict(zip(bits, TMPLS))
     assert [replace(m, template=of[m.template], name=x.name) for m, x in zip(mb, ms, strict=True)] == ms
     for (g, e), (gb, eb) in zip(read(s, ms), read(s, mb, bits), strict=True):
@@ -280,11 +279,11 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_8159_units():
     s = Served(spec, n=1, seed=16)
     tmpls = [t for t, _n in SRW.unit_templates(spec)[1:]]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 4096))
-    WI.validate(ms)
+    CH.validate(ms)
     assert sum(m.n for m in ms) == 8159
     got = read(s, ms, tmpls)
     words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     last = descriptor_id(T.plan(SERVED_V)[-1].defn)
     (m,) = [m for m in ms if m.template == last]
     assert int(words[m.port("o0")][0].view("<u4")[0]) == int(s.tok[0])

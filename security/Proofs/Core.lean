@@ -13,6 +13,7 @@ public import Proofs.Core.Game.Prob
 public import Proofs.Core.Levels
 public import Proofs.Core.LevelsTwo
 public import Proofs.Core.LevelsMiss
+public import Proofs.Core.LevelsLate
 public import Proofs.Core.CircuitLevels
 public import Proofs.Core.LevelsCount
 public import Proofs.Core.LevelsCircuit
