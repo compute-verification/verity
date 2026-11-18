@@ -434,7 +434,7 @@ def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answe
     the client gets the stream's end, with no later chunk. Where a whole answer's head had gone with its length, which
     takes an open gate, its body goes on, and the front adds nothing."""
     from verity.protocols.resource_accounting.network.prover import admission as NA
-    from verity.protocols.resource_accounting.network.verifier import release as REL
+    from verity import release as REL
 
     name = NA.scheme_name()
     late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else

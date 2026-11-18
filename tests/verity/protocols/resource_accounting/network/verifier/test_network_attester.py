@@ -20,9 +20,9 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.grid import Reason
 from verity.protocols.resource_accounting.network.verifier.pacer import Report
-from verity.protocols.resource_accounting.network.verifier.release import (WATERMARK_END, one_request, read_watermark, release_head,
-                                                     release_of, to_watermark, watermark_chunk, watermark_head,
-                                                     with_release)
+from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
+from verity.release import (WATERMARK_END, read_watermark, release_head, release_of, watermark_chunk,
+                                    watermark_head, with_release)
 from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_release import NOT_ONE_REQUEST, ONE_REQUEST
 from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
                                                     REFUSED, WRITE_BACKLOG, Shim, NetworkAttester, NetworkAttesterParams, audit, cell,
