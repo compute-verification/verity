@@ -1,8 +1,9 @@
 """PoUW's serving code over PyTorch: what `verity.protocols.resource_accounting.compute.pouw.prover.serving` leaves to the workload.
 
-Importing this package hands its implementations in (`serving.tensors.use`, `use_h1`): `tensors_device.TENSORS`, the
-tensors on the device (pinned host copies, streams, raw pointers), and `h1.h1_device.H1`, H1's call tables, registered rows,
-trace and records on the device. Each is imported when first asked for, so this import loads no torch.
+Importing this package hands its implementations in (`serving.tensors.use`, `use_h1`, `use_pearl_c`):
+`tensors_device.TENSORS`, the tensors on the device (pinned host copies, streams, raw pointers), `h1.h1_device.H1`, H1's
+call tables, registered rows, trace and records on the device, and Pearl-C's run with its weight roots and step limit.
+Each is imported when first asked for, so this import loads no torch.
 
 The rest is the workload's device code, which `serving` names nowhere:
 
@@ -19,6 +20,7 @@ The rest is the workload's device code, which `serving` names nowhere:
 from __future__ import annotations
 
 import importlib
+from types import SimpleNamespace
 from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as _tensors
@@ -47,8 +49,15 @@ def _h1_impl() -> Any:
     return H1
 
 
+def _pearl_c_impl() -> Any:
+    from verity_torch.pouw.pearl_c import passes, run_device
+    return SimpleNamespace(PearlCDeviceRun=run_device.PearlCDeviceRun, weight_roots=run_device.weight_roots,
+                           step_tokens=passes.step_tokens)
+
+
 _tensors.use(_tensors_impl)
 _tensors.use_h1(_h1_impl)
+_tensors.use_pearl_c(_pearl_c_impl)
 
 
 def __getattr__(name: str) -> Any:

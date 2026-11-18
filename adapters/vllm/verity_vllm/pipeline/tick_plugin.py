@@ -1,7 +1,7 @@
 """``--admit tick`` under vLLM's own OpenAI server, without serve-openai (`network.prover.admission`'s certified tick): `TickFeed`,
 the server's ASGI ``--middleware``, appends the network attester's releases and its watermark to a feed file
-(`network.prover.admission.ReleaseFeed` over this server's routes and body check), and `register`, a vLLM general plugin, makes a
-`network.prover.admission.TickGate` that reads the feed (`FeedReader`) a hold of the adapter's admission hook on every engine
+(`network.prover.admission.ReleaseFeed` over this server's routes and body check), and `register`, a vLLM general plugin, makes the
+network attester's gate, attached by its scheme, that reads the feed (`FeedReader`) a hold of the adapter's admission hook on every engine
 core the process builds (`verity_vllm.engine.admission.register`). Both read ``VERITY_TICK`` (`tick_config`).
 The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit tick``).
 
@@ -107,23 +107,20 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
     return log
 
 
-def _gate(cfg: Mapping[str, Any]) -> NA.TickGate:
-    kw = {"hold_s": cfg["hold_s"], "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}
-    rule = {k: cfg[k] for k in ("token_ns", "catch_up") if cfg.get(k) not in (None, 0, "quiet")}
-    return NA.RuleGate(cfg["tick"], **rule, **kw) if rule else NA.TickGate(cfg["tick"], **kw)
-
-
 _PLUGIN: list[Mapping[str, Any]] = []
 
 
 def register() -> None:
     """``--admit tick`` under vLLM's own OpenAI server, as a vLLM general plugin (entry point group
     ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every engine core
-    built in this process gets a `network.prover.admission.TickGate` that reads the feed, a hold of the adapter's admission hook on its
-    scheduler (`verity_vllm.engine.admission.register`, keyed by the client's X-Request-Id). Idempotent."""
+    built in this process gets the network attester's gate (the scheme that provides admission, `verity_vllm.messages.providing`, its ``attach``) that reads the
+    feed, a hold of the adapter's admission hook on its scheduler (`verity_vllm.engine.admission.register`, keyed by the client's X-Request-Id). Idempotent."""
     cfg = tick_config()
     if cfg is None or _PLUGIN:
         return
+    from verity_vllm import messages
     from verity_vllm.engine import admission
-    admission.register(lambda exchange: _gate(cfg).attach(exchange))
+    given = {k: v for k, v in settings.get(TICK_ENV).items() if k not in ("feed", "log")} | {"order": "tick"}
+    admission.register(lambda exchange: exchange.attach(
+        messages.providing("admission"), given, source=TICK_ENV, pull=FeedReader(cfg["feed"]), log=_log_to(cfg["log"])))
     _PLUGIN.append(cfg)

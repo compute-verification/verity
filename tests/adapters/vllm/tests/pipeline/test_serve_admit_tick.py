@@ -1440,14 +1440,16 @@ def test_the_flag_takes_tick_with_the_engine_class_step_times():
 
 def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
     """`build.hooked` installs admission on an in-process scheduler with the install's own key; `--admit tick`'s setup
-    (`serve_openai.tick_admission`) then attaches its gate and frontend to that one hook, refusing nothing."""
+    (`serve_openai.network_admission`) then attaches the attester's gate and frontend, by its scheme, beside that one
+    hook, refusing nothing."""
     sched = Sched()
     built = admission.install(sched)
     loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
-    opts = SimpleNamespace(tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000.0)
+    opts = SimpleNamespace(admit="tick", tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000)
     try:
-        hook, order = so.tick_admission(loop, sched, opts)
-        assert hook is built is loop.hook and isinstance(order, na.TickAdmit) and isinstance(loop.gate, na.TickGate)
+        hook, order = so.network_admission(loop, sched, opts)
+        assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0
+        assert loop.gate.record() == {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000}
         assert [type(r).__name__ for _, r in messages.current().requests] == ["StartOnBoundary", "ServeRoute"]
     finally:
         built.uninstall()

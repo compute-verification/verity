@@ -8,7 +8,7 @@ import Mathlib.Tactic
 
 `Scheme.accountingLayer` proves `Scheme.AccountingLayer`: the audit's bound at a scheme's accepted runs and incorrect
 blocks, with the scheme's break event bounded by its own term, gives what the scheme gets back at every cutoff. An
-accepted run that breaks nothing and leaves more than the missable cost plus the charges uncredited has incorrect
+accepted run that breaks nothing and has `over` above `under` by more than the missable cost plus the charges has incorrect
 blocks costing more than the missable cost, so the sample misses them with probability at most the cutoff.
 -/
 
@@ -39,5 +39,43 @@ theorem Scheme.accountingLayer : Scheme.AccountingLayer := by
         ≤ pr S.breaks + pr (fun r => S.accepts r ∧ L.missProb (S.incorrect r) ≤ δ) := hunion _ _
       _ ≤ S.δscheme + (δ + ε) := add_le_add hbr (haud δ)
       _ = δ + ε + S.δscheme := by rw [add_comm]
+
+/-- **A richer run.** The audit's bound read along a map `f` from a scheme's runs to the audit's outcomes, with the
+probability that map's, is the audit's bound at the scheme's runs: the scheme's `Run` may carry more than the audit's
+outcome (committed values, rows, a log). -/
+theorem AuditBound.comap {U Run Run' : Type} {L : SamplingDesign U} {pr' : (Run' → Prop) → ℝ≥0∞} (f : Run' → Run)
+    {accepts : Run → Prop} {incorrect : Run → Finset U} {ε : ℝ≥0∞} :
+    AuditBound L (fun p => pr' fun r => p (f r)) accepts incorrect ε ↔
+      AuditBound L pr' (fun r => accepts (f r)) (fun r => incorrect (f r)) ε :=
+  Iff.rfl
+
+/-- **The accounting layer over a period.** -/
+theorem Scheme.periodLayer : Scheme.PeriodLayer := by
+  intro S L R T phase pr δ ε hmono hunion hempty hphase
+  classical
+  unfold Scheme.GetsBackPeriod
+  set bad : Fin T → R → Prop := fun t r => S.accepts (phase t r) ∧ S.logOK (phase t r) ∧
+    S.under (phase t r) + S.missable L δ + S.charges < S.over (phase t r) with hbad
+  have key : ∀ s : Finset (Fin T), pr (fun r => ∃ t ∈ s, bad t r) ≤ s.card * (δ + ε + S.δscheme) := by
+    intro s
+    induction s using Finset.induction_on with
+    | empty =>
+      refine (hmono _ (fun _ => False) ?_).trans (by simp [hempty])
+      rintro r ⟨t, ht, _⟩
+      exact absurd ht (Finset.notMem_empty t)
+    | insert a s ha ih =>
+      refine (hmono _ (fun r => bad a r ∨ ∃ t ∈ s, bad t r) ?_).trans ?_
+      · rintro r ⟨t, ht, hb⟩
+        rcases Finset.mem_insert.1 ht with rfl | ht
+        · exact Or.inl hb
+        · exact Or.inr ⟨t, ht, hb⟩
+      · refine (hunion _ _).trans ?_
+        rw [Finset.card_insert_of_notMem ha, Nat.cast_add, Nat.cast_one, add_mul, one_mul, add_comm]
+        exact add_le_add ih (hphase a)
+  have h := key Finset.univ
+  rw [Finset.card_univ, Fintype.card_fin] at h
+  refine (hmono _ _ ?_).trans h
+  rintro r ⟨t, hb⟩
+  exact ⟨t, Finset.mem_univ t, hb⟩
 
 end Verity

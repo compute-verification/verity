@@ -20,8 +20,7 @@ from served_verdicts import witness  # noqa: E402
 PRIVATE_DIRS = {"private": "a private directory (prover or device state)"}
 #: a file or directory name (`fnmatch`) the three witness tables do not name
 PRIVATE_NAMES = {"*-private.bin": "a private file (prover only)", "index-salt.bin": "the index's salt",
-                 "salts.bin": "a commitment's salts", "*.salts": "a salts file or directory",
-                 "saved-*.tar": "a staged units' value archive", "weights.key": "a weights key", "keys.bin": "a key file"}
+                 "salts.bin": "a commitment's salts", "saved-*.tar": "a staged units' value archive", "keys.bin": "a key file"}
 
 
 def private_why(path: str) -> str | None:

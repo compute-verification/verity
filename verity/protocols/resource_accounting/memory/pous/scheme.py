@@ -22,12 +22,14 @@ onsite's soundness takes the wipe's target, `WipeSound`, as a premise.
 from __future__ import annotations
 
 from verity.commitments import domains
+from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 
 POUS = register(Scheme(
     name="pous",
+    messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
     blocks=(),

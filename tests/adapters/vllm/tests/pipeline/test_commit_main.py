@@ -232,7 +232,7 @@ class Committer:
         self.hook: Any = None
         self.weights: Record | None = None
 
-    def register_weights(self) -> Record:
+    def register_weights(self, replay: bool = False) -> Record:
         self.calls.append("register_weights")
         self.weights = {"root": weights_root(self.eng.model), "bytes": 4 * VOCAB * VOCAB, "wall_s": 0.25}
         return self.weights

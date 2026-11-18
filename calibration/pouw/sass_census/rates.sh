@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The census's unpriced classes timed on one GPU: unpriced.cu on a B200 (ARCH=sm_100a, the default) or unpriced90.cu on
-# an H200 (ARCH=sm_90a); SRC=unpriced_fp4.cu times the B200's fp4 tensor kinds. From a pushed commit:
+# The census's unpriced classes timed on one GPU: unpriced.cu on a B200 or unpriced90.cu on an H200, by the card's target
+# (its card record's `arch`, probe.py arch; another target is refused before anything is built); SRC=unpriced_fp4.cu
+# times the B200's fp4 tensor kinds. From a pushed commit:
 #
 #   research run --on MACHINE --project verity --source <tree> --cwd source --timeout 30m \
 #     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/sass_census/rates.sh
-#   research run --on MACHINE ... --env ARCH=sm_90a --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/sass_census/rates.sh
 #
-# Outside the lease: build for ARCH and SASS-gate every probe (gate-build.txt; a refusal stops the run before any GPU).
+# Outside the lease: build for the card and SASS-gate every probe (gate-build.txt; a refusal stops the run before any GPU).
 # Under one lease: probe.py run (rows.jsonl, gate.json, times.jsonl), then rates.json, each probe's warp instructions
 # and results (FP32 results or MACs) a SM-clock, and the ratios the census needs: FFMA2 / FFMA and FMUL2 / FMUL in FP32
 # results, DMMA / IMMA and DMMA / the device's fastest s8 tensor form in MACs, DMMA beside a saturated tcgen05 or wgmma
@@ -16,11 +16,11 @@ set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
-ARCH=${ARCH:-sm_100a}
+ARCH=$(python3 "$PROBE" arch) || exit 2
 case $ARCH in
   sm_100a) SRC=${SRC:-unpriced.cu} CC=10 ;;
   sm_90a) SRC=${SRC:-unpriced90.cu} CC=9 ;;
-  *) echo "rates.sh: ARCH is sm_100a or sm_90a, not $ARCH" >&2; exit 2 ;;
+  *) echo "rates.sh: the card's target is $ARCH, and rates.sh has probes for sm_100a and sm_90a only: nothing built" >&2; exit 2 ;;
 esac
 export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
@@ -31,7 +31,7 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/env"
 "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
 
-python3 "$PROBE" build --arch "$ARCH" --out "$WORK" "$HERE/$SRC" >"$WORK/built" 2>"$OUT/build.log" \
+python3 "$PROBE" build --out "$WORK" "$HERE/$SRC" >"$WORK/built" 2>"$OUT/build.log" \
   || { cat "$OUT/build.log" >&2; exit 1; }
 BIN=$(head -1 "$WORK/built")
 cuobjdump -sass "$BIN" >"$OUT/${SRC%.cu}.sass" 2>&1

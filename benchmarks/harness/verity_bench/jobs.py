@@ -102,10 +102,20 @@ COMMIT_MARGIN_S = 86_400
 PULL_JOBS = 64
 
 
+class NoCatalog(ValueError):
+    """No catalog is reachable here to look a point's runs up in: git doesn't know the commit (a tree with no git, as a
+    shipped tree has) or the spec's history, or the evidence store has no remote, unconfigured or unusable. `verity-bench
+    run` runs the point on this alone, saying so; any other error of a lookup is the launch's."""
+
+
 def _show(root: Path, commit: str, field: str) -> str:
-    process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
+    try:
+        process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True,
+                                 text=True)
+    except FileNotFoundError:
+        raise NoCatalog(f"no git here, so commit {commit}'s runs can't be looked up") from None
     if process.returncode != 0:
-        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
+        raise NoCatalog(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
     return process.stdout.strip()
 
 
@@ -207,7 +217,7 @@ class StoreCompletion:
         remote = self.store.remote
         if remote is None:
             why = getattr(self.store, "remote_error", None) or "no remote is configured"
-            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+            raise NoCatalog(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
                                "missing; pass --local-only to read this machine's catalog alone")
         return remote
 
@@ -333,13 +343,19 @@ def point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path
     return [*_lease(plan.spec), *env, "bash", "benchmarks/harness/run_point.sh", *flags]
 
 
-def booked(end: float | None, cores: str | None) -> list[str]:
-    """A booked period's launch: the run takes the slot of the booked `cores`, and isn't started unless the spec's
-    max_minutes fit before `end`. `research run` has neither (`--pool` takes the first free slot, `--timeout` is a length,
-    not an end), so it is the launcher's, not the harness's."""
+def booked(spec: ResolvedSpec | SteadySpec, pool: str, slot: str, end: str, cards: Sequence[int]) -> list[str]:
+    """The `research run` flags of a point in a booked period: the booked slot of `pool` alone, the spec's max_minutes as its
+    bound, which `research run` refuses unless it fits before `end` (a UTC time ending in Z) and waits no later than, and
+    `--timed`, so the point isn't niced. A vLLM point's run leases the booked cards (`--card`), so its own lease takes none
+    (`_lease`); a steady-state point's node side leases its one card itself (`_steady_card`), so its run takes no lease."""
 
-    raise NotImplementedError("infra's launcher goal infra/booked-launch: `research run` taking a booked period, its end "
-                              "and its slot by the slot's cores")
+    if spec.admission.max_minutes is None:
+        raise ValueError(f"spec {spec.id!r} has no admission max_minutes, which bounds a booked point's run")
+    want = 1 if isinstance(spec, SteadySpec) else spec.preset.gpu_count
+    if len(cards) != want:
+        raise ValueError(f"spec {spec.id!r} runs on {want} card(s), and the booking names {len(cards)}: {list(cards)}")
+    card = ["--card", ",".join(map(str, cards))] if not isinstance(spec, SteadySpec) else ["--env", f"GPU_LEASE_ON={cards[0]}"]
+    return ["--pool", pool, "--slot", slot, *card, "--end", end, "--timeout", f"{spec.admission.max_minutes}m", "--timed"]
 
 
 def vllm_spec(plan: Plan) -> ResolvedSpec:

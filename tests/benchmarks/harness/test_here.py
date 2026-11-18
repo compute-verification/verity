@@ -9,7 +9,7 @@ from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 
 ROOT = Path(__file__).resolve().parents[3]
-NAME = "llama32-1b-1gpu-pouw-protocol-served-h100"
+NAME = "llama32-1b-1gpu-pouw-protocol-served@h100"
 SHIPPED = "c" * 40
 
 
@@ -66,7 +66,36 @@ def test_run_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_git
     if card == "NVIDIA H100 80GB HBM3":
         assert stop.value.code == f"timed at {SHIPPED}"
     else:
-        assert stop.value.code == 2 and f"the card is a {card}, not the h100 of spec {NAME!r}" in capsys.readouterr().err
+        assert stop.value.code == 2 and f"the card is a {card}, not the h100 of spec {NAME.split('@')[0]!r}" in capsys.readouterr().err
+
+
+def test_run_skips_the_lookup_only_where_no_catalog_is_reachable_and_fails_on_any_other_error(tmp_path, monkeypatch,
+                                                                                               capsys):
+    """A store with no remote is no catalog here: the point runs, saying so. A lookup that fails otherwise (here, a
+    store whose index can't be read) fails the launch by name, so a store's fault never reruns a passed point."""
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", SHIPPED)
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    monkeypatch.chdir(ROOT)
+    commands = []
+    dispatch = jobs.dispatch
+    monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
+        *a, **k, execute=lambda command, cwd: commands.append(command) or 0))
+
+    def no_remote(self, identity, commit):
+        raise jobs.NoCatalog("the evidence store has no remote here (no remote is configured)")
+
+    monkeypatch.setattr(jobs.StoreCompletion, "__call__", no_remote)
+    assert main(["run", NAME]) == 0 and len(commands) == 1
+    assert ("no catalog lookup here, so no passing run is reused: the evidence store has no remote here"
+            in capsys.readouterr().err)
+
+    def broken(self, identity, commit):
+        raise OSError("the catalog's index is unreadable")
+
+    monkeypatch.setattr(jobs.StoreCompletion, "__call__", broken)
+    with pytest.raises(OSError, match="the catalog's index is unreadable"):
+        main(["run", NAME])
+    assert len(commands) == 1 and "no catalog lookup here" not in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("argv", [["--here"], ["--direct", "vy-h100-1"], ["--card", "0"], ["--cores", "0-15"],
@@ -87,7 +116,7 @@ def test_run_refuses_a_spec_with_more_than_one_point_unless_one_is_named(tmp_pat
     dispatch = jobs.dispatch
     monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
         *a, **k, execute=lambda command, cwd: commands.append(command) or 0))
-    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
+    name = "llama31-8b-fp8-1gpu-commit-served-width@h200"
     with pytest.raises(SystemExit):
         main(["run", name])
     assert ("has 3 points (b1-p512-mixed, b8-p512-mixed, b32-p512-mixed) and a run runs one: name it with --point"

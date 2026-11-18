@@ -5349,6 +5349,26 @@
       "paths": {
         "adapters/vllm/verity_vllm/pipeline/network_admission.py": "verity/protocols/resource_accounting/network/prover/admission.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml": "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/llama32-1b-bf16-served-arm.toml"
+      }
+    },
+    {
+      "paths": {}
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/compiler/charge_rows.py": "verity/protocols/resource_accounting/network/prover/charge_rows.py",
+        "tests/adapters/vllm/tests/compiler/test_network_attester_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_charge_rows.py",
+        "tests/adapters/vllm/tests/compiler/test_network_attester_window_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_window_charge_rows.py"
+      }
     }
   ]
 }
