@@ -2305,6 +2305,94 @@
   "ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "type_hash": "d03eac6083dc91f985f258ffa9ba85043337fec435600a11bf6141e46e65c31b",
    "unfolded_hash": "8435f8eb2abc7bfa799171492e4d5c0852d169ed269cac5f47002ecbf7628e41"
+  },
+  "Verity.coins_couple": {
+   "type_hash": "e11a9e40a8666e28598f3e1dd1b9e61a9b0435718454fe4bfd17509cd6f9de36",
+   "unfolded_hash": "690e66106e04ea78f224fdc0d27d6f2ea40024e6e5d1ada50a6ab284bba0c294",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.plain_soundness_of_subprotocols": {
+   "type_hash": "1d1d5352b86264c9d567f36348b5947139ae119b410d5faf3dcc4f3b34190de6",
+   "unfolded_hash": "247e8ffbab868d9b893fd8b427ebcf5409bacbf2bffd40cce6011075e4ffc576",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.remote_soundness_of_subprotocols": {
+   "type_hash": "10dde9d4b2b9d2eaa2bca9c3a6c1f61e31838c8444eb7cd4a10e06fcc47b0686",
+   "unfolded_hash": "01b92f65e5a861032872d59a17d0990cd7ca2f7aaf9eb654c6aada6ff0f099b3",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_at_of_componentBounds": {
+   "type_hash": "3de40e1bed659f5abb9db6888f1a04747e488eba9ab6f04694abf6ee4bb3ab8e",
+   "unfolded_hash": "31cab4c0eb3ae4dca174afaf8c4aff2e1feb873f433cad4877749f9d1d77774b",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_at_of_targets": {
+   "type_hash": "e559b1c46140faa2c230a38cba4ee1d8c15fe7f0c6dc3ca8dcf59bcf33ce8c11",
+   "unfolded_hash": "cd3482eb2e09c71913b341d652c7bc659a869a6860087b72ae185c765f7bbc01",
+   "missing": "below_one",
+   "targets": [
+    "Verity.Subprotocol.sampled",
+    "Verity.Subprotocol.pouw",
+    "Verity.Subprotocol.inferenceOnly",
+    "Verity.Subprotocol.pous",
+    "Verity.Subprotocol.poub",
+    "Verity.Subprotocol.network",
+    "Verity.Subprotocol.wipe"
+   ],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_of_subprotocols": {
+   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911",
+   "unfolded_hash": "058b6195667a827d617cf7612ba04ba2316681d129bc2e4bce78ba9427d04f97",
+   "missing": "below_one",
+   "targets": [
+    "Verity.Subprotocol.sampled",
+    "Verity.Subprotocol.pouw",
+    "Verity.Subprotocol.inferenceOnly",
+    "Verity.Subprotocol.pous",
+    "Verity.Subprotocol.poub",
+    "Verity.Subprotocol.network",
+    "Verity.Subprotocol.wipe"
+   ],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.soundness_of_upFront": {
+   "type_hash": "2494f8e3e16e9e95ff2d41d571d5975aa4edb5159e9ab0eb29fd3fd41be59832",
+   "unfolded_hash": "1e5723b27f241fb2ae9c583f9ee5af864bc6c1254ffdc47e021aaf8e26dca903",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.sampled", "Verity.Subprotocol.pouw", "Verity.Subprotocol.inferenceOnly"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.target_of_periods": {
+   "type_hash": "d181e7720c0d275fb70fe100c65ea105f93c383c5dae726079f6f9869a2f1412",
+   "unfolded_hash": "725ad111966218fa746a8d3d1e8bab2da892791dcccf19dea28bc9fc82cf0b43",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.pouw"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.vocab ⊤ 1`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+  },
+  "Verity.wipe_target": {
+   "type_hash": "8a7cd3dbe22e55ea70b7eeb6a96fe2c7a1828d90e42a45a4b3d7240773ed3222",
+   "unfolded_hash": "061c4ef546efeecd3d50d2ceed38ec13d6cefe7fd98184fc1d33636c161fc61d",
+   "missing": "below_one",
+   "targets": ["Verity.Subprotocol.wipe"],
+   "owner": "@soundness",
+   "why": "Its honest witnesses are at `Idle.unbounded`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
   }
  },
  "witnesses_assumed": {
@@ -27323,7 +27411,7 @@
    }
   },
   "Properties.Remote": {
-   "digest": "846ee24c79189b836d2a0cc6a3bf40b740f7d5e5c05e96df4688342a9c6850bb",
+   "digest": "91f1c14be9f82c436021f461cd761a0b0cdd50c866dd4eb8ff14eaa0a760f1ce",
    "definitions": {
     "Properties.Remote.AcceptComplies": "8418fbde305dfd71e33cd3077d6b347d5d3ee11b551019de4780ce12b16d056e",
     "Properties.Remote.AcceptInferenceOnly": "fb2c35fa3ad927f7a1736524b0ff284924bfd554590feb57e3e1bf59a44f589c",
@@ -27332,7 +27420,7 @@
     "Properties.Remote.InferenceOnlyHeld": "c6eefa6f179de9a4a392fc000cc7c75eeeb7944064fa70fe9be246dde3f69f2b",
     "Properties.Remote.PolicyHeld": "d85033eb18feb1e4682190f6c099aa37fe85a69955e954b14e92a6adb8d9048a",
     "Properties.Remote.PolicyMet": "a7df9db66c3311a831f19328badbc03d10a374dd02ab160e7bb577c5859d244e",
-    "Properties.Remote.StageHeld": "5f862dd76ed26be018a33f95cd214e999cffc924c77ffdad885e74ea65a86fa7",
+    "Properties.Remote.StageHeld": "50b06a340d829b47c9b361b5db3a24afe241ffeee57165d8ed30ded821e26f04",
     "Properties.Remote.VerifierOwn": "7fbcc062159b6955ab221d196b0a0ad150968fe589eae353104c4cc4092a8df2"
    }
   },
@@ -27661,7 +27749,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "65687eeb048845eef33a2069df75feaccea24a7110051d8030910957f58b4833",
+   "digest": "5754ea525806c95e15116fe90db9d91e8d9b1b6c4894af26801d122a2b049bd2",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -27772,7 +27860,8 @@
     "Verity.Vocab.cost": "b4e5c549c8df065d90f3ef828843e00ea8d73980b945ffaef2e2e85998688a90",
     "Verity.Vocab.delta": "fb203b5016af740521287d261553c4b5e226ab28e54077761664a253e5406256",
     "Verity.Vocab.epsForge": "1770857f00471f7794b47fea5b0898f285aef0397da4b3775f68de33768c2627",
-    "Verity.Vocab.error": "547cae36c4b10a4cc669629cb45e532c3a24e9d25bbe4f764be476370603ea8a",
+    "Verity.Vocab.error": "f2b93c1ac5c8879c75c692ef7ffd9c0db628621baec9164820136d7e40791a49",
+    "Verity.Vocab.errorBound": "860b3eb77febddd60e681ad811b9b2e84fc55f226bdaf0b2149472c895740db2",
     "Verity.Vocab.extract": "a6a61398e0c68eedce99bc295e61ef7e17528137e4f1be954309d91e84f61e98",
     "Verity.Vocab.families": "8f7d57eb185b9bfdbd1e780b28a0f9b0dc917bbe8613178cadb62b408a6caa29",
     "Verity.Vocab.finder": "61dd6db53fef55e947d1509b9a8ac51f85bf4e1eba395e5a6a5581afe2e61572",
@@ -29345,7 +29434,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "82f11fc71411b307ac7d91e1ef7670ef7c4ad3e3e530dc5673e4a4536635c22b",
+   "digest": "ac4db1b6df66df49ba40987fd6a173a083aa166549398eaacf0427067965228b",
    "definitions": {
     "Spot.SecondStage.CELLS_WHY": "b560d386dc6373599522f33601aa3e5ca5c71157e173ffd53144f3ac33bd456d",
     "Spot.SecondStage.Callers": "c314c79167654bbed5489d603de1af59caa3cc1987868ef118c0831bcf0b9be9",
@@ -29358,7 +29447,7 @@
     "Spot.SecondStage.Checked.header": "e81581712288efb1d9afba775c6ead3a001ab68ea3af3524d3f98c26bafa6ac7",
     "Spot.SecondStage.Checked.registered": "ea314c4714b7db63cace4ae0c881861d6f8334767dd853a4fc28abff2a091524",
     "Spot.SecondStage.Checked.tables": "7592dec6bf6be62c5aab30cf619490d5c3c217462be104e9667be0d051b31ba5",
-    "Spot.SecondStage.FORM": "8d3ba2829c01716b6571fb454cf71f1ba9101a4a916326c7538d519f5200874a",
+    "Spot.SecondStage.FORM": "7ea3259207fe4c44f58d780fb4cae86869c739cc1bad9f99addb2414c2e4c202",
     "Spot.SecondStage.FORM_WHY": "d87122c2271a1ac8650b81c4794bd59ed8e9d0375c7c20e772cac5524056a59a",
     "Spot.SecondStage.INPUTS_WHY": "2ec4899081a4a1b06fa7866d01f93ea124b944f6ee0e7301662a8225daae9002",
     "Spot.SecondStage.INTERIOR_ORDER_WHY": "ccd80235d8cb3f9e53bea57e501c5c43434b422c9b9588f6b4317aa9eb13a6d7",

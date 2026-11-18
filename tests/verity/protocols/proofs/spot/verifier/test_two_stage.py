@@ -2,7 +2,7 @@
 stage, the interior docket over the replay sample's proof blocks, the second stage on its own coins, one outcome
 binding both dockets and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
-second-stage sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its
+second-stage sessions (`second_stage`), which allows the two-stage form (`second_stage.FORM`, on); its
 refusals; its profile at the footprint; and its replay grain's fan-out."""
 
 from __future__ import annotations
@@ -200,9 +200,8 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     each sampled replay block on the coins after the interior docket; and one outcome holds both audit records, each
     by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior docket
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
-    boundary, each unit at its own row of its replay block's N_RHO, and passes it; while the two-stage form is refused
-    (`second_stage.FORM`) that refusal is the outcome's one failure, a reject. The profile an accepted one carries is at
-    the footprint."""
+    boundary, each unit at its own row of its replay block's N_RHO, and passes it; the two-stage form being allowed
+    (`second_stage.FORM`), the outcome is an accept, and its profile is at the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     assert stream.cells == (N_RHO,) and stream.counts == (K,)
@@ -226,14 +225,12 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         for p, v in (("x", BX), ("o0", BOUT))}
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
-    assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
-    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
+    assert SS.FORM and out.accepted and out.profile is not None and stream.symbols == ("accept",)
 
     body = stream.records[0]
     assert S._sha512(body) == out.record and body["registration"] == reg.digest
     assert body["draw"] == S._sha512(second.draw) and "run" not in body["audit"]["checks"]
-    assert body["audit"]["checks"]["statements"] == {"ok": False, "codes": ["two-stage-form"],
-                                                     "detail": {"two-stage-form": SS.FORM_WHY}}
+    assert body["audit"]["checks"]["statements"] == {"ok": True, "codes": [], "detail": {}}
     assert body["replay_sample"]["draw"] == S._sha512(first.draw) and body["replay_sample"]["audit"]["accepted"]
     assert body["interior"] == {"registration": ireg.digest, "receipt": S._sha512(ireg.receipt)}
 
@@ -291,24 +288,26 @@ def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(p
 
 def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     """`second_stage.FORM` is the Lean's `SecondStage.FORM`, which the run of record reads: flipped in the Python alone,
-    round 2's check passes and the Python would accept, and the run of record, still refusing the form, disagrees."""
-    monkeypatch.setattr(SS, "FORM", True)
+    round 2's check refuses the form and the Python would reject, and the run of record, still allowing the form,
+    disagrees."""
+    monkeypatch.setattr(SS, "FORM", False)
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s])
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
+    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"]
+    assert checks["run"]["codes"] == [V.DISAGREE]
     assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
 
 
 def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
     """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
     Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
-    off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
+    off; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
     say; no record at all. An argument that is not the boolean true counts as missing."""
     whole = {"accepted": True, "complete": True}
-    assert SS.FORM is False
+    assert SS.FORM is True
     assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
-    assert not SS.complete_twin(SS.FORM, True, [whole, whole])
+    assert SS.complete_twin(SS.FORM, True, [whole, whole]) and not SS.complete_twin(False, True, [whole, whole])
     assert not SS.complete_twin(True, False, [whole, whole])
     for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
                    {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
@@ -364,7 +363,7 @@ def _frame(key: str, f):
 
 
 @pytest.mark.parametrize("statements, codes", [
-    (lambda s, second: [s], ["two-stage-form"]),
+    (lambda s, second: [s], []),
     (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-values"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
@@ -381,8 +380,8 @@ def _frame(key: str, f):
     (_frame("bindings", lambda b: {**b, "out": b["x"]}), ["second-header"]),
     (_frame("bindings", lambda b: {"x": b["x"]}), ["second-header"]),
     (_frame("schemas", lambda s: {**s, "out": "hm96-sha512/row/v1"}), ["second-header"]),
-    (_header(registered={"x": {"value": BX, "positions": [0], "paths": [[0]]}}), ["two-stage-form"]),
-    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), ["two-stage-form"]),
+    (_header(registered={"x": {"value": BX, "positions": [0], "paths": [[0]]}}), []),
+    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), []),
     (_restated(header=lambda h: {**h, "units": {**h["units"], "units_per_vu": 2}}), ["second-header"]),
     (_restated(header=lambda h: {**h, "frame_v3": {**h["frame_v3"], "owner": "other"}}), ["second-header"]),
     (_frame("roots", lambda r: {**r, "out": "00" * 64}), ["second-roots"]),
@@ -404,7 +403,7 @@ def _frame(key: str, f):
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
-    unit's row of its cell's replay block (the form's refusal their one failure), under the auditor's params whose
+    unit's row of its cell's replay block (the outcome an accept), under the auditor's params whose
     reference statement reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is
     refused (`second-values`),
     and refuses, each statement's session checked as it states by the verifier: none (`second-statements`), none
@@ -424,7 +423,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     stream = _stream()
     out = _two_stage_outcome(stream, statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
     assert "registered" not in checks and stream.records[0]["replay_sample"]["audit"]["accepted"]
 
 
@@ -489,12 +488,12 @@ FV = REFERENCE["frame_v3"]
 
 
 @pytest.mark.parametrize("header, codes", [
-    (REFERENCE, ["two-stage-form"]),
+    (REFERENCE, []),
     ({**REFERENCE, "instances": 7, "units": {**REFERENCE["units"], "indices": [9]},
       "frame_v3": {**FV, "roots": {"x": "00" * 64}, "domain_ids": {}}, "registered": {"x": {"value": "w"}}},
-     ["two-stage-form"]),
-    (FC.reference_header(TEMPLATE, 9, 9 + Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA)), ["two-stage-form"]),
-    ({**REFERENCE, "set": "served/other/m0", "frame_v3": {**FV, "bindings": {"x": "11" * 64}}}, ["two-stage-form"]),
+     []),
+    (FC.reference_header(TEMPLATE, 9, 9 + Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA)), []),
+    ({**REFERENCE, "set": "served/other/m0", "frame_v3": {**FV, "bindings": {"x": "11" * 64}}}, []),
     ({**REFERENCE, "scheme": "frame-v3-sha512/other"}, ["second-header"]),
     ({**REFERENCE, "units": {**REFERENCE["units"], "units_per_vu": 2}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "out": "hm96-sha512/row/v1"}}}, ["second-header"]),
@@ -508,7 +507,7 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     template (`template_circuits`) placed in the run (`second_stage.at_run`: its `set` the run's `served/<run>/m<k>`,
     its `frame_v3.bindings` each `frame_v3.schemas` port's binding in the run, both the verifier's), the two the same
     with the run's fields blanked (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `units.blocks`,
-    `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged, refused only on the form,
+    `frame_v3.roots`, `frame_v3.domain_ids` and `registered`). The honest run passes unchanged,
     under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
     other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
     `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
@@ -517,7 +516,7 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
 #: The interior's ports as a session's header shares them (``shared_rows``), a table of one row a slot each.
@@ -532,7 +531,7 @@ def _sharing(registered=None):
 
 
 @pytest.mark.parametrize("statements, codes", [
-    (_sharing(lambda s, second: _linked(s, out=_own(second))), ["two-stage-form"]),
+    (_sharing(lambda s, second: _linked(s, out=_own(second))), []),
     (_sharing(), ["second-refs", "second-values"]),
     (_sharing(lambda s, second: None), ["second-read", "second-refs", "second-values"]),
     (_sharing(lambda s, second: _linked(s, out=_own(second, shift=1))), ["second-read"]),
@@ -542,7 +541,7 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     """`second-refs`, by both verifiers, under a reference whose sessions share rows at the interior's ports
     (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body) and read the
     interior's own `out` (`READS_OUT`). The run's statement reading its linked `x` at the boundary and its own `out` at
-    each slot's own rows passes, refused only on the form. One leaving the shared `out` unread is refused: the session's
+    each slot's own rows passes. One leaving the shared `out` unread is refused: the session's
     verifier would only bound its refs by their table, so one could point a sampled proof block at another unit's rows; its
     reads are then not its reference's either (`second-values`). So is one reading nothing registered. A shared port
     read at another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows
@@ -551,7 +550,7 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED},
                                                                   reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
 def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it():
@@ -560,7 +559,7 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     binding the window-domain rule's over the interior record's program, partition and that port's leaves
     (`rows.Binding.binding`, whose domain is the one the record registers for the port). The verifier recomputes both
     from the interior record alone (`second_stage.at_run`), so the header is the reference so placed but for the run's
-    fields, and passes, refused only on the form."""
+    fields, and passes."""
     stream = _stream()
     _, second = _stages(stream)
     rec, (s,) = second.docket.record, stream.statements(second)
@@ -580,11 +579,11 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     out = stream.outcome(second, _lean(reads=_reads_of([s]), checked=s), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=[s])
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks
+    assert out.accepted and checks["statements"]["codes"] == [] and "run" not in checks
 
 
 @pytest.mark.parametrize("sample, statements, codes", [
-    (list, lambda s, second: [s], ["two-stage-form"]),
+    (list, lambda s, second: [s], []),
     (lambda u: u[::-1], lambda s, second: [s], ["second-interior-order"]),
     (lambda u: u[:-1], lambda s, second: [s], ["second-interior-order"]),
     (lambda u: [*u, u[0]], lambda s, second: [s], ["second-interior-order"]),
@@ -603,7 +602,7 @@ def test_round_two_holds_the_interior_record_to_the_replay_sample_in_order(sampl
     stream = _stream()
     out = _two_stage_outcome(stream, statements, sample=sample)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert out.accepted == (codes == []) and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
     if "second-interior-order" in codes:
         assert checks["statements"]["detail"]["second-interior-order"] == SS.INTERIOR_ORDER_WHY
 
@@ -1108,7 +1107,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
     (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
     (`interior-window`): a root of the prover's choosing, none where the boundary docket has one, and the root
     of another sample or another docket. On the computed root, the second stage's session opened for it, the run
-    of record agrees through both stages, and the outcome's one failure is the form's (`second_stage.FORM`)."""
+    of record agrees through both stages, and the outcome is an accept, the form being allowed (`second_stage.FORM`)."""
     stream = _stream()
     reg = stream.register(*_boundary())
     first = stream.select(reg)
@@ -1126,8 +1125,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and "run" not in checks and checks["statements"]["codes"] == ["two-stage-form"]
-    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
+    assert out.accepted and "run" not in checks and checks["statements"]["codes"] == []
 
 
 def test_a_one_stage_stream_has_no_interior_registration():
@@ -1395,7 +1393,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements), {"statement": "stub"},
                          session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks, checks
+    assert out.accepted and checks["statements"]["codes"] == [] and "run" not in checks, checks
     p = stream._footprint(stream._entries[reg.order])
     assert p.sizes == (N, 4) and p.draws["unit"] == Subset(1) and dict(p.drawn) == {S.REPLAY: Q, "unit": Q * 2}
     for w in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)):
