@@ -129,7 +129,8 @@ document carries the passes, that verdict's line and credit at the scheme's name
 (`pearlplus_coins_from`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`pearlplus_why`:
 its passes are not the window SPOT audited; under PEARLPLUS_TIE, ``--tie W``, the window's own epoch, the
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
-only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
+only where `pearlplus_of_record` holds it to the piece's own check of live coins (their signatures verified on the served
+node only: the compose holds just the key file the piece hands to ``--key-sha512``), the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
@@ -411,12 +412,18 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
+#: what no auditor-side entry checks of Pearl+'s coins: its piece verifies their signatures (`pearlplus_coins`,
+#: `pearlplus_draw`), and `pearlplus_of_record` reads its reasons and holds only the key file to the pin
+PEARLPLUS_COINS = ("its coins' signatures (the salt session's and the sample session's) were verified on the served node "
+                   "only: no auditor-side entry verifies them, and the compose checks only that the key file handed to it "
+                   "hashes to the pin")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
-                  "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
+                  "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness; "
+                  f"{PEARLPLUS_COINS}")
 #: what the composed verdict's reason (`said`) says of that row's accept
-PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
+PEARLPLUS_SAID = f"Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks, and {PEARLPLUS_COINS}"
 WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
               "rate over a cut whose tables' readers are templates of their own, so its accept shows only that the tables "
               "its sampled proof blocks read hold the served model's own values at W's roots, not that every table W "
@@ -2038,9 +2045,10 @@ def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] |
 def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, lane: str, check: Mapping[str, Any],
                         lines: Sequence[str], period: str) -> str | None:
     """Why the verifier's sample source in its coin record `record` (the piece's `COIN_RECORD`, `verify_run`'s "The coin
-    record") is not a coin the auditor device's challenger under `key` opened on the run commitment C, or None. It must be
-    a challenger sample (`PEARLPLUS_NODE_SAMPLE`) whose session the piece's check held to the signed ledger and session
-    (`check`, `pearlplus_draw`'s), under `key` (that session's tree in the piece); in the piece's ledger `lines`, the
+    record") is not, as the piece's check says, a coin the auditor device's challenger under `key` opened on the run
+    commitment C, or None. It must be a challenger sample (`PEARLPLUS_NODE_SAMPLE`) whose session the piece's check, run
+    on the served node, held to the signed ledger and session (`check`, `pearlplus_draw`'s; no signature is verified
+    here), the key file of that session's tree in the piece hashing to `key`; in the piece's ledger `lines`, the
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a sample session's layout alone,
     and the one session opened on C, so a prover who samples again under another session holds a sample no compose takes;
     and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`), the record's source that coin."""
@@ -2105,9 +2113,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
     answer and None when it is, else None and the first condition it fails, in order:
 
-    1. **Live coins under the pin.** The epoch's salt coin is the live session's, every pass held to it
-       (`pearlplus_coins`' check), and that session's challenger key is the one `key` pins (`challenger.pinned_key` on
-       the session's tree the piece fetched).
+    1. **Live coins under the pin.** The piece's check (`pearlplus_coins`, run on the served node, whose reason this
+       reads) says the epoch's salt coin is the live session's, every pass held to it; here only the key file in the
+       session's tree the piece handed is held to `key` (`challenger.pinned_key`), no signature being verified.
     2. **The lane's own reserve.** The piece's ledger reserves that session by lane `lane`, under its own gate key, not
        for it.
     3. **The lane's open period, the live sample, and the window tie.** The session joined lane `lane`'s period open at
@@ -2883,8 +2891,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
     r.add_argument("--deploy-manifest", type=Path, help="infra's deploy manifest, which composed_on's auditor_device reads")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
-    r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
-                                        "(H1_KEY_SHA512)")
+    r.add_argument("--key-sha512", help="the pin the challenger key file Pearl+'s piece hands must hash to for a verdict "
+                                        "of record (H1_KEY_SHA512); the coins' signatures are verified on the served "
+                                        "node only")
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "
                                                   "under, in its open period, for a verdict of record "
                                                   "(PEARLC_CHALLENGER_LANE)")

@@ -2751,6 +2751,29 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
 
+@pytest.mark.parametrize("product", ["remote", "onsite"])
+def test_pearlpluss_row_says_its_coins_signatures_were_verified_on_the_served_node_only(tmp_path, monkeypatch, capsys,
+                                                                                         live, product):
+    """No auditor-side entry verifies Pearl+'s coins' signatures (its piece does, on the served node), so its row of
+    record says so on both products' paths: in its stated source (the record's row and the RECORD line's ``answers``)
+    and in the composed reason."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    (tmp_path / "serve").mkdir()
+    S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
+            "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", product,
+            "--key-sha512", pin, "--lane", lane])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["work"]
+    said = ("verified on the served node only: no auditor-side entry verifies them, and the compose checks only that "
+            "the key file handed to it hashes to the pin")
+    assert line["verdicts"]["PoUW"] == "accept"
+    assert said in row["answer_from"] and said in line["answers"]["PoUW"], (row["answer_from"], line["answers"])
+    assert f"{S.PEARLPLUS_SAID}" in line["reason"] and said in S.PEARLPLUS_SAID, line["reason"]
+
+
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
 def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
         tmp_path, monkeypatch, live, design):
