@@ -23,9 +23,9 @@ tree):
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
   local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
   Definition C's Boolean map names for it (`BooleanAgrees`).
+* `LiftEval`: the lift to bits (`Spot.BlockFront.program`) keeps every Definition's value, each word primitive
+  evaluating as its Boolean Definition (`BodyAgrees`).
 * `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
-* `DescEqPartOf`: the inference-only check's three counts (gates per block, fresh input bits per block, all gates) are
-  `partOf`'s, at the blocks of its owners and the gates of θ.
 -/
 
 @[expose] public section
@@ -52,6 +52,12 @@ def BlockIs (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.siz
 def BooleanAgrees (P : Prog) (boolean : Std.HashMap String String) : Prop :=
   ∀ p q, (P.defs[p]!).prim = true → boolean[(P.defs[p]!).key]? = some (P.defs[q]!).key →
     Prog.evalBool P p = Prog.evalBool P q
+
+/-- **`BodyAgrees`**: each primitive of `P` with a Boolean Definition in `P`'s own map (`Prog.bodyOf?`) evaluates as
+that Definition. -/
+def BodyAgrees (P : Prog) : Prop :=
+  ∀ p < P.defs.size, ∀ b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b →
+    Prog.evalBool P p = Prog.evalBool P b
 
 /-- **`V5Rows`, the adapter to the sampled proof's guarantee.** A unit `u` correct in the key circuit of the templated
 statement `c` carrying the template `tu.t`: the statement's unit is the net `tu.t` unrolls to, and at every copy `u'` the
@@ -91,6 +97,13 @@ def BlockEval : Prop :=
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
+
+/-- **`LiftEval`, MERGE's (C2): the lift to bits keeps every Definition's value.** In the block's Program `Q`, each of
+`P`'s Definitions (a lifted word composite keeps its index) evaluates on the same bits as in `P`: a word leaf is its
+`bitAt` bits, consecutive and low bit first, as `Prog.evalBool` reads it. -/
+def LiftEval : Prop :=
+  ∀ (P : Prog) (units : Array ℕ) (Q : Prog), Spot.BlockFront.program P units P.boolean = .ok Q → BodyAgrees P →
+    ∀ d < P.defs.size, Prog.evalBool Q d = Prog.evalBool P d
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
