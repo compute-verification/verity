@@ -62,13 +62,13 @@ def Ranked (S : Spot.Wires.Summary) (ρ : String × ℤ → ℕ) : Prop :=
   ∀ (r : Row) wt wu out off, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) →
     ρ (wt, wu) < ρ (r.tid, (r.unit : ℤ))
 
-/-- **A wired row holds its output**: the writer's field a reader row is wired to, the field of a word or more that
+/-- **A wired row holds its output**: the writer's field a reader row is wired to, the field of a leaf or more that
 starts at the wire's offset, has no more bits than the row. -/
 def OutFits (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
   ∀ (r : Row) wt wu out off sc sc' i f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) → 0 ≤ wu →
     UnitAt P rs r.tid r.unit sc → UnitAt P rs wt wu.toNat sc' → i < (P.defs[sc.d]!).params.size →
-    (P.defs[sc.d]!).params[i]!.1 = r.port → Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f = off →
-    f < (fieldsOf (P.defs[sc'.d]!).ret).length → 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! →
+    (P.defs[sc.d]!).params[i]!.1 = r.port → Spot.Edges.fieldOffset (P.defs[sc'.d]!).ret f = off →
+    f < (fieldsOf (P.defs[sc'.d]!).ret).length → 0 < ((fieldsOf (P.defs[sc'.d]!).ret)[f]!).leaves →
     (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ≤
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0
 

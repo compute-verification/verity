@@ -16,8 +16,8 @@ A row is its leaves' bits in leaf order, and `bitAt` is the bit at which a leaf 
 * `inRow_size`, `inRow_bits`: a row of a parameter cut `k` ways has the parameter's leaves over `k`, and, where `k`
   divides the parameter's outer length, its bits over `k`: an array's leaves are its length's copies of its
   element's (`widths_array`), so a row is whole copies, and any other parameter is one row.
-* `outName_inj`: an output row's name says which field it is; `fieldWord_inj`: so does a field's first word, of a field
-  of a word or more (`fieldWord_succ_le`).
+* `outName_inj`: an output row's name says which field it is; `fieldOffset_inj`: so does a field's first leaf, of a field
+  of a leaf or more (`fieldOffset_succ_le`).
 * `unitAt_fun`: a template's unit is one activation. The units before a root node of the template
   (`unitsBefore`) grow by the node's members from one node to the next (`unitsBefore_succ`), so a unit lies in
   one node and is one member of it.
@@ -189,14 +189,14 @@ theorem inRow_bits (d : Defn) (i k row : ℕ) (ho : outerOf d.params[i]!.2 % k =
 theorem outName_inj (f f' : ℕ) (h : "o" ++ toString f = "o" ++ toString f') : f = f' :=
   Properties.Spot.Credited.toString_inj ((String.append_right_inj "o").1 h)
 
-/-- Field `f` of `t` starts at least its own words before any later field. -/
-theorem fieldWord_succ_le (t : Ty) {f f' : ℕ} (hf : f < f') (hf' : f' ≤ (fieldsOf t).length) :
-    Spot.Edges.fieldWord t f + Spot.Edges.wordsOf (fieldsOf t)[f]! ≤ Spot.Edges.fieldWord t f' := by
-  let L := (fieldsOf t).map Spot.Edges.wordsOf
-  have hw : ∀ n, Spot.Edges.fieldWord t n = (L.take n).sum := fun n => by
-    simp only [Spot.Edges.fieldWord, L, List.map_take]
+/-- Field `f` of `t` starts at least its own leaves before any later field. -/
+theorem fieldOffset_succ_le (t : Ty) {f f' : ℕ} (hf : f < f') (hf' : f' ≤ (fieldsOf t).length) :
+    Spot.Edges.fieldOffset t f + ((fieldsOf t)[f]!).leaves ≤ Spot.Edges.fieldOffset t f' := by
+  let L := (fieldsOf t).map Ty.leaves
+  have hw : ∀ n, Spot.Edges.fieldOffset t n = (L.take n).sum := fun n => by
+    simp only [Spot.Edges.fieldOffset, L, List.map_take]
   have hlt : f < L.length := by simp only [L, List.length_map]; omega
-  have hs : (L.take (f + 1)).sum = (L.take f).sum + Spot.Edges.wordsOf (fieldsOf t)[f]! := by
+  have hs : (L.take (f + 1)).sum = (L.take f).sum + ((fieldsOf t)[f]!).leaves := by
     rw [List.sum_take_succ L f hlt]
     simp only [L, List.getElem_map, getElem!_pos (fieldsOf t) f (by omega)]
   have hm : (L.take (f + 1)).sum ≤ (L.take f').sum := by
@@ -207,15 +207,15 @@ theorem fieldWord_succ_le (t : Ty) {f f' : ℕ} (hf : f < f') (hf' : f' ≤ (fie
   rw [hw, hw, ← hs]
   exact hm
 
-/-- A field of a word or more is named by its first word. -/
-theorem fieldWord_inj (t : Ty) {f f' : ℕ} (hf : f < (fieldsOf t).length) (hf' : f' < (fieldsOf t).length)
-    (hb : 0 < Spot.Edges.wordsOf (fieldsOf t)[f]!) (hb' : 0 < Spot.Edges.wordsOf (fieldsOf t)[f']!)
-    (h : Spot.Edges.fieldWord t f = Spot.Edges.fieldWord t f') : f = f' := by
+/-- A field of a leaf or more is named by its first leaf. -/
+theorem fieldOffset_inj (t : Ty) {f f' : ℕ} (hf : f < (fieldsOf t).length) (hf' : f' < (fieldsOf t).length)
+    (hb : 0 < ((fieldsOf t)[f]!).leaves) (hb' : 0 < ((fieldsOf t)[f']!).leaves)
+    (h : Spot.Edges.fieldOffset t f = Spot.Edges.fieldOffset t f') : f = f' := by
   rcases Nat.lt_trichotomy f f' with c | c | c
-  · have := fieldWord_succ_le t c hf'.le
+  · have := fieldOffset_succ_le t c hf'.le
     omega
   · exact c
-  · have := fieldWord_succ_le t c hf.le
+  · have := fieldOffset_succ_le t c hf.le
     omega
 
 /-! ## A template's units -/

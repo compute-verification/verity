@@ -346,13 +346,12 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   rw [hog]
   exact hg
 
-/-- **A unit of a primitive has one output field of one leaf, its gate**: the field is at word 0, its leaf, where the
-primitive's one value has a bit, is the unit's one gate at that value's bits, and the unit has no other leaf of an
-output field. -/
+/-- **A unit of a primitive has one output field of one leaf, its gate**: the field is at leaf 0, its leaf is the
+unit's one gate, at the bits of the primitive's one value, and the unit has no other leaf of an output field. -/
 theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :
-    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ (0 < w → OutLeaf P sc 0 0 sc.off 0 w) ∧
+    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc 0 0 sc.off 0 w ∧
       ∀ off l g lo hi, OutLeaf P sc off l g lo hi →
         off = 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
@@ -365,14 +364,13 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     exact Prod.ext rfl hwidths
   have hres : Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get 0) = .ok sc.off :=
     Resolve.ret_default P sc 0 hbody
-  have hw0 : Spot.Edges.fieldWord (P.defs[sc.d]!).ret 0 = 0 := by
-    simp [Spot.Edges.fieldWord]
-  refine ⟨w, hw, fun hpos => ⟨0, hw0, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  have hw0 : Spot.Edges.fieldOffset (P.defs[sc.d]!).ret 0 = 0 := by
+    simp [Spot.Edges.fieldOffset]
+  refine ⟨w, hw, ⟨0, hw0, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
   · rw [hfields]
     exact Nat.zero_lt_one
   · rw [hfields, getElem!_pos _ 0 (by simp)]
-    simp only [List.getElem_cons_zero, Spot.Edges.wordsOf]
-    omega
+    simp [Flock.Program.Ty.leaves]
   · rw [hrow]
     exact Nat.zero_lt_one
   · rw [hrow]
