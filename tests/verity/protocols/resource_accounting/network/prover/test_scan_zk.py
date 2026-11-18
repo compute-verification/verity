@@ -306,7 +306,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
     T, v2 = s.params.window, sz.BitRowLeaf.hiding_schema
     root, query, defs = _scan_program(cls, T)
     h = sz.host(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
-    alone = sz.PA.mixed_population_program([(defs["start"], 1)])
+    alone = sz.PN.mixed_population_program([(defs["start"], 1)])
     programs = {sz.TEMPLATES: (root, query, RND.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
                 sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), RND.parse_design("stratified:1"),
                            None)}
@@ -530,7 +530,7 @@ def test_the_members_are_the_programs_ranges():
     for templates in {t for t, _o in sz.ROUNDS.values()}:
         members = sz.members_of(templates, T, entries=E, lanes=L)
         counts = sz.counts_of(members)
-        program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
+        program = sz.PN.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
         assert [(lo, n) for _t, lo, n in ranges] == [
             (next(m.base for m in members if m.template == t), counts[t]) for t in templates]
@@ -814,7 +814,7 @@ def _program(T: int) -> tuple:
     buckets, with stand-in templates."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     defs = {"start": START, "ingress": ING, "egress": EG}
-    return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
+    return (sz.PN.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
             sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
@@ -992,7 +992,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    block = sz.PA.mixed_population_program([(defs["block"], E)])
+    block = sz.PN.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), RND.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
@@ -1439,7 +1439,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     T, k, root = 32, 16, "dd" * 64
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
-    program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
+    program = sz.PN.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
                          stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())
