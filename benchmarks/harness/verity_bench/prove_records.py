@@ -7,7 +7,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 
 | slot | what carries the label | what is read |
 | --- | --- | --- |
-| `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
+| `census` | one `block-census/v1` art | its `census.json`, or each request's `REQUEST/census.json` summed (`prove.Census.of`, `prove.summed`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove_flock.Session`) |
 | `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove_flock.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
@@ -86,9 +86,13 @@ of record, its mark (measured, modeled or partial, as the table says it) the fir
 run's validation; and the figure at the exfiltration run of record's design (`AT_RECORD`), modeled, its input the run
 it is read from. A table with every block proved records nothing.
 
+A `steady_only` workload (`prove_common.Workload`) has its census printed first and its totals refused by name until
+every block type with blocks is measured at steady state, its census holds no gap and every slot is labelled
+(`prove_census`).
+
 The code is in `prove_common` (the slots, the workloads, reading a labelled record), `prove_rows` (a steady-state row),
-`prove_store` (each input), `prove_table` (the table and what a runner records) and `prove_render` (the text); this
-module names what its importers use.
+`prove_store` (each input), `prove_census` (a `steady_only` workload's census table and refusal), `prove_table` (the
+table and what a runner records) and `prove_render` (the text); this module names what its importers use.
 """
 
 from __future__ import annotations

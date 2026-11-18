@@ -49,6 +49,12 @@ NOISE = 0.02
 LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
+#: The most adds or FFMAs in a row the mixed lane loop's SASS may issue. The source alternates them; ptxas keeps that,
+#: or swaps one pair beside the loop's compare (sm_89, sm_90a), and both issue at one a SMSP-cycle. Runs of three
+#: and four (sm_120a, when k_opalone's end stored the k_spec roles) bind on a pipe and read below LANE_MIN.
+LANE_RUN_MAX = 2
+#: A loop counter's add, `IADD3 Rn, Rn, 0x1, RZ` (sm_120a's syntax names the carry predicates), not a lane op.
+COUNTER = re.compile(r"^IADD3 (R\d+), (?:PT, PT, )?\1, 0x1, RZ$")
 #: VF3e's joint issue rows as the machine model's census holds them, fitted beside
 #: IMMA s8 m16n8k32 and OMMA: SMSP-cycles a MMA and a other instruction. Every program of every form must load each at
 #: most 1 - NOISE.
@@ -156,7 +162,7 @@ def opcode(ins: str) -> str:
 
 
 def loops(body: list[tuple[int, str, str]]) -> list[dict]:
-    """Each backward branch's loop (target a label or an address): its MMA opcodes and counts an iteration."""
+    """Each backward branch's loop (target a label or an address): its MMA opcodes, counts an iteration and lane order."""
     by_label = {lab: i for i, (_, lab, _) in enumerate(body) if lab}
     by_addr = {a: i for i, (a, _, _) in enumerate(body)}
     out = []
@@ -173,8 +179,24 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
         # sm_89's ptxas moves part of an add.u32 stream to the FMA pipe as IMAD.IADD: an add all the same
         out.append({"mma": len(mma), "mma_ops": sorted(set(mma)), "other": len(seg) - len(mma),
                     "iadd3": sum(o.startswith(("IADD3", "IMAD.IADD")) for o in seg),
-                    "ffma": sum(o.startswith("FFMA") for o in seg)})
+                    "ffma": sum(o.startswith("FFMA") for o in seg), "order": lane_order(body[i : j + 1])})
     return out
+
+
+def lane_order(seg: list[tuple[int, str, str]]) -> str:
+    """The loop's adds (IADD3, IMAD.IADD; `I`) and FFMAs (`F`) in issue order, the loop counter's add left out."""
+    out = []
+    for _, _, ins in seg:
+        o = opcode(ins)
+        if o.startswith("FFMA"):
+            out.append("F")
+        elif o.startswith(("IADD3", "IMAD.IADD")) and not COUNTER.match(ins):
+            out.append("I")
+    return "".join(out)
+
+
+def longest_run(order: str) -> int:
+    return max((len(m) for m in re.findall(r"I+|F+", order)), default=0)
 
 
 def kernel_key(name: str) -> tuple[str, str, int] | None:
@@ -219,6 +241,9 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         if not L or len(L) != 1 or L[0]["mma"] or L[0]["iadd3"] + L[0]["ffma"] < 64:
             fails.append(f"opalone {r['form']}: loops {L} (want one loop of >= 64 IADD3 and FFMA)")
             continue
+        if r["form"] == MIXED_LANE and (n := longest_run(L[0]["order"])) > LANE_RUN_MAX:
+            fails.append(f"opalone {MIXED_LANE}: ptxas scheduled the lane loop as {L[0]['order']} (I an add, F an "
+                         f"FFMA): {n} of a kind in a row, over {LANE_RUN_MAX}, binds on a pipe and not on issue")
         # 8 warps a SMSP, every instruction of the loop body an iteration
         lanes[r["form"]] = 8 * r["iters"] * L[0]["other"] / r["cyc_med"]
     if MIXED_LANE not in lanes:

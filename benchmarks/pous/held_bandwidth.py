@@ -287,12 +287,13 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
 
 
 def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping[str, Any], host: str) -> dict[str, Any]:
-    """``key_pin`` is ``run`` where only the run named the key, and `trusted-device` then reads rehearsal."""
+    """``key_pin`` is ``run``: the pins this machine was handed are used only to refuse, and ``pins_matched`` says
+    whether they give the key `trusted_sha512` names for the close."""
     key = p2_case.close_key(case)
     key_sha = None if key is None else hashlib.sha512(key).hexdigest()
     pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
     return {"key_sha512": key_sha, "key_pinned": key_sha == trusted_sha512,
-            "key_pin": "configuration" if trusted_sha512 in pinned else "run",
+            "key_pin": "run", "pins_matched": trusted_sha512 in pinned,
             mc.PREMISE: mc.trusted_device(
                 deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT, key_sha,
                 f"the bandwidth verifier, which signs the close with the memory attester's key on {host}",
