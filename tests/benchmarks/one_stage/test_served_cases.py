@@ -352,8 +352,8 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
     assert json.loads((private / "sampled-proofs-v1" / "case.json").read_text()) == v1
     assert json.loads((private / "sampled-proofs-v2" / "case.json").read_text()) == v2_case
     sampled = json.loads((private / "sampled-proofs" / "case.json").read_text())
-    assert sampled == {**v2_case, "params": {**v2_case["params"], "form": "one-stage"}, "evidence": codec.canonical_json(
-        {**json.loads(bytes.fromhex(v2_case["evidence"])), "form": "one-stage"}).hex()}
+    assert sampled == {**v2_case, "params": {**v2_case["params"], "levels": 1}, "evidence": codec.canonical_json(
+        {**json.loads(bytes.fromhex(v2_case["evidence"])), "levels": 1}).hex()}
     assert "proofs" in sampled["params"] and "verdicts" not in json.loads(bytes.fromhex(sampled["evidence"]))
     reg = json.loads((private / "inference-only" / "case.json").read_text())
     assert sorted(reg) == ["commitment", "evidence", "params"]
