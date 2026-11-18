@@ -860,6 +860,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
