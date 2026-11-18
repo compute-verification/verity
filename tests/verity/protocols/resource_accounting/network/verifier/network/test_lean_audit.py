@@ -37,6 +37,8 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 #: the changes of an attested record that leave its window without a verdict (`V2.EXPECT`)
 UNDECIDED = tuple(m for m, v in V2.EXPECT.items() if v == "no-verdict")
+#: the changes of a record that give its window an `advice` violation
+ADVICE = tuple(m for m, v in R.COMMON.items() if v == "advice")
 
 
 @pytest.fixture(scope="module")
@@ -117,6 +119,9 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
             no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()
+    # for the same reason an `advice` is drawn only under the two changes that make one, so they are checked on their own
+    settings(derandomize=True, database=None, deadline=None, max_examples=20)(
+        given(R.record_cases(only=ADVICE), st.data())(same.hypothesis.inner_test))()
 
     # Hypothesis mixes the literals of every imported local module into what it samples, so the 600 cases above move with
     # unrelated code; a grid-free no-verdict is among them only a few times, and attested units under the changes that

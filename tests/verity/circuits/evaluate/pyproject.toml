@@ -41,7 +41,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
           "tools/research/src/research/treelock.py",
           "tools/research/src/research/pipefail.py",
-          "tools/research/src/research/store", "tools/research/src/research/telemetry",
+          "tools/research/src/research/store", "adapters/vllm/verity_vllm/pipeline/private_names.json", "tools/research/src/research/telemetry",
           "tests/verity/protocols/proofs/flock/prover/data/captured-101/slices/silumul-v1-i8192",
           "tests/verity/protocols/proofs/flock/prover/data/captured-101/slices/rope-head-d64",
           "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/regression/__init__.py"]
