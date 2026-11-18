@@ -4,19 +4,22 @@
 # records and the run's result.json through the harness's kit (`result.py`): `write_host` its fastest record as
 # metrics.toml's number, `chip` and `write_gpu` their check's validation with no number.
 #
-#   chip        S_chip on one RTX PRO 6000 (`chip.cu`, `bwchip`). Outside the lease: build `bwchip` (refused on any
+#   chip        S_chip on one card, CARD (required: the `short` of its file under calibration/hardware/cards; the
+#               records cited are an RTX PRO 6000's), `chip.cu`, `bwchip`. Outside the lease: build `bwchip` for the
+#               card's plain architecture (refused on any
 #               register spill), write the code-footprint kernels as PTX and assemble each with ptxas, and record each
 #               cubin's SASS: its instructions, its add/xor steps (2 a chain a step, or the sweep's code bytes are not
 #               what it says: refused) and its code bytes (sass.txt); count the uniform registers bwchip's kernels name
 #               (uniform.txt); and rewrite urt.cubin (chip_ur.py) for each pair of uniform registers in UR_PAIRS.
-#               Under `gpu-lease 1 --wait --on $GPUS --max-min 25`: `bwchip` (its sweeps' gates are the chains' and
+#               Under `gpu-lease 1 --wait --on $GPUS --max-min 25`, refused where the leased card's file states
+#               another `arch` than CARD's: `bwchip` (its sweeps' gates are the chains' and
 #               chases' final states against the host's; a failed sweep reports nothing, and bwchip exits 3), then
 #               `bwchip --ur` for each pair, one process each (a register that doesn't exist may fault the context):
 #               ur.jsonl. Env: CUDA_HOME (the toolkit's directory, required: the probe names no version of its
 #               own), GPUS (0,1,2,3: NUMA node 0's), TIMED, ONLY (one sweep), UR_PAIRS. Outputs under
 #               $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, sass.txt, uniform.txt, chip.json, ur.jsonl.
-#   write_gpu   The write ceilings' GPU half: builds write.cu (bwwrite) for ARCH (90a, 120a; where it isn't given, the
-#               node's first card's name tells it) with toolkit 13.0 (NVCC, else $CUDA_HOME, else the machine's
+#   write_gpu   The write ceilings' GPU half: builds write.cu (bwwrite) for CARD (required: the `short` of the
+#               card's file), its `arch` less the `a`, with toolkit 13.0 (NVCC, else $CUDA_HOME, else the machine's
 #               record: `machine.py toolkit 13.0`) and runs every arm on one card, the queue's GPU (GPU_LEASE_UUID) or
 #               one it leases, with the card's clocks, PCIe link and ECC mode before and after and nvidia-smi dmon
 #               beside it. Outputs in $OUT: build.txt, sass.txt, gpu.txt, dmon.txt, write.jsonl, rc.txt. ARGS go to
@@ -28,9 +31,9 @@
 #               build.txt, write_host.jsonl, rc.txt; its number only where no record has a wrong byte (else exit 5).
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' -- env CUDA_HOME=DIR taskset -c 48-95 verity calibrate bandwidth chip
+#     --declared-output 'out/*' -- env CUDA_HOME=DIR CARD=SHORT taskset -c 48-95 verity calibrate bandwidth chip
 #   research run --queue --gpus 1 --max-min 30 --cpus 8 --mem-gb 32 --project verity --source . --cwd source \
-#     -- verity calibrate bandwidth write_gpu
+#     -- env CARD=SHORT verity calibrate bandwidth write_gpu
 #   research run --on auto --cpus 48 --mem-gb 64 --project verity --cwd source -- verity calibrate bandwidth write_host
 USAGE="usage: verity calibrate bandwidth chip|write_gpu|write_host"
 
@@ -42,11 +45,13 @@ PAIRS=${UR_PAIRS:-6:7 63:6 64:0 72:8 78:14 79:15 79:78 80:16 96:32 112:48 126:62
 
 if [ "${1:-}" = leased ]; then
   S=$2
+  : "${CARD:?chip leased runs under run.sh chip}" "${ARCH:?chip leased runs under run.sh chip}"
   UUID=${GPU_LEASE_UUID:?run under gpu-lease}
   NAME=$(nvidia-smi -i "$UUID" --query-gpu=name --format=csv,noheader | head -1)
   nvidia-smi -i "$UUID" --query-gpu=index,uuid,name,pci.bus_id,clocks.sm,clocks.max.sm,clocks.mem,power.draw,temperature.gpu \
     --format=csv > "$O/gpu.txt"
-  case "$NAME" in *"RTX PRO 6000"*) ;; *) echo "REFUSED: GPU $UUID is '$NAME', not an RTX PRO 6000"; exit 3 ;; esac
+  HAS=$(python3 ../../benchmarks/kernels/machine.py arch "$NAME" 2>&1) || { echo "REFUSED: GPU $UUID is '$NAME': $HAS"; exit 3; }
+  [ "$HAS" = "$ARCH" ] || { echo "REFUSED: GPU $UUID is '$NAME', whose card file states $HAS, not the $ARCH of CARD=$CARD that bwchip is built for"; exit 3; }
   rc=0
   "$S/bwchip" --out "$O" --ptx "$S/ptx" ${ONLY:+--only "$ONLY"} > /dev/null || rc=$?
   : > "$O/ur.jsonl"
@@ -61,14 +66,20 @@ fi
 
 CUDA=${CUDA:-${CUDA_HOME:-}}
 [ -n "$CUDA" ] || { echo "REFUSED: chip: no CUDA toolkit given: set CUDA_HOME to its directory (the machine's own: python3 benchmarks/kernels/machine.py toolkit)" >&2; exit 3; }
+[ -n "${CARD:-}" ] || { echo "REFUSED: chip: CARD is not given: the short name of the card's file under calibration/hardware/cards" >&2; exit 3; }
+ARCH=$(python3 ../../benchmarks/kernels/machine.py card-arch "$CARD") || exit 3
+export CARD ARCH
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
+# Built for the plain architecture, the card's `arch` without its `a` suffix (sm_120 on an RTX PRO 6000, sm_90 on Hopper),
+# on purpose: every record cited was built so, and the `a` target's build is other bytes (compile-only, both ways, toolkit
+# 13.0: r20261118-083832-a37a).
+FLAGS=(-O3 -std=c++17 -arch="${ARCH%a}" -Xptxas -v)
 { "$CUDA/bin/nvcc" --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
 "$CUDA/bin/nvcc" "${FLAGS[@]}" chip.cu -o "$S/bwchip" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
 mkdir "$S/ptx" "$S/ur"
 "$S/bwchip" --emit "$S/ptx"
-ls "$S"/ptx/*.ptx | xargs -P 16 -I{} sh -c '"$1" -arch=sm_120 -O3 "$2" -o "${2%.ptx}.cubin"' _ "$CUDA/bin/ptxas" {}
+ls "$S"/ptx/*.ptx | xargs -P 16 -I{} sh -c '"$1" -arch="$3" -O3 "$2" -o "${2%.ptx}.cubin"' _ "$CUDA/bin/ptxas" {} "${ARCH%a}"
 sha256sum chip.cu chip_ur.py "$S/bwchip" >> "$O/build.txt"
 
 # Each kernel's steps: icache_N 4 chains of add/xor, icache8_N 8, unified_N, clevel_N and glevel_N 4, icachef_N 8 chains
@@ -113,15 +124,12 @@ export O=${OUT:?run under research run}; mkdir -p "$O"
 BW=$PWD/calibration/bandwidth
 export B=$(mktemp -d /tmp/bwwrite.XXXXXX); trap 'rm -rf "$B"' EXIT
 NVCC=${NVCC:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc} || { echo 3 > "$O/rc.txt"; exit 3; }
-if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) echo "write_gpu: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; echo 3 > "$O/rc.txt"; exit 3 ;;
-  esac
-fi
-# write.cu is built for the plain architecture: sm_120 on an RTX PRO 6000, sm_90 on Hopper
-if ! "$NVCC" -O3 -std=c++17 -arch="sm_${ARCH%a}" -o "$B/bwwrite" "$BW/write.cu" > "$O/build.txt" 2>&1; then
+[ -n "${CARD:-}" ] || { echo "write_gpu: CARD is not given: the short name of the card's file under calibration/hardware/cards" >&2; echo 3 > "$O/rc.txt"; exit 3; }
+ARCH=$(python3 benchmarks/kernels/machine.py card-arch "$CARD") || { echo 3 > "$O/rc.txt"; exit 3; }
+# Built for the plain architecture, the card's `arch` without its `a` suffix (sm_120 on an RTX PRO 6000, sm_90 on Hopper),
+# on purpose: every record cited was built so, and the `a` target's build is other bytes (compile-only, both ways, toolkit
+# 13.0: r20261118-083832-a37a).
+if ! "$NVCC" -O3 -std=c++17 -arch="${ARCH%a}" -o "$B/bwwrite" "$BW/write.cu" > "$O/build.txt" 2>&1; then
   cat "$O/build.txt"; echo 4 > "$O/rc.txt"; exit 4
 fi
 { "$NVCC" --version; sha256sum "$B/bwwrite" "$BW/write.cu"; } >> "$O/build.txt"

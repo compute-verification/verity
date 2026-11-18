@@ -76,6 +76,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
@@ -341,13 +342,11 @@ def placed_unit(a, d: Path) -> list[str]:
 
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
-    from verity_bench import kit
-
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
     o = out / (f"{pt['tag']}-c{c}-k{k}" if "unit" in pt else f"k{pt['K']}-c{c}-k{k}") / f"{arm}-{mode}{rep}"
     o.mkdir(parents=True, exist_ok=True)
-    port = kit.free_port()
+    port = free_port()
     if "unit" in pt:
         inst, pub = pt["inst"], pt["pub"]
         tmpl = placed_unit(a, d)
