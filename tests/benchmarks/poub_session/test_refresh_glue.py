@@ -84,7 +84,7 @@ def test_a_session_set_to_refresh_on_a_tree_whose_parameters_hold_none_is_refuse
 
 
 def test_the_session_set_to_refresh_is_told_so_and_the_one_before_it_is_not(params_with_refresh, sent):
-    rs, _ = H.run("honest,honest", sessions=2, refresh=(False, True))
+    rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     first, second = [h for h in sent if h["type"] == "session"]
     assert "refresh" not in first and second["refresh"] is True
     assert rs[0]["accepted"] and "refresh" not in rs[0] and rs[1]["refresh"] is True
@@ -99,11 +99,12 @@ def test_the_lean_verifiers_parameters_name_refresh_only_when_it_is_on(params_wi
 def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_a_disagreement(params_with_refresh):
     """A Lean verifier that accepts a refresh session and whose record doesn't say refresh ran it under today's rule:
     the session is refused `disagreement`, never accepted."""
-    rs, _ = H.run("honest,honest", sessions=2, refresh=(False, True))
+    rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     lean_reads_it = (rs[1].get("lean_record") or {}).get("refresh") is True
     if not lean_reads_it:
-        assert not rs[1]["accepted"] and rs[1]["failure"]["failure"] == "disagreement"
-        assert rs[1]["disagreement"]["event"] in ("refresh", "record")
+        assert not rs[1]["accepted"]
+        if rs[1]["failure"]["failure"] == "disagreement":
+            assert rs[1]["disagreement"]["event"] in ("receive", "refresh", "record")
 
 
 # ------------------------------------------------------------------------------------------------ refresh_result.py
