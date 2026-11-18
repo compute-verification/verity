@@ -404,7 +404,7 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
 
 
 def test_the_chain_reads_the_served_nodes_public_endpoint_document_and_refuses_by_name_what_needs_its_records(
-        tmp_path, certifier_run):
+        tmp_path, attester_run):
     """The chain's report reads `served_session.py endpoint`'s art, the step's public document, as it reads the whole
     report: the verdict it takes is its own, from the document's fields, and a document lacking a field, or the art
     given where the records are needed, is refused by name with the fix."""
@@ -426,7 +426,7 @@ def test_the_chain_reads_the_served_nodes_public_endpoint_document_and_refuses_b
     (art / "report.json").write_text(json.dumps(public))
     with pytest.raises(SystemExit, match="holds no advice_trace.jsonl: the endpoint step reads the endpoint's private "
                                          "records"):
-        cr.network_attester_endpoint(certifier_run, art, [2])
+        cr.network_attester_endpoint(attester_run, art, [2])
 
 
 def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_attester_rehearsals(tmp_path,
