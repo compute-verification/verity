@@ -37,6 +37,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
@@ -588,12 +589,12 @@ def test_kept_sessions_under_another_id_than_the_windows_are_not_answered(served
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
     """A prover that no longer holds most of C* answers the challenged blocks it dropped with zeros: the run's check
     refuses the session, and the answer is a reject with its reason, still under a hiding commitment."""
-    held = pous.PousOption.answer
+    held = pous_served.Served.answer
     dropped = set(range(8, 48))
 
     def lost(self, i):
         return bytes(self.store.params.block_bytes) if i in dropped else held(self, i)
-    monkeypatch.setattr(pous.PousOption, "answer", lost)
+    monkeypatch.setattr(pous_served.Served, "answer", lost)
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "reject" and answer["reason"] and len(calls) == 1
     assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64
