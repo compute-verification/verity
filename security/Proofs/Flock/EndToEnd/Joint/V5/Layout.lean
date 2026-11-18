@@ -24,8 +24,8 @@ file states the layout that fixes those places before the sample and proves what
   and under `memberSamplingDesign τ k` (the design its session is played alone at), the probability the window's one sample gives
   the event at its part (`prCoin_design`, `prCoin_memberDistribution`); the members' samples together are the window's
   (`Laid.prCoin_parts`); and member `k`'s design misses a set of its proof blocks, or samples one, exactly when the
-  window's misses or samples their places in the population (`design_escape`, `memberSamplingDesign_escape`, `design_incl`), so at
-  most `P_a` of those places under A3 (`design_escape_le`);
+  window's misses or samples their places in the population (`design_missProb`, `memberSamplingDesign_missProb`, `design_incl`), so at
+  most `P_a` of those places under A3 (`design_missProb_le`);
 * the window's incorrect proof blocks are its members' (`Laid.part_incorrectSet`).
 -/
 
@@ -330,7 +330,7 @@ theorem prCoin_design (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) →
 
 /-- **Member `k`'s design misses a set of its proof blocks** exactly when the window's sample misses their places in
 the population. -/
-theorem design_escape (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
+theorem design_missProb (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
     (w.design k).missProb B = w.L.missProb (B.image (w.ms.get k).emb) :=
   congrArg (fun p : w.L.Ω → Prop => prCoin p) (funext fun ω => propext (w.disjoint_part_iff k (w.L.draw ω) B))
 
@@ -364,18 +364,18 @@ theorem prCoin_memberDistribution (τ : Strategy w.game) (k : Fin w.ms.length) (
 
 /-- The ended share of the probability that member `k`'s design played alone misses a set of its proof blocks is at most
 the probability that the window's sample misses their places in the population. -/
-theorem memberSamplingDesign_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
+theorem memberSamplingDesign_missProb (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
     w.endShare * (w.memberSamplingDesign τ k).missProb B ≤ w.L.missProb (B.image (w.ms.get k).emb) :=
-  (w.prCoin_memberDistribution τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
+  (w.prCoin_memberDistribution τ k fun S => Disjoint S B).trans_eq (w.design_missProb k B)
 
 end Ended
 
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/
-theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
+theorem design_missProb_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
     (B : Finset (Fin (w.ms.get k).n)) :
     (w.design k).missProb B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
-  (w.design_escape k B).trans_le (Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns _)
+  (w.design_missProb k B).trans_le (Bridge.execSel_missProb_le w.src hA3 w.hlaw w.hns _)
 
 section Ended
 
