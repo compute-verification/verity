@@ -927,7 +927,7 @@ def shaped() -> list[dict]:
     fresh and the rate refuses.
 
     Then a wire's leaves, each case under the policy of exactly what its blocks hold: the token a word into a key of
-    bits that only gates read, and bits into a key of one word (both accepted). Then the accepted case with its Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x`
+    bits that only gates read, and bits into a key of one word (both accepted). Then the accepted case with its Program's root edited (`own-rows`): `Norm`'s `x` handed the input gates its weights' row
     has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output.
 
     Then the accepted case with its record's text another: one that lists its members and so states no wires
