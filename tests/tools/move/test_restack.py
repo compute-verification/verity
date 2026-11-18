@@ -603,6 +603,25 @@ def on_base(monkeypatch):
     return ran
 
 
+def test_the_move_is_checked_only_for_a_branch_its_script_runs_on(repo, on_base):
+    """A layout move's check runs the script over the whole tree on the move's base. A branch based after the move (skipped
+    in a crossing of many), one that already holds it, and one up to date run no script on it, so they pay no check; the
+    branch the script runs on still does."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "held", "move")
+    on(repo, "held", ("after the move", {"NOTES.md": "notes\n"}))
+    git(repo, "checkout", "-q", "-b", "moved-on", "move")
+    onto = commit(repo, "main after the move", {"CHANGES.md": "changes\n"})
+    assert RS.restack("later", "move", cwd=str(repo), main="main")["status"] == "based-after" and on_base == []
+    assert RS.restack("held", "move", onto=onto, cwd=str(repo))["status"] == "clean" and on_base == []
+    assert RS.restack("move", "move", cwd=str(repo))["status"] == "up-to-date" and on_base == []
+    assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [git(repo, "rev-parse", "base")]
+
+
 def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):
     """As drive runs it, and every test that reaches this file: the script runs on the base in each process, nothing is left
     on the machine, and a check another run kept there is not read."""

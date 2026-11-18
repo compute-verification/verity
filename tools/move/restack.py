@@ -26,8 +26,9 @@ same script rather than by rename detection:
 4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
-Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
-and the same for every branch. With `--kept`, a check that passed is kept as a file under
+Before step 1, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
+and the same for every branch. A branch that already contains M, is up to date, or is `based-after` M (below) runs no script
+on M, and M isn't checked for it. With `--kept`, a check that passed is kept as a file under
 `~/.cache/verity-check/restack-generated/`, in the check's cache, and one kept there is read: on one machine the first
 restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
@@ -680,7 +681,6 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
-    generated = check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
@@ -694,6 +694,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
                 "error": refused_after(branch, late, base, move, command, [])}
     tip, ran = head, False
     if not contains(move, head, cwd):
+        generated = check_generated(move, base, python, cwd)
         if not contains(base, head, cwd):
             tree, conflicts = merge_trees(head, base, cwd)
             if conflicts:

@@ -13,8 +13,8 @@ and write, and the index of every directory.
 says. In a fresh clone, `uv sync --all-packages --extra torch-cpu` makes the environment every runner here runs in,
 and `uv run verity bench NAME [ARGS]` runs one. What each measures is its row in the index below, and its runner's
 header gives its machine, its arguments and what it writes. These are the directories that have one, with a runner's
-subcommands or defaults in parentheses: `attester_load`, `bool_build_cost`, `certifier_term`, `compile_cost`,
-`compute`, `dsa_topk`, `exfiltration`, `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate`
+subcommands or defaults in parentheses: `attester_load`, `bool_build_cost`, `certifier_term`, `codec_tensor` (the
+tensor-core wide-word codec on one GPU), `compile_cost`, `compute`, `dsa_topk`, `exfiltration`, `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate`
 (`--against REV`, its guard), `memory`, `mempool` (`--quick`), `network_traces`, `numerical` (one of
 `verity_numerical`'s tools by name; `numerical judge` compares two results under the proof campaign's contract), `overhead` (`points`, `run`,
 `table`), `pouw NAME` (`pouw/NAME/`'s runner; given no NAME, the names), `ppl` (`eval`, `submit`, `report`,
