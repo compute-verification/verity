@@ -13,7 +13,6 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover import circuit
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
@@ -24,6 +23,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import (
 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.protocols import pouw
 
 K, N = 1088, 1600
@@ -74,17 +74,23 @@ def _serve(*enabled, settings=None, **kw):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_h1_is_executed():
-    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, H1}))
+    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, H1}))
     assert pouw.EXECUTED == (H1,)
-    for scheme in ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4", "pearl-c-sm120-v1-h3"):
+    for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-sm120-v1-h3"):
         assert "executor runs" in pouw.refusals(scheme, _serve(f"pouw:{scheme}"))[0], scheme
 
 
 @pytest.mark.parametrize("scheme", ["ncp-v2", "ncp-v2-shift24"])
-def test_the_selector_refuses_an_arm_that_keeps_weight_sides_by_name(scheme):
-    """ncp-v2's executor reused each weight's side across forwards, so beside storage its GEMMs would read a copy made
-    from the plaintext; the selector refuses its entry by name, whatever else is enabled."""
-    assert PO.refusals(_serve(f"pouw:{scheme}")) == (f"pouw:{scheme}: {scheme}: this adapter's executor runs {H1} only",)
+def test_ncp_v2_is_refused_by_name_as_no_scheme_pouw_registers(scheme):
+    """ncp-v2's serving is deleted: PoUW registers no ``ncp-v2`` scheme, so the selector refuses its entry by name, beside
+    SPOT or not, and the Commit's context refuses it before any engine exists."""
+    known = ", ".join(pouw.schemes())
+    want = f"pouw:{scheme}: pouw registers no scheme {scheme!r} (registered: {known})"
+    assert PO.refusals(_serve(f"pouw:{scheme}")) == (want,)
+    assert want in PO.refusals(_serve(f"pouw:{scheme}", "sampled-proofs:rows-sha512"))
+    with pytest.raises(PO.Refused) as r:
+        PO.commit_context(TargetProfile.default().with_overrides(protocols=(f"pouw:{scheme}", "sampled-proofs:rows-sha512")))
+    assert want in r.value.reasons
 
 
 def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
