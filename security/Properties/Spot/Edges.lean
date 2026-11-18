@@ -9,17 +9,14 @@ public import Spot.Edges
 * `RootRef P k i x w l`: root node `k`'s argument `i` reads, at its index `x`, leaf `l` of root node `w`, neither an
   input node.
 * `memberIndex a m t`: argument `a`'s index of member `m`'s leaf `t` (the circuit format's members of a batch argument).
-* `Edges.fieldOffset t f` and `Edges.fieldWord t f`: the first leaf and the first word of field `f` of the return `t`
-  in its unit's output row `out` (the code's, which `edgesOf` writes a wire's `offset` by).
+* `Edges.fieldOffset t f`: the first leaf of field `f` of the return `t`, its first word in the unit's output row `out`
+  (the code's, which `edgesOf` writes a wire's `offset` by).
 * `WireReads P rs W e k i x w l`: wire `e` covers that read: a reader unit of `e` is member `mk` of node `k`, its row
   `cut0` of port `i` holds index `x` at leaf `t`, and the writer unit is member `mw` of node `w`, whose output `out`,
-  from the first leaf of field `f`, word `e.offset`, holds leaf `l` at `t`, the run inside the one unit.
+  from the first leaf of field `f`, word `e.offset`, holds leaf `l` at `t`, the row being field `f` whole.
 * `EdgesExact P rs W ws`: the wires `ws` are exactly the references between root nodes: each is covered by a wire of
   `ws`, each wire covers only references, and no two wires cover one.
 * `EdgesOfExact`: the wires `edgesOf` accepts are exact, an open statement.
-* `PartsWithin P`: each argument of each root node has at most one part more than the spaces its parts read.
-
-`Proofs.Properties.Spot.Edges` proves that a root `edgesOf` accepts is within `PartsWithin`.
 -/
 
 @[expose] public section
@@ -47,8 +44,8 @@ def memberIndex (a : Arg) (m t : ℕ) : ℕ :=
 
 /-- **Wire `e` covers a read**: reader unit `e.start + m` is member `mk` of root node `k`, whose row `e.cut0` of port
 `i` (of `len` leaves) holds argument index `x` at its leaf `t`; writer unit `e.base + m·step` is member `mw` of root
-node `w`, whose output `out`, from the first leaf of field `f`, word `e.offset`, holds leaf `l` at `t`, the run of
-`len` leaves inside the one unit. -/
+node `w`, whose output `out`, from the first leaf of field `f`, word `e.offset`, holds leaf `l` at `t`, the row of `len`
+leaves being field `f` whole. -/
 def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire) (k i x w l : ℕ) : Prop :=
   let b := (P.defs[P.root]!).body
   let node := b.nodes[k]!
@@ -59,8 +56,7 @@ def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire)
     ∃ rb wb m mk mw t f, (Edges.firstUnits rs)[k]? = some (e.reader, rb) ∧
       (Edges.firstUnits rs)[w]? = some (e.writer, wb) ∧ m < e.radix.headD 0 ∧ e.start + m = rb + mk ∧
       mk < node.members ∧ t < len ∧ x = memberIndex (node.args[i]!) mk (e.cut0 * len + t) ∧
-      f < (fieldsOf wd.ret).length ∧ e.offset = Edges.fieldWord wd.ret f ∧
-      Edges.fieldOffset wd.ret f + len ≤ wd.outLeaves ∧
+      f < (fieldsOf wd.ret).length ∧ e.offset = Edges.fieldOffset wd.ret f ∧ len = ((fieldsOf wd.ret)[f]!).leaves ∧
       ((wb + mw : ℕ) : ℤ) = e.base + (m : ℤ) * e.step.headD 0 ∧ mw < (b.nodes[w]!).members ∧
       l = mw * wd.outLeaves + Edges.fieldOffset wd.ret f + t
 
@@ -76,13 +72,5 @@ exactly the references between root nodes. -/
 def EdgesOfExact : Prop :=
   ∀ (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (ws : List Wires.Wire),
     Edges.edgesOf P rs W = .ok ws → EdgesExact P rs W ws
-
-/-- **Each root argument within the parts bound**: at most one part more than the spaces (`Edges.partKey`) its parts
-read. -/
-def PartsWithin (P : Prog) : Prop :=
-  let b := (P.defs[P.root]!).body
-  ∀ k < b.nodes.size, ∀ (j : ℕ) (hj : j < (b.nodes[k]!).args.size),
-    ((b.nodes[k]!).args[j]).seq.parts.size ≤
-      (((b.nodes[k]!).args[j]).seq.parts.toList.map Edges.partKey).toFinset.card + 1
 
 end Properties.Spot.Edges
