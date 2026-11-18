@@ -32,11 +32,11 @@
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
-directory: under a research run, the run's). Each
-measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
-95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
-computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and, under a research
-run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
+directory: under a research run, the run's). Each measurement is the form a reader of numbers takes, `value`, `unit`,
+`commit` and `run`, with its `name`, its `mark`, its metric's `version` (`kit_report.VERSIONS`, 1 where it gives
+none), its 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the
+`inputs` it was computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and,
+under a research run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
 command's measurement from any other run's; a measurement with
 no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
 benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
@@ -154,13 +154,13 @@ def _run(argv: Sequence[str]) -> tuple[int, str]:
     return r.returncode, r.stdout if r.returncode == 0 else r.stderr or r.stdout
 
 
-def _commit() -> str | None:
-    """The commit of the tree the job runs: the one `research run` shipped, else this checkout's HEAD; None where neither
-    says."""
+def commit(root: Path | None = None) -> str | None:
+    """The commit of the tree the job runs: the one `research run` shipped, else the HEAD of the checkout at `root` (this
+    file's where None); None where neither says."""
 
     if sha := settings.RESEARCH_SOURCE_SHA:
         return sha
-    rc, out = _run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"])
+    rc, out = _run(["git", "-C", str(root or Path(__file__).resolve().parent), "rev-parse", "HEAD"])
     return out.strip() or None if rc == 0 else None
 
 
@@ -203,7 +203,7 @@ def host_stamp() -> dict:
         "card": ", ".join(dict.fromkeys(g["name"] for g in gpus)) or "none",
         "gpus": [{"uuid": g["uuid"], "sm_mhz": _mhz(g["clocks.sm"]), "mem_mhz": _mhz(g["clocks.mem"])} for g in gpus],
         "driver": ", ".join(dict.fromkeys(g["driver_version"] for g in gpus)) or None,
-        "cuda": cuda, "node": platform.node(), "commit": _commit()}
+        "cuda": cuda, "node": platform.node(), "commit": commit()}
     if why:
         stamp["why"] = why
     return stamp
@@ -603,6 +603,14 @@ def is_trial(environ: Mapping[str, str] | None = None) -> bool:
     return (settings.get(TRIAL, environ) or "0") != "0"
 
 
+def superseded(store: Any, target: str) -> list[str]:
+    """What supersedes a record's run or art: the values of its `served_table.SUPERSEDED_BY` labels, empty where none."""
+
+    from verity_bench.served_table import SUPERSEDED_BY
+
+    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
+
+
 def trial_attempt(attempt: Mapping[str, Any]) -> bool:
     """Whether `research run` started the attempt as a trial (`--env VERITY_BENCH_TRIAL=1`, its ``params.env``)."""
 
@@ -715,9 +723,10 @@ class Writer:
                over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
         """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
         to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
-        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
-        against that target, and the `inputs` it was computed from, with this run, its commit, the host stamp and, where
-        the writer has it, the run's `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        holds as `ci95`, the key `paired` gives it under, its metric's `version`, 1 unless `name` is in
+        `kit_report.VERSIONS`, which no caller gives, its `target`, the `verdict` of its check against that target, and the
+        `inputs` it was computed from, with this run, its commit, the host stamp and, where the writer has it, the run's
+        `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
@@ -765,7 +774,8 @@ class Writer:
             interval = [low, high]
         spans = {key: x for key, x in (("period", period), ("over", over), ("member", member)) if x is not None}
         entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit, "mark": mark,
-                 **spans, "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
+                 **spans, "version": kit_report.VERSIONS.get(name, 1), "commit": self.stamp["commit"], "run": self.run,
+                 "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:

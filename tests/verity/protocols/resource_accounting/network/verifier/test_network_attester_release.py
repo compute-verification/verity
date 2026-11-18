@@ -9,7 +9,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
 from verity.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END, WATERMARK_PATH,
-                                    read_watermark, release_head, release_of, watermark_chunk, watermark_head,
+                                    read_watermark, release_fields, release_head, release_of, watermark_chunk, watermark_head,
                                     with_release)
 
 BODY = b'{"prompt":"a\\r\\n\\r\\nb","max_tokens":4}'
@@ -71,22 +71,43 @@ def test_release_head_takes_non_negative_integers_and_a_non_empty_run():
             release_head(0, run)
 
 
-def test_release_of_reads_the_first_of_each_and_refuses_what_is_not_a_release():
+def test_release_of_reads_the_first_of_each_and_refuses_a_malformed_one_by_name():
+    """A head with no release header is no release (None); one whose release carries a malformed N, run or bucket is
+    refused by that header's name, so a caller never reads a release someone tried to mark as no release."""
     def head(*fields: bytes) -> bytes:
         return b"POST /v1/completions HTTP/1.1\r\n" + b"".join(f + b"\r\n" for f in fields) + b"\r\n"
 
     assert release_of(head(b"x-verity-release: 4", b"X-Verity-Release: 9")) == (4, None, None)
     assert release_of(head(b"X-VERITY-RELEASE:  41 ", b"x-verity-release-run: 00ff")) == (41, b"\x00\xff", None)
-    assert release_of(head(b"x-verity-release: 4", b"x-verity-release-run: zz")) == (4, None, None)
-    assert release_of(head(b"x-verity-release: 4", b"x-verity-release-run: ")) == (4, None, None)
     assert release_of(head(b"x-verity-release: 4", b"x-verity-release-bucket: 6",
                            b"x-verity-release-bucket: 7")) == (4, None, 6)
     for bad in (b"-1", b"1.0", b"", b"\xd9\xa1", b"x"):
-        assert release_of(head(b"x-verity-release: 4", b"x-verity-release-bucket: " + bad)) == (4, None, None)
-    for bad in (b"x-verity-release: -1", b"x-verity-release: 1.0", b"x-verity-release: ", b"x-verity-release: \xd9\xa1",
-                b"x-verity-release-run: 00", b"x-verity-release-bucket: 3"):
-        assert release_of(head(bad)) is None
-    assert release_of(head()) is None
+        with pytest.raises(ValueError, match="^x-verity-release: a decimal count"):
+            release_of(head(b"x-verity-release: " + bad, b"x-verity-release-run: 00ff"))
+    for bad in (b"zz", b"", b"0", b"00 ff", b"0x00"):
+        with pytest.raises(ValueError, match="^x-verity-release-run: a run id in hex"):
+            release_of(head(b"x-verity-release: 4", b"x-verity-release-run: " + bad))
+    for bad in (b"-1", b"1.0", b"", b"\xd9\xa1", b"x"):
+        with pytest.raises(ValueError, match="^x-verity-release-bucket: a decimal count"):
+            release_of(head(b"x-verity-release: 4", b"x-verity-release-bucket: " + bad))
+    for absent in (head(), head(b"x-verity-release-run: 00"), head(b"x-verity-release-bucket: 3"),
+                   head(b"x-verity-release-run: zz"), watermark_head(RUN), b"x-verity-release: 4\r\n\r\n"):
+        assert release_of(absent) is None
+
+
+def test_release_fields_is_the_one_reader_release_of_reads_a_head_through():
+    """A mapping of lower-cased header names gives what the head of those fields gives, the run as its hex, and the
+    same refusals by name; spaces and tabs around a value are not the value's."""
+    assert release_fields({}) is None and release_fields({"x-verity-release-run": "00"}) is None
+    assert release_fields({"x-verity-release": " 41\t", "x-verity-release-run": "00FF", "x-verity-release-bucket": "6"}) == (
+        41, "00FF", 6)
+    assert release_of(with_release(REQUEST, 3, RUN, 9)) == (3, bytes.fromhex(release_fields(
+        {"x-verity-release": "3", "x-verity-release-run": RUN.hex(), "x-verity-release-bucket": "9"})[1]), 9)
+    for fields, name in (({"x-verity-release": "\u0661"}, "x-verity-release"),
+                         ({"x-verity-release": "1", "x-verity-release-run": "abc"}, "x-verity-release-run"),
+                         ({"x-verity-release": "1", "x-verity-release-bucket": "\xa06"}, "x-verity-release-bucket")):
+        with pytest.raises(ValueError, match=f"^{name}: "):
+            release_fields(fields)
 
 
 def test_the_watermark_stream_is_one_chunked_post_of_one_line_a_tick():
@@ -273,16 +294,19 @@ def test_a_watermark_line_is_read_only_when_it_advances():
         line = b"%d %d" % (t, n) + b"".join(b" %d" % k for k in lost) + b"\n"
         last = read_watermark(line, last)
         assert last == (t, n, lost)
-    for line in (b"7 9\n", b"5 9\n", b"6 8\n", b"4 9\n"):
-        with pytest.raises(ValueError, match="t steps by 1 from 0 and n never decreases"):
+    for line in (b"7 9\n", b"5 9\n", b"4 9\n", b"7 8\n"):
+        with pytest.raises(ValueError, match="^watermark-tick: .* t steps by 1 from 0$"):
+            read_watermark(line, last)
+    for line in (b"6 8\n", b"6 0\n"):
+        with pytest.raises(ValueError, match="^watermark-count: .* n never decreases$"):
             read_watermark(line, last)
     for line in (b"6 12 8\n", b"6 12 12\n", b"6 12 10 9\n", b"6 12 10 10\n"):
-        with pytest.raises(ValueError, match="rise from 9 below n"):
+        with pytest.raises(ValueError, match="^watermark-lost: .* rise from 9 below n$"):
             read_watermark(line, last)
     assert read_watermark(b"6 12 9 11\n", last) == (6, 12, (9, 11))
-    with pytest.raises(ValueError, match="t steps by 1 from 0"):
+    with pytest.raises(ValueError, match="^watermark-tick: "):
         read_watermark(b"1 0\n")
     for line in (b"6 9", b"6 9\r\n", b"06 9\n", b"6  9\n", b"+6 9\n", b"6 -9\n", b" 6 9\n", b"6 9\n\n", b"\xd9\xa1 9\n",
                  b"6 12 09\n", b"6 12  9\n", b"6 12 9 \n"):
-        with pytest.raises(ValueError, match="a watermark line is"):
+        with pytest.raises(ValueError, match="^watermark-form: a watermark line is"):
             read_watermark(line, last)

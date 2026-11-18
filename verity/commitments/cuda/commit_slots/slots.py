@@ -21,8 +21,7 @@ The layout (:class:`CommitShape`) is the step's public structure: groups (what o
 each of rows, each row the concatenation of byte ranges (:class:`Part`) of the slot's row of the group's tensors. Every slot
 has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
 slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
-from that slot's rows alone (a replay of its request) and their salts, and :func:`verify_unit` checks an opening against the
-step's root.
+from that slot's rows alone (a replay of its request) and their salts.
 
 Salts are data. No salt is derived, from a key or from anything else: a step's salts (:func:`fresh_salts`, ``(slots, rows,
 192)`` bytes) are the prover's draws, one a leaf, which it hands to :func:`commit` and keeps, with the step's record and never
@@ -51,12 +50,12 @@ from verity.commitments.identity import identity_digest_sha512, tagged_sha512, t
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
 from verity.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
-from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
+from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 
 __all__ = ["UNIT_MAX_BITS", "Group", "CommitShape", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
            "edge_layout", "fixture", "fresh_salts", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
-           "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids", "verify_unit"]
+           "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -66,7 +65,6 @@ ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 INST = hm96.SHA512
 KEY = INST.default_key
 SALT_BYTES = INST.salt_bytes
-STRING_BYTES = INST.proven_bytes
 DIGEST_BYTES = INST.digest_bytes
 
 
@@ -335,33 +333,6 @@ def open_unit(context: bytes, layout: CommitShape, step: int, salts: Any, slot_r
     b = layout.row_base[unit]
     return UnitOpening(slot, unit, sc.strings[b:b + len(layout.units[unit])], sc.tree.open([unit]),
                        step_tree(context, layout, step, slot_roots).open([slot]))
-
-
-def verify_unit(step_root: bytes, context: bytes, layout: CommitShape, step: int, slots: int, opening: UnitOpening,
-                rows: Mapping[int, tuple[bytes, bytes]] | None = None) -> bool:
-    """Whether ``opening`` opens unit ``opening.unit`` of slot ``opening.slot`` of the step whose root is ``step_root``; with
-    ``rows``, ``rows[r] = (row, salt)`` are exactly its rows' bytes and salts."""
-    o = opening
-    if not (0 <= o.slot < slots and 0 <= o.unit < layout.unit_count) or o.slot_path.indices != (o.slot,) \
-            or o.unit_path.indices != (o.unit,) or len(o.strings) != len(layout.units[o.unit]):
-        return False
-    if any(type(s) is not bytes or len(s) != STRING_BYTES for s in o.strings):
-        return False
-    if rows is not None:
-        if sorted(rows) != list(range(len(o.strings))):
-            return False
-        for r, (row, salt) in rows.items():
-            if len(row) != layout.units[o.unit][r].nbytes or len(salt) != SALT_BYTES \
-                    or INST.commit_string(KEY, sha512_row_v2_digest(row, 8 * len(row)), salt) != o.strings[r]:
-                return False
-    unit_root = _unit_tree(unit_domain(context, layout, o.unit), o.strings).commitment.root
-    if unit_root != o.unit_path.roots[0]:
-        return False
-    sd = slot_domain(context, layout)
-    if not verify_roots(o.slot_path.roots[0], sd.domain_id, sd.count, o.unit_path):
-        return False
-    td = step_domain(context, layout, step, slots)
-    return verify_roots(step_root, td.domain_id, td.count, o.slot_path)
 
 
 # --- layouts and test data ---------------------------------------------------------------------------------------------

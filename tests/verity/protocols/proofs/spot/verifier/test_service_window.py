@@ -15,6 +15,7 @@ from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes
 from test_remote import signer  # noqa: F401  (the challenger key's signer fixture)
@@ -86,7 +87,7 @@ def _record(counts=COUNTS, program=None, query=QUERY, sampling_design=None, valu
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = form or program or _program(counts, values=values)
     named, table = _named(program, query)
-    return R.record(program, query, sampling_design or named, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+    return DK.record(program, query, sampling_design or named, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
                     work_table=None if sampling_design else table, **kw)
 
 
@@ -238,7 +239,7 @@ def _earlier(row: int, registered=(), roots=()) -> dict:
     """A record of the prover's log before the stream: a docket of another Program (PAIR's two instances), in
     window ``row``."""
     prog, q = PN.population_program(PAIR, 2), P.template_instance_query(PAIR)
-    return R.record(prog, q, {"law": "subset", "k": 1}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row},
+    return DK.record(prog, q, {"law": "subset", "k": 1}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row},
                     registered=registered)
 
 

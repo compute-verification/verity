@@ -2,6 +2,7 @@
 stand-in exchange that keeps what a scheme subscribes and files, as the vLLM adapter's `messages.Exchange` does."""
 from __future__ import annotations
 
+import weakref
 from fractions import Fraction
 
 import pytest
@@ -82,6 +83,26 @@ def test_the_kernel_hands_inward_the_weight_decoded_from_c_star_and_leaves_other
     assert kernel(other, lambda given: given) is None
     s.release()
     assert s.store.rows is None and s.commitment()["blocks"] > 0
+
+
+def test_no_weight_outlives_its_call_and_no_registered_tensor_is_kept_alive(monkeypatch):
+    """What `POUS.keeps_weight_copy` (False) says: once the weights are registered nothing of PoUS's keeps a registered
+    tensor alive, and the weight decoded for a block is gone when its call returns."""
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
+    g = torch.Generator().manual_seed(7)
+    s, ex = served.Served(P2, CTX), Exchange()
+    s.install(ex)
+    ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
+    w = torch.randint(-128, 128, (6, 40), dtype=torch.int8, generator=g)
+    registered = weakref.ref(w)
+    ex.emit(H.RegisteredValues((("a.weight", w),), operands={"a.weight": 0}))
+    del w
+    assert registered() is None and POUS.keeps_weight_copy is False
+    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    handed: list = []
+    due = H.BlockDue("a", 0, {"n": 6, "k": 40}, "int8", {"x": None}, weights={"weight": "a.weight"})
+    assert kernel(due, lambda given: handed.append(weakref.ref(given["weight"]))) is None
+    assert len(handed) == 1 and handed[0]() is None
 
 
 def test_its_settings_are_checked_where_every_setting_is_and_its_launchers_values_when_attached():

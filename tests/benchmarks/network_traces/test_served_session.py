@@ -99,7 +99,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_ATTESTER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --protocols-config "
                                     "'{\"network-attester\": {\"order\": \"release-order\"}}' "
-                                    "--seal --retain-exclude hidden_m1")
+                                    "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])

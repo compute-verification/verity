@@ -107,7 +107,7 @@ def network_attester_request(request: bytes, payload: int = ID_PAYLOAD) -> dict 
     """A network attester's id request's fields (`request`: its head and body as the server reads them), or None:
     exactly `id_form.id_request` of its own fields in B = `payload` + 9-byte cells from their first byte, with the
     release headers the network attester puts on the server's copy when it has them (`release.release_of`,
-    `release.with_release`)."""
+    `release.with_release`). `release.release_of`'s `ValueError` for a malformed release header."""
     head, blank, raw = request.partition(b"\r\n\r\n")
     try:
         body = json.loads(raw)
@@ -184,7 +184,11 @@ class Endpoint:
             return None, None, http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
-        fields = network_attester_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
+        try:
+            fields = network_attester_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
+        except ValueError as e:
+            self.refused += 1
+            return None, None, http(400, {"error": str(e)})
         why = (f"a network attester's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
                "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
         if why is not None:

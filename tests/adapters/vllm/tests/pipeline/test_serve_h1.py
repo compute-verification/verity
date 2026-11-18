@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 import torch
+from verity.commitments import salt_file
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
@@ -191,7 +192,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     out = arm.close(0)
     w0 = tmp_path / "prover" / "w0"
     assert out["tied"] and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
-    assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.KEY).is_file() and any((w0 / PV.CALLS).iterdir())
+    assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.SALTS / salt_file.INDEX).is_file() and any((w0 / PV.CALLS).iterdir())
     record = json.loads((tmp_path / "serve" / "h1" / "w0" / PH.CALLS_FILE).read_text())
     served = [c["index"] for c in record["calls"] if c["served"]]
     assert served and out["kept"]["calls"] == len(served) and out["kept"]["waits"] == 0 and PV.writer_of(w0) is None
@@ -358,7 +359,11 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
     session's and its sampling coin its sample session's, its record carries the sessions without their secrets, and the
     verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file
-    the windows wrote holds the weight trees' salt key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
+    the windows wrote holds a salt of the weight trees (`pouw_h1.WEIGHT_SALTS`), raw or in hex. The process's weight
+    salts are this test's own, so the salts checked are the ones its windows drew."""
+    salts = PH.PV.RunSalts()
+    monkeypatch.setattr(PH, "WEIGHT_SALTS", salts)
+    monkeypatch.setattr("verity_vllm.protocols.pouw.h1_hooks.H1_WEIGHT_SALTS", salts)
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
 
@@ -399,7 +404,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
                         ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
                          "--withhold"]] * 2
     written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
-    assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
+    weight = [ys[i:i + 192] for ys in PH.WEIGHT_SALTS._by.values() for i in range(0, len(ys), 192)]
+    assert written and weight and not any(y in b or y.hex().encode() in b for b in written for y in weight)
     srv.src.uninstall()
 
 
@@ -578,9 +584,9 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(SH, "H1Windows", functools.partial(SH.H1Windows, unit=_unit(), clock=lambda: next(ticks)))
     monkeypatch.setattr(PHK, "_ROOTS", {})
 
-    def rooted(w, rows, *key):
+    def rooted(w, rows, *salts):
         roots.append(w)
-        return weight_root(w, rows, *key)
+        return weight_root(w, rows, *salts)
 
     def warm(layers, rows):
         warmed.append((len(layers), rows))

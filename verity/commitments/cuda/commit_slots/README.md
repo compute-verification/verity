@@ -56,8 +56,6 @@ plan = G.Plan(context, G.regroup(layout, 4), "cuda", build=DIR)
 `S.open_unit(context, layout, step, salts, slot_roots, slot, unit, rows)` rebuilds the slot's subtree from that slot's
 rows and their salts (`salts`: the slot's, `(rows, 192)`) alone (its request's replay), refuses if its root isn't the committed one, and returns a `UnitOpening`: the proof
 block's public strings, its root's path in the slot tree and the slot root's path in the step tree.
-`S.verify_unit(step_root, context, layout, step, slots, opening, rows=None)` checks it, and with `rows` (rank to
-`(row, salt)`) that those are exactly the proof block's rows.
 
 ## Layouts
 

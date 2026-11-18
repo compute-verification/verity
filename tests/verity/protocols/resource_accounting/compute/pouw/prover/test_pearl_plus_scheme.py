@@ -524,15 +524,15 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     opened, finished = [], []
     monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
     monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
-    monkeypatch.setattr(SV, "salt_session", lambda entry, settings, root, opens, epoch: (
-        opened.append((entry, settings.challenger, settings.session, settings.gate, root, opens, epoch))
+    monkeypatch.setattr(SV, "salt_session", lambda entry, settings, root, epoch: (
+        opened.append((entry, settings.challenger, settings.session, settings.gate, root, epoch))
         or ("session", "c", "o", b"salt", {"gate": 1}, epoch)), raising=False)
     monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
     on = PS.Attached({**CTX, "private": str(tmp_path)})
     on.run = on.open({0: W0}, on.own)
-    [(entry, at, session, gate, root, opens, epoch)] = opened
+    [(entry, at, session, gate, root, epoch)] = opened
     w = SV.weights_root({0: bytes([0]) * 64})
-    assert (entry, at, session, root, opens, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, True, 0)
+    assert (entry, at, session, root, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, 0)
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
