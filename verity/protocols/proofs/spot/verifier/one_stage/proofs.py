@@ -408,17 +408,18 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]],
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the proof block of `units`, the drawn block's, derived from C and the partition (`one_circuit.restrict`), never
-    `proof`'s own circuit file; the findings in session order and None, or None and the refusal (``registered``:
-    `registered` is None and the program reads registered values, `reads_registered`; ``circuit``: C, the partition or
-    `units` give no C_S, or its base circuit is not derived yet, `one_circuit.lower`; ``proof``: a file is missing or the
+    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
+    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
+    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
+    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
+    `one_circuit.lower`; ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
@@ -441,7 +442,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], units:
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
     try:
-        derived = OC.restrict(program, partition, units)
+        derived = OC.restrict(program, partition, OC.block(program, partition, block))
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
@@ -570,7 +571,8 @@ class Member:
 def members_v2(members: Sequence[Member],
                names: Mapping[str, Sequence[str]] | None = None) -> tuple[dict, dict, list[Path]]:
     """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
-    (``{"members": {name: {public, registered, units, vus_per_block}}}``), the evidence's
+    (``{"members": {name: {public, registered, block, vus_per_block}}}``, ``block`` its rank by first unit, its block of
+    the partition object's ``blocks``), the evidence's
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
@@ -586,9 +588,10 @@ def members_v2(members: Sequence[Member],
         if len(m.proof.sessions) > 1:
             raise ValueError(f"member {m.name} has {len(m.proof.sessions)} sessions: a statement is exactly one session "
                              f"on live coins, never retried")
+    rank = {m.name: k for k, m in enumerate(sorted(members, key=lambda m: min(lo for lo, _ in m.units)))}
     params = {"members": {m.name: {"public": m.public_sha512,
                                    "registered": None if m.registered is None else dict(m.registered),
-                                   "units": [[lo, hi] for lo, hi in m.units], "vus_per_block": m.vus_per_block}
+                                   "block": rank[m.name], "vus_per_block": m.vus_per_block}
                           for m in members}}
     statements, blobs = [], []
     for m in sorted((m for m in members if m.proof.sessions), key=lambda m: min(lo for lo, _ in m.units)):
