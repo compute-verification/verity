@@ -21,7 +21,6 @@ KINDS = {
 }
 
 CALLERS: dict[str, str] = {
-    "adapters/vllm/tools/description_sizes.py": "new-run",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py": "new-run",
     "adapters/vllm/verity_vllm/pipeline/interior_rows.py": "new-run",
     "benchmarks/flock_s8_block/program.py": "new-run",
