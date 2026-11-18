@@ -173,7 +173,8 @@ _GRAIN = Grain()
 
 
 def _wide(b: Any) -> set[str]:
-    return {r.param for r in b.reads if dict(b.fns[r.reader].signature()[0])[r.port].homogeneous_width() == 32}
+    return {r.param for r in b.reads
+            if (t := dict(b.fns[r.reader].signature()[0]).get(r.port)) is not None and t.homogeneous_width() == 32}
 
 
 def class_program(registered: Any, n: int) -> Any:
