@@ -69,7 +69,7 @@ def _bundle_of_record(tmp_path: Path, monkeypatch, block: dict) -> tuple[Path, d
         "per_rank": {"1": {**PENDING, "run_root": ROOTS[1].hex(), **block}}, "tp_run_root": tp_root,
         "commitment_vector": [{"rank": r, "run_root": root.hex()} for r, root in ROOTS.items()]}})
     (bdir / "binding_map.json").write_text(json.dumps({"entries": [], "digest": MAP_DIGEST, "run_root": ROOTS[1].hex(), "rank": 1}))
-    monkeypatch.setattr(TPR.SD, "load", lambda path: (types.SimpleNamespace(_run_root=lambda run: ROOTS[1]), types.SimpleNamespace(run_root=ROOTS[1])))
+    monkeypatch.setattr(TPR.RB, "load_store", lambda bundle: (types.SimpleNamespace(_run_root=lambda run: ROOTS[1]), types.SimpleNamespace(run_root=ROOTS[1])))
     bundle = {"context": {"pair": 0, "tp": {"rank": 1, "world": 2}, "tp_run_root": tp_root, "run_root": ROOTS[1].hex()},
               "path": str(bdir), "manifest_sha256": BUNDLE["manifest_sha256"]}
     return out, bundle, {"world": 2, "bundles": [{"pair": 0, "rank": 1, "manifest_sha256": BUNDLE["manifest_sha256"]}]}
