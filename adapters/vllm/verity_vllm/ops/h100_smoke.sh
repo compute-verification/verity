@@ -28,7 +28,8 @@ else
   SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
 fi
 CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || { echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; }
-CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku) || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
+if [ "$DRY" = 1 ] && [ -n "${CARD_SKU:-}" ]; then echo "DRY: CARD_SKU $CARD_SKU as given (off the card, no card to read it from)"
+else CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku); fi || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
 export CUDA_HOME CARD_SKU HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
 SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
