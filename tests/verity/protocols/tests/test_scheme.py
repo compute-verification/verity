@@ -322,7 +322,8 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
 
     root = Path(__file__).resolve().parents[4]
     declaring = {str(p.relative_to(root).with_suffix("")).replace("/", ".")
-                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
+                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental",
+                           "verity/protocols/proofs/spot", "verity/protocols/workload_classification")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
     assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"

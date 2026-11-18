@@ -70,11 +70,20 @@ PIECES = IL.PIECES
 
 # --- the lane unit, lowered from the IR composites ------------------------------------------------------------------------------
 
-def _composites(V: int):
-    from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import sampling as SM
-
-    return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep
+def _composites(d):
+    """``d``'s (``GumbelTopPTokenSelect_v1{V}``) three scans' lane bodies: ``TemperatureLane``, ``TopPMaskStep{V}``,
+    ``GumbelSelectStep``; refuses a Definition without them."""
+    want = ("TemperatureLane_v1", f"TopPMaskStep_v1{{V={int(d.bindings['V'])}}}", "GumbelSelectStep_v1")
+    found, todo = {}, [d]
+    while todo:
+        for n in todo.pop().body.nodes:
+            if n.fn.id in want:
+                found.setdefault(n.fn.id, n.fn)
+            elif hasattr(n.fn, "body"):
+                todo.append(n.fn)
+    if missing := [w for w in want if w not in found]:
+        raise ValueError(f"{d.id}: its scans have no {', '.join(missing)}")
+    return tuple(found[w] for w in want)
 
 
 def _walk(C, target, args, resolved: dict):
@@ -92,10 +101,11 @@ def _walk(C, target, args, resolved: dict):
     return call, wires
 
 
-def lane_circuit(V: int) -> Circuit:
-    """The lane unit: inputs ``in0`` (the bf16 logit) and ``in1 .. in9`` (``IN_PORTS[1:]``, 32 bits each; skip, noisy and kbit
+def lane_circuit(d) -> Circuit:
+    """``d``'s lane unit: inputs ``in0`` (the bf16 logit) and ``in1 .. in9`` (``IN_PORTS[1:]``, 32 bits each; skip, noisy and kbit
     use bit 0), outputs ``out0 .. out3`` (``OUT_PORTS``)."""
-    temp_lane, mask_step, select_step = _composites(V)
+    V = int(d.bindings["V"])
+    temp_lane, mask_step, select_step = _composites(d)
     C = Circuit(cse=True)
     x = C.input("in0", 16)
     temp, rcp, skip, noisy, kbit, g, best, best_i, i = (C.input(f"in{j}", 32) for j in range(1, 10))
@@ -167,10 +177,10 @@ class Lane:
 
 
 @lru_cache(maxsize=None)
-def lane(V: int) -> Lane:
-    C = lane_circuit(V)
+def lane(d) -> Lane:
+    C = lane_circuit(d)
     lay = IL.layout(C, [f"in{j}" for j in range(len(IN_PORTS))], [f"out{j}" for j in range(len(OUT_PORTS))], [1], None)
-    return Lane(V, C, lay)
+    return Lane(int(d.bindings["V"]), C, lay)
 
 
 def pin_digest(low: Lane) -> str:

@@ -4471,7 +4471,8 @@ def feature_of(words: Sequence[str]) -> Feature:
             raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
         try:
             params[key] = tomllib.loads(f"v = {text}")["v"]
-        except tomllib.TOMLDecodeError:
+        except tomllib.TOMLDecodeError as e:
+            print(f"[serve-tax] --feature {name}: {key}={text!r} is no TOML ({e}), read as that string", file=sys.stderr)
             params[key] = text
     try:
         settings = table[name].params(params)
@@ -4487,11 +4488,8 @@ def feature(words: Sequence[str], stock: str) -> str:
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
-            try:
-                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
-                    return n
-            except SystemExit:
-                continue
+            if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                return n
     raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 

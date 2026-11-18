@@ -54,7 +54,7 @@ from pathlib import Path
 from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit
+from verity.circuits.refs import Affine, Concat, Explicit, Grid
 from verity.circuits.types import Array, RecordType, Tuple
 
 
@@ -166,7 +166,8 @@ def passed_on(fn, memo: dict | None = None) -> frozenset[int]:
         def of(refs) -> frozenset[int]:
             """The parameters the parts of `refs` name, or reach through the nodes they name."""
             named = {(s, i) for p in _parts(refs) if p.count
-                     for s, i in ({r[:2] for r in p.items} if isinstance(p, Explicit) else [(p.space, p.idx)])}
+                     for s, i in ({r[:2] for r in p.items} if isinstance(p, Explicit) else
+                                  {ln[:2] for ln in p.lanes} if isinstance(p, Grid) else [(p.space, p.idx)])}
             return frozenset().union(*({i} if s == "p" else reach[i] for s, i in named))
 
         for n in fn.body.nodes:
@@ -254,7 +255,7 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
 
 def own_rows(program, form_only: bool = False) -> None:
     """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
-    node, but a part reading another such node's outputs (an edge), is affine runs of leaves of the root's input nodes
+    node, but a part reading another such node's outputs (a grid, in every lane; an edge), is affine runs of leaves of the root's input nodes
     (each a primitive or a batch), a batch maps every argument over its members, and no two runs, of one argument or of
     two, share a leaf. Then, unless `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter
     of every unit that no edge fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate
@@ -262,7 +263,7 @@ def own_rows(program, form_only: bool = False) -> None:
     from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
-    from verity.circuits.refs import Grid, Strided
+    from verity.circuits.refs import Strided
     nodes = program.root.body.nodes
 
     def reads(s, i) -> bool:
@@ -270,7 +271,7 @@ def own_rows(program, form_only: bool = False) -> None:
 
     def edge(p) -> bool:
         if isinstance(p, Grid):
-            return any(reads(s, i) for s, i, *_x in p.lanes)
+            return all(reads(s, i) for s, i, *_x in p.lanes)
         if isinstance(p, Explicit):
             return any(reads(r[0], r[1]) for r in p.items)
         return isinstance(p, (Affine, Strided)) and reads(p.space, p.idx)

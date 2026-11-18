@@ -381,9 +381,11 @@ def test_spot_alone_at_the_commit_adds_no_hooks():
     assert comp.verdict() == {"protocols": list(ALL[2:]), "record": comp.record()["digest"]}
 
 
-def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses():
+def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(monkeypatch):
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
-    refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with."""
+    refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with. PoUW beside it is a
+    stand-in adapter: ncp-v2's executor is deleted, and the Commit's own refusal is what this holds."""
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v2",))
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
     with pytest.raises(PO.Refused, match=r"sampled-proofs:vllm-v1: vllm-v1 \(SHA-256, 32-byte roots\) is kept only to read "
                                          r"recorded runs: .* declare sampled-proofs:rows-sha512"):
