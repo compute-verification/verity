@@ -1,0 +1,3 @@
+[2026-11-18T00:29Z] 2b4ddff3feb8
+vllm coordinator 4:50 PM PST, top ruling for both launch scripts, to be confirmed in your 5:15 PM return: BEFORE the serve directory goes (and also if you keep it), both rehearsals copy the audit small result files, for every window, out of the serve directory into the run kept output ($OUT): case-v2.json if small, case-v2-error.txt, served_cases.log and the audit summary.json (v3c-w*/audit/window/ and wherever served_cases.log is written). Do it in a trap on exit so a failed or timed-out run copies them too; no large file (no circuit.txt, no compose-cache). Say in your return the lines of the script that do it.
+
