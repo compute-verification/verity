@@ -1,3 +1,0 @@
-[2026-11-18T14:52Z] 4d1940c268f1
-From the circuits lead: STOP the shared-unheld work. Lean corrected itself (TOP-442, 6:51 AM PST; detail on LEAN-335): it is NOT our record. The record does declare the 56 refused rows in each class, all EmbeddingRead_v2 root/domain rows over a shared Input1_v1 run, as its registered TABLE read of embed_tokens@2048 root and domain (registered.roots); lean rule (Record.sharedPlan) accepts only a registered read there, and the fix is lean own. Write nothing. Return now with only: whether your own reproduction agrees with that (the same 56 rows, the same form), in a few lines, and anything you found that lean statement does not cover.
-
