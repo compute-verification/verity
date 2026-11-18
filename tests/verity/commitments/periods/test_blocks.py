@@ -227,17 +227,12 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
 
 def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_any_run(circuit):
     """The layer row units are one statement (their one wire covers both layers), and the verifier derives the same members
-    from the descriptor record; the period's blocks are byte-identical under any run. The members are the circuit's without
-    its registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the
-    class circuit's weight reads start mid-row."""
+    from the descriptor record, its registered reads among them; the period's blocks are byte-identical under any run."""
     cap = 1 << 20
-    with pytest.raises(ValueError, match="whole registered rows"):
-        I.members(circuit, cap)
-    plain = replace(circuit, registered=None)
-    base = {t: lo for _k, t, lo, _n in CS.template_partition(*plain.program()).ranges}
-    assert [(m.base, m.n) for m in I.members(plain, cap) if m.template == OID] == [(base[OID], 2 * H * T * S)]
-    rec = I.descriptor_record(plain, cap)
+    base = {t: lo for _k, t, lo, _n in CS.template_partition(*circuit.program()).ranges}
+    assert [(m.base, m.n) for m in I.members(circuit, cap) if m.template == OID] == [(base[OID], 2 * H * T * S)]
+    rec = I.descriptor_record(circuit, cap)
     for run in ("ab" * 64, "cd" * 64):
         w = I.window_of_record({**rec, "run": run, "context": ""}, TI.SAMPLING_DESIGN, I.resolve)
-        assert w.members == I.members(plain, cap)
-    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record())
+        assert w.members == I.members(circuit, cap)
+    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(circuit.blocks_record())
