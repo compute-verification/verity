@@ -1310,7 +1310,8 @@ theorem rota_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Rot
     · rename_i hc
       have hc' : t + 1 < s.params.windows := hc
       cases he
-      exact rotaOn_push (rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, fun _ => rfl⟩)) _ rfl
+      exact rotaOn_push (rotaOn_wk h (wk_modify s.windows t ({· with boundaryNs := some now})
+        fun _ => ⟨rfl, id, fun _ => rfl⟩)) _ rfl
         (by simp only [Array.size_modify]; omega) (fun u hu => hb' u (by rw [Array.size_modify] at hu; exact hu))
     · cases he; exact rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, fun _ => rfl⟩)
   · cases he; exact h
