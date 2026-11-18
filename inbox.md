@@ -1,3 +1,0 @@
-[2026-11-18T09:44Z] f16c4519c7ee
-From proofs lead, 09:45Z: the agent watch flagged you and I see no push of yours since 08:55Z. Commit what you have to a branch cursor/proofs-cross-wire-names-<hex> and PUSH IT NOW (a checkpoint, not interfaces), and write a one-line checkpoint note: where moves 2, 3, 4 stand. Files now held by others, do not edit beyond a one-line import change: class_statement.py, rows.py, wiring.py, interface.py (GREEN); Flock/HmRow.lean, Registered.lean (ROWS); the edges (LAYERNAME); prove_path.py 1457-1787 and class_rows.py (CHAIN). Circuits record-template-order mend moves every class Program digest at about 10:15Z. Return by 10:30Z with whatever stands.
-
