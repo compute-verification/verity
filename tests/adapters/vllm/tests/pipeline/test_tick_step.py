@@ -312,6 +312,42 @@ def test_a_window_carries_the_clock(asy: bool) -> None:
     assert admitted(restarted) == admitted(steps[k:]) + 1
 
 
+@BOTH
+def test_the_gates_token_term_keeps_the_references_clock(asy: bool) -> None:
+    """The network attester's gate (`admission.TickGate`, ``token_ns``) under the chosen rule circuit-check pins
+    (`tick_step.circuit-check.py`'s ``RULES[1]``, in nanoseconds), stepped as the scan steps from the empty engine: its
+    T in µs and its nanosecond carry are the reference's clock after every step."""
+    from verity import hooks as H
+    from verity.protocols.resource_accounting.network.prover import admission as na
+
+    rule = SC.Rule(bucket=10**8, sat=6_303_000, free=6_303_000, token=18_126)
+    e = SC.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=8, block_size=16,
+                  async_scheduling=asy)
+    ios, released = plan()
+    S = statics(e, N, R=4, W=4, A=5)
+    gate = na.TickGate(na.Tick(100_000, 6_303, 6_303), hold_s=1.0, clock=lambda: 0.0, token_ns=rule.token)
+    started: list[str] = []
+    for i, b in enumerate(released):
+        gate.take({"key": str(i), "run": "r", "n": i, "bucket": b})
+        gate.add(str(i), lambda i=i: started.append(str(i)))
+    for t in range(max(released) + 1):
+        gate.take({"run": "r", "t": t, "n": sum(b <= t for b in released)})
+    gate.take({"run": "r", "end": True})
+    st, cursor, k, tokens = TS.empty(S), 0, 0, 0
+    while cursor < N or st.step.running or st.step.waiting:
+        queued = len(st.step.waiting) + len(started) - cursor        # what the gate started and no step took yet
+        assert gate.ready(H.StepDue(k, len(st.step.running) + queued, queued, 0))
+        out = TS.reference(S, rule, st, inputs(S, st.step, cursor, ios, released))
+        assert out.ok and out.state is not None
+        n = sum(n for *_, n in out.rows)
+        gate.on(H.StepBegan(k, (), n, 0))
+        tokens += n
+        assert len(started) >= cursor + out.taken
+        assert gate.T * 1000 + gate.ns == out.state.clock, k
+        st, cursor, k = out.state, cursor + out.taken, k + 1
+    assert gate.summary()["token_ns"] == 18_126 and tokens > 0 and gate.T * 1000 + gate.ns > rule.token * tokens
+
+
 def test_the_step_refuses_a_class_that_cannot_see_the_first_arrival_it_leaves() -> None:
     e = engine(False)
     ios, released = plan()
