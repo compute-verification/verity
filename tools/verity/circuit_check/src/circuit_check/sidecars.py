@@ -23,8 +23,7 @@ none is named here) and loads a binding file by its path: its name is no module 
 registry enumeration imports it, and a Definition module imports nothing of circuit-check; the registries import every module
 with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  What circuit-check needs of another
 distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the frontend vocabularies'
-kinds (``_vocabulary_roots``, the word Call families) and the reader of a served workload's request Program
-(``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
+kinds (``_vocabulary_roots``, the word Call families).  `targets.py` keeps what no one module
 owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body, and of no family its maker's
 binding file holds, `BODY_FAMILIES`) or no module defines, one file per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
