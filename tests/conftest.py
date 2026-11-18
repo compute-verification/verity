@@ -42,6 +42,7 @@ BOOKKEEPING = {
                                       "test_mirrors_name_their_port"),
     "tests/test_metrics_registry.py": ("test_the_pinned_command_allowance_only_falls",),
     "tests/test_module_strings.py": ("test_the_exemptions_are_current",),
+    "tests/test_no_keyed_salts.py": ("test_allowed_only_shrinks",),
     "tests/test_one_slowdown.py": ("test_allowed_only_shrinks_to_files_that_still_reach_it",),
     "tests/test_one_translator.py": ("test_allowed_names_only_files_that_still_translate",),
     "tests/test_cli_conventions.py": ("test_no_new_synonym_flags", "test_known_list_has_no_stale_entries"),
