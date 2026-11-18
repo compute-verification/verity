@@ -56,7 +56,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import chain_rows as CH, slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.records import expert_tables as XT
@@ -349,15 +349,16 @@ def wire(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
                                  "a window cuts a token's router row and its pair rows together")
             routers = tuple(base[plan.slots] + plan.router[(key[0], plan.pair[key][2][1])] for key in keys)
             if what in ("w", "ws", "fused"):
-                wired.append(("in0", f"o{topk + k}", routers))
+                wired += CH.pieces(ms, m, "in0", f"o{topk + k}", routers)
             if what in ("gemm", "fused") and ARGS[plan.family[t]][1] is not None:
-                wired.append((_port(t, "g"), f"o{k}", routers))
+                wired += CH.pieces(ms, m, _port(t, "g"), f"o{k}", routers)
         if what in ("gemm", "fused"):
             G = int(plan.of[t][0][3]["statics"]["G"])
             bs = [b for _p, b in plan.units[t][lo:lo + m.n]]
             for port, src, at in zip(("w", "ws"), plan.reads(t), (bs, [b * n // G for b in bs]), strict=True):
                 if src is not None and (what == "gemm" or port == "ws"):
-                    wired.append((_port(t, port), "o0", tuple(base[src] + plan.at[src][(key, a)] for key, a in zip(keys, at, strict=True))))
+                    wired += CH.pieces(ms, m, _port(t, port), "o0",
+                                       [base[src] + plan.at[src][(key, a)] for key, a in zip(keys, at, strict=True)])
         out.append(replace(m, wired=tuple(wired)))
     return out
 

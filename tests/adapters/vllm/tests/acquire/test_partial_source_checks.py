@@ -126,3 +126,10 @@ def test_the_detectors_record_carries_its_schema_id_and_its_rank():
     com, run = commit_steps({0: [("model.norm/0", b"b" * 8)]})                 # a dense rank: no received output to compare
     res = P.late_read_check(com, run, 1)
     assert (res["schema"], res["rank"], res["applicable"], res["result"]) == ("verity/commit-integ/t6_4-check/v1", 1, False, None)
+
+
+def test_the_detectors_pairs_say_whether_the_bytes_are_equal_and_carry_no_digest_of_them():
+    com, run = commit_steps({0: [(f"{MOE}/out", b"a" * 8), ("model.norm/0", b"b" * 8)]})
+    res = P.late_read_check(com, run, 0)
+    assert (res["layers_compared"], res["equal_pairs"], res["result"]) == (1, 0, True)
+    assert res["pairs"] == [{"step": 0, "layer": 0, "out": f"{MOE}/out", "next_norm": "model.norm/0", "nbytes": 8, "equal": False}]

@@ -1,8 +1,8 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
-id = "qwen3-8b-bf16-rtx-served-arm-eager"
+id = "qwen3-8b-bf16-served-arm-eager"
 cards = ["rtx-pro-6000"]
-# qwen3-8b-bf16-rtx-served-arm with the eager Commit (commit-rows-4k-eager, control stock) in place of the compiled one.
+# qwen3-8b-bf16-served-arm with the eager Commit (commit-rows-4k-eager, control stock) in place of the compiled one.
 arms = ["stock", "stock@compiled", "commit-rows-4k-eager"]
 arm_modules = ["served_commit.served_arm:EAGER_ROWS_4K"]
 sweep = "width"
@@ -13,7 +13,7 @@ eager = true
 control = "none"
 
 [preset]
-id = "qwen3-8b-bf16-rtx-served-arm-eager"
+id = "qwen3-8b-bf16-served-arm-eager"
 model = "Qwen/Qwen3-8B"
 revision = "b968826d9c46dd6066d109eabc6255188de91218"
 case = "QWEN3_8B"
