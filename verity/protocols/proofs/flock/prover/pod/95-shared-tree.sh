@@ -7,7 +7,8 @@
 # scratch/, deleted at exit. Outputs under out/: host.txt, stage-8.json and stage-64.json (each statement's public file
 # size and the shared rows' strings it holds), the public files and own files at n = 8, and per statement serve.log,
 # prove.txt, prove.err, challenger-NAME/ and lean.log (its VERDICT line); verdicts.txt sums them.
-# env: CPUS=16  N=8 (the proved size)  SIZES="8 64" (the staged sizes)  CASES="m1 m2 r ra rb mc rd"
+# env: CPUS=16  N=8 (the proved size)  SIZES="8 64" (the staged sizes)  CASES="m1 m2 r ra rb mc rd"  UNWIRED=1 (the
+#      reader reads an input `w` in the program, not the writers' outputs: shared_tree.py --unwired)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${ST_PINNED:-}" ]; then
@@ -70,7 +71,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 
 N=${N:-8}
 for n in ${SIZES:-8 64}; do
-  python3 tests/verity/protocols/proofs/flock/prover/shared_tree.py --out $S/n$n --n $n > $O/stage-$n.json 2> $O/stage-$n.err \
+  python3 tests/verity/protocols/proofs/flock/prover/shared_tree.py --out $S/n$n --n $n ${UNWIRED:+--unwired} > $O/stage-$n.json 2> $O/stage-$n.err \
     || { tail -20 $O/stage-$n.err; exit 1; }
 done
 D=$S/n$N

@@ -16,7 +16,7 @@ n + i reads writer unit n - 1 - i's output as its `x`, and `cs[n + i]`. `stage` 
   (reader units [n, n + 4)), staged for its public file's size only;
 * `stage.json`: each statement's units, rows read and public file's bytes.
 
-    python tests/verity/protocols/proofs/flock/prover/shared_tree.py --out DIR --n N [--seed S]
+    python tests/verity/protocols/proofs/flock/prover/shared_tree.py --out DIR --n N [--seed S] [--unwired]
 """
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ SEED = 20261118
 SHARED = "w_out"
 
 
-def program(n: int) -> tuple[Program, dict]:
+def program(n: int, wired: bool = True) -> tuple[Program, dict]:
+    """Unwired, reader unit n + i reads row n - 1 - i of an input `w` instead of writer unit n - 1 - i's output."""
     from verity_flock import subcircuit_templates as TM
 
     t = TM.rope_head(64).definition()
@@ -46,11 +47,13 @@ def program(n: int) -> tuple[Program, dict]:
     ret = t.signature()[1]
 
     def sig(S):
-        return (("x", Array(n, xt)), ("cs", Array(2 * n, ct))), Array(2 * n, ret)
+        ins = (("x", Array(n, xt)), ("cs", Array(2 * n, ct))) + (() if wired else (("w", Array(n, xt)),))
+        return ins, Array(2 * n, ret)
 
-    def body(B, S, x, cs):
-        w = [B.call(t, x[i], cs[i]) for i in range(n)]
-        return coll_concat(sig(S)[1], w + [B.call(t, w[n - 1 - i], cs[n + i]) for i in range(n)])
+    def body(B, S, x, cs, w=None):
+        o = [B.call(t, x[i], cs[i]) for i in range(n)]
+        src = o if wired else w
+        return coll_concat(sig(S)[1], o + [B.call(t, src[n - 1 - i], cs[n + i]) for i in range(n)])
 
     return Program(bind(CompositeDefinition("SharedTreeRoPE", 0, (), sig, body, register=False))), P.template_instance_query(t)
 
@@ -61,14 +64,14 @@ def port(reg: G.Registered, reads: dict[int, int], units: int) -> dict:
             "reads": [reads.get(u) for u in range(units)]}
 
 
-def stage(out: Path, n: int, seed: int = SEED) -> dict:
+def stage(out: Path, n: int, seed: int = SEED, wired: bool = True) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from verity_flock import synthetic as SY
     from verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
-    prog, query = program(n)
+    prog, query = program(n, wired)
     part = P.partition(prog, query)
     pd = P.program_digest(prog)
     sub = TM.rope_head(64)
@@ -150,8 +153,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--n", type=int, required=True)
     ap.add_argument("--seed", type=int, default=SEED)
+    ap.add_argument("--unwired", action="store_true")
     a = ap.parse_args(argv)
-    print(json.dumps(stage(Path(a.out), a.n, a.seed)))
+    print(json.dumps(stage(Path(a.out), a.n, a.seed, not a.unwired)))
     return 0
 
 
