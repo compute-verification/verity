@@ -533,7 +533,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # each tied row's Build of record, its workload digest, which the served compare holds PRED to (BUILD)
   case ${ROW_ID:-${ROW##*/}} in
     llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager)
-      BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3} ;;
+      BUILD_OF_RECORD=${BUILD_OF_RECORD:-f0424fea41946511ce3d4af79b28fd6fd646d0d58455233c44a0fe48a3e3ba55449dc3588bff18037b75e12ddc906918a84c4bc36368a8be8ca361d80c7dd2a6} ;;
     *) BUILD_OF_RECORD=${BUILD_OF_RECORD:-} ;;
   esac
 fi
