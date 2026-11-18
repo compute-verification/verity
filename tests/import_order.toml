@@ -100,6 +100,9 @@ owner = "compute-accounting"
 # One form opens a trusted place's `loaded_by`: a scheme's declaration is the one file that by design names its verifier
 # and states its parties, so a scheme's `scheme.py`, and no other file of that scheme, may load two trusted places: its
 # own verifier's, and the one that holds the parties' types (`verity/protocol.py`).  That is at most two lines a scheme.
+#
+# A Python script under a Lean package's `lean/` directory is run by path and decides no verdict: it is in no place,
+# nothing loads it, and it may load the Python it holds the Lean to.
 
 # The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
@@ -109,7 +112,6 @@ owner = "compute-accounting"
 loader = "verity/protocols/proofs/flock"
 loaded = "adapters"
 files = [
-    "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
 ]
