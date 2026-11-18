@@ -32,7 +32,7 @@
 # WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call; CAPTURE (sizes, comma-separated)
 # passes --capture: the arm's vLLM graph sizes, the decode batch's alone by default.  BATCH passes --batch.
 # STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
-# /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
+# the machine's toolkit at 13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 # PEARLC_KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
 # under `gpu-lease 1`: the ship is pearl_c_sm90/ship.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
 # VARIANTS=h100, SCHEME defaults to pearl-c-h100-v1-h3, and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
@@ -77,7 +77,8 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 [ -n "$UUID" ] || fail IDENTITY "no GPU_LEASE_UUID: run under gpu-lease"
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
-  /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+  CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || fail STATEMENT "no CUDA toolkit 13.0 to build hm96_rows.cu"
+  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
     verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi

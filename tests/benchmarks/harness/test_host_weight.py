@@ -8,8 +8,8 @@ from fractions import Fraction
 import pytest
 
 from verity.device import node_kinds
-from verity_bench import overhead
-from verity_bench.host_weight import NODE_FILES, cpu_sm_s_per_core_s
+from verity_bench import kit, overhead
+from verity_bench.host_weight import cpu_sm_s_per_core_s
 
 
 @pytest.mark.parametrize("kind, gpu", [("h200-sxm-141gb-x1", "h200"), ("rtx-pro-6000-server-x8", "rtx-pro-6000")])
@@ -18,6 +18,6 @@ def test_a_nodes_weight_is_the_one_the_overhead_reads_for_its_card(kind: str, gp
 
 
 def test_the_weights_exactly() -> None:
-    assert {kind: cpu_sm_s_per_core_s(kind) for kind in node_kinds(directory=NODE_FILES)} == {
+    assert {kind: cpu_sm_s_per_core_s(kind) for kind in node_kinds(directory=kit.nodes_directory())} == {
         "h100-sxm-80gb-x1": Fraction(95, 198), "h200-sxm-141gb-x1": Fraction(95, 198),
         "rtx-pro-6000-server-x8": Fraction(1595, 972)}

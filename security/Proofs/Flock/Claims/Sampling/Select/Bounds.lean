@@ -115,7 +115,7 @@ theorem subset_stage_bounded (n k : ℕ) (hk : k ≤ n) (N : ℕ) (hN : 0 < N) (
 /-- A Bernoulli stage missing `U`, bounded by `bernoulli`'s missProb. -/
 theorem bernoulli_stage_bounded (n num den : ℕ) [NeZero den] (h : num ≤ den) (N : ℕ) (hN : 0 < N) (U : Finset ℕ) :
     Stage.Bounded ⟨N, Flock.Draw.bernoulli num den n, fun D => ∀ u ∈ U, u ∉ D⟩
-      ((SamplingDesign.bernoulli n num den).missProb (finOf n U)) := by
+      ((Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U)) := by
   refine ⟨hN, fun a b D h => SamplingDesign.bernoulli_append num den n a b D h, fun L => ?_⟩
   refine le_trans (prCoin_mono fun f ⟨D, hD, hm⟩ => ⟨D, hD, fun u hu => hm u.val ?_⟩)
     (SamplingDesign.bernoulli_exec_escape_le n num den L h (finOf n U))
@@ -152,7 +152,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     · rw [Verity.SamplingDesign.subset_escape, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
   · have : NeZero den := ⟨by omega⟩
     have hle := seqMiss_le [(⟨2 * n * Flock.Draw.width den + 64, Flock.Draw.bernoulli num den n,
-      fun D => ∀ u ∈ U, u ∉ D⟩, (SamplingDesign.bernoulli n num den).missProb (finOf n U))] (fun p hp => by
+      fun D => ∀ u ∈ U, u ∉ D⟩, (Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U))] (fun p hp => by
         rw [List.mem_singleton.1 hp]; exact bernoulli_stage_bounded n num den h _ (by omega) U) L
     rw [List.map_singleton, List.map_singleton, List.prod_singleton] at hle
     dsimp only at hle

@@ -1,6 +1,6 @@
-"""A row whose device class fixes its whole Build target (`config.TARGET_NUM_SMS`, e.g. `__rtxpro6000__` = cc 12.0 / 188 SMs) Builds
+"""A row whose device class fixes its whole Build target (its card file, `config.target_card`, e.g. `__rtxpro6000__` = cc 12.0 / 188 SMs) Builds
 on a GPU-free host: the target is declared by the row id, the preflight asks no device of a Build-only stage, and the Build selects
-vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before.  The
+vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  A class with no card file Builds on the host's GPU.  The
 platform reports the name of the target's GPU: the row class's, or the one a traced request Build's command passes from φ's target."""
 from __future__ import annotations
 
@@ -39,11 +39,12 @@ def _wl(tmp_path, target=None):
     return str(p)
 
 
-def test_an_rtxpro6000_row_declares_its_whole_target_and_other_classes_keep_the_workload_s(tmp_path):
+def test_a_carded_row_declares_its_whole_target_and_an_uncarded_one_keeps_the_workload_s(tmp_path):
     assert tf.declared_profile(ROW_120, {}) == {"compute_capability": [12, 0], "num_sms": 188}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compilation": "piecewise"}}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 170}}})["num_sms"] == 170, "the workload's own target wins"
-    assert tf.declared_profile(ROW_89, {}) == {} and tf.declared_profile(ROW_90, {}) == {}
+    assert tf.declared_profile(ROW_89, {}) == {}, "an l40s row has no card file"
+    assert tf.declared_profile(ROW_90, {}) == {"compute_capability": [9, 0], "num_sms": 132}, "the h100 card file is the SXM's"
     assert tf.declared_profile(ROW_H200_1, {"engine": {"target": {"batch_invariant": False}}}) == \
         {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}, "an H200 is 132 SMs, SXM and NVL"
     assert R.declared_target(_wl(tmp_path), row=ROW_120) == '{"compute_capability": [12, 0], "num_sms": 188}'

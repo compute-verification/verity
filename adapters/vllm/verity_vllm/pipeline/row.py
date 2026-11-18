@@ -28,16 +28,19 @@ import os
 import sys
 from dataclasses import asdict, dataclass, fields
 from importlib import metadata
+from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm import protocols as PO
 from verity_vllm import settings
 from verity_vllm.config import (
     ROOT,
+    DEFAULT_ROW_PROTOCOLS,
     BuildConfig,
     CommitConfig,
     MatchConfig,
     RowConfig,
+    RowEngine,
     RunEnv,
     UsageError,
     done_source_refusal,
@@ -184,11 +187,29 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
                            and not settings.is_secret(k)}}
 
 
+def row_protocols(knob: Any, workload: dict[str, Any], *, world: int = 1) -> tuple[str, ...] | None:
+    """A row's protocol set, checked before any stage runs (the fail-closed point of single-GPU and TP rows alike): the
+    ``PROTOCOLS`` knob, else the workload's ``engine.target.protocols``; None for SPOT alone.  Either is the whole set,
+    SPOT included.  `PO.Refused` names every refusal: a knob that contradicts the target, a set without SPOT, and the
+    Commit's (`PO.commit_context`)."""
+    enabled, declared = PO.parse(knob), PO.parse((RowEngine.of(workload).target or {}).get("protocols"))
+    if enabled and declared and enabled != declared:
+        raise PO.refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
+    enabled = enabled or declared
+    if not enabled or enabled == DEFAULT_ROW_PROTOCOLS:
+        return None
+    if not any(e.startswith("sampled-proofs:") for e in enabled):
+        raise PO.refused([(f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
+                           "(serve without it through verity_vllm.LLM)")])
+    PO.commit_context(SimpleNamespace(protocols=enabled), world=world, settings=workload.get("protocols_config"))
+    return enabled
+
+
 def run_row(o: Run | Stage, stages: str) -> int:
     wl = row_file(o.row)
     doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:
-        protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
+        protocols = row_protocols(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
     except PO.Refused as e:
         cli.write(f"[row] REFUSE (fail-closed): {e}")
         return 3
