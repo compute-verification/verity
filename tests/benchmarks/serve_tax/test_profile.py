@@ -21,13 +21,30 @@ from verity_bench import profiles as P  # noqa: E402 (benchmarks/harness, put on
 UNSEEDED = ("under the certified tick a request sampled at the server's default temperature needs an integer seed, "
             "not null: send one, or temperature 0")
 SOURCE_COMMIT = S.source_commit
+FEATURE = S.feature
 
 
 @pytest.fixture(autouse=True)
 def an_h200(monkeypatch: pytest.MonkeyPatch):
-    """The host's card as nvidia-smi names it (`card`), read through the card files; the tree's commit given."""
+    """The host's card as nvidia-smi names it (`card`), read through the card files; the tree's commit given; and,
+    since no arm serves a registered scheme yet (`feature`), each arm of ours over stock standing in for the arm its
+    scheme resolves to, named in its place."""
     monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
+    monkeypatch.setattr(S, "feature", lambda name, stock: name if name in S.profile_features(stock) else FEATURE(name, stock))
+
+
+def test_feature_resolves_a_registered_scheme_to_the_arm_that_serves_it_through_the_one_table(
+        monkeypatch: pytest.MonkeyPatch):
+    with pytest.raises(SystemExit, match="--feature record: --protocol 'record' is no registered compute scheme; "
+                                         "registered: dither, pearl-plus"):
+        FEATURE("record", "compiled")
+    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: the schemes' table$"):
+        FEATURE("pearl-plus", "prod")
+    monkeypatch.setitem(S.ARMS, "prod-record", replace(S.ARMS["prod-record"], scheme="pearl-plus"))
+    assert FEATURE("pearl-plus", "prod") == "prod-record"
+    with pytest.raises(NotImplementedError):
+        FEATURE("pearl-plus", "compiled")
 
 
 def test_without_a_profile_the_server_and_client_lines_are_mains():
@@ -263,7 +280,7 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
     assert (result["kind"], result["validation"]["status"]) == ("serve-tax-profile/v1", "failed")
     assert result["workload_fingerprint"] | {"source_sha": None} == {
         "profile": "coding-agent", "version": 1, "digest": r["digest"], "model": "glm53", "card": "h200", "stock": "prod",
-        "feature": "tick-unseeded", "load": "agentic-256k", "point": 4, "source_sha": None}
+        "feature": "tick-unseeded", "arm": "tick-unseeded", "load": "agentic-256k", "point": 4, "source_sha": None}
     got = {(m["name"], m["member"]): m for m in result["measurements"]}
     ours = "glm-5.3-h200-tick-unseeded-over-prod-coding-agent"
     refused = got["vllm/serving-cost-glm53", ours]
@@ -308,7 +325,7 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
     assert lines[0].endswith(": ours slower")
     assert lines[1].startswith("2. time to first token, median / P99: ours 200.0 ms / 800.0 ms, stock ")
     assert lines[2] == "3. within the bounds (each token within 80 ms): ours 92.0% of 576 requests, stock 93.8% of 576 requests"
-    assert lines[3] == "prod-record beside prod at agentic-256k, 4 users, 2 lifetimes of 3 reps each"
+    assert lines[3] == "prod-record (prod-record) beside prod at agentic-256k, 4 users, 2 lifetimes of 3 reps each"
     assert lines[4].startswith("profile coding-agent v1 (digest ")
     # an interval the noise floor straddles, or a side the cap cut short, cannot tell
     same = [[rep(1, 100.4), rep(2, 101.2), rep(3, 99.2)], [rep(1, 99.6), rep(2, 100.3), rep(3, 99.3)]]
@@ -401,13 +418,13 @@ def test_run_sh_takes_a_profile_and_refuses_what_it_fixes_before_it_holds_anythi
         rc, out = run_sh(*flags, **env)
         assert rc != 0 and "run this under research run" in out
     assert run_sh("--model", "llama32-1b", "--profile", "chat") == (
-        2, "serve-tax: --profile chat takes --feature ARM or --find-load, one of them\n")
+        2, "serve-tax: --profile chat takes --feature SCHEME or --find-load, one of them\n")
     assert run_sh(*one, "--feature", "record")[0] == 2
     assert run_sh("--find-load") == (2, "serve-tax: --feature and --find-load are a profile's: --profile NAME\n")
     for env in ({"PROFILE": "chat"}, {"FEATURE": "record"}, {"FIND_LOAD": "1"}):
         assert run_sh("--model", "llama32-1b", **env) == (
             2, "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with "
-               "--feature ARM or --find-load\n")
+               "--feature SCHEME or --find-load\n")
     fixed = {("--loads", "chat=4"): "--loads/LOADS", ("--arms", "compiled record"): "--arms/ARMS",
              ("--reps", "6"): "--reps/REPS and LIFETIMES", ("--target", "5"): "--target/TARGET and WITH"}
     for flags, drop in fixed.items():
@@ -464,6 +481,10 @@ def test_run_sh_on_a_machine_not_ours_names_venv_and_takes_the_hubs_own_place(tm
     (tmp_path / "venv" / "bin").mkdir(parents=True)
     (tmp_path / "venv" / "bin" / "python").symlink_to(sys.executable)
     rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "venv"), **env)
+    assert (rc, out) == (2, "serve-tax: CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement "
+                            "entry names it)\n")
+    rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "venv"),
+                     CUDA_HOME=str(tmp_path / "cuda"), **env)
     ours = next((d for d in ("/workspace/cp/hf", "/workspace/hf") if Path(d).is_dir()), None)
     hub = Path(ours or tmp_path / "c" / "huggingface") / "hub"
     m = S.MODELS["llama32-1b"]

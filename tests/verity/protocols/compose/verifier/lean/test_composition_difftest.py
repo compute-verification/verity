@@ -158,9 +158,17 @@ V2_BREAKS = {
 }
 
 
-#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or one no form's
-#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files.
-FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
+#: One change of SPOT's form that `VStar.Recursive.Sampled` reads: params or evidence naming no form or one no form's
+#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files, and a `levels`
+#: beside the form or alone, agreeing or not, or a two-level key in one level's params.
+FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive",
+               "params-form-not-a-string", "params-levels-one", "params-levels-only", "params-levels-two",
+               "params-levels-three", "params-levels-zero", "params-levels-a-string", "params-a-two-level-key",
+               "evidence-levels-one", "evidence-levels-two-no-form"]
+
+#: What each levels break sets beside the form (`VStar.Recursive.Sampled.split`).
+LEVELS_BREAKS = {"levels-one": {"levels": 1}, "levels-two": {"levels": 2}, "levels-three": {"levels": 3},
+                 "levels-zero": {"levels": 0}, "levels-a-string": {"levels": "1"}, "a-two-level-key": {"boundary": {}}}
 
 
 def _with_form(x, br: str | None, side: str):
@@ -168,7 +176,13 @@ def _with_form(x, br: str | None, side: str):
     it."""
     if not isinstance(x, dict) or br == f"{side}-no-form":
         return x
-    return {**x, "form": {f"{side}-form-other": "other", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
+    if br == f"{side}-levels-only":
+        return {**x, "levels": 1}
+    if br == f"{side}-levels-two-no-form":
+        return {**x, "levels": 2}
+    extra = LEVELS_BREAKS.get(br.removeprefix(f"{side}-"), {}) if br and br.startswith(side) else {}
+    form = {f"{side}-form-other": "other", f"{side}-recursive": "recursive", f"{side}-form-not-a-string": 3}
+    return {**x, **extra, "form": form.get(br, "one-stage")}
 
 
 def form_case(a: dict, br: str | None = None) -> dict:

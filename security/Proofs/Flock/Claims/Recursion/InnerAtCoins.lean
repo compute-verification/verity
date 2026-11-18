@@ -539,7 +539,7 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsized, hall⟩ := coinTie_sized
-    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (Spot.Sampling.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   rw [hRead] at hRead'
   cases hRead'
   have hsz : (st'.rounds.map (·.coins)).size = st'.rounds.size := Array.size_map ..

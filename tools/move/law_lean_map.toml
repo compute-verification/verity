@@ -334,7 +334,7 @@ files = [
   "security/Definitions/Flock.lean",
   "security/Definitions/Flock/Accounting/*.lean",
   "security/Definitions/Flock/Arith.lean",
-  "security/Definitions/Flock/Audit/*.lean",
+  "security/Definitions/Spot/Sampling/*.lean",
   "security/Definitions/Flock/Circuit.lean",
   "security/Definitions/Flock/Compiled.lean",
   "security/Definitions/Flock/Defs.lean",
@@ -424,7 +424,7 @@ files = [
   "verity/protocols/proofs/spot/verifier/tests/lean/generate.sh",
   "verity/protocols/proofs/spot/verifier/tests/test_consumers.py",
   "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
-  "security/Proofs/Flock/Soundness/Audit/README.md",
+  "security/Proofs/Spot/Sampling/README.md",
 ]
 words = { "Audit/Law.lean" = "Audit/SamplingDesign.lean", "\"Law.lean\"" = "\"SamplingDesign.lean\"" }
 

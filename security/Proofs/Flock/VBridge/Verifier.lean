@@ -45,7 +45,7 @@ ran the check (`ParseFacts.recNet`).
 namespace FlockVBridge
 
 open Flock.HmNets hiding and
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Hm
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Hm
 
 /-! ## The builders are equal -/
 

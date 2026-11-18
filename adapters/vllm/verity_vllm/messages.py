@@ -44,6 +44,8 @@ class Exchange:
         self._step: int | None = None
         #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
         self.readers: Mapping[str, Callable[..., Any]] = {}
+        #: the adapter's answer to a refused input (`RefuseInput`), called as it is filed with the input and the reason
+        self.refuse: Callable[[str, str], None] | None = None
 
     @property
     def step(self) -> int:
@@ -66,6 +68,13 @@ class Exchange:
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
         kind = type(request).__name__
+        if isinstance(request, H.RefuseInput):
+            self.requests.append((name, request))
+            if self.refuse is not None:
+                self.refuse(request.input, request.why)
+            return
+        if isinstance(request, H.ServeRoute) and (other := self.route(request.path)) is not None:
+            raise Refused(name, f"serves route {request.path}, which {other[0]} serves")
         if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
         if self._step is not None:
@@ -79,12 +88,11 @@ class Exchange:
         """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
         its reasons; else True when a scheme's required property fixes the build.  Emits ``declared``."""
         why: dict[str, list[str]] = {}
+        for name, r in H.unmet(self.requests, declared.properties):
+            verb = "requires" if isinstance(r, H.RequireProperty) else "refuses"
+            why.setdefault(name, []).append(f"{verb} {r.property} = {r.value!r}: {r.why}")
         for name, r in self.requests:
-            if isinstance(r, H.RequireProperty) and declared.properties.get(r.property) != r.value:
-                why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.RefuseProperty) and declared.properties.get(r.property) == r.value:
-                why.setdefault(name, []).append(f"refuses {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
+            if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
                 missing = sorted(set(r.readers) - set(self.readers))
                 why.setdefault(name, []).append(
                     f"starts {r.process} beside the workload, which no scheme registered" if r.process not in schemes.PROCESSES
@@ -143,6 +151,14 @@ class Exchange:
         """Every gate starts what it holds, and every later input at once."""
         for _, r in self._filed(H.StartOnBoundary):
             r.gate.open(why)
+
+    def route(self, path: str) -> tuple[str, H.Route] | None:
+        """The scheme serving ``path`` (`ServeRoute`) and its answer, None when none does."""
+        return next(((n, r.serve) for n, r in self._filed(H.ServeRoute) if r.path == path), None)
+
+    def refused(self, input: str) -> list[tuple[str, str]]:
+        """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
+        return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
 
     def held(self, input: str, step: int) -> bool:
         """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""

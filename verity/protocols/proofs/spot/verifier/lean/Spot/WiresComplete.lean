@@ -12,6 +12,9 @@ of one port whose rectangles meet wire a reader row twice; the order's closed fo
 
 namespace Spot.Wires
 
+open Circuits
+open Spot.Wires
+
 theorem digit_low (r : Nat) (s : Int) (h1 : 1 ≤ r) :
     (((if 0 ≤ s then 0 else r - 1 : Nat)) : Int) * s = min 0 (s * ((r : Int) - 1)) := by
   split
@@ -64,11 +67,11 @@ theorem accum_high : ∀ ps : List (Nat × Int), (∀ p ∈ ps, 1 ≤ p.1) → �
     simp only [accum, highOf]
     rw [hmod, hdiv, he, digit_high r s h1]
 
-theorem Wire.pairs_pos (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) : ∀ p ∈ w.pairs, 1 ≤ p.1 := fun _ hp =>
+theorem _root_.Circuits.Wire.pairs_pos (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) : ∀ p ∈ w.pairs, 1 ≤ p.1 := fun _ hp =>
   h _ (List.of_mem_zip (List.mem_reverse.1 hp)).1
 
 /-- **The span is attained**: some reader index reads the least writer, and some the greatest. -/
-theorem Wire.span_attained (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) :
+theorem _root_.Circuits.Wire.span_attained (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) :
     (∃ i, i < w.units ∧ w.writerAt i = w.span.1) ∧ (∃ i, i < w.units ∧ w.writerAt i = w.span.2) := by
   obtain ⟨i, hi, he⟩ := accum_low w.pairs (w.pairs_pos h)
   obtain ⟨j, hj, hf⟩ := accum_high w.pairs (w.pairs_pos h)

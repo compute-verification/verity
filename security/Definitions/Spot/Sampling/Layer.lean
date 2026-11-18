@@ -14,7 +14,7 @@ Pr_S[E(X, S) ∧ S misses incorrect(X)] + ε_ks + ε_bind`, `X` the committed tr
 knowledge error at a unit picked before the session's coins, averaged over the sample, `ε_bind` the commitment's binding
 error; the first term is at most `L.miss K` at `E = (K ≤ |incorrect X|)`.
 
-`Sound` is `FlockSoundness.Audit.extraction_audit_le`'s statement with `ExtractionAnalysis`'s fields as binders and
+`Sound` is `Spot.Sampling.extraction_audit_le`'s statement with `ExtractionAnalysis`'s fields as binders and
 `audit` unfolded, so `extraction_audit_le ⟨Tr, inc, com, ks, link, cover⟩ hks hlink E σ` proves it.
 
 **Instances.** `Flock.Guarantees.SampledKSLiveV5` and `SampledKSLiveV3`, deployed and proved, apply
@@ -34,7 +34,7 @@ open scoped ENNReal
 before the session's first coin by `εks` and `εbind` on average over the sample: every audit strategy accepts with an
 event `E` of the committed transcript and the sample with probability at most the sample's probability of `E` while
 missing every incorrect unit, plus `εks` and `εbind` at the strategy's registration and state. Proved by
-`FlockSoundness.Audit.extraction_audit_le`. -/
+`Spot.Sampling.extraction_audit_le`. -/
 def Sound : Prop :=
   ∀ (n : ℕ) (L : SamplingDesign (Fin n)) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
     (Tr : Type) (incorrect : Tr → Finset (Fin n))

@@ -5,8 +5,8 @@ public import Definitions.Pouw.Window
 /-!
 # A window's ε from its calls' (M2), with a sample that depends on the registration (C1) (trusted)
 
-C1, a sample that depends on the registration, is already expressed on main: `FlockSoundness.Audit.auditReg`
-(`Proofs/Flock/Soundness/Audit/RegDraw.lean`) and the keyed window's record theorem over it,
+C1, a sample that depends on the registration, is already expressed on main: `Spot.Sampling.auditReg`
+(`Proofs/Spot/Sampling/RegDraw.lean`) and the keyed window's record theorem over it,
 `keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedSample.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `ε_bind(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `ε_bind(R, τ)` are in terms of its calls', for a window of `C` calls,
@@ -86,7 +86,7 @@ three more links, each stated:
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
   Program the verifier requires: the outputs' half is that Program's opening of the `-h3` root, the inputs' half
   Flock's `AnchorsSound`
-  (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
+  (`Proofs/Spot/Sampling/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `ExecutionPhaseDelta`'s bound plus `δ_in`
   (`Pouw.Window.executionPhase_served_le`, proved).
 * **Flock's analysis** (`Proofs/Pouw/Window/Flock.lean`): Flock's sessions are games of core's one game

@@ -191,7 +191,7 @@ non-empty set (`liveStrata_of_ofJson`, from `SamplingDesign.execStrata_of_ofJson
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 
@@ -206,14 +206,14 @@ def liveSamplingDesign (I : Inputs) : Option (Flock.Draw.SamplingDesign × ℕ) 
 of the population's units to the strata over which the stratified claims' infimum ranges (`SamplingDesign.execStrata_of_ofJson`). -/
 theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitSample} {Kd m : ℕ} {St : Fin m → Flock.Draw.Stratum}
     (h : Flock.Draw.UnitSample.ofJson j = .ok D) (hl : D.samplingDesign = .stratified Kd (Array.ofFn St)) :
-    ∃ σs : Fin D.population → Fin m, Audit.SamplingDesign.ExecStrata σs (fun s => (St s).k) St ∧
-      ∀ s, (St s).k ≤ (Audit.SamplingDesign.stratum σs s).card := by
-  obtain ⟨σ, hS, hk⟩ := Audit.SamplingDesign.execStrata_of_ofJson h hl
+    ∃ σs : Fin D.population → Fin m, Spot.Sampling.SamplingDesign.ExecStrata σs (fun s => (St s).k) St ∧
+      ∀ s, (St s).k ≤ (Spot.Sampling.SamplingDesign.stratum σs s).card := by
+  obtain ⟨σ, hS, hk⟩ := Spot.Sampling.SamplingDesign.execStrata_of_ofJson h hl
   have hsz : (Array.ofFn St).size = m := Array.size_ofFn
-  have hst : ∀ s, Audit.SamplingDesign.stratum (Fin.cast hsz ∘ σ) s = Audit.SamplingDesign.stratum σ (Fin.cast hsz.symm s) := by
+  have hst : ∀ s, Spot.Sampling.SamplingDesign.stratum (Fin.cast hsz ∘ σ) s = Spot.Sampling.SamplingDesign.stratum σ (Fin.cast hsz.symm s) := by
     intro s
     ext u
-    simp only [Audit.SamplingDesign.stratum, Finset.mem_filter, Finset.mem_univ, true_and, Function.comp_apply, Fin.ext_iff,
+    simp only [Spot.Sampling.SamplingDesign.stratum, Finset.mem_filter, Finset.mem_univ, true_and, Function.comp_apply, Fin.ext_iff,
       Fin.val_cast]
   refine ⟨Fin.cast hsz ∘ σ, fun s => ?_, fun s => ?_⟩
   · obtain ⟨-, h2, h3⟩ := hS (Fin.cast hsz.symm s)
@@ -387,7 +387,7 @@ end
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.PlainJ
 open FlockSoundness.Discharge.Tables (LiveOutJ liveOfJ simAuditJ)
@@ -565,7 +565,7 @@ end
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.Inst FlockSoundness.Discharge.PlainHJ
 open FlockSoundness.Discharge.PlainJ (inputsPJ typedPJ)
@@ -922,7 +922,7 @@ end
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Inst
@@ -1524,7 +1524,7 @@ end
 
 section
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)
@@ -1796,7 +1796,7 @@ end
 
 section
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed Placed StrictCR DecodeZL ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.Inst

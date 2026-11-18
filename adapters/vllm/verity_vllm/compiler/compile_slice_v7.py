@@ -4,9 +4,15 @@
 (`codec.Registered.send_lengths`).
 
     CompileSlice_v7{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
-        (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
+        (pub, adv, cert, srv, cin, cout, wit) -> (verdict[16], lengths: Array<K, u32>)
     CompileSliceRowGroups_v2{R, …, CU, G}
-        (pub, adv, cert, srv0, …, srv{P/G − 1}, cin, cout, wit) -> verdict[16]
+        (pub, adv, cert, srv0, …, srv{P/G − 1}, cin, cout, wit) -> (verdict[16], lengths)
+
+**The inputs' lengths** are a public output beside the verdict, a port of its own: ``lengths[k]``, arrival slot k's
+``a_P`` in ``cert`` (its prompt's token count), a u32 least significant bit first, zero-extended, and 0 at an empty slot
+(``a_valid`` 0). It is ``cert``'s value, no new input, and what the ingress tie reads (`tie_service.IngressInputs.compiled`);
+an input's place is its slot's, the certified arrival order. The outputs are 16 + 32·K bits, in the least public size
+class that holds them (`partition_v2.size_class`), and count in leakage at that width.
 
 Everything but the charge is CompileSlice_v1's (and CompileSliceRowGroups_v1's at G < P): the load, the steps, the
 cache, the served rows and the verdict's bits (load, steps, code, charge, rows, cache; `ACCEPT` = 0x3F), on the same
@@ -16,7 +22,7 @@ rows but three:
 - ``cert``: after the certified arrivals and their tokens, ``a_mt``, each arrival slot's certified max_tokens
   (`window_charge.MW` bits, a u32 of the certified body; 0 in an empty slot);
 - ``cin`` and ``cout``: `window_charge`'s carry rows (`window_charge.ROW_BITS`), the window's reads of rows 0 and 1 of
-  `window_charge.VALUE`, which the verifier holds by their b‖c to the session's chain (`window_charge.check_chain`).
+  `window_charge.VALUE`, which the verifier holds by their b‖c to the session's chain (`charge_rows.window_check_chain`).
 
 **The charge** is `window_charge.build_link(C, D, 0, 0, K, …)` on ``pub``'s book from ``cin`` to ``cout``: the
 decisions as CompileSlice_v1 charges them (en_i = i < ``count``), and a length slot for each arrival slot of ``cert``,
@@ -41,21 +47,24 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cache, partial
+from functools import cache
 from types import SimpleNamespace
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import ZERO, Circuit
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.circuits.types import Array, Tuple
+from verity.protocols.interface.charge import window_charge as WC
+from verity.protocols.interface.charge import charge_chain as CC
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_chain as RC
 
 STATICS, BLOCK_STATICS, FLAGS, ACCEPT = CS.STATICS, CS.BLOCK_STATICS, CS.FLAGS, CS.ACCEPT
+U32_BITS = 32
 
 
 @dataclass(frozen=True)
@@ -125,10 +134,19 @@ CODE = LengthCharge()
 
 def _sig(S):
     CC.check_length_slots(vars(S))
-    return CS._sig(S, CODE)
+    if (wide := RC.widths(CS.chain(S)).LW) > U32_BITS:
+        raise ValueError(f"an arrival's prompt length is a public u32, not {wide} bits")
+    rows, verdict = CS._sig(S, CODE)
+    return rows, Tuple(verdict, Array(S.K, Array(U32_BITS, BIT)))
 
 
-_build = partial(CS._build, code=CODE)
+def _build(C, S, *ins):
+    verdict = CS._build(C, S, *ins, code=CODE)[0]
+    c = RC._split(ins[CS.row_names(S).index("cert")], CS.fields(S, CODE)["cert"])
+    lengths = [[C.AND(v[0], b) for b in x] + [ZERO] * (U32_BITS - len(x)) for v, x in zip(c["a_valid"], c["a_P"])]
+    return [verdict, *lengths]
+
+
 _DOC = ("the compile slice's proof block, one window whole, as CompileSlice_v1 with its charge ChargeLink_v2{D, 0, 0, K}: "
         "the committed decisions and a length term for each certified arrival (its certified max_tokens and output "
         "length, in the certified arrivals' row) charged from the window's carry-in to its carry-out and held to the "
@@ -176,11 +194,27 @@ def pub(S, charge: int, book: dict) -> list[int]:
     return CS.pub(S, charge, book, CODE)
 
 
-def evaluate(st: dict, cases: Sequence[CS.Case]) -> list[int]:
-    """The unit's verdict word on each case, in one evaluation."""
+def _int(bits: Sequence) -> int:
+    return sum(int(b) << j for j, b in enumerate(bits))
+
+
+def outputs(st: dict, cases: Sequence[CS.Case]) -> list[tuple[int, tuple[int, ...]]]:
+    """The unit's (verdict word, lengths) on each case, in one evaluation."""
     args = [[c.rows[r] for c in cases] for r in CS.row_names(SimpleNamespace(**st))]
     out = evaluate_bits(unit(**st), *args).reshape(len(cases), -1).tolist()
-    return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
+    return [(_int(o[:16]), tuple(_int(o[16 + U32_BITS * k:16 + U32_BITS * (k + 1)]) for k in range(st["K"])))
+            for o in out]
+
+
+def evaluate(st: dict, cases: Sequence[CS.Case]) -> list[int]:
+    """The unit's verdict word on each case, in one evaluation."""
+    return [v for v, _lengths in outputs(st, cases)]
+
+
+def lengths(S, rows: dict) -> tuple[int, ...]:
+    """The reference of the unit's ``lengths`` on its rows: each ``cert`` slot's prompt length, 0 at an empty slot."""
+    c = CC.ints(rows["cert"], CS.fields(S, CODE)["cert"])
+    return tuple(p * v for p, v in zip(c["a_P"], c["a_valid"]))
 
 
 @cache
@@ -188,7 +222,7 @@ def _counted(key: tuple) -> dict[str, int]:
     S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)
     ins = [C.input(name, sum(BL.elements(t))) for name, t in _sig(S)[0]]
-    C.output("verdict", _build(C, S, *ins)[0])
+    C.output("out", [b for e in _build(C, S, *ins) for b in e])
     return C.counts()
 
 
@@ -199,4 +233,5 @@ def size(**st) -> dict[str, int]:
 
 
 __all__ = ["ACCEPT", "BLOCK_STATICS", "CODE", "CompileSlice", "CompileSliceRowGroups", "FLAGS", "LengthCharge",
-           "STATICS", "Slice", "case", "check", "demo", "demo_async", "evaluate", "pub", "size", "statics", "unit"]
+           "STATICS", "Slice", "U32_BITS", "case", "check", "demo", "demo_async", "evaluate", "lengths", "outputs", "pub",
+           "size", "statics", "unit"]
