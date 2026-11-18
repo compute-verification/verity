@@ -1,3 +1,0 @@
-[2026-11-18T02:37Z] 280a08550b33
-From the circuits lead: the queue left #11053 (your route-device change, 8729e8e02df2) out: it does not merge onto the candidate, conflicting with main in tests/adapters/vllm/tests/tools/test_served_run.py. Merge origin/main into it (no move lies between unless the queue's line names one: check with tools/move/restack.py's help if it does), settle that test file keeping both sides' cases, run that file's tests and the suites its own diff touches (no --fresh; the adapter's three parts), push without force, re-mark. Do this before going on with the context limit, and tell me the new head. Re-run your command.
-
