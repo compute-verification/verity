@@ -80,7 +80,8 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands,
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_gates=a.lower_max_gates,
+                      lower_max_ands=a.lower_max_ands,
                       struct_max_gates=a.struct_max_gates)
 
 
@@ -1517,6 +1518,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
+    ap.add_argument("--lower-max-gates", type=int, default=CK.Options.lower_max_gates,
+                    help="lower a composite Definition whole when it has at most this many IR gates (else it is left to a "
+                         "template's units); a Boolean one is lowered whole whatever its gates")
     ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
                     help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,

@@ -1730,6 +1730,9 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), *call]) == 0
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
+    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-gates", "1", "--out", str(out), *call]) == 0
+    [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
+    assert not real["lowered"] and real["reason"].endswith("lowered as a template's units, not whole (budget 1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
     assert cli.main([fp8, *call]) == 0

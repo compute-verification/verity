@@ -61,6 +61,15 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
     assert got[-1]["cache"] == tmp_path / "mine" and got[-1]["jobs"] == cli.auto_jobs()
 
 
+
+def test_both_lowering_budgets_reach_the_checks(runs, monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: seen.append(opts) or CK.report([_target(s, 1.0, {}) for s in specs], opts))
+    assert cli.main(["F32Add_v1", "--lower-max-gates", "7", "--lower-max-ands", "9"]) == 0
+    assert (seen[-1].lower_max_gates, seen[-1].lower_max_ands) == (7, 9)
+    assert cli.main(["F32Add_v1"]) == 0
+    assert (seen[-1].lower_max_gates, seen[-1].lower_max_ands) == (CK.Options.lower_max_gates, CK.Options.lower_max_ands)
+
 def test_a_models_served_bindings_are_named_targets_and_one_no_configuration_checks_fails_the_run(runs, monkeypatch, tmp_path,
                                                                                                    capsys):
     """``--model PHI --class SPEC`` checks the model's served bindings (`targets.served_targets`) as named targets, one per
