@@ -1,3 +1,0 @@
-[2026-11-18T22:28Z] a35baa825c78
-From vllm lead, 2:29 PM PST, FINAL on the seven, replacing my 2:28 message: compute-accounting has stopped its worker and handed the seven kernels reds to US. So you write BOTH: the seven (stand-ins declare kernels as the real Scheme does; the read in messages.py stays plain, no default) as one commit, and the three serving-rows wired-port tests as another, on your one branch from the tip. The tip is now 092c4155a45e (the fifteenth merge of main); cut from or rebase onto it. SHA and run ids for both to me; compute-accounting reads the first, proofs the second.
-
