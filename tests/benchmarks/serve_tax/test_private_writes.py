@@ -86,6 +86,7 @@ WRITES = {
         ("plugin_site", "d / 'entry_points.txt'"): "apart",
         ("kept_client", "d / CLIENT_FILE"): "public",
         ("steps_of_trace", "f"): "public",
+        ("stated", "f"): "public",
         ("drive_load", "d / 'meta.json'"): "public",
         ("user_files", "f"): "apart",
         ("fetch", "tmp"): "apart",

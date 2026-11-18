@@ -81,8 +81,11 @@ PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
+#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
+#: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
+TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
+PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
            "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
            "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 

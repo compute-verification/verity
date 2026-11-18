@@ -28,7 +28,9 @@ research run --on H200 ... --env DC_JBREAK=1 -- bash calibration/pouw/dc/run.sh 
 ~~~
 
 A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one (on a node
-with no GPU, `DC_CARD` names the card to build for).
+with no GPU, `DC_SKU` names the card file to build for, `calibration/hardware/cards/SKU.toml`; with neither, the build is
+refused). `uni.sh`, `pipe.sh`, `ffill.sh` and `s8_mma.sh` take their target from the card the same way, and `emp.sh build
+SKU` and `s8_mma.sh build SKU` build on a CPU node for the card file `SKU`.
 Its results are not kept here: the analyses print them from a run's `out/`.
 
 ## What is not covered

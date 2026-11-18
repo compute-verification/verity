@@ -6,7 +6,7 @@ eps_budget.py prices a peel design's ε_skip with the checked kernels' and the D
 sm_120: APV_TAIL (apv_l7qs's tail stage, warp instructions a 128-cell tile by class: IMMA 4, IMAD 4.0, the rest 11.5,
 which ncu read as apv_l7qs − apv_cc), c_apv_serve (the served f over a plain epilogue, 4.4 a tile) and c_vfold (vfold −
 vfold_x, 0.6884 / 0.7265 / 0.7221 warp instructions an entry at 2K / 8K / 32K). Off sm_120 it reads the same numbers.
-This counts the same differences from each architecture's SASS (eps_counts.sh's `nvdisasm -c -gi` dumps): every
+This counts the same differences from each architecture's SASS (`nvdisasm -c -gi` dumps of each kernel's cubin): every
 instruction a converged warp can reach (`reach`: `BRA.DIV`'s out-of-line paths never run) is placed by the source lines
 its inline chain passes through, and each region is weighted by how often a warp runs it at the shape ncu measured
 (Llama-3.1-8B, 32 query and 8 KV heads):
@@ -339,7 +339,7 @@ def delta_table(d: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("out", type=Path, help="eps_counts.sh's OUT (TAG/ARCH/apv.gi.sass.gz)")
+    p.add_argument("out", type=Path, help="the dumps, OUT/TAG/ARCH/apv.gi.sass.gz")
     p.add_argument("--src", action="append", required=True, help="TAG=path to that tree's apv.cu")
     p.add_argument("--json", type=Path)
     a = p.parse_args(argv)

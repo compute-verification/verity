@@ -39,6 +39,7 @@ public import Definitions.Certifier.Cells
 public import Definitions.Certifier.ResponseCap
 public import Definitions.Certifier.Marks
 public import Definitions.Certifier.Tap
+public import Definitions.Certifier.AttesterScheme
 public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness

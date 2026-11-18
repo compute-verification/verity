@@ -164,10 +164,16 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     for inside in (out / "private", tmp_path / "run" / "private"):
         with pytest.raises(SystemExit, match="which leaves the node"):
             S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
+        with pytest.raises(SystemExit, match="^--kv-dir .* which leaves the node"):
+            S.run(NS(out=str(out), private=str(tmp_path / "kept"), kv_dir=str(inside), arm="two-stage"))
     assert not seen and not (tmp_path / "run").exists()
     kept = tmp_path / "kept"
+    (tmp_path / "run").mkdir()
     assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
+    # the run states what it keeps on the node: each private directory and the names none of its own files has
+    assert json.loads((tmp_path / "run" / S.PRIVATE_PATHS).read_text()) == {
+        "schema": "private-paths/v1", "private": [str(kept)], "names": list(S.PRIVATE_NAMES)}
     # none given, under vLLM's client (a cost's run, whose kept files nothing reads afterwards): a fresh directory for an
     # arm that keeps something and records nothing, gone when the arm stops; none for the others; an arm that records
     # (its step trace, served ids, edges' outputs) is refused, since later stages read what it records
@@ -373,10 +379,10 @@ def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_re
             for a in ("prod", "prod-tick")]
     assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.scheme_plugin.Front"]
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
-    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0))
+    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p"))
     assert "token_ns" not in plain and "catch_up" not in plain
     ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
-                         1.0, 1.0)
+                         1.0, 1.0, private=tmp_path / "p")
     assert tick_settings(ruled) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
@@ -388,7 +394,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     rule = S.tick_rule("prod-tick", '{"catch_up": "open"}')
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
-    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)
+    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p")
     assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
 
 
@@ -2361,7 +2367,7 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
-                                    "--target, --json, --profile NAME, --feature SCHEME, --find-load)\n")
+                                    "--target, --json, --profile NAME, --feature NAME [KEY=VALUE ...], --find-load)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
     # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
     for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):

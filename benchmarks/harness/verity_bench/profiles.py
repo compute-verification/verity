@@ -1,5 +1,6 @@
 """The serving profiles of `benchmarks/production.toml`, read strictly into frozen objects (`load`), with each profile's
-digest (`digest`) and its dataset, cut and load (`dataset`, `cut`, `load_point`). It builds no command line: a
+digest (`digest`) and its dataset, cut and load (`dataset`, `cut`, `load_point`), and its ladder, the users or
+requests in flight `--find-load` serves stock at (`rungs`). It builds no command line: a
 profile's server and client are serve_tax's own (`benchmarks/serve_tax`, `--profile`). A model's launch is the same on each of its `cards` (the card files'
 ``short``, `verity_bench.kit.card_short`), and a profile's load is the model's on one card."""
 
@@ -37,6 +38,17 @@ class Cut:
 
 
 @dataclass(frozen=True)
+class Ladder:
+    """The load's unit (users of a sessions profile, requests in flight of the others) at ``start``, then each rung
+    ``factor`` times the last, up to ``most``; the load is the fewest past which stock's output tokens a second, at
+    the next rung, rise by less than ``gain`` (a fraction)."""
+    start: int
+    factor: int
+    most: int
+    gain: float
+
+
+@dataclass(frozen=True)
 class Profile:
     version: int
     what: str
@@ -51,6 +63,7 @@ class Profile:
     dataset: Dataset | None = None
     users: Mapping[str, Mapping[str, int | str]] = field(default_factory=dict)
     in_flight: Mapping[str, Mapping[str, int | str]] = field(default_factory=dict)
+    ladder: Ladder | None = None
 
 
 @dataclass(frozen=True)
@@ -117,11 +130,11 @@ class Production:
 
 
 SHAPES = {
-    "timed_trace": {"block", "cuts", "datasets", "users"},
-    "sharegpt": {"prompts", "dataset", "in_flight"},
-    "random": {"prompts", "input", "output", "in_flight"},
+    "timed_trace": {"block", "cuts", "datasets", "users", "ladder"},
+    "sharegpt": {"prompts", "dataset", "in_flight", "ladder"},
+    "random": {"prompts", "input", "output", "in_flight", "ladder"},
 }
-OPTIONAL = {"prompts", "input", "output", "block", "cuts", "datasets", "dataset", "users", "in_flight"}
+OPTIONAL = {"prompts", "input", "output", "block", "cuts", "datasets", "dataset", "users", "in_flight", "ladder"}
 
 
 def _check(doc: Production, path: Path) -> Production:
@@ -163,6 +176,13 @@ def _check(doc: Production, path: Path) -> Production:
                 if count != NOT_FOUND and not (isinstance(count, int) and count > 0):
                     raise refuse(f"profiles.{name}: load for {model}.{card} is {count!r}: a positive count, or "
                                  f"{NOT_FOUND!r}")
+        if (ladder := profile.ladder) and not (1 <= ladder.start <= ladder.most and ladder.factor >= 2
+                                               and 0 < ladder.gain < 1):
+            raise refuse(f"profiles.{name}.ladder: start of at least 1 and at most most, factor of at least 2, and "
+                         f"gain a fraction between 0 and 1; it is {ladder}")
+        if ladder and profile.prompts and ladder.most > profile.prompts:
+            raise refuse(f"profiles.{name}.ladder: most {ladder.most} in flight is more than the {profile.prompts} "
+                         "prompts a pass sends")
         for context, cut in profile.cuts.items():
             if not context.isdigit() or cut.dataset not in profile.datasets:
                 raise refuse(f"profiles.{name}.cuts.{context}: a context in tokens, on one of {sorted(profile.datasets)}")
@@ -218,3 +238,12 @@ def load_point(doc: Production, profile: str, model: str, card: str) -> int:
     if count == NOT_FOUND:
         raise ConfigError(f"{profile} on {model}.{card}: the load is {NOT_FOUND}")
     return count
+
+
+def rungs(doc: Production, profile: str) -> tuple[int, ...]:
+    """The users or requests in flight a profile's `--find-load` serves stock at, its ladder's rungs in order."""
+    ladder = doc.profiles[profile].ladder
+    out = [ladder.start]
+    while out[-1] * ladder.factor <= ladder.most:
+        out.append(out[-1] * ladder.factor)
+    return tuple(out)
