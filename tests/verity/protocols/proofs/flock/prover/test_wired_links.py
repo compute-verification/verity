@@ -325,10 +325,11 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     bad, out = at("honest", *bound, reads="wrong_field.reads.json")
     print("wrong_field", out.strip().splitlines()[-1])
     assert bad is None and "reads its writer's whole output row" in out, out
-    # a link reads its writer's outputs from the offset the program gives (0 here), and no other (HmLinks.checkUnit)
+    # a link reads one whole return field of its writer, from the field's first word (the unit's one field, at 0), and
+    # nothing else (HmLinks.checkUnit)
     bad, out = at("wrong_offset", *bound)
     print("wrong_offset", out.strip().splitlines()[-1])
-    assert bad is None and f"are not unit 0's outputs [1, {1 + N_OUT}) of its {N_OUT}" in out, out
+    assert bad is None and f"read unit 0's outputs [1, {1 + N_OUT}), which are not one whole return field" in out, out
     # a link row is its tree port's registered row, whose width the port names (Registered.checkPort's Port.fits)
     port = _meta(d / "honest")["links"][0]["port"]
     bad, out = at("honest", *bound, reads="wrong_width.reads.json")

@@ -94,6 +94,13 @@ def writerOf (P : Program.Prog) (ns : List NodeUnits) (u t : Nat) : V (Option Na
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
   pure ((ops[t]?).bind (ownerAt ns))
 
+/-- Root node `k`'s callee's return fields (`Program.fieldsOf`) in a unit's output row, one word an output: each one's
+first word and its words. -/
+def fieldSpans (P : Program.Prog) (k : Nat) : List (Nat × Nat) :=
+  let ret := (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).ret
+  ((Program.fieldsOf ret).foldl (fun (acc : List (Nat × Nat) × Nat) t => (acc.1 ++ [(acc.2, t.leaves)], acc.2 + t.leaves))
+    ([], 0)).1
+
 /-- Unit `v`'s template (its node's callee) and its leaf in each of that template's output field trees: its rank among
 the template's units in the root body's order, the members of the earlier nodes of that callee and then its own. -/
 def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String × Nat) := do
@@ -106,9 +113,9 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
 lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or one
-unit's outputs `[at, at + hi - lo)` in order, `at` the link's and so the program's, a read of two units refused: its link row
-is the writer's whole output row, read by path in the writer template's tree (`Registered.checkLinked`), whether or not the
-writer is a unit of the file. The cut wires checked. -/
+whole return field of one unit (`fieldSpans`), from its first word `at`, in order, so `at` is the program's; a read of two
+units or of other than one field is refused. Its link row is the writer's whole output row, read by path in the writer
+template's tree (`Registered.checkLinked`), whether or not the writer is a unit of the file. The cut wires checked. -/
 def checkUnit (c : Circuit) (P : Program.Prog) (links : Array Link) (popIdx : Array Nat)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
   let some u := popIdx[i]? | throw s!"links: unit {i} of the draw is outside the public file's {popIdx.size} units"
@@ -131,9 +138,11 @@ def checkUnit (c : Circuit) (P : Program.Prog) (links : Array Link) (popIdx : Ar
       if rd.any (ownerOf · != some v) then
         throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs and other leaves: a link row is one writer unit's, so the reader's port is cut at its writers' units"
       let (kv, mv) := (unitOf v).getD (0, 0)
+      if !(fieldSpans P kv).contains (off, rd.size) then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs [{off}, {off + rd.size}), which are not one whole return field of its (fields at {fieldSpans P kv}): a link row reads one field, from its first word"
       let og ← outGates P kv mv
-      if off + rd.size > og.size || og.extract off (off + rd.size) != rd then
-        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not unit {v}'s outputs [{off}, {off + rd.size}) of its {og.size}, in order"
+      if og.extract off (off + rd.size) != rd then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not unit {v}'s field [{off}, {off + rd.size}), in order"
       wires := wires + 1
   return wires
 
