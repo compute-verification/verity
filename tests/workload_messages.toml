@@ -371,6 +371,7 @@ readers = [
 type = "PearlPass"
 today = "Pearl+'s passes (`pearl/w<k>/served.json`, `coins.json`, `pass-NNNNN/`)"
 writers = [
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/scheme.py", find = "\"coins\\.json\"|\"served\\.json\"" },
 ]
 readers = [
     { lane = "compute-accounting", file = "benchmarks/pouw/pearl_c_vllm/served_passes.py", find = "passes / \"served\\.json\"\\)\\.read_text" },
