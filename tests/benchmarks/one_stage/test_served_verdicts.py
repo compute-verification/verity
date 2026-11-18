@@ -5838,10 +5838,10 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
+    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/inst-0.bin: not on the hand-off's list (public_files.PUBLIC))"),
+    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/prover/rows.bin: not on the hand-off's list (public_files.PUBLIC))"),
     ("/elsewhere/pub-0.bin", f" (no exception, exit 1): {PRIVATE}"),
 ])
 def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
@@ -5866,6 +5866,40 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
     assert S.main(["witness"]) == 1
     assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
+
+
+def test_the_hand_off_carries_only_what_the_list_names_and_never_a_witness(capsys, monkeypatch):
+    """`public_files.py handoff` passes every file a hand-off carries (`HANDED_READS`, the blobs, its own files) and
+    refuses each witness kind (`HELD_BACK`, H1's prover state) and any other file of the serve dir, exiting 1 iff it
+    named one."""
+    import public_files as PF
+
+    assert PF.unlisted([*HANDED_READS, *BLOBS, *HANDED_OWN, "private/compose/inputs.sha256"]) == []
+    refused = [*HELD_BACK, "private/h1/w0/state.json", "serve.json", "windows.jsonl", "seals.jsonl", "stray.log"]
+    assert PF.unlisted(refused) == refused
+    monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
+    assert PF.main(["handoff"]) == 1
+    assert capsys.readouterr().out == "requests.jsonl: not on the hand-off's list (public_files.PUBLIC)\n"
+
+
+def test_publish_holds_every_file_the_list_does_not_name_and_the_serves_records_leave_through_the_mirror(tmp_path):
+    """`publish` keeps under OUT only what `public_files.PUBLIC` lists under ``OUT/``: a tool's log, a piece's log, a
+    sampled-proofs job's log and any file of no entry are held whole in the private directory; the serve's three records
+    are listed only as the mirror writes them."""
+    import public_files as PF
+
+    out, priv = tmp_path / "out", tmp_path / "private"
+    kept = {"verdicts.txt": "ACCEPT\n", "machine.txt": "0" * 40 + "\n", "pieces/pous/answer.json": "{}\n",
+            "v3c-audit/period.json": "{}\n", "serve/serve.json": "{}\n", "sampled-proofs/summary.json": "{}\n"}
+    held = {"build.log": "x\n", "pieces/pous/piece.log": "x\n", "sampled-proofs/honest/audit.log": "x\n",
+            "sampled-proofs/honest/audit.err": "x\n", "predict_row.json": "{}\n", "stray/thing.txt": "x\n"}
+    for rel, text in {**kept, **held}.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(text)
+    assert sorted(S.publish(out, priv)) == sorted(held)
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == sorted(kept)
+    assert all((priv / rel).read_text() == text for rel, text in held.items())
+    assert {PF.listed(f"OUT/serve/{n}") for n in ("serve.json", "windows.jsonl", "seals.jsonl")} == {PF.MIRROR}
 
 
 @pytest.mark.parametrize("extra, line", [
