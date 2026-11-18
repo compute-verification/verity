@@ -1048,11 +1048,9 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
 def prune_records_facts(cache: Path, kept: int = RECORDS_FACTS_KEPT) -> int:
     """Remove all but the ``kept`` facts documents of ``cache`` (`lean-records/facts`) last stored, each by its sidecar
     `<key>.json` with its `<key>.json.gz` (`check.store_cached_facts`). The number of documents removed."""
-    try:
-        sides = sorted(((e.stat().st_mtime, e.name[:-5]) for e in os.scandir(cache) if e.name.endswith(".json")),
-                       reverse=True)
-    except OSError:
+    if not cache.is_dir():
         return 0
+    sides = sorted(((e.stat().st_mtime, e.name[:-5]) for e in os.scandir(cache) if e.name.endswith(".json")), reverse=True)
     gone = [k for _, k in sides[kept:]]
     for k in gone:
         for p in (cache / f"{k}.json", cache / f"{k}.json.gz"):
