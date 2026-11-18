@@ -42,5 +42,9 @@ tests = [
 paths = ["verity"]
 
 [[tool.verity.tests.reads]]
+tests = ["test_inference_only_weighing.py"]
+paths = ["verity", "adapters/vllm/verity_vllm/definitions"]
+
+[[tool.verity.tests.reads]]
 tests = ["test_inference_only_record_check.py", "test_inference_only_record_difftest.py"]
 paths = ["verity"]

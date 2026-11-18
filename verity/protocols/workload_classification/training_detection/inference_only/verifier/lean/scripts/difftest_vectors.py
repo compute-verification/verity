@@ -458,13 +458,14 @@ def _wired(B, c):
 
 
 #: Primitive ids as `weighing()` names them, each (name, version) of a call `(Value<16>) -> Value<1>` and whether it
-#: weighs nothing (`inference_only_reference.weighs_nothing`): the wiring ids at both versions, `GATELESS`'s, and
-#: neighbours of each that weigh
+#: weighs nothing (`inference_only_reference.weighs_nothing`): the wiring ids at both versions, each of `GATELESS`, and
+#: neighbours of them that weigh
 NAMED = (("BitOf16x0", 1, True), ("BitOf16x15", 1, True), ("BitOf16x0", 2, True), ("WordOf16", 1, True),
-         ("WordOf16", 2, True), ("U32Hi16", 1, True), ("F32Fabs", 1, True), ("BitOf16x01", 1, False),
-         ("BitOf0x0", 1, False), ("BitOf16x0", 3, False), ("WordOf016", 1, False), ("WordOf16", 10, False),
-         ("XBitOf16x0", 1, False), ("BitOf16x0x1", 1, False), ("WordOf", 1, False), ("U32Hi16", 2, False),
-         ("BitOf16", 1, False))
+         ("WordOf16", 2, True),
+         *((pid.rpartition("_v")[0], int(pid.rpartition("_v")[2]), True) for pid in sorted(reference.GATELESS)),
+         ("BitOf16x01", 1, False), ("BitOf0x0", 1, False), ("BitOf16x0", 3, False), ("WordOf016", 1, False),
+         ("WordOf16", 10, False), ("XBitOf16x0", 1, False), ("BitOf16x0x1", 1, False), ("WordOf", 1, False),
+         ("U32Hi16", 2, False), ("BitOf16", 1, False))
 
 
 def weighing() -> list[dict]:
