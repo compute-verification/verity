@@ -28,7 +28,8 @@ floor = 10.0
 goal = "kernels/overhead-counts-output-commitment"
 
 [[metric]]
-id = "benchmarks/pearl-plus-gamma-c"
+id = "benchmarks/pearl-plus-gamma-c-h100"
+was = ["benchmarks/pearl-plus-gamma-c"]
 title = "Pearl+ overhead by card, compute-bound point"
 owner = "benchmarks"
 unit = "fraction over stock"
@@ -40,7 +41,8 @@ floor = 10.0
 goal = "kernels/overhead-counts-output-commitment"
 
 [[metric]]
-id = "benchmarks/pearl-plus-gamma-l"
+id = "benchmarks/pearl-plus-gamma-l-h100"
+was = ["benchmarks/pearl-plus-gamma-l"]
 title = "Pearl+ overhead by card, memory-bound point"
 owner = "benchmarks"
 unit = "fraction over stock"
