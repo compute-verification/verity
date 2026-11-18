@@ -307,3 +307,21 @@ def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
     with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
         M.providing("nothing")
+
+
+def _stand_in(name: str, **declared) -> NS:
+    return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "attach": lambda ex, ctx: None,
+                 "requests": lambda ctx: (), "keeps_weight_copy": schemes.UNDECLARED, "record": schemes.UNDECLARED, **declared})
+
+
+@pytest.mark.parametrize("first, second", [("copy", "store"), ("store", "copy")])
+def test_storage_beside_a_scheme_keeping_a_weight_copy_is_refused_by_both_names_in_either_order(first, second):
+    made = {"copy": _stand_in("keeps-copy", keeps_weight_copy=True), "store": _stand_in("storage", record=M.STORAGE_RECORD),
+            "other": _stand_in("other")}
+    ex = M.Exchange()
+    ex.attach(made[first])
+    with pytest.raises(Refused, match="keeps-copy keeps a weight-derived copy resident .* beside storage"):
+        ex.attach(made[second])
+    assert list(ex.attached) == [made[first].name]
+    ex.attach(made["other"])
+    assert list(ex.attached) == [made[first].name, "other"]

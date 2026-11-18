@@ -15,7 +15,7 @@ message's writers and readers.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -34,6 +34,21 @@ type Subscriber = Callable[[Any], None]
 _KEYS = itertools.count()
 
 
+#: the record of storage's claim, which a scheme reading its own copy of the weights beside it would leave unbacked
+STORAGE_RECORD = "space"
+
+
+def weight_copy_refusal(beside: Iterable[schemes.Scheme], scheme: schemes.Scheme) -> tuple[str, str] | None:
+    """``(name, why)`` where ``scheme`` and one of ``beside``, in one process, are storage's scheme (its record
+    `STORAGE_RECORD`) and one that keeps a weight-derived copy resident (``keeps_weight_copy``), in either order."""
+    for other in beside:
+        for keeps, store in ((scheme, other), (other, scheme)):
+            if getattr(keeps, "keeps_weight_copy", None) is True and getattr(store, "record", None) == STORAGE_RECORD:
+                return scheme.name, (f"{keeps.name} keeps a weight-derived copy resident for the serve's life, so beside "
+                                     f"{store.name} in one process its GEMMs would not read the weights {store.name} holds")
+    return None
+
+
 class Exchange:
     """One process's exchange: subscribers by hook, requests by scheme (filed until `answer`, fixed after it), and the
     workload's step, as the last `StepBegan` emitted it."""
@@ -50,6 +65,7 @@ class Exchange:
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
+        self.schemes: list[schemes.Scheme] = []
         #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
@@ -67,6 +83,8 @@ class Exchange:
         output, where it keeps what never leaves the node across servers; None where the launcher holds none.
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
         `request` refuses them."""
+        if why := weight_copy_refusal(self.schemes, scheme):
+            raise Refused(*why)
         own = None
         if private is not None:
             own = Path(private) / scheme.name
@@ -78,6 +96,7 @@ class Exchange:
             if (scheme.name, r) not in self.requests:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
+        self.schemes.append(scheme)
         if got is not None:
             self.reports[scheme.name] = got
         return got
