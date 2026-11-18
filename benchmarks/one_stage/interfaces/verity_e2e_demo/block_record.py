@@ -67,6 +67,9 @@ BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 #: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": SUBPROTOCOLS, "remote": ("integrity", "pouw")}
+#: what a SPOT accept holds (its ``covers``): ``blocks``, each sampled block on its own inputs, the wires between blocks
+#: not held; ``blocks-and-wires``, once the wires are edges of the registered circuit, which nothing writes yet
+COVERS_BLOCKS, COVERS = "blocks", ("blocks", "blocks-and-wires")
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
 NAMES_TERMS = ("bandwidth",)
 #: what puts a refused one right: its piece's answer names the terms
@@ -215,10 +218,13 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
         raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
+    if "covers" in row and (name != "integrity" or row["covers"] not in COVERS):
+        raise ValueError(f"{name}: covers is {row['covers']!r}, and only SPOT's accept holds one, one of {', '.join(COVERS)}")
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
-            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}})
+            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
+        | ({"covers": row["covers"]} if "covers" in row else {})
 
 
 def compose(server: str, subprotocols: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
@@ -343,6 +349,8 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"
         elif why := named_terms_bad(lg["named_terms"]):
             bad[key] = f"its named_terms: {why}"
+        if "covers" in lg and (name != "integrity" or lg["covers"] not in COVERS):
+            bad[key] = f"covers is {lg['covers']!r}, and only SPOT's accept holds one, one of {', '.join(COVERS)}"
     product = record["composed"].get("product", "onsite")
     if product not in PRODUCTS:
         bad["composed:product"] = f"not one of {sorted(PRODUCTS)}"

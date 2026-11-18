@@ -397,3 +397,26 @@ def test_a_period_s_blocks_are_core_s_block_count() -> None:
     for p in periods.values():
         assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
         assert p["blocks"] == block_count(p["seconds"], window_s, machines)
+
+
+@pytest.mark.parametrize("covers", R.COVERS)
+def test_spots_accept_carries_what_it_covers_and_fits_the_schema(covers) -> None:
+    report, wipe = _accepting_report()
+    report["protocols"][R.RUNNER_KEYS["integrity"]]["covers"] = covers
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rec[R.BY_SUBPROTOCOL]["integrity"]["covers"] == covers and R.check(rec) == {}
+    assert R.COVERS_BLOCKS == "blocks"
+
+
+@pytest.mark.parametrize(("name", "covers"), [("integrity", "wires"), ("integrity", None), ("pouw", "blocks")])
+def test_a_covers_other_than_spots_two_is_refused_by_name(name, covers) -> None:
+    report, wipe = _accepting_report()
+    report["protocols"][R.RUNNER_KEYS[name]]["covers"] = covers
+    with pytest.raises(ValueError, match=f"{name}: covers is"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    rec = R.from_period(_accepting_report()[0], steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    rec[R.BY_SUBPROTOCOL][name]["covers"] = covers
+    assert "covers is" in R.check(rec)[f"subprotocol:{name}"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(SCHEMA).validate(rec)

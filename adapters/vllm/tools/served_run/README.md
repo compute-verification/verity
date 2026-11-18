@@ -8,7 +8,9 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 
 - **integrity**, by SPOT's one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
-  prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
+  prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict. An accept
+  today is over separate copies of each template, each sampled block on its own inputs; the wires between blocks are
+  not held;
 - **work**, by proof of useful work (PoUW, `verity/protocols/resource_accounting/compute/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
@@ -27,7 +29,8 @@ remote's PoUW subprotocol reads. So the remote verdict can't accept on this run 
 Its run is `moved` (`applications/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
 is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
-errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
+errors. An accept today is over separate copies of each template, each sampled block on its own inputs; the wires
+between blocks are not held. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes

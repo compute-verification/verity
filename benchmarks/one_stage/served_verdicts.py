@@ -406,10 +406,6 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
-MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
-                 "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
-                 "misses members; the wires between members are not held; the circuit files' digests are fixed before "
-                 "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
@@ -1872,8 +1868,8 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
     the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
-    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
-    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
+    per-member form carries ``members`` (sampled of registered) and each sampled member's bound over its own proof
+    blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1887,7 +1883,7 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
         proofs = case["params"].get("proofs")
         if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
-            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+            return {**row, "epsilon": None, **members_reached(proofs["members"], answer)}
         return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
@@ -2492,7 +2488,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
     verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
     over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
-    doesn't read."""
+    doesn't read. SPOT's accept row and its block record carry ``covers`` `BR.COVERS_BLOCKS`: each sampled block on its
+    own inputs; the wires between blocks are not held."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2504,6 +2501,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    if rows.get("integrity", {}).get("verdict") == "accept":
+        rows["integrity"]["covers"] = BR.COVERS_BLOCKS
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP

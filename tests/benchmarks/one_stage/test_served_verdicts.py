@@ -1564,14 +1564,14 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps(answer))
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
-    assert rows["integrity"]["verdict"] == "accept" and "covers" not in rows["integrity"], rows["integrity"]
+    assert rows["integrity"]["verdict"] == "accept" and rows["integrity"]["covers"] == "blocks", rows["integrity"]
     w = tmp_path / "serve" / STEP3 / "window"
     case = json.loads((w / "case-v2.json").read_text())
     members = {"m0": {"units": [[0, 2]]}, "m1": {"units": [[2, 3]]}, "m2": {"units": [[3, 4]]}}
     (w / "case-v2.json").write_text(json.dumps({**case, "params": {**case["params"], "proofs": {"members": members}}}))
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
     row = rows["integrity"]
-    assert row["verdict"] == "accept" and row["covers"] == S.MEMBERS_COVER and row["epsilon"] is None, row
+    assert row["verdict"] == "accept" and row["covers"] == "blocks" and row["epsilon"] is None, row
     assert row["members"] == {"sampled": 2, "registered": 3}, row
     assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
                              "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
@@ -1581,6 +1581,7 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
            "at δ 1/1000000")
     assert integrity["at"]["1/1000000"] == {"holds": False, "why": why} and not integrity["at"]["1/100"]["holds"], integrity
     assert integrity["quantity"]["value"] is None and integrity["quantity"]["members"] == {"sampled": 2, "registered": 3}, integrity
+    assert integrity["covers"] == "blocks", integrity
     jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**integrity, "runs": ["r1"]})
     assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
