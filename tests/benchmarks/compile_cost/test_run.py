@@ -46,7 +46,7 @@ H200_PROFILE = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant":
 
 
 def profile(card: str):
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     return TargetProfile(**run.target(card))
 
 

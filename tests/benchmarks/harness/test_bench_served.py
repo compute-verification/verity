@@ -177,12 +177,13 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
-    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
-    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no challenges flipped (the
-    server flips each window's); an unset ``$`` value is refused, naming it."""
+    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's ``--protocols-config`` takes it
+    (`serve_openai.scheme_settings`): the scheme's own settings alone, the setup's paths read in, no challenges flipped
+    (the server flips each epoch's); an unset ``$`` value is refused, naming it."""
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity_vllm.pipeline import serve_pearl as SPL
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm import messages as M
 
     def flipped(n):
         raise AssertionError("served_passes.py arm flipped challenges")
@@ -195,9 +196,9 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
     assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
     doc = json.loads(out.read_text())
-    assert doc == {"pouw": {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+    assert doc == {"pouw": {"kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
                             "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
-    assert SPL.config_of(str(out)) == doc
+    settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):

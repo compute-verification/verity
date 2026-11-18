@@ -123,11 +123,11 @@ class Run:
 def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, *, weight_salts: ROOTS)
     monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
     monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
-    monkeypatch.setattr(pouw, "_SALT_KEYS", {})
+    monkeypatch.setattr(pouw, "_WEIGHT_SALTS", {})
     monkeypatch.setattr(PHW, "EPOCHS", {})
     RUNS.clear()
 
@@ -236,14 +236,16 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_its_epochs_root(tmp
     _untouched(model)
 
 
-def test_each_install_is_an_epoch_of_its_own_with_no_salt_key_and_over_one_weights_root_the_next_k(tmp_path, monkeypatch):
-    """Each install's `commit_weights` takes its weights' roots with no salt key (B's salts are the registration's, data).
-    A reinstall committing a W this process already had an epoch over (the stand-in's fixed roots) is that W's next epoch:
-    k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
-    keys: list[bytes] = []
+def test_each_install_is_an_epoch_of_its_own_under_its_entrys_kept_b_salts_and_over_one_weights_root_the_next_k(
+        tmp_path, monkeypatch):
+    """Each install's `commit_weights` takes its weights' roots under B salts handed in as data, `HM96_SALT` fresh bytes a
+    row kept for its entry, the same at a reinstall in this process. A reinstall committing a W this process already had
+    an epoch over (the stand-in's fixed roots) is that W's next epoch: k = 1, its challenge phase opened on its own epoch
+    root, never epoch 0's."""
+    handed: list[dict[int, bytes]] = []
 
-    def weight_roots(kernel, weights, scheme, salt_key=None):
-        keys.append(salt_key)
+    def weight_roots(kernel, weights, scheme, *, weight_salts):
+        handed.append(dict(weight_salts))
         return ROOTS
 
     monkeypatch.setattr(PPDR, "weight_roots", weight_roots)
@@ -258,7 +260,7 @@ def test_each_install_is_an_epoch_of_its_own_with_no_salt_key_and_over_one_weigh
     assert [c["pass_index"] for c in cs] == [0, 1] and {w.hex(): 2} == PHW.EPOCHS
     assert [h.window for h in hosts] == [{"root": PS.epoch_open_root(w, k).hex()} for k in range(2)]
     assert [c["session"]["root"] for c in cs] == [PS.epoch_open_root(w, k).hex() for k in range(2)]
-    assert keys == [None, None] and ENTRY not in pouw._SALT_KEYS
+    assert handed[0] == handed[1] == pouw._WEIGHT_SALTS[ENTRY] and [len(v) for v in handed[0].values()] == [192 * 128]
     _untouched(model)
 
 

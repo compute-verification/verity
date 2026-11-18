@@ -104,12 +104,12 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
-product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
-(`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
-its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
-``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor device's challenger,
-reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
+``--protocols`` naming a declared scheme's option (``pouw:pearl-c-h100-v1-h3``: ``pearl-plus``, ``--precision bfloat16``)
+attaches that scheme by name on the engine's build (`messages.option`, `scheme_settings`): Pearl+ one epoch a Commit window,
+its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
+``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
+reserved under the lane, its epoch number kept in ``VERITY_PROTOCOLS_CONFIG``'s ``private``; without them it is in-process
+and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
@@ -137,10 +137,11 @@ from typing import Any
 
 from verity import hooks as H
 from verity_vllm import messages as M
+from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
-                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
+                                   serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
@@ -197,7 +198,7 @@ class Options:
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "network attestation's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
-                                 "unquantized (Pearl+'s arm, serve_pearl)")
+                                 "unquantized (Pearl+'s)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
@@ -257,11 +258,10 @@ class Options:
                                             "chunk (default on)")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
-                                        f"{SPL.ENTRY}: every linear but the LM head Pearl+'s FP8 product under it, one Pearl+ "
-                                        "epoch a Commit window, the window's circuit cut at those linears (serve_pearl)")
+                                        "a declared scheme's option: that scheme attached by name (messages.option)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
-                                               "(serve_h1.config_of, serve_pearl.config_of)")
+                                               "(serve_h1.config_of, scheme_settings)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
@@ -572,18 +572,68 @@ class _Route:
         return self.answer
 
 
-def admission_settings(opts: Any) -> dict[str, Any]:
-    """The admission scheme's settings: ``--protocols-config``'s entry under its name (a JSON object, or a JSON file)."""
+def protocols_doc(opts: Any) -> dict[str, dict[str, Any]]:
+    """``--protocols-config``: a JSON object, or a JSON file, ``{name: {...}}``."""
     from verity_vllm.protocols import load_settings
 
     v = opts.protocols_config
-    doc = load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
-    return doc.get(M.providing("admission").name, {})
+    return load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
+
+
+def admission_settings(opts: Any) -> dict[str, Any]:
+    """The admission scheme's settings: ``--protocols-config``'s entry under its name."""
+    return protocols_doc(opts).get(M.providing("admission").name, {})
 
 
 def admission_order(opts: Any) -> str:
     """The admission's order, its settings' ``order``: ``arrival`` where they name none."""
     return admission_settings(opts).get("order", "arrival")
+
+
+def scheme_settings(opts: Any, out: Path) -> dict[str, Any]:
+    """The settings of the scheme ``--protocols`` names (`messages.option`): ``--protocols-config``'s entry under the
+    option's protocol (``pouw``, whose ``device`` is the GPU's, ``cuda``), its passes under ``out/pearl``, its salt a
+    session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the challenger at this node's
+    127.0.0.1, at the port the gate's open answers), else in-process."""
+    own = dict(protocols_doc(opts).get(opts.protocols.partition(":")[0], {}))
+    if own.pop("device", "cuda") != "cuda":
+        raise UsageError(f"--protocols-config: {opts.protocols} runs on cuda")
+    g = opts.gate
+    coins = ({"challenger": "127.0.0.1:0", "lane": g.challenger_lane, "peer": g.challenger_peer} if g.challenger_gate
+             else {"coins": "in-process"})
+    return {**own, **coins, "transcript_dir": str(out / "pearl")}
+
+
+def private() -> str | None:
+    """The directory outside the run output each scheme keeps its own under: ``VERITY_PROTOCOLS_CONFIG``'s ``private``,
+    as `scheme_plugin` hands it."""
+    return (settings.get("VERITY_PROTOCOLS_CONFIG") or {}).get("private")
+
+
+def scheme_refusal(opts: Any, scheme: Any) -> str | None:
+    """Why ``opts`` can't serve ``scheme`` (`messages.option`), None when they can: Pearl+ reads the BF16 checkpoint's
+    linears unquantized, under the server's rows-sha512 Commit, and puts no draw into ``--release-after pouw``."""
+    from verity.protocols.resource_accounting.scheme import settings as checked
+
+    g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
+    if len({bool(g.challenger_gate), bool(g.challenger_peer), bool(g.challenger_lane)}) > 1:
+        return f"--challenger-gate, --challenger-peer and --challenger-lane go together under {opts.protocols}"
+    if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(g).items() if k.startswith("h1_") and v]:
+        return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
+    if g.challenger_gate and not private():
+        return (f"--challenger-gate under {opts.protocols}: VERITY_PROTOCOLS_CONFIG's private, the directory outside the run "
+                "output where each scheme keeps its salt epoch's number, as scheme_plugin's")
+    if opts.precision != "bfloat16":
+        return f"--protocols {opts.protocols} reads the BF16 checkpoint's linears: it needs --precision bfloat16"
+    if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
+        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --required-manifest"
+    if "pouw" in (p.strip() for p in after.split(",")):
+        return f"--release-after pouw waits for PoUW H1's draw of each window, and {opts.protocols} puts none"
+    try:
+        checked(scheme, scheme_settings(opts, Path(opts.out)))
+    except ValueError as e:
+        return f"--protocols-config: {e}"
+    return None
 
 
 def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
@@ -706,7 +756,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
+    scheme = M.option(opts.protocols)
+    if why := (SH.refusal(opts) if scheme is None else scheme_refusal(opts, scheme)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
@@ -722,6 +773,11 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host", **SL.settings_of(opts)})
     scope = register_int8(opts.precision)
+    if (scheme := M.option(opts.protocols)) is not None:
+        from verity_vllm.pipeline.commit_coins import ChallengerGate
+        gate = ChallengerGate(opts.gate.challenger_gate) if opts.gate.challenger_gate else None
+        M.build().attach(scheme, scheme_settings(opts, Path(opts.out)), gate=gate and gate.call, ledger=gate and gate.ledger,
+                         private=private(), process=H.ENGINE)
     from verity_vllm.llm import LLM
 
     llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
@@ -753,7 +809,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SPL.arm_of(opts, llm, com, out) or SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,

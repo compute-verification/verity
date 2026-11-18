@@ -1373,14 +1373,16 @@ def pearl_c_run(weight: torch.Tensor, tag: str) -> object:
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
     from verity_torch.pouw import PearlCDeviceRun, pearl_c_weight_roots
+    from verity_torch.pouw.pearl_c.run_device import fresh_weight_salts
 
     kernel = PPD.Kernel.load(settings.get("PEARLC_KERNEL") or str(Path(__file__).resolve().parents[2] / PEARL_C_KERNEL), cubin)
     digest = hashlib.sha512(tag.encode()).digest()
-    weights, salt_key = {0: weight}, digest[:32]
-    roots = pearl_c_weight_roots(kernel, weights, PEARL_C_SCHEME, salt_key=salt_key)
+    weights = {0: weight}
+    salts = fresh_weight_salts(weights)
+    roots = pearl_c_weight_roots(kernel, weights, PEARL_C_SCHEME, weight_salts=salts)
     ch = Challenger(0, np.random.default_rng(int.from_bytes(digest[32:40], "little")).bytes)
     return PearlCDeviceRun(pouw_schemes.get(PEARL_C_SCHEME), f"pouw:{PEARL_C_SCHEME}", kernel, weights, roots, ch.commitment,
-                           ch.open("salt", weights_root(roots)), capacity=PEARL_C_TILES, salt_key=salt_key)
+                           ch.open("salt", weights_root(roots)), capacity=PEARL_C_TILES, weight_salts=salts)
 
 
 @linear_step("pearl_c", phase="quantize", seeded=True, source="pearl_c_sm90, verity_torch.pouw")

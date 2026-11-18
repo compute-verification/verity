@@ -36,6 +36,7 @@ from verity_torch.pouw.pearl_c.host import (
     _TorchStream,
     _Uploads,
     _zeros,
+    fresh_into,
     joined,
     write_behind,
     write_manifest,
@@ -89,7 +90,6 @@ class _RunState:
     nb: int
     tree_hash: str
     salt: bytes
-    salt_key: bytes | None
     coins: Any
     opening: Any
     roots: dict[int, bytes]
@@ -143,6 +143,7 @@ class _RunState:
     _lane_graph: Callable[..., Any]
     _offsets: Callable[..., Any]
     _retained: Callable[..., Any]
+    salts_a: Callable[..., Any]
     _unpoisoned: Callable[..., Any]
     _widen_later: Callable[..., Any]
 
@@ -150,7 +151,7 @@ class _RunState:
 class PassEnds(_RunState):
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
-    ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
+    ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``device``, ``aside_ends``,
     ``lag_ends``, ``_lagged``, ``_weight_files``, ``shapes``, ``_graphs`` and ``_stages``, and its ``stream``,
     ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and ``_ended``."""
 
@@ -164,13 +165,13 @@ class PassEnds(_RunState):
     _retain_side: Any = None
 
     def end(self, lag: bool = False, behind: bool = False) -> dict[str, Any]:
-        """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
-        commitment (also in `commits` and `details["passes"]`).  With `lag` (on CUDA, without `retain`) the root, A's roots
-        and the flag counts are copied out behind the pass's work and the host doesn't wait for them: the returned dict gets
-        them, and `commits` its root, when the next end, `settle` or `finish` completes the readback.  With `behind` (and
-        `retain_behind`) a retained pass's files and manifest are completed behind it, in order (`retained_ends`, which
-        `finish` waits for): the dict gets ``excluded_rows`` and ``manifest`` once its manifest is written, after every
-        file it names."""
+        """Close the pass: its tile tree on the device, over fresh salts for its tiles (`host.fresh_into`), every A root,
+        and with `retain` the manifest.  Returns the pass's commitment (also in `commits` and `details["passes"]`).  With
+        `lag` (on CUDA, without `retain`) the root, A's roots and the flag counts are copied out behind the pass's work and
+        the host doesn't wait for them: the returned dict gets them, and `commits` its root, when the next end, `settle`
+        or `finish` completes the readback.  With `behind` (and `retain_behind`) a retained pass's files and manifest are
+        completed behind it, in order (`retained_ends`, which `finish` waits for): the dict gets ``excluded_rows`` and
+        ``manifest`` once its manifest is written, after every file it names."""
         import torch
         self.settle()
         self.retained_ends(wait=False)
@@ -184,7 +185,9 @@ class PassEnds(_RunState):
             tree = _zeros(nb * (2 * R.pow2(count) - 1), self.device)
             dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
-            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
+            salts_t = _zeros(HM96_SALT * count, self.device)
+            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "salts_t": salts_t.data_ptr()},
+                                       keys={"dom_t": dom.data_ptr(), **self.const_keys})
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
@@ -192,6 +195,7 @@ class PassEnds(_RunState):
                 (self.leaves.data_ptr(), None, None)
             leaves, side, got = where
             K.dev.stream = side.cuda_stream if aside else self.stream()
+            fresh_into(salts_t, count, K.dev.stream if salts_t.is_cuda else None)
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
@@ -206,6 +210,7 @@ class PassEnds(_RunState):
                     done.record()
                 tree.record_stream(side)
                 dom.record_stream(side)
+                salts_t.record_stream(side)
                 self._lagged = (out, done, [got[0], root, got[1]], units, count)
             elif lag and cur.retain is None and self.device.type == "cuda":
                 got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True)
@@ -217,7 +222,7 @@ class PassEnds(_RunState):
                 roots_a, root_t = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
                 self._ended(out, roots_a, root_t, flags.tolist(), units, count)
                 if cur.retain is not None:
-                    complete = self._write_retained(cur, epoch, roots_a, root_t, tree, count, out)
+                    complete = self._write_retained(cur, epoch, roots_a, root_t, tree, salts_t, count, out)
                     if behind and self.retain_behind:
                         self._behind = (*self._behind, host_behind(complete))
                         deferred = True
@@ -243,8 +248,8 @@ class PassEnds(_RunState):
         self.begin(retain, run, schedule, stepped=step)
         return out
 
-    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None,
-                  y_tree: Any = None, salts: Any = None, y_salts: Any = None) -> None:
+    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, salts: Any, y: Any = None,
+                  y_tree: Any = None, y_salts: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
         A's row salts `salts`, uint8, `HM96_SALT` bytes a row of A's tree in rank order, as the call's commit read them, and
         given its real rows of `y`, y's rows, its tree, `served_y_device.y_tree`, made on the call's device, and its rows'
@@ -255,9 +260,6 @@ class PassEnds(_RunState):
         (uint8, `commit_y`'s layout), y's tree is that one, as the caller's own launches wrote it, copied and never made
         again here: a caller that wrote nothing into it retains what it holds."""
         import torch
-        if salts is None:
-            raise NotImplementedError("A's row salts of a retained call: run.py's pd_commit taking A's fresh row salts as "
-                                      "data (hash_h3.cuh's p7, 192 bytes a row), drawn by the call and handed here")
         if y is not None and y_salts is None:
             if y_tree is not None:
                 raise ValueError("a retained call's own y tree comes with the salts it was committed under (y_salts)")
@@ -341,19 +343,18 @@ class PassEnds(_RunState):
             self._retain_side = torch.cuda.Stream(device=device)
         return self._retain_side
 
-    def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, root: bytes, tree: Any, count: int,
+    def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, root: bytes, tree: Any, salts_t: Any, count: int,
                         out: dict[str, Any]) -> Callable[[], None]:
-        """A retained pass's last files (the leaves and the tile tree, written behind the end) and the step that completes it
-        once every file is: its records, its weights' files and its manifest, ``out``'s ``excluded_rows`` and ``manifest``.
-        A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after."""
+        """A retained pass's last files (the leaves, the tile tree and the tiles' salts `salts_t`, written behind the end)
+        and the step that completes it once every file is: its records, its weights' files and its manifest, ``out``'s
+        ``excluded_rows`` and ``manifest``.  A weight's files are written from the device by the first retained pass, on
+        this thread, and hard-linked after."""
         import torch
         d, nb = cast(Path, cur.retain), self.nb
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
-        raise NotImplementedError("the tiles' fresh salts kept beside the leaves (`salts_t`, 192 bytes a tile): the leaf "
-                                  "kernel taking its salts as data (hash_h3.cuh's hm_leaves, p2 the salts)")
         last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True),
-                             (d / "salts_t", self.salts_t[:HM96_SALT * count], True)), cur.writes)
+                             (d / "salts_t", salts_t, True)), cur.writes)
         sizes = {w: self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
                  for w, wt in self.weights.items()}
 
@@ -369,8 +370,7 @@ class PassEnds(_RunState):
             if part == "tree":
                 return lambda: _bytes(wt.b["tree_b"][:sizes[w]])
             if part == "salts":
-                raise NotImplementedError("weight's B row salts: the vLLM adapter's install handing the device run each "
-                                          "weight's registration and parameter name, read by `pearl_c.weight_row_salts`")
+                return lambda: wt.salts
             return lambda: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))
 
         def from_first(w: int, part: str) -> Callable[[], bytes]:
