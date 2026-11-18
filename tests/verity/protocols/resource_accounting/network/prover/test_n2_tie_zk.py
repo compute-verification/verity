@@ -174,3 +174,21 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     assert rec["control"]["holds_all"] and ok
     rec, ok = member(bytes(range(100, 116)) + piece, tmp_path / "inside")
     assert rec["verifier_found"] == rec["leaked"] == [key] and not rec["structured"] and not ok
+
+
+def test_a_dry_prove_reads_every_member_at_its_verdicts_on_the_pinned_link_and_stages_nothing(tmp_path):
+    """``prove --dry`` on the built-in members: each member's references give its `EXPECT` verdicts, every member names
+    what it changed, and the link is the tie's pinned unit with every port's width; it stops before staging."""
+    out = tmp_path / "out"
+    assert tz.main(["prove", "--dry", "--out", str(out)]) == 0
+    assert [p.name for p in out.iterdir()] == ["summary.json"]
+    s = json.loads((out / "summary.json").read_text())
+    tie = _tie()
+    assert set(s["members"]) == set(s["changed"]) == set(s["inputs"]) == set(tz.EXPECT)
+    for name, m in s["members"].items():
+        assert tuple(bool(x["expect"]) for x in m["reference"]) == tz.EXPECT[name], name
+        assert [x["window"] for x in m["reference"]] == list(range(len(tz.EXPECT[name]))), name
+    assert s["changed"]["honest"] == {} and all(s["changed"][n] for n in tz.EXPECT if n != "honest")
+    link = s["link"]
+    assert link["pinned"] and link["T"] == tz.T and link["unit"] == tie.unit.id and link["name"] == tz.LINK
+    assert link["bits"] == {p: tie.bits(p) for p in tz.TS.PORTS} and set(link["bits"]) == {"wit", "pub", "o0"}

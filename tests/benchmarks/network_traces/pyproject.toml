@@ -94,7 +94,7 @@ inputs = ["calibration/hardware/cards", "calibration/census/deployments.json", "
           "benchmarks/harness/verity_bench/overhead.py", "calibration/hardware/cards", "verity/device.py"]
 # network-rows, the compiled audit of the network attester's records, which test_attester_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_attester_zk
-# and test_egress_zk run on their staged members.
+# runs on its staged members.
 artifacts = ["verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-rows",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"]
 

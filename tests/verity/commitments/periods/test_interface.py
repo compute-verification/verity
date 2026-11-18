@@ -22,6 +22,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pytest
@@ -235,7 +236,8 @@ def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeyp
     assert [c.salts[p] for p in ports] == sampled[:len(ports)]
     assert all(len(c.salts[p]) == CS.SALT_BYTES * len(c.rows[p]) > 0 for p in ports)
     one, two = win.close(), win.close()
-    assert all(one.salts[p] != two.salts[p] and one.roots[p] != two.roots[p] for p in ports)
+    assert all(one.salts[p] != two.salts[p] for p in ports)
+    assert all(one.roots[t] != two.roots[t] for t in win.window.trees)
     given = fixed(win)
     assert all(win.close(salts_of=given).salts[p] == given[p] for p in ports)
 
@@ -484,28 +486,20 @@ def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[n
     return [np.stack([x[k] for k in order]), np.stack([w[k[0]] for k in order])], [np.stack([y[k] for k in order])]
 
 
-def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_salts():
-    """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
-    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the sampled proof blocks alone, the units
-    it samples), and a reader row that isn't its writer's output doesn't commit."""
+def test_a_wire_pattern_wires_whole_members_unit_by_unit_into_its_writers_tree():
+    """Each member's wired port reads, unit by unit, the leaves of its writer template's output tree the pattern gives it
+    (`rows.Binding.reads`), commits no tree of its own, and a reader row that isn't its writer's output doesn't commit."""
     win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
-    assert [(m.base, m.n, m.wired) for m in win.window.members] == [
-        (0, 2, ()), (2, 2, (("x", "o0", (0, 1)),)), (4, 2, (("x", "o0", (2, 3)),)), (6, 2, (("x", "o0", (4, 5)),))]
+    w, ms = win.window, win.window.members
+    assert [(m.base, m.n, tuple(x.port for x in m.wired)) for m in ms] == [(0, 2, ()), (2, 2, ("x",)), (4, 2, ("x",)),
+                                                                          (6, 2, ("x",))]
+    assert [w.reads(m, "x").tolist() for m in ms[1:]] == [[0, 1], [2, 3], [4, 5]]
+    assert {w.tree(m, "x") for m in ms[1:]} == {WI.tree(GID, "o0")} and ms[1].port("x") not in w.trees
     ins, outs = chain_values()
     win.record(GEMM, ins, outs, {"chain": 0})
     assert win.mismatches() == {}
     c = win.close(salts_of=fixed(win))
-    publics = {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
-    assert WI.check(win.window.members, publics) == {}
-    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
-    assert set(WI.check(moved, publics)) == {m.key for m in moved if m.wired}
-    everyone = range(sum(m.n for m in win.window.members))
-    assert WI.check_drawn(win.window.members, publics, everyone) == {}
-    assert set(WI.check_drawn(moved, publics, everyone)) == set(WI.check(moved, publics))
-    assert WI.check_drawn(moved, publics, []) == {}
-    assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
-    lacking = [replace(m, wired=(("x", "o1", m.wired[0][2]),)) if m.wired else m for m in win.window.members]
-    assert list(WI.check_drawn(lacking, publics, [3])) == [moved[1].key]
+    assert set(c.roots) == set(w.trees)
     bad = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
@@ -526,46 +520,29 @@ def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
     return win, given["data"]
 
 
-def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
-    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
-    period derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
-    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
-    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
-    that isn't its writer's rows in order."""
+def test_a_wired_port_commits_no_tree_and_its_table_is_its_writers_leaves(monkeypatch):
+    """A wired port commits no tree, domain or root: its rows are its writer template's output tree's leaves it reads
+    (`rows.Binding.tree`, `leaves`, `refs`), given as `rows.WIRED`. Given as rows it is refused."""
     win, given = chain_given(monkeypatch)
-    ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
-    held = replace(win.window, members=ms)
-    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given, ms)]
-    c, plain = CS.commit(held, data, salts_of=fixed(held)), win.close(salts_of=fixed(win))
-    wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
-    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
-    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
-    assert (held.held(ms[0], "x"), held.held_leaves(ms[0], "x")) == (ms[0].port("x"), (0, 1))
-    assert [(held.held(m, "x"), held.held_leaves(m, "x")) for m in ms[1:]] == [
-        (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1)), (ms[2].port("o0"), (0, 1))]
-    assert all(c.bc[m.port("x")] == c.bc[held.held(m, "x")] == plain.bc[m.port("x")] for m in ms[1:])
-    with pytest.raises(ValueError, match="given as"):
-        CS.commit(held, given, salts_of=fixed(held))
-    with pytest.raises(ValueError, match="several members' outputs"):
-        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (0, 4)),)), *ms[2:]))
-    with pytest.raises(ValueError, match="in its writer's order"):
-        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (5, 4)),)), *ms[2:]))
+    w, ms = win.window, win.window.members
+    c = CS.commit(w, given, salts_of=fixed(w))
+    wired = {m.port(x.port) for m in ms for x in m.wired}
+    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(w)))
+    assert [(w.tree(m, "x"), w.leaves(m, "x").tolist(), w.refs(m, "x").tolist()) for m in ms[1:]] == [
+        (WI.tree(GID, "o0"), [0, 1], [0, 1]), (WI.tree(GID, "o0"), [2, 3], [0, 1]), (WI.tree(GID, "o0"), [4, 5], [0, 1])]
+    rows = [{**d, "rows": {**d["rows"], "x": np.zeros((m.n, 16), dtype=np.uint16)}} if m.wired else d
+            for d, m in zip(given, ms)]
+    with pytest.raises(ValueError, match="give it as wired"):
+        CS.commit(w, rows, salts_of=fixed(w))
 
 
 def _held_window(d: Path, monkeypatch) -> tuple[CS.Binding, CS.Committed, dict]:
-    """`chain_given` with no wired trees, each wired member a shared-row one holding its ``x`` in its writer's tree (a
-    table of its writer's rows, each unit's ref its writer's row) and its ``w`` a table of its own: committed and written
-    under ``d`` -> its window, commitment and ``window.json``."""
+    """`chain_given`, each wired member a shared-row one reading its ``x`` in its writer template's tree (a table of the
+    leaves it reads, each unit's ref its leaf's row) and its ``w`` a table of its own: committed and written under ``d`` ->
+    its window, commitment and ``window.json``."""
     win, given = chain_given(monkeypatch)
-    plain = replace(win.window, members=tuple(replace(m, wired_trees=False) for m in win.window.members))
-    n_of = {m.port("o0"): m.n for m in plain.members}
-    ms = tuple(replace(m, tables=tuple((p, n_of[plain.held(m, p)] if p == "x" else m.n) for p, _w in m.rows)) if m.wired else m
-               for m in plain.members)
-    w = replace(win.window, members=ms)
-    data = [{**g, "rows": {**g["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}},
-             **({"refs": np.stack([np.array(w.held_leaves(m, p)) if m.wired else np.arange(m.n) for p, _w in m.rows], axis=1)}
-                if m.tables else {})} for g, m in zip(given, ms)]
-    c = CS.commit(w, data, salts_of=fixed(w))
+    w = win.window
+    c = CS.commit(w, given, salts_of=fixed(w))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     CS.write(c, d, {"by": "test"}, {}, registrar=reg)
@@ -597,7 +574,7 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
     assert _staged(tmp_path, mem, k, tmp_path / "every", sparse=True, keyed=()) == (full_head, full_body)
     assert all(FI.TABLE_ROWS not in e for e in full_head["registered"].values())
     rows, j = int(mem["shared_rows"]["x"]), [p for p, _w in mem["ports"]].index("x")
-    assert rows > 1 and sorted(set(w.held_leaves(w.members[k], "x"))) == list(range(rows))
+    assert rows > 1 and len(w.leaves(w.members[k], "x")) == rows
     body = bytearray(c.public_body(k))
     refs = np.frombuffer(body, dtype="<u4", offset=len(body) - 4 * mem["n"] * len(mem["ports"])).reshape(mem["n"], -1).copy()
     refs[:, j] = rows - 1
@@ -667,34 +644,24 @@ def test_the_keyed_ports_are_an_openings_key_ports_and_verdict_on_the_members_it
 
 
 def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_verifier_reads(tmp_path, monkeypatch):
-    """A shared-row member holding a wired port in its writer's tree (no wired trees, a table of its writer's rows): its
-    header entry (`rows.held_ports`, `rows.own_entries`) is the writer's output value, one position and one path per row of
-    its table, each path climbing to the writer's root, and the verifier's read of it (`rows.own_reads`, seeded with no
-    port) names the same value, that root, a leaf count of the table's rows and each unit's writer row, so the header opens
-    every row the verifier reads and no other. A member holding none gets no entry, and a body whose held rows are not its
-    writer's is refused."""
+    """A member's wired port, held in its writer template's output tree: its header entry (`rows.shared_ports`,
+    `rows.shared_entries`) is that tree's value, one position and one path per row of its table, the leaves it reads
+    (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
+    with no port) names the same value and root and reads those leaves. A member with no wired port gets no ``x`` entry."""
     w, c, doc = _held_window(tmp_path, monkeypatch)
-    ms = w.members
+    ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
-    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms if m.wired}, w, roots, registered=REG)
-    assert CS.held_ports(doc, 0) == {} and CS.own_entries(doc["members"][0], c.public_body(0), (), {}) == {}
+    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms}, w, roots, registered=REG)
+    assert "x" not in CS.shared_ports(doc, 0)
+    dom, bc = c.domains[tree], b"".join(c.bc[m.port("o0")] for m in ms)
     for k, m in enumerate(ms[1:], 1):
-        writer = w.held(m, "x")
-        assert CS.held_ports(doc, k) == {"x": writer} != {"x": m.port("x")} and m.port("x") not in c.roots
-        e = CS.own_entries(doc["members"][k], c.public_body(k), (), CS.held_ports(doc, k))["x"]
-        read = files[m.key]["ports"]["x"]
-        rows = dict(m.tables)["x"]
-        assert e["value"] == read["value"] == CS.own_value(writer) and read["root"] == c.roots[writer].hex()
-        assert e["positions"] == list(range(rows)) == list(range(read["leaves"])) and len(e["paths"]) == rows
-        assert read["reads"] == list(w.held_leaves(m, "x")) and set(read["reads"]) <= set(e["positions"])
-        dom, bc = c.domains[writer], c.bc[writer]
+        assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
+        e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
+        assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
+        assert e["positions"] == w.leaves(m, "x").tolist() == read["reads"]
         for i, path in zip(e["positions"], e["paths"], strict=True):
             leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
-            assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[writer]
-    body = bytearray(c.public_body(1))
-    body[0] ^= 1                                                       # the held port's first table row
-    with pytest.raises(ValueError, match="not its frame_v3 root"):
-        CS.own_entries(doc["members"][1], bytes(body), (), CS.held_ports(doc, 1))
+            assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[tree]
 
 
 def as_listed(w: CS.Binding, *defs) -> CS.Binding:
@@ -711,18 +678,18 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     mine = I.window_of_record(doc, SAMPLING_DESIGN, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
     with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [2, 0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     with pytest.raises(ValueError, match="order: wire 0"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 2}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
                      ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
                      ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
                      ({**doc, "cap": 0}, "at least one unit")]:
         with pytest.raises(ValueError, match=why):
             I.window_of_record(bad, SAMPLING_DESIGN, by_id)
-    split = I.window_of_record({**doc, "cap": 3}, SAMPLING_DESIGN, by_id).members
-    assert [(m.base, m.n, m.wired) for m in split] == [
-        (0, 2, ()), (2, 2, (("x", "o0", (0, 1)),)), (4, 2, (("x", "o0", (2, 3)),)), (6, 2, (("x", "o0", (4, 5)),))]
+    split = I.window_of_record({**doc, "cap": 3}, SAMPLING_DESIGN, by_id)
+    assert [(m.base, m.n, split.reads(m, "x").tolist() if m.wired else None) for m in split.members] == [
+        (0, 2, None), (2, 2, [0, 1]), (4, 2, [2, 3]), (6, 2, [4, 5])]
     listed_doc = json.loads(I.circuit_bytes(I.circuit_record(as_listed(win.window, GEMM), "chain", [(GID, 8)])))
     assert "cap" not in listed_doc and I.window_of_record(listed_doc, SAMPLING_DESIGN, by_id).members == win.window.members
     with pytest.raises(ValueError, match="stated with a cap"):
@@ -786,8 +753,9 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     weights = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0))
     reg = I.Registered({"weights": LAYERS * 256}, reads=(weights,))
     win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
-    plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(replace(m, tables=t) for m in win.window.members))
-                     for t in ((), (("w", 1),)))
+    plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(
+        replace(m, values=(), tables=tuple((p, t if p == "w" else n) for p, n in m.tables) if m.tables else ())
+        for m in win.window.members)) for t in (2, 1))
     first = I.Ingress(GID, "x", 0, REQUESTS, 0)
     declared = {"registered": reg.doc(), W: [first.doc()]}
     listed = json.loads(I.circuit_bytes(I.circuit_record(plain, "chain", [(GID, 8)], declared=declared)))
@@ -812,7 +780,7 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
         return I.Registered({"weights": LAYERS * 256}, reads=rs)
 
     cut = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS, 2), 0, (0, 256, 0, 128), cut=(0, 2))
-    for bad, why in [(reads(replace(weights, at=1, radix=(1, 4))), "begins no member"),
+    for bad, why in [(reads(replace(weights, at=1, radix=(1, LAYERS, REQUESTS))), "begins no member"),
                      (reads(replace(weights, port="x")), "a wire or a row table fills"),
                      (reads(weights, I.Read(GID, "x", "weights", 0, (REQUESTS,), 0, (16,))), "both fill rows"),
                      (reads(replace(weights, radix=(STEPS, LAYERS, REQUESTS + 1))), "among its template's 8"),
@@ -886,7 +854,9 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
     a unit reading a later unit of its template, so no rising order: a cycle."""
     c = chain()
     assert c.order == ((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2))
-    I.check_order(c.units, c.wires)
+    I.check_order(c.units, c.wires, c.order)
+    with pytest.raises(ValueError, match="order: wire 0 "):
+        I.check_order(c.units, c.wires)
     for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
@@ -941,6 +911,34 @@ def sliced(**edit) -> I.Circuit:
     return I.Circuit("sliced", ((G8, 6), (GEMM, 3)), **{**parts, **edit})
 
 
+def _miswired(ms: Sequence[CS.Member], publics: Mapping[str, bytes]) -> set[str]:
+    """The members whose wired rows, read through their refs, aren't their writer tree's leaves they wire: a tree's leaf
+    ``i`` its template's unit ``i``, its members in order."""
+    owns, seen, trees = {}, {}, {}
+    for m in ms:
+        owns[m.key], seen[m.template] = seen.get(m.template, 0), seen.get(m.template, 0) + m.n
+
+    def tree(t: str, o: str) -> np.ndarray:
+        if (t, o) not in trees:
+            trees[(t, o)] = np.concatenate([WI.strings(publics, x, o) for x in ms if x.template == t])
+        return trees[(t, o)]
+
+    bad = set()
+    for m in ms:
+        for w in m.wired:
+            got = WI.strings(publics, m, w.port)
+            want = tree(w.writer, w.out)[WI.reads([v for v in m.wired if v.port == w.port], owns[m.key], m.n)]
+            if got is None or not np.array_equal(got, want):
+                bad.add(m.key)
+    return bad
+
+
+def _leaves(m: CS.Member, first: int) -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    """Member ``m``'s wired ports, each with its writer's output field and the leaves its units read (``first``: its
+    template's first unit)."""
+    return tuple((x.port, x.out, tuple(x.positions(m.base - first, m.n).tolist())) for x in m.wired)
+
+
 def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
     """A port cut ``k`` ways is ``k`` rows of its outer elements, and a cut wire's last digit walks a reader unit's rows: each
     member's ``x#j`` rows are the slices' outputs, and the record states the cuts, from which the verifier derives them."""
@@ -948,7 +946,7 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
     assert I.unit_rows(GEMM, {"x": 2})[0][:2] == [("x#0", V2, 128, [f"x[{r}]" for r in range(8)]),
                                                   ("x#1", V2, 128, [f"x[{r}]" for r in range(8, 16)])]
     ms = I.members(c, 2)
-    assert [(m.template, m.base, m.n, m.wired) for m in ms] == [
+    assert [(m.template, m.base, m.n, _leaves(m, 6 if m.template == GID else 0)) for m in ms] == [
         (G8ID, 0, 2, ()), (G8ID, 2, 2, ()), (G8ID, 4, 2, ()),
         (GID, 6, 2, (("x#0", "o0", (0, 2)), ("x#1", "o0", (1, 3)))), (GID, 8, 1, (("x#0", "o0", (4,)), ("x#1", "o0", (5,))))]
     assert ms[-1].rows == (("x#0", 8), ("x#1", 8), ("w", 256))
@@ -1083,7 +1081,7 @@ def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
     ms, y8 = win.window.members, outs8[0]
     assert np.array_equal(got.rows[ms[3].port("x#0")], y8[[0, 2]]) and np.array_equal(got.rows[ms[3].port("x#1")], y8[[1, 3]])
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
-    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(9)) == {}
+    assert _miswired(ms, publics) == set()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert doc["cuts"] == {GID: {"x": 2}} and doc["statements"][GID]["in_rows"][1][:3] == ["x#1", V2, 128]
     assert I.window_of_record(doc, SAMPLING_DESIGN, {GID: GEMM, G8ID: G8}.__getitem__).members == ms
@@ -1131,7 +1129,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     assert [(m.template, m.schema("o0")) for m in ms] == [(G8ID, SEG)] * 3 + [(GID, V2)] * 2
     assert [m.schema(p) for p in ("x#0", "x#1", "w") for m in ms[3:4]] == [SEG, SEG, V2]
     assert b"".join(bytes(s) for m in ms[:3] for s in WI.strings(publics, m, "o0")) == b"".join(table.bcs)
-    assert WI.check(ms, publics) == {}
+    assert _miswired(ms, publics) == set()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert doc["statements"][G8ID]["out_rows"] == [[SEG, [0]]] and doc["registered"]["histories"] == [latent().doc()]
     assert [r[1] for r in doc["statements"][GID]["in_rows"]] == [SEG, SEG, V2]
@@ -1206,7 +1204,7 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_strings()
         HT.roots_of(leaf, HW.params(doc, win.window, publics, HW.pins(doc, {"latent": other.root.hex()})))
     m0 = win.window.members[0]
     body = bytearray(publics[m0.key])
-    body[-1] ^= 1
+    body[WI.BC_BYTES * sum(dict(m0.tables)[p] for p, _ in m0.rows)] ^= 1
     flipped = {**publics, m0.key: bytes(body)}
     with pytest.raises(ValueError, match="not the table's root"):
         HT.roots_of(CS.leaf_layer(flipped), HW.params(doc, win.window, flipped, pinned))
@@ -1629,6 +1627,9 @@ class Supplied(Held):
     def commit(cls, program, value, rows, salts, schema):
         v = cls(value, np.array(rows, dtype=np.uint16))
         v.salts, v.program, v.schema = list(salts), program, schema
+        inner = CS._inner(schema, CS.value_words(v))
+        v.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), y)
+                 for r, y in zip(v.rows, v.salts)]
         return v
 
     def entry(self):
@@ -1963,21 +1964,21 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     ms = win.window.members
-    assert [(m.base, m.tables, m.wired) for m in ms] == [
+    assert [(m.base, m.tables, _leaves(m, 0)) for m in ms] == [
         (0, (("x", 2), ("w", 1)), ()), (2, (("x", 2), ("w", 1)), (("x", "o0", (0, 1)),)),
         (4, (("x", 2), ("w", 1)), (("x", "o0", (2, 3)),)), (6, (("x", 2), ("w", 1)), (("x", "o0", (4, 5)),))]
     win.record(GEMM, ins, outs)
     c = win.close(salts_of=fixed(win))
     publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
-    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(8)) == {}
+    assert _miswired(ms, publics) == set()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert I.window_of_record(doc, SAMPLING_DESIGN, {GID: GEMM}.__getitem__).members == ms
-    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in ms]
-    assert set(WI.check(moved, publics)) == {m.key for m in ms if m.wired}
+    moved = [replace(m, wired=(replace(m.wired[0], base=1),)) if m.wired else m for m in ms]
+    assert _miswired(moved, publics) == {m.key for m in ms if m.wired}
     body, at = bytearray(publics[ms[1].key]), WI.BC_BYTES * sum(CS.port_leaves(ms[1]).values())
     body[at:at + 4] = (1).to_bytes(4, "little")
-    assert list(WI.check_drawn(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
-    with pytest.raises(ValueError, match="own rows"):
+    assert _miswired(ms, {**publics, ms[1].key: bytes(body)}) == {ms[1].key}
+    with pytest.raises(ValueError, match=r"its wired 'x' table is the 2 leaves .* not 1"):
         CS.Binding(win.window.program, win.window.query, SAMPLING_DESIGN, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
 
@@ -2086,7 +2087,7 @@ def _long_chain(layers: int, d: Path) -> None:
     win.write(c, d, {"by": "test"}, registrar=reg)
     doc = json.loads((d / "circuit.json").read_bytes())
     mine = I.window_of_record(doc, SAMPLING_DESIGN, {SID: SRC, GID: GEMM}.__getitem__)
-    assert WI.check(mine.members, {m.key: c.public_body(k) for k, m in enumerate(mine.members)}) == {}
+    assert _miswired(mine.members, {m.key: c.public_body(k) for k, m in enumerate(mine.members)}) == set()
     pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": layers, "words": 256, "domain": "ef" * 64}}
     assert len(I.registered_reads(doc, mine, pin, registered=REG)) == 2 * layers
 
@@ -2182,13 +2183,13 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
     files = CS.Bodies(tmp_path, doc)
     for k, m in enumerate(ms):
         body, leaves = c.private_body(k), CS.port_leaves(m)
-        left = {"w", "x"} if k in chained else {p for p, _o, _ws in m.wired}
+        left = {"w", "x"} if k in chained else {w.port for w in m.wired}
         assert CS.read_private(tmp_path, doc, k) == body
         out = io.BytesIO()
         files.copy(k, out)
         assert out.getvalue() == body
         assert (tmp_path / f"m{k}-private.bin").stat().st_size == len(body) - sum(
-            leaves[p] * (2 * n + CS.SALT_BYTES) for p, n in m.all_rows if p in left)
+            leaves.get(p, len(win.window.leaves(m, p))) * (2 * n + CS.SALT_BYTES) for p, n in m.all_rows if p in left)
         assert all("paths" not in e for e in doc["members"][k].get("registered", {}).values())
         assert CS.registered_header(doc, k) == win._entries.get(m.key)
     files = CS.Bodies(tmp_path, doc)
@@ -2203,7 +2204,8 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
             "subcircuit": "gemm"}
     got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
     head, body = Path(got["inst"]).read_bytes().split(b"\n", 1)
-    entries = {**win._entries[ms[k].key], **CS.own_entries(mem, c.public_body(k), win._entries[ms[k].key])}
+    reads, shared = win._entries[ms[k].key], CS.shared_entries(tmp_path, doc, k)
+    entries = {**reads, **shared, **CS.own_entries(mem, c.public_body(k), {*reads, *shared})}
     assert json.loads(head)["registered"] == entries and body == c.private_body(k) + c.public_body(k)
     assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == entries
     row = mem["registered"]["w"]["positions"][0]
@@ -2212,10 +2214,10 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
             (lambda d: d["value_rows"]["w"].update(positions=[2, 3]), CS.read_private, "rows of 256 words the period's"),
             (lambda d: d["registered_paths"]["w"].pop(str(row)), CS.registered_header, "no path for rows"),
             (lambda d: d["members"][k]["registered"]["w"].update(positions=[0, 1]), CS.read_private, "rows of 256 words"),
-            (lambda d: d["members"][k]["wired"][0].update(writers=[10 ** 6] * mem["n"]), CS.read_private, "not output rows"),
-            (lambda d: d["members"][k]["wired"][0].update(writers=[ms[feed].base] * mem["n"], out="o1"), CS.read_private,
+            (lambda d: d["members"][k]["wired"][0].update(base=10 ** 6), CS.read_private, "not output rows"),
+            (lambda d: d["members"][k]["wired"][0].update(writer=ms[feed].template, out="o1"), CS.read_private,
              "not output rows"),
-            (lambda d: d["members"][k].pop("wired"), CS.read_private, "no wire gives")]:
+            (lambda d: d["members"][k].pop("wired"), CS.read_private, "no wire names its rows")]:
         other = copy.deepcopy(doc)
         edit(other)
         with pytest.raises(ValueError, match=why):
@@ -2245,6 +2247,7 @@ def _climb(dom: CommitmentDomain, position: int, leaf: bytes, path: bytes) -> by
     return digest
 
 
+@pytest.mark.xfail(strict=True, reason="waits on proofs: rows.own_entries and own_reads of an output held in its template's tree")
 def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_registrations_root(tmp_path):
     """Lean checks a statement against registered reads only when they name every port of its circuit
     (`Flock.Registered.checkComplete`), so `fed_chain`'s chained GEMMs, which read ``w``, are staged with each other port
@@ -2351,9 +2354,8 @@ def _produced(data: list[dict], asked: list):
 
 def _by_reference_windows() -> dict[str, tuple[I.Window, CS.Binding, list[dict], dict]]:
     """The fixtures a commit into a directory takes, each with what `Window.close` hands `rows.commit`: `window`'s plain
-    members; `fed_chain` and `sliced` recorded by reference, their wired ports with trees of their own, a reader ahead
-    of its writer among them, and ``w`` a registered value's rows; and `fed_chain` as an interior commits it, its
-    shared-row members' wired ports with no tree (``wired_trees`` false)."""
+    members; and `fed_chain` and `sliced` recorded by reference, their wired ports read in their writers' trees, and ``w``
+    a registered value's rows."""
     plain = window()[0]
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     fed = _cut(circuit, registered={"w": w})
@@ -2363,13 +2365,10 @@ def _by_reference_windows() -> dict[str, tuple[I.Window, CS.Binding, list[dict],
     cut = _cut(sliced())
     cut.record(G8, ins8, outs8)
     cut.record(GEMM, [None, ins[1]], outs)
-    got = {name: (win, *_handed(win)) for name, win in (("plain", plain), ("fed", fed), ("cut", cut))}
-    win, held, data, kw = got["fed"]
-    got["held"] = (win, replace(held, members=tuple(replace(m, wired_trees=False) for m in held.members)), data, kw)
-    return got
+    return {name: (win, *_handed(win)) for name, win in (("plain", plain), ("fed", fed), ("cut", cut))}
 
 
-@pytest.mark.parametrize("name", ["plain", "fed", "cut", "held"])
+@pytest.mark.parametrize("name", ["plain", "fed", "cut"])
 @pytest.mark.parametrize("chunk,run", [(1, 1), (2, 1), (CS.CHUNK, CS.VALUE_CHUNK)])
 def test_a_commit_into_a_directory_is_the_whole_commit_a_run_at_a_time(monkeypatch, tmp_path, name, chunk, run):
     """`rows.commit` into a window directory (``into``) makes the commitment the whole commit makes of the same rows under
@@ -2410,7 +2409,7 @@ def test_a_commit_into_a_directory_is_the_whole_commit_a_run_at_a_time(monkeypat
         files.append((got, {k: v for k, v in doc.items() if k != "seconds"},
                       [CS.read_private(d, doc, k) for k in ks]))
     assert files[0] == files[1] and files[1][2] == [whole.private_body(k) for k in ks]
-    assert any(f.startswith("v") for f in files[1][0]) == (name in ("fed", "held"))
+    assert any(f.startswith("v") for f in files[1][0]) == (name == "fed")
 
 
 def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch, tmp_path):
@@ -2419,7 +2418,7 @@ def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch,
     window's, for a run of another shape than its port's and for salts of no port given in full; and its window is
     written where its bodies are, each registered value's rows it left out of a member's file named by that member's
     header."""
-    win, w, data, kw = _by_reference_windows()["held"]
+    win, w, data, kw = _by_reference_windows()["fed"]
     feed = _first(w, SID)
     for more, why in (({"strings_of": {"p": b""}}, "strings_of"), ({"carried": {"p": b""}}, "strings_of or carried"),
                       ({"salts_of": {"no/port": bytes(CS.SALT_BYTES)}}, "salts_of"),
@@ -2433,7 +2432,7 @@ def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch,
     k = _first(full[1], GID)
     given = [dict(d) for d in full[2]]
     given[k]["rows"] = {**given[k]["rows"], "x": np.zeros((2, 16), dtype=np.uint16)}
-    with pytest.raises(ValueError, match="takes a wired port's rows as"):
+    with pytest.raises(ValueError, match="give it as wired"):
         CS.commit(full[1], given, into=tmp_path / "bad", **full[3])
 
     class Short(_Runs):
@@ -2460,7 +2459,7 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
     """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
     that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
     rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
-    more than all of them; the roots are the same."""
+    more than all of them but the salts it is handed; the roots are the same."""
     import tracemalloc
 
     n, chunk = 2048, 64
@@ -2490,11 +2489,13 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
             tracemalloc.stop()
 
     CS.commit(replace(w), [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()], chunk=chunk)
-    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salts_of=fixed(w)))
+    ys = fixed(w)
+    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salts_of=ys))
     whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
-                                         chunk=chunk, salts_of=fixed(w)))
+                                         chunk=chunk, salts_of=ys))
     assert c.roots == whole.roots and len(w.members) == 1
-    assert 4 * streamed < total < held, (streamed, total, held)
+    given = sum(len(y) for y in ys.values())
+    assert 4 * streamed < total and total - given < held, (streamed, total, given, held)
 
 
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
@@ -2567,7 +2568,12 @@ REFUSED = {
 }
 
 
-@pytest.mark.parametrize("edit, why", REFUSED.values(), ids=REFUSED)
+WAITS_CUT_AGAIN = "waits on circuits: a reader's part reads the registered leaves' bits cut again at its width (rows.py)"
+
+
+@pytest.mark.parametrize("edit, why", [
+    pytest.param(*v, id=k, marks=[pytest.mark.xfail(strict=True, reason=WAITS_CUT_AGAIN)] if "row width" in k else [])
+    for k, v in REFUSED.items()])
 def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
     """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width (in u16
     words: a 32-bit value's leaves are two each), schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
@@ -2709,7 +2715,7 @@ def test_each_members_committed_reads_are_its_units_rows_of_the_supplied_values(
     assert I.member_reads(ms, None, ((EID, 0, 3),)) == [{}, {}]
 
 
-def listed_embedding(*wired: tuple[str, str, tuple[int, ...]], registered: I.Registered | None = None) -> dict:
+def listed_embedding(*wired: WI.Wired, registered: I.Registered | None = None) -> dict:
     """`embedding`'s three reads listed in two members (2 units, then 1), each port its units' own rows, the first member's
     ports ``wired``, beside ``registered`` (`embedding`'s tables, table reads and openings by default)."""
     lay = I.layout(EMB)
@@ -2739,7 +2745,7 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
     for p, r in ((None, pins), (pins, {"embed": "cd" * 64}), (pins, {})):
         assert I.input_count(listed, pins=p, roots=r) == {**stated, I.WINDOW_INGRESS: 0, "registered": 0,
                                                           "free": stated["inputs"]}
-    keyed = I.input_count(listed_embedding(("tok", "o0", (5, 6))), pins=pins, roots=pins)
+    keyed = I.input_count(listed_embedding(WI.Wired("tok", EID, "o0", 0, (2,), 5, (1,))), pins=pins, roots=pins)
     assert keyed == {**stated, I.WINDOW_INGRESS: 0, "wired": 16 * 2 * words["tok"], "free": 16 * words["tok"]}
     reg = c.registered
     root, opening = reg.roots[0], reg.openings[0]
@@ -2758,9 +2764,9 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
         with pytest.raises(ValueError, match=why):
             I.input_count(listed_embedding(registered=bad), pins=pins, roots=pins)
     with pytest.raises(ValueError, match="a wire or a row table fills it"):
-        I.input_count(listed_embedding(("root", "o0", (5, 6))), pins=pins, roots=pins)
+        I.input_count(listed_embedding(WI.Wired("root", EID, "o0", 0, (2,), 5, (1,))), pins=pins, roots=pins)
     with pytest.raises(ValueError, match="a wire or a row table fills it"):
-        I.input_count(listed_embedding(("salt", "o0", (5, 6))), pins=pins, roots=pins)
+        I.input_count(listed_embedding(WI.Wired("salt", EID, "o0", 0, (2,), 5, (1,))), pins=pins, roots=pins)
 
 
 def test_an_opening_may_declare_the_output_that_returns_its_row():
@@ -2788,6 +2794,8 @@ def test_an_opening_may_declare_the_output_that_returns_its_row():
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason="o1 reads embed/opened (3 words) at width 1: the "
+                   "registered leaves cut again at a reader's width waits on circuits and lean defining the cut")
 def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from

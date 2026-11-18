@@ -120,4 +120,4 @@ def test_a_replay_probes_its_top_k_into_its_own_directory(tmp_path, monkeypatch)
     monkeypatch.setenv("LADDER_TOPK_PROBE", "sort")
     monkeypatch.setenv("LADDER_TOPK_PROBE_REAL", "det_topk:select")
     L.replay(SimpleNamespace(model="glm53", out=str(tmp_path), index=2, logprobs=False, private=str(tmp_path / "private")))
-    assert seen == [{"mode": "sort", "out": str(tmp_path / "replay-2" / "topk"), "real": "det_topk:select"}]
+    assert seen == [{"mode": "sort", "out": str(tmp_path / "private" / "replay-2" / "topk"), "real": "det_topk:select"}]

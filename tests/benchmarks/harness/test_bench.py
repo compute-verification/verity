@@ -168,8 +168,7 @@ def test_on_a_lease_host_a_point_waits_for_its_cards_in_its_own_lease_and_in_a_l
 
 def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
     """The one launch is `research run ... -- verity-bench run SPEC`: no flag of a node, a slot, a booked card, cores or
-    end, and no queue of the harness's own; what `research run` can't do yet of a booked period is the launcher's
-    (`jobs.booked`)."""
+    end, and no queue of the harness's own; a booked period's are `research run`'s (`jobs.booked`)."""
 
     for flag in ("--direct", "--here", "--card", "--cores", "--end"):
         with pytest.raises(SystemExit):
@@ -178,8 +177,6 @@ def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
     for gone in ("DIRECT_NODES", "GPU_SLOTS", "DIRECT_WAIT_S", "SLOT_GRACE_S", "slot_run", "direct_command",
                  "direct_minutes", "research_command", "QUEUE_KINDS", "queue_kind", "here_command"):
         assert not hasattr(jobs, gone), gone
-    with pytest.raises(NotImplementedError, match="infra's launcher goal"):
-        jobs.booked(0.0, "34-43")
 
 
 def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
@@ -201,57 +198,27 @@ def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
         "b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
 
 
-def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
-    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+def test_the_launcher_runs_the_point_in_the_venv_the_launch_gives_and_refuses_without_one(tmp_path):
+    """The point's Python is VERITY_BENCH_VENV, which the launch gives: no node's directory stands in for it."""
 
     root = Path(__file__).resolve().parents[3]
     launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    python = tmp_path / "cp" / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$0"\n')
-    python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert ran.returncode == 0, ran.stderr
-    assert ran.stdout.strip() == str(python)
-
-
-def test_the_launcher_runs_the_point_in_its_venv(tmp_path, monkeypatch):
-    root = Path(__file__).resolve().parents[3]
-    launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and "pod_bootstrap.sh" in missing.stderr
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "CUDA_HOME": str(tmp_path)}
     python = tmp_path / "venv312" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
     python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and "no Python at VERITY_BENCH_VENV (unset)" in missing.stderr
+    nope = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                          env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
+    assert nope.returncode == 2 and f"{tmp_path}/nope" in nope.stderr
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                         env={**env, "VERITY_BENCH_VENV": str(tmp_path / "venv312")}, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
     assert {f"{root}/benchmarks/harness", f"{root}/adapters/vllm"} <= set(pythonpath.split(":"))
     assert argv == "-m verity_bench _vllm-point --point p"
-
-
-def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
-    """A jobs node's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
-    VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
-
-    root = Path(__file__).resolve().parents[3]
-    launcher = root / "benchmarks/harness/run_point.sh"
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
-    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and f"{tmp_path}/jobs/venv312" in missing.stderr
-    python = tmp_path / "jobs" / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$0"\n')
-    python.chmod(0o755)
-    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert ran.returncode == 0, ran.stderr
-    assert ran.stdout.strip() == str(python)
-    unset = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
-                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
-    assert unset.returncode == 2 and f"{tmp_path}/nope" in unset.stderr
 
 
 def _spec_with(tmp_path, extra: str) -> Path:
@@ -376,7 +343,7 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     python.parent.mkdir(parents=True)
     python.write_text('#!/bin/sh\necho "$FROM_SETUP $SETUP_SAW_PYTHONPATH"\n')
     python.chmod(0o755)
-    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
+    env = {"PATH": "/usr/bin:/bin", "VERITY_BENCH_VENV": str(tmp_path / "venv312"), "CUDA_HOME": str(tmp_path),
            "VERITY_BENCH_SETUP": os.path.relpath(setup, root)}
     setup.write_text('export FROM_SETUP="built in $PWD" SETUP_SAW_PYTHONPATH=${PYTHONPATH##*:}\n')
     ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True, text=True)

@@ -37,9 +37,10 @@ TCP accept, headers and body in the API server, so that the order requests arriv
 the wire.
 
 ``--admit tick`` serves every trace of the run under the attested tick (`verity_vllm.pipeline.serve_admit`, its
-``tick``): the server loads `tick_plugin.register` (`verity_vllm.pipeline.tick_plugin`) as a general plugin beside the
-tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, which writes the release
-headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `NETWORK_ATTESTER` trace they come from the
+``tick``): the server turns the network attester's scheme on by name (`verity_vllm.pipeline.scheme_plugin`), its
+`register` a general plugin beside the tracer, configured by ``VERITY_PROTOCOLS``, and its `Front` the outermost
+middleware, which writes the release headers and the watermark the server gets to its feed (in ``raw/``,
+`network.prover.admission.feed_file`). In a `NETWORK_ATTESTER` trace they come from the
 network attester in front of the server: it numbers each request it releases, in its release order, with the bucket of
 its release, and streams the watermark to the server (`network_attester_serve.py serve --watermark`), its bucket τ_b
 (`tick_for`). In every other trace the client stands in for the network attester, which isn't in front of the server
@@ -186,7 +187,7 @@ TICK_SAT, TICK_FREE = 0.9, 1.1
 TICK_HOLD_MS = 5000
 #: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network attester's or
 #: `StandIn`'s)
-TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
+TICK_MIDDLEWARE = "verity_vllm.pipeline.scheme_plugin.Front"
 CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
 
 
@@ -294,7 +295,7 @@ def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
     """A directory whose .dist-info declares `vllm_adversarial_plugin.register` and `vllm_trace_plugin.register` as vLLM
     general plugins, in that order: vLLM calls them in the file's order, so the tracer wraps the adversary's `schedule`
     and records the step after the adversary has put back what it held. With `cut`, `cut_plugin.register` between them,
-    so that the tracer records the step after the cut. With `tick`, `tick_plugin.register` too, whose gate wraps each
+    so that the tracer records the step after the cut. With `tick`, `scheme_plugin.register` too, whose gate wraps each
     scheduler built after them, so that the tracer sees a request when the gate adds it, and adds it through the cut's
     numbering in release order."""
     d = site / "verity_trace_corpus-0.0.dist-info"
@@ -303,7 +304,7 @@ def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
     (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n" +
                                         ("verity_cut = verity_vllm.pipeline.cut_plugin:register\n" if cut else "") +
                                         "verity_trace = vllm_trace_plugin:register\n" +
-                                        ("verity_tick = verity_vllm.pipeline.tick_plugin:register\n" if tick else ""))
+                                        ("verity_schemes = verity_vllm.pipeline.scheme_plugin:register\n" if tick else ""))
     return site
 
 
@@ -375,14 +376,14 @@ def stop(server: subprocess.Popen) -> None:
 
 
 def tick_modules():
-    """The network attester's `network.prover.admission` (the release headers and the watermark's path) and `tick_plugin` (the
-    plugin and middleware, and ``VERITY_TICK``), imported only for ``--admit tick``."""
+    """The network attester's `network.prover.admission` (the release headers and the watermark's path) and `scheme_plugin`
+    (the plugin and middleware), imported only for ``--admit tick``."""
     p = str(ROOT / "adapters/vllm")
     if p not in sys.path:
         sys.path.insert(0, p)
     from verity.protocols.resource_accounting.network.prover import admission as network_admission
-    from verity_vllm.pipeline import tick_plugin
-    return network_admission, tick_plugin
+    from verity_vllm.pipeline import scheme_plugin
+    return network_admission, scheme_plugin
 
 
 async def drive(port: int, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
@@ -815,9 +816,10 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "adapters/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     if tick:
-        env[tick_modules()[1].TICK_ENV] = json.dumps({**{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")},
-                                                      "hold_ms": TICK_HOLD_MS, "feed": str(d / "raw" / "tick-feed.jsonl"),
-                                                      "log": str(d / "raw")})
+        name = tick_modules()[0].scheme_name()
+        env["VERITY_PROTOCOLS"] = name
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d / "raw"), name: {
+            **{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")}, "hold_ms": TICK_HOLD_MS, "log": str(d / "raw")}})
     arr = traffic.arrivals(requests, rate)
     ids = [request_id(r["i"]) for r in requests]
     cpus = cpu_plan(list(os.sched_getaffinity(0))) if delay is not None else None

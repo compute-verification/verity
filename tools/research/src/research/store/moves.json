@@ -5362,6 +5362,13 @@
     },
     {
       "paths": {}
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/compiler/charge_rows.py": "verity/protocols/resource_accounting/network/prover/charge_rows.py",
+        "tests/adapters/vllm/tests/compiler/test_network_attester_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_charge_rows.py",
+        "tests/adapters/vllm/tests/compiler/test_network_attester_window_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_window_charge_rows.py"
+      }
     }
   ]
 }
