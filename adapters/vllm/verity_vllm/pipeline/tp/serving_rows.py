@@ -350,7 +350,6 @@ class Options:
                                     help="skip the shard sha256 (each tensor read is still held to the committed weights root)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
-    tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
     tables: str | None = option("--tables", default=None,
                                 help="the per-expert tables' registration (records.expert_tables), {rank} its rank's")
 
@@ -368,7 +367,7 @@ def main(o: Options) -> int:
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(world):
             got = from_bundle(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", build_root=o.build_root, checkpoint=ck,
                               required_manifest=o.required_manifest, workers=o.workers,
-                              tables={"key": o.tables_key, "registration": o.tables} if o.tables else None)
+                              tables={"registration": o.tables} if o.tables else None)
             print(f"[tp-serving-rows] rank {r}: stand-in window of {got['population']} units, run {got['run'][:16]} rank {r}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:

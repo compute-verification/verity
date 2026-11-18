@@ -75,11 +75,9 @@ _LAZY = {
     "LEAD_BACKEND": (f"{_SERVING}.lead", "BACKEND"),
     "LEAD_SCHEME": (f"{_SERVING}.lead", "SCHEME"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
-    "NCP_CIRCUIT_SCHEMES": (f"{_PROVER}.circuit", "SCHEMES"),
     "NCP_SCHEMES": (f"{_POUW}.verifier.kernel_schemes", "IDENTIFIED"),
     "NO_DRAW_SESSION": (f"{_SERVING}.h1.window", "NO_DRAW_SESSION"),
     "PEARL_C_CALL_CAPACITY": (f"{_SERVING}.pearl_c", "CALL_CAPACITY"),
-    "PEARL_C_SCHEMES": (f"{_SERVING}.pearl_c", "SCHEMES"),
     "ROUND0": (f"{_SERVING}.h1.requests", "ROUND0"),
     "SCHEDULES": (f"{_POUW}.verifier.serving", "SCHEDULES"),
     "Served": (f"{_SERVING}.h1.served", "Served"),
@@ -102,7 +100,7 @@ _LAZY = {
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
     "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "no_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
-    "pearl_c_scheme": (f"{_SERVING}.pearl_c", "scheme_of"),
+    "pearl_c_scheme": (f"{_PROVER}.schemes", "get"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
     "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
     "program_salt": (f"{_SERVING}.h1", "program_salt"),
@@ -168,6 +166,9 @@ _LAZY = {
     "u64_words": (f"{_SERVING}.row_table_kernels", "u64_words"),
     "to_host": (f"{_SERVING}.h1.commit", "to_host"),
 }
+
+#: each exported name that lists a family of PoUW's kernel schemes (`verifier.kernel_schemes.names`), by that family
+_FAMILIES = {"NCP_CIRCUIT_SCHEMES": "ncp-v2", "PEARL_C_SCHEMES": "pearl-c"}
 
 
 class MatmulRun(Protocol):
@@ -238,6 +239,10 @@ def ready_verifier() -> Any:
 
 
 def __getattr__(name: str) -> Any:
+    if name in _FAMILIES:
+        from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names
+
+        return names(_FAMILIES[name])
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module, attr = _LAZY[name]
@@ -245,8 +250,8 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted({*globals(), *_LAZY})
+    return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
 __all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "ready_verifier",
-           "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY]
+           "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY, *_FAMILIES]

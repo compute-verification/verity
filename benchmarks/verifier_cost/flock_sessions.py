@@ -34,8 +34,8 @@ def stage(spec: str, out: Path, ns: list[int]) -> None:
 
     whole = S.CS.UnitStager.stage
 
-    def with_prefixes(self, rows, out_dir, salt_key, *a, **kw):
-        got = whole(self, rows, out_dir, salt_key, *a, **kw)
+    def with_prefixes(self, rows, out_dir, *a, **kw):
+        got = whole(self, rows, out_dir, *a, **kw)
         full, g = len(next(iter(rows.values()))), self.meta.get("vus_per_block") or 1
         print(f"flock_sessions: full is {full} blocks", file=sys.stderr, flush=True)
         for n in ns:
@@ -44,7 +44,7 @@ def stage(spec: str, out: Path, ns: list[int]) -> None:
                 continue
             t = time.monotonic()
             try:
-                whole(self, {r: v[:n] for r, v in rows.items()}, out_dir.parent / f"{out_dir.name}-n{n}", salt_key, *a, **kw)
+                whole(self, {r: v[:n] for r, v in rows.items()}, out_dir.parent / f"{out_dir.name}-n{n}", *a, **kw)
                 print(f"flock_sessions: {n} blocks staged in {time.monotonic() - t:.1f} s", file=sys.stderr, flush=True)
             except Exception as e:  # noqa: BLE001 -- the full statement and the other prefixes still stand
                 print(f"flock_sessions: {n} blocks not staged: {e!r}", file=sys.stderr, flush=True)
