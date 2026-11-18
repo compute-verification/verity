@@ -17,12 +17,10 @@ execution phase's and a credit period's verdicts are `pouw-verifier serve`'s and
 `core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet raises
 (`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each.
 
-`RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
-
 `coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-verifier-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
-`window.live_challenger` flip every coin and hm96 salt from. Python never reads them from the operating system itself, and
-`RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
+`window.live_challenger` flip every coin and hm96 salt from. Python never reads them from the operating system itself.
+Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
 This module imports only the standard library, so what decides an execution phase never depends on `verity.ml`."""
@@ -39,7 +37,6 @@ import threading
 from pathlib import Path
 from typing import Any, NoReturn
 
-RECORD_VERDICT = "lean"
 #: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
 DISAGREE = "disagree"
 
@@ -158,11 +155,9 @@ def _said(x: Any) -> str:
 
 def of_record(fn: str, value: Any, python: Any) -> Any:
     """The answer of record to `fn` on `value` (`pouw-verifier-difftest`'s inputs), whose Python twin answered `python`
-    in the difftest's JSON form: `python` under ``RECORD_VERDICT = "python"``; else the Lean's (`lean`) when it is
-    that same answer, and ``{"refused": [DISAGREE, why]}`` naming both when it isn't or the Lean can't give one. The
-    Python is the twin the Lean is held to, never its fallback."""
-    if RECORD_VERDICT != "lean":
-        return python
+    in the difftest's JSON form: the Lean's (`lean`) when it is that same answer, and ``{"refused": [DISAGREE, why]}``
+    naming both when it isn't or the Lean can't give one. The Python is the twin the Lean is held to, never its
+    fallback."""
     try:
         got = lean(fn, value)
     except (LeanError, TypeError, ValueError) as e:
@@ -175,11 +170,9 @@ def of_record(fn: str, value: Any, python: Any) -> Any:
 
 def serve_of_record(exe: str, case: Any, python: dict) -> dict:
     """The outcome of record (`Core.Answer`'s JSON) of core protocol `exe`'s `serve` on `case`, whose Python twin
-    answered `python`: `python` under ``RECORD_VERDICT = "python"``; else the Lean's when it is that same outcome, its
-    reason included, and a rejection whose reason starts ``disagree:`` naming both when it isn't or the Lean can't give
-    one. The Python is the twin the Lean is held to, never its fallback."""
-    if RECORD_VERDICT != "lean":
-        return python
+    answered `python`: the Lean's when it is that same outcome, its reason included, and a rejection whose reason starts
+    ``disagree:`` naming both when it isn't or the Lean can't give one. The Python is the twin the Lean is held to,
+    never its fallback."""
     refuse = {"protocol": python.get("protocol"), "verdict": "reject", "commitment": python.get("commitment"),
               "public": None, "profile": None}
     try:
@@ -223,5 +216,5 @@ CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
-__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "GOAL", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
-           "lean", "not_written", "of_record", "serve_of_record"]
+__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "GOAL", "SERVE_EXES", "LeanError", "coins", "executable", "lean",
+           "not_written", "of_record", "serve_of_record"]

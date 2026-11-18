@@ -14,7 +14,7 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the harness (`verity_difftest`); the switch, `verifier.py`; the Python held to the Lean, `core_check.py`,
+# Test-only: the harness (`verity_difftest`); `verifier.py`, which runs the Lean; the Python held to the Lean, `core_check.py`,
 # `credit.py` and `period_check.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof system's challenger and
 # one-stage's registered domains (`one_stage/registered.py` and the `partition.py` it imports), one-stage's proof
 # verification (`one_stage/proofs.py`, its `verifier.py` and what that imports, with the integrity profile and the

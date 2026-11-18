@@ -1,7 +1,7 @@
 """`answers`: the verifier's answers on a window's statements, each run once as credit asks for it and shared
 by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
 core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``verity-verify-proof`` that accepts
-a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
+a session only when it proves every file credit hands it), under the Lean verdict of record:
 two steps over the same statements run the verifier once a statement, the second taking every answer by key; an input
 changed between them is another key, which the verifier answers afresh; and a statement the verifier rejects, refuses
 or can't run refuses both steps, as it does with no memo."""
@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import answers as A
@@ -33,13 +32,6 @@ def kit():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-@pytest.fixture(params=["lean", "python"])
-def record(request, monkeypatch):
-    """Credit's verdict of record: the Lean's (`verifier.RECORD_VERDICT`, as served) and the Python reference's."""
-    monkeypatch.setattr(V, "RECORD_VERDICT", request.param)
-    return request.param
 
 
 @pytest.fixture
@@ -97,7 +89,7 @@ def statements(windows: list[dict]) -> list[str]:
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("memo", ["scratch directory", "one process"])
-def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(seed, memo, record, exe, tmp_path):
+def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(seed, memo, exe, tmp_path):
     """Credit's window check and the period's over one memo: the first runs the verifier once on each statement, sampled
     and live; the second runs it on none, taking each answer by key; both judge as they do with no memo. The memo's
     directory is the verifier's alone (0700, each answer 0600)."""
@@ -172,7 +164,7 @@ def test_a_changed_input_is_another_key(change, exe, tmp_path):
     assert A.key(proof, exe=exe, **kw) != before
 
 
-def test_a_statement_changed_between_the_steps_is_answered_afresh(record, exe, tmp_path):
+def test_a_statement_changed_between_the_steps_is_answered_afresh(exe, tmp_path):
     """A session changed after the window check answered it is another key: the period's check runs the verifier on it
     again (and on nothing else), and refuses as it does with no memo."""
     d, windows = kit()._period(0, tmp_path / "proofs")
@@ -216,7 +208,7 @@ FAILURES = {
 
 
 @pytest.mark.parametrize("failure", FAILURES)
-def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, exe, tmp_path):
+def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, exe, tmp_path):
     """Window 0's last sampled statement rejected, refused or not verifiable: its window check and the period's both
     refuse, with the refusals they give with no memo; the period's takes the window check's answer by key without
     running the verifier, except for a session that is missing, which has no key and which each step's verifier meets."""

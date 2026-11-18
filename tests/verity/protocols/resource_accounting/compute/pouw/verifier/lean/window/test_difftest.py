@@ -29,7 +29,6 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.commitments.indexed import RangeIndexedDomain
@@ -811,7 +810,7 @@ def eps_at(v: dict) -> str:
 def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
     kw.setdefault("rejects", (ValueError,))
     return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
-                  of_record=V.RECORD_VERDICT, **kw)
+                  of_record="lean", **kw)
 
 
 PORTS = {
@@ -868,12 +867,12 @@ PORTS = {
     "draw_epoch_reason": (_port("draw_epoch_reason", draw_epoch_reason, live_commitment_in), 300),
     "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
-                                need_rejects=False, of_record=V.RECORD_VERDICT), 1),
+                                need_rejects=False, of_record="lean"), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
         "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
         "LEGACY_REGISTERED": list(Wd.LEGACY_REGISTERED), "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
         "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False,
-        of_record=V.RECORD_VERDICT), 1),
+        of_record="lean"), 1),
 }
 
 server = D.server_fixture(PORTS["constants"][0])

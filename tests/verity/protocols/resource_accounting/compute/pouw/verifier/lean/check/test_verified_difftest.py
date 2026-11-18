@@ -18,7 +18,6 @@ from hypothesis import strategies as st
 
 import pouw_verified_cases as cases
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 
 if shutil.which("lake") is None:
     pytest.skip("lake is not on the PATH", allow_module_level=True)
@@ -51,7 +50,7 @@ def verified(case: dict) -> dict:
 
 
 VERIFIED_PORT = D.Port("pouw-verifier-difftest", "credit-verified", verified, package=LEAN, need_rejects=False,
-                       of_record=V.RECORD_VERDICT,
+                       of_record="lean",
                        inputs=st.builds(cases.verified_instance, st.randoms(use_true_random=False),
                                         st.sampled_from(["honest"] * (len(cases.NAMES) // 3) + cases.NAMES)))
 server = D.server_fixture(VERIFIED_PORT)

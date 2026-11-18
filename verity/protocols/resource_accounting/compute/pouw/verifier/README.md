@@ -103,8 +103,8 @@ The verifier is Lean, the source of truth for what PoUW checks: four Lake packag
 The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
 `verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
-the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
-setting it to `"python"` is the one line that undoes it.
+the challenger's entropy, which the Lean reads from the operating system. The Lean's answer is always the verdict of
+record.
 
 ### Verdicts of record
 

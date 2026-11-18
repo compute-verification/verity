@@ -10,7 +10,6 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
-  (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
@@ -328,7 +327,7 @@ def install_tiles(scheme: Any) -> Callable[[], None]:
     raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
 
 
-def lean_record(lean: bool | None = None) -> OR.Record:
+def lean_record(lean: bool = True) -> OR.Record:
     """The checks of record with their Lean side (`benchmarks/pouw/served_zk/of_record_lean.py`'s `Record`), which
     `main` takes as `record`: `of_record.Record` alone refuses its first check."""
     raise NotImplementedError(NEEDS_BENCHMARK.format("of_record_lean.Record",
@@ -1499,7 +1498,7 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (an execution phase that ends before its outcome keeps them there); it ends at end of input or
     ``{"op": "quit"}``."""
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
     if a.state:
@@ -1568,7 +1567,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 
 def cmd_replay(a) -> int:
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
                    record=record)
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
@@ -1608,7 +1607,7 @@ def cmd_coin_variant(a) -> int:
 
 
 def cmd_check(a) -> int:
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
@@ -1673,10 +1672,6 @@ def cmd_shape(a) -> int:
     return 0 if v["same"] else 1
 
 
-PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the switch to Lean's verdict of record "
-                 "(`of_record`)")
-
-
 def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
          tiles: Callable[[Any], Callable[[], None]] = install_tiles) -> int:
     """The commands below; `record` makes the checks of record the challenger, `replay` and `check` take (`lean_record`:
@@ -1722,12 +1717,10 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
                                    "from the Lean verifier's challenges before serving); default: fresh from the Lean "
                                    "verifier when this process starts (pouw.verifier.coins, IO.getRandomBytes), before "
                                    "it publishes LOG/coins.json")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
     p.add_argument("--lean", help="Lean verity-verify-proof, the sample's sampler (default: its Python twin)")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):
         p.add_argument(x)
@@ -1741,7 +1734,6 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
     p.add_argument("--undrawn", action="store_true", help="a control: open a unit the sample did not sample")
     p.add_argument("--expect-reject", action="store_true")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")
     p.add_argument("a")
     p.add_argument("b")

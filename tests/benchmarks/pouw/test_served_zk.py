@@ -551,7 +551,8 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
     assert SC.replay(bare, log, tmp_path / "replay", record=ORL.Record(lean=False)) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
-    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"], record=ORL.Record) == 0
+    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2")],
+                   record=lambda: ORL.Record(lean=False)) == 0
 
 
 #: the network attester's run ids, fixed so the prover can name its run in the stream it records
@@ -1011,7 +1012,7 @@ def _through(ch, rec, name="honest"):
 @LEAN
 def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     """Each of the execution phase's checks runs Lean's port and Python's reference on one input: the witness holds both verdicts,
-    the same, Lean's of record, and the published items are Lean's.  Undone (`Record(lean=False)`), the references alone
+    the same, Lean's of record, and the published items are Lean's.  With `Record(lean=False)`, the references alone
     give the same outcome and witness no Lean verdict."""
     *_, words = served
     params, public, advice, priv = _window(words)
@@ -1068,12 +1069,8 @@ def test_r1_r6_of_a_window_are_leans(served):
     record.close()
 
 
-def test_the_record_follows_the_switch(monkeypatch):
-    """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
-    assert ORL.Record().lean is (OR.V.RECORD_VERDICT == "lean")
-    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
-    assert ORL.Record().lean is False and ORL.Record(lean=True).lean is True
-    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
+def test_the_record_is_the_leans_unless_a_test_runs_the_references_alone():
+    """`Record()` takes the Lean's verdict as the record's; `Record(lean=False)` runs the references alone."""
     assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
 
 

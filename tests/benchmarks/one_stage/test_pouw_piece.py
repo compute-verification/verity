@@ -27,7 +27,6 @@ import pouw_piece as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
@@ -37,8 +36,7 @@ STATEMENTS = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resou
 @pytest.fixture
 def statements(tmp_path, monkeypatch):
     """credit's statements kit (`test_pouw_credit_statements`): its periods of proof files and its stand-in
-    verity-verify-proof, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
-    the difftests hold to the Lean's."""
+    verity-verify-proof, which accepts a session only when it proves the files credit hands it."""
     spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
     kit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kit)
@@ -46,7 +44,6 @@ def statements(tmp_path, monkeypatch):
     exe.write_text(kit.FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)
-    monkeypatch.setattr(V, "RECORD_VERDICT", "python")
     return kit
 
 

@@ -679,9 +679,6 @@ def test_a_window_the_lean_and_its_python_twin_disagree_on_is_refused(tmp_path, 
     monkeypatch.setattr(Cr, "_window", lambda *a: (lambda g, w: (g and ([*g[0], len(d["calls"])], *g[1:]), w))(
         *python(*a)))
     assert _disagree(credit(d, statements)[1], "window")
-    monkeypatch.setattr(V, "RECORD_VERDICT", "python")
-    asked.fns.clear()
-    assert credit(d, statements) == ([*_credited(d), len(d["calls"])], None) and "window" not in asked.fns
 
 
 @pytest.mark.parametrize("seed", SEEDS[:1])

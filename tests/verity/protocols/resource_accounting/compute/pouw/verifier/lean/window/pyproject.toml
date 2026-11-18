@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["test_difftest.py", "test_known_rows.py", "test_lanes.py", "test_reg_file.py"]
 # Test-only: the harness (`verity_difftest`, which the workspace installs, and the Lean `lake` builds through the path require);
-# the Python held to the Lean: `window.py` (with the switch, `verifier.py`, and its pinned vectors), `h1zy.py`
+# the Python held to the Lean: `window.py` (with `verifier.py`, which runs the Lean, and its pinned vectors), `h1zy.py`
 # (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/leaf.py` with
 # `verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py`, which import most of PoUW's protocol and the proof system's one-stage modules,
 # so both trees are named whole), with the core they import (the integrity profile, `verity.ml`'s circuits, commitments,

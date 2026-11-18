@@ -18,7 +18,6 @@ from hypothesis import strategies as st
 
 import pouw_period_cases as cases
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -42,7 +41,7 @@ def reference(case) -> dict:
 
 INPUTS = st.builds(cases.instance, st.randoms(use_true_random=False),
                    st.sampled_from(["honest"] * (len(cases.NAMES) // 4) + cases.NAMES))
-PORT = ExactPort("pouw-period", reference, inputs=INPUTS, package=LEAN, of_record=V.RECORD_VERDICT)
+PORT = ExactPort("pouw-period", reference, inputs=INPUTS, package=LEAN, of_record="lean")
 server = D.server_fixture(PORT)
 
 

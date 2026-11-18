@@ -2474,10 +2474,6 @@ def _lean_live_verified(files: Any, entries: Any, run: Run) -> Lived:
     return lived
 
 
-def _live_runner(files: Any, entries: Any, run: Run) -> Lived:
-    return _lean_live_verified(files, entries, run) if V.RECORD_VERDICT == "lean" else _live_verified(files, run)
-
-
 Proved = Callable[[dict, bytes, list[int], int, Any], tuple[Any, tuple[str, str] | None]]
 
 
@@ -2676,8 +2672,8 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     the ``--registered`` file credit builds from the descriptor and the window's entries). The evidence carries proof
     files, never verdicts, and so does its `live` evidence (`LIVE_STATEMENTS`: the live Program's descriptor and each
     round's live@<s> proof files, `_live_verified`, on the circuit file `circuit_files`' ``live``). Both verdicts are
-    the Lean's when `verifier.RECORD_VERDICT` is ``"lean"`` (`_lean_verified`, `_lean_live_verified`). `run` is the
-    verifier (`proofs.verify`), the verifier's own, never the evidence's.
+    the Lean's (`_lean_verified`, `_lean_live_verified`), the two Python functions their references in the difftests.
+    `run` is the verifier (`proofs.verify`), the verifier's own, never the evidence's.
 
     So is the window's verdict (`_of_record`): the Lean `PouwVerifier.Credit.executionPhase`'s on the outcomes those runs gave, with
     `_window` its Python twin. A refusal the runs made themselves stands as theirs, and so does the refusal of live
@@ -2685,7 +2681,7 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     kept = _Outcomes(_runner(statements, circuit_files, entries, window, salt, run),
-                     _live_runner(circuit_files, entries, run))
+                     _lean_live_verified(circuit_files, entries, run))
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, kept.proved, live, kept.lived, LIVE_STATEMENTS, k, rows, verify)
     python = (None, why) if got is None else (got[0], None)
@@ -2698,10 +2694,10 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
 
 class _Outcomes:
-    """One window's statement runs (`_runner`'s `proved`, `_live_runner`'s `lived`), each run's outcomes kept in the form
-    the Lean `PouwCheck.Credit` reads (`PROOF_KEYS`: the sampled proof blocks' ``proofs``, the live rounds' ``live``),
-    none where a run never came, and the refusal a run made itself (the Lean's `Verified` or `LiveVerified` under the
-    Lean record), which no outcome carries."""
+    """One window's statement runs (`_runner`'s `proved`, `_lean_live_verified`'s `lived`), each run's outcomes kept in
+    the form the Lean `PouwCheck.Credit` reads (`PROOF_KEYS`: the sampled proof blocks' ``proofs``, the live rounds'
+    ``live``), none where a run never came, and the refusal a run made itself (the Lean's `Verified` or
+    `LiveVerified`), which no outcome carries."""
 
     def __init__(self, proved: Proved | None = None, lived: Lived | None = None) -> None:
         self._proved, self._lived = proved, lived
@@ -2744,11 +2740,8 @@ def _of_record(fn: str, value: dict, python: tuple[Any, tuple[str, str] | None]
 
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
-    if V.RECORD_VERDICT == "lean":
-        return lambda _layout, raw, units, steps, draw: _lean_verified(statements, files, raw, entries, window["root"],
-                                                                       units, steps, run, salt, draw)
-    return lambda layout, raw, units, steps, draw: _verified(statements, files, raw, layout, entries, window["root"],
-                                                             units, steps, run, salt, draw)
+    return lambda _layout, raw, units, steps, draw: _lean_verified(statements, files, raw, entries, window["root"],
+                                                                   units, steps, run, salt, draw)
 
 
 def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any,
@@ -2900,7 +2893,7 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
     """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
     circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
     None; or None and the refusal (``circuit``). The Python reference of the Lean's `PouwCheck.CommittedFiles`
-    (`_lean_committed_files`), which `period_credit` reads when `verifier.RECORD_VERDICT` is ``"lean"``."""
+    (`_lean_committed_files`), which `period_credit` reads."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
     files = body.get(CIRCUIT_FILES)
@@ -3276,7 +3269,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     period_pin, floor = committed_pin(ledger, name), committed_floor(ledger, name)
     files = None
     if run is not None:
-        files, why = (_lean_committed_files if V.RECORD_VERDICT == "lean" else committed_files)(ledger, name)
+        files, why = _lean_committed_files(ledger, name)
         if why is not None:
             if files_of is not None:
                 files_of.refused = why
@@ -3307,7 +3300,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
             proved, lived, lk = (lambda *_, p=w["proofs"]: (p, None)), _live_outcomes, LIVE_KEYS
         else:
             o = _Outcomes(_runner(w["statements"], files, w["entries"], w["window"], w["salt"], run),
-                          _live_runner(files, w["entries"], run))
+                          _lean_live_verified(files, w["entries"], run))
             if kept is not None:
                 kept.append(o)
             proved, lived, lk = o.proved, o.lived, LIVE_STATEMENTS

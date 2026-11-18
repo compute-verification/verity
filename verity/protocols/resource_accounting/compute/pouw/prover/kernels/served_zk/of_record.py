@@ -17,9 +17,8 @@ challenger's path runs its Lean and its Python reference on one input:
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
 A disagreement raises `Disagree`, which the challenger turns into the refusal ``lean-python-disagree: <check>``; a failure
-is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
-or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
-undone.
+is visible and nothing retries it. `Record(lean=False)` runs the references alone (the witness then holds no Lean
+verdict), for tests that build no Lean.
 
 Verity imports neither Lean's executables nor the canonical JSON the two sides are compared in (`verity_difftest`): a
 `Record`'s `canonical` and `start` raise here, and `benchmarks/pouw/served_zk/of_record_lean.py`'s `Record` supplies
@@ -36,7 +35,6 @@ from typing import Any
 
 from verity.circuits import codec
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 
 REPO = Path(__file__).resolve().parents[8]
 POUW = REPO / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
@@ -147,13 +145,12 @@ def py_draw(x: dict) -> dict | None:
 
 
 class Record:
-    """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
-    `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
+    """Both verdicts of each check, Lean's of record. `lean` False runs the references alone. The servers start at their first check and build their executables (`lake
     build`) then, unless `exes` names them (``pouw-verifier``, ``pouw-verifier-difftest``, ``spot-difftest``,
     ``spot-flock-caller``)."""
 
-    def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
-        self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
+    def __init__(self, lean: bool = True, exes: Mapping[str, str | Path] | None = None) -> None:
+        self.lean = lean
         self.exes = dict(exes or {})
         self.witness: list[dict] = []
         self._servers: dict[str, Any] = {}
