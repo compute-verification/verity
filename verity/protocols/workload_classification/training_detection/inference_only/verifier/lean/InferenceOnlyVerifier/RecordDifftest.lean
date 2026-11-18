@@ -45,7 +45,7 @@ open Lean (Json)
 open InferenceOnlyVerifier.CountDifftest (compare unpublishable)
 
 /-- The fields of the whole verdict compared: a refusal's code and message, or the summary's counts and the verdict. -/
-def detailFields : List String := ["error", "message", "blocks", "gates", "inputs", "fresh", "cross_wires", "free",
+def detailFields : List String := ["error", "message", "blocks", "gates", "weighed", "inputs", "fresh", "cross_wires", "free",
   "ingress", "unregistered", "openings", "wired_rows", "wired_bits", "complies", "failure"]
 
 /-- The fields compared of what the form would publish: a refusal's code and message, or the judgment. -/

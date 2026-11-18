@@ -138,12 +138,17 @@ def fields_of(ret) -> tuple:
     return (ret,)
 
 
-def template_gates(fn) -> list[str]:
+def template_prims(fn) -> list:
     """One activation of a template on its own, gate by gate: each gate's primitive."""
     from verity.circuits.layout import Scope
     if isinstance(fn, PrimitiveDefinition):
-        return [codec.descriptor_id(fn)]
-    return [codec.descriptor_id(prim) for prim, _, _ in reference.activation_gates(Scope(fn, 0, None, 0, 0))]
+        return [fn]
+    return [prim for prim, _, _ in reference.activation_gates(Scope(fn, 0, None, 0, 0))]
+
+
+def template_gates(fn) -> list[str]:
+    """`template_prims`, each by its descriptor id."""
+    return [codec.descriptor_id(p) for p in template_prims(fn)]
 
 
 def _parts(refs) -> list:
@@ -206,7 +211,9 @@ class Template:
             self.widths.setdefault(f"o{j}", tuple(ty.leaf_widths()))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):
             raise Malformed("templates")
-        self.prims = template_gates(fn)
+        prims = template_prims(fn)
+        self.prims = [codec.descriptor_id(p) for p in prims]
+        self.unweighed = sum(map(reference.weighs_nothing, prims))
 
     def port(self, p: str, outs: bool = False) -> int | None:
         """Port `p`'s words: an input row's, or with `outs` an output's too."""
@@ -797,11 +804,12 @@ def expand(inst, tr, form_only: bool = False) -> dict:
             return "theta" if holds[what[1]] else "openings"
         return "ingress"
 
-    sums = {k: [0] * slots for k in ("gates", "inputs", *KINDS)}
+    sums = {k: [0] * slots for k in ("gates", "weighed", "inputs", *KINDS)}
     for t in templates:
         for u in range(t.units):
             s = slot[t.tid][u]
             sums["gates"][s] += len(t.prims)
+            sums["weighed"][s] += len(t.prims) - t.unweighed
             for p, words, _ in t.rows:
                 k = int(cuts.get(t.tid, {}).get(p, 1))
                 sums["inputs"][s] += 16 * words
@@ -818,13 +826,14 @@ def expand(inst, tr, form_only: bool = False) -> dict:
 
 def evaluate(inst, tr, form_only: bool = False) -> dict:
     """`Record.evaluate`: the summary, each per-block count the greatest over the slots, and the rate rule on
-    it: `size` where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its gates."""
+    it: `size` where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its weighed
+    gates (`inference_only_reference.weighs_nothing`'s calls left out), or its gates where those are fewer."""
     e = expand(inst, tr, form_only)
     i = e["i"]
-    out = {"blocks": e["slots"], **{k: max(e[k]) for k in ("gates", "inputs", "fresh", *FRESH)},
+    out = {"blocks": e["slots"], **{k: max(e[k]) for k in ("gates", "weighed", "inputs", "fresh", *FRESH)},
            "wired_rows": e["wired_rows"], "wired_bits": e["wired_bits"]}
     failure = ("size" if out["gates"] > i["gamma"] else
-               "nci" if out["fresh"] * i["den"] > i["num"] * out["gates"] else None)
+               "nci" if out["fresh"] * i["den"] > i["num"] * min(out["gates"], out["weighed"]) else None)
     return {**out, "complies": failure is None, "failure": failure}
 
 

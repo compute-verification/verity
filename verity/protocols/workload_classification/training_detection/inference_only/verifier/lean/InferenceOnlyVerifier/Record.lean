@@ -150,7 +150,8 @@ The rest are a block's fresh bits, and where `kindOf` cannot show a row inside o
 
 `summarize` gives, per kind of fresh bits and in all, the greatest over the slots, with the record's wired rows and
 bits as SPOT counts them. `rate` is the rate rule on it, `InferenceOnlyCheck.failure` on the one pair `(gates, fresh)`: `size`
-where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its gates.
+where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its weighed gates, its
+gates less its calls that hold no gate (`InferenceOnlyCheck.weighsNothing`), which buy no fresh bit.
 
 ## θ
 
@@ -781,6 +782,7 @@ in the Program and its units in a block. -/
 structure Summary where
   blocks : Nat
   gates : Nat
+  weighed : Nat
   inputs : Nat
   fresh : Nat
   crossWires : Nat
@@ -814,12 +816,14 @@ bits, and its `free` bits what no declaration fills: its fresh bits less the dec
 def summarize (c : Case) : Summary :=
   let units := c.f.ts.map fun t => (t.defn, t.units / c.S)
   let gates := (c.f.ts.map fun t => t.units / c.S * (c.f.P.defs[t.defn]!).gates).sum
+  let f := unweighed c.f.P
+  let weighed := (c.f.ts.map fun t => t.units / c.S * ((c.f.P.defs[t.defn]!).gates - f[t.defn]!)).sum
   let inputs := (c.f.ts.map fun t => t.units / c.S * (t.rows.map fun (_, words, _) => 16 * words).sum).sum
   let ds : List Counted := c.x.decls.map fun d => (c.kind (some d.fill), c.gridsAt d.w.reader, d)
   let rows := (slotsToTry c.S ds).map (tally c.S ds)
   let fresh := fun (v : Array Nat) => inputs - v[Kind.inside.index]! - v[Kind.theta.index]!
   let greatest := fun (f : Array Nat → Nat) => (rows.map f).foldl max 0
-  { blocks := c.S, gates, inputs, fresh := greatest fresh,
+  { blocks := c.S, gates, weighed, inputs, fresh := greatest fresh,
     crossWires := greatest (·[Kind.crossWires.index]!),
     free := greatest fun v => fresh v - v[Kind.crossWires.index]! - v[Kind.ingress.index]! -
       v[Kind.unregistered.index]! - v[Kind.openings.index]!,
@@ -829,13 +833,14 @@ def summarize (c : Case) : Summary :=
     wiredRows := c.wired.wiredRows, wiredBits := c.wired.wiredBits, units }
 
 /-- **The rate rule** on a summary, `InferenceOnlyCheck.failure` on its one pair: `size` where a block has more than `Γ` gates,
-else `inference_only` where its fresh bits exceed `α = num/den` times its gates. -/
+else `inference_only` where its fresh bits exceed `α = num/den` times its weighed gates (`unweighed`), or its gates where
+those are fewer. -/
 def rate (gamma num den : Nat) (s : Summary) : Option String :=
-  (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)] #[s.gates]).map (·.2)
+  (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)] #[s.weighed]).map (·.2)
 
 /-- A summary's counts as a verdict's fields. -/
 def Summary.fields (s : Summary) : List (String × Json) :=
-  [("blocks", toJson s.blocks), ("gates", toJson s.gates), ("inputs", toJson s.inputs), ("fresh", toJson s.fresh),
+  [("blocks", toJson s.blocks), ("gates", toJson s.gates), ("weighed", toJson s.weighed), ("inputs", toJson s.inputs), ("fresh", toJson s.fresh),
    ("cross_wires", toJson s.crossWires), ("free", toJson s.free), ("ingress", toJson s.ingress),
    ("unregistered", toJson s.unregistered), ("openings", toJson s.openings), ("wired_rows", toJson s.wiredRows),
    ("wired_bits", toJson s.wiredBits)]
