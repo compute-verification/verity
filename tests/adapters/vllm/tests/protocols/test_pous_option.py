@@ -355,7 +355,7 @@ def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
     vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install)
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
+    monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
 
 
 def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monkeypatch):

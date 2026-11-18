@@ -1216,7 +1216,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins:
     inst.update(gamma=limits["gamma"], alpha=limits["alpha"])
     rows = [(codec.descriptor_id(fn), p, u, r) for fn, n in c.templates for p, _ in fn.signature()[0]
             for u in range(n) for r in range(c.cuts.get(codec.descriptor_id(fn), {}).get(p, 1))]
-    return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, text, json.loads(record), order),
+    return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, text, json.loads(record)),
                      "rows": [list(r) for r in rng.sample(rows, min(6, len(rows)))],
                      "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}},
                      "block_rows": rows_rule},
@@ -1292,11 +1292,11 @@ def _program_wires(text: str, tids, cuts) -> list[dict] | None:
         return None
 
 
-def spot_of(c: Circuit, text: str, doc: dict, order=None) -> dict | None:
+def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
     """The record's wiring as SPOT's `wires` piece reads it (`Spot.Wires.Wiring.ofJson`): each template's rows and
     outputs Python's own layout of it (`verity.commitments.periods.interface.layout`, what `check_wires` reads), the
-    record's cuts and the wires Python reads off the Program `text` (`reference.program_wires`), and the order the
-    record's, else `order` where one is given beside it. None
+    record's cuts and the wires Python reads off the Program `text` (`reference.program_wires`), with no order, as
+    the form reads none. None
     where that layout has no row for a port (its leaves of two widths, or an output of 16 bits or more that is not
     whole 16-bit words) or Python refuses the Program's wires."""
     if any(len(ty.width_set()) != 1 for fn, _ in c.templates
@@ -1310,8 +1310,7 @@ def spot_of(c: Circuit, text: str, doc: dict, order=None) -> dict | None:
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
-            "cuts": doc.get("cuts", {}), "wires": wires,
-            **({"order": doc["order"]} if "order" in doc else {"order": order} if order is not None else {})}
+            "cuts": doc.get("cuts", {}), "wires": wires}
 
 
 def _slots(c: Circuit, w):
@@ -1477,10 +1476,8 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
-        case["spot"] = None if wires is None else {
-            "templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}), "wires": wires,
-            **({"order": doc["order"]} if "order" in doc else
-               {"order": case["instance"]["order"]} if "order" in case["instance"] else {})}
+        case["spot"] = None if wires is None else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
+                                                   "wires": wires}
 
 
 def _misformat(rng, made: dict, doc: dict, how: str) -> bool:
@@ -1721,8 +1718,6 @@ def _break(rng, made: dict, how: str) -> bool:
             _rewrite(made, lambda d: d.update(order=bad))
         else:
             inst["order"] = bad
-            if case["spot"] is not None:
-                case["spot"]["order"] = bad
     elif how == "no-wires":
         _rewrite(made, lambda d: d.pop("wires") if rng.random() < 0.5 else d.update(wires={}))
     elif how in ("read-param", "read-leaves", "read-on-wire", "table-param", "root-port", "verdict", "ingress-units",

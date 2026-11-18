@@ -32,6 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Epoch,
     Workload,
     activation_binding,
+    fresh_salts,
     commit_rows,
     weight_binding,
     weights_root,
@@ -51,6 +52,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 )
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
+from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -265,7 +267,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
     u = Matmul(7, Shape(16, K, N), 3)
     rows = [r.tobytes() for r in a]
-    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, fresh_salts(len(rows))).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
     got = OPS.ncp_tiles(s, ctx, noise, a, OPS.Operands(np.ones(N, np.float32), *OPS.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
@@ -306,7 +308,7 @@ def _fake_pous(monkeypatch):
         return PO.Option(name=f"pous:{scheme}", hooks=h)
     vars(mod)["install"] = install
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
 
 
 def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):

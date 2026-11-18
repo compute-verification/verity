@@ -51,7 +51,6 @@ ROOT = HERE.parents[1]
 DATA = Path(settings.get("PPL_DATA"))
 LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
 HF_HOME = Path(settings.get("HF_HOME"))
-CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
 def load_plugins(paths: Iterable[str] | None) -> None:
@@ -249,7 +248,7 @@ def submit_command(a: argparse.Namespace, data: Path) -> list[str]:
         raise SystemExit(f"a run names its machine, the machine's card, Python and Hugging Face cache: give "
                          f"{', '.join(missing)}")
     from verity_bench import kit
-    kit.card_short(a.card, directory=CARD_FILES)
+    kit.card_short(a.card)
     flags = f"--model {a.model} --set {a.set} --ctx {a.ctx} --gpus {gpus} --seeds {a.seeds}"
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)

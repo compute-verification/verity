@@ -9,12 +9,12 @@
 #   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P] \
 #     [--cubin FILE --cubin-art ART]
 #
-# VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit with nvcc and
-# nsys (default /usr/local/cuda-13.0).
+# VERITY_BENCH_VENV names the Python with torch and vLLM, which the door's launch forwards; the toolkit with nvcc and
+# nsys is CUDA 13.0's, CUDA_HOME's or the run's machine's (benchmarks/kernels/machine.py toolkit 13.0).
 set -euo pipefail
 : "${RESEARCH_RUN_DIR:?}" "${RESEARCH_RUN_ID:?}" "${GPU_LEASE_UUID:?run it on a GPU lease: gpu-lease 1 --wait -- bash $0 ...}"
-CUDA=${CUDA:-/usr/local/cuda-13.0}
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+PY=${VERITY_BENCH_VENV:?set VERITY_BENCH_VENV to the Python with torch and vLLM on the node, which the door forwards}/bin/python
+CUDA=$("$PY" benchmarks/kernels/machine.py toolkit 13.0)
 O=${OUT:-$RESEARCH_RUN_DIR/out}
 mkdir -p "$O"
 export PATH=$CUDA/bin:$PATH CUDA_HOME=$CUDA CUDA_DEVICE_ORDER=PCI_BUS_ID
@@ -32,7 +32,7 @@ if [[ $arch == sm_120a ]]; then
 fi
 # the harness loads the cuBLASLt of the toolkit it links (native/build.sh), which the node's own loader path need not hold
 export LD_LIBRARY_PATH=$CUDA_HOME/$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/workspace/research/cache/pouw-harness-build} \
+POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-${XDG_CACHE_HOME:-$HOME/.cache}/pouw-harness-build} \
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
