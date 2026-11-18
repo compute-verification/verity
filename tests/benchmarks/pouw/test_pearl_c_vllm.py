@@ -451,13 +451,13 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
-    """The call runs as vLLM runs it, under inference mode, so its shape's buffers are inference tensors; the retained pass
-    begins outside it (execution phase 's verify pass failed there)."""
+    """The call runs as vLLM runs it, under inference mode, and its shape's buffers are still normal tensors; the retained
+    pass begins outside it (execution phase 's verify pass failed there)."""
     make, kernel, weights, *_ = device_run
     run = make()
     with torch.inference_mode():
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert all(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
+    assert not any(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
     run.end()
     run.begin(retain=str(tmp_path))
     assert bool((run.leaves == 0xA5).all()) and all(bool((t == 0xA5).all()) for sh in run.shapes.values() for t in sh.b.values())
