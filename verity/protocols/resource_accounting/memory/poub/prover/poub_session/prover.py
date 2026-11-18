@@ -69,11 +69,13 @@ Under refresh (the session message's `refresh`, absent off), an honest, kv or kv
 without serving ahead, re-keys on the schedule of the session message's `lifetime` and `fresh_slots` (`rota.Schedule`, `audit_prover.Refresh`;
 an honest session as a trace that writes no pages): the trace's step at a window's first pass sends that window's due
 re-keys, each whole, before its pages, each append message naming its `slot` and a re-key its `origin`; the pages of a
-step take the window's next fresh slot when they are sent, and wait while the window's are used; a page's own coin encodes nothing,
-its first encode its first re-key's; and each pass's plan is the schedule's for its window, every opening of a re-key's
-block naming its origin's position.  The session's entry in prover.json then has `refresh`: the re-key appends sent
-(`appends`), the blocks they re-keyed (`blocks`), the blocks encoded under an append's coin (`encoded`) and the
-host time those encodes took (`encode_ns`).
+step take the window's next fresh slot when they are sent, and wait while the window's are used; a window whose first
+step finds pages unsent from before it (their pass dropped at its boundary) leaves its re-key slots empty; a page's own
+coin encodes nothing, its first encode its first re-key's; and each pass's plan is the schedule's for its window, every
+opening of a re-key's block naming its origin's position.  The session's entry in prover.json then has `refresh`: the
+re-key appends sent (`appends`), the blocks they re-keyed (`blocks`), the blocks encoded under an append's coin
+(`encoded`), the host time those encodes took (`encode_ns`) and the windows whose re-key slots stayed empty
+(`skipped`).
 
 Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`, the verifier's `memory_map`,
 "Passes and steps"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
@@ -366,7 +368,7 @@ class ServingTrace:
         self.released: list[int] = []
         self.withdrawn: list[int] = []
         self.appended: list[int] = []
-        self.refresh, self.rekeyed_to, self.slot_of = refresh, -1, {}
+        self.refresh, self.rekeyed_to, self.slot_of, self.skipped = refresh, -1, {}, 0
 
     def rekeys_due(self, window: int) -> bool:
         """Under refresh, whether `window`'s re-keys are still to be made."""
@@ -451,7 +453,7 @@ class ServingTrace:
         their own append's coin, and at the window's first step its due re-keys (`audit_prover.Refresh.due`), each in
         its slot of the schedule and of its origin whole: a kept chunk's block in that chunk's slot, recorded as the
         line's `rekeyed`, and the block of a chunk no longer kept withdrawn."""
-        r, store = self.refresh, self.backend.store
+        r, store = self.refresh, getattr(self.backend, "ledger", self.backend.store)
         slots, payloads = [x for x, _ in writes], [m for _, m in writes]
         for x in [*freed, *slots]:
             if (j := self.replay.holds(x)) is not None:
@@ -459,6 +461,10 @@ class ServingTrace:
                 r.held.pop(p, None)
                 self.slot_of.pop(p, None)
         due = r.due(window) if window > self.rekeyed_to else ()
+        if due and r.unsent:
+            # Pages of a pass dropped at the boundary go out in this window's fresh slots, which follow its re-key
+            # slots, though their indices come first: its re-key slots stay empty.
+            due, self.skipped = (), self.skipped + 1
         self.rekeyed_to = max(self.rekeyed_to, window)
         if not (freed or slots or due):
             return None
@@ -518,7 +524,7 @@ class ServingTrace:
     def plan(self, window: int | None = None) -> rb.Plan:
         """Every live block, or under refresh the plan the schedule gives `window`, its re-keys encoded before the pass."""
         if self.refresh is not None:
-            return self.refresh.plan(window, pending=True)
+            return self.refresh.plan(window, pending=not getattr(self.backend, "deferred", False))
         return rb.Plan(runs_of(sorted(self.live)), self.replay.extent)
 
 
@@ -804,7 +810,8 @@ class ProverSide:
                 raise ValueError("a refresh session's period is its lifetime cap, which the session message names")
             if type(head.get("fresh_slots")) is not int:
                 raise ValueError("a refresh session's fresh slots a window, F, are the session message's fresh_slots")
-            refresh = audit_prover.Refresh(self.backend.store, Schedule(N, head["lifetime"], W, head["fresh_slots"]))
+            refresh = audit_prover.Refresh(getattr(self.backend, "ledger", self.backend.store),
+                                           Schedule(N, head["lifetime"], W, head["fresh_slots"]))
         if mode == "honest" and refresh is not None:
             # serving that writes nothing: the trace's steps are the schedule's re-keys alone
             trace = ServingTrace(self.backend, self.registration, 0, self.kv_pool,
@@ -1091,7 +1098,7 @@ class ProverSide:
                          "pass_blocks": [p.length for p in sent],
                          "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}
         if refresh is not None:
-            out["refresh"] = refreshed
+            out["refresh"] = refreshed | {"skipped": trace.skipped}
         if ahead is not None:
             out["ahead"] = {**ahead.stats(), "headroom": getattr(trace, "headroom", None)}
         out["misread"] = [[tt, i, j] for (tt, i), js in sorted(self.misread.items()) for j in js]

@@ -98,12 +98,14 @@ class Lean:
         return self.lean.call({"op": "settle", "id": self.checks})
 
 
-def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None, tamper=None) -> tuple[list, dict, list, list]:
+def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None, tamper=None,
+            late: dict[int, tuple[int, ...]] | None = None) -> tuple[list, dict, list, list]:
     """W windows of L = 2 over N registered blocks, each opened by its due re-keys, pages in windows 0, 1 (two appends,
     F = 2) and 2, `PASSES` passes a window over the refresh plan (every block without refresh); `freed` names the chunks
-    freed at the start of a window.  Every receipt is sampled and opened, `tamper` rewriting each opening.  The windows'
-    settled verdicts, the session's outcome, the appends sent as (slot, origin, count) and the blocks withdrawn.
-    Without refresh the session appends nothing."""
+    freed at the start of a window; `late` the appends of pages made after a window's last root, sent in the next
+    window, whose re-key slots then stay empty (`ServingTrace`'s).  Every receipt is sampled and opened, `tamper`
+    rewriting each opening.  The windows' settled verdicts, the session's outcome, the appends sent as (slot, origin,
+    count) and the blocks withdrawn.  Without refresh the session appends nothing."""
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
@@ -134,20 +136,27 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
         if old or gone:
             assert lean.event(lv.release_event(runs_of([*old, *gone]), runs_of(gone))) == {"ok": True}
 
+    def pages(count: int) -> audit_prover.Append:
+        a = s.append([payload(b"page %d" % (s.extent + u)) for u in range(count)],
+                     salts(b"page salts %d" % s.extent, count))
+        r.appended(a)
+        return a
+
+    held_back: list[audit_prover.Append] = []
     for t in range(WINDOWS):
         if r is not None:
             for q in (freed or {}).get(t, []):
                 release([r.freed(q)])
-            for k, origin, count in r.due(t):
+            for k, origin, count in r.due(t) if not r.unsent else ():
                 a = s.rekey(origin, count, k)
                 old, gone = r.appended(a)
                 send(a, t)
                 release(old, gone)
+            for a in held_back:
+                send(a, t)
+            held_back = []
         for count in {0: (3,), 1: (2, 1), 2: (2,)}.get(t, ()) if r is not None else ():
-            a = s.append([payload(b"page %d" % (s.extent + u)) for u in range(count)],
-                         salts(b"page salts %d" % s.extent, count))
-            r.appended(a)
-            send(a, t)
+            send(pages(count), t)
         for i in range(PASSES):
             plan = r.plan(t) if r is not None else receipts.Plan.whole(N)
             ps = prover.run(challenges[t], i, lean.latest, plan, head=head)
@@ -155,6 +164,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
             change = [runs_of(set(plan) - set(plan_sent)), runs_of(set(plan_sent) - set(plan))]
             assert lean.event(lv.receive_event(t, i, ps.root, change, step), at=lean.now) == {"ok": True}, (t, i)
             passes[t, i], lean.latest, plan_sent = ps, ps.root, plan
+        held_back = [pages(count) for count in (late or {}).get(t, ())]
         if t + 1 < WINDOWS:
             challenge = lean.coins.challenge(t + 1, lean.latest)
             challenges.append(challenge)
@@ -190,6 +200,14 @@ def test_the_lean_accepts_a_refresh_session_whose_rekeys_withdraw_freed_chunks(e
     verdicts, outcome, _, withdrawn = session(exe, freed={2: [N + 1], 3: [5, 6]})
     assert outcome["outcome"] == "accepted", (verdicts, outcome)
     assert len(withdrawn) == len(range(2, WINDOWS, LIFETIME)) + 2 * len(range(3, WINDOWS, LIFETIME))
+
+
+def test_pages_made_after_a_window_s_last_root_join_the_next_and_leave_its_rekey_slots_empty(exe):
+    verdicts, outcome, sent, _ = session(exe, late={1: (1,)})
+    assert outcome["outcome"] == "accepted", (verdicts, outcome)
+    windows = [(Schedule(N, LIFETIME, WINDOWS, FRESH).slot_at(k)[0], o) for k, o, _ in sent]
+    assert [o for w, o in windows if w == 2] == [None, None]
+    assert {w for w, o in windows if o is not None} == {1, 3, 4, 5, 6}
 
 
 def test_the_lean_rejects_a_rekey_s_opening_at_another_origin(exe):

@@ -204,6 +204,7 @@ class Refresh:
         self.last = -1
         self.unsent = 0
         self.filled: dict[int, int] = {}
+        self._plan: tuple[tuple, Plan] | None = None
 
     def appended(self, a: Append) -> tuple[tuple[int, ...], tuple[int, ...]]:
         """`a`, made: a fresh append's blocks become chunks; a re-key's encode moves each kept chunk of its origin to
@@ -278,6 +279,10 @@ class Refresh:
         """The plan of window t: every kept chunk at the index it is held at, where a plan of t may hold that index and
         it is encoded, or, with `pending`, is a re-key's still awaiting the coin it is encoded under before the pass
         reads it.  An append of pages is never planned: its blocks' first encode is their first re-key's."""
+        # Appends only grow, and between two appends the kept chunks and the appends awaiting coins only shrink.
+        key = (t, pending, len(self.store.appends), len(self.store.pending), len(self.held))
+        if self._plan is not None and self._plan[0] == key:
+            return self._plan[1]
         out = []
         for j in self.held.values():
             if j >= self.schedule.blocks and self.store._append_of(j).slot is None:
@@ -292,7 +297,11 @@ class Refresh:
                 runs[-1][1] += 1
             else:
                 runs.append([j, 1])
-        return Plan(tuple((f, c) for f, c in runs), self.store.extent)
+        if not runs:
+            raise ValueError(f"window {t} holds no block a plan may read: no kept chunk is valid in it")
+        plan = Plan(tuple((f, c) for f, c in runs), self.store.extent)
+        self._plan = (key, plan)
+        return plan
 
 
 @dataclass(frozen=True, slots=True)

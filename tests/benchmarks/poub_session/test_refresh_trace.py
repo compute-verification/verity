@@ -36,10 +36,11 @@ def backend() -> prover.CpuBackend:
     return b
 
 
-def run(refresh: bool):
+def run(refresh: bool, dropped: frozenset = frozenset()):
     """The session loop's moves for a kv:2 session at every pass: a step before each pass but the session's first,
     its pages only while the window has a fresh slot left, the plan, the step's appends sent, each in its slot, and
-    each re-key encoded under its coin, then the pass and every opening."""
+    each re-key encoded under its coin, then the pass and every opening.  A pass in `dropped`, (t, i), is dropped at
+    its window's boundary after its step: it sends nothing and runs nothing."""
     b = backend()
     store, coins, joined = b.store, {}, {}
     r = audit_prover.Refresh(store, Schedule(N, LIFETIME, WINDOWS, FRESH)) if refresh else None
@@ -50,6 +51,9 @@ def run(refresh: bool):
             if n > 0:
                 trace.step(n - 1, t, r is None or r.fresh_left(t))
             plan = trace.plan(t) if refresh else trace.plan()
+            if (t, i) in dropped:
+                n += 1
+                continue
             if refresh:
                 trace.appends[sent:] = [r.sent(a, t) for a in trace.appends[sent:]]
             for a in trace.appends[sent:]:
@@ -120,6 +124,19 @@ def test_under_refresh_the_memory_map_records_each_rekey_once_in_its_chunk_s_slo
     for j, origin in blocks:
         assert (j in withdrawn) != (trace.replay.origin.get(j) == origin), j
     assert withdrawn and trace.rekeyed == len(blocks) - len(withdrawn)
+
+
+def test_pages_of_passes_dropped_at_a_boundary_go_out_in_the_next_window_whose_rekey_slots_stay_empty():
+    """Pages made at a step whose pass is dropped at window 2's boundary precede window 3's re-keys in index order but
+    must follow them in slot order, so window 3 sends no re-key and the pages take its fresh slots."""
+    b, trace, _, joined, out = run(True, frozenset({(2, PASSES - 2), (2, PASSES - 1)}))
+    schedule = trace.refresh.schedule
+    windows = [(schedule.slot_at(a.slot)[0], a.origin) for a in b.store.appends]
+    assert trace.skipped == 1 and [o for w, o in windows if w == 3] == [None, None]
+    assert all(schedule.slot_at(a.slot)[0] == joined[a.first] for a in b.store.appends)
+    assert [a.slot for a in b.store.appends] == sorted({a.slot for a in b.store.appends})
+    assert {w for w, o in windows if o is not None} == set(range(1, WINDOWS)) - {3}
+    assert {t for t, _, _ in out} == set(range(WINDOWS))
 
 
 def test_with_refresh_off_the_trace_rekeys_as_before_and_sends_no_origin():
