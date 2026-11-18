@@ -22,7 +22,8 @@ Where `blk` places a claims partition `P`'s proof blocks as the blocks of `L`'s 
   at one level (`Levels.design_one`).
 * `Levels.missesAsDesign_all`: the first instance. One level whose design draws every block, against a claims design
   whose every rule is `all` (`classesPa_all`): both miss a set of slots with probability `1` when it is empty and `0`
-  otherwise.
+  otherwise. `missesAsDesign_all_design`: the same at a level whose design is core's `SamplingDesign.all` of its
+  blocks, the design the claims' `all` rule is a product of (`Claims.Sampling.Design.Pa_all_prod`).
 -/
 
 @[expose] public section
@@ -210,6 +211,13 @@ theorem missesAsDesign_all {l : Level G} (hL : L.levels = [l]) (h : L.SlotsAreBl
       hB0 ((hdis ω).1 hω)
     rw [if_neg hB0, le_antisymm ((Game.prCoin_mono fun c hc => (h0 c hc).elim).trans_eq Game.prCoin_false) zero_le,
       ENNReal.toReal_zero]
+
+/-- **The first instance at core's `all`**: `missesAsDesign_all` at a level whose design at the whole circuit is
+`SamplingDesign.all` of its blocks, the one design both sides read for `all`. -/
+theorem missesAsDesign_all_design {l : Level G} (hL : L.levels = [l]) (h : L.SlotsAreBlocks P blk)
+    (hl : l.design Finset.univ = SamplingDesign.all l.blocks.parts) {d : Design}
+    (hd : d.rules = P.classes.map fun _ => OneStage.all) : L.MissesAsDesign d P blk :=
+  missesAsDesign_all hL h (by generalize l.design Finset.univ = M at hl ⊢; subst hl; exact fun _ => rfl) hd
 
 end Levels
 
