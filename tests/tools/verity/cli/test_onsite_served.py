@@ -58,12 +58,13 @@ UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p n
 VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1 --peer peer-1 --tokens 4",
-    "H1_KEY_SHA512": KEY, "LOAD": "varied", "PEARLC_CHALLENGER_GATE": "gate-command",
+                       "--gate user@gate-1 --peer peer-1 --tokens 2",
+    "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
+    "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus", "PRODUCT": "onsite",
-    "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
-    "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
-    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
+    "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
+    "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
+    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
     "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
     "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
@@ -135,6 +136,25 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
     assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
     assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
+
+
+TIED = {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
+        "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "window-steps": 2, "load": "fixed"}
+TIED_WORKLOAD = {"REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2",
+                 "LOAD": "fixed"}
+TIED_CLASS = {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
+
+
+def test_remote_and_onsite_full_have_the_values_pearl_pluss_tie_takes_and_the_smaller_sets_keep_the_defaults():
+    for name in ("remote", "onsite_full"):
+        cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
+        assert cfg["workload"]["params"] == TIED, name
+        assert cfg["params"]["verity/pouw/pearl-plus/v1"] == {"class": "4,27,2", "tie-uniform": True}, name
+        assert T.SERVE.variables(cfg, {}).items() >= TIED_WORKLOAD.items(), name
+        assert T.variables(cfg, {}).items() >= (TIED_WORKLOAD | TIED_CLASS).items(), name
+    for name in set(T.DEMOS) - {"remote", "onsite_full"}:
+        cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
+        assert cfg["workload"]["params"] == T.SERVED.default_params and "pearl-plus" not in cfg["protocols"]
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -254,7 +274,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
     assert (hooks["POUW"], hooks["PEARLPLUS_TIE"]) == ("pearlplus", "1") and "H1_GATE" not in hooks
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 4") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2") and "PP_CHALLENGER" not in hooks
     assert "DEVELOPMENT" not in hooks
 
 
@@ -335,7 +355,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"}
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
-                                               "--peer '<network-certifier.certifier.peer>' --tokens 4")
+                                               "--peer '<network-certifier.certifier.peer>' --tokens 2")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
 
@@ -439,7 +459,7 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
     R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
     assert side.variables(cfg, T.bindings_of(tmp_path)) == {
         **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
-                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 4'}
+                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 2'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
     assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_ATTESTER] == {"certifier": ["gate", "peer"]}
@@ -665,7 +685,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLC_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -685,7 +705,8 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
     assert {"SERVE_ARGS", "POUW", "PEARLC_CHALLENGER_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks) \
-        and not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"} & set(hooks)
+        and not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(hooks)
+    assert hooks["V3C_CLASS"] == hooks["CLASSES"] == "4,27,2"
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "192.0.2.1" not in json.dumps(json.loads((state / "run.json").read_text()))
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
