@@ -71,7 +71,7 @@ theorem Circuit.ofAudit_isInput {C : Verity.Boolean.Circuit} (g : Fin C.N) :
 def Partition.ofAudit {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) :
     Partition (Circuit.ofAudit C) n where
   unit := P.unit
-  input_iff g := (Verity.Partition.input_iff P g).trans (by rw [Circuit.ofAudit_isInput])
+  input_iff g := by rw [Circuit.ofAudit_isInput]; exact Verity.Partition.input_iff P g
 
 /-- The circuit with no gates: what files that don't parse register. -/
 def Circuit.empty : Circuit where
