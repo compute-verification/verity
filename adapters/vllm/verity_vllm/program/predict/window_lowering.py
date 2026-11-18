@@ -361,7 +361,7 @@ class _Program:
         for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
             if not count:
                 continue
-            tid, u = self.b.unit(IX.scaled_mm_words(K, m), count)
+            tid, u = self.b.unit(IX.scaled_mm(K, m), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.feed(tid, "sx", u, count, ss)
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
