@@ -10,6 +10,7 @@ from dataclasses import replace
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL, codec
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
@@ -254,7 +255,7 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     public row is whole u16 words, as its witness row is."""
     lw = Run(tmp_path).lw
     assert lw.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    defs = codec.encode_program(P.population_program(lw.unit, 1))["definitions"]
+    defs = codec.encode_program(PN.population_program(lw.unit, 1))["definitions"]
     pins = json.loads(HC.PINS.read_text())["digests"]
     fid = "NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}"
     assert f"Gate[{fid}@{pins[fid]['sha512']}]_v2" in set(defs)
@@ -367,7 +368,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
 
     registered, query = lw._partition["program"], lw.query
     other = bind(SVC._unit(lambda *k: swapped if k == key else HC.gate(*k)), EGRESS=key, INGRESS=lw.head_key(1))
-    program = P.partition(P.population_program(other, 1), query)["program"]
+    program = P.partition(PN.population_program(other, 1), query)["program"]
     assert other.id == lw.unit.id and program != registered and lw._partition["program"] == registered
     assert lw.proved([_finding(registered)])
     assert not lw.proved([_finding(program)]) and not lw.proved([])
@@ -390,7 +391,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
 
 def test_the_domain_is_one_stages_window_domain(tmp_path):
     lw = Run(tmp_path).lw
-    part = P.partition(P.population_program(lw.unit, 1), lw.spec.check.query)
+    part = P.partition(PN.population_program(lw.unit, 1), lw.spec.check.query)
     for w in range(3):
         want = R.window_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want
