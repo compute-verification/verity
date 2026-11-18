@@ -127,6 +127,13 @@ of its ranges (`rangesAt`) summed. -/
 def unitsOf (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat) :=
   (rs.toList.map (·.template)).eraseDups.map fun tid => (tid, (rangesAt rs tid).foldl (fun a r => a + r.count) 0)
 
+/-- The template `tid` with `n` units, read off its first range of `rs` (`tmplOf`); refused (`templates`) where `rs`
+has no range of it. -/
+def tmplAt (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (x : String × Nat) : Except String Tmpl :=
+  match rs.find? (·.template == x.1) with
+  | some r => tmplOf P { r with count := x.2 }
+  | none => throw "templates"
+
 /-- The record's templates, held to the Program: the record names the Program, and its `templates`, `[id, units]`
 each, are the templates of the root's nodes that are no input, each a call or a batch of a template, each template
 once, in the order of its first node, with its units its nodes' members summed (`unitsOf`). A root node is no input
@@ -148,9 +155,7 @@ def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
     | .ok rs => pure rs
     | .error _ => throw "templates"
   if unitsOf rs != ts.toList then throw "templates"
-  ts.toList.mapM fun (tid, n) => match rs.find? (·.template == tid) with
-    | some r => tmplOf P { r with count := n }
-    | none => throw "templates"
+  ts.toList.mapM (tmplAt P rs)
 
 /-- `x`, its refusal recoded as `code`. -/
 def recode {α : Type} (code : String) : Except String α → Except String α
