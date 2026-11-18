@@ -79,7 +79,7 @@ GPU_LEASE_UUID=GPU-own0 CUDA_VISIBLE_DEVICES=0 exec "$@"
 """
 DEMO_SHIM = """#!/usr/bin/env bash
 [ -z "$FAKE_PYTHONPATH" ] || export PYTHONPATH=$FAKE_PYTHONPATH
-exec {python} {demo} "$OUT" "${{GPU_LEASE_UUID:-}}" "$@"
+exec {python} {demo} "$OUT" "${{GPU_LEASE_UUID:-}}" "$WIPE_PRIVATE" "${{VERITY_PINS:-[]}}" "${{VERITY_CONFIGURATION:-}}" "$@"
 """
 LAUNCH = 'export FAKE_PYTHONPATH="${PYTHONPATH:-}" PATH="$FAKE_BIN:$PATH"; exec bash "$@"'
 """The stand-ins first on PATH, and the suite's PYTHONPATH (which the wrapper unsets) kept for the stand-in demo.sh's Python,
@@ -456,11 +456,17 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     assert not any((tmp_path / "out").iterdir())
 
 
-def test_the_start_file_demo_sh_runs_starts() -> None:
-    """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
-    `--help` with `wipe_run.main`'s options."""
-    start = ROOT / "benchmarks/pous/streamed_wipe/wipe_on_node.py"
-    assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
-    r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert all(f"--{o}" in r.stdout for o in ("period", "out", "node", "expect")), r.stdout
+def test_demo_sh_attaches_the_wipe_through_the_exchange(tmp_path) -> None:
+    """demo.sh's last step, which no CPU test runs on a card: its Python attaches the wipe scheme through the exchange
+    (`Exchange.attach`) with the runtime's side, and the attach's refusals reach it by name before any session."""
+    text = DEMO.read_text()
+    start = text.index("<<'EOF' || rc=$?\n") + len("<<'EOF' || rc=$?\n")
+    launcher = text[start:text.index("\nEOF\n", start)]
+    attach = tmp_path / "attach.json"
+    attach.write_text(json.dumps({"settings": {"store": "host"}, "pins": None, "configuration": None, "trusted": None,
+                                  "judge": None}))
+    r = subprocess.run([sys.executable, "-c", launcher, str(attach), str(tmp_path), str(tmp_path / "private"), "n0",
+                        "accept"], capture_output=True, text=True)
+    assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
+    assert "ValueError: wipe: no pin was handed to it" in r.stderr and "no challenger binding" in r.stderr, r.stderr
+    assert not (tmp_path / "private" / "wipe" / "wipe.case.json").exists()
