@@ -42,7 +42,8 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     assert plugin["private"] == str(tmp_path / "private")
     assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
         "record": True, "to_length": True, "idle_reset": True, "release_order": None}
-    assert {k: json.loads(env["VERITY_TICK"])[k] for k in ("bucket_us", "sat_us", "free_us")} == {
+    tick = json.loads(env["VERITY_PROTOCOLS_CONFIG"])[env["VERITY_PROTOCOLS"]]
+    assert {k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} == {
         "bucket_us": 250000, "sat_us": 220000, "free_us": 230000}
     assert S.changes_of(ARM) == [*S.changes_of("tick"), "the network certifier in front"]
     assert S.not_in_target(glm, ARM) == ["the network certifier in front"]
@@ -201,14 +202,15 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     monkeypatch.setattr(S, "scrape", lambda port: events.append(("scrape", port)) or COUNTERS)
     monkeypatch.setattr(S, "stop", lambda server, grace_s: events.append(("stop", server.name, grace_s)) or "exited")
     out, t, events, procs = tmp_path / "out", [5000.0], [], {}
-    feed = out / "server" / "tick-feed.jsonl"
+    feed = S.tick_feed(out / "server")
 
     def popen(argv, stdout, stderr, env, **how):
         name = "front" if "ids-front" in argv else "server"
         if name == "server":
             assert how == {"start_new_session": True} and json.loads(env[S.PLUGIN_ENV])["idle_reset"] is True
-            assert json.loads(env["VERITY_TICK"]) | {"bucket_us": 250000, "sat_us": 220000, "feed": str(feed)} == \
-                json.loads(env["VERITY_TICK"])
+            cfg = json.loads(env["VERITY_PROTOCOLS_CONFIG"])
+            assert cfg["feed"] == str(feed.parent) and cfg[env["VERITY_PROTOCOLS"]] | {"bucket_us": 250000, "sat_us": 220000} == \
+                cfg[env["VERITY_PROTOCOLS"]]
             assert argv[argv.index("--port") + 1] == "8100"
         else:
             assert how == {"text": True} and str(S.ROOT / "adapters/vllm") in env["PYTHONPATH"].split(":")

@@ -52,7 +52,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   the engine core, written by a thread of its own (`servetax_plugin`);
 - ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
   core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
-- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.tick_plugin`), τ_sat and
+- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
@@ -230,8 +230,8 @@ PRODUCTION = tomllib.loads((ROOT / "benchmarks/production.toml").read_text(encod
 PROFILE = PRODUCTION["profiles"]
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
-TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
-TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/tick_plugin.py"
+TICK_MIDDLEWARE = "verity_vllm.pipeline.scheme_plugin.Front"
+TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 10: 2.228, 20: 2.086,
        30: 2.042}
@@ -636,10 +636,11 @@ def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampli
 
 def entry_points(arm: Arm) -> list[str]:
     """The vLLM general plugins an arm's server loads, as entry points, in order: `servetax_plugin.register` for an arm
-    with a change of its, under the tick `tick_plugin.register` after it (the tick's scheduler wrapper is then outside
-    the step trace's, so the trace sees a request when the gate adds it), then the arm's others (`Arm.general`)."""
+    with a change of its, under the tick the network attester's scheme turned on by name (`scheme_plugin.register`) after
+    it (the tick's scheduler wrapper is then outside the step trace's, so the trace sees a request when the gate adds
+    it), then the arm's others (`Arm.general`)."""
     return [*(["verity_serve_tax = servetax_plugin:register"] if arm.plugin or arm.tick else []),
-            *(["verity_tick = verity_vllm.pipeline.tick_plugin:register"] if arm.tick else []),
+            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick else []),
             *(entry for entry, _ in arm.general)]
 
 
@@ -842,9 +843,17 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
-        env["VERITY_TICK"] = json.dumps({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {
-            "hold_ms": 5000, "feed": str(d / "tick-feed.jsonl"), "log": str(d)})
+        from verity.protocols.resource_accounting.network.prover.admission import scheme_name
+        env["VERITY_PROTOCOLS"] = scheme_name()
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), scheme_name(): {
+            k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {"hold_ms": 5000, "log": str(d)}})
     return env
+
+
+def tick_feed(d: Path) -> Path:
+    """The feed file a tick arm's server writes in its directory ``d`` (`network.prover.admission.feed_file`)."""
+    from verity.protocols.resource_accounting.network.prover.admission import feed_file
+    return Path(feed_file(str(d)))
 
 
 def value_settings(env: dict[str, str] | None = None) -> dict:
@@ -2248,7 +2257,7 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
 
 
 def runs_ended(feed: Path) -> int:
-    """The network attester's runs whose watermark the tick's feed (`tick_plugin.TickFeed`) has seen end."""
+    """The network attester's runs whose watermark the tick's feed (`scheme_plugin.Front`) has seen end."""
     if not feed.exists():
         return 0
     return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
@@ -2372,7 +2381,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
-            why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv / "tick-feed.jsonl"),
+            why = hold_ends(server.poll(), fronted.poll(), runs_ended(tick_feed(srv)),
                             None if stop_at is None else stop_at - now())
             if why is not None:
                 break
@@ -4365,7 +4374,7 @@ def refusals(name: str, rows: dict | None = None) -> list[dict]:
     """What of a profile the arm ``name`` refuses, in the words of the code that refuses it: the piece (``sampling``,
     ``the cache`` or ``vLLM's client``), the words, and the change on our side alone that lets the same prompts through
     (`OURS_CHANGES`), None where none does. A profile's client sends no sampling flag, so under the certified tick a
-    request without a seed is refused (`verity_vllm.pipeline.tick_plugin.unseeded`) unless the arm's client sends
+    request without a seed is refused (`verity_vllm.pipeline.scheme_plugin.unseeded`) unless the arm's client sends
     each user's seed (`sends_seed`); history tables with prefix caching on are refused by the boundary commitment
     (``rows``, the job's ``--boundary-rows`` or the arm's); an arm behind the network attester is served greedy
     (`SERVED_GREEDY`); an arm whose passes only the corpus client sends cannot take vLLM's (`corpus_only`). No arm
@@ -4379,7 +4388,7 @@ def refusals(name: str, rows: dict | None = None) -> list[dict]:
         out.append({"piece": "vLLM's client", "words": f"arm {name} needs the corpus client, not vLLM's: {why} "
                                                        f"(--client {CORPUS})", "change": None})
     elif arm.tick and not sends_seed(arm):
-        from verity_vllm.pipeline.tick_plugin import unseeded
+        from verity_vllm.pipeline.scheme_plugin import unseeded
 
         out.append({"piece": "sampling", "words": unseeded(json.dumps({"stream": True}).encode()), "change": "seeded"})
     rows = rows or arm.rows
@@ -4836,7 +4845,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
-                   "verity_vllm.pipeline.tick_plugin's token_ns and catch_up")
+                   "the network attester's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
                         "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "
