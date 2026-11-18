@@ -210,6 +210,10 @@ def test_what_the_audit_showed_is_counted_from_the_four_runs_files(tmp_path):
     for outcome, complete in ((given, False), (given | {"complete": True}, True), (given | {"complete": 1}, False)):
         got = R.read(**served(tmp_path / "given", outcome=outcome))[0]["audit"]["outcome"]
         assert (got["accepted"], got["complete"], got["codes"]) == (True, complete, [])
+        assert "not_covered" not in got
+    said = "the two-stage form is not yet proved"
+    got = R.read(**served(tmp_path / "given", outcome=given | {"not_covered": said}))[0]["audit"]["outcome"]
+    assert got["not_covered"] == said
     assert (shown["sessions"], shown["proof_blocks"], shown["cores"], shown["sizes"]) == (2, 3, 30, [20])
     assert shown["seconds"] == {"session_s": 90.0, "busy_s": None, "prove_total_s": 69.75, "lean_verify_s": 6.0,
                                 "verify_s": 1.0}

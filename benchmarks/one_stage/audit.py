@@ -176,7 +176,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
     negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
     round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
-    form alone, while `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
+    form alone, where `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
     members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
