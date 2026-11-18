@@ -164,7 +164,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
@@ -1603,6 +1603,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    from verity_config.settings import of
+
+    try:
+        LV.command(of(__file__).raw(LV.ENV), (2,), 2)
+    except LV.Refused as e:
+        ap.error(f"{e} (one level: a5.py)")
     if a.cmd == "second":
         if a.gpus is not None:
             a5 = _a5()
@@ -1618,6 +1624,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.stop_design and not a.stop:
         ap.error("--stop-design is the sampling design over the stop blocks of the rule --stop gives")
     pubs = [json.loads((Path(d) / BR.COMMIT).read_text()) for d in a.boundary]
+    for d, pub in zip(a.boundary, pubs, strict=True):
+        try:
+            if (n := LV.served(pub)) != 2:
+                ap.error(f"--boundary {d}: its record serves {n} level(s), not the two this command audits")
+        except LV.Refused as e:
+            ap.error(f"--boundary {d}: {e}")
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None

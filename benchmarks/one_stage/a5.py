@@ -233,6 +233,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier import levels as LV  # noqa: E402
 import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
@@ -1442,7 +1443,7 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
-    ``out/case-v2.json``, and that case in SPOT's one-stage form (`case_with_form`), which onsite's and remote's
+    ``out/case-v2.json``, and that case at one level (`case_with_levels`), which onsite's and remote's
     evidence carries for SPOT, in ``out/case-sampled.json``; or why there is neither in
     ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`), the v2 case is the per-member form's (`case_members`) and ``v2`` is not read. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
@@ -1475,7 +1476,7 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
             zk = build(**v2)
             if coins is not None and named:
                 zk = case_coins(zk, coins, challenger_key, family, window_root)
-            sampled = case_with_form(zk)
+            sampled = case_with_levels(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
@@ -1565,17 +1566,12 @@ def case_coins(case: dict, coins: dict, key: dict | None, label: str | None, win
 SPOT = "verity/sampled-proofs/v1"
 
 
-def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SPOT`): its params and
-    its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
-    rest."""
+def case_with_levels(case: dict, levels: int = 1) -> dict:
+    """`case`, one-stage v2's (`case_v2`), as SPOT's (`SPOT`) at ``levels`` (`levels.with_levels`): its params and its
+    evidence each naming the levels' form, which `VStar.Recursive.Sampled` splits off before that form's decoders read
+    the rest."""
     RP = own_replay()
-
-    evidence = json.loads(bytes.fromhex(case["evidence"]))
-    if not isinstance(evidence, dict) or "form" in evidence or "form" in case["params"]:
-        raise ValueError("the case's params and evidence must be objects that name no form")
-    return {**case, "evidence": RP.DT.canonical(evidence | {"form": form}).encode().hex(),
-            "params": {**case["params"], "form": form}}
+    return LV.with_levels(case, levels, lambda o: RP.DT.canonical(o).encode())
 
 
 def draw_ran_out(sampling_design: dict, population: int, read: bytes) -> bool | str:
@@ -2631,6 +2627,12 @@ def main() -> int:
                     "under the partition's stratified sampling design, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
     a = ap.parse_args()
+    from verity_config.settings import of
+
+    try:
+        LV.command(of(__file__).raw(LV.ENV), (1,), 1)
+    except LV.Refused as e:
+        ap.error(f"{e} (two levels: two_stage.py)")
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
     need = ("row_dir", "window") if a.bundle else ("build_root", "windows", *(() if a.advice_opening else ("workload",)))
