@@ -2557,7 +2557,7 @@
     {"file": "tests/verity/protocols/resource_accounting/network/prover/test_scan_zk.py", "count": 42},
     {"file": "tests/verity/protocols/resource_accounting/network/prover/test_scan_zk_v3c.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py", "count": 90},
-    {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_protocol.py", "count": 1},
+    {"file": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_protocol.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_lean_audit.py", "count": 7},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_check_protocol.py", "count": 6},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_ok_cost.py", "count": 2},

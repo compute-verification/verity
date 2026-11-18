@@ -5501,6 +5501,19 @@
         "security/Definitions/Certifier/AttesterScheme.lean": "security/Definitions/ResourceAccounting/Network/AttesterScheme.lean",
         "security/Proofs/Certifier/AttesterScheme.lean": "security/Proofs/ResourceAccounting/Network/AttesterScheme.lean"
       }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_count_difftest.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_count_difftest.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_desc_difftest.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_desc_difftest.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_desc_fuzz.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_desc_fuzz.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_desc_liveness.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_desc_liveness.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_lean_difftest.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_lean_difftest.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_protocol.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_protocol.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_record_check.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_record_check.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_record_difftest.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_record_difftest.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_theta_difftest.py": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_theta_difftest.py"
+      }
     }
   ]
 }

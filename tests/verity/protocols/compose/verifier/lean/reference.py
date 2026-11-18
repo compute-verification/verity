@@ -8,7 +8,7 @@ attester's period check's difftest's `reference` (`verity/certifier/v0`, its Pyt
 certificates and one-stage's answers, `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `inference_only_reference.check_theta`, behind the protocol's decoders,
-`tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_protocol.py`), for SPOT (`verity/sampled-proofs/v1`)
+`tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_protocol.py`), for SPOT (`verity/sampled-proofs/v1`)
 `spot`: its levels' split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py`) and its check up to its one session's coin tree, the
@@ -92,7 +92,7 @@ POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "tests/verity/protocols/r
 PERIOD = module("network_period_difftest", ROOT / "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_theta`) behind the
 #: protocol's decoders, and `sampled` samples a declaration's case with one change.
-INFERENCE = module("inference_only_protocol_difftest", ROOT / "tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_protocol.py")
+INFERENCE = module("inference_only_protocol_difftest", ROOT / "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/wipe_protocol_case.py")
 #: The count over a span's difftest helper: `reference` is the count's mirror behind a parameters decoder, and `build`
