@@ -63,6 +63,7 @@
   "Proofs.Properties.Spot.PlanCheck",
   "Proofs.Properties.Spot.Wires",
   "Proofs.Properties.Spot.Edges",
+  "Proofs.Properties.Spot.ChallengerPin",
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
   "Proofs.Properties.Spot.Tables",

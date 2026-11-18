@@ -77,7 +77,7 @@ from verity.circuits.refs import tuple_of
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Tuple
 
-from verity_vllm.definitions.registry import boolean_silu as BSL
+from verity_vllm.definitions.registry import act
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
@@ -466,7 +466,7 @@ SiluMulClampIn = EW.specialized("SiluMulClampIn", 1, ["LIMIT"], silu_mul_clamp_i
 def _silu_mul_clamp_bf16(B, S, g, u):
     """`SiluMulClampBf16_v1` on bits: `SiluMulClampIn_v1`, then `SiluMulBf16_v4`."""
     c = B.call(bind(SiluMulClampIn, LIMIT=S.LIMIT), g, u)
-    return B.call(BSL.SiluMulBf16Expf, c[0], c[1])
+    return B.call(act.SiluMulBf16Expf, c[0], c[1])
 
 
 SiluMulClampBf16 = EW.on_bits("SiluMulClampBf16", 2, ("LIMIT",), lambda S: ((("g", BF16), ("u", BF16)), BF16),
