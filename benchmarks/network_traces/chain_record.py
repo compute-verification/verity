@@ -19,7 +19,8 @@
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
   `monitoringPeriodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
-  records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
+  records: the endpoint's advice bound to the run and the I/O tie's prototype (`io_tie`'s reference, on stand-ins), in
+  the clear, required on the advice profile. N2's
   summary is `n2_zk.py prove`'s (Selection All: every execution phase's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic network attester run until its ``--warden-run``
@@ -33,10 +34,10 @@
   isn't required, and the rest is held as before. On the network attester-only path (``--job``'s ``path``,
   `ATTESTER_ONLY`) there are no network attester rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
-  N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
-  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
-  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. The report writes
-  no block record's attester entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
+  N2's members, the rehearsal's own check on each run it must refuse, and the verdict of the I/O tie's prototype on
+  each tampered run that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``:
+  each window's sample and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. The
+  report writes no block record's attester entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``attester.answer.json``, its case
   ``attester.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
   reason is `ROWS_FORM`. Its ``tied_form`` (`tied_form`) says how far the scan's summary and that answer show the
@@ -49,8 +50,9 @@
   session's attested start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
   the endpoint's own advice to the attested I/O read off the network attester's cells (`network_attester_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
-  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network attester link; the I/O tie is
-  `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network attester link; the ingress tie
+  (IoTieRequest: prompt lengths and arrival order, not the ids' values) is `n2_tie_zk.py prove --class warden`'s,
+  proved (``--tie``, `tie_step`); no output tie runs; the scan is `scan_zk.py prove
   --warden-run`'s. Each is held to the network attester run the attestations step read (`on_network_attester`), every one is
   required, and the report names what the path stands on (`NETWORK_ATTESTER_STUBBED`, or `NETWORK_ATTESTER_SERVED_STUBBED` on the served node's
   endpoint report).
@@ -148,7 +150,7 @@ NETWORK_ATTESTER_SERVED_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and no output tie runs: the I/O "
     "tie's egress half, each egress id to the Commit's port, is not run on this path", NETWORK_ATTESTER_STUBBED[1])
-#: the rehearsal's strategies its own check accepts: token's changed bytes only the tie refuses
+#: the rehearsal's strategies its own check accepts: token's changed bytes only the I/O tie's prototype refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's kinds of round whose window is accepted (scan_zk.ROUNDS), one a round an execution phase: the toy
 #: block's is proved like the honest one's
@@ -223,10 +225,11 @@ def custody(gates: Path) -> dict:
 
 def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
-    run's attested I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
-    (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
-    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
-    its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
+    run's attested I/O and rebuilt from it (`chain.served_advice`), and the verdict of the I/O tie's prototype
+    (`chain.tie`, `io_tie`'s reference on stand-ins) on the honest run, both in the clear. The prototype decides a
+    tampered run only where the rehearsal's own check let it through (no ``own_code`` in the report's ``negatives``:
+    token), and must refuse it at exactly the execution phases its changes fall in (``ok``); a run the check refused
+    (late, extra) is the rehearsal's negative, not the prototype's."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
     chain = e.get("chain") or {}
@@ -306,7 +309,8 @@ ENDPOINT_PUBLIC_FORMAT = "network-attester-endpoint-step/1"
 
 #: The endpoint step's public document (`served_session.py endpoint`'s art): each field it may hold, by its path, with
 #: its public kind, as released_keys.json's list of that name declares it. `endpoint_public` writes these and nothing
-#: else, so a field not there is never published.
+#: else, so a field not there is never published. ``io/accepted``: the attested I/O is well formed and in order; no id
+#: is compared with the Commit. ``io/violations``: how many of those checks failed.
 ENDPOINT_LIST = "the endpoint step's public document"
 ENDPOINT_PUBLIC = next(x for x in RK.load().lists if x.name == ENDPOINT_LIST).keys
 
@@ -329,7 +333,8 @@ def endpoint_public(step: dict) -> dict:
 
 def network_attester_endpoint_step(e: dict | None) -> dict:
     """`network_attester_endpoint`'s report, or its public document (`endpoint_public`): accepted when the network
-    attester's attested I/O reads whole off its cells and the endpoint's own advice is bound to it and rebuilt from it."""
+    attester's attested I/O reads whole off its cells and the endpoint's own advice is bound to it and rebuilt from it.
+    ``io``'s ``accepted``: the attested I/O is well formed and in order; no id is compared with the Commit."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
                 "in_the_clear": CLEAR["warden_endpoint"]}
@@ -353,9 +358,10 @@ def network_attester_endpoint_step(e: dict | None) -> dict:
 
 
 def tie_step(t: dict | None, job: dict | None = None) -> dict:
-    """`n2_tie_zk.py prove --class warden`'s summary: accepted when its ``ok`` holds (every execution phase's verdict
-    its reference's, the tie's on the link, no witness piece leaked), its honest member tied in every execution phase it
-    proved and its forged member refused in one or more."""
+    """`n2_tie_zk.py prove --class warden`'s summary of the ingress tie (IoTieRequest), which holds each request's
+    prompt length and arrival order, not the ids' values: accepted when its ``ok`` holds (every execution phase's
+    verdict its reference's, the tie's on the link, no witness piece leaked), its honest member accepted in every
+    execution phase it proved and its forged member refused in one or more."""
     job = job or {}
     rc, why = (job.get("rc") or {}).get("tie"), (job.get("why") or {}).get("tie")
     if t is None or rc not in (None, "0") and not t.get("tie"):

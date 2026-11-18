@@ -60,7 +60,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      fetch's own (`network_attester_chain.own_record`), as every check below reads it. The case's files go to a 0700 scratch
      directory beside the unpacked run, removed once the check has answered, so the records reach no hold.
   2. The window's requests are attested ones: each window request's user names one of the network attester's attested
-     requests (`network_attester_chain.io`), with the same prompt and streamed ids; else reject.
+     requests (`network_attester_chain.io`), with the same prompt and streamed ids in the serve's own log
+     (``requests.jsonl``), not the Commit; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's network attester path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
