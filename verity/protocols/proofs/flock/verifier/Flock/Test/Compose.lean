@@ -11,7 +11,9 @@ meta import Flock.Zk
 `Compose.compose`'s file read back by the door's reader (`ProvedScope.circuitOf` under `Tags.circuit`'s `--zk` tags, so
 `HmOut.parseCommit`: every check `HmRow.parse` makes, the `sha512x3` and `hm96` sections against the verifier's own nets,
 and `checkRows`), then compared with the block it was written from: the unit's net, the input rows, the output ports,
-and the pinned dummy `b ‖ c` of every row against the padding instance's (`HmOut.checkPublic`'s rule).
+and the pinned dummy `b ‖ c` of every row against the padding instance's (`HmOut.checkPublic`'s rule). It takes minutes,
+nearly all of them the interpreter building the two row nets twice: only a whole read of a whole file catches a writer
+whose sections, ranges or wires the reader refuses, which no check of a part of the file does.
 -/
 
 @[expose] public section
