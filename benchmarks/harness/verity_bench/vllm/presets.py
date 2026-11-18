@@ -197,10 +197,10 @@ def former_specs() -> dict[str, tuple[str, str]]:
 
 
 def declared_schemes() -> tuple[str, ...]:
-    """The declared schemes' names (`verity_vllm.messages.declarations`), each an arm id that attaches it by name."""
-    from verity_vllm import messages
+    """The declared schemes' names (`compose.schemes`), each an arm id that attaches it by name."""
+    from verity.protocols.compose import schemes
 
-    return tuple(messages.declarations.load())
+    return tuple(schemes.load())
 
 
 def former_arm(arm_id: str) -> str | None:
