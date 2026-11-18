@@ -221,12 +221,12 @@ def test_the_tick_rule_reads_whole_buckets_in_microseconds():
 class Gated:
     """A gate over `Sched` with a hand-turned clock."""
 
-    def __init__(self, hold_s: float = 5.0, rule: dict[str, Any] | None = None) -> None:
+    def __init__(self, hold_s: float = 5.0, token_ns: int = 0) -> None:
         self.now = 0.0
         self.sched = Sched()
         self.log: list[dict] = []
         kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
-        self.gate = na.RuleGate(TICK, **rule, **kw) if rule else na.TickGate(TICK, **kw)
+        self.gate = na.TickGate(TICK, token_ns=token_ns, **kw)
         self.hooks = hooked(self.sched, self.gate)
         self.watermark = na.Watermark(RUN, self.gate.take)
 
@@ -278,63 +278,27 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     assert [r["held_steps"] for r in g.log] == [[0], [0], [2]]       # r2 came, then r1 stepped twice before its bucket
 
 
-def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_while_nothing_waits():
-    g = Gated(rule={"token_ns": 1_000_000, "catch_up": "marks"})
-    g.release(0, bucket=0)
-    g.arrive("r0", out=10)
-    g.lines(1)
-    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us + 1_000
-    g.release(1, bucket=3)
-    g.arrive("r1")
-    g.lines(1, 1, 2)
-    assert g.step() and g.sched.added == ["r0", "r1"] and g.sched.steps[-1] == ["r0", "r1"]
-    up = [r for r in g.log if r.get("event") == "catch_up"]
-    assert [(r["T"], r["to"], r["bits"]) for r in up] == [(141_000, TICK.close(3), 2.0)]
-    h = Gated()
-    h.release(0, bucket=0)
-    h.arrive("r0", out=10)
-    h.lines(1)
-    h.step()
-    h.release(1, bucket=3)
-    h.arrive("r1")
-    h.lines(1, 1, 2)
-    assert h.step() and h.sched.added == ["r0"]                     # the registered rule holds r1 till T closes bucket 3
-    o = Gated(rule={"catch_up": "open"})
-    o.release(0, bucket=5)
-    o.arrive("r0")
-    assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
-
-
-def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
+def test_the_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
     drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
     assert admission.non_draft_tokens(drafted) == (4, 10)
     assert admission.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
-    g = Gated(rule={"token_ns": 600})
+    g = Gated(token_ns=600)
     g.release(0, bucket=0)
     g.arrive("r0", out=10)
     g.lines(1)
     assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
     assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
-    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2}}
+    assert g.gate.summary()["token_ns"] == 600 and "token_ns" not in Gated().gate.summary()
 
 
 SETTINGS = {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000}
 
 
-def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know():
-    assert {k: na.tick_config(SETTINGS, "s")[k] for k in ("token_ns", "catch_up")} == {
-        "token_ns": 0, "catch_up": "quiet"}
-    for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
+def test_the_tick_config_has_no_token_term_by_default_and_refuses_one_that_is_not_whole_nanoseconds():
+    assert na.tick_config(SETTINGS, "s")["token_ns"] == 0
+    for bad in ({"token_ns": -1}, {"token_ns": 1.5}):
         with pytest.raises(ValueError, match="token_ns a non-negative integer"):
             na.tick_config(SETTINGS | bad, "s")
-
-
-def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it():
-    cfg = SETTINGS | {"catch_up": "open"}
-    for unnamed in (cfg, cfg | {"arm": ""}):
-        with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
-            na.tick_config(unnamed, "s")
-    assert na.tick_config(cfg | {"arm": "prod-tick"}, "s")["catch_up"] == "open"
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
