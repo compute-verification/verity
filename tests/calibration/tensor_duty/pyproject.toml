@@ -6,8 +6,9 @@ testpaths = ["."]
 pythonpath = ["../../../calibration/tensor_duty"]
 
 [tool.verity.tests]
-# summarize.py finds its card with the harness kit and reads the bound from it (the Site's reader, `verity.device`, which
-# imports `verity.errors` and the wire, `verity.channel`), and writes its metric with the kit's writer
+# summarize.py finds its card and reads the bound from it with the Site's reader (`verity.device`, which imports
+# `verity.errors` and the wire, `verity.channel`), over the harness kit's cards directory, and writes its metric with the
+# kit's writer
 # (`benchmarks/harness/verity_bench`: `kit` and its `settings`, which read `verity_config`).
 inputs = ["verity/__init__.py", "verity/errors.py", "calibration/hardware/cards", "verity/device.py",
           "verity/channel.py", "calibration/tensor_duty",

@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 import summarize as S
+from verity_bench import kit
+
+from verity.device import load_card
 
 SECS = 1.2
 R_1830 = 132 * 4096 * 1830e6
@@ -17,7 +20,7 @@ R_1980 = 132 * 4096 * 1980e6
 F_1980 = 132 * 128 * 1980e6
 R_A = 0.98 * R_1830
 IDEAL = 128 * 64 / 67
-H200 = "h200-sxm-141gb"
+H200 = load_card("h200-sxm-141gb", directory=kit.cards_directory())
 
 
 def bpoint(arm: str, *, x: float = 0, p: float | None = None, share: float = 0.0, clock: str = "1980",

@@ -39,7 +39,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.device import READINGS, load_card, number, rate
+from verity.device import READINGS, gpu_card_reporting, number, rate
 from verity.device import readings as card_readings
 from verity_bench import kit
 
@@ -49,16 +49,20 @@ STAMP_S = 1e-3
 LOOP_ADDS, LOOP_INSNS, SATURATED = 64, 67, 0.95
 
 
-def sheet(out: Path) -> str:
-    """The sku of the card record the kit finds for the GPU name `out/found.json` gives, nvidia-smi's (`kit.card_sku`,
-    which refuses by `SystemExit`, naming what to add, unless exactly one record holds it)."""
+def found_name(out: Path) -> str:
+    """The GPU name `out/found.json` gives, nvidia-smi's; empty where it gives none."""
     p = out / "found.json"
-    return kit.card_sku((json.loads(p.read_text()).get("name") if p.exists() else None) or "")
+    return (json.loads(p.read_text()).get("name") if p.exists() else None) or ""
 
 
-def readings(sku: str) -> tuple[float, float, float]:
+def sheet(out: Path) -> dict:
+    """The card record whose `driver` holds `found_name(out)` (`verity.device.gpu_card_reporting` over
+    `kit.cards_directory()`, which refuses by `KeyError`, naming what to add, unless exactly one record holds it)."""
+    return gpu_card_reporting(found_name(out), directory=kit.cards_directory())
+
+
+def readings(card: dict) -> tuple[float, float, float]:
     """The card's tensor rate at clock.tensor (the bound), at clock.sm (the second reading), and a MHz of clock's."""
-    card = load_card(sku, directory=kit.cards_directory())
     return float(rate(card)), float(rate(card, mhz=card["clock"]["sm"]["value"])), float(rate(card, mhz=1))
 
 
@@ -133,10 +137,9 @@ def where(r: dict) -> str:
     return f"clock {r['clock']}, {r['arm']} {r['class']}, fill / burst / duty {at(r)}"
 
 
-def report(pts: list[dict], sku: str) -> tuple[str, list[str], dict]:
-    """The verdict, the Markdown lines and the JSON summary of ``pts``, run on the card of data sheet ``sku``."""
-    bound, second, per_mhz = readings(sku)
-    card = load_card(sku, directory=kit.cards_directory())
+def report(pts: list[dict], card: dict) -> tuple[str, list[str], dict]:
+    """The verdict, the Markdown lines and the JSON summary of ``pts``, run on the card of record ``card``."""
+    bound, second, per_mhz = readings(card)
 
     def tm(r: dict) -> float:
         return host_rate(r) * 1e-12
@@ -214,8 +217,8 @@ def report(pts: list[dict], sku: str) -> tuple[str, list[str], dict]:
                     if c:
                         L.append(f"| {f} | {b} | {max(tm(r) for r in c):.2f} | {mean(c, 'clock64_mhz'):.1f} | "
                                  f"{mean(c, 'tensor_mhz'):.1f} | {mean(c, 'fill_mhz'):.1f} |")
-    doc = {"verdict": v, "sku": sku, "bound": bound, "clock_sm_rate": second, "stamp_s": STAMP_S, "points": len(pts),
-           "refuting": len(refuting), "undecided": len(undecided),
+    doc = {"verdict": v, "sku": card["sku"], "bound": bound, "clock_sm_rate": second, "stamp_s": STAMP_S,
+           "points": len(pts), "refuting": len(refuting), "undecided": len(undecided),
            "top": {**{k: top[k] for k in ("clock", "arm", "class", "fill", "burst", "duty", "clock64_mhz",
                                           "tensor_mhz")},
                    "tmacs_per_s": tm(top), "of_bound": host_rate(top) / bound},
@@ -238,11 +241,10 @@ def fp32_rate(r: dict, pad: float = 0.0) -> float:
     return r["adds"] / span if span > 0 else float("inf")
 
 
-def price_readings(sku: str) -> list[dict]:
+def price_readings(card: dict) -> list[dict]:
     """The card's clock readings of an FP32 add's price in tensor units (`price.fp32.<reading>`, by `READINGS`), its
     `clock.default` first, each with its pipes' ceilings: the tensor's e4m3 MACs a second under the reading
     (`verity.device.readings`), and the FP32 pipe's adds a second, 32 x rate.issue at clock.sm."""
-    card = load_card(sku, directory=kit.cards_directory())
     clock, default = card["clock"], card["clock"]["default"]
     sm = clock["sm"]["value"]
     adds = 32 * float(rate(card, "issue"))
@@ -263,9 +265,9 @@ def over(r: dict, rd: dict, pad: float) -> bool:
     return span <= 0 or r["macs"] / span > rd["tensor_ceiling"] or r["adds"] / span > rd["fp32_ceiling"]
 
 
-def ideal_adds(sku: str) -> float:
+def ideal_adds(card: dict) -> float:
     """The FP32 loop's adds a SM-clock at the card's issue rate: 32 lanes x rate.issue x LOOP_ADDS / LOOP_INSNS."""
-    return 32 * float(load_card(sku, directory=kit.cards_directory())["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
+    return 32 * float(card["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
 
 
 def setting(clock: str) -> str:
@@ -277,9 +279,9 @@ def held(r: dict) -> float:
     return r.get("smi_mhz_mean") or r["clock64_mhz"]
 
 
-def beside(pts: list[dict], sku: str) -> tuple[bool, list[str], dict]:
+def beside(pts: list[dict], card: dict) -> tuple[bool, list[str], dict]:
     """Whether every reading is decided, and the Markdown lines and summary.json of ``pts`` (module docstring)."""
-    ideal = ideal_adds(sku)
+    ideal = ideal_adds(card)
     alone: dict[tuple[str, str], dict] = {}
     for r in pts:
         k = (r["clock"], r["class"])
@@ -305,7 +307,7 @@ def beside(pts: list[dict], sku: str) -> tuple[bool, list[str], dict]:
     under = [x for x in rows if x["undersaturated"]]
     low = min((x for x in rows if x["arm"] in "CD" and x["p"] is not None), key=lambda x: x["p"], default=None)
     verdicts = []
-    for rd in price_readings(sku):
+    for rd in price_readings(card):
         refuted = [r for r in pts if over(r, rd, STAMP_S)]
         undecided = [r for r in pts if over(r, rd, -STAMP_S) and not over(r, rd, STAMP_S)]
         v = "refuted" if refuted else "undecided" if undecided else "survives"
@@ -378,12 +380,11 @@ def lock_result(out: Path) -> list[dict] | None:
             for m in re.finditer(r"^clock (\d+) rc (\d+)$", p.read_text(), re.M)]
 
 
-def top_share(pts: list[dict], sku: str, lock: list[dict] | None = None) -> dict:
+def top_share(pts: list[dict], card: dict, lock: list[dict] | None = None) -> dict:
     """The fastest point's MACs a second over its host interval as a share of the tensor's ceiling at the higher of the
     card's readings (`share`, of `reading`), that share over the interval lengthened and shortened by a stamp
     (`share_lo`, `share_hi`), the rate itself, its share at each reading, the clock it held by nvidia-smi and by its
     kernel's clock64, ``lock`` (`lock_result`), and where the point ran."""
-    card = load_card(sku, directory=kit.cards_directory())
     peaks = {r: float(x) for r, x in card_readings(card).items()}
     head = max(peaks, key=peaks.__getitem__)
     top = max(pts, key=host_rate)
@@ -392,7 +393,7 @@ def top_share(pts: list[dict], sku: str, lock: list[dict] | None = None) -> dict
         return None if x is None else {"value": x, "unit": "MHz"}
 
     return {"share": host_rate(top) / peaks[head], "share_lo": host_rate(top, STAMP_S) / peaks[head],
-            "share_hi": host_rate(top, -STAMP_S) / peaks[head], "reading": head, "sheet": sku,
+            "share_hi": host_rate(top, -STAMP_S) / peaks[head], "reading": head, "sheet": card["sku"],
             "rate": {"value": host_rate(top), "unit": "MACs a second"},
             "readings": [{"reading": r, "clock": mhz(card["clock"][r]["value"]),
                           "ceiling": {"value": peaks[r], "unit": "MACs a second"},
@@ -413,21 +414,21 @@ def gate_failures(out: Path) -> list[str]:
             if (m := re.search(r"\brc (\d+)$", ln)) and m.group(1) != "0" and not ln.startswith("clock ")]
 
 
-def record(out: Path, pts: list[dict], sku: str | None = None, why: str | None = None) -> bool:
-    """Writes the run's validation and, when every gate held and there are points, `top_share` on data sheet ``sku`` as
-    `METRIC`, its member the sheet's `short`, or with no sheet no value and ``why``; whether it wrote a value."""
+def record(out: Path, pts: list[dict], card: dict | None = None, why: str | None = None) -> bool:
+    """Writes the run's validation and, when every gate held and there are points, `top_share` on card record ``card``
+    as `METRIC`, its member `kit.card_short` of the GPU the run found, or with no card no value and ``why``; whether it
+    wrote a value."""
     fails = gate_failures(out) + ([] if pts else ["no points"])
     w = kit.writer(out)
     w.validation("failed" if fails else "passed", "run.sh build, lease and point exit codes",
                  "; ".join(fails) or f"{len(pts)} points")
     if fails:
         return False
-    if sku is None:
+    if card is None:
         w.measurement(METRIC, None, UNIT, mark="measured", why=why)
         return False
-    t = top_share(pts, sku, lock=lock_result(out))
-    short = load_card(sku, directory=kit.cards_directory())["short"]
-    w.measurement(METRIC, t.pop("share"), UNIT, mark="measured", member=short, extra=t)
+    t = top_share(pts, card, lock=lock_result(out))
+    w.measurement(METRIC, t.pop("share"), UNIT, mark="measured", member=kit.card_short(found_name(out)), extra=t)
     return True
 
 
@@ -454,19 +455,19 @@ def main(argv: list[str] | None = None) -> int:
             record(a.outs[0], pts)
         return 2
     try:
-        found = {sheet(out) for out in a.outs}
+        found = {card["sku"]: card for card in map(sheet, a.outs)}
         if len(found) != 1:
-            raise SystemExit(f"the OUTs ran on {len(found)} cards' data sheets ({', '.join(sorted(found))}), not one")
-    except SystemExit as refused:
-        print(refused, file=sys.stderr)
+            raise KeyError(f"the OUTs ran on {len(found)} cards' data sheets ({', '.join(sorted(found))}), not one")
+    except KeyError as refused:
+        print(refused.args[0], file=sys.stderr)
         if a.record:
-            record(a.outs[0], pts, why=str(refused))
+            record(a.outs[0], pts, why=refused.args[0])
         return 2
-    sku = found.pop()
+    [card] = found.values()
     if a.arms == "fp32-beside":
-        ok, lines, doc = beside(pts, sku)
+        ok, lines, doc = beside(pts, card)
     else:
-        v, lines, doc = report(pts, sku)
+        v, lines, doc = report(pts, card)
         ok = v == "PASS"
     doc["smi_unread"] = len(unread)
     print("\n".join(lines))
@@ -474,7 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{len(unread)} nvidia-smi line(s) not read as samples:", *unread[:5], sep="\n", file=sys.stderr)
     if a.json:
         a.json.write_text(json.dumps(doc, indent=1) + "\n")
-    if a.record and not record(a.outs[0], pts, sku):
+    if a.record and not record(a.outs[0], pts, card):
         return 1
     return 0 if ok else 1
 

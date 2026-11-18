@@ -1,5 +1,5 @@
-"""summarize.py's verdict, the falsification test of its card's `clock.tensor`: the card is the one the harness kit
-finds for the GPU the run found, its bound is the card's tensor rate, a point refutes the card only by its MACs
+"""summarize.py's verdict, the falsification test of its card's `clock.tensor`: the card is the record whose `driver`
+holds the GPU the run found, its bound is the card's tensor rate, a point refutes the card only by its MACs
 over the host's wall clock, and a point the host stamps' resolution can't place on either side of the bound leaves the
 verdict undecided."""
 from __future__ import annotations
@@ -40,12 +40,12 @@ def run(tmp_path: Path, *pts: dict, name: str = "out") -> tuple[int, dict]:
     return rc, json.loads((tmp_path / f"{name}.json").read_text())
 
 
-def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert S.readings(H200) == (BOUND, 132 * 4096 * 1980e6, 132 * 4096 * 1e6)
-    card = copy.deepcopy(load_card(H200, directory=CARD_FILES))
+def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock() -> None:
+    card = load_card(H200, directory=CARD_FILES)
+    assert S.readings(card) == (BOUND, 132 * 4096 * 1980e6, 132 * 4096 * 1e6)
+    card = copy.deepcopy(card)
     card["clock"]["tensor"]["value"] = 1900
-    monkeypatch.setattr(S, "load_card", lambda sku, *, directory: card)
-    assert S.readings(H200)[0] == 132 * 4096 * 1900e6
+    assert S.readings(card)[0] == 132 * 4096 * 1900e6
 
 
 def test_points_under_the_card_pass(tmp_path: Path) -> None:
@@ -98,7 +98,7 @@ def test_the_fills_table_gives_a_fill_and_bursts_highest_rate_and_mean_clocks() 
     pts = [point(0.5, duty=95, clock64_mhz=1800.0, tensor_mhz=1810.0, fill_mhz=1700.0, warm=False),
            point(0.25, duty=90, clock64_mhz=1820.0, tensor_mhz=1830.0, fill_mhz=1720.0, warm=False),
            point(0.75, warm=False)]
-    _, lines, _ = S.report(pts, H200)
+    _, lines, _ = S.report(pts, load_card(H200, directory=CARD_FILES))
     assert lines[lines.index("| --- | ---: | ---: | ---: | ---: | ---: |") + 1:] == [
         f"| idle | 65536 | {0.5 * BOUND * 1e-12:.2f} | 1810.0 | 1820.0 | 1710.0 |"]
     assert lines[0].startswith(f"**PASS**: of 3 points, 0 exceed the card's tensor rate, 132 x 4096 x clock.tensor = "
@@ -154,12 +154,12 @@ def recorded(tmp_path: Path, lock: str | None, name: str = NAME[H200]) -> Path:
     return out
 
 
-def summary(out: Path) -> dict:
+def summary(out: Path, card: dict | None = None) -> dict:
     smi, _ = S.samples(out)
     pts = S.load_points(out)
     for r in pts:
         S.join(r, smi)
-    return S.top_share(pts, S.sheet(out), lock=S.lock_result(out))
+    return S.top_share(pts, card or S.sheet(out), lock=S.lock_result(out))
 
 
 def test_the_metric_is_the_fastest_points_share_of_the_higher_ceiling_and_carries_both_readings(
@@ -182,13 +182,10 @@ def test_the_metric_is_the_fastest_points_share_of_the_higher_ceiling_and_carrie
     json.dumps(t, allow_nan=False)
 
 
-def test_the_headline_follows_the_higher_of_the_cards_readings(tmp_path: Path,
-                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_headline_follows_the_higher_of_the_cards_readings(tmp_path: Path) -> None:
     card = copy.deepcopy(load_card(H200, directory=CARD_FILES))
     card["clock"]["tensor"]["value"] = 2100
-    monkeypatch.setattr(S, "load_card", lambda sku, *, directory: card if sku == H200 else load_card(sku,
-                                                                                                    directory=directory))
-    t = summary(recorded(tmp_path, None))
+    t = summary(recorded(tmp_path, None), card)
     assert t["reading"] == "tensor" and t["share"] == pytest.approx(1178092000000000.0 / 1.2 / (132 * 4096 * 2100e6))
     assert t["lock"] is None
 
@@ -216,15 +213,15 @@ def test_a_build_lease_or_point_exiting_nonzero_fails_the_gate_and_a_skipped_clo
     assert S.gate_failures(tmp_path) == ["default wg_s8 zero idle 65536 rc 139", "lease rc 2"]
 
 
-def test_the_card_is_the_one_the_kit_finds_for_the_gpu_the_run_found(tmp_path: Path) -> None:
+def test_the_card_is_the_record_whose_driver_holds_the_gpu_the_run_found(tmp_path: Path) -> None:
     for sku in (H200, H100):
         (tmp_path / "found.json").write_text(json.dumps({"name": NAME[sku]}))
-        assert S.sheet(tmp_path) == sku
+        assert S.sheet(tmp_path) == load_card(sku, directory=CARD_FILES)
     (tmp_path / "found.json").write_text(json.dumps({"name": NAME[None]}))
-    with pytest.raises(SystemExit, match=f"^0 card records under .* {NAME[None]!r}, the card nvidia-smi"):
+    with pytest.raises(KeyError, match=f"0 GPU card files under .* {NAME[None]!r}, the name the device reports"):
         S.sheet(tmp_path)
     (tmp_path / "found.json").unlink()
-    with pytest.raises(SystemExit, match="^0 card records under .* '', the card nvidia-smi"):
+    with pytest.raises(KeyError, match="0 GPU card files under .* '', the name the device reports"):
         S.sheet(tmp_path)
 
 
@@ -267,4 +264,4 @@ def test_the_point_names_its_sheet_and_card(tmp_path: Path, no_gpu: None) -> Non
 def test_a_card_no_data_sheet_holds_writes_no_value_and_the_refusal_is_why(tmp_path: Path, no_gpu: None) -> None:
     _, rc, m = written(tmp_path, None)
     assert rc == 2 and m["value"] is None and "member" not in m
-    assert m["why"].startswith("0 card records under ") and repr(NAME[None]) in m["why"]
+    assert m["why"].startswith("0 GPU card files under ") and repr(NAME[None]) in m["why"]
