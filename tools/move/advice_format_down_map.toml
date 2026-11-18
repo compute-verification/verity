@@ -21,7 +21,9 @@ paths = []
 [rewrite]
 exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tools/move/**", "tests/tools/move/**",
            "tests/tools/check/test_move_check.py", "archive/**", "tools/research/src/research/store/moves.json",
-           "**/*.lean", "**/lean-audit.json", "**/lakefile.toml"]
+           "**/*.lean", "**/lean-audit.json", "**/lakefile.toml",
+           "tests/verity/circuits/format_vectors.json", "tests/verity/circuits/qcall_vectors.json",
+           "tests/verity/circuits/qword_vectors.json"]
 include = []
 
 [modules]
