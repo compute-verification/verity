@@ -47,10 +47,6 @@ def _record(circuit: IF.Circuit) -> dict:
     return {**IF.descriptor_record(circuit, 1), "run": "a run root", "context": "the coins' context"}
 
 
-def _and_record(circuit: IF.Circuit) -> tuple[IF.Circuit, dict]:
-    return circuit, _record(circuit)
-
-
 def _window(free: bool = False) -> IF.Circuit:
     """The window of the module docstring; ``free``: without the short chunk's wires, so a row of `C3`'s ports is free
     beside its wired ones."""
@@ -180,7 +176,7 @@ def read_back(defn) -> tuple[dict, dict[str, dict[str, int]]]:
 @pytest.mark.parametrize("free", [False, True])
 def test_the_wires_read_back_from_the_body_are_the_windows(free):
     circuit = _window(free)
-    cells, cuts = read_back(WR.replay(circuit, _record(circuit)))
+    cells, cuts = read_back(WR.replay(circuit))
     assert cells == _cells(circuit)
     assert cuts == {t: dict(ps) for t, ps in circuit.cuts.items()}
     assert sum(len(c) for c in cells.values()) == 44 if free else 48
@@ -189,7 +185,7 @@ def test_the_wires_read_back_from_the_body_are_the_windows(free):
 @pytest.mark.parametrize("loose", [False, True])
 def test_each_template_port_with_a_free_row_is_a_parameter_and_the_external_outputs_are_the_return(loose):
     circuit = _window(loose)
-    params, ret = WR.replay(circuit, _record(circuit)).signature()
+    params, ret = WR.replay(circuit).signature()
     wired = _cells(circuit)
     free = {}
     for fn, n in circuit.templates:
@@ -204,7 +200,7 @@ def test_each_template_port_with_a_free_row_is_a_parameter_and_the_external_outp
     assert free.get(f"{descriptor_id(C3)}/best") == ((2, 1) if loose else None)
     assert repr(ret) == "(Array<5,Value<32>>, Array<2,Value<32>>)"
     empty = _whole(external=())
-    assert WR.replay(empty, _record(empty)).signature()[1].leaves == 0
+    assert WR.replay(empty).signature()[1].leaves == 0
 
 
 def _unit_outputs(circuit: IF.Circuit, given: dict[str, list[int]]) -> dict[tuple[str, int], tuple[int, ...]]:
@@ -243,7 +239,7 @@ def _unit_outputs(circuit: IF.Circuit, given: dict[str, list[int]]) -> dict[tupl
 @pytest.mark.parametrize("seed, free", [(0, False), (1, True)])
 def test_the_reference_evaluation_gives_each_unit_its_templates_output_on_its_wired_rows(seed, free):
     circuit = _window(free)
-    defn = WR.replay(circuit, _record(circuit))
+    defn = WR.replay(circuit)
     rng = np.random.default_rng(seed)
     given = {name: [int(v) for v in rng.integers(0, 1 << w, t.leaves)] for name, t in defn.signature()[0]
              for w in [t.homogeneous_width()]}
@@ -266,7 +262,7 @@ def test_the_reference_evaluation_gives_each_unit_its_templates_output_on_its_wi
 
 def test_a_window_of_one_wire_read_whole_is_in_the_form_round_two_derives():
     circuit = _whole()
-    defn = WR.replay(circuit, _record(circuit))
+    defn = WR.replay(circuit)
     assert [(n.form, n.fn.id) for n in defn.body.nodes] == [("call", C2.id), ("call", C1.id)]
     c1, c2 = descriptor_id(C1), descriptor_id(C2)
     assert SS.replay_wires(PN.population_program(defn, 3), descriptor_id(defn)) == (SS.Wire(c1, "idx", c2, "o0"),)
@@ -277,16 +273,15 @@ def test_a_window_is_named_by_its_record_less_its_run_fields():
     circuit = _window()
     record = _record(circuit)
     h = hashlib.sha512(canonical_json(IF.circuit_of(record))).hexdigest()
-    a = WR.replay(circuit, record)
+    a = WR.replay(circuit)
     assert WR.window_digest(record) == h and a.id == f"WindowReplay_v1{{window='{h}'}}"
-    assert WR.replay(circuit, {**record, "run": "another run", "context": "other coins"}).id == a.id
+    assert WR.window_digest({**record, "run": "another run", "context": "other coins"}) == h
     packed = {**record, **IF.descriptor_record(circuit, 2)}
-    assert WR.replay(circuit, packed).id == a.id
+    assert WR.window_digest(packed) == h
     assert hashlib.sha512(IF.circuit_bytes(packed)).digest() != hashlib.sha512(IF.circuit_bytes(record)).digest()
-    assert WR.replay(circuit, {**record, "name": "another name"}).id != a.id
-    assert a.id != WR.replay(_whole(), _record(_whole())).id
+    assert a.id != WR.replay(_whole()).id
     again = _window()
-    assert P.program_digest(Program(a)) == P.program_digest(Program(WR.replay(again, _record(again))))
+    assert P.program_digest(Program(a)) == P.program_digest(Program(WR.replay(again)))
 
 
 def test_refused_by_name():
@@ -294,21 +289,14 @@ def test_refused_by_name():
     # C2's token (one u32) as C1's ``best`` and its ``x0`` beside it would be two words read as one leaf of 32 bits
     x = descriptor_id(X)
     with pytest.raises(ValueError, match=r"wire-width: .* writes Value<32> into a row of Array<2,Value<16>>"):
-        WR.replay(*_and_record(IF.Circuit("reinterpreted", ((X, 2), (C2, 1)), external=(f"{c2}/o0",),
-                                          cuts={c2: {"idx": 1}}, wires=(IF.Wire(c2, "best", x, "o1", 0, (1,), 0, (0,)),))))
+        WR.replay(IF.Circuit("reinterpreted", ((X, 2), (C2, 1)), external=(f"{c2}/o0",),
+                             cuts={c2: {"idx": 1}}, wires=(IF.Wire(c2, "best", x, "o1", 0, (1,), 0, (0,)),)))
     # C1's unit 1 before its unit 0, C2 between them
     wires = (IF.Wire(c2, "idx", c1, "o0", 0, (1,), 1, (0,), cut=(0, 1)), IF.Wire(c1, "idx", c2, "o0", 0, (1,), 0, (0,)))
     with pytest.raises(ValueError, match="in unit order"):
-        WR.replay(*_and_record(IF.Circuit("backwards", ((C1, 2), (C2, 1)), external=(f"{c1}/o0",),
-                                          cuts={c2: {"idx": 2}}, wires=wires, order=((c1, 1, 1), (c2, 0, 1), (c1, 0, 1)))))
-    # another circuit's record, a record naming other external ports, one listing its members
-    circuit = _whole()
-    record = _record(circuit)
-    listed = {**{k: v for k, v in record.items() if k != "wires"}, "members": []}
-    for other in (_record(_window()), {**record, "external": []}, listed):
-        with pytest.raises(ValueError, match="is not its record"):
-            WR.replay(circuit, other)
+        WR.replay(IF.Circuit("backwards", ((C1, 2), (C2, 1)), external=(f"{c1}/o0",),
+                             cuts={c2: {"idx": 2}}, wires=wires, order=((c1, 1, 1), (c2, 0, 1), (c1, 0, 1))))
     # a return of 8,193 tokens of 32 bits is past the widest size class
-    WR.replay(*_and_record(IF.Circuit("widest", ((C1, 8192),), external=(f"{c1}/o0",))))
+    WR.replay(IF.Circuit("widest", ((C1, 8192),), external=(f"{c1}/o0",)))
     with pytest.raises(ValueError, match="262,144"):
-        WR.replay(*_and_record(IF.Circuit("wider", ((C1, 8193),), external=(f"{c1}/o0",))))
+        WR.replay(IF.Circuit("wider", ((C1, 8193),), external=(f"{c1}/o0",)))
