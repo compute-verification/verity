@@ -124,7 +124,7 @@ def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_t
     w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], **kw), s, got
+    return CS.commit(w, CH.held_rows(w, [g[0] for g in got]), **kw), s, got
 
 
 def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
