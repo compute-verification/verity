@@ -90,7 +90,7 @@
   "benchmarks/one_stage/onsite_record.py": 5,
   "benchmarks/one_stage/served_verdicts.py": 8,
   "benchmarks/one_stage/served_verdicts.sh": 1,
-  "benchmarks/pous/served_piece.py": 4,
+  "benchmarks/pous/served_piece.py": 1,
   "benchmarks/serve_tax/serve_tax.py": 11,
   "benchmarks/slowdown/slowdown/envelopes.py": 3,
   "benchmarks/spot_figures/cards.py": 2,
