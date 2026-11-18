@@ -22,6 +22,7 @@ Batch invariance keeps each row's values independent of its place.
 """
 from __future__ import annotations
 
+import json
 import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -101,3 +102,23 @@ def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
     hooks = Hooks(tag="admit-rows")
     hooks.patch(module, "sort_batch_req_ids", scheduler_order)
     return hooks
+
+
+def protocols_doc(opts: Any) -> dict[str, dict[str, Any]]:
+    """``--protocols-config``: a JSON object, or a JSON file, ``{name: {...}}``."""
+    from verity_vllm.protocols import load_settings
+
+    v = opts.protocols_config
+    return load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
+
+
+def admission_settings(opts: Any) -> dict[str, Any]:
+    """The admission scheme's settings: ``--protocols-config``'s entry under its name."""
+    from verity_vllm import messages as M
+
+    return protocols_doc(opts).get(M.providing("admission").name, {})
+
+
+def admission_order(opts: Any) -> str:
+    """The admission's order, its settings' ``order``: ``arrival`` where they name none."""
+    return admission_settings(opts).get("order", "arrival")
