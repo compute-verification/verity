@@ -9,7 +9,8 @@
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set, else the run's machine's
-  `[properties]`'; `card_arch(name, directory=...)`: the `arch` of the card `card_short` finds.
+  `[properties]`'; `card_arch(name, directory=...)`: the `arch` of the card `card_short` finds, and
+  `machine_arch(directory=...)` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
@@ -229,6 +230,17 @@ def card_short(name: str, *, directory: Path) -> str:
 def card_arch(name: str, *, directory: Path) -> str:
     """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
     return _card(name, directory)["arch"]
+
+
+def machine_arch(*, directory: Path) -> str:
+    """The ``arch`` of the run's machine's card: `machine_properties()`'s ``card``, a card record's name in ``directory``,
+    with no card needed; refused by name where it is unread."""
+    from verity.device import load_card
+
+    card = machine_properties()["card"]["value"]
+    if card == "unread":
+        raise SystemExit(f"machine {settings.RESEARCH_MACHINE!r}: its [properties] have card unread: read it there")
+    return load_card(card, directory=directory)["arch"]
 
 
 def _text(v: Any) -> bool:
