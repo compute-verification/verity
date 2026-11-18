@@ -5,10 +5,10 @@
 #
 # Assembles, once and under a lock, CUDA 12.9.1's nvcc, cudart, cccl, cuobjdump, nvdisasm, NVTX and profiler API from
 # NVIDIA's redistributable archives (each pinned by sha256) and the cuBLASLt headers and library from the wheel env.sh pins, into POUW_HARNESS_TOOLKIT
-# (default /workspace/cache/pouw-cuda-12.9.1), and exports CUDA_HOME. Needs curl, tar and xz, and uv or pip.
+# (default /workspace/cache/pouw-cuda-<the hash of those pins>, so its name is what it holds), and exports CUDA_HOME. Needs
+# curl, tar and xz, and uv or pip.
 
 _tk_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-POUW_HARNESS_TOOLKIT="${POUW_HARNESS_TOOLKIT:-/workspace/cache/pouw-cuda-12.9.1}"
 _tk_url="https://developer.download.nvidia.com/compute/cuda/redist"
 _tk_parts="cuda_nvcc 12.9.86 7a1a5b652e5ef85c82b721d10672fc9a2dbaab44e9bd3c65a69517bf53998c35
 cuda_cudart 12.9.79 1f6ad42d4f530b24bfa35894ccf6b7209d2354f59101fd62ec4a6192a184ce99
@@ -22,6 +22,7 @@ cuda_profiler_api 12.9.79 8c50636bfb97e9420905aa795b9fa6e3ad0b30ec6a6c8b0b8db519
 _tk_cublas="$(grep -o 'nvidia-cublas-cu12==[0-9.]*' "$_tk_here/env.sh")"
 _tk_want="$(printf '%s\n%s\n' "$_tk_parts" "$_tk_cublas" | sha256sum | cut -c1-16)"
 _tk_headers_want="$(printf '%s\n' "$_tk_headers" | sha256sum | cut -c1-16)"
+POUW_HARNESS_TOOLKIT="${POUW_HARNESS_TOOLKIT:-/workspace/cache/pouw-cuda-$_tk_want}"
 mkdir -p "$POUW_HARNESS_TOOLKIT" || return 1
 (
   set -euo pipefail

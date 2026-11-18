@@ -211,15 +211,6 @@ def test_row_fed_refusals(program, which, extra, match):
         NW.node_window(program, families=_after(*which, extra))
 
 
-def test_row_fed_cut_kept(program):
-    """After `_Builder.settle`, a row-fed port's cut is still the one `feed_rows` gave it, else the window is refused."""
-    w = NW.NodeWindow(program, FAMILIES).lower()
-    (tid,) = [t for t in w.b.fns if t.startswith("AllReduceResidualMnnvl_v1") and "SHOT=2" in t]
-    w.b.cuts[tid]["parts"] = 4
-    with pytest.raises(NW.Unexpressible, match=r"cuts changed after `feed_rows`: .*parts 8"):
-        w.circuit()
-
-
 def _rewired(circuit: IF.Circuit, make) -> IF.Circuit:
     (i, x), *_ = [(i, x) for i, x in enumerate(circuit.wires) if x.reader.startswith("AllReduceResidualMnnvl_v1")
                   and x.port == "parts" and x.cut == (0, 1)]

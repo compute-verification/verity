@@ -22,6 +22,10 @@ SURFACE = {
     "vllm.v1.engine.llm_engine:LLMEngine": "the in-process engine, which engine.handle walks to its scheduler and runner",
     "vllm.v1.engine.core:EngineCore": "the engine core, whose two steps engine.core_gate wraps for its edges",
     "vllm.v1.engine.core:EngineCoreProc": "the engine core process, whose input loop and has_work a gate holds",
+    "vllm.v1.engine:EngineCoreOutput": "a request's output, which scheme_plugin's refusal sends finished with ABORT",
+    "vllm.v1.engine:EngineCoreOutputs": "the outputs scheme_plugin's refusal puts on the core's output queue",
+    "vllm.v1.engine:FinishReason": "ABORT, the finish reason of a request scheme_plugin refuses",
+    "vllm.v1.request:RequestStatus": "FINISHED_ABORTED, which scheme_plugin finishes a refused request with in the scheduler",
     "vllm.v1.core.sched.scheduler:Scheduler": "the V1 scheduler, which engine.handle returns and the tick's gate and "
                                               "engine.kv_blocks hook",
     "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations and frees engine.kv_blocks emits",

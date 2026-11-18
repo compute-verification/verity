@@ -105,8 +105,9 @@ theorem seqBad_sound (B : Body) (below : ℕ) (t : Ty) (ps : Array Part) (w w' :
   have hL := forIn_m_idx _
     (fun i (b : Option (Option (ℕ × Part)) × Subarray ℕ) => b.1 = none ∧ b.2.array = (Seq.ofParts ps).starts ∧
       b.2.start = i ∧ b.2.stop = (Seq.ofParts ps).starts.size ∧
-      ∀ x < i, ∃ s₁ s₂, (Widths.partOk (srcOf B below) t (Widths.homo t) ((Seq.ofParts ps).starts[x]!)
-        ps[x]!).run s₁ = .ok true s₂)
+      ∀ x < i, ∃ s₁ s₂, (Widths.partOk (srcOf B below) t
+        (Widths.sliceWidth t ((Seq.ofParts ps).starts[x]!) ps[x]!.count) ((Seq.ofParts ps).starts[x]!) ps[x]!).run s₁
+        = .ok true s₂)
     (fun b => ∃ y, b.1 = some (some y)) ps ?step ps.size 0 _ r w w₂ (by omega)
     ⟨rfl, hsa, hss, hse, fun x hx => absurd hx (by omega)⟩ (by rw [List.drop_zero]; exact hloop)
   case step =>
