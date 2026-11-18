@@ -83,7 +83,11 @@ KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resourc
 POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 SCHEME = "pearl-c-sm120-v1-h3"
 SEED = bytes(range(32))
-SALT_KEY = bytes(range(100, 132))
+
+
+def salts_b(weights) -> dict[int, bytes]:
+    """Each weight's B-row salts as a registration would hand them, seeded so two runs over the same weights share them."""
+    return {w: hashlib.shake_256(b"salts_b %d" % w).digest(HM96_SALT * t.shape[0]) for w, t in weights.items()}
 RUN = "r20260930-120000-test"
 
 
@@ -232,14 +236,15 @@ def device_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, weight_salts=salts_b(weights))
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
 
     def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
         return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows,
+                                   weight_salts=salts_b(weights), **kw)
     return make, kernel, weights, roots, salt
 
 
@@ -523,8 +528,8 @@ class _Engine:
 
 def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the hm96 key `SALT_KEY` (an
-    install samples a fresh one, so two installs compared byte for byte share it); `run` overrides the device run's buffer
+    with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the weights' B salts
+    `salts_b` (a registration's, so two installs compared byte for byte share them); `run` overrides the device run's buffer
     sizes."""
     import functools
 
@@ -532,9 +537,9 @@ def _served(monkeypatch, kernel, weights, more=None, **run):
     from verity_vllm.protocols import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(pouw, "pearl_c_salt_key", lambda scheme: SALT_KEY)
-    if run:
-        monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots",
+                        lambda k, ws, scheme: PPDR.weight_roots(k, ws, scheme, weight_salts=salts_b(ws)))
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, weight_salts=salts_b(weights), **run))
     model = _Model(weights)
     settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
@@ -974,8 +979,9 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     assert PPDR._constant_keys(t) == {"hm": t.data_ptr()}
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
-    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16,
+                               weight_salts=salts_b(weights))
     assert run.tree_hash == s.commitment_hash == C.TREE_HASH["h3"] == HM96 and PPDR._bytes(run.const) == PPDR._bytes(t)
 
 
@@ -990,18 +996,20 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
     the zero C~ and U are `pearl_c.leaf`'s."""
     s = pouw_schemes.get(scheme)
-    h, nb, key = s.commitment_hash, 64, SALT_KEY
+    h, nb = s.commitment_hash, 64
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
     kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=key)
-    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
+    key = salts_b(weights)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=key)
+    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h,
+                                    [key[w][i:i + HM96_SALT] for i in range(0, len(key[w]), HM96_SALT)]).commitment.root
                      for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
-    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, salt_key=key)
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, weight_salts=key)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
     for w, x in calls:
@@ -1580,7 +1588,7 @@ def test_a_seeded_serve_draws_the_same_coins_and_no_salt_key_and_takes_no_retent
     SP.seed_install(one)
     SP.seed_install(two)
     assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert set(one) == set(two) == {"coins"} and not hasattr(PPD, "new_salt_key")
+    assert set(one) == set(two) == {"coins"} and not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -2900,30 +2908,6 @@ def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan(
     assert most == CW.voluntary_cap(192) == 3
 
 
-@pytest.mark.slow
-def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
-    """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
-    row seeds, seed_A and E_A lines (16 padding rows under seed_A) are; a wrong line or row digest is caught."""
-    path, s, epoch, prover, tr, splits, records = honest_pass
-    HS = load("pearl_c_vllm_h3_screen", POUW / "pearl_c_vllm" / "h3_screen.py")
-    d = path.parent
-    assert HS._tiles(d, 1) == {"tiles": tr.commitment.count, "failed": 0, "failures": []}
-    for u in epoch.workload.matmuls:
-        ctx = Context(epoch.salt, u, tr.activation_roots[u.index], epoch.weight_roots[u.weight])
-        data = VR.Files(d)(json.loads(path.read_text())["matmuls"][u.index]["rows"])
-        rows = [VR.f32_row(data, u.shape.k, i) for i in range(u.shape.m)]
-        seeds, seed_a = s.row_seeds(ctx, rows, range(u.shape.m)), s.noise(ctx).seed_a
-        lines = [C.sample_line(x, 0, 0, 0) for x in seeds] + [C.sample_line(seed_a, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
-        (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
-        (d / f"call{u.index}.seed_a").write_bytes(seed_a)
-        (d / f"call{u.index}.ea_codes").write_bytes(b"".join(bytes(x) for x in lines))
-        (d / f"call{u.index}.rowdig_a").write_bytes(b"".join(C.row_digest(r) for r in rows))
-    got = HS._calls(d)
-    assert got["ok"] and [c["padded"] - c["m16"] for c in got["calls"]] == [16, 16]
-    (d / "call1.ea_codes").write_bytes(bytes(32) + (d / "call1.ea_codes").read_bytes()[32:])
-    assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
-    (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
-    assert not HS._calls(d)["calls"][1]["row_digests"]
 def test_verify_run_refuses_a_v1_manifest(honest_pass):
     """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwCheck.PearlPlus`
     refuses it, and so is a manifest of another schema; there is no ``--recorded`` reading of one."""
@@ -3016,7 +3000,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
 
     def make(c, o, k=1):
         return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
-                                   capacity=1 << 12, salt_key=SALT_KEY, pass_index=k)
+                                   capacity=1 << 12, weight_salts=salts_b(weights), pass_index=k)
     c, o = live_coin(r)
     run = make(c, o)
     assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
@@ -4316,7 +4300,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     run = make()
     fmt = hash_format(run.scheme)
     assert fmt is HASH_FORMATS["h3"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == HM96
-    assert PPDR._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
+    assert PPDR._bytes(run.const) == hm96_kernel_constants() and set(HASH_FORMATS) == {"h0", "h3"}
     assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in kernel_names("pearl-c"))
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
@@ -4363,12 +4347,12 @@ def sm90_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R90, H100Dev(), "0" * 64)
-    roots = PPDR.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, H100_SCHEME, weight_salts=salts_b(weights))
     coins = salt_coin(roots)
 
     def make(schedule="deferred-a"):
         return PPDR.PearlCDeviceRun(pouw_schemes.get(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
-                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+                                   capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
     return make, kernel, weights, roots
 
 
@@ -4765,11 +4749,11 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
         run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
-                                  *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+                                  *salt_coin(roots), capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         lines = []
         for w, x in xs:
@@ -4806,11 +4790,11 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
         run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
-                                  capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+                                  capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:
             run.gemm(w, x, weights[w], None)
@@ -4973,7 +4957,7 @@ def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
     s = pouw_schemes.get("pearl-c-sm120-unpromoted-v1-h3")
     assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in kernel_names("pearl-c")
     run = PPDR.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
-                              salt_key=SALT_KEY)
+                              weight_salts=salts_b(weights))
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]

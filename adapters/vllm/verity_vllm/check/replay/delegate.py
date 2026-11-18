@@ -2,7 +2,7 @@
 
 A delegate evaluates a row from its resolved operands like a row kernel (`evaluate._evaluate_row`), and also receives the
 row's place (`Place`), so it can answer from a protocol's own commitment. PoUW's `ncp-v2` installs one for
-`NcpLinearRow_v1` for the length of a replay (`check.replay.pouw_circuit`). Outside that, the family is not evaluable,
+`NcpLinearRow_v1` for the length of a replay (`protocols.pouw.pouw_circuit`). Outside that, the family is not evaluable,
 and a Program with such rows fails closed.
 """
 from __future__ import annotations
