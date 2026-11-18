@@ -163,8 +163,8 @@ def test_exchange_answers_requests_by_name_before_serving():
         ex.answer(declared)
     ex.requests.pop()
     assert ex.answer(declared) is True and seen == [declared]
-    with pytest.raises(Refused, match="after the requests were answered"):
-        ex.request("c", H.HoldRelease("in-0", 1))
+    with pytest.raises(Refused, match="after the build was answered"):
+        ex.request("c", H.RefuseProperty("world", 1, "one rank"))
     off = ex.subscribe("c", "values", seen.append)
     ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
     off()
@@ -242,3 +242,14 @@ def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkey
     other.request("network", H.StartBeside("tap"))
     with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
         other.answer(H.Declared("", {}))
+
+
+def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_first_step():
+    ex = M.Exchange()
+    ex.answer(H.Declared("", {}))
+    with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
+        ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
+    ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
+    ex.emit(H.StepBegan(1))
+    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 1\)"):
+        ex.request("pouw", H.HoldRelease("in-0", 3))
