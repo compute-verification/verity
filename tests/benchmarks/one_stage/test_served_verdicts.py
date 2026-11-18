@@ -560,6 +560,21 @@ def test_step_3_on_the_gates_coins_stops_where_its_sessions_took_their_own_coin_
         assert lines == []
 
 
+def test_every_only_and_skip_word_the_script_passes_is_one_the_pieces_parser_takes(tmp_path, monkeypatch):
+    """Each ``--only``/``--skip`` word in served_verdicts.sh, through `main`'s own parser: a word one side renamed alone
+    is argparse's refusal, which stops the launcher at that piece."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    used = re.findall(r"--(only|skip)[ =]([A-Za-z_]+)", script)
+    assert {f for f, _ in used} == {"only", "skip"}, used
+    monkeypatch.setattr(S, "pieces", lambda *a, **k: {})
+    for flag, word in used:
+        argv = ["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"), f"--{flag}", word]
+        try:
+            assert S.main(argv) == 0
+        except SystemExit as e:
+            pytest.fail(f"served_verdicts.sh passes --{flag} {word}, which served_verdicts.py pieces refuses (exit {e.code})")
+
+
 def test_the_main_run_checks_step_3s_coin_trees_right_after_its_line_and_stops_on_a_refusal():
     """The main run serves before step 3, which no harness here stubs, so this reads the script: its SAMPLED-PROOFS line
     passes the audit's challenger and summary, and the next command is the check, its refusal the run's stop."""
