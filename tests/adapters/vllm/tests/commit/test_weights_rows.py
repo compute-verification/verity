@@ -57,12 +57,28 @@ def test_a_rows_sha512_registration_is_a_sha512_tree_the_replay_opens_and_a_rere
     assert CPU.folded_root(tree) == w["root"] == tree["root"]
     words, wc = _open(com, tmp_path, w["root"])
     assert wc["equal"] is True and wc["opened"] == wc["servable"] == len(tree["names"]) == 4, wc
-    assert com.register_weights()["root"] == w["root"], "a re-registration takes the registration's key (live_weights_check)"
+    assert com.register_weights(replay=True)["root"] == w["root"], "a replay re-registers under the recorded key (live_weights_check)"
     _other, w2 = _registered(monkeypatch)
     assert w2["root"] != w["root"], "a fresh registration salts its rows with a fresh key"
     with torch.no_grad():
         com.model.proj.bias[3] += 1
-    assert com.register_weights()["root"] != w["root"]
+    assert com.register_weights(replay=True)["root"] != w["root"]
+
+
+def test_every_new_registration_draws_its_own_key_even_on_the_same_committer(monkeypatch):
+    com, w = _registered(monkeypatch)
+    k1 = com.weights_tree["key"]
+    w2 = com.register_weights()
+    assert com.weights_tree["key"] != k1 and w2["root"] != w["root"], "a new registration never reuses a key"
+    assert com.register_weights(replay=True)["root"] == w2["root"], "a replay takes the latest registration's key"
+
+
+def test_a_replay_with_no_recorded_key_is_refused(monkeypatch):
+    monkeypatch.setenv("VERITY_WEIGHTS_HASH", "host")
+    com = committer()
+    com.model = _Model()
+    with pytest.raises(ValueError, match="recorded rows-sha512 weights key"):
+        com.register_weights(replay=True)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for the device row hash")

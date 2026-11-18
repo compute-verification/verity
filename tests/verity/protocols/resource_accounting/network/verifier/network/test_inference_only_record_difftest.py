@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 711 cases (600 random circuits,
-two in five broken in one way, and 111 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 714 cases (600 random circuits,
+two in five broken in one way, 94 shaped ones, most in the shape of a served class, and 20 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -12,10 +12,11 @@ is what says the data is still what the generator and the reference write. The s
 reaches what its docstring says, that the published result is the judgment alone, and that a text the form reads
 nothing of is refused: a record that lists its members, and one that names no Program. The third states the verdicts on
 the served class's shape, the negative vectors among them, and the fourth the refusals of a pinned reader's layout:
-one negative vector a role, each refused, and the same records under no pin. The fifth and the sixth are the two
-refusals that make a row what the form counts it as: a wire whose writer's leaf is not inside one leaf of the row
-that reads it, into a row that is not closed (`leaf-widths`), and a root that hands a unit a row that is not input
-gates of its own (`own-rows`), each with what the form would count without the refusal. The seventh is what the
+one negative vector a role, each refused, and the same records under no pin. The fifth is that an edge's writer
+output has its row's leaves: an edge from an output of other leaves, which a wire's leaves were refused for
+(`leaf-widths`), is no Program's, refused with the Program (`program`). The sixth is the refusal that makes a row
+what the form counts it as: a root that hands a unit a row that is not input gates of its own (`own-rows`), with
+what the form would count without the refusal. The seventh is what the
 form exports of a row: its unit's slot, and why it is held. The eighth is the check that no wire crosses slots: none
 does at the served class's shape, and one that does is counted. The ninth sets the form beside
 `Desc.evaluate`'s reference on the same Program: one block for the whole phase there and one a slot here,
@@ -36,7 +37,8 @@ every slot's units, with an opening's ports off the count only where the opening
 format is held to the registration log: a value read in leaves of another width than 16 bits is registered in leaves of
 that width. The eighteenth is the row an opening may declare: the first of its reader's two outputs, the second
 its verdict, of a reader of six input rows, by which nothing is filled or counted. The nineteenth is the opening whose
-row is its verdict's own output: refused with the declarations, under its reader's pin and under none.
+row is its verdict's own output: refused with the declarations, under its reader's pin and under none. The twentieth is
+the edges (`EDGED`): each toy taken or refused at the stage it states, and a taken one's every unit counted in a block.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -67,6 +69,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits.program import input_id, is_input
+from verity.circuits.types import Array, Value
 
 LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean"
 
@@ -86,13 +89,6 @@ SEEDS = range(500)
 #: the form's own refusals of a record `verity.commitments.periods.interface` takes: a wire's leaves, a pinned reader's
 #: layout, and the row formats held to the registration log, which the interface does not read
 OWN = ("leaf-widths", "formats", "reader-layout", "reader-roles")
-#: the cases whose wires Python's layout has no rows for
-TWO_WIDTHS = "a wire from an output of two widths"
-TWO_CLOSED = "an output of two widths into a closed row"
-#: `short_output`: an output of 8 bits into a 16-bit row, one leaf or sixteen that are closed
-SHORT, SHORT_CLOSED = "an output that lacks bits of its row", "an output that lacks bits of a closed row"
-#: `odd_output`: an output of 31 bits, two words, into a row of two words and wired into a row of one
-ODD, ODD_ONE = "an output of 31 bits into a row of two words", "an output of 31 bits wired into a row of one word"
 #: the cases on a text the form reads nothing of, each with the stage that refuses it: a record that lists its
 #: members, and the text of no wire and nothing else
 LISTED, BARE = "2x3 a record that lists its members", "2x3 a text of no wire that names no Program"
@@ -129,7 +125,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 711 cases and the reference's results, byte for byte as the record pins them."""
+    """All 714 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -142,7 +138,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
         detail = r["detail"]
         assert r["public"] == (detail if "error" in detail else {"complies": detail["complies"]})
         assert detail.get("error") == m["broken"], (m["shape"], m.get("how"))
-        assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY or m["shape"] in (TWO_WIDTHS, TWO_CLOSED, ODD, ODD_ONE))
+        assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY)
         assert isinstance(r["kinds"], list) == isinstance(r["exported"], list) == ("error" not in detail)
         assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths"))
     assert {m["broken"] for m in made} == set(vectors.BROKEN) | {None}
@@ -286,222 +282,36 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     assert taken["complies"] and (taken["fresh"], taken["free"], taken["openings"]) == (held["fresh"], 0, 0)
 
 
-#: the cases on a wire's leaves and on a unit's rows: the stage that refuses each, or the rate rule's and the count's
-#: verdicts
-CARRIED = "a leaf that reads sixteen gates through one row"
-#: `passed_on`, its leaves passed on another way: by a Definition of no gate, through a call, a callee inside a
-#: callee, a batch member, a scan
-PASSED = {f"sixteen gates through one row, passed on {how}": shape for how, shape in (
-    ("by a Definition of no gate", {"gate": False}), ("through a call", {"how": "call"}),
-    ("through a callee inside a callee", {"how": "nested"}), ("through a batch member", {"how": "batch"}),
-    ("through a scan", {"how": "scan"}))}
-#: `passed_on`, one of its leaves passed on through a scan's carry, and the other fifteen as a scan's outputs: per
-#: case, which of the sixteen leaves of its return are leaves of its row
-PART = {"a gate through one row, passed on through a scan's carry": [0],
-        "fifteen gates through one row, passed on as a scan's outputs": list(range(1, 16))}
-#: `passed_on`, its first output gates of its own and its leaves passed on to a second output, which no wire reads
-UNREAD = "sixteen gates through one row, passed on to an output no wire reads"
-#: `passed_on`, its leaves handed to a callee that returns none of them, and its output gates of its own over them
-BESIDE, GATES = "a row a callee is handed and returns no leaf of", "a closed row: sixteen gates read, none passed on"
+#: the cases on a unit's rows, each with the stage that refuses it
 ROWS = {
-    "2x3 the key's reader bits, the other side a word": (None, None),
-    "2x3 the key's writer bits, the other side a word": (None, None),
-    CARRIED: "leaf-widths",
-    **dict.fromkeys(PASSED, "leaf-widths"),
-    **dict.fromkeys(PART, "leaf-widths"),
-    UNREAD: "leaf-widths",
-    BESIDE: "leaf-widths",
-    GATES: (None, None),
-    TWO_WIDTHS: "leaf-widths",
-    TWO_CLOSED: (None, None),
-    SHORT: "leaf-widths",
-    SHORT_CLOSED: "leaf-widths",
-    ODD: "leaf-widths",
-    ODD_ONE: "wires",
     "2x3 one input run handed to two rows": "own-rows",
     "2x3 a row every unit shares": "own-rows",
     "2x3 a row of computed gates": "own-rows",
 }
-WHOLE = ("Every leaf of a writer's output lies inside one leaf of the row that reads it, each side's leaves of one "
-         "width and the writer's dividing the reader's; or the reader's row is one-bit leaves and its Definition "
-         "passes none of them on: its return refers to no part of that row, itself or through a call, a batch or a "
-         "scan. Fix the Definitions, not the record: give the reader's row leaves of the writer's width or a multiple "
-         "of it, or the writer's output leaves of a width that divides the reader's, or make the reader's row "
-         "one-bit leaves and have its Definition return gates of its own in their place.")
-FILLED = ("Every bit of a row a wire fills is a bit of its writer's output: a row is whole 16-bit words, and a bit of "
-          "it past its writer's output is no gate's. Fix the Definitions, not the record: give the writer's output "
-          "whole 16-bit words, each bit a gate of its own.")
+#: the toys of an edge from an output of leaves other than its row's (`vectors.EDGED`)
+LEAVES = ("an edge from an output of two widths into one 32-bit leaf", "an edge from an output of 8 bits into a 16-bit leaf",
+          "an edge from an output of 31 bits into 32 one-bit leaves", "an edge from a 16-bit output into 16 one-bit leaves")
 
 
-def test_a_writers_leaf_lies_inside_one_leaf_of_the_row_that_reads_it(shaped, monkeypatch):
-    """A wire's two rows have the same words, and that alone does not make the row the writer's gates: where a
-    writer's leaf straddles leaves of the row that reads it, a leaf the reader passes on carries part of a gate of
-    the writer further. The form takes a wire whose writer's leaves each lie inside one leaf of the row, and a wire
-    into a closed row, one-bit leaves its Definition passes none of on, which only gates of its own unit read; it
-    refuses any other (`leaf-widths`), and its message names the wire, the two widths and the fix. At the served
-    class's shape, the token a word (one 32-bit leaf) into a key of 32 one-bit leaves is taken, the key a closed
-    row, and so is the token 32 one-bit leaves into a key of one word; each is counted as any wire. An output whose
-    leaves have two widths is refused into a 32-bit leaf and taken into a closed row.
-
-    Of either way, every bit of the row is a bit of its writer's output. A wire's two rows have the same words, and
-    an output's words are its bits rounded up: an output of 8 bits fills a row of 16, whose other 8 bits are no
-    gate's. It is refused into one 16-bit leaf and into a closed row alike, the message naming the two rows' bits.
-    An output of 31 bits is two words, so it is refused the same way into a row of two words, and a record that
-    wires it into a row of one word is refused before that, by the wires' own check: with its words rounded down
-    that check takes the wire, and sixteen one-bit leaves read a gate of 31 bits.
-
-    What the refusal is for is `passed_on`: a template that passes on, with no gate, one bit of each of sixteen
-    16-bit gates, and a unit of another slot that reads those sixteen bits as one 16-bit leaf. Without the refusal the
-    reference takes the record and counts 16 fresh bits a block, the one row that crosses slots, and the block is
-    accepted under a policy of 16 bits; followed leaf by leaf, that row reads sixteen 16-bit gates of the other
-    slot. It is refused however the template passes the bits on: itself, with no gate of its own at all, through a
-    call, through a callee inside a callee, through a batch member and through a scan, each followed leaf by leaf
-    through the root to the row's own gates (`hands_on`); where it passes on one of them alone, through every
-    iteration of a scan's carry, or the other fifteen alone, as a scan's outputs; and where it passes them on to an
-    output no wire reads, the output the row is wired to gates of its own. Where the template's output is sixteen gates of its own over those bits, the row is closed
-    and the record is taken: the 16-bit leaf then reads sixteen one-bit gates. The rule reads a Definition's
-    reference parts, a parameter at a time, so it is narrower than what it is for: a template that hands the bits to
-    a callee beside gates of its own, and gets the gates back, passes no leaf on and is refused."""
-    got = {what: vectors.results(shaped[what]["case"]) for what in ROWS}
-    into_on = ("PassWide_v1.o0 -> PassOn_v1.x", "16 bits", "1 bits")
-    wires = {**dict.fromkeys((CARRIED, *PASSED, *PART, UNREAD, BESIDE), into_on),
-             TWO_WIDTHS: ("WidthsTwo_v1.o0 -> WidthsWhole_v1.v", "more than one width", "32 bits")}
-    eight = ("ShortEight_v1.o0 -> ShortWhole_v1.v", 8, 1)
-    short = {SHORT: (*eight, []), SHORT_CLOSED: (*eight, ["v"]), ODD: ("OddOut_v1.o0 -> OddWhole_v1.v", 31, 2, ["v"])}
-    assert set(wires) | set(short) == {what for what, want in ROWS.items() if want == "leaf-widths"}
-    for what, (wire, bits, words, closed) in short.items():
-        said = {"error": "leaf-widths", "message": f"wire {wire}: the writer's output is {bits} bits and the row it "
-                                                   f"fills {16 * words}. {FILLED}"}
-        assert got[what]["detail"] == got[what]["public"] == said, what
-        assert got[what]["count"] == got[what]["kinds"] == got[what]["exported"] == {"error": "leaf-widths"}, what
-        writer, whole = (ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in shaped[what]["circuit"].templates)
-        # the two rows have the same words, which SPOT's check holds, and the row has bits the output has not
-        assert writer.port("o0", outs=True) == whole.port("v") == words
-        assert (sum(writer.widths["o0"]), sum(whole.widths["v"])) == (bits, 16 * words)
-        assert whole.closed == closed
-    # the 31 bits wired into a row of one word: two words against one, refused by the wires' own check; with the
-    # output's words rounded down that check takes the same wires
-    one = shaped[ODD_ONE]
-    assert got[ODD_ONE]["detail"] == got[ODD_ONE]["public"] == got[ODD_ONE]["count"] == {"error": "wires"}
-    odd, whole = (ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in one["circuit"].templates)
-    assert (sum(odd.widths["o0"]), odd.port("o0", outs=True), whole.port("v"), whole.closed) == (31, 2, 1, ["v"])
-    rec = json.loads(one["case"]["instance"]["record"])
-    assert rec["wires"] == [vectors.ODD_WIRE]
-
-    def lays(down: bool) -> dict:
-        return {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows),
-                                     tuple((o, sum(t.widths[o]) // 16 if down else w) for o, w in t.outs), (),
-                                     tuple(n for *_, n in t.rows)), t.units) for t in (odd, whole)}
-    wired = tuple(IF.Wire.of(w) for w in rec["wires"])
-    IF.check_wires(lays(True), wired, IF._cuts(rec.get("cuts", {})), IF.order_of(rec))
-    with pytest.raises(ValueError):
-        IF.check_wires(lays(False), wired, IF._cuts(rec.get("cuts", {})), IF.order_of(rec))
-    for what, (wire, writer, reader) in wires.items():
-        said = {"error": "leaf-widths", "message": f"wire {wire}: the writer's leaves are of {writer} and the reader's "
-                                                   f"of {reader}. {WHOLE}"}
-        assert got[what]["detail"] == got[what]["public"] == said, what
-        assert got[what]["count"] == got[what]["kinds"] == got[what]["exported"] == {"error": "leaf-widths"}, what
-    # the served class's shape: the two sides of the token's wires, a word and its 32 bits, either way round
-    for side, (key, tok) in (("reader", ((1,) * 32, (32,))), ("writer", ((32,), (1,) * 32))):
-        m = shaped[f"2x3 the key's {side} bits, the other side a word"]
-        scan, embed, *_, feed = (ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in m["circuit"].templates)
-        assert (embed.widths["tok"], scan.widths["o0"], feed.widths["o0"]) == (key, tok, tok)
-        into = [(w.writer, w.out) for w in m["circuit"].wires if (w.reader, w.port) == (embed.tid, "tok")]
-        assert sorted(into) == sorted([(scan.tid, "o0"), (feed.tid, "o0")])
-        # the key of bits is a closed row: gates of `Embed` read it and its return refers to no part of it
-        assert embed.closed == (["tok"] if side == "reader" else []) and not ref.passed_on(embed.fn)
-        taken = got[f"2x3 the key's {side} bits, the other side a word"]
-        assert (taken["detail"]["failure"], taken["count"]["failure"]) == (None, None) and taken["detail"]["complies"]
-        assert taken["detail"]["fresh"] == taken["detail"]["unregistered"] > 0 == taken["detail"]["cross_wires"]
-    # the row that carries sixteen gates: what the wires say, leaf by leaf
-    m = shaped[CARRIED]
-    c, case = m["circuit"], m["case"]
-    (wide, _), (on, _), (take, _) = c.templates
-    wide_id, on_id, take_id = map(codec.descriptor_id, (wide, on, take))
-    passed = [on.body.ret[j] for j in range(16)]
-    assert passed == [("p", 0, 17 * j) for j in range(16)] and wide.signature()[1].leaf_widths() == [16]
-    rows = {(w.reader, w.port, u, w.cut[0] + r): (w.writer, v)
-            for w in c.wires for u, r, v in ref.entries({**w.doc(), "c0": w.cut[0], "C": w.cut[1]})}
-    slot = c.slot()
-    for s in range(c.slots):
-        writer, v = rows[take_id, "v", s, 0]
-        # the leaf is the 16 bits `On` passes on: bit j is its row j's bit j, and its row j is one 16-bit gate
-        gates = {rows[on_id, "x", v, leaf // 16] for _, _, leaf in passed}
-        assert writer == on_id and len(gates) == 16 and {t for t, _ in gates} == {wide_id}
-        assert {slot[wide_id][u] for _, u in gates} == {slot[on_id][v]} != {slot[take_id][s]}
-    assert case["count"]["k"] == 16 < 16 * 16
-    # however `On` passes them on, the same sixteen leaves of its row are leaves of its return: through the root, the
-    # same gates. Each of those Definitions has the one row, not closed; none but the first refers to it in its return.
-    from verity.circuits.layout import Scope, resolve_gate
-
-    def returned(m: dict) -> list[list[int]]:
-        """Per unit of `On`, the gates the sixteen leaves of its first output are."""
-        program = ref.reference.desc_program(m["case"]["instance"]["program"])
-        [k] = [k for k, n in enumerate(program.root.body.nodes) if codec.descriptor_id(n.fn) == on_id]
-        fn, root = program.root.body.nodes[k].fn, Scope(program.root, 0, None, 0, 0)
-        return [[resolve_gate(root.child(k, u), fn.body.ret[j])[0] for j in range(16)] for u in range(c.slots)]
-
-    def row(m: dict) -> list[list[int]]:
-        """Per unit of `On`, the gates the sixteen leaves `17 j` of its row are."""
-        program = ref.reference.desc_program(m["case"]["instance"]["program"])
-        [k] = [k for k, n in enumerate(program.root.body.nodes) if codec.descriptor_id(n.fn) == on_id]
-        root = Scope(program.root, 0, None, 0, 0)
-        return [[resolve_gate(root.child(k, u), ("p", 0, 17 * j))[0] for j in range(16)] for u in range(c.slots)]
-
-    def of(m: dict) -> tuple:
-        """`On` as the reference reads it: what it passes on, its closed rows, whether a unit hands a leaf on."""
-        program = ref.reference.desc_program(m["case"]["instance"]["program"])
-        [fn] = [n.fn for n in program.root.body.nodes if codec.descriptor_id(n.fn) == on_id]
-        return sorted(ref.passed_on(fn)), ref.Template(on_id, fn, c.slots).closed, ref.hands_on(program, on_id, "x")
-
-    assert returned(m) == row(m) and of(m) == ([0], [], True)
-    for what, shape in PASSED.items():
-        other = shaped[what]
-        assert returned(other) == row(other) and of(other) == ([0], [], True), what
-        [on_fn] = [fn for fn, _ in other["circuit"].templates if codec.descriptor_id(fn) == on_id]
-        direct = any(space == "p" for space, _, _ in (on_fn.body.ret[j] for j in range(16)))
-        assert direct == ("how" not in shape) and ("gate" in shape) == (not ref.template_gates(on_fn)), what
-    # one leaf passed on through a scan's carry, and fifteen as a scan's outputs: those leaves of the return are the
-    # row's gates, leaf for leaf, and the others are gates of `On`
-    for what, kept in PART.items():
-        some, ret, own = shaped[what], returned(shaped[what]), row(shaped[what])
-        assert of(some) == ([0], [], True), what
-        for u in range(c.slots):
-            assert [j for j in range(16) if ret[u][j] in own[u]] == kept == [j for j in range(16) if ret[u][j] == own[u][j]]
-        [on_fn] = [fn for fn, _ in some["circuit"].templates if codec.descriptor_id(fn) == on_id]
-        [scan] = [n for n in on_fn.body.nodes if n.form == "scan"]
-        assert scan.n == 15 and not any(space == "p" for space, _, _ in (on_fn.body.ret[j] for j in range(16))), what
-    # passed on to an output no wire reads: the leaves of the output the row is wired to are gates of `On`, none of
-    # them the row's, and the row's leaves are leaves of its second output all the same
-    unread = shaped[UNREAD]
-    assert not set(sum(returned(unread), [])) & set(sum(row(unread), [])) and of(unread) == ([0], [], True)
-    [on_fn] = [fn for fn, _ in unread["circuit"].templates if codec.descriptor_id(fn) == on_id]
-    assert [on_fn.body.ret[j] for j in range(16, 32)] == passed and len(ref.fields_of(on_fn.signature()[1])) == 2
-    assert not [w for w in unread["circuit"].wires if (w.writer, w.out) == (on_id, "o1")]
-    # handed to a callee beside gates and none returned: no leaf of the row is a leaf of the return, and the rule,
-    # which reads parts, still counts the row passed on
-    beside, gates = shaped[BESIDE], shaped[GATES]
-    assert not set(sum(returned(beside), [])) & set(sum(row(beside), [])) and of(beside) == ([0], [], False)
-    # the output gates of its own: a closed row, taken, and the 16 fresh bits a block are the one row across slots
-    assert not set(sum(returned(gates), [])) & set(sum(row(gates), [])) and of(gates) == ([], ["x"], False)
-    closed = got[GATES]
-    assert closed["detail"]["complies"] and closed["count"]["complies"]
-    assert closed["detail"]["fresh"] == closed["detail"]["cross_wires"] == 16
-    # an output of two widths into a closed row
-    two = got[TWO_CLOSED]
-    assert two["detail"]["complies"] and two["count"]["complies"] and two["detail"]["cross_wires"] == 0
-    [whole] = [ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in shaped[TWO_CLOSED]["circuit"].templates
-               if codec.descriptor_id(fn) == "WidthsWhole_v1"]
-    assert whole.closed == ["v"] and whole.widths["v"] == (1,) * 32
-    # without the stage the reference refuses none of them, and counts the carried row as the one row across slots
-    monkeypatch.setattr(ref, "leaf_widths", lambda *_: None)
-    off = {what: vectors.results(shaped[what]["case"]) for what in (*wires, *short)}
-    assert not any("error" in r["detail"] for r in off.values())
-    assert all(off[what]["detail"]["complies"] and off[what]["count"]["complies"] for what in short)
-    for what in (CARRIED, *PASSED, *PART, UNREAD, BESIDE):
-        carried = off[what]
-        assert carried["detail"]["complies"] and carried["count"]["complies"], what
-        assert carried["detail"]["fresh"] == carried["detail"]["cross_wires"] == 16, what
+def test_an_edges_writer_output_has_its_rows_leaves():
+    """A wire's leaves were refused (`leaf-widths`) where its writer's leaves straddle the row's, or the row holds
+    bits its writer's output lacks: a leaf the reader passes on would carry part of a writer's gate further. The
+    record's wiring is the Program's edges, and an edge hands a row an output of the row's own type: an edge from an
+    output of two widths into one 32-bit leaf, of 8 bits into a 16-bit leaf, of 31 bits into 32 one-bit leaves, or of
+    a 16-bit leaf into 16 one-bit leaves is no Program's. The Program's builder refuses each as a type error, and the
+    descriptor that states it by its references is refused with the Program (`program`), by the record, its count
+    and its rows rule alike."""
+    for what in LEAVES:
+        *_, stage = vectors.EDGED[what]
+        assert stage == "program", what
+        r = vectors.results(vectors.edged_case(what))
+        assert r["detail"] == r["count"] == r["block_rows"] == {"error": "program"}, what
+    W = vectors.template("LeavesW", [("a", Value(16))], [Value(8)], [[("op", 8, [(0, 0)])]])
+    R = vectors.template("LeavesR", [("v", Value(16))], [Value(16)], [[("op", 16, [(0, 0)])]])
+    with pytest.raises(TypeError):
+        vectors.Edged(1, [("a", Array(2, Value(16)))], Array(2, Value(16)),
+                      lambda B, S, a: B.batch(R, B.batch(W, a, axes=(0,)), axes=(0,)),
+                      [(W, 2, vectors._units(1, 2)), (R, 2, vectors._units(1, 2))]).program()
 
 
 def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
@@ -1148,3 +958,17 @@ def test_a_template_in_two_root_nodes(shaped):
             assert got["detail"] == {"error": "templates"}, what
         else:
             assert got["detail"] == base["detail"] and got["chosen"] == base["chosen"], what
+
+
+def test_a_units_row_may_be_an_earlier_units_output():
+    """The edges (`EDGED`): each toy is taken, or refused at the stage it states, by the record, its count and its
+    rows rule alike; a taken one counts every unit of the circuit in its blocks."""
+    for what, (make, _, _, stage) in vectors.EDGED.items():
+        case = vectors.edged_case(what)
+        r = vectors.results(case)
+        assert r["detail"].get("error") == stage, (what, r["detail"])
+        if stage is None:
+            assert r["detail"]["blocks"] >= 1 and isinstance(r["kinds"], list), what
+            assert "error" not in r["count"] and "error" not in r["block_rows"], what
+        else:
+            assert r["count"] == r["block_rows"] == {"error": stage}, what

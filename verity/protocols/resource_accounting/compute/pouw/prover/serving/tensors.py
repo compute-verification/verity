@@ -1,4 +1,5 @@
-"""The workload's buffers and H1's device half, which the workload that serves the model hands in (`use`, `use_h1`).
+"""The workload's buffers, H1's device half and Pearl-C's device run, which the workload that serves the model hands in
+(`use`, `use_h1`, `use_pearl_c`).
 
 PoUW's serving code names no tensor library: where it reads, writes or allocates one of the workload's buffers it asks
 `tensors()`, an object of the workload's (`Tensors`), and where H1 hashes, keeps its tables or traces a call on the device
@@ -128,8 +129,25 @@ class H1Device(Protocol):
         ...
 
 
+class PearlCDevice(Protocol):
+    """Pearl-C's run on the device, which a served Pearl+ opens (`compute.pouw.scheme.Attached.open`)."""
+
+    PearlCDeviceRun: Callable[..., Any]
+    """One install's run (`PearlCDeviceRun(scheme, entry, kernel, weights, roots, coins, opening, ...)`): its ``gemm``,
+    ``end_pass``, ``finish``, ``commits`` and ``details``."""
+
+    def weight_roots(self, kernel: Any, weights: dict[int, Any], scheme: str) -> dict[int, bytes]:
+        """Each weight's B-row tree root, by its block key, before any salt."""
+        ...
+
+    def step_tokens(self, run: Any, calls: int) -> int:
+        """The most tokens one step's forward can carry in one pass of ``run``."""
+        ...
+
+
 _tensors: Callable[[], Tensors] | None = None
 _h1: Callable[[], H1Device] | None = None
+_pearl_c: Callable[[], PearlCDevice] | None = None
 
 
 def use(provider: Callable[[], Tensors]) -> None:
@@ -142,6 +160,12 @@ def use_h1(provider: Callable[[], H1Device]) -> None:
     """The workload's `H1Device`, as `use` takes `Tensors`."""
     global _h1
     _h1 = provider
+
+
+def use_pearl_c(provider: Callable[[], PearlCDevice]) -> None:
+    """The workload's `PearlCDevice`, as `use` takes `Tensors`."""
+    global _pearl_c
+    _pearl_c = provider
 
 
 def has_tensors() -> bool:
@@ -162,4 +186,12 @@ def h1_device() -> H1Device:
     return _h1()
 
 
-__all__ = ["GOAL", "H1Device", "Tensors", "dtype_name", "h1_device", "has_tensors", "tensors", "use", "use_h1"]
+def pearl_c_device() -> PearlCDevice:
+    if _pearl_c is None:
+        raise NotImplementedError(f"{GOAL}: no Pearl-C device run handed in; the workload that serves the model calls "
+                                  "`tensors.use_pearl_c` first")
+    return _pearl_c()
+
+
+__all__ = ["GOAL", "H1Device", "PearlCDevice", "Tensors", "dtype_name", "h1_device", "has_tensors", "pearl_c_device",
+           "tensors", "use", "use_h1", "use_pearl_c"]

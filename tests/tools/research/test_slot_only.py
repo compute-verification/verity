@@ -154,6 +154,10 @@ def test_a_booked_period_s_end_and_slot_reach_slot_py_and_a_bound_past_the_end_i
     assert S.named_slot(cmd) == (S.pool_slots("gpu"), "g2") and S.node_copy(cmd)[4:] == cmd[4:]
     assert main([*argv, "--end", end, "--timeout", "40m", "--pool-wait", "600", "--", "true"]) == 0
     assert seen[-1]["command"][6:8] == ["--wait-max", "600"], "a shorter --pool-wait stands"
+    assert main([*argv, "--slot", "g2", "--card", "2", "--end", end, "--timeout", "40m", "--timed", "--", "true"]) == 0
+    kw = seen[-1]
+    assert (kw["gpus"], kw["cards"], kw["timed"]) == (1, [2], True), "a booked vLLM point's flags (verity_bench's jobs.booked)"
+    assert kw["command"][-2:] == ["--", "true"] and S.named_slot(kw["command"])[1] == "g2"
 
     plain = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
     assert main([*plain, "--slot", "g2", "--", "true"]) == 2

@@ -308,7 +308,7 @@ def test_an_admission_off_the_list_a_slot_leaf_of_another_width_and_a_round_past
 def test_a_table_of_no_rows_is_cores_empty_tree():
     """`hiding_rows` of no values is `audit.commit_rows` of none: the domain's empty root over a count of 0."""
     got = RQ.hiding_rows(SALT, 5, [], KEY, 9)
-    assert got.commitment == commit_rows(SALT, 5, [], hash=HM96, salt_key=KEY, nonce=9).commitment
+    assert got.commitment == commit_rows(SALT, 5, [], hash=HM96, salts=[]).commitment
     assert got.commitment.count == 0
 
 
@@ -2110,7 +2110,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
                                  f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
     stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
     with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
-        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
+        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
 
 

@@ -422,6 +422,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
+    ms = [replace(m, tables=tuple((p, m.n) for p, _ in m.rows)) if not m.tables and n_of[m.template] != m.n else m for m in ms]
     program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
@@ -711,7 +712,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
-    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.ranges_of(IF.templates_of(window), None))
+    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
