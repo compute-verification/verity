@@ -1230,8 +1230,9 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
         late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
                 for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        said = {n: f", {u}" for n, c in comp.items() if (u := S.declared_unchecked(ACCEPTS.get(c, {}).get("protocol")))}
         assert line["reason"] == "; ".join(
-            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
+            f"{n}: accept{late.get(n, '')}{said.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
