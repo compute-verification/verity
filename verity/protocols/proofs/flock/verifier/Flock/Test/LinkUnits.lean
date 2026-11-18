@@ -67,6 +67,8 @@ def lk (lo hi : Nat) (off : Option Nat) : Circuit :=
 def unit13 (c : Circuit) : String := res (HmLinks.check c (at_ [0, 13]) (some #[1]) plain)
 
 #guard unit13 (lk 0 1 none) == "ok 1"
+-- the reader's own output row may be of another width than its writer's row
+#guard unit13 { lk 0 1 none with ports := #[inP, { outP with words := 64 }] } == "ok 1"
 #guard unit13 (lk 0 1 (some 0)) == "ok 1"
 -- wrong_offset: the program's offset is 0
 #guard (unit13 (lk 0 1 (some 1))).startsWith "links: unit 13's leaves [0, 1) (row x) are not unit 0's outputs [1, 2) of its 2"
