@@ -394,7 +394,7 @@ def offsetSteps (n : Nat) : List (Nat × Int) → Option (List Int)
     if s == 0 then some rest
     else if r == 0 || r > n then none
     else
-      let os := ((List.range r).flatMap fun d => rest.map fun a => (d : Int) * s + a).foldl (fun t x => t.insert x) []
+      let os := ((List.range r).flatMap fun (d : Nat) => rest.map fun a => (d : Int) * s + a).foldl (fun t x => t.insert x) []
       if os.length > n then none else some os
 
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
