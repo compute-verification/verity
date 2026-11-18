@@ -134,7 +134,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 import served_case as SC
 
-POUS = table.get("pous")
+POUS, BANDWIDTH = table.get("pous"), table.get("bandwidth")
 ROOT = Path(__file__).resolve().parents[2]
 #: the manifests a served model's pin is read from, the first that names it at its revision
 PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
@@ -445,7 +445,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         try:
             held = ex.attach(POUS, {"challenges": rounds}, salt_source=_salt_source(party, bind), p2_lib=p2_lib,
                              experimental=True)
-            bw = None if bw_party is None else ex.attach(table.get("bandwidth"))
+            bw = None if bw_party is None else ex.attach(BANDWIDTH)
             ex.answer(H.Declared(bw_card or str(dev), {"eager": True}, tuple(ex.attached),
                                  {n: dict(v) for n, v in ex.attached.items()}))
             ex.emit(H.RegisteredValues(tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
