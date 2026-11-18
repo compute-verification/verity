@@ -185,10 +185,9 @@ class Exchange:
 
 def attester() -> schemes.Scheme:
     """The network attester's scheme, by its declaration's name, from the one table of schemes."""
-    from verity.protocols.compose.schemes import load
+    from verity.protocols.compose import schemes as table
     from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
-    load()
-    return schemes.get(NETWORK_ATTESTER.name)
+    return table.get(NETWORK_ATTESTER.name)
 
 
 _CURRENT: Exchange | None = None
