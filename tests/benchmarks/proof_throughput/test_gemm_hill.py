@@ -11,8 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-POD = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod"
-sys.path.insert(0, str(POD))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "proof_throughput"))
 import gemm_hill as GH  # noqa: E402
 import gemm_slowdown as GS  # noqa: E402
 
