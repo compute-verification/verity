@@ -218,43 +218,56 @@ def _gpu_cards(directory: Path) -> list[dict]:
     return [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
 
 
-def _holding(name: str, directory: Path) -> list[dict]:
-    return [c for c in _gpu_cards(directory) if name and name in {d["value"] for d in c.get("driver", ())}]
+def card_record(name: str, *, directory: Path | None = None) -> dict:
+    """The card record in ``directory`` (`cards_directory` by default) whose ``driver`` has ``name``, the name nvidia-smi
+    gives the card (a stamp's `card`), exactly (`verity.device.gpu_card_reporting`); refused, naming what to add, unless
+    exactly one record holds it and has a ``short``, the card's name in a measurement's member."""
+
+    from verity.device import gpu_card_reporting
+
+    directory = directory or cards_directory()
+    try:
+        card = gpu_card_reporting(name, directory=directory)
+    except KeyError as e:
+        raise SystemExit(f"{e.args[0]}, and give it a `short`, the card's name in a measurement's member") from None
+    if not card.get("short"):
+        raise SystemExit(f"card record {card['sku']!r} under {directory} has {name!r} in `driver` and no `short`: give it "
+                         "one, the card's name in a measurement's member")
+    return card
 
 
 def card_short(name: str, *, directory: Path | None = None) -> str:
-    """The ``short`` of the card record in ``directory`` (`cards_directory` by default) whose ``driver`` has ``name``, the
-    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
-    holds it and has a ``short``, the card's name in a measurement's member."""
-
-    return _card_named(name, directory or cards_directory())["short"]
+    """The ``short`` of `card_record`'s record for ``name``."""
+    return card_record(name, directory=directory)["short"]
 
 
-def _card_named(name: str, directory: Path) -> dict:
-    found = _holding(name, directory)
-    if len(found) != 1 or not found[0].get("short"):
-        raise SystemExit(
-            f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
-            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
-            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]
+def card_named_short(short: str, *, directory: Path | None = None) -> dict:
+    """The GPU card record in ``directory`` (`cards_directory` by default) whose ``short`` is ``short``, a member's card
+    part as a record stored it; refused, naming the shorts there are, unless exactly one has it."""
+    directory = directory or cards_directory()
+    cards = _gpu_cards(directory)
+    held = [c for c in cards if c.get("short") == short]
+    if len(held) != 1:
+        raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
+                         f"{sorted(c['short'] for c in cards if c.get('short'))}")
+    return held[0]
 
 
 def card_sku(name: str, *, directory: Path | None = None) -> str:
-    """The ``sku`` of the card record `card_short` finds for ``name``: its file's name in ``directory``."""
-    return _card_named(name, directory or cards_directory())["sku"]
+    """The ``sku`` of `card_record`'s record for ``name``: its file's name in ``directory``."""
+    return card_record(name, directory=directory)["sku"]
 
 
 def card_arch(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
-    """The ``arch`` of the card record `card_short` finds for ``name``, or, for a build on a machine with no card, of the
-    record ``sku`` (its file's name in ``directory``): the target (``sm_90a``) machine code is built for."""
+    """The ``arch`` of `card_record`'s record for ``name``, or, for a build on a machine with no card, of the record
+    ``sku`` (its file's name in ``directory``): the target (``sm_90a``) machine code is built for."""
     from verity.device import load_card
 
-    directory = directory or cards_directory()
     if (name is None) == (sku is None):
         raise TypeError("card_arch takes the name nvidia-smi gives a card or a card file's sku, one of them")
     if sku is None:
-        return _card_named(name, directory)["arch"]
+        return card_record(name, directory=directory)["arch"]
+    directory = directory or cards_directory()
     try:
         card = load_card(sku, directory=directory)
     except KeyError as e:
@@ -389,6 +402,16 @@ def toolkit(version: str) -> str:
     return at[0]
 
 
+def machine_toolkit() -> str:
+    """The directory of the CUDA toolkit the run's machine's properties (`machine_properties()`) list first, its
+    default; refused by name where they list none or it is unread."""
+    found = machine_properties()["toolkit"]["value"]
+    name = settings.RESEARCH_MACHINE
+    if found in ("unread", "none"):
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit {found}: set CUDA_HOME")
+    return found["directory"]
+
+
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
     from verity.device import load_architecture, load_card, number
 
@@ -407,8 +430,16 @@ def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
-    directory = directory or cards_directory()
-    return all(len(found := _holding(name, directory)) == 1 and found[0].get("short") == short for name in card.split(", "))
+    """Whether every card a stamp's `card` names (``, ``-joined) is one record's whose ``short`` is ``short``; a name
+    no single record holds, or one without a ``short``, is not."""
+
+    def held(name: str) -> bool:
+        try:
+            return card_record(name, directory=directory)["short"] == short
+        except SystemExit:
+            return False
+
+    return all(held(name) for name in card.split(", "))
 
 
 def wrong_card(workload: str, short: str, card: str, *, directory: Path | None = None) -> str | None:

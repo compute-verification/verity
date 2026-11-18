@@ -132,6 +132,14 @@ def test_the_toolkit_is_the_runs_machines_at_the_version_asked_not_the_first_lis
         "/usr/local/cuda-13.0", "/usr/local/cuda-13.3", "/usr/local/cuda-12.9"]
 
 
+def test_the_machines_toolkit_is_the_one_its_properties_list_first_and_none_is_refused(tmp_path, monkeypatch):
+    run = _run(tmp_path, monkeypatch, "one-card")
+    assert kit.machine_toolkit() == "/usr/local/cuda-13.0"
+    _toolkits(run, '"none"')
+    with pytest.raises(SystemExit, match=r"^machine 'one-card': its \[properties\] have toolkit none: set CUDA_HOME"):
+        kit.machine_toolkit()
+
+
 def test_cuda_home_where_given_wins_with_no_machine(monkeypatch):
     monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
     monkeypatch.setenv("CUDA_HOME", "/opt/cuda-13.3")
@@ -211,7 +219,7 @@ def test_with_no_card_the_sku_names_the_card_file_and_ends_in_the_same_architect
 
 
 def test_a_card_no_record_holds_is_refused_by_name():
-    with pytest.raises(SystemExit, match=r"^0 card records under .* have 'NVIDIA A100-SXM4-80GB'"):
+    with pytest.raises(SystemExit, match=r"^0 GPU card files under .* have 'NVIDIA A100-SXM4-80GB'"):
         kit.card_arch("NVIDIA A100-SXM4-80GB")
 
 

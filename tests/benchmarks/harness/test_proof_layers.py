@@ -240,8 +240,8 @@ def test_a_card_name_no_record_holds_writes_no_measurement_and_says_why(tmp_path
     sampling = PL.read("sampling", str(out))
     assert sampling.serves is None
     assert PL.measured([PL.read("flock", None), PL.read("zk", None), sampling], IDS) == []
-    assert "- with sampling: no member, so no measurement: 0 card records under " in PL.render([sampling])
-    assert "have 'NVIDIA H300', the card nvidia-smi names here" in PL.render([sampling])
+    assert "- with sampling: no member, so no measurement: 0 GPU card files under " in PL.render([sampling])
+    assert "have 'NVIDIA H300', the name the device reports" in PL.render([sampling])
 
 
 def test_the_layers_write_nothing_unless_their_outputs_state_one_model_and_card(tmp_path):

@@ -149,7 +149,8 @@ def test_the_setup_is_part_of_every_points_identity(tmp_path):
 
 #: a stand-in for verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
 #: which resets the sourcing shell's arguments, and exits where it can't
-TOOLKIT = """for c in "$FLOCK_WORK/cuda-root"; do
+TOOLKIT = """[ -e "$FLOCK_WORK/own-toolkit" ] && return 0
+for c in "$FLOCK_WORK/cuda-root"; do
   [ -z "${CUDA_TK:-}" ] && [ -x "$c/bin/nvcc" ] && export CUDA_TK=$c
 done
 if [ -z "${CUDA_TK:-}" ]; then
@@ -241,10 +242,19 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert len((work / "uv-ran.txt").read_text().splitlines()) == 2, "a later point finds the Python the first made"
 
 
-def test_the_setups_default_work_directory_is_the_harnesss_own_under_the_nodes_jobs():
+def test_the_setups_default_work_directory_is_the_harnesss_own_under_the_users_cache_and_names_no_nodes():
     setup = (ROOT / SETUP).read_text()
-    assert "export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/verity-bench-steady}\n" in setup
+    assert "export FLOCK_WORK=${FLOCK_WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/verity-bench-steady}\n" in setup
     assert "VERITY_BENCH_STEADY_SCRATCH=$FLOCK_WORK/scratch" in setup and "/dev/shm" not in setup
+    assert "/workspace" not in setup and "/usr/local" not in setup
+
+
+def test_a_nodes_own_toolkit_its_record_does_not_list_is_refused_naming_the_record(tmp_path):
+    launcher = Launcher(tmp_path)
+    launcher.work.mkdir()
+    (launcher.work / "own-toolkit").touch()
+    ran = launcher()
+    assert ran.returncode == 4 and "its own CUDA 13.3, which the run's machine's [properties] don't list" in ran.stderr
 
 
 def test_the_setup_removes_only_the_scratch_a_killed_point_left_long_ago(tmp_path):
