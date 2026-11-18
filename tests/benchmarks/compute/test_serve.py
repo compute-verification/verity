@@ -1,7 +1,8 @@
 """`serve.sh`'s refusal of a run directory that already holds a record, before it touches the machine or writes a file:
 a share read after a failed run would otherwise be an earlier run's number. And its serve's card under a caller's
 gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant, and the card compute-run.json names.
-And the Lean verdict's limit, which grows as the cores fall."""
+And the Lean verdict's limit, which grows as the cores fall. And the two verifiers, the Lean's beside the Python's on
+its coin record and arguments unless LEAN_CONCURRENT is empty, either one's failure failing the run."""
 from __future__ import annotations
 
 import json
@@ -163,17 +164,97 @@ def test_with_in_process_coins_the_row_is_asked_under_no_key_pin_or_lane(tmp_pat
 
 
 def steps() -> list[str]:
-    """serve.sh's step names in the order its lines run them."""
-    return re.findall(r"^\s*(?:\[ [^]]* \] \|\| )?step ([a-z-]+) ", SERVE.read_text(), re.M)
+    """serve.sh's step names in the order its lines run them, verifiers()'s where it is called."""
+    text = SERVE.read_text()
+    body = re.search(r"^verifiers\(\) \{.*?^\}$", text, re.M | re.S)
+    assert body and len(re.findall(r'^\s*verifiers "\$LX"$', text, re.M)) == 1, \
+        "serve.sh's verifiers() or its one call moved: this test reads them"
+    text = re.sub(r'^\s*verifiers "\$LX"$', lambda _: body[0], text.replace(body[0], ""), flags=re.M)
+    return re.findall(r"^\s*(?:\[ [^]]* \] \|\| )?step ([a-z-]+) ", text, re.M)
 
 
 def test_the_circuit_record_and_the_period_come_before_the_serve_and_its_close_before_the_sample():
     got = steps()
-    for name in ("serve-phi", "circuit", "period-open", "serve", "retain", "period-close", "python-verify", "verdicts"):
+    for name in ("serve-phi", "circuit", "period-open", "serve", "retain", "lean-build", "period-close", "python-verify",
+                 "lean-launch", "verdicts"):
         assert got.count(name) == 1, (name, got)
     at = got.index
     assert at("serve-phi") < at("circuit") < at("gate") < at("period-open") < at("serve") < at("retain") \
-        < at("period-close") < at("python-verify") < at("verdicts")
+        < at("lean-build") < at("period-close") < at("python-verify") < at("lean-launch") < at("verdicts")
+
+
+#: a `$PY` that writes each call's arguments to CALLS and answers as each verifier would: verify writes the coin record
+#: and verify.json (neither under NO_COIN), lean --launch its run's document
+PY_STUB = """#!/bin/sh
+echo "$*" >> "$CALLS"
+shift
+case "$1" in
+  verify) [ -n "$NO_COIN" ] || { echo '{}' > "$P/coin.json"; echo '{}' > "$PIECE/verify.json"; }; exit "${VERIFY_RC:-0}" ;;
+  lean) case " $* " in *" --launch "*) echo '{}' > "$PIECE/lean-launch.json"; exit "${LAUNCH_RC:-0}" ;; esac
+    exit "${LEAN_RC:-0}" ;;
+esac
+"""
+
+
+def verifiers(tmp_path, concurrent: str = "1", **env) -> tuple[list[list[str]], list[str], str]:
+    """serve.sh's step() and verifiers() run alone under its `set -euo pipefail`, `$PY` `PY_STUB`: each call's arguments
+    after the script's, steps.txt's lines up to each status, and `failed`."""
+    text = SERVE.read_text()
+    fns = [re.search(rf"^{name}\(\) \{{.*?^\}}$", text, re.M | re.S) for name in ("step", "verifiers")]
+    assert all(fns), "serve.sh's step() or verifiers() moved: this test reads them"
+    py, out, p = tmp_path / "py", tmp_path / "out", tmp_path / "passes"
+    py.write_text(PY_STUB)
+    py.chmod(0o755)
+    for d in (out / "logs", out / "pieces" / "pouw", p):
+        d.mkdir(parents=True)
+    script = ("set -euo pipefail\ndeclare -A LONG=()\nfailed=0\n" + "\n".join(f[0] for f in fns)
+              + '\nverifiers /exe/pouw-pearlplus\necho "$failed"\n')
+    keep = {k: v for k, v in os.environ.items() if k not in ("NO_COIN", "VERIFY_RC", "LAUNCH_RC", "LEAN_RC")}
+    got = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True, env={
+        **keep, "PY": str(py), "SP": "sp.py", "P": str(p), "WR": "/w/window-record.json", "CLASS": "4,32,4",
+        "OUT": str(out), "PIECE": str(out / "pieces" / "pouw"), "DRAWS": "459", "DELTA": "1/100", "JOBS": "32",
+        "FAST": "1", "LEAN_TIMEOUT": "10800", "LEAN_CONCURRENT": concurrent, "CALLS": str(tmp_path / "calls"), **env})
+    calls = [x.split()[1:] for x in (tmp_path / "calls").read_text().splitlines()]
+    return calls, [x.split("s:")[0].rsplit(" ", 1)[0] for x in (out / "steps.txt").read_text().splitlines()], \
+        got.stdout.splitlines()[-1]
+
+
+def test_the_lean_verifier_runs_beside_the_pythons_on_its_coin_record_and_arguments(tmp_path):
+    calls, done, failed = verifiers(tmp_path)
+    piece, p = tmp_path / "out" / "pieces" / "pouw", str(tmp_path / "passes")
+    assert calls[0] == ["verify", "--passes", p, "--tie", "/w/window-record.json", "--class", "4,32,4", "--out",
+                        f"{piece}/verify.json", "--answer", f"{piece}/pearlplus-answer.json", "--draws", "459",
+                        "--delta", "1/100", "--jobs", "32", "--fast", "--concurrent"]
+    assert calls[1] == ["lean", "--launch", f"{piece}/lean-launch.json", "--passes", p, "--exe", "/exe/pouw-pearlplus",
+                        "--draws", "459", "--tie", "/w/window-record.json", "--class", "4,32,4", "--timeout", "10800"]
+    assert calls[2] == ["lean", "--passes", p, "--verify", f"{piece}/verify.json", "--exe", "/exe/pouw-pearlplus",
+                        "--out", f"{piece}/pearlplus-lean.json", "--printout", f"{piece}/lean-launch.json"]
+    assert len(calls) == 3 and sorted(done[:2]) == ["lean-launch rc=0", "python-verify rc=0"]
+    assert done[2:] == ["lean rc=0"] and failed == "0"
+
+
+def test_with_lean_concurrent_empty_the_lean_verifier_runs_after_the_pythons_as_before(tmp_path):
+    calls, done, failed = verifiers(tmp_path, concurrent="")
+    piece, p = tmp_path / "out" / "pieces" / "pouw", str(tmp_path / "passes")
+    assert calls[0][-1] == "--fast" and calls[1:] == [
+        ["lean", "--passes", p, "--verify", f"{piece}/verify.json", "--exe", "/exe/pouw-pearlplus", "--out",
+         f"{piece}/pearlplus-lean.json", "--timeout", "10800"]]
+    assert done == ["python-verify rc=0", "lean rc=0"] and failed == "0"
+
+
+@pytest.mark.parametrize(("concurrent", "env", "step"), [
+    ("1", {"VERIFY_RC": "1"}, "python-verify rc=1"), ("1", {"LAUNCH_RC": "2"}, "lean-launch rc=2"),
+    ("1", {"LEAN_RC": "1"}, "lean rc=1"), ("", {"VERIFY_RC": "1"}, "python-verify rc=1"),
+    ("", {"LEAN_RC": "1"}, "lean rc=1")])
+def test_a_failure_of_either_verifier_fails_the_run_and_is_a_line_of_steps(tmp_path, concurrent, env, step):
+    calls, done, failed = verifiers(tmp_path, concurrent=concurrent, **env)
+    assert step in done and failed == "1" and calls[-1][0] == "lean"
+
+
+def test_with_no_coin_record_no_lean_verifier_is_launched_and_the_run_fails(tmp_path):
+    calls, done, failed = verifiers(tmp_path, NO_COIN="1", VERIFY_RC="2")
+    assert [c[0] for c in calls] == ["verify"] and done == ["python-verify rc=2"] and failed == "1"
+    assert not (tmp_path / "out" / "pieces" / "pouw" / "lean-launch.json").exists()
 
 
 def period(tmp_path, verb: str) -> tuple[list[str], Path]:

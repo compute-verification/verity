@@ -25,7 +25,10 @@
 #   7. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
 #      fixed load, a sample of DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   8. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
-#      written only where it is the Python's;
+#      written only where it is the Python's. Under LEAN_CONCURRENT (default on) the Lean verifier runs beside the
+#      Python's on the same cores: lean-build builds pouw-pearlplus before step 6, lean-launch (`served_passes.py lean
+#      --launch`) runs it once python-verify wrote its coin record, on the arguments python-verify got, and once both
+#      ended lean (`--printout`) holds that run to verify.json, refusing a command line other than the one it gives;
 #   9. publish and piece: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in no store) and PoUW's
 #      development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
 #  10. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
@@ -44,7 +47,8 @@
 # the salt coin the in-process challenger's and the sample the node's own (`verify_run.node_draw`), the Lean's verdict
 # a development one. Both are development parameters, which $OUT/compute-run.json and the COINS line say.
 # Writes under OUT, RUN_DIR/out: pieces/pouw/pearlplus-answer.json,
-# pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
+# pearlplus-lean.json, pearlplus-lean-check.json (and lean-launch.json under LEAN_CONCURRENT), verify.json, served.json
+# and coin.json; inference-only-policy.json;
 # record/circuit-record.json, record/window-record.json and record/verdicts.json; registered/; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
 # path's window record W stands in its place. The passes stay outside OUT, as they hold the run's activations
@@ -54,20 +58,23 @@
 # pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search under WORK), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30), LEAN_TIMEOUT (the seconds
-# the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer). The load is
+# the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer), LEAN_CONCURRENT (1; empty: the Lean
+# verifier after the Python's). The load is
 # benchmarks/compute/load.toml's, which run.py holds the record to. Before it writes anything it exits 3 on a RUN_DIR
 # already holding a record, a missing lake, or a GPU that isn't an idle H100 or H200, and after the bootstrap, before
 # the cubin, on a missing verity_torch. A failed step exits 1 with a sentence naming it (compute-run.json written from
 # the cubin on), and run.py isn't run on what it left. Exit 0 only where Python and Lean both accept and run.py prints
 # the share.
 set -euo pipefail
-# the one path under verity/ this names, which a layout move may change
+# the two paths under verity/ this names, which a layout move may change
 AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
+LEAN=verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
+LEAN_CONCURRENT=${LEAN_CONCURRENT-1}
 # the Lean verdict runs on every core it may, so its limit grows as the cores fall
 CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
@@ -111,7 +118,8 @@ step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
   return "$rc"
 }
 #: the steps whose start is printed, as each takes minutes
-declare -A LONG=([bootstrap]=1 [cubin]=1 [circuit]=1 [gate]=1 [serve]=1 [period-close]=1 [python-verify]=1 [lean]=1 [policy]=1)
+declare -A LONG=([bootstrap]=1 [cubin]=1 [circuit]=1 [gate]=1 [serve]=1 [period-close]=1 [lean-build]=1 [python-verify]=1 [lean-launch]=1
+  [lean]=1 [policy]=1)
 # the pinned-vLLM venv env.sh finds, else pod_bootstrap.sh installs it under WORK, where env.sh then finds it
 if venv=$(. benchmarks/harness/env.sh > /dev/null 2>&1 && echo "$VENV"); then
   echo "bootstrap: skipped, as $venv is there"
@@ -268,6 +276,29 @@ registered() {  # what training reads the run registered: the circuit record and
       "$WR" > "$OUT/registered/log.jsonl" \
     && echo "registered: circuit.json and log.jsonl (W alone); no program.json: the tied path writes no Program"
 }
+lean_build() (
+  cd "$LEAN" && lake build pouw-pearlplus
+)
+verifiers() {  # EXE: Pearl+'s verdict in Python and in Lean, the Lean verifier beside the Python's under LEAN_CONCURRENT
+  local v l='' lean=(--timeout "$LEAN_TIMEOUT")
+  step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
+    --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} \
+    ${LEAN_CONCURRENT:+--concurrent} || exit $? &
+  v=$!
+  if [ -n "$LEAN_CONCURRENT" ]; then
+    # the coin record leaves the passes the moment verify samples it, before its replay: a Lean verifier started
+    # before it would write a record of its own on the node's sample
+    while [ ! -s "$P/coin.json" ] && kill -0 "$v" 2> /dev/null; do sleep 1; done
+    [ ! -s "$P/coin.json" ] || step lean-launch "$PY" "$SP" lean --launch "$PIECE/lean-launch.json" --passes "$P" \
+      --exe "$1" --draws "$DRAWS" --tie "$WR" --class "$CLASS" --timeout "$LEAN_TIMEOUT" || exit $? &
+    l=$!
+    lean=(--printout "$PIECE/lean-launch.json")
+  fi
+  wait "$v" || failed=1
+  [ -z "$l" ] || wait "$l" || failed=1
+  [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" --exe "$1" \
+    --out "$PIECE/pearlplus-lean.json" "${lean[@]}" || failed=1
+}
 cleanup() {
   gate_down
   [ -n "${PASSES:-}" ] || rm -rf "$W"
@@ -319,11 +350,12 @@ if [ "$failed" = 0 ]; then
     echo "serve.sh: the verdict needs a give-up before its coin, and this runs none" >&2; fail volunteer-needed; }
   step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || fail retain
   cp "$WR" "$REC/window-record.json"
+  LX=${PEARLPLUS_LEAN_EXE:-build}
+  [ -z "$LEAN_CONCURRENT" ] || [ "$LX" != build ] || {
+    step lean-build lean_build || fail lean-build
+    LX=$TREE/$LEAN/.lake/build/bin/pouw-pearlplus; }
   [ "$COINS" != local ] || step period-close period close || fail period-close
-  step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
-    --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
-  [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
-    --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "$LEAN_TIMEOUT" || failed=1
+  verifiers "$LX"
   if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1
   else echo "serve.sh: the python-verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
 fi
