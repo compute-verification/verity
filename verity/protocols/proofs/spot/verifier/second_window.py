@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 
 #: how a rank's registered names are its own (`Spot.Ranks.PREFIX`)
@@ -592,15 +593,38 @@ def session_failures(g: Given, ranks: Sequence[tuple[str, Mapping[str, int], int
     return out + SS.table_rows_failures(own, statements)
 
 
+DOCKET_WHY = ("a rank's docket is not its rank's registration in the log: its digest is not logged before the period's "
+              "challenge, or its window names a circuit other than its served record's bytes or a run other than "
+              "<root>/rank<r>")
+
+
+def docket_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], dockets: Sequence[Any],
+                    served: Sequence[tuple[str, str]], root: str, logged: Callable[[str], bool]) -> list[tuple[str, Any]]:
+    """`Spot.SecondWindow.docketFailures`: ``ranks-docket``."""
+    def ok(r: int) -> bool:
+        d = dockets[r]
+        w = d.get("window") if isinstance(d, Mapping) else None
+        if not isinstance(w, Mapping):
+            return False
+        try:
+            h = DD.digest(d)
+        except (TypeError, ValueError):
+            return False
+        return logged(h) and _same(w.get("circuit"), served[r][1]) and _same(w.get("run"), f"{root}/rank{r}")
+    good = len(dockets) == len(ranks) == len(served) and all(ok(r) for r in range(len(ranks)))
+    return [] if good else [("ranks-docket", DOCKET_WHY)]
+
+
 def failures(g: Given, record: Mapping[str, Any], records: Sequence[Mapping[str, Any]],
              served: Sequence[tuple[str, str]], registrations: Sequence[Mapping[str, Any]], root: str,
              logged: Callable[[str], bool], sample: Sequence[tuple[str, int]],
              statements: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled proof block is in no rank
-    member, else ``ranks-wire-tree`` and the per-session failures."""
+    """`Spot.SecondWindow.failures`: the ranks' failures, ``ranks-docket``, then ``ranks-members`` where a sampled proof
+    block is in no rank member, else ``ranks-wire-tree`` and the per-session failures."""
     found = rank_failures(record, records, served, registrations, root, logged)
     ranks = ranks_of(record.get("ranks"))
     if ranks is not None:
+        found += docket_failures(ranks, g.dockets, served, root, logged)
         ms = parts_of(ranks, registrations, sample)
         found += [("ranks-members", PARTS_WHY)] if ms is None else (
             wire_tree_failures(ranks, record, ms) + session_failures(g, ranks, registrations, record, ms, sample,

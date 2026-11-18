@@ -20,6 +20,9 @@
   and `second-verified`, read against the rank member in place of an interior part, with the window-domain binding at
   the rank's program, partition digest and run (`portBinding`); and `ranks-wire-tree`: the writer rows a sampled reader
   member reads through a port lie in one rank's window, so its session reads the port from one committed tree.
+* **Each rank's docket is its registration** (`ranks-docket`, `docketFailures`): the docket record round 2 reads a rank's
+  roots from is in the log before the period's challenge by its digest, and names its rank's served record's bytes and
+  run, so every root a session opens against is one its rank registered.
 
 * **A member's session** (`ownFor`) is `Spot.SecondStage`'s part of one block: the member's units in its rank's
   window, the interior its rank's docket record (`Given.dockets`). Each port it reads through a wire reads through the
@@ -34,6 +37,7 @@ No guarantee reads this module.
 -/
 module
 
+public import Flock.WindowRecord
 public import Spot.Ranks
 public import Spot.SecondStage
 public import Spot.SecondStagePass
@@ -474,18 +478,38 @@ end Example
   codes [stmt "A"] == ["second-read"] && codes [] == ["second-cover"] && codes [stmt "B"] == ["second-order"] &&
     codes [stmt "A", stmt "A"] == ["second-read", "second-order"]
 
+def DOCKET_WHY : String :=
+  "a rank's docket is not its rank's registration in the log: its digest is not logged before the period's " ++
+  "challenge, or its window names a circuit other than its served record's bytes or a run other than <root>/rank<r>"
+
+/-- `ranks-docket`: each rank `r`'s docket `dockets[r]` is in the log before the period's challenge by its digest
+(`Flock.WindowRecord.digestHex`), and its `window` names the digest of rank `r`'s served record's bytes (`circuit`)
+and the run `<root>/rank<r>`. -/
+def docketFailures (rs : Spot.Ranks.Ranks) (dockets : Array Json) (served : Array (String × String)) (root : String)
+    (logged : String → Bool) : List (String × Json) :=
+  let ok := dockets.size == rs.of.size && served.size == rs.of.size && (List.range rs.of.size).all fun r =>
+    let d := dockets.getD r .null
+    match getD d "window", (Flock.WindowRecord.digestHex d).toOption, served[r]? with
+    | w@(.obj _), some h, some s =>
+      logged h && jeq (getD w "circuit") (.str s.2) && jeq (getD w "run") (.str (root ++ "/rank" ++ toString r))
+    | _, _, _ => false
+  if ok then [] else [("ranks-docket", Json.str DOCKET_WHY)]
+
 def PARTS_WHY : String := "a sampled proof block is in no rank member"
 
 /-- Every failure of statements `stmts` over the joined record `rec` and what round 2 holds beside it `g`, its ranks'
 records `records`, served records `served` and registrations `regs` at the serve's root `root`, `logged` whether a
-registration is in the log before the period's challenge, and the sampled proof blocks `sample`. -/
+registration is in the log before the period's challenge, and the sampled proof blocks `sample`: the ranks', then
+`ranks-docket`, then the members' and sessions'. -/
 def failures (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : List (String × Json) :=
   let ranks := Spot.Ranks.failures rec records served regs root logged
   match Spot.Ranks.Ranks.ofJson? (getD rec "ranks") with
   | none => ranks
-  | some rs => match partsOf? rs regs sample with
+  | some rs =>
+    let ranks := ranks ++ docketFailures rs g.dockets served root logged
+    match partsOf? rs regs sample with
     | none => ranks ++ [("ranks-members", Json.str PARTS_WHY)]
     | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures g rs regs rec ms sample stmts
 
