@@ -5,6 +5,9 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
 public import Proofs.Flock.Soundness.Discharge.Recursion.Flock
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.Binding.Leaf
 import Proofs.Flock.Soundness.Game
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -24,6 +27,36 @@ import Mathlib.Tactic.ReduceModChar
 /-! # What V*'s bridge obligation reads of `Recursive.Registrants`, without its recursion imports. -/
 
 @[expose] public section
+
+namespace FlockSoundness.Registered
+
+open Game Refine Binding Audit
+
+section Clash
+
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+  {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
+  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
+  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
+  {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
+  {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
+  {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
+
+/-- **Two registrant records clash**: at registered reads `p` of `rd` and `p'` of `rd'`, the openings
+(`TwoOpenings.pair`, under `p`'s root and position) or the hm96 leaves over the two commit strings' encodings
+(`hm96Pair` of `rs.enc p` and `rs'.enc p'`) are a SHA-512 collision. It asks nothing of the two reads' roots or
+positions, so it covers a collision however an obligation keys them (one `Registered.Port`, or one registration). -/
+def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
+  ∃ p p', rd.isRead p ∧ rd'.isRead p' ∧
+    (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
+      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
+
+end Clash
+
+end FlockSoundness.Registered
 
 namespace FlockSoundness.Discharge.Recursion
 

@@ -66,15 +66,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg :
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- **Two registrant records clash**: at registered reads `p` of `rd` and `p'` of `rd'`, the openings
-(`TwoOpenings.pair`, under `p`'s root and position) or the hm96 leaves over the two commit strings' encodings
-(`hm96Pair` of `rs.enc p` and `rs'.enc p'`) are a SHA-512 collision. It asks nothing of the two reads' roots or
-positions, so it covers a collision however an obligation keys them (one `Registered.Port`, or one registration). -/
-def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
-  ∃ p p', rd.isRead p ∧ rd'.isRead p' ∧
-    (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
-      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
-
 /-- **Two registrant records' candidates**: at each two positions `p` of `rd` and `p'` of `rd'`, in the order of the
 lists `ps` and `ps'`, the openings' pair (`TwoOpenings.pair`, under `p`'s root and position) and the hm96 leaves' pair
 (`hm96Pair`), each with the test that both are registered reads and the pair collides. -/
