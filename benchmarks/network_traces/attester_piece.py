@@ -553,7 +553,7 @@ def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
         raise NotRun(f"{len(runs)} network attester runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
-                        "load goes through the network certifier only with CERTIFIER_FRONT")
+                        "load goes through the network attester only with CERTIFIER_FRONT")
     return runs[0]
 
 
@@ -666,7 +666,7 @@ def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
         c = by.get(r.get("user"))
         if c is None:
             raise Rejected(f"window request {r.get('engine_id')}'s user {r.get('user')!r} is no certified request: "
-                           "the window served traffic the network certifier didn't see")
+                           "the window served traffic the network attester didn't see")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
                 raise Rejected(f"window request {r.get('engine_id')}'s {key} aren't the certified {theirs}")

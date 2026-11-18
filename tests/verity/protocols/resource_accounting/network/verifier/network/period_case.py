@@ -1332,7 +1332,7 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
             and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
-        raise Finding(REJECT, f"{what}: certificates (none of a window in which the network certifier refused a "
+        raise Finding(REJECT, f"{what}: certificates (none of a window in which the network attester refused a "
                               f"connection){_unlisted(p, w, [c.key_id for c in x.certificates])}")
     if len(x.registrations) != 2:
         raise Finding(REJECT, f"{what}: registrations")

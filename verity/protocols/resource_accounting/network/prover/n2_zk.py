@@ -605,7 +605,7 @@ def prove(a) -> int:
                   "verifier (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     summary["warden_run"] = members["honest"].plan["warden_run"]
-    summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
+    summary["warden"] = {"syncs": "none: the network attester runs no shaper clock, so a window declares no sync and the link's "
                                   "charge is 0",
                          "counts": "the network certifier's schedule's (service.NetworkAttesterProfile), not a profile's"}
     members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}

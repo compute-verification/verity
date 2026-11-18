@@ -458,7 +458,7 @@ def markdown(results: list[dict[str, Any]]) -> str:
                        f"{fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['p99'])} / {fmt(t['max'])} | {fmt(w['tok_per_s_base'], 0)} -> "
                        f"{fmt(w['tok_per_s_cf'], 0)} | {fmt(w['tok_per_s_change_pct'], 2)}% |")
     out += ["", ("| trace | TTFT from the engine's add, base p50 / p95 / max (ms) | frontend not ready at the boundary "
-            "| held behind an earlier release (hold) | first token to the network certifier's first egress cell, min base -> hold "
+            "| held behind an earlier release (hold) | first token to the network attester's first egress cell, min base -> hold "
             "-> aligned (ms) |"), "|---|---|---|---|---|"]
     for r in results:
         b, h, al = r["base"], r["variants"]["hold"], r["variants"]["aligned"]

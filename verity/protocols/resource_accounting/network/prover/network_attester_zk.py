@@ -355,11 +355,11 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = RND.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network certifier's "
+    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network attester's "
                                       f"egress execution phase {at.window} (network_attester_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network attester's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
     rec = DK.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))

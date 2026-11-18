@@ -698,7 +698,7 @@ def egress_base(network_attester) -> str:
         return "release a (the ingress end): egress cell i at a + D + i/r"
     if "before s + D" in doc:
         return "admission s: egress cell i at s + D + i/r"
-    return "unknown (the network certifier's docstring names neither a + D nor s + D)"
+    return "unknown (the network attester's docstring names neither a + D nor s + D)"
 
 
 def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
@@ -857,7 +857,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                      "warden/deployment.json)"}
             if tick:
                 meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": dep["origin_unix"], "run": dep["run_id"],
-                                "where": f"the network certifier ({NETWORK_ATTESTER_WHERE}; network_attester_serve.py serve --watermark)"}
+                                "where": f"the network attester ({NETWORK_ATTESTER_WHERE}; network_attester_serve.py serve --watermark)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
@@ -875,7 +875,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             if tick:
                 log = d / "warden" / "warden.json"
                 meta["tick"]["watermark"] = (json.loads(log.read_text()).get("watermark") if log.exists() else
-                                             {"error": "the network certifier wrote no warden.json"})
+                                             {"error": "the network attester wrote no warden.json"})
     finally:
         if network_attester is not None and network_attester.poll() is None:
             network_attester.terminate()

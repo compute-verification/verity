@@ -94,20 +94,20 @@ CLEAR = {
     "scan": f"at the verifier: each unit's o0 output opened from the salts the prover sends; {INGRESS_TIE}, proved "
             "in a step of its own (`tie`) on the network attester path, run on no other",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
-    "warden_certificates": "in the clear, in the chain's job (chain_record.py certs), on the network certifier's "
-                           "witness: the network certifier's own offline check "
+    "warden_certificates": "in the clear, in the chain's job (chain_record.py certs), on the network attester's "
+                           "witness: the network attester's own offline check "
                            "(network_attester_serve.check: each record's certificate and its rows' registration under the "
-                           "network certifier's key and session, the audit and the client's view), and the public "
+                           "network attester's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
     "warden_endpoint": "in the clear, where the endpoint step runs (chain_record.py endpoint, in the chain's job), on "
-                       "the endpoint's records and the network certifier's certified I/O (network_attester_chain.io, off "
+                       "the endpoint's records and the network attester's certified I/O (network_attester_chain.io, off "
                        "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
     "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
-                              "each Commit window's advice opened to its registered root and rebuilt from the network certifier's "
+                              "each Commit window's advice opened to its registered root and rebuilt from the network attester's "
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
-           "lengths and the network certifier's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
+           "lengths and the network attester's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
            "scanned for every piece). It holds each request's prompt length and arrival order, not the ids' values",
 }
 #: the network attester-only path (``--job``'s ``path``): the records are the attester rehearsal's alone
@@ -126,7 +126,7 @@ RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance 
 #: what a report on the network attester-only path stands on that isn't the chain's own
 STUBBED = (
     "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
-    "network certifier's own cells as one device, so there are no network attester rows and the scan isn't run",
+    "network attester's own cells as one device, so there are no network attester rows and the scan isn't run",
     "no I/O tie runs on this path; token content is tied by nothing here",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
@@ -134,7 +134,7 @@ STUBBED = (
 NETWORK_ATTESTER = "warden"
 #: what a report on the network attester path stands on that isn't the chain's own
 NETWORK_ATTESTER_STUBBED = (
-    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear, where the "
+    "the endpoint's advice is bound to the network attester's certified I/O and rebuilt from it in the clear, where the "
     "endpoint step runs, and no output tie runs: the I/O tie's egress half, each egress id to the Commit's port, is not "
     "run on this path",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
@@ -142,7 +142,7 @@ NETWORK_ATTESTER_STUBBED = (
 SERVED_NODE = "the served node"
 #: `NETWORK_ATTESTER_STUBBED` when the endpoint's report is the served node's
 NETWORK_ATTESTER_SERVED_STUBBED = (
-    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
+    "the endpoint's advice is bound to the network attester's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and no output tie runs: the I/O "
     "tie's egress half, each egress id to the Commit's port, is not run on this path", NETWORK_ATTESTER_STUBBED[1])
 #: the rehearsal's strategies its own check accepts: token's changed bytes, which nothing here refuses
@@ -721,7 +721,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "(Verity.Assumptions.TrustedDevice), and this record doesn't hold that this run's scan had that form",
                 "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
                 "live",
-                "hdata (the network certifiers' arrivals are the framed egress of the network attester's observations) and Carries "
+                "hdata (the network attesters' arrivals are the framed egress of the network attester's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
                 "#(freeInputs \\ reg) is not bounded by the advice bits until V3's padding: b_w is vacuous",
@@ -817,18 +817,18 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
-                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
+                "each connection's cap is its lane's egress_cells, which the network attester holds a lane to and "
                 "NetworkVerifier.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
-                "the scan proves sampling block 0 of the network certifier run; a monitoring period's terms are its "
+                "the scan proves sampling block 0 of the network attester run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the world fleet has (leak_bounds.at_link_rate, its scaling by links), "
                 f"each link pooled at δ / links ({split}) and paying its own incorrect proof blocks: our "
                 "composition, which no Lean statement covers. Each link certifies the run's rate; a scope's requests "
                 "past its links' rate are uncertified, and no row counts them, so these rows are not the scope's K "
-                "(leak_bounds.table counts the network certifier's terms over every request a scope serves)",
+                "(leak_bounds.table counts the network attester's terms over every request a scope serves)",
                 "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkVerifier.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
@@ -978,7 +978,7 @@ def report(a) -> dict:
         certificates = on_network_attester(certificates, _json(a.certs), run_id, "the certificates step's input")
         endpoint = on_network_attester(endpoint, _json(a.endpoint), run_id, "the endpoint's report")
         n2 = on_network_attester(n2, merged, run_id, "N2's summary") | {
-            "clocks": {"source": "none", "by": "the network certifier link declares no sync and signs no clock (n2_zk "
+            "clocks": {"source": "none", "by": "the network attester link declares no sync and signs no clock (n2_zk "
                                                "--warden-run)"}}
         tie = on_network_attester(tie_step(tie_doc, job), tie_doc, run_id, "the tie's summary")
         scan = on_network_attester(scan, _json(a.scan), run_id, "the scan's summary")

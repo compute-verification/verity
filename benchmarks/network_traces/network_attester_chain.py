@@ -58,7 +58,7 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a network attester rehearsal's run (its records through the older network attester's proxy in front of the endpoint): "
-         "the network certifier path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
+         "the network attester path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
 #: what only a network attester rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 ATTESTER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
@@ -266,7 +266,7 @@ def io(run: Path) -> dict:
                 try:
                     kind, q, payload = W.read_cell(f, B)
                 except ValueError as e:
-                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network certifier's: {e}"])
+                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network attester's: {e}"])
                     continue
                 if kind in (W.DATA, W.END) and q not in end:
                     data[q] += payload

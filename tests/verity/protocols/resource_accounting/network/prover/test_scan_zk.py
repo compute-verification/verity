@@ -1136,7 +1136,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     (scan / "answers.json").write_text(json.dumps(doc))
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
+        "forged": ("reject", "window 0: certificates (none of a window in which the network attester refused a "
                    "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     elsewhere = [{**o, "root": "dd" * 64} for o in progs]

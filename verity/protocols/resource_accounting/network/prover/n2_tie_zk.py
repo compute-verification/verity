@@ -96,7 +96,7 @@ MEMBERS = ("honest", "carried", "forged", "split")
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
 #: what the verifier receives per execution phase, by file (`member`)
 def _received(T: int) -> dict[str, str]:
-    return {"registration.json": "the registration record (the network certifier's salted root)", "draw.json": "the stream's sample",
+    return {"registration.json": "the registration record (the network attester's salted root)", "draw.json": "the stream's sample",
             f"pub-{T}.bin": "the statement's public file",
             "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
