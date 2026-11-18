@@ -39,7 +39,6 @@ KNOWN = {
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.replay"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py", "verity_vllm.definitions.registry"),
     # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py", "verity_vllm.definitions.registry.boolean_silu"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_keep_builder"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_word_gates"),
     ("tests/verity/protocols/proofs/flock/prover/test_boolean_export.py", "verity_vllm.definitions.registry"),
