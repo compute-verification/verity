@@ -1,10 +1,11 @@
 module
 
-public import Flock.Lower
+public import Flock.Compose
 
 /-! The `flock-lower-check` executable, a test's (`tests/verity/protocols/proofs/flock/prover/test_lean_lower.py`): a
 descriptor's Definition lowered by `Lower.lower` and its template written, every composite Definition's template `CALL`s
-held to `Lower.callBound` of its lift to bits, and the template's rows, unrolled, solved on 64 instances a lane word. -/
+held to `Lower.callBound` of its lift to bits, and the template's rows, unrolled, solved on 64 instances a lane word; or,
+under `compose`, the block's circuit file `Compose.compose` writes on that template. -/
 
 @[expose] public section
 
@@ -21,7 +22,34 @@ def lowerLanes (t : Tmpl.Tmpl) (ins : Array UInt64) : V (Array UInt64) := do
     z.push (if c < ins.size then ins[c]! else if c == k then ~~~(0 : UInt64)
       else if acc.set.getD c false then sum z acc.ra[c]! &&& sum z acc.rb[c]! else 0)) #[]
 
+/-- `name:bits,…` as its pairs. -/
+def named (s : String) : Array (String × Nat) :=
+  ((s.splitOn ",").map fun p => match p.splitOn ":" with
+    | [n, b] => (n, b.toNat!)
+    | _ => (p, 0)).toArray
+
+/-- `compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION FILE`: Definition `KEY` lowered with one 16-bit port a row
+word, and the block's file written: input rows `INS` (`name:bits`), output ports `OUTS` (`name:words`). -/
+def composeMain : List String → IO UInt32
+  | [desc, key, name, ins, outs, layout, prog, part, file] => do
+    let ins := named ins
+    let outs := named outs
+    let P ← match Program.decode (← IO.FS.readBinFile desc) with
+      | .ok p => pure p
+      | .error e => do IO.eprintln s!"flock-lower-check compose: decode: {e}"; return 1
+    let some d := P.index[key]? | do IO.eprintln s!"flock-lower-check compose: no Definition {key}"; return 1
+    let nIn := ins.foldl (fun a p => a + (p.2 + 15) / 16) 0
+    let nOut := outs.foldl (· + ·.2) 0
+    let out : V ByteArray := do
+      let t ← Lower.lower P d (Array.replicate nIn 16) (Array.replicate nOut 16)
+      Compose.compose { name, body := .tmpl t layout, ins, outs } prog part
+    match out with
+    | .ok bs => do IO.FS.writeBinFile file bs; IO.println s!"COMPOSED {name} bytes={bs.size}"; return 0
+    | .error e => do IO.eprintln s!"flock-lower-check compose: {e}"; return 1
+  | _ => do IO.eprintln "usage: flock-lower-check compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION FILE"; return 2
+
 def main (args : List String) : IO UInt32 := do
+  if args.head? == some "compose" then return ← composeMain args.tail
   let [desc, key, ins, outs, inFile, tmplFile, outFile] := args
     | do IO.eprintln "usage: flock-lower-check DESC KEY INS OUTS IN TMPL OUT"; return 2
   let P ← match Program.decode (← IO.FS.readBinFile desc) with
@@ -34,7 +62,7 @@ def main (args : List String) : IO UInt32 := do
   let mut over := false
   for i in [0:Q.defs.size] do
     let df := Q.defs[i]!
-    if df.prim then continue
+    if df.prim || (Lift.lift Q i).toOption.map (·.2) != some i then continue
     match Lower.lower Q i #[max 1 df.paramLeaves] #[max 1 df.outLeaves] with
     | .ok t =>
       let calls := (t.defs.getD (t.root - 1) default).calls.size
@@ -52,7 +80,9 @@ def main (args : List String) : IO UInt32 := do
   let z ← match lowerLanes t words with
     | .ok z => pure z
     | .error e => do IO.eprintln s!"flock-lower-check: rows: {e}"; return 1
-  let m := (Q.defs[d]!).outLeaves
+  let m := match Lift.lift P d with
+    | .ok (Q, d) => (Q.defs[d]!).outLeaves
+    | .error _ => 0
   IO.FS.writeFile outFile ((List.range m).foldl (fun s k => s ++ toString (z.getD (Lower.outBit t k) 0) ++ "\n") "")
   IO.println s!"LOWERED {key} defs={t.defs.size} lines={(Lower.renderLines t).size} rows={z.size}"
   if over then do IO.eprintln "flock-lower-check: a Definition's CALLs past Lower.callBound"; return 1
