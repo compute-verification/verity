@@ -247,10 +247,13 @@ It needs:
   in `~/.elan/bin`, which serve.sh also checks first;
 - disk under `WORK` for what the bootstrap installs, and under `SCRATCH` or `TMPDIR` (the run's scratch under
   `research run`) for the run's passes, which are removed on exit;
-- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise. It grows with `JOBS`: a smaller
-  `JOBS` holds less and makes `python-verify` slower.
+- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise, and the Lean verifier's beside
+  them. It grows with `JOBS`: a smaller `JOBS` holds less and makes `python-verify` slower.
 
-The two verdicts run on every core serve.sh may run on (`nproc`), so a run takes longer on fewer cores. The Lean
+The two verifiers run at once on every core serve.sh may run on (`nproc`), with no split between them: the Lean
+verifier starts once `python-verify` has written its coin record (`lean-launch`), and `lean` then holds its run to the
+Python's answer. `LEAN_CONCURRENT=` (empty) runs the Lean verifier after the Python's instead. A run takes longer on
+fewer cores. The Lean
 verdict has `LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over `nproc` on fewer, 17,280 on 20.
 Give `research run` a `--timeout` past the bootstrap, `LEAN_TIMEOUT` and the other steps together. For each step's
 seconds on one H200, read the published run that `metrics.toml`'s rows read: its record's `out/compute-run.json`
