@@ -94,6 +94,7 @@ class Served:
     shapes: dict[str, tuple[tuple[int, ...], Any]] = field(default_factory=dict)
     commits: dict[str, Any] = field(default_factory=dict)
     answered: int = 0
+    periods: int = 0
     _decode: Any = None
 
     @property
@@ -125,6 +126,13 @@ class Served:
         tensors = dict(sorted(((n, h) for n, h in event.values if n in event.operands), key=lambda v: event.operands[v[0]]))
         if not tensors:
             raise ValueError(f"{self.entry}: no registered value is a block's weight operand, so W is empty")
+        for n, t in tensors.items():
+            if not t.is_contiguous():
+                raise ValueError(f"{self.entry}: {n}'s weight is strided {tuple(t.stride())}: W holds each tensor's bytes in "
+                                 "the order its kernel reads them, which is a contiguous tensor's")
+        devices = sorted({str(t.device) for t in tensors.values()})
+        if len(devices) > 1:
+            raise ValueError(f"{self.entry}: the weights are on {devices}, and C* is held on one device")
         lib = self.ctx.get("p2_lib") or None
         layout, commitment = ws.commit(self.scheme, tensors)
         source, how = ws.salt_from(self.entry, self.ctx["salt_source"], commitment, layout.params)
@@ -182,6 +190,29 @@ class Served:
     def prover(self, blocks: Any = ()) -> Any:
         """`period_prover.Prover`: each index answered from ``C*`` where it is held."""
         return self.answer
+
+    def audit(self, node: str, coins: bytes, **kw: Any) -> Any:
+        """`weight_store.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period_prover.audit`'s
+        (the prover by default this one's)."""
+        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+
+        if self.store is None:
+            raise RuntimeError(f"{self.entry}: nothing is held to audit")
+        kw.setdefault("prover", self.prover)
+        return ws.audit(self.store, node, coins, **kw)
+
+    def subprotocol(self, period_dir: Any, node: str, out: Any, *, side_of: Any, schemes: Any = None,
+                    protocol: str | None = None) -> dict[str, Any]:
+        """One period's PoUS of what this setup holds (`weight_store.subprotocol`), the first this setup's ``fresh``."""
+        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+
+        def audited(node: str, coins: bytes, **kw: Any) -> Any:
+            got = self.audit(node, coins, **kw)
+            self.periods += 1
+            return got
+
+        return ws.subprotocol(self.store, period_dir, node, out, audit=audited, side_of=side_of, fresh=self.periods == 0,
+                              answered=lambda: self.answered, schemes=schemes, protocol=protocol)
 
     def answer(self, index: int) -> bytes:
         """The prover's reply to challenge ``index``: block ``index`` of ``C*``."""
