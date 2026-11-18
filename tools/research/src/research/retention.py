@@ -6,7 +6,8 @@
     research retention report [--root R] [--depth N] [--json]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--max-paths 200] [--jobs-dir D]...
                           [--store S] [--unpreserved-runs] [--launcher-copies] [--json] [--apply]
-    research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--json] [--apply]
+    research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--registry FILE]
+                          [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
 and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
@@ -14,7 +15,8 @@ and `cat` reads it. A directory its owner made read-only has its record beside i
 (PRIORITIES), `preserved` (an `art:` id once the data is on the remote, or null), `regenerate` (how to rebuild it, or null), `why`.
 
 A directory whose `.custody` marker (store.custody) says `preserved: true` and which has no sidecar has an implicit record
-(`implicit`): owner its job.json's lane, else its campaign, else `runner`; `preserved` the marker's run record; `expires`
+(`implicit`): owner its job.json's lane (`research run` writes the launcher's, `--lane`, else `--as` or $RESEARCH_LANE), else
+`runner`, never its campaign, which no lane answers to; `preserved` the marker's run record; `expires`
 RUN_EXPIRY after the marker's `verified_utc`; priority `normal`. Nothing is written for it, and a sidecar always wins.
 
 A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires
@@ -113,7 +115,9 @@ refused, naming the run its `.who` names, to retry when that run ends. Each dele
 
 `rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
 record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
-the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A sealed
+the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. An owner
+that no handle of the registry (`slack.registry_path`) holds, such as `runner`, takes UNHELD_APPROVER's yes instead, and the
+plan says that rule let it through; with no registry to read, the rule is off. A sealed
 run dir (store.sealed) is the one read-only path either command deletes: whole, by `sudo -n vy-seal-runs delete` once every check
 here passed, which redoes custody's as root; a path inside one is refused. A path no
 record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES; not a Python package of that name, nor anything inside a
@@ -141,7 +145,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Iterator, Sequence
+from typing import Any, Callable, Collection, Iterator, Sequence
 
 from . import settings
 from .disk import HOLD_PCT, RELEASE_PCT
@@ -200,6 +204,8 @@ STORED = ("verified", "expired", "withdrawn", "uncovered", "mismatch", "unknown"
 COLLECTED = STORED[:3]
 RM_SCHEMA = "research/retention-rm/v0"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
+#: who says yes for a record whose owner no handle of the registry holds (`rm`)
+UNHELD_APPROVER = "@infra"
 TS = "%Y-%m-%dT%H:%M:%SZ"
 NAME_CHAR = r"[\w.-]"
 
@@ -471,9 +477,8 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
 
 
 def _owner(job: dict) -> str:
-    """Who an implicit record names as owner: the job's lane, else its campaign, else `runner`."""
-    return (EV._get(job, "ownership", "lane") or EV._get(job, "store", "campaign") or EV._get(job, "store", "conditions", "exec.campaign")
-            or "runner")
+    """Who an implicit record names as owner: the job's lane, else `runner`."""
+    return EV._get(job, "ownership", "lane") or "runner"
 
 
 def _launcher_copy(d: Path, rel: str) -> dict | None:
@@ -1428,8 +1433,13 @@ def _kept(f: Found, root: Path) -> str:
     return f"{relative(f.path, root)} is kept by {_handle(r.get('owner'))} until {r.get('expires') or 'never'} (priority {r.get('priority')}{why})"
 
 
+def _unheld(owner: Any, handles: Collection[str] | None) -> bool:
+    """Whether no handle of the registry holds `owner`; False when the registry wasn't read."""
+    return handles is not None and _handle(owner) not in {_handle(h) for h in handles}
+
+
 def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below: list[Found],
-             in_use: Callable[[Path], str | None]) -> str | None:
+             in_use: Callable[[Path], str | None], handles: Collection[str] | None = None) -> str | None:
     """Why `rm` may not delete `path` with `approved_by`'s yes, given the records `_covering` found; None when it may."""
     if top is None:
         return (f"no record covers it, so nobody can say yes: its owner records it first (`research keep {path} --owner @LANE "
@@ -1437,8 +1447,11 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
     for f in (top, *below):
         if f.error:
             return f"invalid record at {f.path}: {f.error}"
-        if _handle(f.record["owner"]) != approved_by:
-            return f"{_kept(f, root)}, and --approved-by {approved_by} is not its owner: only {_handle(f.record['owner'])} can say yes"
+        owner = _handle(f.record["owner"])
+        if owner != approved_by and not (approved_by == UNHELD_APPROVER and _unheld(owner, handles)):
+            unheld = (f"; {owner} is no handle of the registry, so {UNHELD_APPROVER} can say yes too" if _unheld(owner, handles)
+                      else "")
+            return f"{_kept(f, root)}, and --approved-by {approved_by} is not its owner: only {owner} can say yes{unheld}"
         if f.record["priority"] == "keep":
             return f"{_kept(f, root)}: priority keep is never deleted, until its owner lowers it with `research keep`"
     if u := in_use(path):
@@ -1485,12 +1498,26 @@ def _holds_passes(path: Path, root: Path) -> bool:
     return False
 
 
+def registry_handles(explicit: str | None = None) -> tuple[list[str] | None, str | None]:
+    """The registry's handles, or None with why it can't be read."""
+    from . import slack
+
+    try:
+        path = slack.registry_path(explicit)
+        return [h["handle"] for h in json.loads(path.read_text())["handles"]], None
+    except slack.SlackError as e:
+        return None, str(e)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return None, f"{path}: {e!r}"
+
+
 def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | str = DEFAULT_ROOT, apply: bool = False,
        by: str | None = None, in_use: Callable[[Path], str | None] | None = None, now: Callable[[], datetime] = utc_now,
        node: str | None = None, log: Path | str | None = None, remote_check: Callable[[str, Path], Stored] | None = None,
-       store_root: str | None = None) -> dict[str, Any]:
+       store_root: str | None = None, handles: Collection[str] | None = None) -> dict[str, Any]:
     """`research retention rm` (module docstring): the plan for `paths`, and with `apply` their deletions, every decision a line in the
-    deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist; `remote_check` None
+    deletion log (`log`, default `root/LOG`). `handles` are the registry's (None: not read, and an unheld owner takes no
+    UNHELD_APPROVER yes). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist; `remote_check` None
     is `store_check(store_root, now)`, read only by an --apply that deletes passes, which needs its answer `verified`. RecordError when --approved-by is not a handle or --ref
     is empty, and with `apply` when `by` is missing or the log can't be written."""
     root = Path(os.path.abspath(root))
@@ -1543,13 +1570,17 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
             record(act)
             continue
         act["owners"] = sorted({_handle(f.record["owner"]) for f in (top, *below) if f and f.record})
-        if why := _refusal(p, root, approved_by, top, below, in_use):
+        if why := _refusal(p, root, approved_by, top, below, in_use, handles):
             act["reason"] = why
             record(act)
             continue
         act["action"] = "delete"
-        act["reason"] = f"{_kept(top, root)}, and its owner said yes" + (f" ({len(below)} record(s) beneath it, the same owner's)"
-                                                                        if below else "")
+        if act["owners"] == [approved_by]:
+            act["reason"] = f"{_kept(top, root)}, and its owner said yes" + (f" ({len(below)} record(s) beneath it, the same owner's)"
+                                                                            if below else "")
+        else:
+            act["reason"] = (f"{_kept(top, root)}, and {approved_by} said yes for {', '.join(o for o in act['owners'] if o != approved_by)}"
+                             f", which no handle of the registry holds (the rule for an unheld owner)")
         if apply:
             try:
                 again = _covering(p, root)
@@ -1846,6 +1877,9 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, help="the evidence store a deletion of passes checks its artifact against")
+        ap.add_argument("--registry", default=None, metavar="FILE",
+                        help=f"with --approved-by {UNHELD_APPROVER}: the handles' registry, which says which owners no handle holds, "
+                             "whose records it may approve (default: research msg's, $RESEARCH_SLACK_REGISTRY or the checkout's)")
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--apply", action="store_true", help=f"delete, and log each decision to <root>/{LOG}; without it nothing "
                                                              "is deleted or logged")
@@ -1854,9 +1888,13 @@ def main(argv: list[str]) -> int:
             print(f"research retention rm: {missing[0]} is not a directory", file=sys.stderr)
             return 2
         jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
+        handles, unread = registry_handles(ns.registry) if ns.approved_by == UNHELD_APPROVER else (None, None)
+        if unread:
+            print(f"research retention rm: the registry can't be read ({unread}), so no record's owner counts as unheld: "
+                  "give it with --registry FILE", file=sys.stderr)
         try:
             plan = rm(ns.paths, approved_by=ns.approved_by, ref=ns.ref, root=ns.root, apply=ns.apply, by=ns.by,
-                      in_use=JobScripts(jobs, ns.root), now=utc_now, store_root=ns.store)
+                      in_use=JobScripts(jobs, ns.root), now=utc_now, store_root=ns.store, handles=handles)
         except RecordError as e:
             print(f"research retention rm: {e}", file=sys.stderr)
             return 2
