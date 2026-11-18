@@ -50,7 +50,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.protocols.resource_accounting.memory.poub.scheme import POUB, REUSE_OLDEST_FREED
+from verity.protocols.resource_accounting.memory.poub.scheme import POUB, PROVER
 from verity.hooks import RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
@@ -383,11 +383,12 @@ class Binder:
 
     def install(self, exchange: Any) -> Binder:
         """Subscribe to ``exchange`` (the adapter's: ``subscribe(name, hook, fn)`` returning the removal, and
-        ``request(name, request)``), filing `ReuseOldestFreed` with ``fifo``; before the engine is built."""
+        ``request(name, request)``), filing the declaration's requests (`POUB.requests`: `ReuseOldestFreed` with
+        ``fifo``); before the engine is built."""
         if self._off:
             raise RuntimeError("the binder is installed")
-        if self.fifo:
-            exchange.request(NAME, REUSE_OLDEST_FREED)
+        for r in POUB.requests({"fifo": self.fifo}):
+            exchange.request(NAME, r)
         self._off = [exchange.subscribe(NAME, hook, self.on_event) for hook in POUB.hooks]
         return self
 
@@ -407,3 +408,6 @@ class Binder:
                 "registration": self.store.registration().count, "steps": self.step, "windows": self.windows,
                 "hooks": {k: {"calls": c.calls[k], "seconds": c.seconds[k], "us_per_call": 1e6 * c.seconds[k] / c.calls[k]}
                           for k in sorted(c.calls)}}
+
+
+PROVER["binder"] = Binder

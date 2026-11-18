@@ -46,19 +46,24 @@ def test_the_binder_subscribes_under_the_declaration() -> None:
             return lambda: None
 
     ex = Exchange()
-    binder.Binder(None).install(ex)
-    assert ex.requests == [("poub", poub.REUSE_OLDEST_FREED)] and poub.REUSE_OLDEST_FREED in poub.REQUESTS
+    b = poub.POUB.attach(ex, {"store": None, "binder": {"passes": False}})
+    assert isinstance(b, binder.Binder) and not b.passes
+    assert ex.requests == [("poub", poub.REUSE_OLDEST_FREED)]
     assert ex.subscribed == [("poub", "memory"), ("poub", "steps")]
-    assert {type(r) for r in poub.REQUESTS} == {H.ReuseOldestFreed, H.RefuseProperty, H.RequireProperty}
-    assert poub.requests() == poub.REQUESTS and poub.requests(8)[-1] == H.FixRanges(8)
+    ex = Exchange()
+    binder.Binder(None, fifo=False).install(ex)
+    assert ex.requests == []
 
 
-def test_the_requests_refuse_a_run_the_session_cannot_follow() -> None:
-    ok = {"prefix_cache": False, "async_steps": False, "in_process": True}
-    filed = [("poub", r) for r in poub.REQUESTS]
-    assert H.unmet(filed, ok) == []
-    for key, bad in (("prefix_cache", True), ("async_steps", True), ("async_steps", None), ("in_process", False)):
-        [(who, request)] = H.unmet(filed, {**ok, key: bad})
+def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
+    assert poub.POUB.requests({}) == (poub.REUSE_OLDEST_FREED,) and poub.BANDWIDTH.requests({}) == ()
+    filed = poub.POUB.requests({"fifo": False, "session": True, "ranges": 8})
+    assert filed == (*poub.SESSION, H.FixRanges(8))
+    ok = {"world": 1, "prefix_cache": False, "async_steps": False}
+    named = [("poub", r) for r in filed]
+    assert H.unmet(named, ok) == []
+    for key, bad in (("world", 2), ("prefix_cache", True), ("async_steps", True), ("async_steps", None)):
+        [(who, request)] = H.unmet(named, {**ok, key: bad})
         assert who == "poub" and request.property == key
 
 

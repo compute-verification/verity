@@ -88,6 +88,8 @@ POUB = S.register(S.Scheme(
     charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
     settings={"refresh": False},
     hooks=("memory", "steps"),
+    requests=lambda ctx: requests(ctx),
+    attach=lambda exchange, ctx: attach(exchange, ctx),
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: the node store's registration root and a receipt root a pass",
@@ -97,24 +99,38 @@ POUB = S.register(S.Scheme(
     },
 ))
 
-#: what `POUB` asks of every workload, in the properties a served run declares (`verity.hooks.Declared`): a freed
-#: range is reused as late as the workload allows, no range comes back holding another input's values, a step's
-#: outputs are read before the next step is scheduled, and the steps are taken in the binder's process. The binder
-#: files the first itself (`Binder(fifo=True)`); the rest are filed from the scheme's requests once the interface
-#: gives a scheme's requests a home, and until then the adapter's remote session refuses the same three itself.
+#: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
 REUSE_OLDEST_FREED = H.ReuseOldestFreed()
-REQUESTS: tuple[H.Request, ...] = (
-    REUSE_OLDEST_FREED,
-    H.RefuseProperty("prefix_cache", True, "a prefix hit brings a range back with the values another input wrote"),
-    H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its outputs in turn"),
-    H.RequireProperty("in_process", True, "the binder reads the store in the process that takes the steps"),
+#: what a session in lockstep with the run asks of it (one engine step a pass, `prover.node_store.serving.Lockstep`),
+#: in the properties a served run declares (`verity.hooks.Declared`): one GPU's store, a step's outputs read before the
+#: next step is scheduled, and no range brought back holding the values another input wrote
+SESSION: tuple[H.Request, ...] = (
+    H.RequireProperty("world", 1, "a store is one GPU's: a TP Commit's session is not wired yet"),
+    H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its output in turn"),
+    H.RequireProperty("prefix_cache", False, "a prefix hit brings a page back with its KV"),
 )
 
 
-def requests(ranges: int | None = None) -> tuple[H.Request, ...]:
-    """`REQUESTS`, and with ``ranges`` the request that the workload's memory hold exactly that many (a session whose
-    store's size is its registration's)."""
-    return REQUESTS if ranges is None else (*REQUESTS, H.FixRanges(ranges))
+def requests(ctx: Mapping[str, Any]) -> tuple[H.Request, ...]:
+    """`POUB`'s requests of a served run (`Scheme.requests`), by what ``ctx`` says of it: `REUSE_OLDEST_FREED` unless
+    ``fifo`` is False; `SESSION` with ``session`` (a session in lockstep with the run); and with ``ranges`` that the
+    workload's memory hold exactly that many (a session whose store's size is its registration's)."""
+    return (*((REUSE_OLDEST_FREED,) if ctx.get("fifo", True) else ()),
+            *(SESSION if ctx.get("session") else ()),
+            *(() if ctx.get("ranges") is None else (H.FixRanges(ctx["ranges"]),)))
+
+
+#: the prover's binder, entered by its module as it loads (`prover.binder`): the declaration loads no prover
+PROVER: dict[str, Any] = {}
+
+
+def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
+    """`POUB` on a served run (`Scheme.attach`): the binder over ``ctx["store"]`` (a `NodeMemory`), built with
+    ``ctx["binder"]``'s keywords, installed on ``exchange``, which files its requests; returns the binder."""
+    if "binder" not in PROVER:
+        raise RuntimeError("poub attaches with its prover's binder: import "
+                           "verity.protocols.resource_accounting.memory.poub.prover.binder first")
+    return PROVER["binder"](ctx["store"], **ctx.get("binder", {})).install(exchange)
 
 
 def settings(given: Mapping[str, Any]) -> dict[str, Any]:
@@ -125,5 +141,5 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "POUB", "REFRESH_GOAL", "REQUESTS",
-           "REUSE_OLDEST_FREED", "requests", "settings"]
+__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "POUB", "PROVER", "REFRESH_GOAL",
+           "REUSE_OLDEST_FREED", "SESSION", "attach", "requests", "settings"]
