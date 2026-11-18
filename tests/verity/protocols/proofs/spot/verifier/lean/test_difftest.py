@@ -8414,8 +8414,8 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
         got = second_interior_reads(copy.deepcopy(case))
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
-    _, own, statements = _second_own(_read_interior(honest, 0))
-    v = SS.check_twin(True, own, statements)
+    own, statements = _second_own(_read_interior(honest, 0))
+    v = SS.check_twin(own, statements)
     assert v.ok and SS.attach({"checks": {}}, v, SS.interior_reads(own, statements))["interior_reads"] == [h]
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
 
