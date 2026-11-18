@@ -267,7 +267,7 @@
   "tools/verity/cli/verity_cli/served_table.py": 5
  },
  "toolkit_paths": {
-  "adapters/vllm/tools/served_run/placement.toml": 4,
+  "adapters/vllm/tools/served_run/placement.toml": 2,
   "benchmarks/one_stage/cold_sessions.sh": 1,
   "benchmarks/one_stage/zk_cost.sh": 1,
   "benchmarks/pouw/harness/jobs/toolkit.sh": 2,
