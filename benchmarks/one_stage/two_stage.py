@@ -1603,10 +1603,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    from verity_config.settings import SHARED
+    from verity_config.settings import of
 
     try:
-        LV.command(SHARED.raw(LV.ENV), (2,), 2)
+        LV.command(of(__file__).raw(LV.ENV), (2,), 2)
     except LV.Refused as e:
         ap.error(f"{e} (one level: a5.py)")
     if a.cmd == "second":

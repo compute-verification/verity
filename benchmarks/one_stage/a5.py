@@ -2627,10 +2627,10 @@ def main() -> int:
                     "under the partition's stratified sampling design, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
     a = ap.parse_args()
-    from verity_config.settings import SHARED
+    from verity_config.settings import of
 
     try:
-        LV.command(SHARED.raw(LV.ENV), (1,), 1)
+        LV.command(of(__file__).raw(LV.ENV), (1,), 1)
     except LV.Refused as e:
         ap.error(f"{e} (two levels: two_stage.py)")
     if bool(a.bundle) == bool(a.tp_commit):
