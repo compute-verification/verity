@@ -1,0 +1,355 @@
+# Every decoder, evaluator and structure walk of C, each marked THE one, a caller of it, a twin (a Python mirror of a Lean
+# function held by a difference test), or a copy. `basis` is "read" (the file and line were read) or "inferred" (from a
+# search, not from reading every caller). An entry's owner is `research msg owners <path>`.
+
+[[decoder]]
+path = "verity/circuits/codec.py"
+fn = "decode_program"
+line = 1000
+schemas = "v2 (v0, v1 refused: E_SCHEMA)"
+callers = "served path, verifiers, benchmarks, tests"
+role = "THE one (Python)"
+basis = "read"
+
+[[decoder]]
+path = "verity/circuits/lean/Circuits/Program.lean"
+fn = "Flock.Program.decode"
+line = 1324
+schemas = "v2"
+callers = "Flock verifier (FlockVerify, Qcall, Registered, Sigma), Spot.Program, inference-only check, network Period.Decode, compose CoreRemote, PoUW programOf, Evaluate.Walk"
+role = "THE one (Lean)"
+basis = "read"
+
+[[decoder]]
+path = "verity/circuits/lean/Circuits/Program.lean"
+fn = "Flock.Program.decodeOf, Flock.Program.decodeWith"
+line = 1381
+schemas = "v2"
+callers = "ProgramRead (decodeOf), With.Setup (decodeWith)"
+role = "copy: decode's body twice more, held by decode_eq_of and programDecodeWith_std (rfl); decode can be decodeWith at pure-hash and decodeOf its tail"
+size_lines = 110
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean"
+fn = "Desc.parse, Desc.parseWith"
+line = 59
+schemas = "v2 (schema, callees, forms, nodes only; none of decode's refusals)"
+callers = "FlockVerify 1735, Registered 478, ProgramRead"
+role = "partial copy: Desc.ofProg of Program.decode gives the same Desc"
+size_lines = 35
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean"
+fn = "Desc.parseOfWith"
+line = 34
+schemas = "v2"
+callers = "ProgramRead.descAt"
+role = "copy of Desc.parseWith from parsed JSON"
+size_lines = 40
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DefinitionDigest.lean"
+fn = "definitionDigest, closureDigest"
+line = 95
+schemas = "any (reads callees, types, definitions; no schema check)"
+callers = "the period check's slot entries; security/Properties/InferenceOnly"
+role = "reader for the definition digest (PROTOCOL 4.8), which is over the JSON entry, not the decoded Program: not a decoder copy"
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/proofs/spot/verifier/lean/Spot/CertifiedRows.lean"
+fn = "marks"
+line = 16
+schemas = "v2 (reads ports beside Program.decode)"
+callers = "none ('No check calls it')"
+role = "partial copy: the Lean decoder reads no ports, so this reads them from JSON"
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Credit.lean"
+fn = "programOf (and the live reader at 1860)"
+line = 561
+schemas = "v1 required (SCHEMA, line 466), then Program.decode, which takes v2 only: refuses every descriptor"
+callers = "PoUW Lean verifier (credit)"
+role = "copy (raw schema/callees check before the one decoder); broken"
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Lanes.lean"
+fn = "parsed"
+line = 183
+schemas = "v1"
+callers = "PoUW Lean verifier (lanes)"
+role = "copy; refuses every v2 descriptor"
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/resource_accounting/compute/pouw/verifier/credit.py"
+fn = "_parsed, layout_of, shape_of, _reinterprets, _misreads, _record"
+line = 2177
+schemas = "v1 (domains.IR_DESCRIPTOR)"
+callers = "PoUW Python verifier (trusted)"
+role = "copy: its own descriptor reader and walk; refuses every descriptor the codec writes"
+size_lines = 235
+basis = "read"
+
+[[decoder]]
+path = "verity/commitments/domains.py"
+fn = "IR_DESCRIPTOR"
+line = 180
+schemas = "v1"
+callers = "credit.py, benchmarks/verifier_cost/inference_only_glm.py; Lean twin Identity/Domains/Shared.lean 59"
+role = "stale constant"
+basis = "read"
+
+[[decoder]]
+path = "adapters/vllm/verity_vllm/program/compact.py"
+fn = "lean_root"
+line = 474
+schemas = "v0 branch (dead), else v2; non-root Definitions through codec.definition_decoder"
+callers = "check/match/instance_sequence.py 94; tests/adapters/vllm/tests/program/test_compact.py"
+role = "partial copy: reads the root body's references and aliases itself"
+size_lines = 47
+basis = "read"
+
+[[decoder]]
+path = "verity/commitments/periods/edges.py"
+fn = "_Root, _parts"
+line = 241
+schemas = "any with callees/types (no schema check); its own reference parser (affine, strided, grid, explicit, alias)"
+callers = "inference-only record reference script; tests/verity/protocols/proofs/spot/verifier/lean/test_edges_difftest.py"
+role = "twin of Spot.Edges.edgesOf, which reads the decoded Prog; the reference parser is a copy of codec's"
+size_lines = 49
+basis = "read"
+
+[[decoder]]
+path = "tools/verity/circuit_check/src/circuit_check/by_calls.py"
+fn = "(uses codec._decode_refs with SCHEMA_V0)"
+line = 121
+schemas = "v0 self-contained entries"
+callers = "circuit-check"
+role = "reader of v0 entries through codec's private function"
+basis = "read"
+
+[[decoder]]
+path = "verity/circuits/metadata.py"
+fn = "_callee"
+line = 53
+schemas = "v2, with a v0 branch"
+callers = "metadata checks"
+role = "raw reader of node callees; v0 branch dead"
+basis = "read"
+
+[[decoder]]
+path = "adapters/vllm/verity_vllm/program/predict/node_registration.py"
+fn = "root_inputs"
+line = 74
+schemas = "v2 and v0-style fn"
+callers = "node-registration command"
+role = "raw reader of the root's input nodes ('no decode')"
+basis = "read"
+
+[[decoder]]
+path = "verity/protocols/proofs/flock/prover/agreement/qcall_agree.py"
+fn = "check_members"
+line = 31
+schemas = "v2 (raw callees)"
+callers = "agreement harness"
+role = "raw reader, test harness"
+basis = "read"
+
+[[decoder]]
+path = "benchmarks/verifier_cost/inference_only_glm.py"
+fn = "gates_of and the module's readers"
+line = 249
+schemas = "v1 constant (DESCRIPTOR)"
+callers = "benchmark only"
+role = "raw reader and walk"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/circuits/evaluation/reference.py"
+fn = "evaluate, evaluate_call, evaluate_region"
+level = "word, each primitive by its registry evaluator"
+callers = "everything"
+role = "THE reference (Python), word level"
+held_by = "the reference; its word evaluators are held to the Boolean bodies (PROTOCOL 4.9) only by circuit-check's word view, which is off the merge gate"
+basis = "read"
+
+[[evaluator]]
+path = "verity/circuits/evaluation/batch.py"
+fn = "evaluate_batch, kernels"
+level = "word, numpy kernels"
+callers = "served path, adapter, benchmarks"
+role = "fast path"
+held_by = "self_check against the reference (tests/verity/circuits/evaluation/test_evaluation.py); runs in check"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/circuits/evaluation/bits.py"
+fn = "evaluate_bits, evaluate_words"
+level = "bit, Boolean Definitions, bit-sliced numpy"
+callers = "evaluate_batch fallback, program_walk"
+role = "fast path"
+held_by = "tests/verity/circuits/evaluation/test_bits.py against the reference; runs in check"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/circuits/evaluate/Evaluate/Walk.lean"
+fn = "Evaluate.evaluate"
+level = "word, primitives transcribed (Evaluate.Prims)"
+callers = "verity-evaluate (difftest server) only"
+role = "Lean twin of the reference"
+held_by = "tests/verity/circuits/evaluate/test_difftest.py (skipped without lake); docstrings still say v1"
+basis = "read"
+
+[[evaluator]]
+path = "security/Properties/Flock/EvalBool.lean"
+fn = "Prog.evalBool, evalDef?"
+level = "bit, section 9 gates only"
+callers = "Lean proofs (Lower, Circuit.OfProgram)"
+role = "THE bit-level semantics (Lean)"
+held_by = "proofs; no Python twin compared with it"
+basis = "read"
+
+[[evaluator]]
+path = "verity/protocols/proofs/flock/verifier/Flock/TmplValue.lean"
+fn = "eval"
+level = "bit, a template's columns"
+callers = "proofs only ('Nothing on a verifier path reads this file')"
+role = "proof-side semantics of Flock.Tmpl"
+held_by = "rows_eval theorem"
+basis = "read"
+
+[[evaluator]]
+path = "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py"
+fn = "evaluate"
+line = 145
+level = "word, gate by gate by each primitive's evaluator"
+callers = "partition_units.lanes, check"
+role = "copy of reference.evaluate_region"
+size_lines = 10
+held_by = "nothing (it is the expected side of its own check)"
+basis = "read"
+
+[[evaluator]]
+path = "tools/verity/circuit_check/src/circuit_check/bodies.py"
+fn = "evaluate"
+line = 475
+level = "word, compiled bodies"
+callers = "circuit-check"
+role = "fast path"
+held_by = "tests/tools/verity/circuit_check/test_bodies.py; falls back to the reference"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/circuits/restrict.py"
+fn = "evaluate"
+line = 451
+level = "bit, a block listing (verity/block-circuit/v1)"
+callers = "tests only (test_restrict, test_partition_blocks, restrict_difftest)"
+role = "test reference of the listing format"
+size_lines = 25
+basis = "read"
+
+[[evaluator]]
+path = "verity/circuits/private_circuits/universal.py"
+fn = "interpret"
+line = 104
+level = "bit, a private circuit"
+callers = "tests (test_boolean_universal)"
+role = "reference the universal unit agrees with"
+basis = "read"
+
+[[evaluator]]
+path = "verity/circuits/boolean/forms.py"
+fn = "Circuit.evaluate"
+line = 205
+level = "bit, GF(2) forms of a Flock circuit"
+callers = "verity_flock lowering checks"
+role = "evaluator of the lowered Flock circuit, not of C"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/protocols/proofs/flock/prover/python/verity_flock/"
+fn = "tmpl.evaluate, struct_lower.evaluate, struct_slots.evaluate, ir_lower.evaluate_layout, circuit_types.evaluate, lowering.evaluate, topp_word.evaluate"
+level = "bit, Flock's lowered rows (A·z)(B·z)"
+callers = "witness generation and lowering tests"
+role = "evaluators of the lowered circuit, not of C"
+held_by = "lowering tests against the reference (tests/adapters/vllm/flock/); a wrong value fails the proof"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/protocols/proofs/flock/prover/live/src/"
+fn = "ir_block.rs eval64/eval_wide, typed.rs eval64, sha512_native.rs eval64, tables.rs eval, circuit.rs witness, verity_unit.rs eval8/witness"
+level = "bit, the lowered circuit's rows"
+callers = "the Rust prover"
+role = "witness evaluators of the lowered circuit"
+held_by = "Rust unit tests against each other (eval_wide_is_eval64_per_group); against the Python reference, nothing found; a wrong witness fails the proof (completeness only)"
+basis = "inferred"
+
+[[evaluator]]
+path = "verity/protocols/proofs/flock/prover/live/src/ir_tail.rs"
+fn = "apply, eval (18 primitives)"
+line = 354
+level = "word, f32 and MUFU"
+callers = "ir_sampling.rs 512, 528"
+role = "Rust word model"
+held_by = "prims_match_ir_vectors returns unless IR_TAIL_VECTORS and IR_TAIL_TABLES are set; nothing sets them; check's cargo test runs it vacuously; nan_payloads_are_the_irs pins six vectors"
+basis = "read"
+
+[[evaluator]]
+path = "adapters/vllm/verity_vllm/definitions/numerics/program_walk.py"
+fn = "walk, evaluate"
+line = 214
+level = "word models, then evaluate_bits, then body by body"
+callers = "the training step's check against its GPU dump"
+role = "caller of the one (models held by their Definitions' tests)"
+basis = "read"
+
+[[evaluator]]
+path = "adapters/vllm/verity_vllm/program/predict/node_window_values.py"
+fn = "Values.evaluate"
+level = "word, evaluate_batch plus NATIVE numpy transcriptions"
+callers = "node-window value check"
+role = "caller of the one; NATIVE transcriptions held to the reference on a small binding at run time"
+basis = "read"
+
+[[walk]]
+what = "section 6 gate count"
+one = "verity/circuits/defs.py Definition.gates (Python); Circuits/Program.lean Defn.gates (Lean)"
+copies = "Flock/TemplateQuery.lean Desc.gatesIn (59 lines incl. parse); Spot/Partition.lean gatesMemo (a memoized gatesIn)"
+basis = "read"
+
+[[walk]]
+what = "gate layout and index"
+one = "verity/circuits/layout.py Circuit, resolve (Python); Circuits/Program.lean resolve, Prog.gate (Lean)"
+copies = "restrict.Bits builds C on bits from layout's gates (caller, not a copy); credit.py layout_of (PoUW's own)"
+basis = "read"
+
+[[walk]]
+what = "in(S), out(S)"
+one = "verity/circuits/boundary.py (compact, over Parts)"
+copies = "restrict.ports (walks every gate of the unrolled circuit, 9 lines); cut.check_call_cut derives committed sets per Call"
+basis = "read"
+
+[[walk]]
+what = "Boolean gate count"
+one = "verity/circuits/count.py count, table"
+copies = "census.BooleanWork (same rule, by id(fn), facets); InferenceOnlyVerifier/Count.lean takes the per-primitive count as an input table instead of reading the bodies; benchmarks/datacenter logical.ands"
+basis = "read"
+
+[[walk]]
+what = "template partition"
+one = "verity/circuits/partition_object.py TemplatePartition (Python); Flock/TemplateQuery.lean evaluate (Lean twin)"
+copies = "compact.lean_root's root walk; benchmarks/verifier_cost/population.py"
+basis = "inferred"
+
+[[walk]]
+what = "wires between root nodes"
+one = "Spot/Edges.lean edgesOf over the decoded Prog"
+copies = "verity/commitments/periods/edges.py over raw JSON (twin, with its own reference parser)"
+basis = "read"
