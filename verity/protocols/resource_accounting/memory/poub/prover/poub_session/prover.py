@@ -340,7 +340,6 @@ class ServingTrace:
             raise ValueError(f"a step of {pages} pages, its slots kept {headroom} steps after their free, frees and "
                              f"writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
-        self.salts = random.Random(rng.getrandbits(64))
         self.lifetime, self.headroom = lifetime, headroom
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
         self.steps, self.served, self.cursor, self.rekeyed = 0, 0, 0, 0
@@ -413,7 +412,7 @@ class ServingTrace:
             self.held.pop(x, None)
         self.held.update((x, (window, m)) for x, m in zip(slots, payloads))
         if slots:
-            a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
+            a = self.backend.append(payloads, [rb.HM96.fresh_salt() for _ in payloads])
             if a.first != change.first or a.digests != change.digests:
                 raise AssertionError("the store's append is not the memory map's")
             getattr(self.backend, "place", lambda first, slots, step: None)(a.first, slots, s)
@@ -560,7 +559,7 @@ class CpuBackend:
         held = [zero if j in self.dropped else self.mem.get(self.where.get(j, j), zero) for j in plan]
         self.misreads = tuple(j for j, e in zip(plan, held) if j not in self.dropped and e != self.store.blocks[j])
         ys = tuple(r(j, e) for j, e in zip(plan, held))
-        salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(plan.length)))
+        salts = tuple(rb.HM96.fresh_salt() for _ in range(rb.leaves(plan.length)))
         tree = rb.tree(seed, plan, ys, salts)
         return tree.commitment.root, (ys, salts, tree, plan)
 
