@@ -14,17 +14,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 #: where the sources are that run `check.py` or `lean_changed.py`: the check, `research` (the queue, its loop, its
-#: records run, the landing, the preflight), the task graph, the `verity` command, and the Lean tools themselves
-RUNNERS = ("tools/check", "tools/research/src/research", "tools/verity/graph/verity_graph", "tools/verity/cli",
-           "tools/verity/lean")
+#: records run, the landing, the preflight), the `verity` command, and the Lean tools themselves
+RUNNERS = ("tools/check", "tools/research/src/research", "tools/verity/cli", "tools/verity/lean")
 #: the two files that may name it: the option's own, and the audit's, whose docstrings say it takes none
 NAMES_IT = {"tools/verity/lean/lean_changed.py", "tools/verity/lean/check.py"}
 #: callers the scan must reach, so that a move of one of them leaves the rule on it rather than on nothing
 CALLERS = {"tools/check/check.py", "tools/check/train.sh", "tools/verity/lean/lean_audit.py",
            "tools/verity/lean/warm.py", "tools/research/src/research/vqueue_loop.py",
            "tools/research/src/research/vqueue_records.py", "tools/research/src/research/landing.py",
-           "tools/research/src/research/queue.py", "tools/verity/cli/verity_cli/__init__.py",
-           "tools/verity/graph/verity_graph/runners/lean_module.py"}
+           "tools/research/src/research/queue.py", "tools/verity/cli/verity_cli/__init__.py"}
 SOURCES = {".py", ".sh", ".toml"}
 ALLOW = re.compile(r"(?<![\w-])--allow(?![\w-])")
 

@@ -20,7 +20,7 @@ channels between them and runs nothing: it prints a `PLAN` line for each party, 
 | --- | --- |
 | `verity check` | The whole check, or with `tests`, `circuits` or `lean` only those parts of it. |
 | `verity ci` | The check's recent runs, and one run's steps. |
-| `verity tasks`, `verity graph` | The check as a graph of tasks: listed, or one task run here. |
+| `verity tasks` | The check as a graph of tasks: listed, or one task run here. |
 | `verity bench NAME` | A benchmark's runner. |
 | `verity calibrate NAME` | A calibration's runner. |
 | `verity run CONFIG\|NAME` | A configuration's parties on the machines this host stands for (an `--on` for each), and its verdict. An application is one configuration file, `applications/NAME.toml`; by NAME it runs on every machine it places parties on, with the running tree's commit as its program. |

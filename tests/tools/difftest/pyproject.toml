@@ -15,8 +15,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_example_port.py", "test_protocol_port.py"]
 # Test-only: `lake` builds lean/ (in this directory) and, through its path requires, the base packages (`Base.Canon`
 # and what it imports; `Base.JsonParse`, the JSON parser's port). The annotation port's test builds `annot-difftest`,
 # which reads `Circuits.Annot`, `Circuits.AnnotExpand` and what they import (`verity_difftest.annot.INPUTS`), and holds

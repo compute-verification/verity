@@ -4,8 +4,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_requirement_difftest.py"]
 # Test-only: the reference is `verity.circuits.requirement` (with its census path), and two of its Programs are rows
 # of the Definitions (`verity_vllm.definitions.registry`: `b1`, over `prims`, with the package's `__init__.py`, which
 # importing it runs); the census loads PoUW's segment Definitions

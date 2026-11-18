@@ -4,8 +4,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_vstar_difftest.py", "test_vstar_in_difftest.py", "test_vstar_menu.py"]
 # Test-only: the references are Flock's Python builders (verity_flock) over core's forms, gadgets and codec, and a
 # statement's bindings are the one-stage audit's partition (`one_stage.partition`, which `rec_residuals.statement` reads)
 # and its registered values (`one_stage.registered`, which the stagers commit V*'s port inputs under);
@@ -28,5 +26,5 @@ inputs = ["verity/protocols/proofs/flock/prover/python", "verity/circuits", "ver
 # 2100 s of tests (the longest 440 s) spread over workers.
 parallel = true
 worker_gb = 9
-# its test-file task's bound: test_vstar_difftest.py holds most of those 2100 s, past the test-file family's default
+# its bound under `--timeouts`: test_vstar_difftest.py holds most of those 2100 s
 timeout_s = 3600

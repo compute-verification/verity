@@ -3,7 +3,7 @@ Where the land verdicts gate (the loop's `--gate verdict`), a plain candidate's 
 and `main`'s whole check follows its landing (`culprit`).
 
 A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` merge per member on top (built by `Queue._merge`), pushed
-to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:
+to `queue/<sha12>` and checked as `ready:<sha>`.  Its verdict decides what happens:
 
     pass     `main` fast-forwards to it, so its members are on `main` and the candidate above it now sits on `main`
     fail     a failure its base has too (at its base's key, with its failing tests among the base's, or as a read outside its
@@ -22,7 +22,7 @@ to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides 
              for each set; a listing failure is handled alike.  A failed task whose records say its machine failed it
              (`MACHINE_KINDS`: a timeout, a kill, a full disk or no memory, a shared store's or build tree's state) is an
              infra error, not a failure, unless its base fails it too; a test that failed or flaked is a failure.  With
-             `tree_ejects`, infra errors graph2 saw on two or more nodes (`tree`) follow the tree: they are bisected like a
+             `tree_ejects`, infra errors seen on two or more nodes (`tree`) follow the tree: they are bisected like a
              fail, on the members whose files meet their inputs, else on every member, and eject a lone member.  Without
              it, the default, infra that persists until infra is rung, from runs that started the candidate's own steps,
              splits a multi-member candidate the same way to find a tree that breaks machines, ejecting nobody and recorded
@@ -68,9 +68,9 @@ a candidate built apart holds a PR changing a Lean input, as none is built besid
 always carry onto the top it goes onto.  A member that
 doesn't merge, or isn't marked at the head it was checked at, sends its members back to building.
 
-`decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
+`decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and the check's results say now) to
 the `Action`s that bring the world closer to it.  The loop builds the snapshot, applies the actions and keeps nothing between
-ticks but what the next snapshot reads (the refs, the labels, graph2's results, and the outcomes it recorded), so a restart
+ticks but what the next snapshot reads (the refs, the labels, the check's results, and the outcomes it recorded), so a restart
 repeats nothing that matters: a candidate's ref is named by its sha and enqueueing a check twice queues it once.
 
 Only the lowest candidate's verdict is read whole: one above it is checked on a base that may still fail, so its pass counts
@@ -156,7 +156,7 @@ class Failed:
     base_key: str | None = None    # the same task id's key in the base's listed graph, None when unknown
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
-    tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
+    tree: bool = False             # infra: it erred on two or more nodes, so the tree breaks the machines
     launch: bool = False           # infra: its launch started none of the candidate's steps (it registered no run, its twins
                                    # never took a slot, or its run ended before any step), so no candidate is split for it
     reads: frozenset[str] | None = None  # every path it can have read, paths and globs as `meets` reads them (its declared
@@ -179,7 +179,7 @@ MACHINE_KINDS = ("infra", "killed", "timeout", "store-state")
 
 @dataclass(frozen=True)
 class Verdict:
-    """graph2's results for the candidate's newest enqueue or rerun: pending after a `Retry` or a `Rerun` until it says
+    """The check's results for the candidate's newest enqueue or rerun: pending after a `Retry` or a `Rerun` until it says
     something newer."""
     state: str = PENDING
     failed: tuple[Failed, ...] = ()
@@ -247,7 +247,7 @@ class Snapshot:
     lean: int = 1                  # the most members of a Lean batch (`_next`); 0: only a pinned Lean PR opens one
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
-    tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
+    tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while `tree` marks any
                                    # error that ran out of attempts on two or more nodes, as an outage's do
     launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on a lone member before it is set aside
                                    # as for any other infra; a candidate of several is never split for it
@@ -325,15 +325,15 @@ class Eject:
 
 @dataclass(frozen=True)
 class Retry:
-    """Enqueue `ready:<sha>` again: graph2 reruns only what ended in infra errors, lists a check whose listing failed, or takes
-    up again a check that stayed pending."""
+    """Enqueue `ready:<sha>` again: what ended in infra errors, a check whose listing failed, or a check that stayed pending
+    is run again."""
     sha: str
 
 
 @dataclass(frozen=True)
 class Rerun:
     """Run ``keys`` on `ready:<sha>` again, afresh, their cached results set aside (the same tree built again has the same
-    keys, which graph2 answers from its cache); the candidate counts it in `reruns`."""
+    keys, answered from the cache); the candidate counts it in `reruns`."""
     sha: str
     keys: tuple[str, ...]
 
@@ -407,7 +407,7 @@ class Leave:
     why: str
 
 
-#: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
+#: the prefix of a task's test for each file it read outside its declared inputs, a fault named by file
 UNDECLARED = "undeclared:"
 ON_MAIN = "on main"
 #: the state of the outcome of a fail above the lowest decided before its base's word (`_unsaid`)
@@ -934,7 +934,7 @@ def _stale(c: Candidate, below: set[int], untaken: dict[int, tuple[str, str]], p
 
 
 def _inherited(f: Failed) -> bool:
-    """Whether the base fails ``f`` too, so no member is to blame: at the same key (graph2 keys a task by everything it reads,
+    """Whether the base fails ``f`` too, so no member is to blame: at the same key (a task's key is everything it reads,
     so no member touched it, and a fail stands), with its failing tests among the base's failing tests of it, or, for a task
     failed by reading files outside its declared inputs (tests `UNDECLARED`), when the base fails that task so too, whatever
     files each names, and every other test it fails (what its run failed beside the reads) is among the base's: a task that
@@ -973,7 +973,7 @@ def _erred(v: Verdict) -> tuple[Failed, ...]:
 
 
 def _tree(v: Verdict) -> tuple[Failed, ...]:
-    """``v``'s infra errors that follow the tree: graph2 saw each on two or more nodes."""
+    """``v``'s infra errors that follow the tree: each seen on two or more nodes."""
     return tuple(f for f in v.infra if f.tree)
 
 
@@ -1068,7 +1068,7 @@ def _delete_rings(s: Snapshot, c: Candidate, built: dict[int, Ready]) -> list[Ri
 
 def _rerun(s: Snapshot, c1: Candidate, built: dict[int, Ready]) -> Rerun | None:
     """The rerun of ``c1``'s own failures that meet none of its members' files (``built``: the members as built), the first
-    time: the same tree's keys, which graph2 answers from its cache.  A candidate of several is not rerun when a passing
+    time: the same tree's keys, answered from the check's cache.  A candidate of several is not rerun when a passing
     rerun of one of the failing tests was recorded within 24 hours (`_fresh`)."""
     own = _unreached(c1, built)
     if own is None or c1.reruns or (len(c1.members) > 1 and any(t in _fresh(s) for f in own for t in _tests_of(f))):

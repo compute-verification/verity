@@ -1,8 +1,7 @@
 """The grader's reading of training's slowdown code (`load_slowdown_code`) from a stand-in package in a git checkout of its own:
 the commit it is at, checked against the checkout's HEAD, and each refusal with its fix; the command line (`main`) end to end
 on the tiny step; and, with VERITY_GRADER_SLOWDOWN_CODE set, the tiny steps read beside the slowdown code itself, whose capture
-of the same step agrees product by product, and on sm_120 prices the linears' MACs as the circuit's tensor-core dots. These
-tests start git (pyproject.toml's `untraced`)."""
+of the same step agrees product by product, and on sm_120 prices the linears' MACs as the circuit's tensor-core dots."""
 from __future__ import annotations
 
 import importlib

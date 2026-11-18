@@ -5,8 +5,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_cost.py", "test_host_twin.py", "test_scale.py", "test_stream.py"]
 # slots_gpu runs the SHA-512 engine (sha512_rows: engine.py and the host twin's sources), which reads no settings: the
 # tests pass its build directory. test_slots.py reads FAMILIES' layout from commitments' layouts, a registered fixture fetched
 # before the suite runs (git holds none of it).
@@ -22,10 +20,3 @@ inputs = ["verity/commitments/cuda/sha512_rows", "tests/verity/commitments/fixtu
           "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/challenger.py"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_slots.py"]
-paths = ["tests/verity/commitments/fixtures/commit-slots-v1.json"]

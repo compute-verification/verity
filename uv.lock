@@ -52,8 +52,6 @@ members = [
     "verity-exact-kit-tests",
     "verity-flock",
     "verity-flock-tests",
-    "verity-graph",
-    "verity-graph-tests",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-machine-model-tests",
@@ -2480,12 +2478,6 @@ requires-dist = [{ name = "verity-circuit-check", editable = "tools/verity/circu
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
-dependencies = [
-    { name = "verity-graph" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-cli-tests"
@@ -2675,22 +2667,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-flock", extras = ["bench"] }]
-
-[[package]]
-name = "verity-graph"
-version = "0.0.0"
-source = { editable = "tools/verity/graph" }
-
-[[package]]
-name = "verity-graph-tests"
-version = "0.0.0"
-source = { virtual = "tests/tools/verity/graph" }
-dependencies = [
-    { name = "verity-graph" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-lean-audit"

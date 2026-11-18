@@ -5,7 +5,6 @@ import inspect
 import json
 import os
 import re
-import shlex
 import shutil
 import stat
 import subprocess
@@ -109,7 +108,7 @@ def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_ap
     assert env["PATH"].split(":")[0] == os.path.realpath(VQ / "bin") and (VQ / "bin" / "gh").is_file()
     assert (env["GH_TOKEN"], env["AWS_ACCESS_KEY_ID"], env["SLACK_BOT_TOKEN"]) == ("dummy-app", "dummy-r2", "dummy-slack")
     assert env["RESEARCH_AGENT_URL"] is None and env["RESEARCH_LANE"] == "ci" and env["GIT_TERMINAL_PROMPT"] == "0"
-    assert env[merge.LEAN_PUBLISH_ENV] == os.path.realpath(VQ / "lean_publish.sh") and flag(argv, "--graph2") == os.path.realpath(VQ / "graph2.sh")
+    assert env[merge.LEAN_PUBLISH_ENV] == os.path.realpath(VQ / "lean_publish.sh")
     helper = subprocess.run(["git", "-C", str(node.clone), "config", "--local", "--get", "credential.helper"],
                             capture_output=True, text=True).stdout.strip()
     assert helper == f"!{os.path.realpath(LOOP)} git"
@@ -239,7 +238,7 @@ def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missi
     on the node each is its file under live/, in every mode and after ci's args, so a line of args naming the pod's never wins.
     A missing file reads as empty there, as it does on the pod, and the tick says which in one line and runs."""
     live = node.home / "live"
-    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n--graph2 /root/g2remote.sh\n")
+    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n")
     (live / "heavy").write_text("")
     r = node.loop("once")
     assert r.returncode == 0, r.stderr
@@ -254,7 +253,6 @@ def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missi
     assert r.returncode == 0 and "reads each as empty" not in r.stderr
     for t in node.ticks():
         assert {o: flag(t["argv"], o) for o in LISTS} == {o: str(live / f) for o, f in LISTS.items()}
-        assert flag(t["argv"], "--graph2") == os.path.realpath(VQ / "graph2.sh")
 
 
 FAKE_MAIN = """import json, os, sys
@@ -293,39 +291,6 @@ class Research:
 
     def made(self) -> list[list[str]]:
         return [json.loads(ln) for ln in self.calls.read_text().splitlines()] if self.calls.exists() else []
-
-
-GRAPH2 = ["sudo", "-n", "python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events",
-          "/root/executor/events"]
-
-
-def test_graph2_s_wrapper_reaches_its_machine_by_name_with_each_argument_whole(tmp_path):
-    """The pod's wrapper writes graph2's machine as an address; the node's asks the register for the machine's ssh line by
-    name (VQ_GRAPH2_NODE, default vy-nebius-cpu-7) and runs graph2 there over one shared connection, each argument one word
-    to the remote shell however it is spelled, and the register's line taken as words, never run.  A name the register lacks
-    runs nothing."""
-    fake = Research(tmp_path)
-    ssh = script(tmp_path / "bin" / "ssh", f'#!{sys.executable}\nimport json, os, sys\n'
-                 'open(os.environ["SSH_OUT"], "a").write(json.dumps(sys.argv[1:]) + "\\n")\n')
-    out, odd = tmp_path / "ssh.jsonl", tmp_path / "ran"
-    env = {**fake.env, "PATH": f"{ssh.parent}:{fake.env['PATH']}", "SSH_OUT": str(out), "FAKE_KNOWN": "vy-nebius-cpu-7",
-           "FAKE_SSH": shlex.join(["ssh", "-i", "/k", "-p", "22", f"research@$(touch {odd})"])}
-
-    def graph2(*args: str, **more: str) -> subprocess.CompletedProcess:
-        return subprocess.run([str(VQ / "graph2.sh"), *args], env={**env, **more}, capture_output=True, text=True)
-
-    words = ["list", "a b;c $(id)", "it's", "two\nlines", "", "\\'\"", "--json"]
-    assert graph2(*words).returncode == 0
-    [argv] = [json.loads(ln) for ln in out.read_text().splitlines()]
-    assert argv[:-1] == ["-i", "/k", "-p", "22", "-o", "ControlMaster=auto", "-o", f"ControlPath={fake.home}/.runpod/ssh/cm-g2-%C",
-                         "-o", "ControlPersist=600", f"research@$(touch {odd})"] and not odd.exists()
-    # ssh hands the command to the remote user's shell: shlex.split parses it by POSIX sh's rules, bash's alone not among them
-    assert shlex.split(argv[-1]) == [*GRAPH2, *words]
-    assert fake.made() == [["pods", "ssh", "vy-nebius-cpu-7", "--print"]]
-    assert graph2().returncode == 0
-    assert shlex.split(json.loads(out.read_text().splitlines()[-1])[-1]) == GRAPH2
-    r = graph2("list", VQ_GRAPH2_NODE="vy-nowhere")
-    assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 2
 
 
 def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts_its_publisher(tmp_path):

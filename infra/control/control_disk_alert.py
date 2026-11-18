@@ -23,7 +23,6 @@ from research.pods import budgets, connect
 
 SEEN = Path(settings.get("CONTROL_DISK_SEEN", Path.home() / "control-disk/seen.json"))
 LOCAL = settings.get("CONTROL_POD_LOCAL") == "1"
-#: graph2's ready checks take ~2 GB each, several an hour, so 85% leaves about an hour to act
 LEVELS = (85, 90, 95)
 CLEAR = 80
 REARM = 3

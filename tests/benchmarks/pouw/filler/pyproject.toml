@@ -9,8 +9,6 @@ pythonpath = ["../../../../benchmarks/pouw/filler", "../../../../benchmarks/pouw
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_pf_rounds.py", "test_pfill_fold.py", "test_pfill_r9.py", "test_pfill_ref.py"]
 # The scorer refuses an arm whose record the attempt ledger (harness/ledger.py) or the evidence store's canonical form, ids
 # and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
 # schema from verity.protocols.resource_accounting.compute.pouw.verifier.serving, which it imports outright. pfill.cuh and pfill_ref.py take
@@ -29,10 +27,3 @@ inputs = ["benchmarks/pouw/harness", "verity/protocols/resource_accounting/compu
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/__init__.py",
           "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/circuits/kernels/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/pouw/filler"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_pfill_fp_score.py", "test_psched_score.py"]
-paths = ["benchmarks/pouw/filler"]
