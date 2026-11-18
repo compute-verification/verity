@@ -138,7 +138,6 @@ NETWORK_ATTESTER = register(Scheme(
     processes={"id-relay": id_relay.process},
     parties=NC.MANIFEST.parties,
     channels=NC.MANIFEST.channels,
-    channel_schemas=NC.MANIFEST.messages,
     colocated=(("challenger", NC.NETWORK_ATTESTER),),
     needs=frozenset({"windows", "ingress-relay"}),
     depends=("sampled-proofs",),

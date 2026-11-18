@@ -885,10 +885,6 @@ loaded_by = [
 paths = [
     "verity/protocols/resource_accounting/scheme.py",
 ]
-loads = [
-    "verity/channel.py",
-    "verity/runtime",
-]
 
 [[place]]
 paths = [

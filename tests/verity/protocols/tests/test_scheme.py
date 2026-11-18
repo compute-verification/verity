@@ -244,7 +244,7 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "from verity.protocols.compose import schemes as C\n"
              "from verity.protocols.resource_accounting import scheme as S\n"
              "C.load()\n"
-             "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
+             "F = ('parties', 'channels', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
              "     'published', 'check', 'reader', 'premises', 'tables', 'output_format', 'product_family',\n"
              "     'y_committed', 'salt_open_root', 'kernels')\n"
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
@@ -274,17 +274,10 @@ def test_a_component_that_charges_nothing_is_a_scheme_bound_and_credited_refuse(
         _toy(name="toy-check", resource=nothing)
 
 
-def test_the_records_unit_is_an_exact_factor_and_schemas_are_of_carried_messages() -> None:
-    from verity.channel import Schema
-    from verity.protocol import Channel
-
+def test_the_records_unit_is_an_exact_factor() -> None:
     assert _toy(published=("bytes", Fraction(1, 8))).published == ("bytes", Fraction(1, 8))
     with pytest.raises(ValueError, match="published is"):
         _toy(published=("bytes", 0.125))
-    ch = (Channel("prover", "verifier", ("Root",)),)
-    assert _toy(channels=ch, channel_schemas=(Schema("Root", 1, "commitment"),)).channel_schemas[0].type == "Root"
-    with pytest.raises(ValueError, match=r"channel_schemas name \['Open'\]"):
-        _toy(channels=ch, channel_schemas=(Schema("Open", 1, "commitment"),))
 
 
 def test_a_ports_layout_at_a_shape() -> None:

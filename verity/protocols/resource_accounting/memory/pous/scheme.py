@@ -33,12 +33,12 @@ from fractions import Fraction
 from typing import Any
 
 from verity.commitments import domains
-from verity.protocol import Channel
+from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Reading, Scheme, register
+from verity.protocols.resource_accounting.scheme import Charge, Lacks, Order, Reading, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -121,7 +121,6 @@ POUS = register(Scheme(
     attach=_pous_attach,
     parties=(*CS.MANIFEST.parties, VERIFIER),
     channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("SignedRun",), after=("End",))),
-    channel_schemas=CS.MANIFEST.messages,
     colocated=(),
     needs=frozenset({"store"}),
     depends=(),
@@ -158,7 +157,6 @@ WIPE = register(Scheme(
     attach=lambda exchange, ctx: _wipe_attach(),
     parties=(*WP.MANIFEST.parties, VERIFIER),
     channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("WipeReport",), after=("End",))),
-    channel_schemas=WP.MANIFEST.messages,
     colocated=(),
     needs=frozenset(),
     depends=(),
