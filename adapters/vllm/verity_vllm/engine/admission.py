@@ -19,8 +19,8 @@ emits, and what it asks:
   outside never reaches the scheduler, which is never handed its id;
 - before each step, on each pass of the engine core's input loop: every gate is asked (`Exchange.ready`, with the
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
-- ``schedule()``: `StepBegan` for a step that scheduled a token, with its requests, its tokens less draft tokens and the
-  requests left waiting;
+- ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
+  for a step that scheduled none) and the requests left waiting;
 - ``update_from_output``: `OutputReleased` for each new token, refused while a scheme holds its request's release at that
   step (`HoldRelease`), `OutputsComplete` for each request that finished, then `StepEnded`;
 - ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
@@ -72,7 +72,7 @@ class Hook(scheduler_step.Part):
 
     def __init__(self, sched: Any, exchange: messages.Exchange, key: Callable[[str], str]) -> None:
         self.sched, self.ex, self.key = sched, exchange, key
-        self.step = 0                                       # the next step that schedules a token
+        self.step = 0                                       # the next call of the scheduler's schedule
         self.began: collections.deque[int] = collections.deque()    # steps scheduled whose outputs haven't come
         self.held: dict[str, str] = {}                      # vLLM's request id -> its input, until a gate starts it
         self.live: dict[str, str] = {}                      # vLLM's request id -> its input, in the scheduler
@@ -97,17 +97,16 @@ class Hook(scheduler_step.Part):
 
     def around_schedule(self, call: Callable[..., Any], *a: Any, **kw: Any) -> Any:
         out = call(*a, **kw)
-        if out.total_num_scheduled_tokens > 0:
-            tokens, _ = non_draft_tokens(out)
-            inputs = tuple(self.key(r) for r in getattr(out, "num_scheduled_tokens", None) or ())
-            self.ex.emit(H.StepBegan(self.step, inputs, tokens, _waiting(self.sched)))
-            self.began.append(self.step)
-            self.step += 1
+        tokens, _ = non_draft_tokens(out)
+        inputs = tuple(self.key(r) for r in getattr(out, "num_scheduled_tokens", None) or ())
+        self.ex.emit(H.StepBegan(self.step, inputs, tokens, _waiting(self.sched)))
+        self.began.append(self.step)
+        self.step += 1
         return out
 
     def around_update_from_output(self, call: Callable[..., Any], scheduler_output: Any, model_runner_output: Any,
                                   *a: Any, **kw: Any) -> Any:
-        step = self.began.popleft() if self.began else self.step - 1
+        step = self.began.popleft()
         outs = call(scheduler_output, model_runner_output, *a, **kw)
         wants = self.ex.wants("steps")
         for batch in (outs or {}).values():
