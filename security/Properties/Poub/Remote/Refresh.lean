@@ -90,22 +90,23 @@ def OriginsOnRota : Prop :=
         ∀ b (hb : b < s.appends.size), a < b → s.appends[a].slot < s.appends[b].slot
 
 /-- **An accepted window opens every sampled block of a re-key at its origin.** For each sampled receipt whose block
-`j` is in a re-key append `a` (origin `registered x` or `rekey k`), its opening names the origin's position `q`
-(`originLeaf`: `x + (j − first)` in the registration's payload tree, or the same offset in the tree of the fresh append
-filling slot `k`), its block decodes under the bound key of its digest and `a`'s coin to a payload, and that payload's
-leaf, under the opening's salt and path, is leaf `q` under the origin's root. -/
+`j` is in an append `a` with an origin leaf (`originLeaf`: for `registered x`, position `x + (j − first)` in the
+registration's payload tree; for `rekey k`, the same offset in the tree of the append filling slot `k`, which
+`OriginsOnRota` gives every re-key of an accepted session), its opening names that position `q`, its block decodes
+under the bound key of its digest and `a`'s coin to a payload, and that payload's leaf, under the opening's salt and
+path, is leaf `q` under the origin's root. -/
 def OpensOrigin : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
       ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
         openings.size = sampled.size ∧
-        ∀ k (hk : k < sampled.size) (a : Append),
+        ∀ k (hk : k < sampled.size) (a : Append) q oroot odom,
           let o := openings[k]!
           let j := w.passes[sampled[k].1]!.plan.block sampled[k].2
-          reg.blocks ≤ j → appendOf appends j = some a → a.origin ≠ .fresh →
-            ∃ q oroot odom payload, originLeaf reg reg.digest appends a j = some (q, oroot, odom) ∧
-              o.originPosition = some q ∧
+          reg.blocks ≤ j → appendOf appends j = some a →
+          originLeaf reg reg.digest appends a j = some (q, oroot, odom) →
+            o.originPosition = some q ∧ ∃ payload,
               Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
               odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true
 
