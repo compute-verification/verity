@@ -15,7 +15,8 @@ over the three leaves `dsa_leaves.dsa_leaves` exports in place of its kernels (`
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
         shortcut, slot i = i), or past TOPK, at the row's class N (`long_row_keys`: n rounded up to a multiple of TOPK, the keys
         past n `PAD_SCORE`), the logits' top-TOPK set (`DsaTopKMask_v1{N,TOPK}`) and the concentrator's settings for it
-        (`DsaButterflySettings_v1{N,K=TOPK}`); on an IndexShare layer the top-k the last indexer layer wrote for the same
+        (`DsaButterflySettings_v1{N,K=TOPK}`), in vLLM's launch order (`emit_indexer`: each launch's logits, then its rows'
+        selections); on an IndexShare layer the top-k the last indexer layer wrote for the same
         positions; then explicitly pinned `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's first n
         rows (T = n), or past TOPK over the rows `DsaButterflyRows_v1{N,K=TOPK,W,E=16}` routes at those settings, in ascending
         index order (T = TOPK; `DsaButterflyRowsPad_v1{T=n,N,...}` where n < N).  In the batched form a call's rows past TOPK go in
@@ -31,6 +32,9 @@ vocabulary lacks refuses by name.  The leaf the shim exports in dsa_indexer_attn
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import torch
@@ -124,6 +128,34 @@ def long_row_blocks(keys: list[int], topk: int) -> list[tuple[int, list[int]]]:
             else:
                 out.append((N, [i]))
     return out
+
+
+#: vLLM's indexer logits budget in f32 words: `VLLM_SPARSE_INDEXER_MAX_LOGITS_MB` (envs.py:60, 512 by default) MiB, which
+#: `split_indexer_prefill_chunks` (indexer.py:180) holds each launch's rows × keys to
+MAX_LOGITS_MB = 512
+MAX_LOGITS = MAX_LOGITS_MB * 1024 * 1024 // 4
+
+
+def emit_indexer(keys: list[int], blocks: list[tuple[int, list[int]]], logits: Callable[[int, int], Any],
+                 alone: Callable[[int, int, Any], None], block: Callable[[int, list[int], list[Any]], None]) -> None:
+    """A call's indexer Calls in the order vLLM launches them (`sparse_attn_indexer`: per launch one MQA-logits kernel over its rows,
+    sparse_attn_indexer.py:500 and 603, then one top-k over them, :509 and :617-657).  `keys` are the call's rows' keys in row
+    order, increasing, its last the request's sequence length; a request's rows are one launch unless they pass `MAX_LOGITS`
+    alone, when `split_indexer_prefill_chunks` cuts them into launches of max(1, MAX_LOGITS // keys[-1]) rows (a decode's are
+    one).  Per launch: ``logits(i, N)`` for each row i in order, N its keys or its block's (`long_row_blocks`); then in row order
+    ``alone(i, n, logits)`` for each row outside `blocks`, n its keys, and ``block(N_b, rows, logits)`` for each block's rows in
+    the launch, so a block's ops each run over its rows in turn and batch (`prune.batched_form`)."""
+    at = {i: N for N, rows in blocks for i in rows}
+    step = max(1, MAX_LOGITS // keys[-1]) if keys else 1
+    for a in range(0, len(keys), step):
+        run = range(a, min(a + step, len(keys)))
+        out = {i: logits(i, at.get(i, keys[i])) for i in run}
+        for i in run:
+            if i not in at:
+                alone(i, keys[i], out[i])
+        for N, rows in blocks:
+            if (mine := [i for i in rows if i in out]):
+                block(N, mine, [out[i] for i in mine])
 
 
 def pad_words(topk: int, words: int = 1) -> int:
@@ -658,26 +690,26 @@ class DsaIndexerAttnRule(StateRule):
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
-            for i, (P, n) in enumerate(zip(pos, keys)):
-                if blocks and n > TOPK:
-                    break
-                lg = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
-                logits = ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
-                                  node=node, rule=self, name=f"{h}/logits[t={P}]")
+
+            def logits(i: int, n: int) -> Coll:
+                return ctx.call(ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D), iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)),
+                                Coll(Array(n, Value(32)), slog.cut(n)), node=node, rule=self, name=f"{h}/logits[t={pos[i]}]")
+
+            def alone(i: int, n: int, lg: Coll) -> None:
+                P = pos[i]
                 if n <= TOPK:
                     ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
-                    continue
+                    return
                 N = long_row_keys(n, TOPK)
-                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else logits.refs)
+                scores = Coll(Array(N, Value(32)), concat([lg.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else lg.refs)
                 mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
                                 name=f"{h}/topk_mask[t={P}]")
                 selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
                                        name=f"{h}/topk[t={P}]")
-            for Nb, rows in blocks:
-                N, lg = long_row_keys(Nb, TOPK), ctx.kind("dsa_mqa_logits", node, N=Nb, H=H, D=D)
-                ik, iks = Coll(Array(Nb, Array(D, Value(8))), klog.cut(Nb)), Coll(Array(Nb, Value(32)), slog.cut(Nb))
-                logits = [ctx.call(lg, iq[i], iw[i], ik, iks, node=node, rule=self, name=f"{h}/logits[t={pos[i]}]") for i in rows]
+
+            def block(Nb: int, rows: list[int], logits: list[Coll]) -> None:
+                N = long_row_keys(Nb, TOPK)
                 counts = [Coll(Value(32), pad(32, keys[i], 1, 1)) for i in rows]
                 tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if Nb < N else []
                 fm = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK)
@@ -686,6 +718,8 @@ class DsaIndexerAttnRule(StateRule):
                                   name=f"{h}/topk_mask[t={pos[i]}]") for i, lgt, c in zip(rows, logits, counts)]
                 for i, m in zip(rows, masks):
                     selected[pos[i]] = ctx.call(fs, m, node=node, rule=self, name=f"{h}/topk[t={pos[i]}]")
+
+            emit_indexer(keys, blocks, logits, alone, block)
             ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:

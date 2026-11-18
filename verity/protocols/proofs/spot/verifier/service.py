@@ -184,6 +184,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
+from verity.commitments import randomness as RND
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
@@ -299,13 +300,13 @@ def fixed(text: Any) -> str:
 
 
 def rate(text: Any) -> bool:
-    """Whether a sampling design text is a rate: a rate sampling design (`draw.parse_rate`), a stratified or work rate sampling design
-    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
+    """Whether a sampling design text is a rate: a rate sampling design (`randomness.parse_rate`), a stratified or work rate sampling design
+    (`randomness.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
     `Select.rate?` is this."""
-    if D.parse_rate(text) is not None or D.parse_strata_rate(text) is not None:
+    if RND.parse_rate(text) is not None or RND.parse_strata_rate(text) is not None:
         return True
     try:
-        return D.parse_design(text)["law"] == "bernoulli"
+        return RND.parse_design(text)["law"] == "bernoulli"
     except (ValueError, TypeError, AttributeError):
         return False
 
@@ -313,8 +314,8 @@ def rate(text: Any) -> bool:
 @dataclass(frozen=True)
 class SamplingDesign:
     """A one-stage sampling design, a rate (`rate`): the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`
-    (`draw.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
-    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A docket's N proof blocks
+    (`randomness.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
+    (`randomness.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A docket's N proof blocks
     are the prover's to size, so a fixed count, `subset:K`, `stratified:K` or `work:K`, which samples each proof block with
     K/N as the prover pads N, is refused (`fixed`). A rate samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a
     multiple of the T tables (`draw.rate_count`) over the N proof blocks each docket brings, so every proof block is
@@ -344,7 +345,7 @@ def _grain(g: Any) -> bool:
 def _replay_sampling_design(text: Any) -> bool:
     """`Select.replaySamplingDesign?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
     registers."""
-    return D.parse_rate(text) is not None
+    return RND.parse_rate(text) is not None
 
 
 @dataclass(frozen=True)
@@ -740,7 +741,7 @@ def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any])
     """The strata sizes a stratified rate's K reads (`draw.strata_sizes` of `program` under `query`), none for any other rule.
     Raises `Refused` (`rate`) where the query doesn't apply to a stratified rate, as `selection_table` does for a work rate.
     The Lean verifier's `Select.strataSizes`, which `Rule.over` reads only for a stratified rate, is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
+    strata = RND.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or strata[0]:
         return []
     try:
@@ -759,9 +760,9 @@ def selection_sampling_design(rule: Selection, n: int, sizes: Sequence[int] = ()
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
-    rate, strata = D.parse_rate(text), D.parse_strata_rate(text)
+    rate, strata = RND.parse_rate(text), RND.parse_strata_rate(text)
     if rate is None and strata is None:
-        return D.parse_design(text)
+        return RND.parse_design(text)
     if rate is not None:
         kind, k = "subset", D.rate_count(*rate, n)
     elif strata[0]:
@@ -779,7 +780,7 @@ def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
     `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
     `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
     no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
+    strata = RND.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or not strata[0]:
         return work_table
     try:
@@ -791,13 +792,13 @@ def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
 def params_sampling_design(sampling_design: Any, program: Program, query: Mapping[str, Any],
                work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
     """One-stage's parameters' agreed sampling design and the work table it is expanded over: a sampling design object as given, with
-    `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
+    `work_table`, or a rate as a selection rule states it (`randomness.parse_rate`, `randomness.parse_strata_rate`), its sampling design
     over the population of `program` under `query` and its strata (`selection_sampling_design`) and its work table (`selection_table`). Raises
     `ValueError` for any other text, a query that doesn't apply, or a rate `selection_sampling_design` or `selection_table` refuses.
     The Lean verifier's `OneStage.design` is this."""
     if not isinstance(sampling_design, str):
         return sampling_design, work_table
-    if D.parse_rate(sampling_design) is None and D.parse_strata_rate(sampling_design) is None:
+    if RND.parse_rate(sampling_design) is None and RND.parse_strata_rate(sampling_design) is None:
         raise ValueError("a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, "
                          f"not {sampling_design!r}")
     rule = SamplingDesign(sampling_design)

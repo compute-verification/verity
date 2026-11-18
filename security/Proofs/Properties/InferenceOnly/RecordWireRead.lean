@@ -7,8 +7,8 @@ public import Proofs.Properties.InferenceOnly.RecordJson
 
 SPOT's reader (`Spot.Wires.Wire.ofJson`) refuses a wire that has no digit, a digit with no step, or a digit of radix
 zero (`wire_digits`). The record's wiring is `Spot.Edges.edgesOf`'s, and that each of its wires has a step for each
-digit and no digit of radix zero is the hypothesis `EdgeDigits`, which is what the record check's test that a wire
-stays inside a slot (`Record.sameSlot`) is sound on.
+digit and no digit of radix zero is `EdgeDigits` (proved: `edgeDigits`), which is what the record check's test that
+a wire stays inside a slot (`Record.sameSlot`) is sound on.
 -/
 
 @[expose] public section

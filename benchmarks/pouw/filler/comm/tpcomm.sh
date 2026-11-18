@@ -17,7 +17,8 @@
 # skips the alone probe and the DRAM gate).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler/comm
 export B; B=$(mktemp -d /tmp/tpcomm.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TC_TP=${TC_TP:-2} TC_REPS=${TC_REPS:-9}

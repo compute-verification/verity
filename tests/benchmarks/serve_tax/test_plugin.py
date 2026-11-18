@@ -213,39 +213,6 @@ class Rows:
         return Rows(len(range(*s.indices(self.shape[0]))), self.shape[1])
 
 
-class Launched:
-    def __init__(self):
-        self.done = False
-
-    def ready(self) -> bool:
-        return self.done
-
-    def kernel_ms(self) -> float:
-        return 2.0
-
-
-def test_kv_edge_keeps_at_most_inflight_chunks_out_and_reports_each_edge_once():
-    now, got, out = [0.0], [], []
-
-    def launch(edge, rows):
-        out.append((edge, rows.shape[0], Launched()))
-        return out[-1][2]
-
-    kv = P.KvEdge(10.0, got.append, chunk_rows=2, inflight=1, clock=lambda: now[0], launch=launch)
-    kv.rows = lambda caches: [Rows(5, 8)]
-    kv.tick(None)
-    assert out == []
-    now[0] = 10.0
-    for _ in range(3):
-        kv.tick(None)
-        assert sum(not o[2].done for o in out) == 1
-        out[-1][2].done = True
-    kv.tick(None)
-    assert [o[:2] for o in out] == [(0, 2), (0, 2), (0, 1)]
-    assert got == [{"edge": 0, "bytes": 40, "chunks": 3, "kernel_ms": 6.0, "gb_per_s": round(40 / 6.0 / 1e6, 1), "span_s": 0.0,
-                    "t": got[0]["t"]}]
-
-
 def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     now, got, seen = [0.0], [], []
     tc = P.TokenCommit(10.0, got.append, clock=lambda: now[0], commit=lambda w, data: (seen.append(data), b"\x01" * 64)[1])
@@ -284,28 +251,6 @@ def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_p
     done[-1].uninstall()
     sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
     assert not done[0].open
-
-
-def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
-    ticks, capturing = [], [False]
-
-    class Edge:
-        def tick(self, kv):
-            ticks.append(kv)
-
-    made = []
-    run = P._kv_runner(lambda self: "out", {"out": "."}, capturing=lambda: capturing[0],
-                       edge_of=lambda: made.append(1) or Edge())
-    runner = NS()
-    assert run(runner) == "out" and not made
-    runner.kv_caches = []
-    run(runner)
-    runner.kv_caches, capturing[0] = ["kv"], True
-    run(runner)
-    assert not made
-    capturing[0] = False
-    run(runner), run(runner)
-    assert made == [1] and ticks == [["kv"], ["kv"]]
 
 
 def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outside_a_capture(monkeypatch):
@@ -397,8 +342,8 @@ def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_en
 
 
 class RankExecutor:
-    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool` and `boundary.rank_take`, rank 2's
-    root different."""
+    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool`, `boundary.rank_salted` and
+    `boundary.rank_take`, rank 2's root different."""
 
     def __init__(self):
         self.calls: list = []
@@ -408,12 +353,14 @@ class RankExecutor:
 
         self.calls.append((fn.__name__, args))
         if fn is B.rank_pool:
-            return [{"rank": r, "bytes": 10} for r in (1, 0)]
+            return [{"rank": r, "bytes": 10, "salt_rows": {"kv.0": 2}} for r in (1, 0)]
+        if fn is B.rank_salted:
+            return [{"rank": r, "build_s": 0.5 + r} for r in (1, 0)]
         return [{"rank": r, "root": "aa" if r < 2 else "bb", "hash_kernel_ms": 4.0 + r, "copy_ms": 9.0 if r == 0 else None,
                  "copied_bytes": 10 if r == 0 else 0, "kv_s": 0.5, "runner_s": 0.1 * r} for r in (2, 0, 1)]
 
 
-def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch):
+def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch, tmp_path):
     import boundary as B
     import pytest
 
@@ -425,12 +372,15 @@ def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(mon
     with pytest.raises(RuntimeError, match="no save_kv"):
         P.ranks_take(core, {"out": "x", "save_kv": [1]}, NS(scheduled=7), None, None, [None], lambda: now[0],
                      record=recs.append)
-    take = P.ranks_take(core, {"out": "x", "kv_copy": "first"}, NS(scheduled=7), None, None, ["medium2"],
-                        lambda: now[0], key=lambda: b"k" * 32, record=recs.append)
-    assert calls == [("rank_pool", (4, "first"))] and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    take = P.ranks_take(core, {"out": "x", "kv_copy": "first", "kv_dir": str(tmp_path / "kv")}, NS(scheduled=7), None,
+                        None, ["medium2"], lambda: now[0], record=recs.append)
+    salts = tmp_path / "kv" / B.SALTS
+    assert calls == [("rank_pool", (4, "first")), ("rank_salted", (str(salts),))]
+    assert B.SF.params(salts) == {"kv.0": 2} and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    assert recs[0]["build_s"] == 1.5
     now[0] = 12.5
     take(NS(edge=0), {"edge": 0, "due_t": 12.0, "drained_t": 12.25, "drain_calls": 2})
-    assert calls[-1] == ("rank_take", (b"k" * 32,))
+    assert calls[-1] == ("rank_take", ())
     r = recs[-1]
     assert (r["edge"], r["load"], r["next_step"], r["drain_s"], r["pause_s"]) == (0, "medium2", 7, 0.25, 0.25)
     assert [x["rank"] for x in r["ranks"]] == [0, 1, 2] and r["state_requests_bytes"] == 3
@@ -451,7 +401,8 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
     monkeypatch.setattr(B, "capture", lambda core, runner=True: {"requests": b""})
     core = NS(scheduler=sched, model_executor=RankExecutor(), batch_queue=[])
     now, steps = [0.0], []
-    edges = P.edges_of(core, {"out": str(tmp_path), "every_s": 30.0, "kv_copy": "first"}, lambda: now[0])
+    edges = P.edges_of(core, {"out": str(tmp_path), "private": str(tmp_path / "p"), "every_s": 30.0, "kv_copy": "first"},
+                       lambda: now[0])
 
     def step(t: float) -> None:
         now[0] = t

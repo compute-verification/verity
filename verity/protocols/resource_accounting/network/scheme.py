@@ -31,7 +31,7 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 #: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
 #: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty
 SETTINGS = {"order": "arrival", "hold_ms": 5000, "bucket_us": 100_000, "sat_us": 0, "free_us": 0, "token_ns": 0,
-            "catch_up": "quiet", "arm": "", "log": ""}
+            "log": ""}
 
 
 def _check(values: Mapping[str, Any]) -> str | None:

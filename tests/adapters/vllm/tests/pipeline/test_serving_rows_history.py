@@ -31,7 +31,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
@@ -129,7 +129,7 @@ def cut(rows, histories=True, caps=CAPS):
 def binding(ms) -> CS.Binding:
     n = {t: sum(m.n for m in ms if m.template == t) for t in TMPLS}
     return CS.Binding(*IF.listed_program([(SRW.template(t).fn, n[t]) for t in TMPLS], ()),
-                      D.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
+                      RND.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
 
 
 def opens(t: HT.HistoryTable, g, i):

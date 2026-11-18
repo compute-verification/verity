@@ -51,6 +51,24 @@ def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.Mon
         S.register(_toy("toy"))
 
 
+def test_a_shell_reads_one_field_of_a_declaration(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path) -> None:
+    """`python3 -m verity.protocols.compose.schemes NAME FIELD`, what the benchmarks' shell scripts read instead of a
+    literal of their own."""
+    from verity.protocols.compose import schemes
+
+    (tmp_path / "toy_shell_declaration.py").write_text(
+        "from verity.protocols.resource_accounting import scheme as S\n"
+        "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', (), (), (), (), settings={'reads': 5, 'on': True},\n"
+        "                    option='toy:at-v1'))\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_shell_declaration"})
+    for field, printed in (("protocol", "verity/toy/v0"), ("option", "toy:at-v1"),
+                           ("settings", '{"on": true, "reads": 5}')):
+        assert schemes.main(["toy", field]) == 0 and capsys.readouterr().out == printed + "\n"
+    assert schemes.main(["pouw", "protocol"]) == 2 and "declared: toy" in capsys.readouterr().err
+    assert schemes.main(["toy", "name"]) == 2 and "protocol|option|settings" in capsys.readouterr().err
+
+
 def test_settings_toggle() -> None:
     s = _toy()
     assert S.settings(s, {}) == {"refresh": False}

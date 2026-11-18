@@ -62,7 +62,6 @@ import pytest
 import settings
 import window_tie as WT
 from verity_vllm.program.model import INT8_EXACT_QUANT
-from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WRS
@@ -78,8 +77,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words i
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
-from verity.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json, program_digest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
 
@@ -100,7 +100,7 @@ H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
 RUN = "ab" * 64
-SAMPLING_DESIGN = D.parse_design("stratified:1")
+SAMPLING_DESIGN = RND.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped row: round 1's o-projection's (call 1 of the round) first slot
 FLIP = ("row-table/1/k2048", M * 1)
@@ -226,7 +226,7 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
     low = WC.lower(reg, CLASS, None, WC.Grain(), tables=TABLES)
     fields = _weights(low.fn)
-    state = WRS.state_value(IB.program_digest(low.circuit), CLASS,
+    state = WRS.state_value(program_digest(low.circuit.program()[0]), CLASS,
                             SR.standin_rows(CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)]), window=OPEN)
     values = {**WW.weight_values(reg, fields, None, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])

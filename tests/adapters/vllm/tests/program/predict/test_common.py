@@ -26,6 +26,7 @@ CHUNKS = " (a request's chunks are its {} prefill rows in turn, each at least on
 PASSES = [
     (("step", None, None, 3, 0, None, True, False), (False, (), [3], [True])),
     (("step", None, None, 3, 0, None, False, False), (False, (), [3], [True])),
+    (("step", None, None, 1, 2, None, False, False), (False, (), [1], [True])),
     (("request", 4, 2, 1, 0, None, True, False), (False, (), [4, 1, 1], [True, True, True])),
     (("request", 4, 0, 1, 0, None, True, False), (False, (), [4], [True])),
     # a history of C rows: the prefill is the prompt's other rows, down to one
@@ -52,7 +53,6 @@ NO_PASSES = [
     (("request", 4, 2, 1, -1, None, True, False), "a history of -1 rows for a prompt of 4 (0 < C < LP)"),
     (("request", 4, 2, 1, 6, None, False, False), "a history of 6 rows for a prompt of 4 and 2 decodes (0 < C < LP + T)"),
     (("request", 6, -2, 1, 4, None, False, True), "a history of 4 rows for a prompt of 6 and -2 decodes (0 < C < LP + T)"),
-    (("step", None, None, 1, 2, None, False, False), "a history of 2 rows for a prompt of None and None decodes (0 < C < LP + T)"),
     (("step", None, None, 1, 0, None, False, True), "a step to position 0 of a None-token prompt" + EDGE),
     (("request", 4, 2, 1, 0, None, True, True), "a request to position 6 of a 4-token prompt" + EDGE),
     (("request", 6, -6, 1, 0, None, False, True), "a request to position 0 of a 6-token prompt" + EDGE),
@@ -90,7 +90,8 @@ def test_cyclic_gc_off_holds_the_collector_off_inside_and_restores_its_state():
 
 @pytest.mark.parametrize(("shape", "passes"), PASSES, ids=[str(shape) for shape, _ in PASSES])
 def test_a_wrappers_passes_are_its_prefill_in_its_chunks_and_a_decode_each(shape, passes):
-    """`request_passes`: a step is one pass of its M rows; a request is its prefill of the prompt's rows after its history, a pass
+    """`request_passes`: a step is one pass of its M rows, after its history if it has one (`build.build_program` holds it to the
+    step's pos0); a request is its prefill of the prompt's rows after its history, a pass
     a chunk, and then a pass a decode, or only the decodes left where its history reaches them; every pass samples but a
     chunk before the prefill's last, and a request that stops inside its prompt samples nothing."""
     assert request_passes(*shape) == passes
