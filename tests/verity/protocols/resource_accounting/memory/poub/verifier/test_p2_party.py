@@ -86,7 +86,7 @@ def _held(params) -> tuple[int, ...]:
 
 def test_the_honest_request_passes_and_the_params_are_the_auditors(store) -> None:
     """A request carrying the auditor's values as they are passes, and `audit.Params` gets the auditor's: `SESSION`,
-    the served bandwidth piece's (`benchmarks/pous/held_bandwidth.py`'s defaults), by default, or the values a toy party
+    the served bandwidth piece's (`p2_stage/bandwidth.py`'s defaults), by default, or the values a toy party
     is held to."""
     reg = store.registration
     assert p2_parties.SESSION == {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
