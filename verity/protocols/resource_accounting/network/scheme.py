@@ -15,7 +15,7 @@ from verity.protocols.resource_accounting.network.verifier.io_request import IoT
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
-from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.admission import Admitter
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
@@ -24,13 +24,13 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
-    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
-    ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
+    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log``,
+    ``clock`` and ``schedule``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
     if "admit" not in ctx:
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
         return None
-    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
+    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
     return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
 
 
@@ -50,6 +50,7 @@ def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
 
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
+    messages=workload.MESSAGES,
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
