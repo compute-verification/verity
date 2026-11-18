@@ -201,6 +201,26 @@ class NoPiece(NotImplementedError):
 
 #: the top-p keep word over every split count (``sampling.topp_mask_word``), which no one circuit holds (`topp_word`)
 TOPP_WORD = r"TopPMaskWordx(\d+)_v1"
+#: a primitive too large for one circuit, by id pattern (its one group the lane count): the module writing its composition
+#: (``ands``, ``count``, ``build``, ``NAMES``, ``OPS``), which registers itself here
+COMPOSED: dict[str, Any] = {}
+
+
+def compositions() -> dict[str, Any]:
+    """`COMPOSED`, with `topp_word`'s registered."""
+    from . import topp_word  # noqa: F401  (registers itself)
+
+    return COMPOSED
+
+
+def composition(pid: str):
+    """``(module, V)``: the composition `COMPOSED` holds for primitive ``pid``, or None."""
+    import re
+
+    for pat, mod in compositions().items():
+        if (m := re.fullmatch(pat, pid)) is not None:
+            return mod, int(m[1])
+    return None
 
 
 def no_piece(pids: Collection[str]) -> str:
@@ -476,11 +496,10 @@ def _piece_ands(prim) -> int:
     """The ANDs of ``prim``'s piece on free operands (none for a primitive Flock has no piece for, which no unit holding it
     lowers past), each primitive id lowered once. A piece that lowers only on a constant operand (a rotation by a constant
     count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead. The top-p
-    keep word (`TOPP_WORD`) has no piece but counts its composition's (`topp_word.ands`), so that a unit holding it is sized,
+    keep word (`TOPP_WORD`) has no piece but counts its composition's (`composition`), so that a unit holding it is sized,
     and refused past the range (`circuit.refuse_past_range`), before anything lowers it."""
     if prim.id not in _PIECE_ANDS:
         import inspect
-        import re
 
         from verity.circuits.evaluation.reference import signature_of
 
@@ -493,10 +512,8 @@ def _piece_ands(prim) -> int:
             outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
             C.output("out", [b for w in outs for b in w])
             ands = C.counts()["ands"]
-        elif (m := re.fullmatch(TOPP_WORD, prim.id)) is not None:
-            from . import topp_word
-
-            ands = topp_word.ands(int(m[1]))
+        elif (c := composition(prim.id)) is not None:
+            ands = c[0].ands(c[1])
         _PIECE_ANDS[prim.id] = ands
     return _PIECE_ANDS[prim.id]
 

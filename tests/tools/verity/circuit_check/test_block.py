@@ -139,8 +139,9 @@ def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(mo
 
 def test_a_held_target_s_progress_row_and_the_last_line_count_it_apart_from_its_failures(monkeypatch, capsys):
     """A held Definition past the block: its line in ``progress`` (`cli.progress_row`) says why, and its ``failures`` count
-    what the verdict counts, so not its ``block/past-range``; the last line counts it held, not failed.  A held one that fits
-    counts its ``block/stale-hold``."""
+    what the verdict counts, so not its ``block/past-range``; its line in the log (`cli.target_line`) says ``held`` with
+    ``failures=0``, and unheld says ``FAIL``; the last line counts it held, not failed.  A held one that fits counts its
+    ``block/stale-hold``."""
     from verity_flock import circuit as FC
     from circuit_check import cli
 
@@ -155,6 +156,9 @@ def test_a_held_target_s_progress_row_and_the_last_line_count_it_apart_from_its_
     assert [f["code"] for f in F.failures] == ["past-range"]
     assert {k: cli.progress_row(past, holds)[k] for k in ("failures", "held")} == {"failures": 0, "held": "a toy"}
     assert cli.progress_row(past, {})["failures"] == 1 and "held" not in cli.progress_row(past, {})
+    timed = {**past, "seconds": 0.0}
+    assert cli.target_line(timed, holds).startswith(f"held      definition {fn.id}  failures=0 ")
+    assert cli.target_line(timed, {}).startswith(f"FAIL      definition {fn.id}  failures=1 ")
     _held(monkeypatch, {fn.id: "a toy"})
     assert cli.verdict(CK.report([past], OPTS), out=None, what="shard 1/4: 1 target(s)") == 0
     assert capsys.readouterr().out.splitlines()[-1].startswith(

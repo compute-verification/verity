@@ -51,16 +51,20 @@ DOOR = _load("verity_bench_overhead_door", ROOT / "benchmarks" / "harness" / "ve
 HH = _load("pearl_c_hash_host_test", POUW.parents[1] / "tests" / "benchmarks" / "pouw" / "test_pearl_c_hash_host.py")
 host = HH.host
 LINEARS = DOOR.MODELS[DOOR.KERNEL_MODEL]
-CTX = {"device": None, "arch": "sm_90a"}
+CTX = {"device": None, "card": "h100"}
+#: the kernel scheme Pearl+ runs on the H100 and the H200, by which its cubin, its records and its passes are found
+SERVED = "pearl-c-h100-v1-h3"
 
 
-def _built(tmp_path: Path, monkeypatch, body: bytes = b"\x7fELF a sent cubin") -> tuple[OA.PearlPlus, dict, Path]:
+def _built(tmp_path: Path, monkeypatch, body: bytes = b"\x7fELF a sent cubin",
+           card: str = "h100") -> tuple[OA.PearlPlus, dict, Path]:
     cubin = tmp_path / "inputs" / "pearl_c_sm90.cubin"
     cubin.parent.mkdir(parents=True)
     cubin.write_bytes(body)
     monkeypatch.setenv(OA.CUBIN_ENV, str(cubin))
     arm = OA.PearlPlus()
-    return arm, arm.build({**CTX, "out_dir": str(tmp_path / "run"), "transcripts_dir": str(tmp_path / "run" / "transcripts")}), cubin
+    return arm, arm.build({**CTX, "card": card, "out_dir": str(tmp_path / "run"),
+                           "transcripts_dir": str(tmp_path / "run" / "transcripts")}), cubin
 
 
 def test_the_arm_meets_the_harness_interface():
@@ -106,8 +110,8 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 8)[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
         monkeypatch.delenv(k, raising=False)
-    honest = T.proved_pass(tmp_path / "transcripts", OA.SERVED)[0]
-    control = T.proved_pass(tmp_path / "negative", OA.SERVED)[0]
+    honest = T.proved_pass(tmp_path / "transcripts", SERVED)[0]
+    control = T.proved_pass(tmp_path / "negative", SERVED)[0]
     rows = control.parent / json.loads(control.read_text())["weights"]["0"]["rows"]["path"]
     rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))
 
@@ -221,17 +225,25 @@ def test_the_development_build_is_build_sh_s_cubin_and_gates(tmp_path, monkeypat
         OA.build_dev(out)
 
 
-def test_the_arm_builds_only_for_its_cubins_target(tmp_path, monkeypatch):
+@pytest.mark.parametrize("card", ["h100", "h200"])
+def test_the_arm_serves_the_kernel_scheme_pearl_plus_declares_on_the_card(tmp_path, monkeypatch, card):
+    arm, build, _ = _built(tmp_path, monkeypatch, card=card)
+    assert arm.served == build["served"] == SERVED
+
+
+@pytest.mark.parametrize("card", ["rtx-pro-6000", "b200"])
+def test_the_arm_refuses_a_card_pearl_plus_has_no_build_for(tmp_path, monkeypatch, card):
     monkeypatch.setenv(OA.CUBIN_ENV, str(tmp_path / "absent.cubin"))
-    with pytest.raises(RuntimeError, match="runs on sm_90a .* not sm_120a: time it with --card h200"):
-        OA.PearlPlus().build({**CTX, "arch": "sm_120a", "out_dir": str(tmp_path)})
+    with pytest.raises(LookupError, match=f"^{card}'s architecture sm_\\d+a has no build here: {SERVED} is built for "
+                                          "sm_90a$"):
+        OA.PearlPlus().build({**CTX, "card": card, "out_dir": str(tmp_path)})
 
 
 @pytest.mark.parametrize("m", [1, 16, 8192, DOOR.M_MAX])
 @pytest.mark.parametrize("linear", sorted(LINEARS))
-def test_the_door_s_linears_are_in_the_domain(linear, m):
+def test_the_door_s_linears_are_in_the_domain(tmp_path, monkeypatch, linear, m):
     n, k = LINEARS[linear]
-    assert OA.PearlPlus().domain(A.Shape(linear, m, k, n)) is None
+    assert _built(tmp_path, monkeypatch)[0].domain(A.Shape(linear, m, k, n)) is None
 
 
 @pytest.mark.parametrize("m, k, n, why", [
@@ -242,26 +254,26 @@ def test_the_door_s_linears_are_in_the_domain(linear, m):
     (16, 8192, 1024 * 256 + 256, "at most 1024 (n a multiple of 256"),
     (PPD.FLAG_ROWS + 1, 8192, 8192, f"at most {PPD.FLAG_ROWS} rows"),
 ])
-def test_outside_the_domain_the_arm_says_why(m, k, n, why):
-    got = OA.PearlPlus().domain(A.Shape("x", m, k, n))
+def test_outside_the_domain_the_arm_says_why(tmp_path, monkeypatch, m, k, n, why):
+    got = _built(tmp_path, monkeypatch)[0].domain(A.Shape("x", m, k, n))
     assert got is not None and why in got and not got.startswith("linear 0")
 
 
 @pytest.mark.parametrize("m, m16", [(1, 16), (16, 16), (17, 32), (8192, 8192)])
-def test_work_is_the_served_scheme_s_at_the_padded_rows(m, m16):
+def test_work_is_the_served_scheme_s_at_the_padded_rows(tmp_path, monkeypatch, m, m16):
     n, k = LINEARS["o"]
-    w, s, unit = OA.PearlPlus().work(A.Shape("o", m, k, n)), pouw_schemes.get(OA.SERVED), Unit(m16, k, n)
+    w, s, unit = _built(tmp_path, monkeypatch)[0].work(A.Shape("o", m, k, n)), pouw_schemes.get(SERVED), Unit(m16, k, n)
     assert w.tensor_macs == {"fp8-e4m3-rowwise": m16 * k * n} and w.unit == "fp8-mac"
     assert (w.w_ref, w.credited) == (str(s.wref(unit)), str(s.credit_of(unit)))
     assert w.hashed_bytes == {"a_rows": 4 * m16 * k, "tile_leaves": 8 * m16 * n, "y_rows": 4 * m * n}
     assert w.weight_hashed_bytes == {"b_rows": 4 * n * k} and w.gamma is None
 
 
-def test_the_door_s_entry_says_the_call_commits_y_only_once_the_call_hashes_y_s_rows():
+def test_the_door_s_entry_says_the_call_commits_y_only_once_the_call_hashes_y_s_rows(tmp_path, monkeypatch):
     """The door notes every figure of a scheme whose entry says its timed call commits no y (`Scheme.commits_y`). The
     arm's call hashes y's rows (`_YTree`), and the entry says so."""
     n, k = LINEARS["o"]
-    hashed = OA.PearlPlus().work(A.Shape("o", 16, k, n)).hashed_bytes
+    hashed = _built(tmp_path, monkeypatch)[0].work(A.Shape("o", 16, k, n)).hashed_bytes
     assert DOOR.SCHEMES[OA.SCHEME].commits_y is ("y_rows" in hashed), (
         f"the arm's call hashes {sorted(hashed)}: the door's entry (verity_bench.overhead.SCHEMES) says commits_y only "
         "in the change that makes the call hash y's rows (`y_rows` in work's hashed bytes), and then it must")
@@ -430,7 +442,7 @@ class Recording:
 
 def _trees(dev):
     import torch
-    s, cpu = pouw_schemes.get(OA.SERVED), torch.device("cpu")
+    s, cpu = pouw_schemes.get(SERVED), torch.device("cpu")
     const = PPDR._constants(cpu)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
                           const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, cur=None)

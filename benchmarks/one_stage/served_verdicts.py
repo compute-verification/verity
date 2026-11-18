@@ -29,6 +29,7 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py coin-trees --challenger C --summary FILE
     served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
+    served_verdicts.py failed|said RC [LOG|- ...]
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
 
@@ -47,7 +48,8 @@ SAMPLED-PROOFS line from the records audit's log
 its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
-``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`), ``failed`` a tool's
+failure by its exception's class and exit status (`failed`) and ``said`` its last line where it passed, else that (`tool_said`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -65,8 +67,8 @@ command it lacks and its owner. PoUS's piece runs before the bandwidth audit's: 
 the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD``
 collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
 that ran but wrote no answer is its error, unless it refused to run (``DIR/refused.txt``, `REFUSED`, naming why), which
-leaves it missing; no verdict is made for a piece that didn't run. A development piece writes ``DIR/development.json``
-(`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
+makes it ``refused`` with that sentence (`block_record.REFUSED`: undecided, never accepted, never dropped); no verdict
+is made for a piece that didn't run. A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
@@ -840,6 +842,40 @@ def front_line(session: Mapping[str, Any]) -> str:
     if "refused" in session:
         return "refused (its reason in the serve dir's private/certifier-front/session.json)"
     return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
+
+
+#: a traceback's last line: its exception's class, dotted or not, then its message
+EXCEPTION = re.compile(r"^(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*(?:Error|Exception))(?::|$)")
+
+
+def _logs(logs: Sequence[str]) -> list[str]:
+    return [line for p in logs for line in (sys.stdin.read() if p == "-" else
+                                            Path(p).read_text(errors="replace") if Path(p).is_file() else "").splitlines()]
+
+
+def _class(lines: Sequence[str]) -> str:
+    found = [m[1] for line in lines if (m := EXCEPTION.match(line))]
+    return found[-1] if found else "no exception"
+
+
+def failed(rc: object, logs: Sequence[str]) -> str:
+    """A tool's failure by its last exception's class and its exit status alone (``-`` is stdin): a tool's log holds
+    paths, hosts and its inputs' values, so no line of it is said."""
+    return f"({_class(_logs(logs))}, exit {rc}): its log is in the run's private directory"
+
+
+def tool_said(rc: object, logs: Sequence[str]) -> str:
+    """Our tool's own last line where it passed (its verdict), else its last exception's class alone, for a line that
+    says the exit status itself."""
+    lines = _logs(logs)
+    if str(rc) != "0":
+        return f"{_class(lines)}; its log is in the run's private directory"
+    return next((line for line in reversed(lines) if line.strip()), "")
+
+
+def not_listening(log: Path, rc: int) -> str:
+    """A serve that never listened, by `failed`: its log holds paths and the host's address."""
+    return f"not listening {failed(rc, [str(log)])}"
 
 
 def _unset(comp: str, what: str) -> str:
@@ -1703,7 +1739,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     class the check held the passes to with the requests and rounds its fixed load fixes (`pearlplus_class`), None
     without one."""
     import served_shares as SS
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1763,7 +1799,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                    **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
     if tie is not None:
         try:
-            doc["tie"] = {"record": REG.digest(json.loads(tie.read_text()))}
+            doc["tie"] = {"record": DD.digest(json.loads(tie.read_text()))}
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
     if verified is not None:
@@ -2160,8 +2196,10 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
     of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
     verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
-    ran (`RAN`) and wrote neither is its ``error``, unless it refused to run (`REFUSED`); otherwise ``missing``, naming
-    why."""
+    ran (`RAN`) and wrote neither is its ``error``, unless it refused to run (`REFUSED`): then ``refused`` with its
+    sentence as ``reason``; otherwise ``missing``, naming why."""
+    from verity_e2e_demo import block_record as BR
+
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
     f, dev, ran = d / "answer.json", d / DEVELOPMENT, _json(d / RAN)
@@ -2187,7 +2225,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     if not f.exists():
         if (d / REFUSED).exists():
             said = (d / REFUSED).read_text(errors="replace").strip()
-            return {"verdict": "missing", "owner": owner, "why": f"its piece refused to run: {said}"[:2000]}
+            return {"verdict": BR.REFUSED, "owner": owner, "reason": said[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
             return {"verdict": "error", "owner": owner,
@@ -2603,7 +2641,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
     unserved = sorted(NAMES[k] for k, r in rows.items()
-                      if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
+                      if r.get("verdict") not in ("missing", "dropped", BR.REFUSED) and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
     answers = {NAMES[k]: r["answer_from"] for k, r in rows.items() if "answer_from" in r}
@@ -2616,7 +2654,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
     bad = sorted(NAMES[k] for k, r in rows.items()
-                 if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
+                 if r.get("verdict") not in ("accept", "missing", "dropped", BR.REFUSED) and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if (answer or {}).get("verdict") == "reject" or any(
             rows[k].get("verdict") in ("reject", "error") for k in rows if NAMES[k] in bad) else "pending"
@@ -2626,9 +2664,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 "why": "block_record carries an accepted subprotocol's certificate only"}
         report["protocols"] = {**rows, **io}
         return report, None, line
-    extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
-             for k, r in rows.items()
-             if k != "integrity" and k not in apart and r.get("verdict") == "accept" and at[k][0] is not None}
+    extra = {subprotocols[k]: {"row": r, "server": at[k][0] or node, "runs": r.get("runs") or [run], "source": at[k][1]}
+             for k, r in rows.items() if k != "integrity" and k not in apart
+             and (r.get("verdict") == "accept" and at[k][0] is not None or r.get("verdict") == BR.REFUSED)}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, answer=answer, extra=extra, product=product)
     verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
@@ -2709,7 +2747,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("piece_dir", type=Path)
     ppe.add_argument("--gate", required=True)
     ppe.add_argument("--name")
-    ppe.add_argument("--scheme", default="pearl-c-h100-v1-h3")
+    ppe.add_argument("--scheme", help="default: the kernel of Pearl+'s declared option")
     described = ppe.add_mutually_exclusive_group()
     described.add_argument("--cubin", type=Path)
     described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
@@ -2738,6 +2776,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ct.add_argument("--summary", type=Path, required=True)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
+    nl = sub.add_parser("not-listening")
+    nl.add_argument("log", type=Path)
+    nl.add_argument("rc", type=int)
+    for name in ("failed", "said"):
+        fa = sub.add_parser(name)
+        fa.add_argument("rc")
+        fa.add_argument("logs", nargs="*", default=["-"])
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -2836,6 +2881,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"no session ({type(e).__name__})")
             return 1
         return 0
+    if a.cmd == "not-listening":
+        print(not_listening(a.log, a.rc))
+        return 0
+    if a.cmd in ("failed", "said"):
+        print((failed if a.cmd == "failed" else tool_said)(a.rc, a.logs))
+        return 0
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)
         return 0
@@ -2929,7 +2980,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
-            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record)
+            from verity.protocols.compose import schemes
+
+            scheme = a.scheme or schemes.get("pearl-plus").option.partition(":")[2]
+            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, scheme, a.cubin, a.circuit_record)
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             said = "RULE not read" if a.verb == "rule" else "PERIOD refused"
             print(f"{said}: {type(e).__name__}: {e}"[:1200], flush=True)
@@ -2958,7 +3012,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
         got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
-        return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
+        from verity_e2e_demo import block_record as BR
+
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped", BR.REFUSED, UNCLAIMED) for g in got.values()) else 1
     if a.off_node and socket.gethostname() == a.node:
         print(f"RECORD refused: a record composed off the served node is not composed on it: this host is {a.node}",
               flush=True)

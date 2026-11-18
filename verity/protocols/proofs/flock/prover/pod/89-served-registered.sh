@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The served-registered fixture (tests/served_registered.py, tests/test_lean_served_registered.py): a RoPE d64 statement
-# whose `cs` rows are a served tree registered as a port (`one_stage.served.register_served`), proved in one loopback --zk
+# whose `cs` rows are a served tree registered as a port (`prover.served.register_served`), proved in one loopback --zk
 # session under a subset sample, then Lean's `verity-verify-proof verify --zk --registered` on it with the verifier's own file
 # (accepted) and with the tree's root changed (refused). The staged files, the session and its challenger's challenger/
 # (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`),

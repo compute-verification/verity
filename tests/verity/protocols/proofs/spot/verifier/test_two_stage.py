@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.cut import member_refs
@@ -158,7 +159,7 @@ def _refused(f) -> tuple[str, ...]:
 def _stages(stream: S.Stream, row=0, sample=list) -> tuple[S.Draw, S.Draw]:
     """Both stages on `stream`, the interior record naming as its replay sample `sample` of the first stage's proved
     blocks (they themselves, in order, where honest)."""
-    previous = R.digest(stream._log[-1]) if stream._log else None
+    previous = DD.digest(stream._log[-1]) if stream._log else None
     reg = stream.register(*_boundary(row=row, previous=previous))
     first = stream.select(reg)
     stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, sample(D.proved(first.draw)), row))

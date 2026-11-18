@@ -196,6 +196,20 @@ def former_specs() -> dict[str, tuple[str, str]]:
     return {old: (entry["spec"], entry["card"]) for old, entry in tomllib.loads(FORMER_IDS.read_text())["former"].items()}
 
 
+def declared_schemes() -> tuple[str, ...]:
+    """The declared schemes' names (`verity_vllm.messages.declarations`), each an arm id that attaches it by name."""
+    from verity_vllm import messages
+
+    return tuple(messages.declarations.load())
+
+
+def former_arm(arm_id: str) -> str | None:
+    """The arm id a former arm id is now (`FORMER_IDS`' ``[former_arms]``), for reading a run recorded under it; None
+    for any other id. No launch takes a former arm id."""
+
+    return tomllib.loads(FORMER_IDS.read_text()).get("former_arms", {}).get(arm_id)
+
+
 def retired_spec(spec_id: str) -> str | None:
     """Why a spec deleted with no successor refuses a launch (`FORMER_IDS`' ``[retired]``); None for any other id. Its
     stored runs read under the id itself."""
@@ -214,14 +228,21 @@ def current_spec(spec_id: str) -> str:
     return now[0] if doc.get("cards", [doc.get("card")]) == [now[1]] else f"{now[0]}@{now[1]}"
 
 
-def _spec_path(spec: str | Path) -> Path:
+def spec_file(spec: str | Path) -> Path | None:
+    """The spec file ``spec`` names, by path or id (one under `FORMER_SPECS` by its name); None where none is there: a
+    former, retired or unknown id."""
+
     path = Path(spec)
     if path.is_file():
         return path
+    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
+    return named if named.is_file() else None
+
+
+def _spec_path(spec: str | Path) -> Path:
+    if (path := spec_file(spec)) is not None:
+        return path
     name = former_name(spec) or str(spec)
-    named = SPEC_ROOT / f"{name}.toml"
-    if named.is_file():
-        return named
     if now := former_spec(name):
         raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
                           "stored run's spec, and no run is launched under it")
@@ -273,8 +294,9 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: setup {given!r} must name a script in the source tree, relative to its root")
     for name, arm in doc.arm_settings.items():
         variant = name.partition("@")[2] in SERVED_EXECUTIONS
-        if name not in doc.arms or not (":" in name or variant):
-            raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
+        if name not in doc.arms or not (":" in name or variant or name in declared_schemes()):
+            raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme or a declared "
+                              "scheme's name) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
             raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")

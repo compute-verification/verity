@@ -1,6 +1,5 @@
-"""P2 v4 on the CPU, the scheme's reference (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2", outlines it): the
-reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
-(`vectors.py`) are built on. Its maps and key streams are the registered scheme's
+"""P2 v4 on the CPU, the scheme's reference: the reference the harness's GPU kernels are gated against, and the one the
+wire verifier (`wire.py`) and the vectors (`vectors.py`) are built on. Its maps and key streams are the registered scheme's
 (`verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
 its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
 mirrors), v4's leaves and the audit's derivations.
@@ -31,11 +30,11 @@ import hashlib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.randomness import Key, derive, frame
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.commitments.randomness import Key, derive, frame
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
