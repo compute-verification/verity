@@ -44,6 +44,14 @@ DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "wipe": f"{_MEMORY}.pous.scheme",
 })
 
+#: the modules whose ``MESSAGES`` are workload message types no scheme declares: useful work's (H1's)
+WORKLOAD_MESSAGES = (f"{_COMPUTE}.pouw.prover.workload",)
+
+
+def workload_messages() -> tuple:
+    """The schemas of `WORKLOAD_MESSAGES`, their modules imported; no scheme is imported."""
+    return tuple(m for module in WORKLOAD_MESSAGES for m in import_module(module).MESSAGES)
+
 
 #: the fields `named` looks a scheme up by: `Scheme.option`, `provides`, and the names of its `ports`, `framings` and
 #: `processes`
@@ -118,4 +126,5 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 
 
-__all__ = ["DECLARATIONS", "FIELDS", "KEYS", "LOOKUPS", "get", "keys", "load", "main", "named"]
+__all__ = ["DECLARATIONS", "FIELDS", "KEYS", "LOOKUPS", "WORKLOAD_MESSAGES", "get", "keys", "load", "main", "named",
+           "workload_messages"]

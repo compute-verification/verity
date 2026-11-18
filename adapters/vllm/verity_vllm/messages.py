@@ -360,14 +360,12 @@ _TYPES: tuple[int, MessageTypes] | None = None
 def types() -> MessageTypes:
     """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
     those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
-    of them declares."""
-    from verity.protocols.resource_accounting.compute.pouw.prover import workload as pouw
-
+    of them declares (`compose.schemes.workload_messages`)."""
     global _TYPES
     registry = schemes.SCHEMES
     if _TYPES is None or _TYPES[0] != len(registry):
         declared = {id(m): m for s in registry.values() for m in s.messages}
-        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *declared.values())))
+        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declarations.workload_messages(), *declared.values())))
     return _TYPES[1]
 
 
