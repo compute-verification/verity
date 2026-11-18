@@ -9,6 +9,7 @@ import sys
 from argparse import Namespace as NS
 from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -39,7 +40,8 @@ def test_feature_resolves_a_registered_scheme_to_the_arm_that_serves_it_through_
     with pytest.raises(SystemExit, match="--feature record: --protocol 'record' is no registered compute scheme; "
                                          "registered: dither, pearl-plus"):
         FEATURE("record", "compiled")
-    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: the schemes' table$"):
+    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: the schemes' table; vllm's plugin entry "
+                                                 "that loads a named scheme inside vLLM's server$"):
         FEATURE("pearl-plus", "prod")
     monkeypatch.setitem(S.ARMS, "prod-record", replace(S.ARMS["prod-record"], scheme="pearl-plus"))
     assert FEATURE("pearl-plus", "prod") == "prod-record"
@@ -195,7 +197,18 @@ def test_run_refuses_what_the_profile_fixes(kw: dict, refusal: str):
 
 
 @pytest.fixture
-def refusing(monkeypatch: pytest.MonkeyPatch) -> None:
+def glm_at_four(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GLM-5.3's coding-agent load on the H200 at 4 users, the production run's point, where the file has it not found
+    yet: the profiles' file as `profiles.load` reads it, with that one line."""
+    doc = P.load()
+    agent = doc.profiles["coding-agent"]
+    users = MappingProxyType({**agent.users, "glm53": MappingProxyType({"h200": 4})})
+    found = replace(doc, profiles=MappingProxyType({**doc.profiles, "coding-agent": replace(agent, users=users)}))
+    monkeypatch.setattr(P, "load", lambda path=P.PATH: found)
+
+
+@pytest.fixture
+def refusing(monkeypatch: pytest.MonkeyPatch, glm_at_four: None) -> None:
     """Three arms over prod that refuse what a profile has on: one on the certified tick whose client sends no seed,
     one with the boundary commitment's history tables and prefix caching on, and one whose sampling is the corpus
     client's."""
@@ -299,7 +312,8 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
     assert text.splitlines()[1] == "no second line: no change on our side alone lets the profile's prompts through"
 
 
-def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                     glm_at_four: None):
     ours = [[rep(1, 90, 0.3, 0.025, 80), rep(2, 91), rep(3, 89)], [rep(1, 90), rep(2, 90.5), rep(3, 89.5)]]
     dirs = arm_dirs(tmp_path, monkeypatch, "agentic-256k", {"prod": STOCK, "prod-record": ours})
     rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False, tmp_path / "res")
@@ -365,7 +379,7 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     monkeypatch.setattr(S, "card", lambda: name)
     plan = S.profile_plan("chat", "llama32-1b", None, True)
     assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": card, "ARMS": "compiled",
-                    "LOADS": "chat=4+8+12+16+24+32+48", "REPS": "3", "LIFETIMES": "1"}
+                    "LOADS": "chat=4+8+16+32+64", "REPS": "3", "LIFETIMES": "1"}
     assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=1+2+4+8"
     assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8+16+32+64"
     with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
@@ -386,11 +400,11 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     edited.write_text(text_[:at] + f"llama32-1b.{card} = 16" + text_[at + len(old):], encoding="utf-8")
     digest = P.digest(P.load(edited), "chat")
     assert rc == 0 and (r["verdict"], r["peak"], r["raise_version"], r["pin"], r["card"]) == (
-        "saturated", 16, 2, [2, digest], card)
+        "saturated", 16, 3, [3, digest], card)
     assert text.splitlines()[0].startswith(f"llama32-1b stock on {card} at chat: 4 in flight 100 tok/s")
     assert text.splitlines()[2:5] == [f"in benchmarks/production.toml, under [profiles.chat.in_flight]: llama32-1b.{card} = 16",
-                                      "and under [profiles.chat]: version = 2 (from 1)",
-                                      f'in tests/benchmarks/harness/test_profiles.py, PINS: "chat": (2, "{digest}"),']
+                                      "and under [profiles.chat]: version = 3 (from 2)",
+                                      f'in tests/benchmarks/harness/test_profiles.py, PINS: "chat": (3, "{digest}"),']
     assert json.loads((tmp_path / "out" / "find_load.json").read_text()) == r
     result = json.loads((tmp_path / "out" / "result.json").read_text())
     assert (result["kind"], result["validation"]["status"], result["measurements"]) == (
@@ -400,7 +414,7 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     metrics["loads"] = {f"chat@{c}": x for c, x in reps.items() if c <= 12}
     rc, r, text = S.profile_result([tmp_path / "compiled"], "chat", "llama32-1b", None, True)
     assert (r["verdict"], "line" in r) == ("cannot tell", False)
-    assert text.splitlines()[1] == "cannot tell: stock still rises at its highest rung served (12): no line"
+    assert text.splitlines()[1] == "cannot tell: stock still rises by 5% or more at each rung served, up to 12: no line"
 
 
 def test_find_load_on_sessions_takes_the_fewest_users_past_which_the_rise_is_under_the_ladders_gain(

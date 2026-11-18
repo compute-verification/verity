@@ -69,7 +69,7 @@ turns = 24
 cut = "ours: each session up to its first request that does not fit 131,072 tokens with its output"
 
 [profiles.coding-agent.users]
-glm53.h200 = 4
+glm53.h200 = "not found yet"
 llama32-1b.h200 = "not found yet"
 llama32-1b.h100 = "not found yet"
 
@@ -90,11 +90,17 @@ sha512 = "a6c659d9d773a3b00552266103937cad1cd6a7f1233fb98aa00f2ff6f706c4d77ebf1b
 license = "Apache-2.0"
 
 [profiles.chat]
-version = 1
+version = 2
 what = "ShareGPT's first turns, each answer as long as the recorded one"
 dataset_name = "sharegpt"
 prompts = 200
 within = ["first_token", "token"]
+
+[profiles.chat.ladder]
+start = 4
+factor = 2
+most = 64
+gain = 0.05
 
 [profiles.chat.in_flight]
 glm53.h200 = "not found yet"
@@ -110,13 +116,19 @@ sha512 = "324efe241e9a5a284c94a9cd15776a8a037092528e44b4bc6aa7338f7c93ee8062e859
 license = "Apache-2.0"
 
 [profiles.fixed-size]
-version = 1
+version = 2
 what = "random tokens, 8,192 in and 1,024 out"
 dataset_name = "random"
 input = 8192
 output = 1024
 prompts = 24
 within = ["token"]
+
+[profiles.fixed-size.ladder]
+start = 1
+factor = 2
+most = 8
+gain = 0.05
 
 [profiles.fixed-size.in_flight]
 glm53.h200 = "not found yet"

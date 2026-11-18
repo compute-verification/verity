@@ -4241,7 +4241,8 @@ def feature(name: str, stock: str) -> str:
         raise SystemExit(f"--feature {name}: {e}") from None
     arms = [n for n in profile_features(stock) if ARMS[n].scheme == registered.name]
     if not arms:
-        raise NotImplementedError("benchmarks/serving-profiles-first-number: the schemes' table")
+        raise NotImplementedError("benchmarks/serving-profiles-first-number: the schemes' table; vllm's plugin entry "
+                                  "that loads a named scheme inside vLLM's server")
     return arms[0]
 
 
@@ -4320,9 +4321,8 @@ def profile_run(a: argparse.Namespace) -> dict:
 
 
 def profile_plan(profile: str, model_id: str, scheme: str | None, find_load: bool) -> dict[str, str]:
-    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over a sessions
-    profile's ladder (`profiles.rungs`) or the load's rungs up to the profile's prompts (`Load.rungs`, requests in
-    flight) in one lifetime of `FIND_REPS` reps;
+    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the profile's
+    ladder (`profiles.rungs`) in one lifetime of `FIND_REPS` reps;
     ``--feature SCHEME``, stock and the arm that serves the scheme (`feature`) at the profile's one load in
     `FEATURE_LIFETIMES` lifetimes of `FEATURE_REPS` reps, the arm with the changes on our side its refusals need
     (``OURS``), and no arm at all where a refusal has none; and the minutes the job plans its passes within, the
@@ -4336,9 +4336,7 @@ def profile_plan(profile: str, model_id: str, scheme: str | None, find_load: boo
     stock, load, card_ = profile_stock(profile, model_id), profile_load(profile, model_id), profile_card(model_id)
     plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes), "CARD": card_}
     if find_load:
-        prof = doc.profiles[profile]
-        ladder = P.rungs(doc, profile) if prof.ladder else tuple(c for c in LOADS[load].rungs if c <= prof.prompts)
-        return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, ladder))}", "REPS": str(FIND_REPS),
+        return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, P.rungs(doc, profile)))}", "REPS": str(FIND_REPS),
                        "LIFETIMES": "1"}
     arm = feature(scheme, stock)
     try:
@@ -4589,9 +4587,9 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
 
 def find_load_result(P: object, doc: object, profile: str, model_id: str, card_: str, ref: dict | None, load: str,
                      cap: str | None) -> tuple[dict, list[str]]:
-    """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising: on
-    a sessions profile, the fewest users whose next rung served rises by less than its ladder's ``gain``; otherwise
-    the rung of the most (`peak`) with a rung served above it. The line of `benchmarks/production.toml` that names it,
+    """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising:
+    the fewest users or requests in flight whose next rung served rises by less than the profile's ladder's ``gain``.
+    The line of `benchmarks/production.toml` that names it,
     the profile's version raised by one, and the digest the pin test then holds (`profiles.digest` of the file with
     that line), the model's load on ``card_``. Where stock still rises at its highest rung served it cannot tell, and prints no line. It edits no
     file."""
@@ -4604,17 +4602,10 @@ def find_load_result(P: object, doc: object, profile: str, model_id: str, card_:
     if not rungs:
         return r | {"verdict": "cannot tell", "why": cap or "stock served no rung"}, text + ["cannot tell: no rung served"]
     old, served = doc.profiles[profile], sorted(each)
-    if old.ladder:
-        top = next((c for c, d in zip(served, served[1:]) if each[d] < each[c] * (1 + old.ladder.gain)), None)
-        still = None if top else (f"stock still rises by {old.ladder.gain:.0%} or more at each rung served, up to "
-                                  f"{served[-1]}")
-        stop = f"output tokens a second rise by less than {old.ladder.gain:.0%} past {top}"
-    else:
-        top = peak(ref, load, 0)[0]
-        still = f"stock still rises at its highest rung served ({top})" if top == max(rungs) else None
-        stop = f"output tokens a second stop rising at {top}"
-    if still:
-        why = still + (f"; {cap}" if cap else "")
+    gain = old.ladder.gain
+    top = next((c for c, d in zip(served, served[1:]) if each[d] < each[c] * (1 + gain)), None)
+    if top is None:
+        why = f"stock still rises by {gain:.0%} or more at each rung served, up to {served[-1]}" + (f"; {cap}" if cap else "")
         return r | {"verdict": "cannot tell", "why": why}, text + [f"cannot tell: {why}: no line"]
     loads = getattr(old, key)
     new = replace(old, **{key: MappingProxyType({**loads, model_id: MappingProxyType({**loads[model_id], card_: top})})})
@@ -4622,7 +4613,8 @@ def find_load_result(P: object, doc: object, profile: str, model_id: str, card_:
     line = f"{model_id}.{card_} = {top}"
     r |= {"verdict": "saturated", "peak": top, "line": line, "table": f"profiles.{profile}.{key}",
           "raise_version": old.version + 1, "pin": [old.version + 1, digest]}
-    return r, text + [f"saturated: {stop} ({'+'.join(map(str, each))} served)",
+    return r, text + [f"saturated: output tokens a second rise by less than {gain:.0%} past {top} "
+                      f"({'+'.join(map(str, each))} served)",
                       f"in {P.PATH.relative_to(ROOT)}, under [profiles.{profile}.{key}]: {line}",
                       f"and under [profiles.{profile}]: version = {old.version + 1} (from {old.version})",
                       f"in tests/benchmarks/harness/test_profiles.py, PINS: \"{profile}\": ({old.version + 1}, "

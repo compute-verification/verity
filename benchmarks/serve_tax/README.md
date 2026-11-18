@@ -517,6 +517,11 @@ fixed-size's at 1,024 tokens) and the bounds a request is counted within. The fl
 refused if given too, each refusal naming the flag to drop. `--profile`, `--feature` and `--find-load` are flags alone:
 `PROFILE`, `FEATURE` and `FIND_LOAD` in the environment are refused. Without `--profile` the job is as it was.
 
+On this branch the profiles stand beside the free-form path; they do not replace it yet. The dashboard's serving-cost
+line (`vllm/serving-cost-glm53`) still runs on the free-form path: `two-stage` against `compiled` over `chat,long`.
+Three things make it one path: a `--feature` naming the sampled proofs' scheme with its one-stage or two-stage setting,
+found loads for chat and fixed-size on the H200, and the free-form `long` load going when the free-form path goes.
+
 A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
 (`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
 never a flag or a machine's name. The same command runs on a machine that is not ours, under `research run --local-only`
@@ -525,16 +530,19 @@ never a flag or a machine's name. The same command runs on a machine that is not
 place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
 no `.git` needed. A tree that none of these names is refused before anything is served.
 
-- `--find-load` serves stock alone over the profile's ladder where it has one, the users of a sessions profile
-  (`[profiles.coding-agent.ladder]`: users from `start`, each rung `factor` times the last, up to `most`), and over
-  its load's own rungs (`LOADS`) otherwise, requests in flight up to the profile's prompts. It says where output tokens
-  a second stop rising (on a ladder, the fewest users past which the next rung rises by less than its `gain`) and prints the file's line for this host's card, the profile's
-  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
-  profile whose load is still `not found yet` refuses `--feature` until that line is in.
+- `--find-load` serves stock alone over the profile's ladder (`[profiles.NAME.ladder]`): the load's unit, users for
+  coding-agent and requests in flight for chat and fixed-size, from `start`, each rung `factor` times the last, up to
+  `most`. The load is the fewest at which doubling raises stock's output tokens a second by less than `gain` (5%); where
+  they rise by 5% or more at every rung served, it cannot tell. It prints the file's line for this host's card, the
+  profile's version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no
+  file. A profile whose load is still `not found yet` refuses `--feature` until that line is in: every load is, GLM-5.3's
+  coding-agent load on the H200 among them. The production run `r20261117-112411-576f` stays a point at 4 users: its
+  +2.11 points over prod-trace (+2.27% against stock) are the cost at 4 users, a load no ladder found.
 - `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
   by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
   the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
-  `NotImplementedError` (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+  `NotImplementedError`, naming the goal and what it waits on: vllm's plugin entry that loads a named scheme inside
+  vLLM's server (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
   two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
   through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
   stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
