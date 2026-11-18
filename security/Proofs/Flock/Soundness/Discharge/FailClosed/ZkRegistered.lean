@@ -44,7 +44,7 @@ accepts with `--registered F` it accepts without (`verifiesZK_of_R`), and the cl
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed Placed StrictCR DecodeZL ZkHidden
 open FlockSoundness.Discharge.ZkReg (AcceptsZKR LiveAcceptsZKR OwnReadsHJ regPathsHJ acceptsZK_of_R
   checked_of_acceptsHJSt)

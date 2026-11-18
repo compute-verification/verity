@@ -27,7 +27,7 @@ So the hypotheses left are `flock_headline_exec_hidden`'s, with `hdec` at `own` 
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

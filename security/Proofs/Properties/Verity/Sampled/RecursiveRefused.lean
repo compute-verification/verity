@@ -6,10 +6,9 @@ public import Proofs.Properties.Verity.Soundness
 /-!
 # SPOT refuses the recursive form; a sampled verdict names the one-stage form or the two-stage form
 
-SPOT's compiled component (`VStar.Recursive.Sampled.protocol`) refuses parameters and evidence naming the recursive
-form by name (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before their rest is read, so no case of its parameters is
-that form's (`VStar.Recursive.Sampled.Params`). Parameters naming the two-stage form decode, and the form's own check
-accepts them (`VStar.Recursive.SampledTwo.FORM` is on): with evidence of another form the forms' mismatch rejects.
+No case of SPOT's compiled component's parameters (`VStar.Recursive.Sampled.Params`) is the recursive audit's: they are
+one level's or two levels' (`levels`). Two levels' parameters decode, and their own check accepts them: with evidence of
+another count the mismatch rejects.
 
 * **A sampled verdict names the one-stage form or the two-stage form** (`paramsAt_of_verdict`): wherever composite `k`'s
   sampled verdict holds of what the prover sent, SPOT's case decodes in the one-stage form, under the parameters

@@ -2322,6 +2322,13 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
 
         if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
             raise Refused(why)
+        if (named := slot_only.named_slot(command)) is not None:
+            listed = ssh_run(ssh, ["cat", named[0]])
+            if listed.returncode not in (0, 1):
+                raise Refused(f"--slot {named[1]}: {machine_name}'s {named[0]} could not be read to find the slot (exit "
+                              f"{listed.returncode}); launch again")
+            if why := slot_only.slot_refusal(command, listed.stdout.decode(errors="replace") if listed.returncode == 0 else None):
+                raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         if (own := slot_only.node_copy(command)) is not None:
             # a run in a pool's line: by the machine's own slot.py where it has one, so the line's waiters share one copy's rules

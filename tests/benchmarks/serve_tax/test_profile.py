@@ -481,6 +481,10 @@ def test_run_sh_on_a_machine_not_ours_names_venv_and_takes_the_hubs_own_place(tm
     (tmp_path / "venv" / "bin").mkdir(parents=True)
     (tmp_path / "venv" / "bin" / "python").symlink_to(sys.executable)
     rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "venv"), **env)
+    assert (rc, out) == (2, "serve-tax: CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement "
+                            "entry names it)\n")
+    rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "venv"),
+                     CUDA_HOME=str(tmp_path / "cuda"), **env)
     ours = next((d for d in ("/workspace/cp/hf", "/workspace/hf") if Path(d).is_dir()), None)
     hub = Path(ours or tmp_path / "c" / "huggingface") / "hub"
     m = S.MODELS["llama32-1b"]

@@ -6,7 +6,7 @@ public import Definitions.Core.Levels
 # The count at δ over levels
 
 A sampled guarantee bounds the incorrect blocks by a count at `δ`: the largest set of blocks that the sample misses with
-probability at least `δ` (`FlockSoundness.Audit.IsHarmBound` at weight one, which `Spot.Bound.boundOf` computes for one
+probability at least `δ` (`Spot.Sampling.IsHarmBound` at weight one, which `Spot.Bound.boundOf` computes for one
 level). Over levels the blocks are the last level's (`Levels.blocks`), the units `Levels.design` draws; a set holding
 anything else is never drawn from, so the count curve `SamplingDesign.miss` over every set says nothing there.
 

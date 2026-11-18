@@ -117,7 +117,7 @@ theorem opensOKL_plain_pair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
-/-- **The batched session on a sample, under `Lf`**: `Audit.Partition.batchedSession` with salted openings. At
+/-- **The batched session on a sample, under `Lf`**: `Spot.Sampling.Partition.batchedSession` with salted openings. At
 `Refine.leaf512` it is the session verity-verify-proof's hm96 statements run. -/
 noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))

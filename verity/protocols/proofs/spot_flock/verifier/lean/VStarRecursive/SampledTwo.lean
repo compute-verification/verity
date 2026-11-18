@@ -127,8 +127,6 @@ open Lean (Json)
 open Flock (V)
 open Spot
 
-def TWO_STAGE : String := "two-stage"
-
 /-- **The switch**: the two-stage form accepts only where `Spot.SecondStage.FORM` lets the second-stage statement check
 accept, so one change flips both. -/
 def FORM : Bool := SecondStage.FORM
@@ -206,12 +204,13 @@ def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 def paramsAt (j : Json) : V OneStage.Params := do
   OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
-/-- The form's rest: the object less its `form`, which must be `two-stage`. -/
+/-- The rest of two levels' object: the object less its `levels`, which is `2`. -/
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
-  let .str form := getD j "form" | throw s!"the {what} names no form"
-  if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
-  pure (Json.mkObj (without j "form"))
+  match field? j "levels" with
+  | some (.num ⟨2, 0⟩) => pure (Json.mkObj (without j "levels"))
+  | some v => throw s!"levels-mismatch: the {what}' levels is {v.compress}, not 2"
+  | none => throw s!"levels-mismatch: the {what} name no levels, not 2"
 
 /-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
 (`paramsOfJson`). -/
@@ -980,14 +979,23 @@ def protocol : Core.BlobProtocol where
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
 
-#guard (paramsOfJson (Json.mkObj [("form", "one-stage")])).toOption.isNone
-#guard match paramsOfJson (Json.mkObj [("form", TWO_STAGE), ("outputs", Json.arr #["y"])]) with
+#guard (paramsOfJson (Json.mkObj [("levels", Json.num 1)])).toOption.isNone
+#guard match split (Json.mkObj [("levels", Json.num 1)]) "parameters" with
+  | .error e => e == "levels-mismatch: the parameters' levels is 1, not 2"
+  | .ok _ => false
+#guard match split (Json.mkObj [("levels", Json.num 2), ("a", Json.num 0)]) "parameters" with
+  | .ok j => j == Json.mkObj [("a", Json.num 0)]
+  | .error _ => false
+#guard match split (Json.mkObj [("a", Json.num 0)]) "parameters" with
+  | .error e => e == "levels-mismatch: the parameters name no levels, not 2"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("outputs", Json.arr #["y"])]) with
   | .error e => e.startsWith "the keys of the parameters"
   | .ok _ => false
-#guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
+#guard match evidenceOf "{\"levels\":2}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
   | .ok _ => false
-#guard match evidenceOf ("{\"coins\":null,\"form\":\"two-stage\",\"interior\":{},\"received\":\"r\",\"record\":{}," ++
+#guard match evidenceOf ("{\"coins\":null,\"interior\":{},\"levels\":2,\"received\":\"r\",\"record\":{}," ++
     "\"source\":\"\",\"statements\":[]}").toUTF8 with
   | .error e => e == FIRST_COINS_NULL
   | .ok _ => false
