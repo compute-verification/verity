@@ -43,6 +43,7 @@ from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry import moe as MOE
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import serving_rows as SRW
@@ -244,7 +245,7 @@ def test_the_units_are_cut_by_table_and_slot_and_wired_to_the_router_and_the_rea
     assert [(m.n, m.base - base[m.template]) for m in ms if m.template == READ_W] == [(T, j * T) for j in range(B * TOPK)]
     assert [(m.n, m.base - base[m.template]) for m in ms if m.template == BLOCK] == [(3, 0), (1, 3), (3, 4), (1, 7)]
     for m in ms:
-        wired = {port: (out, writers) for port, out, writers in m.wired}
+        wired = {port: (out, writers) for port, out, writers in CH.writer_units(ms, m)}
         if m.template == SLOTS:
             assert wired == {}
             continue
@@ -289,7 +290,7 @@ def check_words(plan, ms, got, block, ns, nr=NR, gemm=None):
         elif layout != "read":
             stager(m.template).reference_check(g["rows"], g["outs"])
         assert "o1" not in g["outs"] or m.template == SLOTS or (g["outs"]["o1"] == 1).all()
-        for port, o, writers in m.wired:
+        for port, o, writers in CH.writer_units(ms, m):
             for i, wr in enumerate(writers):
                 j, k = at[wr]
                 assert np.array_equal(g["rows"][port][i], got[j][0]["outs"][o][k])
@@ -434,7 +435,7 @@ def test_the_fused_blocks_are_cut_as_reads_and_wired_to_the_router_and_the_scale
         want = {"in0": (f"o{TOPK + k}", routers),
                 ports(FU)["ws"]: ("o0", [base[READ_WS] + (b * NR // G * TOPK + k) * T + tok for (tok, k), b in keys]),
                 **({ports(FU)["g"]: (f"o{k}", routers)} if PROJ[proj].routed else {})}
-        assert {p: (o, list(w)) for p, o, w in m.wired} == want
+        assert {p: (o, list(w)) for p, o, w in CH.writer_units(ms, m)} == want
 
 
 @pytest.mark.parametrize("proj", PROJ)
@@ -460,7 +461,7 @@ def test_a_fused_blocks_scale_row_is_its_own_g_blocks(monkeypatch):
     pair = {(20 + TOPK * t + k): (t, k) for t in range(T) for k in range(TOPK)}
     for m in (m for m in ms if m.template == FU):
         keys = [(pair[plan.key(FU, u)[1]], plan.units[FU][u][1]) for u in range(m.base - base[FU], m.base - base[FU] + m.n)]
-        assert dict((p, list(w)) for p, _o, w in m.wired)[ports(FU)["ws"]] == [
+        assert dict((p, list(w)) for p, _o, w in CH.writer_units(ms, m))[ports(FU)["ws"]] == [
             base[READ_WS] + (b * nr // G * TOPK + k) * T + tok for (tok, k), b in keys]
     assert {b * nr // G for _p, b in plan.units[FU]} == {0, 1}
     tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, committer(plan))
