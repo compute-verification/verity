@@ -277,6 +277,29 @@ def rowWords (ts : List Tmpl) (W : Spot.Wires.Wiring) (w : Spot.Wires.Wire) : Na
   | some (words, _) => words / W.cutsOf w.reader w.port
   | none => 0
 
+/-- `rowWords` over the templates by id and the cuts as maps. -/
+def rowWordsAt (tm : Std.HashMap String Tmpl) (cm : Std.HashMap String (List (String × Nat))) (w : Spot.Wires.Wire) :
+    Nat :=
+  match (tm[w.reader]?).bind fun t => t.rows.lookup w.port with
+  | some (words, _) => words / Spot.Wires.cutsOfIx cm w.reader w.port
+  | none => 0
+
+theorem find?_eq_lookup {α : Type} (key : α → String) (l : List α) (k : String) :
+    l.find? (key · == k) = (l.map fun x => (key x, x)).lookup k := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    by_cases h : key x = k
+    · simp [List.lookup, h]
+    · have h1 : (k == key x) = false := by simp [Ne.symm h]
+      have h2 : (key x == k) = false := by simp [h]
+      simp only [List.map_cons, List.lookup, h1, List.find?_cons, h2, ih]
+
+private theorem rowWordsAt_eq (ts : List Tmpl) (W : Spot.Wires.Wiring) (w : Spot.Wires.Wire) :
+    rowWordsAt (Spot.Wires.mapOf (ts.map fun t => (t.tid, t))) (Spot.Wires.mapOf W.cuts) w = rowWords ts W w := by
+  simp only [rowWordsAt, rowWords, Spot.Wires.mapOf_get?, ← find?_eq_lookup, Spot.Wires.cutsOfIx,
+    Spot.Wires.Wiring.cutsOf]
+
 /-- What `registered` reads as where the record has none. -/
 def NO_REGISTERED : Json :=
   Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
@@ -464,6 +487,114 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
   if !Spot.Wires.pairwiseDisjoint (decls.toList.map (·.w)) then throw "inputs"
   return { params, tables, roots, openings, decls := decls.toList }
 
+/-- `inputsOf` with the templates and cuts as maps: the code compiled in its place (`inputsOf_eq_fast`). -/
+def inputsOfFast (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
+  let tm := Spot.Wires.mapOf (ts.map fun t => (t.tid, t))
+  let cm := Spot.Wires.mapOf W.cuts
+  let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
+  if !(registeredKeys reg && (historiesOf reg).isSome) then throw "inputs"
+  let .obj pkv := valueAt reg "params" | throw "inputs"
+  let params ← pkv.toArray.toList.mapM fun (p, v) => match nat? v with
+    | some n => if n ≥ 1 then pure (p, n) else throw "inputs"
+    | none => throw "inputs"
+  let mut decls : Array Decl :=
+    (W.wires.zipIdx.map fun (w, i) => { w, bits := 16 * rowWordsAt tm cm w, fill := .wire i }).toArray
+  let .arr tablesJ := valueAt reg "tables" | throw "inputs"
+  let mut tables : List Table := []
+  for t in tablesJ do
+    if !keyed t TABLE then throw "inputs"
+    let name ← strIn t "name"
+    let param ← strIn t "param"
+    let offset ← natIn t "offset"
+    let words ← natIn t "words"
+    let rows ← natIn t "rows"
+    let some leaves := params.lookup param | throw "inputs"
+    if tables.any (·.name == name) || words < 1 || rows < 1 || offset + words * rows > leaves then throw "inputs"
+    tables := tables ++ [({ name, param } : Table)]
+  if !formatsOk reg params tables then throw "inputs"
+  tables := tables ++ ((historiesOf reg).getD []).map fun name => ({ name, param := name } : Table)
+  let .arr readsJ := valueAt reg "reads" | throw "inputs"
+  for r in readsJ do
+    let w ← readOf r
+    let t ← tmplIn ts w.reader
+    let k := W.cutsOf w.reader w.port
+    let (words, rowBits) ← match t.rows.find? (·.1 == w.port), t.outs.lookup w.port with
+      | some (_, words, _), _ => pure (words, 16 * words / k)
+      | none, some words => pure (words, 0)
+      | none, none => throw "inputs"
+    if !(w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) && w.units % w.cuts == 0) then
+      throw "inputs"
+    if !(w.readerUnits ≥ 1 && w.start + w.readerUnits ≤ t.units) then throw "inputs"
+    let some leaves := params.lookup w.writer | throw "inputs"
+    if !(0 ≤ w.span.1 && w.span.2 + ((words / k : Nat) : Int) ≤ (leaves : Int) &&
+        16 * (words / k) % widthOf doc w.writer == 0) then throw "inputs"
+    decls := decls.push { w, bits := rowBits, fill := .read w.writer }
+  let .arr rootsJ := valueAt reg "roots" | throw "inputs"
+  let mut roots : List TableRead := []
+  for r in rootsJ do
+    if !keyed r TABLE_READ then throw "inputs"
+    let reader ← strIn r "reader"
+    let port ← strIn r "port"
+    let table ← strIn r "table"
+    let which ← strIn r "of"
+    let t ← tmplIn ts reader
+    let words ← rowIn t port
+    let start ← natIn r "at"
+    let units ← natIn r "units"
+    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
+    if !(tables.any (·.name == table)) || !(which == "root" || which == "domain") || words != 32 then throw "inputs"
+    let k := W.cutsOf reader port
+    roots := roots ++ [({ reader, port, table, root := which == "root", start, units } : TableRead)]
+    decls := decls.push
+      { w := rect reader port start units k, bits := 16 * words / k, fill := .table table (which == "root") }
+  let .arr openingsJ := valueAt reg "openings" | throw "inputs"
+  let mut openings : List Opening := []
+  for o in openingsJ do
+    let declaresRow := keyed o ("row" :: OPENING)
+    if !(keyed o OPENING || declaresRow) then throw "inputs"
+    let reader ← strIn o "reader"
+    let table ← strIn o "table"
+    let key ← strIn o "key"
+    let out ← strIn o "verdict"
+    let row := stringAt o "row"
+    if declaresRow && row.isNone then throw "inputs"
+    let .arr portsJ := valueAt o "ports" | throw "inputs"
+    if portsJ.isEmpty then throw "inputs"
+    let t ← tmplIn ts reader
+    let start ← natIn o "at"
+    let units ← natIn o "units"
+    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
+    let _ ← rowIn t key
+    if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
+    if row.any fun r => !(t.rows.length == 6 && t.outs.map (·.1) == [r, out]) then throw "inputs"
+    let mut ports : List String := []
+    for pj in portsJ do
+      let .str p := pj | throw "inputs"
+      let words ← rowIn t p
+      let k := W.cutsOf reader p
+      decls := decls.push { w := rect reader p start units k, bits := 16 * words / k, fill := .opening openings.length }
+      ports := ports ++ [p]
+    openings := openings ++ [({ reader, table, key, ports, verdict := out, row, start, units } : Opening)]
+  let .arr ingressJ := (doc.getObjVal? "ingress").toOption.getD (Json.arr #[]) | throw "inputs"
+  for g in ingressJ do
+    if !keyed g INGRESS then throw "inputs"
+    let reader ← strIn g "reader"
+    let port ← strIn g "port"
+    let _ ← natIn g "step"
+    let t ← tmplIn ts reader
+    let words ← rowIn t port
+    let start ← natIn g "at"
+    let units ← natIn g "units"
+    if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
+    let k := W.cutsOf reader port
+    decls := decls.push { w := rect reader port start units k, bits := 16 * words / k, fill := .ingress }
+  if !Spot.Wires.pairwiseDisjoint (decls.toList.map (·.w)) then throw "inputs"
+  return { params, tables, roots, openings, decls := decls.toList }
+
+@[csimp] theorem inputsOf_eq_fast : @inputsOf = @inputsOfFast := by
+  funext ts W doc
+  simp only [inputsOf, inputsOfFast, rowWordsAt_eq]
+
 /-! ## Blocks -/
 
 /-- Units `[start, start + units)` of a template, unit `start + i` in slot `(i / q) % S` of the class's `S`: an
@@ -571,6 +702,36 @@ def Inputs.declares (x : Inputs) : Fill → Option Declared
 /-- What the declarations `x` declare the row `r` to hold: `declares` of what fills it (`fillAt`). -/
 def Inputs.declared (x : Inputs) (r : Row) : Option Declared := (fillAt x.decls r).bind x.declares
 
+/-- The declarations `ds` by reader and port: what `fillAtIx` reads. -/
+def declIndex (ds : List Decl) : Std.HashMap String (List Decl) :=
+  Spot.Wires.groupBy (fun d => d.w.reader ++ "/" ++ d.w.port) ds
+
+/-- `fillAt` among only the declarations of the row's reader and port. -/
+def fillAtIx (g : Std.HashMap String (List Decl)) (r : Row) : Option Fill :=
+  fillAt (g.getD (r.tid ++ "/" ++ r.port) []) r
+
+theorem fillAtIx_eq (ds : List Decl) (r : Row) : fillAtIx (declIndex ds) r = fillAt ds r := by
+  simp only [fillAtIx, declIndex, Spot.Wires.groupBy_getD, fillAt, List.find?_filter]
+  congr 1
+  congr 1
+  funext d
+  cases hq : (d.w.indexOf r.tid r.unit r.port r.row).isSome
+  · simp
+  · unfold Circuits.Wire.indexOf at hq
+    split at hq
+    · rename_i h
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+      simp [h.1.1.1.1.1, h.1.1.1.1.2]
+    · cases hq
+
+/-- `slotIn` over the grids as a map. -/
+def slotInAt (S : Nat) (gm : Std.HashMap String (List Grid)) (tid : String) (u : Nat) : Option Nat :=
+  ((gm.getD tid []).find? fun g => g.start ≤ u && u < g.start + g.units).map fun g => (u - g.start) / g.q % S
+
+theorem slotInAt_eq (S : Nat) (grids : List (String × List Grid)) (tid : String) (u : Nat) :
+    slotInAt S (Spot.Wires.mapOf grids) tid u = slotIn S grids tid u := by
+  simp only [slotInAt, slotIn, Std.HashMap.getD_eq_getD_getElem?, Spot.Wires.mapOf_get?]
+
 /-- **A unit's block, of the record's text**: the slot of template `tid`'s unit `u`, by the Program's templates
 (`templatesOf`) and the text's inference entries (`gridsOf`); none where either refuses, or the record has no such
 unit. -/
@@ -592,6 +753,60 @@ def orderOf (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat × Nat
     let b := (acc.1.lookup r.template).getD 0
     ((r.template, b + r.count) :: acc.1.filter (·.1 != r.template), acc.2 ++ [(r.template, b, r.count)]))
     ([], [])).2
+
+/-- `orderOf` with each template's next unit in a map and the ranges gathered in reverse: the code compiled in its place
+(`orderOf_eq_fast`), in work `O(ranges)`. -/
+def orderOfFast (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat × Nat) :=
+  (rs.foldl (fun (acc : Std.HashMap String Nat × List (String × Nat × Nat)) r =>
+    let b := acc.1.getD r.template 0
+    (acc.1.insert r.template (b + r.count), (r.template, b, r.count) :: acc.2)) ({}, [])).2.reverse
+
+private theorem lookup_filter_ne (a : List (String × Nat)) (t s : String) (h : (t == s) = false) :
+    (a.filter (·.1 != t)).lookup s = a.lookup s := by
+  induction a with
+  | nil => rfl
+  | cons p a ih =>
+    obtain ⟨u, n⟩ := p
+    by_cases hu : u = t
+    · subst hu
+      have : (s == u) = false := by rw [BEq.comm]; exact h
+      simp [List.filter, List.lookup, this, ih]
+    · have hu' : (u != t) = true := by simp [hu]
+      rw [List.filter_cons_of_pos (p := fun x : String × Nat => x.1 != t) hu']
+      simp only [List.lookup]
+      split <;> simp_all
+
+private theorem orderOf_fold (l : List Flock.TemplateQuery.TRange) : ∀ (a : List (String × Nat)) (m : Std.HashMap String Nat)
+    (acc acc' : List (String × Nat × Nat)), (∀ t, (a.lookup t).getD 0 = m.getD t 0) → acc = acc'.reverse →
+    (l.foldl (fun (acc : List (String × Nat) × List (String × Nat × Nat)) r =>
+      let b := (acc.1.lookup r.template).getD 0
+      ((r.template, b + r.count) :: acc.1.filter (·.1 != r.template), acc.2 ++ [(r.template, b, r.count)]))
+      (a, acc)).2 =
+    (l.foldl (fun (acc : Std.HashMap String Nat × List (String × Nat × Nat)) r =>
+      let b := acc.1.getD r.template 0
+      (acc.1.insert r.template (b + r.count), (r.template, b, r.count) :: acc.2)) (m, acc')).2.reverse := by
+  induction l with
+  | nil => intro a m acc acc' _ he; exact he
+  | cons r l ih =>
+    intro a m acc acc' hm he
+    simp only [List.foldl_cons]
+    apply ih
+    · intro t
+      rw [Std.HashMap.getD_insert]
+      by_cases ht : (r.template == t) = true
+      · have : t = r.template := (beq_iff_eq.1 ht).symm
+        subst this
+        simp [List.lookup, hm]
+      · have ht' : (r.template == t) = false := by simpa using ht
+        have : (t == r.template) = false := by rw [BEq.comm]; exact ht'
+        simp only [List.lookup, this, ht', Bool.false_eq_true, ↓reduceIte]
+        rw [lookup_filter_ne a r.template t ht', hm]
+    · simp [he, hm]
+
+@[csimp] theorem orderOf_eq_fast : @orderOf = @orderOfFast := by
+  funext rs
+  simp only [orderOf, orderOfFast, ← Array.foldl_toList]
+  exact orderOf_fold rs.toList [] {} [] [] (fun t => by simp) rfl
 
 /-- **The record's wiring**: the Program's templates (`templatesOf`), the text's cuts (`cutsOf`), the wires the
 Program's root states under the templates' ranges (`Spot.Edges.edgesOf`, whose refusal it is), and the ranges' order
