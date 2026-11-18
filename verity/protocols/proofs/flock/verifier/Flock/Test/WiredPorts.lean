@@ -90,7 +90,7 @@ def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
 def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
 def block : Circuit := { (default : Circuit) with ports := #[inP, outP], outRowPorts := #[1] }
 #guard match OneCircuit.io block prog with
-  | .error e => e.startsWith "one-circuit: not derived yet: io at a block circuit that names no template"
+  | .error e => e.startsWith "one-circuit: not derived yet: io : a block circuit that names no template"
   | .ok _ => false
 
 def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)

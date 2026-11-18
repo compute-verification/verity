@@ -569,7 +569,7 @@ def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
     if Spot.Edges.isInputNode P k then continue
     let node := nodes[k]!
     if node.form == .scan then
-      throw (Flock.OneCircuit.notDerived "ioCuts at a scan node of C's root (edge-form: no closed form yet)")
+      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
     let some (rt, _) := fu[k]? | throw "edge-template"
     let defn := P.defs[node.fn]!
     for i in [0:node.args.size] do

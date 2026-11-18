@@ -2258,7 +2258,7 @@ order. Its work is the root's nodes, arguments and parts and the circuit's ports
 `c` is refused, and so is a block circuit that names no template of C. -/
 def io (c : Circuit) (P : Program.Prog) : V (Array (Nat × Nat × Nat)) := do
   let some (t, _) := HmRow.queryTemplate c
-    | throw (notDerived "io at a block circuit that names no template of C (META program_digests)")
+    | throw (notDerived "io : a block circuit that names no template of C (META program_digests)")
   let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
   let wiredNode := fun (k : Nat) => match nodes[k]? >>= fun n => P.defs[n.fn]? with
     | some f => !(f.prim && Program.isInputId f.key)
