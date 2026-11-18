@@ -382,8 +382,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole ts
       (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none)
-    (hSh : ∀ r l g lo hi, RowLeaf P rs W r l g lo hi → SharedLeaf P g →
-      S.writerOf r.tid r.unit r.port r.row = none) : Aligned P rs W S := by
+    (hSh : SharedUnwired P rs W S) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, out, sc₁, hw, -, hu₁, hout₁⟩ := hwl
   obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, rfl, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw

@@ -238,8 +238,8 @@ theorem runLe_total (a b : Nat × Nat × Nat) : (runLe a b || runLe b a) = true 
 
 theorem sortedOf_sorted (P : Prog) (parts : List Part) :
     (sortedOf P parts).Pairwise fun a b => runLe a.1 b.1 = true :=
-  List.pairwise_mergeSort (le := fun a b => runLe a.1 b.1) (fun a b c => runLe_trans a.1 b.1 c.1)
-    (fun a b => runLe_total a.1 b.1) _
+  List.pairwise_mergeSort (le := fun (a b : (Nat × Nat × Nat) × Bool) => runLe a.1 b.1)
+    (fun a b c => runLe_trans a.1 b.1 c.1) (fun a b => runLe_total a.1 b.1) _
 
 theorem sortedOf_perm (P : Prog) (parts : List Part) :
     (sortedOf P parts).Perm ((parts.filterMap (partRun P)).filter fun r => r.1.2.2 > 0) :=
@@ -264,7 +264,7 @@ theorem same_or_apart_of_sorted : ∀ (l : List ((Nat × Nat × Nat) × Bool)),
     obtain ⟨hxy, ha'⟩ := ha
     have ih := same_or_apart_of_sorted (y :: rest) hs' (by simpa using ha')
     refine List.pairwise_cons.2 ⟨fun z hz => ?_, ih⟩
-    have hxy' : x.1 = y.1 ∨ x.1.1 ≠ y.1.1 ∨ x.1.2.1 + x.1.2.2 ≤ y.1.2.1 := by simpa using hxy
+    have hxy' : x.1 = y.1 ∨ x.1.1 ≠ y.1.1 ∨ x.1.2.1 + x.1.2.2 ≤ y.1.2.1 := by simpa [or_assoc] using hxy
     have hlxy : x.1.1 < y.1.1 ∨ (x.1.1 = y.1.1 ∧ x.1.2.1 ≤ y.1.2.1) := by
       simpa [runLe] using hx y List.mem_cons_self
     rcases hxy' with heq | hap
@@ -322,7 +322,7 @@ private theorem pairwise_back {R : (Nat × Nat × Nat) × Bool → (Nat × Nat �
     (hsym : ∀ a b, R a b → R b a) {P : Prog} {parts : List Part} (h : (sortedOf P parts).Pairwise R) :
     parts.Pairwise fun q q' => ∀ a, partRun P q = some a → ∀ b, partRun P q' = some b → 0 < a.1.2.2 →
       0 < b.1.2.2 → R a b := by
-  have hperm := (List.Perm.pairwise_iff hsym (sortedOf_perm P parts)).1 h
+  have hperm := (List.Perm.pairwise_iff (fun _ _ => hsym _ _) (sortedOf_perm P parts)).1 h
   rw [List.pairwise_filter, List.pairwise_filterMap] at hperm
   exact hperm.imp fun {q q'} hqq a ha b hb hp hp' => hqq a ha b hb (by simpa using hp) (by simpa using hp')
 
